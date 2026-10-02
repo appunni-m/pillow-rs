@@ -61,6 +61,57 @@ pub struct PyImage {
     inner: RsImage,
 }
 
+#[pyclass(name = "BatchExecutor")]
+/// Python wrapper for an explicitly queued group of image operations.
+pub struct PyBatchExecutor {
+    inner: pillow_rs::BatchExecutor,
+}
+
+#[pymethods]
+impl PyBatchExecutor {
+    #[new]
+    #[pyo3(signature = (queue=false, backend=None))]
+    fn new(queue: bool, backend: Option<&str>) -> PyResult<Self> {
+        let backend = match backend {
+            Some(name) => Some(pillow_rs::Backend::parse(name).ok_or_else(|| {
+                PyValueError::new_err("backend must be one of 'cpu', 'simd', or 'gpu'")
+            })?),
+            None => None,
+        };
+        Ok(Self {
+            inner: pillow_rs::BatchExecutor::new(queue, backend),
+        })
+    }
+
+    fn submit(
+        &mut self,
+        image: &Bound<'_, PyImage>,
+        operation: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<usize> {
+        let operation_type = operation.get_type().name()?.to_string();
+        if operation_type != "MedianFilter" {
+            return Err(PyTypeError::new_err(
+                "batch operation must be an ImageFilter.MedianFilter instance",
+            ));
+        }
+        let size = operation.getattr("size")?.extract::<i64>()?;
+        let size = filter_size_from_python(size, false)?;
+        let source = image.borrow().inner.clone();
+        py.detach(|| {
+            self.inner
+                .submit(source, pillow_rs::BatchOperation::MedianFilter { size })
+        })
+        .map_err(map_error)
+    }
+
+    fn join(&mut self, py: Python<'_>) -> PyResult<Vec<PyImage>> {
+        py.detach(|| self.inner.join())
+            .map(|images| images.into_iter().map(|inner| PyImage { inner }).collect())
+            .map_err(map_error)
+    }
+}
+
 fn filter_size_from_python(size: i64, negative_is_identity: bool) -> PyResult<u32> {
     if size < 0 {
         if negative_is_identity {
@@ -2487,6 +2538,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.py().get_type::<DecompressionBombError>(),
     )?;
     m.add_class::<PyImage>()?;
+    m.add_class::<PyBatchExecutor>()?;
     m.add_class::<PyPointTransform>()?;
     m.add_class::<PyImageSequenceIterator>()?;
     m.add_class::<PyDraw>()?;

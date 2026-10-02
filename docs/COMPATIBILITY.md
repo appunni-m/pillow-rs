@@ -15,6 +15,7 @@ modes, options, or input formats.
 | Create, open, save, and inspect images | `PIL.Image`: `new`, `open`; image `save`, `size`, `mode`, pixel access |
 | Resize, crop, rotate, or convert | Image `resize`, `crop`, `rotate`, `convert` |
 | Flip, mirror, fit, or apply image operations | `PIL.ImageOps` and `PIL.ImageChops` |
+| Queue compatible independent GPU filters | `PIL.ImageBatch.BatchExecutor`; currently groups native `L`, `LA`, `RGB`, and `RGBA` `MedianFilter(3)` jobs; see [batching guide](IMAGE_BATCHING.md) |
 | Draw shapes and text | `PIL.ImageDraw` |
 | Adjust color or apply filters | `PIL.ImageColor`, `PIL.ImageEnhance`, `PIL.ImageFilter` |
 | Load fonts and measure text | Selected `PIL.ImageFont` APIs; see font limits below |

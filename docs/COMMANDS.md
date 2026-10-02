@@ -14,6 +14,8 @@ enabled.
 | Build for application use | `make build` | Installs the replacement into the selected environment |
 | Build npm package | `make build-wasm-release` | Compiles the shared Node/browser WASM artifact |
 | One parity case | `make migration-parity-case CASE_ID=<id>` | Runs the selected input against source and target |
+| Explicit image-batch parity | `make build-parity && .venv/bin/python scripts/test_imagebatch_parity.py` | Compares `PIL.ImageBatch` with isolated Pillow; verifies one GPU shader dispatch per compatible group and a separate dispatch per fallback job |
+| Explicit image-batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --mode L --width 64 --height 64 --images 64` | Run after `make build-parity`; measures full-call queued `MedianFilter(3)` throughput. Use `--backend simd` without `--queue` for single-image SIMD comparison |
 | Review repetitive cases | `make migration-parity-reduction MIGRATION_REDUCTION_ARGS='--candidates <pairs.json> --output-dir <directory>'` | Measures removal batches and binary restoration against separate CPU/SIMD/GPU baselines; see [coverage](COVERAGE.md#reduce-repetitive-parity-inputs) |
 | Complete runtime campaign | `make test` | Runs backend, Node/browser, and reverse Pillow coverage lanes |
 | Format check / fix | `make fmt` / `make fmt-fix` | Checks / changes Rust formatting |

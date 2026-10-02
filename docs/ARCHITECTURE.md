@@ -28,6 +28,12 @@ Execution receipts record requested and actual routing plus terminal completion.
 A registration, shader compilation, or GPU request is not proof of native
 arithmetic or source-line coverage.
 
+Explicit multi-image scheduling lives behind the separate `PIL.ImageBatch`
+API. It reuses existing single-image operations and only groups combinations
+with a proven native-mode layout; normal `Image` calls and backend routing do
+not change. See [image batching](IMAGE_BATCHING.md) for its current GPU group
+and parity limits.
+
 ## Safety and error conventions
 
 Use checked dimensions and the centralized buffer helpers before allocation.
