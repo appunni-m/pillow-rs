@@ -14997,3 +14997,66 @@ low-load target's confirmation build was stopped after its utility-priority
 release LTO link ran for more than four minutes without reaching measurement;
 the two completed ordinary-scheduler result sets above remain the evidence.
 Move on to the next ranked operation after this checkpoint.
+
+## RGB material `Image.thumbnail` checkpoint — 2026-10-03
+
+The selected workload is `pipeline-op.thumbnail.material-rgb-1024x768`: a
+1024 × 768 RGB image reduced to 256 × 192 with BICUBIC, timing the public
+thumbnail call and `tobytes`. Every parity-gated run used the documented
+`MIGRATION_BENCHMARK_PROFILE=pipeline` filter with
+`MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.thumbnail.material-rgb-1024x768'`
+and `make migration-parity-benchmark`, 100 samples per subject, and exact
+Pillow output checks before timing. The clean-source run at `06080987f` passed
+CPU/SIMD/GPU parity 3/3 and recorded 100 actual executions per requested
+backend with no fallback. Its medians were:
+
+| Candidate | Pillow (ms) | CPU (ms) | SIMD (ms) | GPU (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Clean-source baseline | 0.874229 | 2.265667 | 3.168833 | 2.205021 |
+| CPU 2×2 per-pixel unroll, reverted | 0.943438 | 2.343167 | 3.223500 | 2.300187 |
+| Eight-lane SIMD 2×2 RGB reduction | 0.952396 | 2.303501 | 2.271729 | 2.308146 |
+| CPU paired-row reduction, reverted | 0.952125 | 2.386938 | 2.299083 | 2.349354 |
+| Full-box unboxed-resize route, reverted | 0.924188 | 2.386188 | 2.343833 | 2.376979 |
+
+The retained SIMD kernel only handles complete eight-pixel blocks of 2 × 2
+three-byte reductions. It gathers the four fixed channel offsets for each lane,
+adds the exact Pillow rounding bias, and averages in `u32x8`. Odd right/bottom
+edges, short tails, other factors, alpha-bearing data, and other channel counts
+continue through the established reducer. The scalar-reference test covers two
+interior vector blocks, rejects a partial block, and verifies the complete
+17 × 3 result across odd source dimensions.
+
+The SIMD result repeated at 2.271729 and 2.299083 ms in two runs with similar
+Pillow medians (0.952396 and 0.952125 ms), about 27–28% faster than the clean
+baseline SIMD median. That is a repeatable direction, not goal completion: in
+the same runs it remained 2.38–2.42× slower than Pillow. Serial CPU remained
+about 2.4× slower than Pillow, and GPU about 2.4× slower; the GPU was genuinely
+used for all 100 samples, so this is not an unreceipted GPU request. The target
+of no CPU operation slower than Pillow, 5× SIMD, and GPU matching SIMD remains
+unmet for this workload.
+
+The other three attempts were reverted. A scalar CPU 2×2 branch using direct
+per-pixel arithmetic did not beat the baseline. Replacing its general block
+walk with paired row slices and explicit channel writes was also slower in a
+Pillow-stable repeat; simpler indexing by itself did not make the CPU reducer
+faster. Bypassing boxed resize when RGB's reduced dimensions exactly fill the
+reduced raster passed parity but did not produce a complete-call win, so the
+safe-box code remains unchanged. Parity passed 3/3 in each experiment, so these
+were performance rejections, not correctness failures.
+
+A post-SIMD macOS sample placed 532 samples in `native_reduce_bytes`, 501 in
+horizontal vector convolution, and 133 in vertical vector convolution. The
+reduction specialization is worth keeping, but the next thumbnail revisit must
+profile the RGB horizontal gather/plan and complete resampling path before
+another kernel is written. Do not keep a full-box or row-layout branch based
+only on fewer allocations or simpler source.
+
+Focused checks were `cargo test -p pillow-rs --lib reduce` (7 passed) and
+`cargo test -p pillow-rs --lib thumbnail` (11 passed). Benchmark artifacts are
+`thumbnail-rgb-main-06080987f-baseline-20261003.json`,
+`thumbnail-rgb-attempt1-cpu2x2-06080987f-20261003.json`,
+`thumbnail-rgb-attempt2-simd-2x2-06080987f-20261003.json`,
+`thumbnail-rgb-attempt3-cpu-rowpairs-06080987f-20261003.json`, and
+`thumbnail-rgb-attempt4-full-resize-06080987f-20261003.json` under
+`build/migration-parity/`. No coverage was run. Move to the next ranked
+operation after this checkpoint.

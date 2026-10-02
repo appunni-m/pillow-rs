@@ -20150,6 +20150,55 @@ fn native_reduce_full_pixel_sums(
     sums
 }
 
+// Eight output pixels from complete 2×2 blocks. Three-byte pixels prevent a
+// single contiguous load from lining up with these channel sums, so gather the
+// fixed offsets once and keep the averaging arithmetic in eight SIMD lanes.
+#[inline]
+fn native_reduce_3byte_2x2_vector_block(
+    source: &[u8],
+    geometry: &NativeReduceGeometry,
+    output_x: usize,
+    output_y: usize,
+) -> Option<[u8; SIMD_REDUCE_LANES * 4]> {
+    if geometry.x_factor != 2
+        || geometry.y_factor != 2
+        || output_x > geometry.main_width.saturating_sub(SIMD_REDUCE_LANES)
+        || output_y >= geometry.main_height
+    {
+        return None;
+    }
+    let source_x = output_x.checked_mul(6)?;
+    let source_top = output_y
+        .checked_mul(2)?
+        .checked_mul(geometry.width)?
+        .checked_mul(3)?
+        .checked_add(source_x)?;
+    let source_bottom = source_top + geometry.width * 3;
+    let channel_sums = |channel: usize| {
+        std::array::from_fn(|lane| {
+            let relative_index = lane * 6 + channel;
+            let source_index = source_top + relative_index;
+            u32::from(source[source_index])
+                + u32::from(source[source_index + 3])
+                + u32::from(source[source_bottom + relative_index])
+                + u32::from(source[source_bottom + relative_index + 3])
+        })
+    };
+    let averaged: [[u8; SIMD_REDUCE_LANES]; 3] = std::array::from_fn(|channel| {
+        ((u32x8::new(channel_sums(channel)) + u32x8::splat(2)) >> 2u32)
+            .to_array()
+            .map(|value| value.min(255) as u8)
+    });
+    let mut output = [0u8; SIMD_REDUCE_LANES * 4];
+    for lane in 0..SIMD_REDUCE_LANES {
+        let destination = lane * 3;
+        output[destination] = averaged[0][lane];
+        output[destination + 1] = averaged[1][lane];
+        output[destination + 2] = averaged[2][lane];
+    }
+    Some(output)
+}
+
 // Eight adjacent RGB destination pixels each consume a 3×5 source block.
 // This keeps the RGB source walk explicit and factor-bounded; only the final
 // rounded 24-bit reciprocal average is expressed as wide SIMD lanes. Partial
@@ -20238,6 +20287,17 @@ fn native_reduce_vector_block(
     premultiplied_alpha: bool,
     rgb_3x5_fast_path: bool,
 ) -> Option<[u8; SIMD_REDUCE_LANES * 4]> {
+    if channels == 3
+        && !premultiplied_alpha
+        && valid_pixels == SIMD_REDUCE_LANES
+        && geometry.x_factor == 2
+        && geometry.y_factor == 2
+        && output_x <= geometry.main_width.saturating_sub(SIMD_REDUCE_LANES)
+        && output_y < geometry.main_height
+    {
+        return native_reduce_3byte_2x2_vector_block(source, geometry, output_x, output_y);
+    }
+
     if rgb_3x5_fast_path
         && channels == 3
         && !premultiplied_alpha
@@ -30887,6 +30947,68 @@ mod tests {
         assert_eq!((output_width, output_height), (23, 11));
         assert_eq!(vector_blocks, 22);
         assert_eq!(scalar_tail, 77);
+        let mut expected = Vec::with_capacity(actual.len());
+        for y in 0..output_height as usize {
+            for x in 0..output_width as usize {
+                let (sums, _, multiplier, amend) =
+                    super::native_reduce_pixel_sums(&source, &geometry, 3, false, x, y)
+                        .expect("scalar reference pixel must be in bounds");
+                for channel in 0..3 {
+                    expected.push(super::native_reduce_average(
+                        sums[channel],
+                        multiplier,
+                        amend,
+                    ));
+                }
+            }
+        }
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn native_3byte_2x2_vector_reduce_matches_scalar_with_partial_edges() {
+        let (width, height) = (33u32, 5u32);
+        let source: Vec<u8> = (0..width as usize * height as usize * 3)
+            .map(|index| (index.wrapping_mul(53).wrapping_add(index / 7 * 19 + 11) % 256) as u8)
+            .collect();
+        let image = crate::raster::DynamicImage::ImageRgb8(
+            crate::raster::RgbImage::from_raw(width, height, source.clone())
+                .expect("RGB source dimensions must be valid"),
+        );
+        let geometry = super::NativeReduceGeometry::new(width as usize, height as usize, 2, 2)
+            .expect("2×2 RGB reduction geometry must be supported");
+        for output_x in [0usize, 8] {
+            let vector_block =
+                super::native_reduce_3byte_2x2_vector_block(&source, &geometry, output_x, 0)
+                    .expect("complete eight-pixel blocks must use the specialized kernel");
+            for lane in 0..super::SIMD_REDUCE_LANES {
+                let (sums, _, multiplier, amend) = super::native_reduce_pixel_sums(
+                    &source,
+                    &geometry,
+                    3,
+                    false,
+                    output_x + lane,
+                    0,
+                )
+                .expect("scalar reference pixel must be in bounds");
+                for channel in 0..3 {
+                    assert_eq!(
+                        vector_block[lane * 3 + channel],
+                        super::native_reduce_average(sums[channel], multiplier, amend),
+                        "output ({}, {}) channel {channel}",
+                        output_x + lane,
+                        0
+                    );
+                }
+            }
+        }
+        assert!(super::native_reduce_3byte_2x2_vector_block(&source, &geometry, 16, 0).is_none());
+
+        let (actual, output_width, output_height, vector_blocks, scalar_tail) =
+            super::native_reduce_bytes(&image, 3, false, 2, 2, false)
+                .expect("native RGB reduction must succeed");
+        assert_eq!((output_width, output_height), (17, 3));
+        assert_eq!((vector_blocks, scalar_tail), (6, 3));
         let mut expected = Vec::with_capacity(actual.len());
         for y in 0..output_height as usize {
             for x in 0..output_width as usize {
