@@ -4854,7 +4854,7 @@ struct NativeExpandOutputDispatch {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct NativePackedTransformOutputDispatch {
+struct NativePackedChannelOutputDispatch {
     groups_x: u32,
     groups_y: u32,
     row_tiled: bool,
@@ -4968,7 +4968,7 @@ fn plan_native_transform_output(
     max_storage_buffer_binding_size: u32,
     max_buffer_size: u64,
     capacity_words: u32,
-) -> Option<NativePackedTransformOutputDispatch> {
+) -> Option<NativePackedChannelOutputDispatch> {
     if !matches!(output_channels, 2 | 3) {
         return None;
     }
@@ -5066,7 +5066,7 @@ fn plan_native_transform_output(
     (transfer_bytes <= capacity_bytes
         && transfer_bytes <= u64::from(max_storage_buffer_binding_size)
         && transfer_bytes <= max_buffer_size)
-        .then_some(NativePackedTransformOutputDispatch {
+        .then_some(NativePackedChannelOutputDispatch {
             groups_x: u32::try_from(groups_x).ok()?,
             groups_y: u32::try_from(groups_y).ok()?,
             row_tiled,
@@ -5081,7 +5081,7 @@ fn plan_native_rgb_transform_output(
     max_storage_buffer_binding_size: u32,
     max_buffer_size: u64,
     capacity_words: u32,
-) -> Option<NativePackedTransformOutputDispatch> {
+) -> Option<NativePackedChannelOutputDispatch> {
     plan_native_transform_output(
         ops,
         3,
@@ -5092,13 +5092,81 @@ fn plan_native_rgb_transform_output(
     )
 }
 
+/// Plan the native RGB point/LUT path. Each invocation remaps four RGB
+/// pixels and owns the three u32 words containing their 12 output bytes.
+/// The packed output preserves RGB channel order while avoiding RGBA staging.
+fn plan_native_rgb_point_output(
+    width: u32,
+    height: u32,
+    max_workgroups_per_dimension: u32,
+    max_storage_buffer_binding_size: u32,
+    max_buffer_size: u64,
+    capacity_words: u32,
+) -> Option<NativePackedChannelOutputDispatch> {
+    if width == 0 || height == 0 || max_workgroups_per_dimension == 0 {
+        return None;
+    }
+    let pixels = u64::from(width).checked_mul(u64::from(height))?;
+    if pixels > u64::from(u32::MAX) {
+        return None;
+    }
+    let output_bytes =
+        u64::try_from(CheckedDims::new(width, height, 3).ok()?.total_bytes()).ok()?;
+    if output_bytes > u64::from(u32::MAX) {
+        return None;
+    }
+    let transfer_bytes = output_bytes
+        .checked_add(3)?
+        .checked_div(4)?
+        .checked_mul(4)?;
+    let output_word_count = u32::try_from(transfer_bytes / 4).ok()?;
+    let output_group_count = pixels.div_ceil(4);
+    let workgroup_items =
+        NATIVE_EXPAND_WORKGROUP_WIDTH.checked_mul(NATIVE_EXPAND_WORKGROUP_HEIGHT)?;
+    let required_workgroups = output_group_count.div_ceil(workgroup_items);
+    let max_groups = u64::from(max_workgroups_per_dimension);
+    let row_groups_x =
+        (width % 4 == 0).then(|| u64::from(width / 4).div_ceil(NATIVE_EXPAND_WORKGROUP_WIDTH));
+    let row_groups_y = u64::from(height).div_ceil(NATIVE_EXPAND_WORKGROUP_HEIGHT);
+    let row_tiled_workgroups = row_groups_x.and_then(|groups_x| groups_x.checked_mul(row_groups_y));
+    let row_tiled = row_groups_x.is_some_and(|groups_x| {
+        groups_x <= max_groups
+            && row_groups_y <= max_groups
+            && row_tiled_workgroups.is_some_and(|count| count <= required_workgroups)
+    });
+    let (groups_x, groups_y) = if row_tiled {
+        (row_groups_x?, row_groups_y)
+    } else {
+        let groups_x = required_workgroups.min(max_groups);
+        if groups_x == 0 {
+            return None;
+        }
+        let groups_y = required_workgroups.div_ceil(groups_x);
+        if groups_y > max_groups {
+            return None;
+        }
+        (groups_x, groups_y)
+    };
+    let capacity_bytes = u64::from(capacity_words).checked_mul(4)?;
+    (transfer_bytes <= capacity_bytes
+        && transfer_bytes <= u64::from(max_storage_buffer_binding_size)
+        && transfer_bytes <= max_buffer_size)
+        .then_some(NativePackedChannelOutputDispatch {
+            groups_x: u32::try_from(groups_x).ok()?,
+            groups_y: u32::try_from(groups_y).ok()?,
+            row_tiled,
+            output_word_count,
+            transfer_bytes,
+        })
+}
+
 fn plan_native_la_transform_output(
     ops: &[PipelineOp],
     max_workgroups_per_dimension: u32,
     max_storage_buffer_binding_size: u32,
     max_buffer_size: u64,
     capacity_words: u32,
-) -> Option<NativePackedTransformOutputDispatch> {
+) -> Option<NativePackedChannelOutputDispatch> {
     plan_native_transform_output(
         ops,
         2,
@@ -6312,8 +6380,8 @@ struct GpuBatchResources<'a> {
     lut_ranges: Vec<Option<BufferRange>>,
     native_expand_output: Option<NativeExpandOutputDispatch>,
     native_luma_transform_output: Option<NativeExpandOutputDispatch>,
-    native_rgb_transform_output: Option<NativePackedTransformOutputDispatch>,
-    native_la_transform_output: Option<NativePackedTransformOutputDispatch>,
+    native_rgb_packed_output: Option<NativePackedChannelOutputDispatch>,
+    native_la_transform_output: Option<NativePackedChannelOutputDispatch>,
     native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
 }
 
@@ -6771,7 +6839,7 @@ impl GpuInner {
         native_sharpness_rgb_input: bool,
         native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
         native_luma_transform_output: bool,
-        native_rgb_transform_output: bool,
+        native_rgb_packed_output: bool,
         native_la_transform_output: bool,
     ) -> Result<Vec<ResolvedPipeline>, PilError> {
         let mut resolved = Vec::with_capacity(ops.len());
@@ -6816,6 +6884,16 @@ impl GpuInner {
                     "__internal_point_luma_packed",
                     "point_luma_packed.wgsl",
                     include_str!("shaders/point_luma_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(point));
+                index += 1;
+                continue;
+            }
+            if native_rgb_packed_output && matches!(op, PipelineOp::Eval { .. }) {
+                let point = self.resolve_pipeline(
+                    "__internal_point_rgb_packed",
+                    "point_rgb_packed.wgsl",
+                    include_str!("shaders/point_rgb_packed.wgsl"),
                 )?;
                 resolved.push(ResolvedPipeline::Single(point));
                 index += 1;
@@ -7089,7 +7167,7 @@ impl GpuInner {
                     horizontal,
                     vertical,
                 });
-            } else if native_rgb_transform_output && matches!(op, PipelineOp::Transform { .. }) {
+            } else if native_rgb_packed_output && matches!(op, PipelineOp::Transform { .. }) {
                 resolved.push(ResolvedPipeline::Single(self.resolve_pipeline(
                     "__internal_transform_rgb_nearest_packed",
                     "transform_rgb_nearest_packed.wgsl",
@@ -8106,7 +8184,7 @@ impl GpuInner {
         packed_luma_transform_input: bool,
         packed_luma_transform_output: bool,
         native_rgb_compact_input: bool,
-        native_rgb_transform_output: bool,
+        native_rgb_packed_output: bool,
         native_la_transform_output: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
@@ -8151,8 +8229,17 @@ impl GpuInner {
         let mut pad_resize_dims = Vec::with_capacity(ops.len());
         let mut native_expand_output = None;
         let mut native_luma_transform_output = None;
-        let native_rgb_transform_output = if native_rgb_transform_output {
-            Some(
+        let native_rgb_packed_output = if native_rgb_packed_output {
+            let output_plan = if matches!(ops, [PipelineOp::Eval { .. }]) {
+                plan_native_rgb_point_output(
+                    w,
+                    h,
+                    limits.max_compute_workgroups_per_dimension,
+                    limits.max_storage_buffer_binding_size,
+                    limits.max_buffer_size,
+                    buffers.capacity,
+                )
+            } else {
                 plan_native_rgb_transform_output(
                     ops,
                     limits.max_compute_workgroups_per_dimension,
@@ -8160,12 +8247,12 @@ impl GpuInner {
                     limits.max_buffer_size,
                     buffers.capacity,
                 )
-                .ok_or_else(|| {
-                    PilError::InternalError(
-                        "GPU packed-RGB transform lost its checked output plan".into(),
-                    )
-                })?,
-            )
+            };
+            Some(output_plan.ok_or_else(|| {
+                PilError::InternalError(
+                    "GPU packed-RGB operation lost its checked output plan".into(),
+                )
+            })?)
         } else {
             None
         };
@@ -8267,7 +8354,13 @@ impl GpuInner {
                     "resize_convolution_h.wgsl",
                     include_str!("shaders/resize_convolution_h.wgsl"),
                 )?
-            } else if native_rgb_transform_output.is_some()
+            } else if native_rgb_packed_output.is_some() && matches!(op, PipelineOp::Eval { .. }) {
+                self.resolve_pipeline(
+                    "__internal_point_rgb_packed",
+                    "point_rgb_packed.wgsl",
+                    include_str!("shaders/point_rgb_packed.wgsl"),
+                )?
+            } else if native_rgb_packed_output.is_some()
                 && matches!(op, PipelineOp::Transform { .. })
             {
                 self.resolve_pipeline(
@@ -8556,6 +8649,16 @@ impl GpuInner {
                 params[1] = 1;
                 params[2] = 0;
                 params[3] = 0;
+            } else if native_rgb_packed_output.is_some() && matches!(op, PipelineOp::Eval { .. }) {
+                let plan = native_rgb_packed_output.ok_or_else(|| {
+                    PilError::InternalError(
+                        "packed-RGB point parameters have no checked output plan".into(),
+                    )
+                })?;
+                params[0] = cur_w;
+                params[1] = cur_h;
+                params[2] = 0;
+                params[3] = if plan.row_tiled { 16 } else { 0 };
             } else if packed_luma_colorize && matches!(op, PipelineOp::Colorize { .. }) {
                 // Colorize has no row-offset input; reuse that word to select
                 // the packed four-luma-samples-per-u32 upload layout.
@@ -8768,7 +8871,7 @@ impl GpuInner {
                     // logical output samples into each storage word.
                     params[3] |= 8;
                 }
-                if native_rgb_transform_output.is_some_and(|plan| plan.row_tiled) {
+                if native_rgb_packed_output.is_some_and(|plan| plan.row_tiled) {
                     // The compact RGB shader maps workgroup rows directly to
                     // image rows, avoiding a flat group-to-row division.
                     params[3] |= 16;
@@ -9351,7 +9454,7 @@ impl GpuInner {
                 lut_ranges,
                 native_expand_output,
                 native_luma_transform_output,
-                native_rgb_transform_output,
+                native_rgb_packed_output,
                 native_la_transform_output,
                 native_cover_packed_output,
             },
@@ -9448,9 +9551,17 @@ impl GpuInner {
                 (plan.groups_x, plan.groups_y)
             }
             "__internal_transform_rgb_nearest_packed" => {
-                let plan = resources.native_rgb_transform_output.ok_or_else(|| {
+                let plan = resources.native_rgb_packed_output.ok_or_else(|| {
                     PilError::InternalError(
                         "packed-RGB Transform shader has no checked output plan".into(),
+                    )
+                })?;
+                (plan.groups_x, plan.groups_y)
+            }
+            "__internal_point_rgb_packed" => {
+                let plan = resources.native_rgb_packed_output.ok_or_else(|| {
+                    PilError::InternalError(
+                        "packed-RGB point shader has no checked output plan".into(),
                     )
                 })?;
                 (plan.groups_x, plan.groups_y)
@@ -9561,7 +9672,7 @@ impl GpuInner {
             native_sharpness_rgb_input,
             prepared.resources.native_cover_packed_output,
             packed_luma_transform_output,
-            prepared.resources.native_rgb_transform_output.is_some(),
+            prepared.resources.native_rgb_packed_output.is_some(),
             prepared.resources.native_la_transform_output.is_some(),
         )?;
         let mut current_is_a = start_is_a;
@@ -13231,7 +13342,7 @@ impl GpuInner {
         packed_luma_transform_input: bool,
         packed_luma_transform_output: bool,
         native_rgb_compact_input: bool,
-        native_rgb_transform_output: bool,
+        native_rgb_packed_output: bool,
         native_la_transform_output: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
@@ -13467,7 +13578,7 @@ impl GpuInner {
                 packed_luma_transform_input,
                 packed_luma_transform_output,
                 native_rgb_compact_input,
-                native_rgb_transform_output,
+                native_rgb_packed_output,
                 native_la_transform_output,
                 packed_luma_point,
                 packed_luma_putdata,
@@ -13520,7 +13631,7 @@ impl GpuInner {
                     dispatch.transfer_bytes
                 } else if let Some(dispatch) = prepared.resources.native_expand_output {
                     dispatch.transfer_bytes
-                } else if let Some(dispatch) = prepared.resources.native_rgb_transform_output {
+                } else if let Some(dispatch) = prepared.resources.native_rgb_packed_output {
                     dispatch.transfer_bytes
                 } else if let Some(dispatch) = prepared.resources.native_la_transform_output {
                     dispatch.transfer_bytes
@@ -13921,13 +14032,15 @@ fn gpu_packed_luma_convert_input(
 }
 
 /// Admit operations that consume a singleton native RGB upload. Convert
-/// widens to RGBA in its shader; Transform samples the compact triples while
-/// keeping its normal packed working/output layout.
+/// widens to RGBA in its shader; Transform samples compact triples; the
+/// host-derived unmasked RGB AutoContrast LUT uses the matching packed point
+/// shader to keep both transfer boundaries native.
 #[cfg(target_endian = "little")]
 fn gpu_native_rgb_compact_input(
     ops: &[PipelineOp],
     image: &DynamicImage,
     logical_mode: Option<&str>,
+    host_autocontrast_rgb_lut: bool,
 ) -> bool {
     let supported_consumer = match ops {
         [
@@ -13938,6 +14051,7 @@ fn gpu_native_rgb_compact_input(
             },
         ] => true,
         [PipelineOp::Transform { .. }] => true,
+        [PipelineOp::Eval { .. }] => host_autocontrast_rgb_lut,
         _ => false,
     };
     if !supported_consumer
@@ -13962,6 +14076,7 @@ fn gpu_native_rgb_compact_input(
     _ops: &[PipelineOp],
     _image: &DynamicImage,
     _logical_mode: Option<&str>,
+    _host_autocontrast_rgb_lut: bool,
 ) -> bool {
     false
 }
@@ -20687,6 +20802,9 @@ impl GpuPool {
         let host_autocontrast_luma_lut = host_autocontrast_lut.is_some()
             && matches!(img, DynamicImage::ImageLuma8(_))
             && matches!(mode, None | Some("L"));
+        let host_autocontrast_rgb_lut = host_autocontrast_lut.is_some()
+            && matches!(img, DynamicImage::ImageRgb8(_))
+            && matches!(mode, None | Some("RGB"));
         let mut dispatch_ops: Vec<PipelineOp> = if let Some(op) = host_autocontrast_lut {
             vec![op]
         } else {
@@ -20762,7 +20880,8 @@ impl GpuPool {
         // the existing standard RGBA transport and shader contract.
         let packed_luma_convert = gpu_packed_luma_convert_input(ops, img, mode);
         let packed_luma_transform_input = gpu_packed_luma_transform_input(ops, img, mode);
-        let native_rgb_compact_input = gpu_native_rgb_compact_input(ops, img, mode);
+        let native_rgb_compact_input_candidate =
+            gpu_native_rgb_compact_input(ops, img, mode, host_autocontrast_rgb_lut);
         let native_la_transform_input = gpu_native_la_transform_input(ops, img, mode);
         let packed_luma_point = gpu_packed_luma_point_input(
             source_is_luma_point_run,
@@ -21800,15 +21919,31 @@ impl GpuPool {
                 capacity,
             )
             .is_some();
-        let native_rgb_transform_output = native_rgb_compact_input
-            && plan_native_rgb_transform_output(
+        let native_rgb_output_plan = if matches!(ops, [PipelineOp::Eval { .. }]) {
+            plan_native_rgb_point_output(
+                img.width(),
+                img.height(),
+                limits.max_compute_workgroups_per_dimension,
+                limits.max_storage_buffer_binding_size,
+                limits.max_buffer_size,
+                capacity,
+            )
+        } else {
+            plan_native_rgb_transform_output(
                 ops,
                 limits.max_compute_workgroups_per_dimension,
                 limits.max_storage_buffer_binding_size,
                 limits.max_buffer_size,
                 capacity,
             )
-            .is_some();
+        };
+        let native_rgb_packed_output =
+            native_rgb_compact_input_candidate && native_rgb_output_plan.is_some();
+        // A native RGB Eval shader writes packed RGB too. If its checked
+        // output layout is unavailable, use the RGBA input/output contract;
+        // the generic Eval shader cannot consume compact triples by itself.
+        let native_rgb_compact_input = native_rgb_compact_input_candidate
+            && (!matches!(ops, [PipelineOp::Eval { .. }]) || native_rgb_packed_output);
         let native_la_transform_output = native_la_transform_input
             && plan_native_la_transform_output(
                 ops,
@@ -22451,7 +22586,7 @@ impl GpuPool {
             packed_luma_transform_input,
             packed_luma_transform_output,
             native_rgb_compact_input,
-            native_rgb_transform_output,
+            native_rgb_packed_output,
             native_la_transform_output,
             packed_luma_point,
             packed_luma_putdata,
@@ -22548,7 +22683,7 @@ impl GpuPool {
         let readback_buffer = readback.buffer(&buffers, final_is_a);
         let result = if let Some(dispatch) = native_cover_packed_output {
             gpu.readback_to_cover_native_bytes(final_w, final_h, dispatch, readback_buffer)?
-        } else if native_rgb_transform_output {
+        } else if native_rgb_packed_output {
             gpu.readback_to_native_channels(final_w, final_h, 3, readback_buffer)?
         } else if native_la_transform_output {
             gpu.readback_to_native_channels(final_w, final_h, 2, readback_buffer)?
@@ -22667,7 +22802,7 @@ impl GpuPool {
         };
         resource_telemetry.readback_bytes = if let Some(dispatch) = native_cover_packed_output {
             dispatch.transfer_bytes
-        } else if native_rgb_transform_output {
+        } else if native_rgb_packed_output {
             u64::try_from(CheckedDims::new(final_w, final_h, 3)?.total_bytes())
                 .map_err(|_| PilError::ValueError("GPU native RGB readback is too large".into()))?
                 .div_ceil(4)
@@ -29946,43 +30081,66 @@ mod tests {
         assert!(super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&convert_rgba),
             &rgb,
-            None
+            None,
+            false
         ));
         assert!(super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&convert_rgba),
             &rgb,
-            Some("RGB")
+            Some("RGB"),
+            false
         ));
         assert!(super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&transform),
             &rgb,
-            Some("RGB")
+            Some("RGB"),
+            false
         ));
         assert!(super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&transform),
             &rgb,
-            None
+            None,
+            false
         ));
         assert!(!super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&convert_rgba),
             &rgb,
-            Some("HSV")
+            Some("HSV"),
+            false
         ));
         assert!(!super::gpu_native_rgb_compact_input(
             &[convert_rgba.clone(), PipelineOp::Duplicate],
             &rgb,
-            Some("RGB")
+            Some("RGB"),
+            false
         ));
         assert!(!super::gpu_native_rgb_compact_input(
             &[transform.clone(), PipelineOp::Duplicate],
             &rgb,
-            Some("RGB")
+            Some("RGB"),
+            false
         ));
         let empty = DynamicImage::ImageRgb8(RgbImage::new(0, 1));
         assert!(!super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&convert_rgba),
             &empty,
-            Some("RGB")
+            Some("RGB"),
+            false
+        ));
+        let eval = PipelineOp::Eval {
+            lut: Arc::from(vec![17; 3 * 256]),
+        };
+        assert!(!super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&eval),
+            &rgb,
+            Some("RGB"),
+            false
+        ));
+        assert!(super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&eval),
+            &rgb,
+            Some("RGB"),
+            true
         ));
     }
 
@@ -30116,6 +30274,89 @@ mod tests {
                 crate::compute::take_pipeline_backend_override(),
                 None,
                 "{name} fallback"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn rgb_autocontrast_packed_point_matches_cpu_for_every_rgb_tail() {
+        use crate::compute::BackendImpl;
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+
+        match super::GpuPool::ensure_init() {
+            Ok(_) => {}
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                return;
+            }
+            Err(error) => panic!("GPU RGB AutoContrast initialization failed: {error}"),
+        }
+
+        for (width, height) in [(5u32, 1u32), (3, 2), (5, 3), (8, 1)] {
+            let pixel_count = width as usize * height as usize;
+            let source = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(
+                    width,
+                    height,
+                    (0..pixel_count * 3)
+                        .map(|index| index.wrapping_mul(47).wrapping_add(index / 3) as u8)
+                        .collect(),
+                )
+                .expect("RGB AutoContrast source"),
+            );
+            let op = PipelineOp::Autocontrast {
+                cutoff: 0.0,
+                mask: None,
+            };
+            let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGB"))
+                .unwrap_or_else(|error| panic!("CPU RGB AutoContrast {width}x{height}: {error}"));
+            let actual = super::GpuPool
+                .execute_batch_strict(std::slice::from_ref(&op), &source, Some("RGB"))
+                .unwrap_or_else(|error| panic!("GPU RGB AutoContrast {width}x{height}: {error}"));
+            assert_eq!(actual.color(), expected.color(), "{width}x{height} mode");
+            assert_eq!(
+                actual.as_bytes(),
+                expected.as_bytes(),
+                "{width}x{height} pixels"
+            );
+
+            let resources = crate::compute::take_pipeline_resource_telemetry()
+                .unwrap_or_else(|| panic!("{width}x{height} resource receipt"));
+            let transfer_bytes = (pixel_count * 3).div_ceil(4) * 4;
+            assert_eq!(
+                resources.upload_bytes, transfer_bytes as u64,
+                "{width}x{height} upload"
+            );
+            assert_eq!(
+                resources.readback_bytes, transfer_bytes as u64,
+                "{width}x{height} readback"
+            );
+            assert_eq!(
+                resources.mode_conversion_count, 0,
+                "{width}x{height} conversion"
+            );
+            assert_eq!(
+                crate::compute::take_pipeline_dispatch_count(),
+                Some(1),
+                "{width}x{height} dispatch"
+            );
+            assert_eq!(
+                crate::compute::take_pipeline_backend_override(),
+                None,
+                "{width}x{height} fallback"
             );
         }
     }
@@ -31042,7 +31283,7 @@ mod tests {
     }
 
     #[test]
-    fn native_rgb_transform_output_plans_compact_words_with_checked_limits() {
+    fn native_rgb_packed_output_plans_compact_words_with_checked_limits() {
         let transform = |w, h, matrix: [f64; 6]| PipelineOp::Transform {
             w,
             h,
@@ -31103,6 +31344,52 @@ mod tests {
         assert!(
             super::plan_native_rgb_transform_output(
                 &oversized,
+                65_535,
+                u32::MAX,
+                u64::MAX,
+                u32::MAX,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn native_rgb_point_output_plans_packed_lut_dispatch_with_checked_limits() {
+        let odd = super::plan_native_rgb_point_output(5, 3, 1, 48, 48, 12)
+            .expect("odd RGB point output fits one workgroup and padded storage");
+        assert_eq!((odd.groups_x, odd.groups_y), (1, 1));
+        assert!(!odd.row_tiled);
+        assert_eq!(odd.output_word_count, 12);
+        assert_eq!(odd.transfer_bytes, 48);
+
+        let aligned =
+            super::plan_native_rgb_point_output(1024, 768, 128, u32::MAX, u64::MAX, 1024 * 768)
+                .expect("benchmark RGB output fits its bounded dispatch grid");
+        assert_eq!((aligned.groups_x, aligned.groups_y), (16, 48));
+        assert!(aligned.row_tiled);
+        assert_eq!(aligned.transfer_bytes, 1024 * 768 * 3);
+
+        let image_4k = super::plan_native_rgb_point_output(
+            4096,
+            4096,
+            65_535,
+            u32::MAX,
+            u64::MAX,
+            4096 * 4096,
+        )
+        .expect("4K RGB output is below the per-dimension workgroup limit");
+        assert_eq!((image_4k.groups_x, image_4k.groups_y), (64, 256));
+        assert!(image_4k.row_tiled);
+        assert_eq!(image_4k.transfer_bytes, 4096 * 4096 * 3);
+
+        assert!(super::plan_native_rgb_point_output(5, 3, 0, 48, 48, 12).is_none());
+        assert!(super::plan_native_rgb_point_output(5, 3, 1, 47, 48, 12).is_none());
+        assert!(super::plan_native_rgb_point_output(5, 3, 1, 48, 47, 12).is_none());
+        assert!(super::plan_native_rgb_point_output(5, 3, 1, 48, 48, 11).is_none());
+        assert!(
+            super::plan_native_rgb_point_output(
+                65_536,
+                65_536,
                 65_535,
                 u32::MAX,
                 u64::MAX,

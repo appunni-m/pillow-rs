@@ -12638,13 +12638,12 @@ every result against live Pillow. Baseline and final receipts are
 
 All 1,600 outputs from CPU, SIMD, and GPU matched Pillow exactly in the final
 run. Telemetry confirms the target backends executed without fallback. The
-GPU still uploads and reads back 3,145,728 bytes each and records one mode
-conversion for the 2,359,296-byte RGB image. The existing AutoContrast lowering
-computes the LUT on the host and maps it in one GPU dispatch, so the GPU
-checkpoint needs a compact native-RGB Eval route: packed triplet upload,
-channel-specific LUT selection, exclusive writers for packed output words,
-and a checked workgroup/buffer planner. That route was not implemented in
-this four-attempt visit; do not count the unchanged GPU timing as a gain.
+At this CPU checkpoint, the GPU still uploaded and read back 3,145,728 bytes
+each and recorded one mode conversion for the 2,359,296-byte RGB image. The
+existing AutoContrast lowering computed the LUT on the host and mapped it in
+one GPU dispatch; the compact native-RGB Eval route was not part of that
+four-attempt CPU visit. The GPU follow-up below implements and measures that
+route separately.
 
 Two SIMD candidates were tried and removed. Reusing the balanced-tree
 out-of-place LUT mapper dropped the observed SIMD rate to 284 img/s. A second
@@ -12664,8 +12663,65 @@ make PYTHON=build/parity-venv/bin/python \
 ```
 
 The CPU and SIMD source hashes in the final receipt match the checkpointed
-source; neither rejected SIMD candidate remains in the tree. Move to the next
-ranked operation and revisit RGB AutoContrast's compact GPU route later. CI,
+source; neither rejected SIMD candidate remains in the tree. The GPU state at
+this checkpoint is superseded by the packed-path measurements below. CI,
+coverage, release, and push remain deferred.
+
+## RGB `ImageOps.autocontrast` packed GPU follow-up — 2026-10-02
+
+The compact GPU route now handles the host-derived, unmasked RGB AutoContrast
+LUT as a native RGB point pass. The previous path widened input and output to
+RGBA, moving 3,145,728 bytes each way and recording one mode conversion for a
+2,359,296-byte image. The admitted path uploads and reads back exactly
+2,359,296 bytes each way, records zero mode conversions, and keeps one GPU
+dispatch. A new `point_rgb_packed.wgsl` shader applies the R, G, and B LUT
+bands independently, reads three aligned packed words for each four-pixel
+group, and writes the corresponding three output words. Its checked planner
+rejects unsupported workgroup, storage-buffer, and buffer-capacity layouts;
+unaligned pixel tails use the flat grid while aligned rows use row tiling.
+
+The focused GPU regression compares RGB output with the CPU reference at
+pixel-count remainders 1, 2, and 3, plus an aligned row-tiled case. The
+isolated throughput parity workflow then checked 1,600 outputs per backend
+against live Pillow in each run. All Pillow, serial CPU, SIMD, and GPU outputs
+matched exactly, the GPU was the actual backend with one dispatch and no
+fallback, and the runtime remained consistent across processes. The baseline,
+first packed-transfer attempt, packed-gather attempt, and unchanged repeat
+receipts are:
+
+| q1 measurement | Baseline | Packed transfer | Packed gather | Gather repeat | Exact-source checkpoint |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Pillow throughput (img/s) | 430.5 | 431.6 | 421.5 | 373.4 | 443.9 |
+| Serial CPU throughput (img/s) | 769.3 | 754.8 | 746.5 | 687.9 | 778.3 |
+| SIMD throughput (img/s) | 559.3 | 554.9 | 548.9 | 514.4 | 560.3 |
+| GPU throughput (img/s) | 459.9 | 603.8 | 570.4 | 576.0 | 638.9 |
+| GPU p50 latency (ms) | 2.183 | 1.619 | 1.611 | 1.552 | 1.524 |
+| GPU / SIMD throughput | 0.82× | 1.09× | 1.04× | 1.12× | 1.14× |
+
+The final checkpoint receipt matches the current Rust and shader file hashes.
+It again puts q1 GPU throughput and latency ahead of SIMD; q2 is effectively
+even at 0.995×, while q4 remains 18% slower. Across packed-gather runs, q2
+GPU/SIMD throughput ranged from 0.87× to 1.06× and q4 from 0.77× to 1.08×,
+so queued throughput is not a stable win. The serial CPU remains faster than
+Pillow on this workload; SIMD remains about 1.3× Pillow rather than meeting
+the 5× target. Keep this as a partial P1 GPU checkpoint and continue with the
+next ranked operation while those backend targets remain open.
+
+Reproduce the final packed-gather repeat with:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/autocontrast-rgb-p1-packed-gpu-checkpoint-20261002.json \
+  MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation autocontrast --mode RGB --size 1024 768' \
+  make migration-parity-transpose-throughput
+```
+
+The four receipts are `build/migration-parity/autocontrast-rgb-p1-before-gpu-20261002.json`,
+`build/migration-parity/autocontrast-rgb-p1-after-gpu-point-20261002.json`,
+`build/migration-parity/autocontrast-rgb-p1-after-gpu-point-attempt2-20261002.json`,
+`build/migration-parity/autocontrast-rgb-p1-after-gpu-point-attempt2-repeat-20261002.json`,
+and `build/migration-parity/autocontrast-rgb-p1-packed-gpu-checkpoint-20261002.json`.
+The benchmark target builds in the isolated parity environment; full CI,
 coverage, release, and push remain deferred.
 
 ## L `ImageOps.cover` direct CPU resampling checkpoint — 2026-10-02
