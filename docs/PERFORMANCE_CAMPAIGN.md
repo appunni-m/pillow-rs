@@ -234,6 +234,97 @@ still incomplete; blockers remain the small/masked SIMD gap, GPU latency and
 throughput relative to SIMD, and performance outside this cohort. The next
 ranked operation remains `PIL.ImageFont.FreeTypeFont.font_variant`.
 
+## Native-L Equalize GPU throughput revisit — 2026-10-02
+
+The host queue-depth diagnostic showed that plain L Equalize widened each
+native one-byte pixel to RGBA before its GPU histogram/remap. For a
+1024 × 768 frame that uploaded and read back 3,145,728 bytes each, four times
+the 786,432-byte native L payload. Singleton native-L Equalize now uses a
+packed-byte histogram and packed-byte remap, preserving the existing clear and
+CDF stages. Histogram reads stop at the logical pixel count; the final packed
+word is zero-padded and readback trims to the logical byte length. Masked
+Equalize and other modes retain their existing paths. Packed buffer capacity
+is still expressed in logical pixels by the shared allocator, so this change
+keeps that allocation contract and limits its change to transfer and shader
+work.
+
+The exact L output matched the CPU byte-for-byte in the focused Rust regression
+for 255–260 pixels and for a 31 × 17 image. The test requires strict GPU
+execution, native L output, zero mode conversions, three compute dispatches,
+and the expected padded upload/readback size. An expanded 10-case live Pillow
+cohort covering unmasked L, materialized and empty L images, and masked-L
+controls passed on CPU, strict SIMD, and strict GPU (10/10 each). The
+benchmark independently checks each completed result against live Pillow. No
+coverage was run.
+
+The same release request-boundary throughput diagnostic was run before and
+after the native-L path with 1024 × 768 L and RGB inputs. It used queue depths
+1/2/4, 16 different images per window, five warmup windows, and five measured
+samples of 20 windows each (1,600 measured requests per subject, mode, and
+depth). Timing includes fresh image creation through terminal bytes and
+receipt capture; output comparison runs outside the timed windows. Every
+request completed and matched Pillow. The first receipt used clean commit
+`216c6d082`; the second recorded the same revision with the intended working
+changes and `source_unchanged: true` during the run.
+
+| L workload, images/s | Pillow before → after | CPU before → after | SIMD before → after | GPU before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Queue depth 1 | 1,615.5 → 1,675.4 | 2,687.2 → 2,813.6 | 1,610.7 → 1,689.7 | 445.6 → 2,053.7 |
+| Queue depth 2 | 2,648.2 → 2,478.0 | 4,637.0 → 4,845.9 | 2,988.6 → 3,086.3 | 724.6 → 3,319.0 |
+| Queue depth 4 | 3,763.5 → 4,199.2 | 7,210.8 → 7,773.2 | 4,895.9 → 5,395.0 | 953.9 → 4,986.3 |
+
+GPU L throughput improved 4.61×, 4.58×, and 5.23× at the three tested queue
+depths. Its p50 request latency at depth one moved from 2.036 ms to 0.480 ms.
+The new GPU receipt reports 786,432 upload bytes, 786,432 readback bytes, and
+zero mode conversions, down from 3,145,728 bytes in each direction and one
+conversion in the baseline.
+After the change, GPU throughput exceeds SIMD at depths one and two, but trails
+SIMD by 7.6% at depth four; GPU therefore has not established a general
+high-concurrency throughput win. CPU remains the throughput leader for L at
+all three depths. RGB, whose native transfer path did not change, is a useful
+control: the second run's GPU throughput was 865.6/1,333.0/1,705.8 images/s at
+depths 1/2/4, versus 656.8/1,227.3/1,454.6 in the first run. This run-to-run
+shift is why the ratios are diagnostic evidence, not a stable claim.
+
+These queue depths are concurrent host requests, not an internal multi-image
+batch. `BackendImpl::execute_batch` receives one image plus its ordered list
+of operations; GPU pipeline chunking keeps that image's intermediates on the
+device, while independent calls can submit work through the shared GPU queue
+and acquire separate reusable buffers. No library scheduler currently groups
+independent images into one submission or one multi-image dispatch. The
+diagnostic does not claim that separate requests execute as simultaneous GPU
+kernels. A future scheduler should be evaluated as a distinct change, with
+same-shape/mode batches, per-image output ownership, bounded in-flight memory,
+and measured queue wait, GPU work, and completed valid images per second.
+
+Reproduce the parity and benchmark evidence with:
+
+```sh
+cargo test --locked -p pillow-rs --lib luma_equalize_packed_histogram_matches_cpu_for_every_luma_tail -- --nocapture --test-threads=1
+MIGRATION_TARGET_BACKEND=cpu MIGRATION_STRICT_TARGET_BACKEND=1 \
+  MIGRATION_PARITY_CASE_IDS='PIL.ImageOps.equalize.behavior.default,PIL.ImageOps.equalize.mode.l,PIL.ImageOps.equalize.nuanced.valid-l-mask,PIL.ImageOps.equalize.nuanced.materialized-l,PIL.ImageOps.equalize.nuanced.empty-l,PIL.ImageOps.equalize.nuanced.empty-height-l,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-empty,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-full,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-alternating,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-half' \
+  MIGRATION_PARITY_OUTPUT=build/migration-parity/equalize-l-expanded-cpu-20261002.json \
+  make migration-parity-test
+MIGRATION_PARITY_CASE_IDS='PIL.ImageOps.equalize.behavior.default,PIL.ImageOps.equalize.mode.l,PIL.ImageOps.equalize.nuanced.valid-l-mask,PIL.ImageOps.equalize.nuanced.materialized-l,PIL.ImageOps.equalize.nuanced.empty-l,PIL.ImageOps.equalize.nuanced.empty-height-l,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-empty,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-full,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-alternating,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-half' \
+  MIGRATION_SIMD_STRICT_OUTPUT=build/migration-parity/equalize-l-expanded-simd-20261002.json \
+  make migration-parity-test-simd-strict
+MIGRATION_PARITY_CASE_IDS='PIL.ImageOps.equalize.behavior.default,PIL.ImageOps.equalize.mode.l,PIL.ImageOps.equalize.nuanced.valid-l-mask,PIL.ImageOps.equalize.nuanced.materialized-l,PIL.ImageOps.equalize.nuanced.empty-l,PIL.ImageOps.equalize.nuanced.empty-height-l,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-empty,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-full,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-alternating,PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-half' \
+  MIGRATION_GPU_STRICT_OUTPUT=build/migration-parity/equalize-l-expanded-gpu-20261002.json \
+  make migration-parity-test-gpu-strict
+MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/equalize-native-l-throughput-20261002.json \
+  MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation equalize --mode L --mode RGB --size 1024 768' \
+  make migration-parity-transpose-throughput
+```
+
+The throughput receipts are
+`build/migration-parity/equalize-throughput-20261002.json` and
+`build/migration-parity/equalize-native-l-throughput-20261002.json`. Keep this
+optimization as a GPU L checkpoint, not a claim that Equalize or GPU
+multi-image scheduling has met its full performance target. SIMD L still
+misses the campaign's 2× latency target versus Pillow, and RGB remains the
+unmodified comparison cohort.
+
+
 ## Font variant checkpoint
 
 The unchanged-policy whole-workflow baseline for
@@ -5779,6 +5870,7 @@ each API boundary before tuning the pixel loop. If the producer already owns
 the exact expanded raster consumed by the next stage, transfer that allocation
 and preserve its logical mode tag instead of encoding and decoding it again.
 No coverage collection ran.
+
 
 ## PIL.ImageDraw.ImageDraw.multiline_text checkpoint — 2026-09-27
 
