@@ -14516,5 +14516,52 @@ receipt passed 3/3; the separate Parallel CPU receipt passed 1/1. Exact receipt 
 benchmark commands used their documented Make target, which depends on
 `build-parity`; neither used `make build`. Results identify revision
 `9545210b821cba796d4a30b7a016c05e796176fe` with a dirty worktree and are
-diagnostic until the same parity and benchmark gates pass on the commit
-checkpoint. No coverage was run.
+diagnostic snapshots. The clean checkpoint results follow. No coverage was
+run.
+
+### Clean checkpoint verification — commit 82c83e753
+
+The exact commit passed the documented standard workload through
+the documented Make targets; its Pillow parity gate passed 3/3 and the
+separate Parallel CPU run passed 1/1. Both receipts identify revision
+`82c83e7537a0f09d6ada0ba77bfcda74bc4116b4` with `dirty: false` and 100 timed
+backend samples. The exact commands were:
+
+```sh
+PYTHON=.venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.paste.masked.materialized.masked-rgba-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/paste-masked-rgba-main-commit-82c83e753-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/paste-masked-rgba-main-commit-82c83e753-parity-20261002.json \
+make migration-parity-benchmark
+
+PYTHON=.venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.paste.masked.materialized.masked-rgba-noise-1024x768' \
+make migration-parity-benchmark-parallel-cpu
+```
+
+| Subject | Median ms | Median ops/s | Clean-commit comparison |
+| --- | ---: | ---: | --- |
+| Ordinary Pillow | 1.011396 | 989 | reference |
+| Serial CPU | 0.574834 | 1,740 | 1.76× faster than Pillow |
+| SIMD | 0.521604 | 1,917 | 1.94× faster than Pillow; below 5× |
+| GPU | 2.291667 | 436 | 4.39× slower than SIMD |
+| Parallel CPU | 0.563792 | 1,774 | 1.79× faster than ordinary Pillow |
+
+All 100 standard samples report the requested CPU, SIMD, or GPU backend with no
+fallback; GPU dispatch count is one per operation. Parallel CPU records both
+`pillow-rs/parallel` and `pillow-rs-py/parallel`, executes on the CPU backend,
+and uses the ordinary Pillow result above as its baseline. There is no threaded
+Pillow comparison. The listed operations per second are reciprocals of median
+latency at concurrency one, not a sustained-throughput result.
+
+The exact standard receipts are
+`build/migration-parity/paste-masked-rgba-main-commit-82c83e753-20261002.json`
+and `build/migration-parity/paste-masked-rgba-main-commit-82c83e753-parity-20261002.json`;
+the Parallel CPU receipts are
+`build/migration-parity/benchmark-result-parallel-cpu.json` and
+`build/migration-parity/benchmark-parity-result-parallel-cpu.json`. No actual
+4096 × 4096 GPU image parity run was made; only its allocation-free planner
+boundary and the small real 2D shader dispatch were tested. No coverage was
+run.
