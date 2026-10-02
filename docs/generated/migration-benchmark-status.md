@@ -7,7 +7,7 @@ lane inputs, and it does not turn missing evidence into a pass.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: c3c3c6c6c25ca8bbd51f7b37cf9dccdf86bc983bf2768cd8ed45ac75cb8860d7
+manifest_sha256: b7ba089baec686a207a09c136f5c2e4eb6911d7db1f9d3258a8a844e87bc83e3
 lane: benchmark
 ```
 
@@ -20,11 +20,13 @@ lane: benchmark
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
 | `benchmark_input_mapping` | `python-cpu` | 206 | 208 | `not_proven` |
-| `benchmark_input_mapping` | `python-simd` | 0 | 0 | `not_proven` |
-| `benchmark_input_mapping` | `python-gpu` | 0 | 0 | `not_proven` |
+| `benchmark_input_mapping` | `python-simd` | 1 | 1 | `not_proven` |
+| `benchmark_input_mapping` | `python-gpu` | 1 | 1 | `not_proven` |
+| `benchmark_input_mapping` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
 | `benchmark_budget_outcome` | `python-cpu` | 0 | 208 | `not_proven` |
-| `benchmark_budget_outcome` | `python-simd` | 0 | 0 | `not_proven` |
-| `benchmark_budget_outcome` | `python-gpu` | 0 | 0 | `not_proven` |
+| `benchmark_budget_outcome` | `python-simd` | 0 | 1 | `not_proven` |
+| `benchmark_budget_outcome` | `python-gpu` | 0 | 1 | `not_proven` |
+| `benchmark_budget_outcome` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
 
 ## Interpretation
 
