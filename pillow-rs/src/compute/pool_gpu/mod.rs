@@ -4297,15 +4297,18 @@ impl BufferPool {
     ) -> Result<(), PilError> {
         let (w, h) = image.dimensions();
         let pixel_count = CheckedDims::new(w, h, 1)?.total_pixels();
-        if pixel_count > self.capacity as usize || image.as_raw().len() != pixel_count {
-            return Err(PilError::ValueError(
-                "GPU packed-luma input does not fit its checked buffer".into(),
-            ));
-        }
         let transfer_bytes = pixel_count
             .div_ceil(4)
             .checked_mul(4)
             .ok_or_else(|| PilError::ValueError("GPU packed-luma input is too large".into()))?;
+        let capacity_bytes = (self.capacity as usize)
+            .checked_mul(std::mem::size_of::<u32>())
+            .ok_or_else(|| PilError::ValueError("GPU packed-luma buffer is too large".into()))?;
+        if transfer_bytes > capacity_bytes || image.as_raw().len() != pixel_count {
+            return Err(PilError::ValueError(
+                "GPU packed-luma input does not fit its checked buffer".into(),
+            ));
+        }
         let size = u64::try_from(transfer_bytes)
             .ok()
             .and_then(NonZeroU64::new)
@@ -7131,11 +7134,18 @@ impl GpuInner {
                 // one workgroup scan the complete image serially.
                 let native_rgb_equalize =
                     native_rgb_packed_output && matches!(op, PipelineOp::Equalize);
+                let native_luma_equalize = packed_luma_point && matches!(op, PipelineOp::Equalize);
                 let histogram = if native_rgb_equalize {
                     self.resolve_pipeline(
                         "__internal_equalize_histogram_rgb_packed",
                         "equalize_histogram_rgb_packed.wgsl",
                         include_str!("shaders/equalize_histogram_rgb_packed.wgsl"),
+                    )?
+                } else if native_luma_equalize {
+                    self.resolve_pipeline(
+                        "__internal_equalize_histogram_l_packed",
+                        "equalize_histogram_l_packed.wgsl",
+                        include_str!("shaders/equalize_histogram_l_packed.wgsl"),
                     )?
                 } else {
                     self.resolve_pipeline(
@@ -7163,6 +7173,12 @@ impl GpuInner {
                         "__internal_histogram_remap_rgb_packed",
                         "point_rgb_packed.wgsl",
                         include_str!("shaders/point_rgb_packed.wgsl"),
+                    )?
+                } else if native_luma_equalize {
+                    self.resolve_pipeline(
+                        "__internal_equalize_remap_l_packed",
+                        "equalize_remap_l_packed.wgsl",
+                        include_str!("shaders/equalize_remap_l_packed.wgsl"),
                     )?
                 } else {
                     self.resolve_pipeline(
@@ -7781,6 +7797,19 @@ impl GpuInner {
             });
             entries.push(wgpu::BindGroupEntry {
                 binding: 3,
+                resource: params,
+            });
+        } else if cached.variant_name == "__internal_equalize_histogram_l_packed" {
+            entries.push(wgpu::BindGroupEntry {
+                binding: 0,
+                resource: input_buf.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 1,
+                resource: resources.histogram.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 2,
                 resource: params,
             });
         } else if cached.variant_name == "__internal_autocontrast_lut"
@@ -9789,11 +9818,13 @@ impl GpuInner {
         cpass.set_pipeline(&cached.pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
         let (dispatch_w, dispatch_h) = match cached.variant_name {
-            "__internal_point_luma_packed" => plan_packed_point_luma_dispatch(
-                input_dims.0,
-                input_dims.1,
-                self.device.limits().max_compute_workgroups_per_dimension,
-            )?,
+            "__internal_point_luma_packed" | "__internal_equalize_remap_l_packed" => {
+                plan_packed_point_luma_dispatch(
+                    input_dims.0,
+                    input_dims.1,
+                    self.device.limits().max_compute_workgroups_per_dimension,
+                )?
+            }
             "__internal_put_data_luma_packed" => plan_packed_luma_dispatch(
                 input_dims.0,
                 input_dims.1,
@@ -9934,7 +9965,9 @@ impl GpuInner {
             "__internal_resize_v_pad_rgbx" => {
                 (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16))
             }
-            "__internal_equalize_histogram" | "__internal_equalize_histogram_rgb_packed" => {
+            "__internal_equalize_histogram"
+            | "__internal_equalize_histogram_rgb_packed"
+            | "__internal_equalize_histogram_l_packed" => {
                 // About 16 packed pixels per lane amortizes each group's
                 // shared histogram. Cap groups to bound global bin merges;
                 // the shader grid-stride loop handles the remaining pixels.
@@ -9957,6 +9990,7 @@ impl GpuInner {
             "__internal_histogram_clear"
                 | "__internal_equalize_histogram"
                 | "__internal_equalize_histogram_rgb_packed"
+                | "__internal_equalize_histogram_l_packed"
                 | "__internal_autocontrast_lut"
                 | "__internal_equalize_lut"
         );
@@ -14372,9 +14406,10 @@ fn gpu_packed_luma_point_input(
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> bool {
-    if !(source_is_luma_point_run || host_autocontrast_luma_lut)
-        || !matches!(ops, [PipelineOp::Eval { .. }])
+    let native_luma_equalize = matches!(ops, [PipelineOp::Equalize]);
+    if !matches!(ops, [PipelineOp::Eval { .. } | PipelineOp::Equalize])
         || !matches!(logical_mode, None | Some("L"))
+        || (!native_luma_equalize && !(source_is_luma_point_run || host_autocontrast_luma_lut))
     {
         return false;
     }
@@ -30966,6 +31001,7 @@ mod tests {
         let eval = PipelineOp::Eval {
             lut: vec![0; 256].into(),
         };
+        let equalize = PipelineOp::Equalize;
         let luma = DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![31, 207]).unwrap());
         assert!(super::gpu_packed_luma_point_input(
             true,
@@ -30980,6 +31016,20 @@ mod tests {
             std::slice::from_ref(&eval),
             &luma,
             Some("L")
+        ));
+        assert!(super::gpu_packed_luma_point_input(
+            false,
+            false,
+            std::slice::from_ref(&equalize),
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_point_input(
+            false,
+            false,
+            std::slice::from_ref(&equalize),
+            &luma,
+            Some("P")
         ));
         assert!(!super::gpu_packed_luma_point_input(
             false,
@@ -32303,6 +32353,94 @@ mod tests {
                 crate::compute::take_pipeline_backend_override(),
                 None,
                 "{width}x{height} fallback"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn luma_equalize_packed_histogram_matches_cpu_for_every_luma_tail() {
+        use crate::compute::BackendImpl;
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+
+        match super::GpuPool::ensure_init() {
+            Ok(_) => {}
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                return;
+            }
+            Err(error) => panic!("GPU L Equalize initialization failed: {error}"),
+        }
+
+        // Cover Pillow's zero-step boundary, all packed-word tails, and a
+        // multi-row input whose final packed word crosses a row boundary.
+        for (width, height) in [
+            (255u32, 1u32),
+            (256, 1),
+            (257, 1),
+            (258, 1),
+            (259, 1),
+            (260, 1),
+            (31, 17),
+        ] {
+            let pixel_count = width as usize * height as usize;
+            let bytes: Vec<u8> = (0..pixel_count).map(|pixel| pixel as u8).collect();
+            let source = DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width, height, bytes).expect("L Equalize source"),
+            );
+            let op = PipelineOp::Equalize;
+            let expected = crate::compute::registry::execute_cpu(&op, &source, Some("L"))
+                .unwrap_or_else(|error| panic!("CPU L Equalize {width}x{height}: {error}"));
+            let actual = super::GpuPool
+                .execute_batch_strict(std::slice::from_ref(&op), &source, Some("L"))
+                .unwrap_or_else(|error| panic!("GPU L Equalize {width}x{height}: {error}"));
+            assert!(
+                matches!(&actual, DynamicImage::ImageLuma8(_)),
+                "{width}x{height} must remain native L"
+            );
+            assert_eq!(actual.color(), expected.color(), "{width}x{height} mode");
+            assert_eq!(
+                actual.as_bytes(),
+                expected.as_bytes(),
+                "{width}x{height} pixels"
+            );
+
+            let resources = crate::compute::take_pipeline_resource_telemetry()
+                .unwrap_or_else(|| panic!("{width}x{height} resource receipt"));
+            let transfer_bytes = pixel_count.div_ceil(4) * 4;
+            assert_eq!(
+                resources.upload_bytes, transfer_bytes as u64,
+                "{width}x{height} packed L upload"
+            );
+            assert_eq!(
+                resources.readback_bytes, transfer_bytes as u64,
+                "{width}x{height} packed L readback"
+            );
+            assert_eq!(
+                resources.mode_conversion_count, 0,
+                "{width}x{height} must not widen L"
+            );
+            assert_eq!(
+                crate::compute::take_pipeline_dispatch_count(),
+                Some(3),
+                "{width}x{height} compute dispatches"
+            );
+            assert_eq!(
+                crate::compute::take_pipeline_backend_override(),
+                None,
+                "{width}x{height} must execute on GPU without fallback"
             );
         }
     }
