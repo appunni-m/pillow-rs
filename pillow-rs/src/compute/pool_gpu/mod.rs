@@ -7017,6 +7017,16 @@ impl GpuInner {
                 index += 1;
                 continue;
             }
+            if native_rgb_packed_output && matches!(op, PipelineOp::MinFilter { size: 3 }) {
+                let min_filter = self.resolve_pipeline(
+                    "__internal_min_filter_3x3_rgb_packed",
+                    "min_filter_3x3_rgb_packed.wgsl",
+                    include_str!("shaders/min_filter_3x3_rgb_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(min_filter));
+                index += 1;
+                continue;
+            }
             if packed_luma_order_statistic && matches!(op, PipelineOp::MedianFilter { size: 3 }) {
                 let median = self.resolve_pipeline(
                     "__internal_median_filter_3x3_luma_packed",
@@ -8433,6 +8443,7 @@ impl GpuInner {
                 [PipelineOp::Eval { .. }
                     | PipelineOp::Equalize
                     | PipelineOp::MedianFilter { size: 3 }
+                    | PipelineOp::MinFilter { size: 3 }
                     | PipelineOp::MaxFilter { size: 3 }]
             ) {
                 plan_native_rgb_point_output(
@@ -8536,6 +8547,14 @@ impl GpuInner {
                     "__internal_max_filter_3x3_rgb_packed",
                     "max_filter_3x3_rgb_packed.wgsl",
                     include_str!("shaders/max_filter_3x3_rgb_packed.wgsl"),
+                )?
+            } else if native_rgb_packed_output.is_some()
+                && matches!(op, PipelineOp::MinFilter { size: 3 })
+            {
+                self.resolve_pipeline(
+                    "__internal_min_filter_3x3_rgb_packed",
+                    "min_filter_3x3_rgb_packed.wgsl",
+                    include_str!("shaders/min_filter_3x3_rgb_packed.wgsl"),
                 )?
             } else if packed_native_byte_filter
                 && matches!(
@@ -8917,6 +8936,17 @@ impl GpuInner {
                 let plan = native_rgb_packed_output.ok_or_else(|| {
                     PilError::InternalError(
                         "packed-RGB MaxFilter parameters have no checked output plan".into(),
+                    )
+                })?;
+                params[0] = cur_w;
+                params[1] = cur_h;
+                params[3] = if plan.row_tiled { 16 } else { 0 };
+            } else if native_rgb_packed_output.is_some()
+                && matches!(op, PipelineOp::MinFilter { size: 3 })
+            {
+                let plan = native_rgb_packed_output.ok_or_else(|| {
+                    PilError::InternalError(
+                        "packed-RGB MinFilter parameters have no checked output plan".into(),
                     )
                 })?;
                 params[0] = cur_w;
@@ -9861,6 +9891,7 @@ impl GpuInner {
             "__internal_point_rgb_packed"
             | "__internal_histogram_remap_rgb_packed"
             | "__internal_median_filter_3x3_rgb_packed"
+            | "__internal_min_filter_3x3_rgb_packed"
             | "__internal_max_filter_3x3_rgb_packed" => {
                 let plan = resources.native_rgb_packed_output.ok_or_else(|| {
                     PilError::InternalError(
@@ -14691,8 +14722,8 @@ fn gpu_packed_luma_convert_input(
 
 /// Admit singleton consumers of the compact native RGB upload. Convert widens
 /// to RGBA in its shader; Transform samples compact triples; RGB AutoContrast,
-/// Equalize, 3x3 MedianFilter, and 3x3 MaxFilter use packed output shaders when
-/// their checked output plan permits native transfers.
+/// Equalize, and 3x3 order filters use packed output shaders when their checked
+/// output plan permits native transfers.
 #[cfg(target_endian = "little")]
 fn gpu_native_rgb_compact_input(
     ops: &[PipelineOp],
@@ -14710,6 +14741,7 @@ fn gpu_native_rgb_compact_input(
         ] => true,
         [PipelineOp::Transform { .. }] => true,
         [PipelineOp::MedianFilter { size: 3 }] => true,
+        [PipelineOp::MinFilter { size: 3 }] => true,
         [PipelineOp::MaxFilter { size: 3 }] => true,
         [PipelineOp::Eval { .. }] => host_autocontrast_rgb_lut,
         [PipelineOp::Equalize] => true,
@@ -22639,6 +22671,7 @@ impl GpuPool {
             [PipelineOp::Eval { .. }
                 | PipelineOp::Equalize
                 | PipelineOp::MedianFilter { size: 3 }
+                | PipelineOp::MinFilter { size: 3 }
                 | PipelineOp::MaxFilter { size: 3 }]
         ) {
             plan_native_rgb_point_output(
@@ -22669,6 +22702,7 @@ impl GpuPool {
                 [PipelineOp::Eval { .. }
                     | PipelineOp::Equalize
                     | PipelineOp::MedianFilter { size: 3 }
+                    | PipelineOp::MinFilter { size: 3 }
                     | PipelineOp::MaxFilter { size: 3 }]
             ) || native_rgb_packed_output);
         let native_la_transform_output = native_la_transform_input
@@ -30956,6 +30990,60 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
+    fn gpu_packed_rgb_min_filter_preserves_edges_and_compact_transfers() {
+        use crate::compute::{execute_prepared, prepare_execution};
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+        let op = [PipelineOp::MinFilter { size: 3 }];
+        for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (8, 3), (5, 3), (33, 35)] {
+            let bytes = (0..width as usize * height as usize * 3)
+                .map(|index| ((index * 73 + index / 13 * 31 + 19) % 256) as u8)
+                .collect::<Vec<_>>();
+            let source = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, bytes).expect("RGB min-filter source"),
+            );
+            let expected = crate::compute::registry::execute_cpu(&op[0], &source, Some("RGB"))
+                .expect("CPU RGB MinFilter reference");
+            let prepared =
+                prepare_execution(&op, Some(Backend::Gpu)).expect("GPU RGB MinFilter routing");
+            let actual = match execute_prepared(&prepared, &op, &source, Some("RGB")) {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    return;
+                }
+                Err(error) => panic!("native GPU RGB MinFilter failed: {error}"),
+            };
+            assert!(matches!(&actual, DynamicImage::ImageRgb8(_)));
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
+
+            let receipt = Backend::take_pipeline_telemetry().expect("native RGB min receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native RGB min resources");
+            let transfer_bytes = (width as usize * height as usize * 3).div_ceil(4) * 4;
+            assert_eq!(resources.upload_bytes, transfer_bytes as u64);
+            assert_eq!(resources.readback_bytes, transfer_bytes as u64);
+            assert_eq!(resources.mode_conversion_count, 0);
+        }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
     fn gpu_packed_la_gaussian_blur_preserves_odd_width_rows_and_alpha() {
         use crate::compute::{execute_prepared, prepare_execution};
 
@@ -31393,6 +31481,7 @@ mod tests {
         };
         let equalize = PipelineOp::Equalize;
         let median = PipelineOp::MedianFilter { size: 3 };
+        let min_filter = PipelineOp::MinFilter { size: 3 };
         let max_filter = PipelineOp::MaxFilter { size: 3 };
         assert!(super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&convert_rgba),
@@ -31443,6 +31532,18 @@ mod tests {
             false
         ));
         assert!(super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&min_filter),
+            &rgb,
+            Some("RGB"),
+            false
+        ));
+        assert!(super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&min_filter),
+            &rgb,
+            None,
+            false
+        ));
+        assert!(super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&max_filter),
             &rgb,
             Some("RGB"),
@@ -31456,6 +31557,12 @@ mod tests {
         ));
         assert!(!super::gpu_native_rgb_compact_input(
             &[PipelineOp::MaxFilter { size: 5 }],
+            &rgb,
+            Some("RGB"),
+            false
+        ));
+        assert!(!super::gpu_native_rgb_compact_input(
+            &[PipelineOp::MinFilter { size: 5 }],
             &rgb,
             Some("RGB"),
             false
