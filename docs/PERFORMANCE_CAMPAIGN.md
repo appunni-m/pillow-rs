@@ -13566,3 +13566,89 @@ Its generated default receipts were preserved to the operation-specific paths
 above and prior default files were restored byte-for-byte. After four bounded
 attempts, keep the SIMD-only gain, record CPU/SIMD/GPU as open goals, and move
 to the next operation. No coverage, broad CI, release, or push was run.
+
+## RGB GaussianBlur SIMD checkpoint — 2026-10-02
+
+The material observation is the seeded 1024 × 768 native-RGB
+`UnsharpMask(radius=2, percent=150, threshold=3)` workload
+`pipeline-op.unsharpmask.material-rgb-noise-1024x768-radius-2`. Its timed call
+includes GaussianBlur and the final unsharp blend; the complete output bytes
+are checked against Pillow before timing. The fresh clean baseline on
+`b6593e9da` measured Pillow / serial CPU / SIMD / GPU at 7.984 / 9.281 / 25.600
+/ 3.783 ms. The earlier UnsharpMask blend work already showed that GaussianBlur
+dominates the SIMD cost.
+
+The generic SIMD blur gathered samples through a scalar rolling recurrence,
+vectorizing only the independent fixed-point arithmetic. Its RGB vertical path
+also transposed the interleaved frame twice so that the generic line helper
+could process columns. The retained specialization is limited to tightly
+packed `ImageRgb8`, logical mode `RGB` or the default RGB mode, and Gaussian
+blur radii in `[1, 2)`. It keeps all six Pillow byte-rounded passes and exact
+fixed-point weights:
+
+1. Vertical passes now load 16 consecutive native bytes from each clamped
+   neighboring row and compute the three-sample sum plus the two fractional
+   edge samples directly in row-major storage. Vector lanes may cross an RGB
+   pixel boundary because each byte channel is an independent blur sample.
+   This removes the full-frame transpose pair without changing channel order
+   or pass rounding.
+2. Horizontal passes load vectors at byte offsets ±3 and ±6, which are the
+   adjacent and fractional-edge RGB pixels for every lane's channel. This
+   replaces scalar recurrence gathering with direct vector loads. The first
+   two and last two pixels, plus any incomplete vector tail, retain clamped
+   scalar handling.
+3. A third candidate fused all three horizontal passes per row using two row
+   buffers. It measured 7.721 ms against 7.528 ms for the prior candidate and
+   was removed. Keeping whole-frame pass buffers was faster on this workload.
+
+The retained RGB direct-column and direct-horizontal kernels match the generic
+SIMD implementation byte-for-byte in focused tests for radii 1.0, 1.25, and
+1.9 across tiny, degenerate, odd-stride, vector-tail, and 65 × 47 / 67 × 53
+inputs. The material benchmark's live-Pillow parity gate passed for all target
+backends; each CPU, SIMD, and GPU subject recorded 100 actual executions and
+no fallback. The standalone RGB `GaussianBlur(radius=2)` material parity case
+`PIL.ImageFilter.GaussianBlur.nuanced.performance-material-rgb-noise-1024x768-radius-2`
+also passed strict CPU, SIMD, and GPU lanes (1/1 each); those receipts are
+`gaussianblur-rgb-direct-cpu-strict-20261002.json`,
+`gaussianblur-rgb-direct-simd-strict-20261002.json`, and
+`gaussianblur-rgb-direct-gpu-strict-20261002.json`. GPU kept its prior
+six-dispatch route.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Clean baseline | 7.984 | 9.281 | 25.600 | 3.783 |
+| Direct RGB vertical SIMD | 7.869 | 9.511 | 14.575 | 3.754 |
+| Vertical SIMD repeat | 8.034 | 9.619 | 14.639 | 3.887 |
+| Direct RGB horizontal SIMD | 7.749 | 9.317 | 7.528 | 3.694 |
+| Rejected row-fused horizontal passes | 8.071 | 9.701 | 7.721 | 3.773 |
+| Retained candidate repeat | 7.729 | 8.065 | 7.602 | 3.712 |
+
+The retained SIMD path is 3.37× faster than its clean baseline and 1.02× faster
+than Pillow in the final run. It still misses the 5× SIMD goal by a wide margin;
+serial CPU also remains slightly slower than Pillow. The apparent CPU movement
+between runs is not attributed to this SIMD-only change. GPU latency is about
+2.05× lower than retained SIMD latency at concurrency one; this does not prove
+saturated throughput. After three bounded candidates, keep the two direct
+vector paths and record the SIMD and serial-CPU gaps as blockers for a later
+operation-ranked revisit.
+
+The clean baseline is `gaussianblur-rgb-simd-before-b6593-20261002.json`. The
+retained parity-gated candidate and repeat receipts are
+`gaussianblur-rgb-simd-horizontal-vector-attempt2-20261002.json` and
+`gaussianblur-rgb-simd-direct-native-final-20261002.json`; the corresponding
+parity sidecars use the same names with `-parity-20261002.json`. The initial
+vertical candidate and repeat are `gaussianblur-rgb-simd-direct-column-attempt1-20261002.json`
+and `gaussianblur-rgb-simd-direct-column-repeat-20261002.json`. The rejected
+third candidate is `gaussianblur-rgb-simd-row-fused-attempt3-20261002.json`.
+The exact benchmark command was:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.unsharpmask.material-rgb-noise-1024x768-radius-2' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/gaussianblur-rgb-simd-direct-native-final-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/gaussianblur-rgb-simd-direct-native-final-parity-20261002.json \
+make migration-parity-benchmark
+```
+
+No coverage, broad CI, release, or push was run.
