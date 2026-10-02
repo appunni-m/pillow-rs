@@ -14107,3 +14107,61 @@ This closes the serial CPU, SIMD 5×, and q=1 GPU latency/throughput targets
 for this RGB `MaxFilter(3)` workload. It does not establish saturated GPU
 throughput, larger filter sizes, or other image modes; keep those as separate
 operation/mode checks rather than generalizing this result.
+
+## RGB `ImageFilter.MinFilter(3)` native GPU checkpoint — 2026-10-02
+
+The focused workload is materialized `MinFilter(3)` over the same deterministic
+1024 × 768 RGB noise used by the MaxFilter check:
+`pipeline-op.minfilter.material-rgb-noise-1024x768`. The input exercises every
+pixel without allowing a constant-image shortcut to hide the neighborhood
+work.
+
+Before the change, MinFilter used the general RGB-to-RGBA GPU path. It moved
+3,145,728 bytes each way and recorded one mode conversion. Attempt 1 adds a
+separate native-RGB MinFilter(3) path: checked compact-triple transfers, four
+output pixels packed across three words, and per-channel minimum over the
+clamped 3 × 3 neighborhood. Row-tiled workgroups reuse six source columns for
+four adjacent output pixels; other geometries keep the packed flattened
+sampling path. The scalar CPU and SIMD implementations are unchanged.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | Parallel CPU ms | GPU ms | GPU upload/readback | GPU conversions |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Generic RGB path | 92.307 | 14.998 | 13.444 | — | 1.880 | 3.00 / 3.00 MiB | 1 |
+| Packed native RGB | 94.087 | 15.029 | 13.569 | — | 1.079 | 2.25 / 2.25 MiB | 0 |
+| Opt-in Parallel CPU | 94.087* | — | — | 2.701 | — | — | — |
+
+The Parallel CPU benchmark runs only the Rayon-enabled CPU profile and does
+not time Pillow. `*` reuses the ordinary Pillow measurement from the packed
+standard-profile run on the same workload. That run uses default features; the
+separate Parallel CPU receipt names both `pillow-rs/parallel` and
+`pillow-rs-py/parallel` and records 100/100 actual CPU executions without GPU
+fallback. The paired medians put serial CPU 6.26×, SIMD 6.94×, Parallel CPU
+34.84×, and GPU 87.2× faster than the ordinary Pillow result. GPU latency is
+12.6× lower than SIMD, with reciprocal-latency throughput of 926.6 versus
+73.7 operations/s. This establishes single-request throughput, not saturated
+multi-request GPU throughput.
+
+Compact transfer removed 25% of the bytes in each direction and avoided one
+full-frame mode conversion. GPU median latency fell 42.6% versus the generic
+MinFilter run; CPU and SIMD timings remained within about 1% of their prior
+medians. The focused CPU, SIMD, and GPU parity runs each passed all three RGB
+material/boundary cases. GPU receipts recorded 3/3 native dispatches with no
+fallback. `gpu_packed_rgb_min_filter_preserves_edges_and_compact_transfers`
+also passed against the CPU reference for 1 × 1, 1 × 3, 4 × 3, 8 × 3, 5 × 3,
+and 33 × 35, checking output bytes, edge replication, one dispatch, compact
+transfers, and zero mode conversions. The compact-input admission test passed.
+
+The clean baseline, packed attempt, and separate Parallel CPU receipts are
+`minfilter-main-baseline.json`, `minfilter-packed-baseline.json`, and
+`minfilter-packed-parallel-cpu.json` under `build/migration-parity/`. The
+attempt and Parallel CPU receipts were captured from the exact local code tree
+before its checkpoint commit, so their receipts name the parent revision with
+`dirty: true`; the unrelated clean baseline names its commit revision. Each
+standard benchmark passed its parity gate. The focused parity receipts and GPU
+execution sidecar are `minfilter-packed-{cpu,simd,gpu}-parity.json` and
+`minfilter-packed-gpu-execution.json`.
+
+This RGB size-3 workload meets the selected CPU, SIMD, and GPU thresholds after
+one attempt. The checkpoint does not cover other modes, larger MinFilter
+windows, or sustained concurrent GPU throughput. Keep those as separate
+operation/mode rows and move to the next ranked gap.
