@@ -992,6 +992,83 @@ pub(crate) fn try_simd_linear_gradient(mode: &str) -> Result<Option<DynamicImage
     result.map(Some)
 }
 
+/// Try the eager native-L `Image.radial_gradient` generator on SIMD.
+///
+/// Other modes stay on their established constructors until they have their
+/// own format-specific vector kernels.
+pub(crate) fn try_simd_radial_gradient(mode: &str) -> Result<Option<DynamicImage>, PilError> {
+    if mode != "L" {
+        return Ok(None);
+    }
+    let timed = pipeline_telemetry_enabled();
+    let route_start = timed.then(pipeline_timestamp).flatten();
+    let active_set = active_lock()?.clone();
+    let route_ns = elapsed_ns(route_start);
+    if !active_set.contains(&Backend::Simd) {
+        return Ok(None);
+    }
+
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+    let validation_start = timed.then(pipeline_timestamp).flatten();
+    let requested_backend = (active_set.len() == 1).then_some(Backend::Simd);
+    let validation_ns = elapsed_ns(validation_start);
+    if timed {
+        begin_pipeline_operation_telemetry("RadialGradient");
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let result = pool_simd::ops::adapters::simd_radial_gradient_generate();
+    let backend_ns = elapsed_ns(backend_start);
+
+    if timed {
+        if result.is_err() {
+            record_pipeline_operation_path("unsupported");
+        }
+        finish_pipeline_operation_telemetry();
+
+        let resource = result.as_ref().ok().map(|image| {
+            let bytes = image.as_bytes().len() as u64;
+            let allocation = take_pipeline_allocation_telemetry();
+            PipelineResourceTelemetry {
+                host_buffer_count: u64::from(bytes != 0),
+                host_buffer_bytes: bytes,
+                peak_live_host_bytes: bytes,
+                host_allocation_count: allocation.allocation_count,
+                host_allocated_bytes: allocation.allocated_bytes,
+                ..PipelineResourceTelemetry::default()
+            }
+        });
+        if let Some(resource) = resource {
+            record_pipeline_resource_telemetry(resource);
+        }
+        let resource = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let dispatch_count = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend,
+            actual_backend: Backend::Simd,
+            operation_count: 1,
+            route_ns,
+            validation_ns,
+            backend_ns,
+            dispatch_count,
+            fallback_reason: None,
+            resource,
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+
+    result.map(Some)
+}
+
 // ── Router ─────────────────────────────────────────────────────────────────
 
 fn route_decision(
