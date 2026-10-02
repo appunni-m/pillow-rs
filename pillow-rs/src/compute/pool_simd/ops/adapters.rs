@@ -16406,6 +16406,45 @@ fn native_filter_5x5_i32_vector(
     kernel: &[f32; 25],
     rounding_bias: f32,
 ) -> [i32; 8] {
+    if x_start + 8 <= width - 2 {
+        let row = |dy: isize, kernel_start: usize| -> f32x8 {
+            let source_y = (y as isize + dy) as usize;
+            let first_pixel = source_y * width + x_start - 2;
+            let load = |tap: usize| {
+                let start = (first_pixel + tap) * 4;
+                let pixels: [i32; 8] = bytemuck::pod_read_unaligned(&raw[start..start + 8 * 4]);
+                f32x8::new(pixels.map(|pixel| i32::from_le(pixel) as f32))
+            };
+            let pixel0 = load(0);
+            let pixel1 = load(1);
+            let pixel2 = load(2);
+            let pixel3 = load(3);
+            let pixel4 = load(4);
+            let sum = pixel1 * f32x8::splat(kernel[kernel_start + 1]);
+            let sum = pixel0.mul_add(f32x8::splat(kernel[kernel_start]), sum);
+            let sum = pixel2.mul_add(f32x8::splat(kernel[kernel_start + 2]), sum);
+            let sum = pixel3.mul_add(f32x8::splat(kernel[kernel_start + 3]), sum);
+            pixel4.mul_add(f32x8::splat(kernel[kernel_start + 4]), sum)
+        };
+
+        let mut total = f32x8::splat(rounding_bias);
+        total += row(2, 0);
+        total += row(1, 5);
+        total += row(0, 10);
+        total += row(-1, 15);
+        total += row(-2, 20);
+        let values = total.to_array();
+        return std::array::from_fn(|lane| {
+            if values[lane] >= 0.0 {
+                values[lane] as i32
+            } else {
+                0
+            }
+        });
+    }
+
+    // Keep the short final block scalar-gathered: contiguous eight-lane loads
+    // would cross the row edge even though only a few output lanes are live.
     let row = |dy: isize, kernel_start: usize| -> f32x8 {
         let mut samples = [[0.0f32; 8]; 5];
         let source_y = (y as isize + dy) as usize;

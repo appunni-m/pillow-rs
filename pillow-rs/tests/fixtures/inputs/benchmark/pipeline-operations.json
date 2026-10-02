@@ -67155,6 +67155,171 @@
       }
     },
     {
+      "workload_id": "pipeline-op.filter.material-i-noise-5x5-1024x768",
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-noise-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-op.filter.material-i-bounded-noise-5x5-1024x768",
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-bounded-noise-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.convolution-i.5x5-noise-1024x768",
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-noise-1024x768.whole-workflow"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-chain.reviewed.filter-invert-mirror",
       "covers": [
         "PIL.Image.Image.filter.performance.standard"
@@ -246150,6 +246315,18 @@
         },
         {
           "workload_id": "pipeline-chain.convolution-i.5x5-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-op.filter.material-i-noise-5x5-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-op.filter.material-i-bounded-noise-5x5-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.convolution-i.5x5-noise-1024x768",
           "weight": 1
         }
       ]
