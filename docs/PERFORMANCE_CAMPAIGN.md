@@ -15284,16 +15284,16 @@ uses live Pillow.
 
 | Profile | Pillow median / p95 (ms) | pillow-rs median / p95 (ms) | Relative latency | Median throughput | Backend proof |
 | --- | ---: | ---: | ---: | ---: | --- |
-| Serial CPU | 1.012 / 1.154 | 1.096 / 1.283 | 1.08× slower | 913 ops/s | CPU 100/100 |
-| SIMD | 1.012 / 1.154 | 3.165 / 3.365 | 3.13× slower | 316 ops/s | SIMD 100/100 |
-| GPU | 1.012 / 1.154 | 3.987 / 4.412 | 3.94× slower | 251 ops/s | GPU 100/100, 1 dispatch/call |
-| Parallel CPU (opt-in Rayon) | 1.012 / 1.154 | 0.499 / 0.632 | 2.03× faster | 2,003 ops/s | CPU 100/100, `parallel` feature |
+| Serial CPU | 0.935 / 1.073 | 1.114 / 1.205 | 1.19× slower | 898 ops/s | CPU 100/100 |
+| SIMD | 0.935 / 1.073 | 2.998 / 3.169 | 3.21× slower | 334 ops/s | SIMD 100/100 |
+| GPU | 0.935 / 1.073 | 3.194 / 3.799 | 3.41× slower | 313 ops/s | GPU 100/100, 1 dispatch/call |
+| Parallel CPU (opt-in Rayon) | 0.935 / 1.073 | 0.462 / 0.547 | 2.03× faster | 2,165 ops/s | CPU 100/100, `parallel` feature |
 
 The Parallel CPU profile was built separately with `pillow-rs/parallel` and
 `pillow-rs-py/parallel`; its comparison uses the ordinary Pillow oracle from
 the same workload, not a separate threaded Pillow baseline. It is not SIMD or
-GPU evidence. Serial CPU is still about 8% slower than Pillow on the median.
-SIMD is 3.13× slower than Pillow, and GPU is 3.94× slower than Pillow and
+GPU evidence. Serial CPU is still about 19% slower than Pillow on the median.
+SIMD is 3.21× slower than Pillow, and GPU is 3.41× slower than Pillow and
 slower than SIMD. Strict backend receipts show 100 executions on each
 requested backend with no fallback.
 
