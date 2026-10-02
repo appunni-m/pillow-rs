@@ -14016,3 +14016,94 @@ that stale interpreter. The focused command
 both tests. `RUSTC_WRAPPER= make fmt clippy`,
 `make docs-lint PYTHON=target/perf-venv/bin/python`, and `git diff --check`
 passed. No coverage, broad CI, or release was run.
+
+## RGB `ImageFilter.MaxFilter(3)` native GPU checkpoint — 2026-10-02
+
+The measured operation is a materialized `MaxFilter(3)` over deterministic
+1024 × 768 RGB noise:
+`pipeline-op.maxfilter.material-rgb-noise-1024x768`. The noisy input prevents
+the uniform-image fast path from hiding the filter cost. Each RGB channel is
+maximized independently over a clamped 3 × 3 neighborhood.
+
+The ordinary GPU path staged RGB as RGBA, then returned RGBA, moving 3,145,728
+bytes in each direction and recording one mode conversion. Attempt 1 added a
+checked compact-triple upload/output plan and a packed shader that owns three
+output words for four RGB pixels. That brought each transfer to 2,359,296
+bytes and removed the conversion. Attempt 2 reuses the six distinct source
+columns shared by four horizontally adjacent output pixels in row-tiled
+dispatches, instead of reloading all twelve columns. Non-row-tiled dimensions
+keep the exact generic packed-RGB sampling branch. Both routes retain clamped
+edge behavior and checked output bounds.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | Parallel CPU ms | GPU ms | GPU upload/readback | GPU conversions |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Clean kernel baseline | 105.129 | 16.361 | 15.438 | — | 2.097 | 3.00 / 3.00 MiB | 1 |
+| Native RGB packed attempt 1 | 96.849 | 14.701 | 13.910 | — | 1.186 | 2.25 / 2.25 MiB | 0 |
+| Shared-window attempt 2 | 108.795 | 15.907 | 14.102 | — | 1.116 | 2.25 / 2.25 MiB | 0 |
+| Shared-window repeat | 95.923 | 14.734 | 13.605 | — | 1.081 | 2.25 / 2.25 MiB | 0 |
+| Final exact-tree verification | 92.162 | 14.354 | 13.321 | — | 0.959 | 2.25 / 2.25 MiB | 0 |
+| Opt-in Parallel CPU | 92.162* | — | — | 2.468 | — | — | — |
+
+The separate Parallel CPU target used the opt-in `pillow-rs/parallel` and
+`pillow-rs-py/parallel` features and requested only the CPU executor. Its run
+does not time Pillow; `*` reuses the ordinary Pillow timing from the final
+standard-profile run on this same workload and tree. Serial CPU, SIMD, and GPU
+medians in that run are 6.42×, 6.92×, and 96.1× faster than Pillow. The
+separate Parallel CPU median is 37.4× faster than that same ordinary Pillow
+measurement. GPU median latency is 13.89× lower than SIMD; reported
+single-request throughput is 1,042.8 versus 75.1 operations/s. This confirms
+better q=1 throughput, not saturated multi-request device throughput.
+The Parallel CPU receipt passed its Pillow parity preflight and recorded
+100/100 executions on the CPU backend without fallback; its profile identity
+includes both `pillow-rs/parallel` and `pillow-rs-py/parallel`.
+
+Every standard benchmark run passed its parity gate and recorded 100/100
+executions on each requested CPU, SIMD, and GPU backend with no fallback. The
+attempt 2, repeat, and final exact-tree receipts selected and passed 3/3 parity
+comparisons. The separate 8 × 3 row-tiled RGB boundary case passed strict CPU,
+SIMD, and GPU Pillow parity (1/1 per backend); the 5 × 3 flattened boundary
+case also passed all three lanes. `gpu_packed_rgb_max_filter_preserves_edges_and_compact_transfers`
+passed with 1 × 1, 1 × 3, 4 × 3, 8 × 3, 5 × 3, and 33 × 35 inputs, checking
+exact RGB bytes, the actual GPU route, one dispatch, compact transfers, and
+zero mode conversions.
+
+The standard baseline, attempt 1, attempt 2, attempt 2 repeat, and final exact-
+tree receipts are
+`maxfilter-rgb-noise-baseline-20261002.json`,
+`maxfilter-rgb-native-attempt1-20261002.json`,
+`maxfilter-rgb-native-attempt2-20261002.json`,
+`maxfilter-rgb-native-attempt2-repeat1-20261002.json`, and
+`maxfilter-rgb-prepush-final-20261002.json` under
+`build/migration-parity/`, each with a parity sidecar. The distinct Parallel
+CPU receipts are `maxfilter-rgb-parallel-cpu-attempt2-20261002.json` and
+`maxfilter-rgb-parallel-cpu-attempt2-parity-20261002.json`. Keep that result
+separate from serial CPU, SIMD, and GPU.
+
+The separate Parallel CPU benchmark command was:
+
+```sh
+env VIRTUAL_ENV="$PWD/target/perf-venv" PATH="$PWD/target/perf-venv/bin:$PATH" \
+RUSTC_WRAPPER= make migration-parity-benchmark-parallel-cpu \
+  PYTHON=target/perf-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/maxfilter-rgb-parallel-cpu-attempt2-20261002.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/maxfilter-rgb-parallel-cpu-attempt2-parity-20261002.json \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.maxfilter.material-rgb-noise-1024x768'
+```
+
+The final material benchmark command was:
+
+```sh
+env VIRTUAL_ENV="$PWD/target/perf-venv" PATH="$PWD/target/perf-venv/bin:$PATH" \
+RUSTC_WRAPPER= make migration-parity-benchmark \
+  PYTHON=target/perf-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/maxfilter-rgb-prepush-final-20261002.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/maxfilter-rgb-prepush-final-parity-20261002.json \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.maxfilter.material-rgb-noise-1024x768'
+```
+
+This closes the serial CPU, SIMD 5×, and q=1 GPU latency/throughput targets
+for this RGB `MaxFilter(3)` workload. It does not establish saturated GPU
+throughput, larger filter sizes, or other image modes; keep those as separate
+operation/mode checks rather than generalizing this result.

@@ -367,6 +367,17 @@ gain and was discarded. This closes the CPU target and confirms the existing
 native GPU route for this specific L Cover case, not P1 across the operation
 set. Detailed attempts and receipts are in `PERFORMANCE_CAMPAIGN.md`.
 
+RGB `ImageFilter.MaxFilter(3)` now has an operation-specific compact RGB GPU
+route: it uploads and reads back packed RGB triples, removing the general
+RGBA widening and four-byte-per-pixel transport at both boundaries. Its
+row-tiled shader reuses overlapping horizontal samples for four output pixels
+while preserving independent channel maxima and clamped edges. On the
+material 1024 × 768 RGB workload, strict CPU, SIMD, and GPU parity passed; GPU
+upload/readback fell from 3,145,728 to 2,359,296 bytes and conversion count
+from one to zero. This is another partial P1 reduction, limited to RGB
+MaxFilter size 3; other modes and filter sizes remain operation-specific.
+Timings and exact receipts are in `PERFORMANCE_CAMPAIGN.md`.
+
 P3 is partially addressed on main. The median-cut path borrows bytes for native
 RGB and avoids the unused tuple and flattened-byte buffers when `kmeans=0`;
 non-RGB modes retain conversion. Focused parity passed for default median-cut,
