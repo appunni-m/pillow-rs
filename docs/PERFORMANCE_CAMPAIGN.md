@@ -13088,3 +13088,119 @@ memory-layout hypothesis after other operations get a first pass. The older
 CPU gaps (27.92 ms vs Pillow's 3.93 ms) and also misses the SIMD target; treat
 that stale receipt as a candidate selector only, then refresh its parity and
 baseline before editing. Do not report it as current performance evidence.
+
+## I-mode `Image.filter` 5 × 5 convolution checkpoint — 2026-10-02
+
+The refreshed material workload filters a seeded 1024 × 768 signed-I image
+with the normalized outer product of `[1, 4, 6, 4, 1]`, scale 256 and offset
+zero. Two source distributions separate the safe optimization domain from the
+general I range: arbitrary samples in `[-1,000,000, 1,000,000]`, and bounded
+samples with magnitude at most 65,535. A separately identified workflow row
+measures filter plus terminal materialization. All output comparisons use live
+Pillow and require exact pixels.
+
+The SIMD general path now loads contiguous blocks of eight I samples per tap,
+converts them to `f32x8`, and keeps the existing scalar gather for a short row
+tail. This removes repeated eight-lane scalar gathers from the hot interior.
+The arbitrary-range operation moved from 17.910 ms SIMD latency in the fresh
+baseline to 2.476 ms after this change; the final receipt measured 2.550 ms.
+That is a large local improvement, but only 2.35× Pillow in the final run, below
+the 5× target. The generic serial CPU remains about 29 ms on this input, nearly
+five times slower than Pillow.
+
+The CPU specialization is deliberately narrower. It admits only the exact
+normalized binomial coefficients, zero offset, dimensions of at least 5 × 5,
+valid I storage, and source magnitudes no greater than 65,535. Under that bound,
+the largest full weighted sum is `256 × 65,535 = 16,776,960`, still below
+`2^24`; every integer partial and final sum is therefore exact in the f32
+reference domain. The kernel evaluates the integer factorization in a five-row
+ring buffer. Each horizontal row uses a sliding five-sample window, and each
+horizontal result is reused by five vertical contributions. It retains
+Pillow's copied two-pixel border, positive-only clipping, and `+0.5` rounding.
+Inputs outside the proven domain continue through the old generic calculation.
+
+The first separable CPU version reread five horizontal samples for every output
+and measured 6.688 ms, slower than Pillow's 5.477 ms on the bounded input.
+Changing that stage to a sliding window reduced CPU latency to 4.113 ms; the
+final run measured 4.287 ms against Pillow at 6.055 ms. CPU therefore meets its
+latency target only on the proven bounded subset. It does not close the
+arbitrary-range I workload.
+
+A second SIMD candidate used a full-frame integer intermediate and two
+separable passes for the bounded input. Its 2.437 ms median was slightly slower
+than the existing direct vector kernel's 2.403 ms, so that path and its extra
+frame allocation were removed. The retained SIMD implementation is the
+contiguous-load direct kernel for both distributions.
+
+The final correctness-gated run used `make migration-parity-benchmark` on
+2026-10-02, macOS 15.7.7 arm64, Python 3.12, release build, warm cache,
+concurrency one, five warmups, 20 iterations and five samples. The run selected
+both material filter inputs and the whole-workflow convolution row. All nine
+strict CPU/SIMD/GPU comparisons passed with the requested backend recorded and
+no fallback. The receipt is
+`build/migration-parity/i-filter-final-attempt4-20261002.json`; parity evidence
+is in `build/migration-parity/i-filter-final-attempt4-parity-20261002.json`.
+
+| I 5 × 5 workload | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Filter, arbitrary signed samples | 6.000 ms | 29.014 ms | 2.550 ms | 1.918 ms |
+| Filter, bounded ±65,535 samples | 6.055 ms | 4.287 ms | 2.548 ms | 1.886 ms |
+| Filter workflow plus materialization | 6.712 ms | 36.937 ms | 3.358 ms | 2.523 ms |
+
+On these samples GPU latency is below SIMD for both filter inputs. The receipt's
+throughput metric is reciprocal latency at concurrency one, not sustained or
+queued throughput; do not interpret it as a throughput saturation result.
+Parallel CPU remains its own profile, with opt-in feature flags
+`pillow-rs-py/parallel` and `pillow-rs/parallel`; its actual backend is CPU.
+Building that profile exposed a dead-code denial for the serial-only
+`premultiply_alpha_row` helper in native-alpha resize. The helper is now
+compiled for serial builds and unit tests; the parallel implementation reads
+alpha taps directly, so its execution path is unchanged. The feature build and
+selection tests now complete.
+The current separate run passed 3/3 parity comparisons. It uses ordinary
+single-threaded Pillow as the comparison baseline, not a separate threaded
+Pillow run:
+
+| I 5 × 5 workload | Pillow | Parallel CPU | Relative to Pillow |
+| --- | ---: | ---: | ---: |
+| Filter, arbitrary signed samples | 6.000 ms | 4.770 ms | 1.26× faster |
+| Filter, bounded ±65,535 samples | 6.055 ms | 4.149 ms | 1.46× faster |
+| Filter workflow plus materialization | 6.712 ms | 7.781 ms | 1.16× slower |
+
+The benchmark and parity receipts are
+`build/migration-parity/benchmark-result-parallel-cpu.json` and
+`build/migration-parity/benchmark-parity-result-parallel-cpu.json`. Keep these
+results separate from serial CPU, SIMD, and GPU. Reproduce this run with:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.filter.material-i-noise-5x5-1024x768 --workload-id pipeline-op.filter.material-i-bounded-noise-5x5-1024x768 --workload-id pipeline-chain.convolution-i.5x5-noise-1024x768' \
+make migration-parity-benchmark-parallel-cpu
+```
+
+The exact final command was:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.filter.material-i-noise-5x5-1024x768 --workload-id pipeline-op.filter.material-i-bounded-noise-5x5-1024x768 --workload-id pipeline-chain.convolution-i.5x5-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/i-filter-final-attempt4-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/i-filter-final-attempt4-parity-20261002.json \
+make migration-parity-benchmark
+```
+
+Checkpoint after four bounded candidates: keep the contiguous SIMD loads and
+bounded CPU separable kernel; discard the full-frame SIMD separable experiment.
+The CPU target is met for bounded samples only, SIMD remains below 5× Pillow,
+and high-range CPU remains a large gap. Do not spend another attempt here
+without a new exactness and memory-traffic hypothesis. Resume the mode-coverage
+audit's next uncheckpointed operation/mode with measured RGBA staging cost.
+`Image.blend` on LA was considered but is already covered by
+`gpu_native_byte_op_channels`' same-mode native two-input path. The selected
+next baseline is `PIL.ImageFilter.GaussianBlur` on LA: the current packed-L blur
+admission is limited to mode L, so LA is widened to four-byte RGBA and the
+general shader computes unused channels. Add a varied material LA parity case,
+measure its upload/readback cost and backend timings, then choose whether a
+compact two-channel kernel pays off. No coverage, broad CI, release, or push
+was run.

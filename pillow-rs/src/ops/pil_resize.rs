@@ -1401,6 +1401,7 @@ fn premultiply_channel(value: u8, alpha: u8) -> u8 {
     ((value as u16 * alpha as u16 + 127) / 255) as u8
 }
 
+#[cfg(any(not(feature = "parallel"), test))]
 fn premultiply_alpha_row(source: &[u8], channels: usize, output: &mut [u8]) {
     debug_assert!(matches!(channels, 2 | 4));
     debug_assert_eq!(source.len(), output.len());
@@ -1417,9 +1418,8 @@ fn premultiply_alpha_row(source: &[u8], channels: usize, output: &mut [u8]) {
     }
 }
 
-/// Reference alpha-row kernel retained for the Parallel CPU path and focused
-/// equivalence tests. The serial CPU path premultiplies each source row once
-/// before convolution so every horizontal tap does not repeat that work.
+/// Reference alpha-row kernel retained for the serial CPU path and focused
+/// equivalence tests. Parallel CPU consumes each alpha tap directly per row.
 fn horizontal_pass_row_alpha(
     src_row: &[u8],
     channels: usize,

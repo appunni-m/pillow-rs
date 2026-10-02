@@ -41929,6 +41929,7 @@ def build_nuanced_cases(
     cases.extend(f_boxed_resize_materialized_parity_cases(surface_id))
     cases.extend(f_resize_materialized_parity_cases(surface_id))
     cases.extend(i_resize_materialized_parity_cases(surface_id))
+    cases.extend(i_filter_materialized_parity_cases(surface_id))
     cases.extend(rotate_mode_parity_cases(surface_id))
     cases.extend(transform_mode_parity_cases(surface_id))
     if surface_id == "PIL.Image.Image":
@@ -43610,6 +43611,119 @@ def i_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "observations": ["call", "materialize"],
         }
     ]
+
+
+def i_filter_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Compare material I-mode 5x5 convolution on varied signed samples."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    width, height = 1024, 768
+    rng = random.Random(20261002)
+    raw = b"".join(
+        struct.pack("<i", rng.randrange(-1_000_000, 1_000_000))
+        for _ in range(width * height)
+    )
+    case_id = (
+        f"{surface_id}.filter.nuanced.i-mode-kernel-5x5-noise-"
+        f"{width}x{height}"
+    )
+    kernel = [
+        1.0, 4.0, 6.0, 4.0, 1.0,
+        4.0, 16.0, 24.0, 16.0, 4.0,
+        6.0, 24.0, 36.0, 24.0, 6.0,
+        4.0, 16.0, 24.0, 16.0, 4.0,
+        1.0, 4.0, 6.0, 4.0, 1.0,
+    ]
+    case = {
+        "case_id": case_id,
+        "surface": surface_id,
+        "operation": "filter",
+        "covers": [f"{surface_id}.filter.behavior.default"],
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        "assets": [
+            {
+                "id": "pixels",
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(raw).decode("ascii"),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "media_type": "application/octet-stream",
+            }
+        ],
+        "steps": [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "frombytes",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("I"),
+                    "size": literal([width, height]),
+                    "data": asset_value("pixels"),
+                },
+            },
+            {
+                "step_id": "setup-filter",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "receiver": None,
+                "arguments": {
+                    "size": literal([5, 5]),
+                    "kernel": literal(kernel),
+                    "scale": literal(256.0),
+                    "offset": literal(0),
+                },
+            },
+            {
+                "step_id": "call",
+                "surface": surface_id,
+                "operation": "filter",
+                "receiver": binding("image"),
+                "arguments": {"filter": binding("setup-filter")},
+            },
+            {
+                "step_id": "materialize",
+                "surface": surface_id,
+                "operation": "tobytes",
+                "receiver": binding("call"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["call", "materialize"],
+    }
+    pipeline_case = copy.deepcopy(case)
+    pipeline_case["case_id"] = f"{case_id}.whole-workflow"
+    # Observe the input as well as the filtered output so this parity case has
+    # a distinct measurement identity from the operation-boundary case. The
+    # benchmark timer ends before observation serialization, so that extra
+    # evidence does not enter the whole-workflow timing.
+    pipeline_case["observations"] = ["image", "call", "materialize"]
+
+    bounded_rng = random.Random(20261003)
+    bounded_raw = bytearray(
+        b"".join(
+            struct.pack("<i", bounded_rng.randrange(-65_535, 65_536))
+            for _ in range(width * height)
+        )
+    )
+    for x, y, value in (
+        (0, 0, -65_535),
+        (width // 2, height // 2, 65_535),
+        (width // 2 + 1, height // 2, -65_535),
+        (width - 1, height - 1, 65_535),
+    ):
+        struct.pack_into("<i", bounded_raw, (y * width + x) * 4, value)
+    bounded_case = copy.deepcopy(case)
+    bounded_case["case_id"] = (
+        f"{surface_id}.filter.nuanced.i-mode-kernel-5x5-bounded-noise-"
+        f"{width}x{height}"
+    )
+    bounded_case["assets"][0]["data"] = base64.b64encode(bounded_raw).decode(
+        "ascii"
+    )
+    bounded_case["assets"][0]["sha256"] = hashlib.sha256(bounded_raw).hexdigest()
+    return [case, pipeline_case, bounded_case]
 
 
 def grayscale_premultiplied_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -49546,6 +49660,105 @@ def build_pipeline_benchmark_document(
                 ),
             }
         )
+
+    i_filter_noise_case_id = (
+        "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-noise-1024x768"
+    )
+    i_filter_noise_case = cases_by_id.get(i_filter_noise_case_id)
+    if i_filter_noise_case is None:
+        raise ValueError(
+            f"I-mode convolution benchmark references missing case: "
+            f"{i_filter_noise_case_id}"
+        )
+    i_filter_noise_pipeline_case_id = f"{i_filter_noise_case_id}.whole-workflow"
+    i_filter_noise_pipeline_case = cases_by_id.get(
+        i_filter_noise_pipeline_case_id
+    )
+    if i_filter_noise_pipeline_case is None:
+        raise ValueError(
+            f"I-mode pipeline benchmark references missing case: "
+            f"{i_filter_noise_pipeline_case_id}"
+        )
+    i_filter_noise_measurement = copy.deepcopy(chain_policy)
+    i_filter_noise_measurement.update(
+        {
+            "boundary": "observed_steps",
+            "step_ids": ["call", "materialize"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        }
+    )
+    i_filter_noise_workload = {
+        "workload_id": "pipeline-op.filter.material-i-noise-5x5-1024x768",
+        "covers": [i_filter_requirement],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": i_filter_noise_case_id},
+        "measurement": i_filter_noise_measurement,
+        "context": _workflow_benchmark_context(
+            i_filter_noise_case,
+            variant="filter-material-i-noise-5x5-1024x768",
+            surface="PIL.Image.Image",
+            operation="filter",
+        ),
+    }
+    i_filter_noise_workload["context"]["operation_class"] = "neighborhood"
+    i_convolution_workloads.append(i_filter_noise_workload)
+
+    i_filter_bounded_case_id = (
+        "PIL.Image.Image.filter.nuanced."
+        "i-mode-kernel-5x5-bounded-noise-1024x768"
+    )
+    i_filter_bounded_case = cases_by_id.get(i_filter_bounded_case_id)
+    if i_filter_bounded_case is None:
+        raise ValueError(
+            f"bounded I-mode convolution benchmark references missing case: "
+            f"{i_filter_bounded_case_id}"
+        )
+    i_filter_bounded_workload = {
+        "workload_id": "pipeline-op.filter.material-i-bounded-noise-5x5-1024x768",
+        "covers": [i_filter_requirement],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": i_filter_bounded_case_id},
+        "measurement": copy.deepcopy(i_filter_noise_measurement),
+        "context": _workflow_benchmark_context(
+            i_filter_bounded_case,
+            variant="filter-material-i-bounded-noise-5x5-1024x768",
+            surface="PIL.Image.Image",
+            operation="filter",
+        ),
+    }
+    i_filter_bounded_workload["context"]["operation_class"] = "neighborhood"
+    i_convolution_workloads.append(i_filter_bounded_workload)
+
+    i_filter_noise_pipeline_measurement = copy.deepcopy(chain_policy)
+    i_filter_noise_pipeline_measurement.update(
+        {
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        }
+    )
+    i_filter_noise_pipeline_workload = {
+        "workload_id": "pipeline-chain.convolution-i.5x5-noise-1024x768",
+        "covers": [i_filter_requirement],
+        "subjects": benchmark_subjects(),
+        "input": {
+            "kind": "parity_case",
+            "case_id": i_filter_noise_pipeline_case_id,
+        },
+        "measurement": i_filter_noise_pipeline_measurement,
+        "context": _workflow_benchmark_context(
+            i_filter_noise_pipeline_case,
+            variant="convolution-i-5x5-noise-1024x768",
+            surface="PIL.Image.Image",
+            operation="filter",
+        ),
+    }
+    i_filter_noise_pipeline_workload["context"]["operation_class"] = "neighborhood"
+    i_convolution_workloads.append(i_filter_noise_pipeline_workload)
 
     reviewed_workloads: list[dict[str, Any]] = []
     for case_id in PIPELINE_REVIEWED_COMPOSITION_BENCHMARK_IDS:

@@ -402,3 +402,21 @@ or Parallel CPU route.
 2. Continue with P7 color transforms and the host access findings using
    full-call benchmarks and exact parity cases. P3 remains open for evidence
    beyond its allocation reduction.
+
+## Next measured transport candidate — 2026-10-02
+
+The next P1/P9 probe is `PIL.ImageFilter.GaussianBlur` on native LA. The
+existing packed-L blur admission is explicitly limited to logical L in
+`gpu_packed_luma_blur_input`; LA therefore reaches `upload_standard_image`,
+which widens its two stored bytes per pixel to the four-byte RGBA carrier. The
+general blur shader also accumulates four channels although LA has two. The
+existing benchmark has a material L GaussianBlur row but no corresponding LA
+row.
+
+This is a source-level opportunity, not yet a measured speedup. The next visit
+must add a varied material LA input, pass live Pillow parity on CPU, SIMD, and
+GPU, then record actual backend execution and upload/readback bytes before
+choosing a compact two-channel kernel. Keep the logical mode and alpha channel
+semantics intact. `Image.blend` LA was checked as an alternative but is already
+covered by `gpu_native_byte_op_channels`' same-mode native transport, so it is
+not the next conversion target.
