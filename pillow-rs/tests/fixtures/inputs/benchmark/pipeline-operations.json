@@ -13406,6 +13406,62 @@
       }
     },
     {
+      "workload_id": "pipeline-op.minfilter.material-l-noise-1024x768",
+      "covers": [
+        "PIL.ImageFilter.MinFilter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.MinFilter.nuanced.performance-material-l-noise-1024x768-size-3"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-op.grayscale.material-rgb-noise-1024x768",
       "covers": [
         "PIL.ImageOps.grayscale.performance.standard"

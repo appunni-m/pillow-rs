@@ -15436,3 +15436,84 @@ for the separately built opt-in profile. The GPU unit regression is
 `cargo test --locked -p pillow-rs --lib gpu_packed_luma_max_filter_preserves_edges_and_compact_transfers`.
 Continue the audit with the next uncheckpointed operation/mode that still pays
 measurable RGBA staging.
+
+## Native-L `ImageFilter.MinFilter(3)` GPU transport checkpoint — 2026-10-03
+
+The native-L MinFilter(3) route reuses the packed-L upload, bounded
+word-dispatch planner, and native readback. Its dedicated shader computes the
+clamped 3 × 3 minimum and gives each four-byte output word one owner. Admission
+is limited to one native-L operation of size 3 on little-endian targets; other
+modes, sizes, and multi-operation pipelines retain the existing route. The
+ordinary image API still executes as a single-image request. The explicit
+`ImageBatch` scheduler remains separate and unchanged.
+
+The material input is seeded L noise at 1024 × 768; exact parity also covers
+1 × 1 and 33 × 35. Live-Pillow parity passed 3/3 on serial CPU, strict SIMD,
+strict GPU, and Parallel CPU. The direct GPU regression additionally checks
+1 × 1, 1 × 3, 4 × 3, 5 × 3, and 33 × 35 against the CPU output, asserts native
+L mode and one dispatch, and verifies there is no fallback or mode conversion.
+No coverage was run.
+
+The correctness-gated benchmark measured 100 observations per profile, with
+image creation outside `apply-filter` and `observe-filter-result`. The
+Parallel CPU build enabled `pillow-rs/parallel` and
+`pillow-rs-py/parallel`; it uses the same ordinary Pillow comparator as the
+other profiles, not a threaded Pillow baseline.
+
+| Profile | Pillow median / p95 (ms) | pillow-rs median / p95 (ms) | Relative latency | Median throughput | Execution proof |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Serial CPU | 30.655 / 31.805 | 9.867 / 10.434 | 3.11× faster | 101.3 ops/s | CPU 100/100, no fallback |
+| SIMD | 30.655 / 31.805 | 4.392 / 4.456 | 6.98× faster | 227.7 ops/s | SIMD 100/100, no fallback |
+| GPU | 30.655 / 31.805 | 1.030 / 1.131 | 29.8× faster; 4.26× lower latency than SIMD | 970.7 ops/s | GPU 100/100, 1 dispatch/call, no fallback |
+| Parallel CPU (opt-in Rayon) | 30.655 / 31.805 | 1.095 / 1.324 | 28.0× faster | 913.6 ops/s | CPU 100/100, `parallel` feature |
+
+Before the native-L route, generic RGBA transport uploaded and read back
+3,145,728 bytes per call and reported one mode conversion. The packed-L route
+moves 786,432 bytes in each direction, a 4× reduction, and reports zero
+conversions. Median GPU latency fell from 2.292 ms to 1.030 ms (55.0%). Its
+measured single-call throughput is 4.26× the SIMD result; this does not claim
+high-concurrency or queued-batch throughput. All measured profiles beat the
+Pillow median for this case, and the SIMD/GPU goals are met here; P1 remains
+open for other modes and filter sizes.
+
+The exact standard, baseline, and Parallel CPU receipts are
+`build/migration-parity/minfilter-l-baseline-benchmark.json`,
+`build/migration-parity/minfilter-l-optimized-benchmark.json`, and
+`build/migration-parity/minfilter-l-optimized-parallel-cpu-benchmark.json`.
+Parity receipts with the same prefix cover CPU, strict SIMD, strict GPU, and
+Parallel CPU. The input IDs are:
+
+```sh
+MINFILTER_L_CASES='PIL.ImageFilter.MinFilter.nuanced.performance-material-l-noise-1024x768-size-3,PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-1x1-size-3,PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-33x35-size-3'
+```
+
+Use `MIGRATION_TARGET_BACKEND=cpu` with
+`MIGRATION_PARITY_CASE_IDS="$MINFILTER_L_CASES" make migration-parity-test`;
+run the SIMD and GPU cases through `make migration-parity-test-simd-strict`
+and `make migration-parity-test-gpu-strict` with those IDs. For Parallel CPU,
+also set `MIGRATION_TARGET_PROFILE=parallel-cpu` and keep
+`MIGRATION_TARGET_BACKEND=cpu`.
+
+The standard benchmark command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.minfilter.material-l-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/minfilter-l-optimized-benchmark.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/minfilter-l-optimized-benchmark-parity.json \
+make migration-parity-benchmark
+```
+
+For the separately built opt-in feature, use the same profile and workload with
+the canonical output paths changed to the `-parallel-cpu` suffix:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.minfilter.material-l-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/minfilter-l-optimized-parallel-cpu-benchmark.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/minfilter-l-optimized-parallel-cpu-benchmark-parity.json \
+make migration-parity-benchmark-parallel-cpu
+```
+
+The focused GPU regression is
+`cargo test --locked -p pillow-rs --lib gpu_packed_luma_min_filter_preserves_edges_and_compact_transfers`.
