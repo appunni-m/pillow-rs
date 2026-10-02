@@ -14805,3 +14805,67 @@ consumer requests individual images. Compare that path against both serial
 calls and concurrent independent requests at the same total image count; keep
 single-image latency separate from batch throughput. No runtime path changed in
 this probe, and no goal threshold was met or waived.
+
+## ImageDraw.shape rectangle fast-path probe — 2026-10-02
+
+The existing individual-operation workload for `ImageDraw.shape` is only a
+16 × 16 RGB outline workflow: construct an image, construct the drawing
+context, create a closed four-corner `Outline`, call `shape`, then materialize
+with `tobytes`. I tried routing exact four-corner axis-aligned rectangles to
+`DrawRectangle`, then tried filling clipped CPU row spans directly in native
+L, LA, RGB, RGBA, and I;16 storage. Neither change produced a repeatable
+whole-workflow gain, so neither code change was retained.
+
+| Run | Pillow p50 | Serial CPU p50 | SIMD p50 | GPU p50 |
+| --- | ---: | ---: | ---: | ---: |
+| Before edits | 39.31 µs | 146.25 µs | 153.75 µs | 3,799.60 µs |
+| Rectangle route, first run | 131.00 µs | 38.79 µs | 148.83 µs | 3,785.10 µs |
+| Rectangle route, repeat | 136.79 µs | 142.40 µs | 150.98 µs | 3,775.04 µs |
+| Native row fills | 131.17 µs | 142.54 µs | 145.58 µs | 3,780.98 µs |
+
+Each subject contributed 100 samples. Unrelated Python, Rust compiler,
+emulator, and system storage work was active during these runs; Pillow's own
+median shifted from 39 µs to 131–137 µs. The 38.79 µs CPU result did not
+repeat, while the later CPU and SIMD medians stayed close to the original.
+Treat this cohort as noisy diagnostic evidence, not an accepted speedup. The
+standard workflow still measured serial CPU about 1.09× slower and SIMD about
+1.11× slower than Pillow; GPU latency stayed roughly 26× SIMD latency. The
+single-image GPU draw registration still performs Pillow-exact scan conversion
+on the CPU and uses the GPU for the resulting packed-canvas copy. A requested
+GPU backend with no fallback does not mean polygon geometry ran on the device.
+
+The experimental exact-rectangle proof admitted four distinct bounding-box
+corners in perimeter order, optionally followed by one repeated first point.
+It rejected extra vertices, degenerate bounds, diagonal edges, and bow-ties.
+RGB drawing through an RGBA context had to remain on the polygon path: the
+polygon rasterizer writes horizontal edges and then visits those rows in its
+scanline fill, so alpha blending makes the repeated boundary writes observable.
+These are useful admission rules, but they do not justify retaining a path
+without a repeatable full-call win.
+
+During the experiment, the focused Rust tests passed 3/3; 117 existing
+shape/rectangle/rounded-rectangle Pillow cases passed on each CPU, SIMD, and
+GPU profile (351 comparisons total); strict execution passed 10 SIMD rectangle
+cases and 8 GPU rectangle cases. The shape standard benchmark's parity gate
+passed across all three target backends. No coverage ran. Those checks applied
+to the temporary implementation and are not fresh verification of current
+source, because the unproven code was reverted.
+
+The missing evidence is size and mode coverage for materialized shape calls.
+Before revisiting this kernel, add an input-only large rectangle workload for
+the relevant native modes and time `shape` plus `tobytes`, excluding image and
+drawing-context setup while retaining the current 16 × 16 whole-workflow row.
+Compare paired runs on a quiet host. Keep the alpha-blended RGB parity boundary,
+and separate GPU request concurrency from an actual multi-image scheduler.
+The focused receipts were `shape-baseline.json`, `shape-after.json`,
+`shape-after-repeat.json`, and `shape-row-fill.json` under
+`build/migration-parity/`; the latest run used:
+
+```sh
+PYTHON=.venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imagedraw-imagedraw.shape.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/shape-row-fill.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/shape-row-fill-parity.json \
+make migration-parity-benchmark-low-load
+```
