@@ -14764,3 +14764,44 @@ Attempt receipts are `getbbox-rgb-filled-attempt1-20261002.json`,
 `getbbox-rgb-canonical-final-parity-20261002.json`, and
 `getbbox-rgb-final-canonical-20261002.json` under `build/migration-parity/`.
 No coverage collection ran.
+
+## Independent-image GPU batching probe — 2026-10-02
+
+The current GPU `execute_batch` batches an ordered operation sequence for one
+image. It does not coalesce independent image requests into one dispatch. The
+changing-input GetChannel queue diagnostic measures separate synchronous
+requests sharing the GPU queue; that is host concurrency, not image batching.
+
+An exploratory RGB GetChannel probe compared one-image calls with batches made
+by concatenating 4, 8, or 16 equal-size 1024 × 768 frames into one taller image,
+running `getchannel("G")`, then rebuilding each L output image. The timed
+boundary included input concatenation, image construction, the operation,
+readback/materialization, and per-image output construction; exact output
+comparisons ran outside timing. Across 64 changing input frames, every output
+matched live Pillow. Strict receipts recorded the requested actual backend for
+CPU, SIMD, and GPU without fallback; GPU used one dispatch per combined image.
+
+Repeated target medians varied substantially under unrelated host load, so
+these are exploratory ranges, not acceptance measurements:
+
+| Stacked frames | Pillow images/s, one run | CPU images/s, two runs | SIMD images/s, two runs | GPU images/s, two runs |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 2,037 | 1,114–4,553 | 805–4,654 | 897–1,053 |
+| 4 | 1,044 | 1,194–2,773 | 1,729–3,120 | 932–1,024 |
+| 8 | 919 | 759–2,553 | 1,422–2,407 | 878–1,008 |
+| 16 | 908 | 666–2,439 | 1,424–2,404 | 725–810 |
+
+The stacked-image method did not demonstrate a GPU throughput win: its 16-frame
+rate fell below its one-frame rate in both target runs. It adds a host-side
+concatenation and image allocation, then copies readback bytes into separately
+allocated outputs. Do not retain vertical stacking as a production scheduler
+or treat these noisy timings as a new performance baseline. Artifacts are in
+`build/migration-parity/getchannel-batch-probe/`.
+
+A real multi-image scheduler needs compatible per-image descriptors and shared
+input/output storage, with offsets and dimensions kept separate. Keep the
+outputs packed or resident for subsequent work and split them only when the
+consumer requests individual images. Compare that path against both serial
+calls and concurrent independent requests at the same total image count; keep
+single-image latency separate from batch throughput. No runtime path changed in
+this probe, and no goal threshold was met or waived.
