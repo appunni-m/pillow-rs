@@ -13362,6 +13362,66 @@ Keep the native LA GPU path. The CPU remains close to Pillow but meets the
 latency target; SIMD and GPU meet their current targets for this workload. No
 coverage, broad CI, release, or push was run.
 
+## RGB `ImageOps.pad` vertical-fill checkpoint — 2026-10-02
+
+The material workload is
+`pil-imageops.pad.materialized.native-rgb-noise-1024x768-square`. It places a
+native RGB 1024 × 768 source into a 1024 × 1024 canvas without resampling. The
+CPU path previously allocated the full output, filled it, and copied the
+middle source rows over that fill. The retained CPU specialization admits only
+the exact `(RGB, 3-byte)` storage contract, then appends the top fill rows, the
+source triplets, and the bottom fill rows into one reserved output. SIMD uses
+the same native append layout. Its one vector-fill candidate was slower and
+was discarded; the retained row fill uses the existing native three-byte
+pattern repeater and avoids the redundant 768-row overwrite.
+
+The strict live-Pillow gate passed 3/3 CPU/SIMD/GPU comparisons in each run.
+Every target recorded 100/100 actual executions with no fallback. The
+measurements were:
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Fresh baseline | 1.408 | 1.049 | 0.352 | 1.839 |
+| Vector-fill append, rejected | 1.637 | 0.399 | 0.404 | 3.575 |
+| Native append, retained | 1.276 | 0.265 | 0.258 | 1.705 |
+| Native append repeat | 1.274 | 0.311 | 0.270 | 1.906 |
+| Precomputed-vector append, rejected | 1.544 | 0.372 | 0.331 | 1.812 |
+
+The retained CPU result is 4.1–4.8× faster than Pillow, closing the serial CPU
+target on both runs. SIMD is 4.72–4.95× faster, close but still below 5×. The
+three attempts establish a useful decision: bulk RGB vector construction is
+not worth keeping when it costs more than the redundant row writes; append
+native bytes first, and only add a vector fill kernel when it beats that whole
+call. GPU remains far behind SIMD. It uploads 3,145,728 bytes for a 2,359,296-
+byte RGB source, reads back 4,194,304 bytes for a 3,145,728-byte result, records
+one mode conversion, and dispatches once. Its 1.70–1.91 ms latency is about
+6.6–7.1× SIMD latency. This operation is transfer-heavy; these concurrency-one
+rates do not establish sustained throughput. The opt-in Parallel CPU profile
+was not separately benchmarked; this identity-contain branch returns before
+the Rayon row loop.
+
+The benchmark receipts are `pad-rgb-baseline-82bb209b-20261002.json`,
+`pad-rgb-native-append-attempt1-82bb209b-20261002.json`,
+`pad-rgb-append-attempt2-82bb209b-20261002.json`,
+`pad-rgb-append-repeat2-82bb209b-20261002.json`, and
+`pad-rgb-vector-period-attempt3-82bb209b-20261002.json`; each has a matching
+`-parity-20261002.json` sidecar. Reproduce the retained final run with:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.pad.materialized.native-rgb-noise-1024x768-square' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/pad-rgb-append-attempt2-82bb209b-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/pad-rgb-append-attempt2-82bb209b-parity-20261002.json \
+make migration-parity-benchmark
+```
+
+`cargo fmt --all -- --check`, `git diff --check`, and
+`cargo test --locked -p pillow-rs --lib pad_ -- --nocapture` passed (24 tests).
+After three bounded attempts, keep CPU/SIMD append construction, record the
+SIMD and GPU blockers, and move to another mode/workload. No coverage, broad
+CI, release, or push was run.
+
 ## RGB `ImageFilter.MedianFilter(3)` checkpoint — 2026-10-02
 
 Added seeded 1024 × 768 RGB noise plus 1 × 1, 1 × 3, and odd 33 × 35

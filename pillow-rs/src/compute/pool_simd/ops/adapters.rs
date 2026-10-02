@@ -21709,13 +21709,12 @@ fn native_pad_bytes(
             .ok_or_else(|| simd_unsupported("Pad"))?;
         let needs_fill_rows = offset_y != 0 || source_end != target_height_usize;
         let (fill_row, vector_blocks, scalar_tail) = if mode == Some("RGBA") && needs_fill_rows {
-            // RGBA padding has a genuine vector data-plane step: build
-            // its reusable alpha-aware fill row with the SIMD lane type,
-            // then append that row around the native source bytes.
+            // RGBA padding builds its reusable alpha-aware fill row with SIMD
+            // lanes, then appends it around the original source bytes.
             let mut row = vec![0u8; target_stride];
             let (vector_blocks, scalar_tail) = native_fill_row(&mut row, fill, channels)
                 .ok_or_else(|| {
-                    PilError::InternalError("SIMD RGBA pad fill shape mismatch".into())
+                    PilError::InternalError("SIMD RGBA Pad fill shape mismatch".into())
                 })?;
             (row, vector_blocks, scalar_tail)
         } else {
@@ -21724,7 +21723,7 @@ fn native_pad_bytes(
         if fill_row.len() != target_stride {
             return Ok(None);
         }
-        let append_vertical_rows = matches!(mode, Some("RGBA" | "CMYK" | "RGBX"))
+        let append_vertical_rows = matches!(mode, Some("RGB" | "RGBA" | "CMYK" | "RGBX"))
             || (channels == 1 && matches!(mode, None | Some("L")));
         let mut output = if append_vertical_rows {
             Vec::with_capacity(output_len)
@@ -31063,6 +31062,33 @@ mod tests {
         expected.extend_from_slice(&fill_row);
         expected.extend_from_slice(&fill_row);
         expected.extend_from_slice(&[23, 47, 89, 131, 29, 31, 37, 41]);
+        expected.extend_from_slice(&fill_row);
+        assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn pad_rgb_appends_native_source_rows_between_fill_rows() {
+        use crate::raster::{DynamicImage, RgbImage};
+
+        let source = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(2, 1, vec![23, 47, 89, 29, 31, 37])
+                .expect("RGB source shape must be valid"),
+        );
+        let fill = (7, 11, 13, 17);
+        let operation = crate::pipeline::PipelineOp::Pad {
+            w: 2,
+            h: 4,
+            filter: crate::pipeline::ResampleFilter::Nearest,
+            color: Some(fill),
+            centering: (0.0, 0.5),
+        };
+        let result = super::simd_pad(&source, &operation, Some("RGB")).expect("SIMD RGB pad");
+
+        let fill_row = [7, 11, 13, 7, 11, 13];
+        let mut expected = Vec::with_capacity(2 * 4 * 3);
+        expected.extend_from_slice(&fill_row);
+        expected.extend_from_slice(&fill_row);
+        expected.extend_from_slice(&[23, 47, 89, 29, 31, 37]);
         expected.extend_from_slice(&fill_row);
         assert_eq!(result.as_bytes(), expected);
     }
