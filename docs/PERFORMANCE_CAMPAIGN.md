@@ -15517,3 +15517,103 @@ make migration-parity-benchmark-parallel-cpu
 
 The focused GPU regression is
 `cargo test --locked -p pillow-rs --lib gpu_packed_luma_min_filter_preserves_edges_and_compact_transfers`.
+
+## Native-LA `ImageFilter.MaxFilter(3)` GPU transport checkpoint — 2026-10-03
+
+The native-LA MaxFilter(3) route reuses the checked compact two-channel upload,
+dispatch planner, and native LA readback. Each invocation computes two pixels
+as independent `(L0, A0, L1, A1)` lanes, using clamped edges and one owner per
+packed output word. Admission remains limited to a singleton LA MaxFilter(3)
+on little-endian targets; other modes, sizes, and composed pipelines retain
+their existing paths. This is a single-image route. The separate
+`ImageBatch` scheduler and all ordinary image-call routing were left unchanged.
+
+The material input is seeded LA noise at 1024 × 768; exact parity also covers
+1 × 1 and 33 × 35. Live-Pillow parity passed 3/3 on serial CPU, strict SIMD,
+strict GPU, and opt-in Parallel CPU. The focused GPU regression additionally
+checks 1 × 1, 1 × 3, 4 × 3, 5 × 3, and 33 × 35 against CPU bytes, verifies LA
+mode and alpha ordering, and asserts one actual GPU dispatch, no fallback, and
+no mode conversion. No coverage was run.
+
+The correctness-gated benchmark measured 100 observations per profile. Input
+construction is outside `apply-filter` and `observe-filter-result`. Parallel
+CPU used both opt-in `parallel` features and the same ordinary Pillow
+comparator; it did not run a threaded Pillow baseline.
+
+| Profile | Pillow median / p95 (ms) | pillow-rs median / p95 (ms) | Relative latency | Median throughput | Execution proof |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Serial CPU | 61.861 / 63.594 | 11.437 / 11.884 | 5.41× faster | 87.4 ops/s | CPU 100/100, no fallback |
+| SIMD | 61.861 / 63.594 | 8.831 / 9.127 | 7.00× faster | 113.2 ops/s | SIMD 100/100, no fallback |
+| GPU | 61.861 / 63.594 | 1.204 / 1.718 | 51.4× faster; 7.33× lower latency than SIMD | 830.6 ops/s | GPU 100/100, 1 dispatch/call, no fallback |
+| Parallel CPU (opt-in Rayon) | 61.861 / 63.594 | 1.379 / 1.492 | 44.8× faster | 724.9 ops/s | CPU 100/100, `parallel` feature |
+
+Before the native-LA route, generic RGBA transport uploaded and read back
+3,145,728 bytes per call and reported one mode conversion. The native route
+moves 1,572,864 bytes each way, a 2× reduction, and reports zero conversions.
+GPU median latency fell from 2.918 ms to 1.204 ms (58.7%). The GPU now has
+7.33× the measured q1 SIMD throughput for this input. CPU and SIMD use the
+existing implementations; their small baseline-to-final changes are ordinary
+run variation, not attributed to the GPU change. These results close the
+measured LA MaxFilter(3) case only; other LA filters and sizes need their own
+parity and performance evidence.
+
+The baseline, optimized, and separately built Parallel CPU receipts are
+`build/migration-parity/maxfilter-la-baseline-benchmark.json`,
+`build/migration-parity/maxfilter-la-optimized-benchmark.json`, and
+`build/migration-parity/maxfilter-la-optimized-parallel-cpu-benchmark.json`.
+Parity receipts use the same `maxfilter-la-` prefix.
+
+The exact case IDs are:
+
+```sh
+MAXFILTER_LA_CASES='PIL.ImageFilter.MaxFilter.nuanced.performance-material-la-noise-1024x768-size-3,PIL.ImageFilter.MaxFilter.nuanced.backend-noise-la-1x1-size-3,PIL.ImageFilter.MaxFilter.nuanced.backend-noise-la-33x35-size-3'
+```
+
+The exact parity commands were:
+
+```sh
+MIGRATION_TARGET_BACKEND=cpu MIGRATION_PARITY_CASE_IDS="$MAXFILTER_LA_CASES" \
+  MIGRATION_PARITY_OUTPUT=build/migration-parity/maxfilter-la-optimized-cpu-parity.json \
+  make migration-parity-test
+
+MIGRATION_TARGET_BACKEND=simd MIGRATION_STRICT_TARGET_BACKEND=1 \
+  MIGRATION_PARITY_CASE_IDS="$MAXFILTER_LA_CASES" \
+  MIGRATION_PARITY_OUTPUT=build/migration-parity/maxfilter-la-optimized-simd-parity.json \
+  make migration-parity-test
+
+MIGRATION_TARGET_BACKEND=gpu MIGRATION_STRICT_TARGET_BACKEND=1 \
+  MIGRATION_PARITY_CASE_IDS="$MAXFILTER_LA_CASES" \
+  MIGRATION_PARITY_OUTPUT=build/migration-parity/maxfilter-la-optimized-gpu-parity.json \
+  make migration-parity-test
+
+make build-parity-parallel-cpu
+MIGRATION_TARGET_PROFILE=parallel-cpu MIGRATION_TARGET_BACKEND=cpu \
+  MIGRATION_STRICT_TARGET_BACKEND=1 \
+  MIGRATION_PARITY_CASE_IDS="$MAXFILTER_LA_CASES" \
+  MIGRATION_PARITY_OUTPUT=build/migration-parity/maxfilter-la-optimized-parallel-cpu-parity.json \
+  make migration-parity-test
+```
+
+The exact optimized standard benchmark command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.maxfilter.material-la-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/maxfilter-la-optimized-benchmark.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/maxfilter-la-optimized-benchmark-parity.json \
+make migration-parity-benchmark
+```
+
+The separate Parallel CPU benchmark command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.maxfilter.material-la-noise-1024x768' \
+make migration-parity-benchmark-parallel-cpu
+```
+
+The Make target writes canonical `benchmark-result-parallel-cpu.json` and
+`benchmark-parity-result-parallel-cpu.json` receipts; they were copied to the
+`maxfilter-la-optimized-parallel-cpu` paths above. Continue P1 with the next
+uncheckpointed operation/mode that still pays measurable RGBA staging, and
+keep queued GPU measurements separate from this q1 comparison.

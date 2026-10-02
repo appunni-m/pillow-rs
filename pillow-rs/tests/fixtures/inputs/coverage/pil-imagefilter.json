@@ -730,6 +730,8 @@
           "PIL.ImageFilter.MinFilter.nuanced.backend-noise-rgb-8x3-size-3",
           "PIL.ImageFilter.MaxFilter.nuanced.backend-noise-l-1x1-size-3",
           "PIL.ImageFilter.MaxFilter.nuanced.backend-noise-l-33x35-size-3",
+          "PIL.ImageFilter.MaxFilter.nuanced.backend-noise-la-1x1-size-3",
+          "PIL.ImageFilter.MaxFilter.nuanced.backend-noise-la-33x35-size-3",
           "PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-1x1-size-3",
           "PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-33x35-size-3"
         ],
