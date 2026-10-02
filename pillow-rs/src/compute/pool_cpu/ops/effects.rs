@@ -811,6 +811,47 @@ fn paste_native_masked_rgb_l_row(source: &[u8], destination: &mut [u8], mask: &[
     }
 }
 
+/// Blend native RGBA samples with one L-mask byte per pixel. Alpha is a
+/// stored channel and follows the same Pillow byte blend as red, green, and
+/// blue; endpoint weights need no special cases in the arithmetic loop.
+#[inline]
+fn paste_native_masked_rgba_l_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len() % 4, 0);
+    debug_assert_eq!(source.len() / 4, mask.len());
+
+    for ((source_pixel, destination_pixel), mask_value) in source
+        .chunks_exact(4)
+        .zip(destination.chunks_exact_mut(4))
+        .zip(mask.iter().copied())
+    {
+        let weight = u16::from(mask_value);
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+        )]
+        let inverse = 255 - weight;
+        let blend = |source_value: u8, destination_value: u8| {
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+            )]
+            let weighted =
+                u16::from(source_value) * weight + u16::from(destination_value) * inverse + 127;
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "DIV255 yields an 8-bit convex blend of byte channels"
+            )]
+            let blended = (weighted / 255) as u8;
+            blended
+        };
+        destination_pixel[0] = blend(source_pixel[0], destination_pixel[0]);
+        destination_pixel[1] = blend(source_pixel[1], destination_pixel[1]);
+        destination_pixel[2] = blend(source_pixel[2], destination_pixel[2]);
+        destination_pixel[3] = blend(source_pixel[3], destination_pixel[3]);
+    }
+}
+
 /// Blend an exact same-mode byte layout directly. This covers common modes
 /// whose storage is already native; tagged, indexed, scalar, and cross-mode
 /// cases retain the established conversion path until their contracts have
@@ -920,6 +961,12 @@ fn paste_native_masked(
             && !mask_pixels.layout.premultiplied
         {
             paste_native_masked_rgb_l_row(source_row, destination_row, mask_row);
+        } else if mode == "RGBA"
+            && mask_channels == 1
+            && mask_pixels.layout.value_index == 0
+            && !mask_pixels.layout.premultiplied
+        {
+            paste_native_masked_rgba_l_row(source_row, destination_row, mask_row);
         } else if mode == "HSV"
             && mask_channels == 1
             && mask_pixels.layout.value_index == 0
@@ -4876,6 +4923,45 @@ mod tests {
         super::paste_native_masked_rgb_l_row(&source, &mut actual, &masks);
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn native_rgba_l_masked_paste_row_matches_div255_for_all_mask_values() {
+        let masks = (0..=u8::MAX).collect::<Vec<_>>();
+        let source = (0..masks.len() * 4)
+            .map(|index| {
+                u8::try_from(index % 256)
+                    .expect("wrapped value fits in a byte")
+                    .wrapping_mul(37)
+                    .wrapping_add(13)
+            })
+            .collect::<Vec<u8>>();
+        let destination = (0..masks.len() * 4)
+            .map(|index| {
+                u8::try_from(index % 256)
+                    .expect("wrapped value fits in a byte")
+                    .wrapping_mul(71)
+                    .wrapping_add(29)
+            })
+            .collect::<Vec<u8>>();
+        let mut actual = destination.clone();
+        let mut expected = destination;
+
+        for (pixel, mask) in masks.iter().copied().enumerate() {
+            for channel in 0..4 {
+                let byte = pixel * 4 + channel;
+                let source_value = u32::from(source[byte]);
+                let destination_value = u32::from(expected[byte]);
+                let mask_value = u32::from(mask);
+                expected[byte] =
+                    ((source_value * mask_value + destination_value * (255 - mask_value) + 127)
+                        / 255) as u8;
+            }
+        }
+
+        super::paste_native_masked_rgba_l_row(&source, &mut actual, &masks);
+
+        assert_eq!(actual, expected, "RGBA alpha uses the same native L blend");
     }
 
     #[test]

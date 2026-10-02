@@ -14405,3 +14405,116 @@ operation; investigate Rayon scheduling and row partition overhead if revisited.
 The receipts are `benchmark-result-parallel-cpu.json` and
 `benchmark-parity-result-parallel-cpu.json`. Both final benchmark profiles
 identify the same `fff4770ff` revision with `dirty: false`. No coverage was run.
+
+### Image.Image.paste masked native RGBA — checkpoint 2026-10-02
+
+This visit optimized the parity-backed workload
+`pil-image-image.paste.masked.materialized.masked-rgba-noise-1024x768` (1024 ×
+768 RGBA source/destination with one L mask byte per pixel). Pillow blends all
+four stored bytes independently, including alpha, with exact rounded
+`(source * mask + destination * (255 - mask) + 127) / 255` arithmetic. It is
+not premultiplied-alpha compositing. The native paths are admitted only for
+same-mode RGBA source and destination plus an L mask whose value is byte zero
+and which is not premultiplied; other mask layouts retain their existing path.
+
+Four bounded implementation attempts addressed separate costs:
+
+1. The serial CPU path now blends four RGBA bytes explicitly after loading one
+   mask byte. That removes the generic per-channel loop and endpoint checks
+   from this proven layout. A direct regression checks all 256 mask values on
+   all four channels.
+2. The SIMD route expands each L sample once across its four RGBA lanes. A
+   16-byte block handles four pixels, an 8-byte block handles two, and a
+   clipped row can end in one padded four-byte vector tail. AArch64 uses a
+   dedicated NEON kernel and reports its path; Rayon remains separate under
+   Parallel CPU.
+3. The GPU route keeps source bytes RGBA and mask bytes L in one aligned input
+   arena. One shader invocation owns one aligned four-byte destination pixel,
+   blends all four stored bytes, and writes that output word once. The clipped
+   source coordinate indexes the mask, and bounds checks precede buffer access.
+   The shader returns native RGBA without an intermediate mode conversion.
+4. The RGBA dispatch planner now respects the device limit on both axes. For
+   more workgroups than fit on one axis, it selects a near-square grid and
+   records the launched rectangle product as dispatch telemetry. The planner
+   represents a 4096 × 4096 image as 512 × 512 groups at 64 invocations per
+   group; the one-axis 65,536-group layout is rejected by the device limit.
+
+Median milliseconds per call and their reciprocal operations per second from
+the final standard-profile run are:
+
+| Subject | Median ms | Median ops/s | Compared result |
+| --- | ---: | ---: | --- |
+| Ordinary Pillow | 1.286834 | 777 | reference |
+| Serial CPU | 0.673396 | 1,485 | 1.91× faster than Pillow |
+| SIMD | 0.549584 | 1,820 | 2.34× faster than Pillow; below 5× |
+| GPU | 2.289479 | 437 | 4.16× slower than SIMD |
+| Parallel CPU | 0.665230 | 1,503 | 1.93× faster than ordinary Pillow |
+
+The standard run measured 100 samples per subject at concurrency one, including
+the public Paste call and receiver observation. All three target profiles used
+their requested CPU, SIMD, or GPU backend for all 100 samples with no fallback;
+the GPU executed one dispatch per operation. The separate Parallel CPU run
+recorded both `pillow-rs/parallel` and `pillow-rs-py/parallel` features, used
+the CPU backend for 100 samples, and passed parity 1/1. Its comparison reuses
+ordinary Pillow from the standard profile; it is not a threaded Pillow
+baseline. These reciprocal-latency rates are not a concurrent-throughput test.
+
+Earlier candidate medians show the effect of each retained specialization and
+the run-to-run noise. Values are Pillow / CPU / SIMD / GPU in milliseconds:
+
+| Run | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Initial baseline | 0.999042 | 1.342938 | 2.154438 | 3.152646 |
+| CPU row specialization | 0.900834 | 0.626146 | 2.093563 | 3.194604 |
+| CPU + SIMD row specialization | 0.852855 | 0.595729 | 0.511583 | 3.281583 |
+| Native RGBA GPU shader | 0.884500 | 0.549438 | 0.500667 | 2.229417 |
+| Final balanced-grid code | 1.286834 | 0.673396 | 0.549584 | 2.289479 |
+
+The 128-thread experiment measured 0.868688 / 0.541229 / 0.493188 / 2.200125
+ms; the 256-thread experiment measured 1.140771 / 0.703229 / 0.621917 /
+2.809896 ms. Since oracle and every backend shifted together, the small 64 vs
+128 differences do not demonstrate a stable full-call gain. The shader remains
+at 64 threads. Against the original generic GPU path, the native shader reduced
+auxiliary source-plus-mask bytes from 6,291,456 to 3,932,160 and improved the
+GPU median from 3.153 to about 2.23 ms in the corresponding run. The final run
+records 7,077,888 uploaded bytes, 3,145,728 readback bytes, one dispatch, no
+mode conversion, and three full-frame copies. These fields overlap by design;
+do not sum upload and auxiliary bytes as independent traffic.
+
+The compact shader fixes the widening and invalid-flat-dispatch costs, but
+GPU completion and readback still exceed this materialized operation's SIMD
+latency by more than four times. SIMD is faster than Pillow but remains below
+the 5× goal. The next useful investigations are a one-write output builder for
+the active CPU/SIMD pixels and GPU result residency or synchronization cost;
+neither was attempted in this bounded visit. No actual 4096 × 4096 image
+parity run was made: the 4K boundary is covered by the allocation-free dispatch
+planner test, while the GPU shader parity test uses clipped native RGBA input.
+
+The focused code checks passed on the pre-checkpoint dirty tree:
+
+```sh
+cargo test -p pillow-rs --lib native_rgba_l_masked_paste_row_matches_div255_for_all_mask_values --locked
+cargo test -p pillow-rs --lib simd_rgba_l_masked_paste_uses_native_mask_expansion_and_exact_clipped_tail --locked
+cargo test -p pillow-rs --lib simd_rgba_l_masked_paste --features parallel --locked -- --nocapture
+cargo test -p pillow-rs --lib native_masked_rgba --locked -- --nocapture
+cargo test -p pillow-rs --lib native_masked --locked -- --nocapture --test-threads=1
+```
+
+The broader serial filter passed 16 CPU/GPU tests, including existing L/LA/PA/
+RGB/HSV planners and actual PA/RGB/RGBA shader parity. Its first parallel test
+run exposed process-global telemetry being consumed by concurrent GPU tests;
+it also found an LA planner assertion that still expected four-byte layouts to
+be unsupported. Since RGBA is now supported, that assertion now checks that an
+unsupported five-byte layout is rejected. The parity assertions are unchanged.
+The isolated RGBA GPU filter passed five planner, shader-selection, layout,
+2×2 dispatch, and actual compact shader parity tests. The standard parity
+receipt passed 3/3; the separate Parallel CPU receipt passed 1/1. Exact receipt paths are
+`build/migration-parity/perf-paste-masked-rgba-final-20261002.json`,
+`build/migration-parity/perf-paste-masked-rgba-final-20261002-parity.json`,
+`build/migration-parity/benchmark-result-parallel-cpu.json`, and
+`build/migration-parity/benchmark-parity-result-parallel-cpu.json`. Both
+benchmark commands used their documented Make target, which depends on
+`build-parity`; neither used `make build`. Results identify revision
+`9545210b821cba796d4a30b7a016c05e796176fe` with a dirty worktree and are
+diagnostic until the same parity and benchmark gates pass on the commit
+checkpoint. No coverage was run.
