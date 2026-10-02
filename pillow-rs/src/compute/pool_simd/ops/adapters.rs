@@ -21699,12 +21699,14 @@ fn resize_horizontal_convolution_row(
     cover_byte_i32: bool,
     premultiplied_row: &mut [u8],
 ) -> Option<(u64, u64)> {
-    let (source_row, premultiply_in_kernel) = if premultiplied_alpha && !cover_byte_i32 {
-        resize_premultiply_alpha_row(source_row, channels, premultiplied_row)?;
-        (&*premultiplied_row, false)
-    } else {
-        (source_row, premultiplied_alpha)
-    };
+    let precompute_la_luma = premultiplied_alpha && cover_byte_i32 && channels == 2;
+    let (source_row, premultiply_in_kernel) =
+        if premultiplied_alpha && (!cover_byte_i32 || channels == 2) {
+            resize_premultiply_alpha_row(source_row, channels, premultiplied_row)?;
+            (&*premultiplied_row, false)
+        } else {
+            (source_row, premultiplied_alpha)
+        };
 
     if cover_byte_i32 {
         resize_horizontal_cover_i32_vector_row(
@@ -21714,7 +21716,8 @@ fn resize_horizontal_convolution_row(
             plan,
             output_width,
             output_row,
-            premultiply_in_kernel,
+            premultiplied_alpha,
+            precompute_la_luma,
         )
     } else {
         resize_horizontal_vector_row(
@@ -21965,6 +21968,7 @@ fn resize_horizontal_la_i32_vector_row(
     plan: &ResizeHorizontalPlan,
     output_width: usize,
     output_row: &mut [u8],
+    luma_is_premultiplied: bool,
 ) -> Option<(u64, u64)> {
     if source_row.is_empty() {
         output_row.fill(0);
@@ -21997,12 +22001,18 @@ fn resize_horizontal_la_i32_vector_row(
                     alpha[lane] = *source_row.get(source_base.checked_add(1)?)?;
                 }
             }
-            let premultiplied_luma = simd_div255_u16x8(
-                u16x8::new(luma.map(u16::from)) * u16x8::new(alpha.map(u16::from))
-                    + u16x8::splat(127),
-            );
+            let premultiplied_luma = if luma_is_premultiplied {
+                luma.map(i32::from)
+            } else {
+                simd_div255_u16x8(
+                    u16x8::new(luma.map(u16::from)) * u16x8::new(alpha.map(u16::from))
+                        + u16x8::splat(127),
+                )
+                .to_array()
+                .map(i32::from)
+            };
             let weight = i32x8::new(tap.weights);
-            luma_sum += i32x8::new(premultiplied_luma.to_array().map(i32::from)) * weight;
+            luma_sum += i32x8::new(premultiplied_luma) * weight;
             alpha_sum += i32x8::new(alpha.map(i32::from)) * weight;
         }
         let luma = luma_sum.to_array().map(resize_fixed_point_i32_to_u8);
@@ -22026,9 +22036,9 @@ fn resize_horizontal_la_i32_vector_row(
     for output_x in scalar_start..output_width {
         let output_start = output_x.checked_mul(2)?;
         *output_row.get_mut(output_start)? =
-            resize_horizontal_scalar(source_row, 2, coeffs, output_x, 0, true)?;
+            resize_horizontal_scalar(source_row, 2, coeffs, output_x, 0, !luma_is_premultiplied)?;
         *output_row.get_mut(output_start.checked_add(1)?)? =
-            resize_horizontal_scalar(source_row, 2, coeffs, output_x, 1, true)?;
+            resize_horizontal_scalar(source_row, 2, coeffs, output_x, 1, false)?;
         scalar_tail = scalar_tail.saturating_add(1);
     }
     Some((vector_blocks, scalar_tail))
@@ -22310,6 +22320,7 @@ fn resize_horizontal_cover_i32_vector_row(
     output_width: usize,
     output_row: &mut [u8],
     premultiplied_alpha: bool,
+    luma_is_premultiplied: bool,
 ) -> Option<(u64, u64)> {
     match (channels, premultiplied_alpha) {
         (1, false) => resize_horizontal_luma_i32_vector_row(
@@ -22319,9 +22330,14 @@ fn resize_horizontal_cover_i32_vector_row(
             output_width,
             output_row,
         ),
-        (2, true) => {
-            resize_horizontal_la_i32_vector_row(source_row, coeffs, plan, output_width, output_row)
-        }
+        (2, true) => resize_horizontal_la_i32_vector_row(
+            source_row,
+            coeffs,
+            plan,
+            output_width,
+            output_row,
+            luma_is_premultiplied,
+        ),
         (3, false) => {
             resize_horizontal_hsv_i32_vector_row(source_row, coeffs, plan, output_width, output_row)
         }
@@ -23133,7 +23149,8 @@ fn simd_resize_convolution_into(
         .checked_mul(channels)
         .ok_or_else(|| simd_unsupported("Resize"))?;
     let source = img.as_bytes();
-    let mut premultiplied_source_row = if premultiplied_alpha && !cover_byte_i32 {
+    let mut premultiplied_source_row = if premultiplied_alpha && (!cover_byte_i32 || channels == 2)
+    {
         vec![0u8; source_stride]
     } else {
         Vec::new()
