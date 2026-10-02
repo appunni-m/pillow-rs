@@ -121605,6 +121605,90 @@
       ]
     },
     {
+      "case_id": "PIL.ImageOps.pad.nuanced.performance-native-l-noise-1024x768-to-768-square",
+      "surface": "PIL.ImageOps",
+      "operation": "pad",
+      "covers": [
+        "PIL.ImageOps.pad.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "image-noise",
+          "kind": "ref_bytes",
+          "path": "generated/b4673500e3590f96044b5e9aec0fa2a2a2f903e91ad0b3f1fb5c7f0208b4b18c.bin",
+          "sha256": "b4673500e3590f96044b5e9aec0fa2a2a2f903e91ad0b3f1fb5c7f0208b4b18c",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image-noise"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "pad",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                768,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 73
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.ImageOps.pad.nuanced.performance-native-rgbx-resize-1024x768-to-768-square",
       "surface": "PIL.ImageOps",
       "operation": "pad",

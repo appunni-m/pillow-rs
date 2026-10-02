@@ -1846,6 +1846,19 @@ fn horizontal_pass_luma_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row
             sum += i32::from(source_row[source_x + 1]) * weights[1] as i32;
             sum += i32::from(source_row[source_x + 2]) * weights[2] as i32;
             sum += i32::from(source_row[source_x + 3]) * weights[3] as i32;
+        } else if weights.len() == 5 {
+            sum = i32::from(source_row[source_x]) * weights[0] as i32;
+            sum += i32::from(source_row[source_x + 1]) * weights[1] as i32;
+            sum += i32::from(source_row[source_x + 2]) * weights[2] as i32;
+            sum += i32::from(source_row[source_x + 3]) * weights[3] as i32;
+            sum += i32::from(source_row[source_x + 4]) * weights[4] as i32;
+        } else if weights.len() == 6 {
+            sum = i32::from(source_row[source_x]) * weights[0] as i32;
+            sum += i32::from(source_row[source_x + 1]) * weights[1] as i32;
+            sum += i32::from(source_row[source_x + 2]) * weights[2] as i32;
+            sum += i32::from(source_row[source_x + 3]) * weights[3] as i32;
+            sum += i32::from(source_row[source_x + 4]) * weights[4] as i32;
+            sum += i32::from(source_row[source_x + 5]) * weights[5] as i32;
         } else {
             for (tap, &weight) in weights.iter().enumerate() {
                 sum += i32::from(source_row[source_x + tap]) * weight as i32;
@@ -1867,6 +1880,7 @@ fn vertical_pass_luma_i32(
     for (output_y, output_row) in output.chunks_exact_mut(output_width).enumerate() {
         let weights = coeffs.weights_for(output_y);
         if weights.is_empty() {
+            output_row.fill(0);
             continue;
         }
         let source_y = coeffs.xmin[output_y] as usize;
@@ -1895,6 +1909,47 @@ fn vertical_pass_luma_i32(
                 sum += i32::from(intermediate[row3 + output_x]) * weight3;
                 *pixel = fixed_point_to_u8_i32(sum);
             }
+        } else if weights.len() == 5 {
+            let weight0 = weights[0] as i32;
+            let weight1 = weights[1] as i32;
+            let weight2 = weights[2] as i32;
+            let weight3 = weights[3] as i32;
+            let weight4 = weights[4] as i32;
+            let row0 = source_y * output_width;
+            let row1 = row0 + output_width;
+            let row2 = row1 + output_width;
+            let row3 = row2 + output_width;
+            let row4 = row3 + output_width;
+            for (output_x, pixel) in output_row.iter_mut().enumerate() {
+                let mut sum = i32::from(intermediate[row0 + output_x]) * weight0;
+                sum += i32::from(intermediate[row1 + output_x]) * weight1;
+                sum += i32::from(intermediate[row2 + output_x]) * weight2;
+                sum += i32::from(intermediate[row3 + output_x]) * weight3;
+                sum += i32::from(intermediate[row4 + output_x]) * weight4;
+                *pixel = fixed_point_to_u8_i32(sum);
+            }
+        } else if weights.len() == 6 {
+            let weight0 = weights[0] as i32;
+            let weight1 = weights[1] as i32;
+            let weight2 = weights[2] as i32;
+            let weight3 = weights[3] as i32;
+            let weight4 = weights[4] as i32;
+            let weight5 = weights[5] as i32;
+            let row0 = source_y * output_width;
+            let row1 = row0 + output_width;
+            let row2 = row1 + output_width;
+            let row3 = row2 + output_width;
+            let row4 = row3 + output_width;
+            let row5 = row4 + output_width;
+            for (output_x, pixel) in output_row.iter_mut().enumerate() {
+                let mut sum = i32::from(intermediate[row0 + output_x]) * weight0;
+                sum += i32::from(intermediate[row1 + output_x]) * weight1;
+                sum += i32::from(intermediate[row2 + output_x]) * weight2;
+                sum += i32::from(intermediate[row3 + output_x]) * weight3;
+                sum += i32::from(intermediate[row4 + output_x]) * weight4;
+                sum += i32::from(intermediate[row5 + output_x]) * weight5;
+                *pixel = fixed_point_to_u8_i32(sum);
+            }
         } else {
             for (output_x, pixel) in output_row.iter_mut().enumerate() {
                 let source_start = source_y * output_width + output_x;
@@ -1917,13 +1972,35 @@ fn pil_resize_luma_i32(
     horizontal: &FilterCoeffs,
     vertical: &FilterCoeffs,
 ) -> Option<Vec<u8>> {
+    let output_width = usize::try_from(output_width).ok()?;
+    let output_height = usize::try_from(output_height).ok()?;
+    let output_len = output_height.checked_mul(output_width)?;
+    let mut output = vec![0; output_len];
+    pil_resize_luma_i32_into(
+        img,
+        output_width,
+        output_height,
+        horizontal,
+        vertical,
+        &mut output,
+    )?;
+    Some(output)
+}
+
+#[cfg(not(feature = "parallel"))]
+fn pil_resize_luma_i32_into(
+    img: &DynamicImage,
+    output_width: usize,
+    output_height: usize,
+    horizontal: &FilterCoeffs,
+    vertical: &FilterCoeffs,
+    output: &mut [u8],
+) -> Option<()> {
     let DynamicImage::ImageLuma8(source) = img else {
         return None;
     };
     let source_width = usize::try_from(source.width()).ok()?;
     let source_height = usize::try_from(source.height()).ok()?;
-    let output_width = usize::try_from(output_width).ok()?;
-    let output_height = usize::try_from(output_height).ok()?;
     if horizontal.xmin.len() != output_width
         || vertical.xmin.len() != output_height
         || !resize_coefficients_fit_source(horizontal, source_width)
@@ -1935,7 +2012,9 @@ fn pil_resize_luma_i32(
     }
     let intermediate_len = source_height.checked_mul(output_width)?;
     let output_len = output_height.checked_mul(output_width)?;
-    if source.as_raw().len() != source_width.checked_mul(source_height)? {
+    if source.as_raw().len() != source_width.checked_mul(source_height)?
+        || output.len() != output_len
+    {
         return None;
     }
 
@@ -1950,16 +2029,45 @@ fn pil_resize_luma_i32(
         );
     }
 
-    let mut output = vec![0; output_len];
     vertical_pass_luma_i32(
         &intermediate,
         source_height,
         output_width,
         vertical,
         false,
-        &mut output,
+        output,
     );
-    Some(output)
+    Some(())
+}
+
+/// Resize native L bytes directly into a caller-owned full-width output
+/// window. ImageOps.pad uses this to avoid materializing the contained image
+/// before copying its rows into the final canvas.
+#[cfg(not(feature = "parallel"))]
+pub(crate) fn pil_resize_luma_i32_into_window(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    filter: ResampleFilter,
+    output: &mut [u8],
+) -> bool {
+    let DynamicImage::ImageLuma8(_) = img else {
+        return false;
+    };
+    if output_width == 0 || output_height == 0 || img.width() == 0 || img.height() == 0 {
+        return false;
+    }
+    let horizontal = precompute_coeffs(output_width, img.width(), filter);
+    let vertical = precompute_coeffs(output_height, img.height(), filter);
+    pil_resize_luma_i32_into(
+        img,
+        output_width as usize,
+        output_height as usize,
+        &horizontal,
+        &vertical,
+        output,
+    )
+    .is_some()
 }
 
 #[cfg(not(feature = "parallel"))]
