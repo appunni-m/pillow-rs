@@ -129,7 +129,73 @@ fn native_extract_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize
 fn gather_channel<const CHANNELS: usize, const CHANNEL: usize>(
     source: &[u8],
 ) -> (Vec<u8>, u64, u64) {
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    if CHANNELS == 3 {
+        return gather_rgb_channel_neon::<CHANNEL>(source);
+    }
     crate::compute::pool_cpu::ops::imageops::gather_native_channel::<CHANNELS, CHANNEL>(source)
+}
+
+/// Extract one selected byte from packed RGB with one NEON structure load.
+/// `vld3q_u8` deinterleaves 16 RGB pixels directly into three byte vectors,
+/// avoiding the temporary lane arrays and three separate swizzles in the
+/// generic portable gather.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn gather_rgb_channel_neon<const CHANNEL: usize>(source: &[u8]) -> (Vec<u8>, u64, u64) {
+    const CHANNELS: usize = 3;
+    const LANES: usize = 16;
+    let pixel_count = source.len() / CHANNELS;
+    let vector_pixels = pixel_count / LANES * LANES;
+    let mut output: Vec<u8> = Vec::with_capacity(pixel_count);
+
+    macro_rules! extract_rgb_block {
+        ($pixel:expr) => {{
+            let input = core::arch::aarch64::vld3q_u8(source.as_ptr().add($pixel * CHANNELS));
+            let channel = if CHANNEL == 0 {
+                input.0
+            } else if CHANNEL == 1 {
+                input.1
+            } else {
+                input.2
+            };
+            core::arch::aarch64::vst1q_u8(output.as_mut_ptr().add($pixel), channel);
+        }};
+    }
+
+    // SAFETY: Each structure load starts at `3 * pixel` and reads exactly
+    // `3 * LANES` initialized source bytes. Both loops use aligned pixel
+    // offsets within `vector_pixels`, which is a multiple of LANES and bounded
+    // by `source.len() / 3`; each load and 16-byte store therefore fits its
+    // backing allocation. The output allocation is distinct from `source`,
+    // reserves `pixel_count` bytes, and keeps length zero until the full vector
+    // prefix has been initialized. The channel index is clamped by
+    // `simd_extract_band` to 0..3 before this helper is called. No operation
+    // inside the block can panic before `set_len` establishes initialization.
+    unsafe {
+        let unrolled_pixels = vector_pixels / (LANES * 4) * (LANES * 4);
+        for pixel in (0..unrolled_pixels).step_by(LANES * 4) {
+            extract_rgb_block!(pixel);
+            extract_rgb_block!(pixel + LANES);
+            extract_rgb_block!(pixel + LANES * 2);
+            extract_rgb_block!(pixel + LANES * 3);
+        }
+        for pixel in (unrolled_pixels..vector_pixels).step_by(LANES) {
+            extract_rgb_block!(pixel);
+        }
+        output.set_len(vector_pixels);
+    }
+
+    for pixel in vector_pixels..pixel_count {
+        output.push(source[pixel * CHANNELS + CHANNEL]);
+    }
+    debug_assert_eq!(output.len(), pixel_count);
+    (
+        output,
+        (vector_pixels / LANES) as u64,
+        (pixel_count - vector_pixels) as u64,
+    )
 }
 
 fn native_typed_filter_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
@@ -14518,13 +14584,25 @@ pub fn simd_extract_band(
     if scalar_tail != 0 {
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     }
-    crate::compute::record_pipeline_operation_path(if pixel_count == 0 {
+    let path = if pixel_count == 0 {
         "scalar-control"
     } else if vector_blocks != 0 {
-        "vector-gather"
+        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+        {
+            if channels == 3 {
+                "neon-deinterleave"
+            } else {
+                "vector-gather"
+            }
+        }
+        #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+        {
+            "vector-gather"
+        }
     } else {
         "scalar-gather"
-    });
+    };
+    crate::compute::record_pipeline_operation_path(path);
 
     GrayImage::from_raw(width, height, output)
         .map(DynamicImage::ImageLuma8)
@@ -33118,6 +33196,65 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[test]
+    fn extract_band_rgb_neon_deinterleave_covers_blocks_and_tail() {
+        let pixel_count = 37;
+        let raw: Vec<u8> = (0..pixel_count * 3)
+            .map(|index| u8::try_from((index * 73 + 19) % 256).expect("sample byte fits"))
+            .collect();
+
+        for channel in 0..3 {
+            let (output, vector_blocks, scalar_tail) = match channel {
+                0 => super::gather_rgb_channel_neon::<0>(&raw),
+                1 => super::gather_rgb_channel_neon::<1>(&raw),
+                2 => super::gather_rgb_channel_neon::<2>(&raw),
+                _ => unreachable!(),
+            };
+            let expected: Vec<u8> = raw.chunks_exact(3).map(|pixel| pixel[channel]).collect();
+
+            assert_eq!(output, expected, "RGB channel {channel}");
+            assert_eq!(vector_blocks, 2, "RGB channel {channel}");
+            assert_eq!(scalar_tail, 5, "RGB channel {channel}");
+        }
+    }
+
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[test]
+    fn simd_extract_band_rgb_dispatches_to_neon_deinterleave() {
+        let pixel_count = 37;
+        let raw: Vec<u8> = (0..pixel_count * 3)
+            .map(|index| u8::try_from((index * 73 + 19) % 256).expect("sample byte fits"))
+            .collect();
+        let image = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(pixel_count as u32, 1, raw).expect("RGB source shape must be valid"),
+        );
+
+        let previous = crate::compute::Backend::set_pipeline_telemetry_enabled(true);
+        crate::compute::begin_pipeline_operation_telemetry("ExtractBand");
+        let output = simd_extract_band(&image, &PipelineOp::ExtractBand { index: 1 }, Some("RGB"))
+            .expect("SIMD ExtractBand must succeed");
+        crate::compute::finish_pipeline_operation_telemetry();
+        let telemetry = crate::compute::Backend::take_pipeline_operation_telemetry();
+        crate::compute::Backend::set_pipeline_telemetry_enabled(previous);
+
+        let operation = telemetry
+            .first()
+            .expect("SIMD ExtractBand must publish operation telemetry");
+        assert_eq!(operation.path, "neon-deinterleave");
+        assert_eq!(operation.vector_block_count, 2);
+        assert_eq!(operation.scalar_tail_count, 5);
+        assert_eq!(
+            output.as_bytes(),
+            image
+                .as_bytes()
+                .chunks_exact(3)
+                .map(|pixel| pixel[1])
+                .collect::<Vec<_>>()
+                .as_slice()
+        );
     }
 
     #[test]
