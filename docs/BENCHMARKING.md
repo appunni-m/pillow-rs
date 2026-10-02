@@ -140,6 +140,27 @@ MIGRATION_BENCHMARK_ARGS="--workload-id pipeline-op.medianfilter.material-l-nois
 make migration-parity-benchmark
 ```
 
+The native-LA `MedianFilter(3)` workload is
+`pipeline-op.medianfilter.material-la-noise-1024x768`. It uses seeded
+1024×768 LA pixels and the same parity gate and measured boundary. This row is
+useful for confirming alpha-channel parity and checking that GPU execution
+keeps the two native bytes per pixel instead of expanding them to RGBA:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS="--workload-id pipeline-op.medianfilter.material-la-noise-1024x768" \
+make migration-parity-benchmark
+```
+
+To measure the opt-in Parallel CPU profile separately, compare its result with
+the ordinary single-threaded Pillow subject from the standard workload above:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS="--workload-id pipeline-op.medianfilter.material-la-noise-1024x768" \
+make migration-parity-benchmark-parallel-cpu
+```
+
 ## Correctness gate and budget gate
 
 Run the correctness gate before interpreting timing:

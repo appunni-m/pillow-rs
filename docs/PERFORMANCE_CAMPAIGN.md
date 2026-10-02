@@ -13270,3 +13270,94 @@ The separate Parallel CPU receipts are
 Keep the SIMD optimization and compact GPU path. Record serial CPU as a blocker
 and move to the next operation after four bounded candidates. No coverage,
 broad CI, release, or push was run.
+
+## LA `ImageFilter.MedianFilter(3)` checkpoint — 2026-10-02
+
+Added seeded 1024 × 768 LA noise plus 1 × 1, 1 × 3, and odd 33 × 35
+parity inputs. The maintained benchmark row is
+`pipeline-op.medianfilter.material-la-noise-1024x768`. Its baseline passed the
+Pillow, CPU, SIMD, and GPU parity gate, with actual CPU/SIMD/GPU execution and
+no fallbacks. Median latency was 83.830 ms for Pillow, 72.237 ms for serial
+CPU, 15.852 ms for SIMD, and 5.198 ms for GPU. CPU was 1.16× faster than
+Pillow, SIMD 5.29×, and GPU 3.05× faster than SIMD.
+
+The initial GPU implementation processed LA through the generic four-channel
+RGBA carrier. Its receipt showed 3,145,728 upload bytes, 3,145,728 readback
+bytes, and one mode conversion. The native LA specialization now packs two
+adjacent `[L, A]` pixels into each little-endian u32 and uses the four vector
+lanes for those two pixels. One shader invocation sorts nine clamped samples
+per lane and emits both median pixels, so it does not widen the image or sort
+the unused color channels. Pixel coordinates are derived separately for each
+adjacent pixel; this matters when an odd row width makes the packed word cross
+a row boundary. A partial final word writes only the existing first pixel and
+leaves its spare bytes unobserved by native readback.
+
+The odd 65 × 47 GPU regression test compares every LA byte with the CPU result,
+checks that alpha remains independent, and verifies a single dispatch, native
+transfer size, and zero mode conversions. The 1024 × 768 correctness-gated
+benchmark then passed all profiles again. GPU median latency fell to 2.284 ms
+(2.28× faster than the generic LA baseline); upload and readback each fell to
+1,572,864 bytes, conversion count fell to zero, and the actual backend remained
+GPU with no fallback. In that run Pillow was 84.854 ms, CPU 72.920 ms, SIMD
+15.894 ms, and GPU 2.284 ms: SIMD was 5.34× faster than Pillow and GPU was
+6.96× faster than SIMD. CPU remained 1.16× faster than Pillow. The measured
+operation rates are concurrency-one reciprocal-latency evidence, not saturated
+throughput.
+
+| LA `MedianFilter(3)`, 1024 × 768 | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Median latency | 84.854 ms | 72.920 ms | 15.894 ms | 2.284 ms |
+
+The public Pillow parity cases for 1 × 1, 1 × 3, and odd 33 × 35 also passed
+on CPU, strict SIMD, and strict GPU (3/3 for each backend), with no fallback.
+This specifically checks degenerate-axis replication, a final partial LA word,
+odd-row word crossings, and independent alpha medians.
+
+Parallel CPU was measured separately with `pillow-rs-py/parallel` and
+`pillow-rs/parallel`; the actual backend was CPU, parity passed 1/1, and there
+was no fallback. Its median/mean latency was 10.083/19.183 ms. The ordinary
+single-threaded Pillow subject from the standard run measured 84.854/85.127 ms,
+so Parallel CPU was 8.41× faster by medians and 4.44× by means across these
+separate runs. The Parallel CPU sample had a 71.615 ms p95 and 95.411 ms p99,
+so retain the median as a directional result and do not treat this one
+concurrency-one run as stable throughput.
+
+| Parallel CPU profile | Normal Pillow median | Parallel CPU median | Relative median |
+| --- | ---: | ---: | ---: |
+| LA `MedianFilter(3)`, 1024 × 768 | 84.854 ms | 10.083 ms | 8.41× faster |
+
+The baseline receipts are
+`build/migration-parity/medianfilter-la-baseline-20261002.json` and
+`build/migration-parity/medianfilter-la-baseline-parity-20261002.json`. The
+native-path receipts are
+`build/migration-parity/medianfilter-la-native-attempt1-20261002.json` and
+`build/migration-parity/medianfilter-la-native-attempt1-parity-20261002.json`.
+The separate Parallel CPU receipts are
+`build/migration-parity/medianfilter-la-parallel-cpu-20261002.json` and
+`build/migration-parity/medianfilter-la-parallel-cpu-parity-20261002.json`.
+The odd/tail public parity receipts are
+`build/migration-parity/medianfilter-la-odd-edge-20261002.json`,
+`build/migration-parity/medianfilter-la-degenerate-edges-20261002.json`,
+`build/migration-parity/medianfilter-la-simd-strict-20261002.json`, and
+`build/migration-parity/medianfilter-la-gpu-strict-20261002.json`.
+The exact measured command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.medianfilter.material-la-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/medianfilter-la-native-attempt1-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/medianfilter-la-native-attempt1-parity-20261002.json \
+make migration-parity-benchmark
+```
+
+The separate Parallel CPU command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.medianfilter.material-la-noise-1024x768' \
+make migration-parity-benchmark-parallel-cpu
+```
+
+Keep the native LA GPU path. The CPU remains close to Pillow but meets the
+latency target; SIMD and GPU meet their current targets for this workload. No
+coverage, broad CI, release, or push was run.
