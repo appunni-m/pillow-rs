@@ -1801,6 +1801,57 @@ fn native_small_uniform_byte_image(img: &DynamicImage, channels: usize, max_pixe
 }
 
 #[inline]
+fn native_uniform_f_mode_image(raw: &[u8], width: usize, height: usize) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    let Some(byte_count) = pixel_count.checked_mul(4) else {
+        return false;
+    };
+    if pixel_count == 0 || raw.len() != byte_count {
+        return false;
+    }
+    let Some(first) = raw.get(..4) else {
+        return false;
+    };
+    raw.chunks_exact(4).skip(1).all(|pixel| pixel == first)
+}
+
+fn rank_filter_f_requires_legacy_sort(raw: &[u8]) -> bool {
+    let mut saw_negative_zero = false;
+    let mut saw_positive_zero = false;
+    for bytes in raw.chunks_exact(4) {
+        let value = f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        if value.is_nan() {
+            // The existing partial_cmp fallback treats every NaN as equal to
+            // every value. Keep its exact sort behavior for these inputs.
+            return true;
+        }
+        if value == 0.0 {
+            saw_negative_zero |= value.is_sign_negative();
+            saw_positive_zero |= !value.is_sign_negative();
+            if saw_negative_zero && saw_positive_zero {
+                // partial_cmp considers the two zero signs equal, though
+                // their output bytes differ.
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[inline]
+fn select_rank_filter_f_value(values: &mut [f32], rank: usize, legacy_sort: bool) -> f32 {
+    let compare = |a: &f32, b: &f32| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal);
+    if legacy_sort {
+        values.sort_unstable_by(compare);
+        values[rank]
+    } else {
+        *values.select_nth_unstable_by(rank, compare).1
+    }
+}
+
+#[inline]
 fn select_rank_histogram(histogram: &[usize; 256], rank: usize) -> u8 {
     let mut seen = 0usize;
     for (value, count) in histogram.iter().enumerate() {
@@ -2110,6 +2161,7 @@ fn rank_filter_f_large_serial(
     half: i32,
     area: usize,
     rank: usize,
+    legacy_sort: bool,
 ) {
     let mut values = Vec::with_capacity(area);
     for y in 0..h {
@@ -2128,9 +2180,9 @@ fn rank_filter_f_large_serial(
                     ]));
                 }
             }
-            values.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let selected = select_rank_filter_f_value(&mut values, rank, legacy_sort);
             let out_base = (y * w + x) as usize * 4;
-            out[out_base..out_base + 4].copy_from_slice(&values[rank].to_le_bytes());
+            out[out_base..out_base + 4].copy_from_slice(&selected.to_le_bytes());
         }
     }
 }
@@ -2144,6 +2196,7 @@ fn rank_filter_f_large_parallel(
     half: i32,
     area: usize,
     rank: usize,
+    legacy_sort: bool,
 ) {
     let width = w as usize;
     let height = h as usize;
@@ -2170,9 +2223,9 @@ fn rank_filter_f_large_parallel(
                     ]));
                 }
             }
-            values.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let selected = select_rank_filter_f_value(&mut values, rank, legacy_sort);
             let out_base = x as usize * 4;
-            row[out_base..out_base + 4].copy_from_slice(&values[rank].to_le_bytes());
+            row[out_base..out_base + 4].copy_from_slice(&selected.to_le_bytes());
         }
     });
 }
@@ -2202,6 +2255,17 @@ fn rank_filter_impl(
             _ => Cow::Owned(img.to_rgba8().into_raw()),
         };
         let raw = raw.as_ref();
+        if area > 1 && native_uniform_f_mode_image(raw, w_u32 as usize, h_u32 as usize) {
+            let result = match img {
+                DynamicImage::ImageRgba8(_) => img.clone(),
+                _ => DynamicImage::ImageRgba8(
+                    crate::raster::RgbaImage::from_raw(w_u32, h_u32, raw.to_vec()).ok_or_else(
+                        || PilError::ValueError("rank_filter_impl(F): buffer error".into()),
+                    )?,
+                ),
+            };
+            return Ok(preserve_mode(img, result));
+        }
         let mut out = CheckedDims::new(w as u32, h as u32, 4)?.alloc_buffer();
         if area <= SMALL_RANK_AREA {
             for y in 0..h {
@@ -2230,10 +2294,11 @@ fn rank_filter_impl(
                 }
             }
         } else {
+            let legacy_sort = rank_filter_f_requires_legacy_sort(raw);
             #[cfg(feature = "parallel")]
-            rank_filter_f_large_parallel(raw, &mut out, w, h, half, area, rank);
+            rank_filter_f_large_parallel(raw, &mut out, w, h, half, area, rank, legacy_sort);
             #[cfg(not(feature = "parallel"))]
-            rank_filter_f_large_serial(raw, &mut out, w, h, half, area, rank);
+            rank_filter_f_large_serial(raw, &mut out, w, h, half, area, rank, legacy_sort);
         }
         let result = DynamicImage::ImageRgba8(
             crate::raster::RgbaImage::from_raw(w_u32, h_u32, out)
@@ -2676,5 +2741,80 @@ mod i32_filter3x3_uniform_tests {
             &identity_kernel,
             0.5,
         ));
+    }
+}
+
+#[cfg(test)]
+mod f_mode_rank_filter_uniform_tests {
+    use super::{
+        native_uniform_f_mode_image, rank_filter_f_requires_legacy_sort, rank_filter_impl,
+        select_rank_filter_f_value,
+    };
+    use crate::raster::{DynamicImage, RgbaImage};
+
+    fn raw_f32(values: &[f32]) -> Vec<u8> {
+        let mut raw = Vec::with_capacity(values.len() * 4);
+        for value in values {
+            raw.extend_from_slice(&value.to_le_bytes());
+        }
+        raw
+    }
+
+    #[test]
+    fn uniform_f_mode_rank_filter_preserves_exact_source_bytes() {
+        let (width, height, sample) = (256, 256, 37.0f32);
+        let raw = sample.to_le_bytes().repeat(width * height);
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(width as u32, height as u32, raw.clone()).unwrap(),
+        );
+
+        let result = rank_filter_impl(&image, 9, 40, Some("F")).unwrap();
+        assert_eq!(result.as_bytes(), raw);
+    }
+
+    #[test]
+    fn uniform_f_mode_detection_is_bit_exact() {
+        assert!(native_uniform_f_mode_image(
+            &37.0f32.to_le_bytes().repeat(4),
+            2,
+            2
+        ));
+        assert!(!native_uniform_f_mode_image(
+            &[0.0f32.to_le_bytes(), (-0.0f32).to_le_bytes()].concat(),
+            2,
+            1,
+        ));
+        assert!(!native_uniform_f_mode_image(&37.0f32.to_le_bytes(), 0, 1));
+    }
+
+    #[test]
+    fn f_mode_selection_matches_full_sort_for_finite_ties() {
+        let original = [8.0, -3.0, 8.0, 0.5, 11.0, -3.0, 4.0, 1.0, 8.0];
+        assert!(!rank_filter_f_requires_legacy_sort(&raw_f32(&original)));
+        for rank in 0..original.len() {
+            let mut sorted = original;
+            sorted.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let expected = sorted[rank].to_bits();
+            let mut selected = original.to_vec();
+            assert_eq!(
+                select_rank_filter_f_value(&mut selected, rank, false).to_bits(),
+                expected,
+            );
+        }
+    }
+
+    #[test]
+    fn f_mode_non_total_values_keep_legacy_sort() {
+        assert!(rank_filter_f_requires_legacy_sort(&raw_f32(&[
+            1.0,
+            f32::from_bits(0x7fc0_1234),
+            2.0,
+        ])));
+        assert!(rank_filter_f_requires_legacy_sort(&raw_f32(&[
+            -0.0, 1.0, 0.0
+        ])));
+        assert!(!rank_filter_f_requires_legacy_sort(&raw_f32(&[
+            -0.0, -0.0, 1.0
+        ])));
     }
 }

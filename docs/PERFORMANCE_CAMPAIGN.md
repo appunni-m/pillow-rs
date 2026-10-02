@@ -15060,3 +15060,88 @@ Focused checks were `cargo test -p pillow-rs --lib reduce` (7 passed) and
 `thumbnail-rgb-attempt4-full-resize-06080987f-20261003.json` under
 `build/migration-parity/`. No coverage was run. Move to the next ranked
 operation after this checkpoint.
+
+## F-mode `RankFilter(9, rank=40)` checkpoint — 2026-10-03
+
+The canonical workload is a 256 × 256 F image containing the same bit pattern
+(`37.0f32`) at every pixel. Rank selection over this input is an identity, so
+scanning and sorting 81 values for each output pixel is unnecessary. The
+retained CPU and SIMD adapter shortcuts prove bitwise equality across all
+four-byte samples before returning the native input. The shortcut is strict
+about signed zero: `+0.0` and `-0.0` are different byte patterns and do not
+qualify. This reduces the canonical whole-call median to about 50 μs, while
+preserving the actual F bytes.
+
+The standard baseline and retained implementation were measured with the
+canonical pipeline workload
+`pipeline-chain.rank-filter.material.f-9x9-256x256` using
+`make migration-parity-benchmark`. The benchmark gate reports successful
+execution; exact output checks are separate evidence:
+
+| Run | Pillow (ms) | CPU (ms) | SIMD profile (ms) | GPU (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 5.178 | 8.288 | 26.000 | 5.589 |
+| Retained fast path | 5.045 | 0.0504 | 0.0499 | 4.381 |
+
+The SIMD profile takes the `native-identity` shortcut for this uniform workload;
+its 50 μs timing is not vector-kernel throughput and must not count toward the
+5× SIMD goal. GPU performed its actual single-image dispatch and still has
+materialization/dispatch latency; it is far slower than the CPU identity path.
+A direct Pillow byte comparison passed for all four backends, including the
+opt-in Parallel CPU profile. No conversion is needed to answer this identity
+case.
+
+A separate nonuniform diagnostic used `value = float((pixel_index * 37) %
+251)` over the same dimensions. Image creation was outside the timer; each of
+seven samples timed two `RankFilter(9, 40)` calls plus `tobytes`. All backends
+produced the Pillow-matching output hash. These diagnostic timings are not the
+canonical benchmark receipt:
+
+| Profile | Pillow (ms) | Final pillow-rs (ms) | Pillow / target |
+| --- | ---: | ---: | ---: |
+| Serial CPU | 13.671 | 15.648 | 0.87× |
+| SIMD | 13.671 | 25.737 | 0.53× |
+| GPU | 13.671 | 5.786 | 2.36× |
+| Parallel CPU (opt-in Rayon) | 13.671 | 3.316 | 4.12× |
+
+Thus the nonuniform serial CPU is still 14% slower than Pillow, SIMD remains
+1.88× slower than Pillow, and the one-shot GPU is quicker than Pillow but much
+slower than SIMD's target. Parallel CPU is a separate opt-in CPU profile; its
+result is compared with ordinary Pillow and is not SIMD or GPU evidence. An
+earlier nonuniform run measured serial CPU at 25.432 ms, so guarded selection
+improved that probe, but has not crossed the Pillow threshold.
+
+Four bounded attempts produced these decisions:
+
+1. Replacing every large-window full sort with `select_nth_unstable` regressed
+the uniform canonical CPU case from 8.288 ms to 12.729 ms. Reverted; a cheaper
+selection algorithm cannot compensate for doing work on known-identity data.
+2. The native, bit-exact uniform-image identity test is retained. The Rust unit
+tests cover exact byte detection, signed-zero distinction, finite rank
+selection, and special comparator inputs.
+3. Guarded quickselect is retained for large nonuniform F windows in serial and
+Parallel CPU. It uses the old full-sort order for NaNs and mixed signed zeros,
+whose comparator is not a total order or whose equal values have distinct
+bytes. This improved the exploratory serial probe but remains slower than
+Pillow; keep optimizing only with a new measured hypothesis.
+4. A nine-row sorted merge network for the SIMD 9 × 9 median passed exact output
+comparison but regressed from about 24.8 ms to 36.8 ms. Reverted. SIMD's final
+nonuniform probe remains slower than Pillow, so no architecture-specific
+speedup is claimed from the uniform identity shortcut.
+
+The final nonuniform F parity case
+`PIL.Image.Image.filter.nuanced.f-mode-large-rank-filter` passed 1/1 on CPU,
+strict SIMD, strict GPU, and the separate Parallel CPU profile. The official
+focused benchmark completed after `make build-parity`; focused Rust tests
+passed 4/4 with
+`cargo test -p pillow-rs --lib f_mode_rank_filter_uniform_tests`. The parallel
+benchmark was run with `make migration-parity-benchmark-parallel-cpu` and its
+feature-enabled extension; the standard and parallel subjects remain reported
+separately. No coverage was run.
+
+The feature work is limited to RankFilter; it does not touch the explicit GPU
+batch executor or route ordinary image calls through batching. The batch API
+remains a separate entry point. This operation is checkpointed after four
+attempts. Remaining blockers are nonuniform serial CPU and SIMD latency, and
+one-shot GPU latency; move to the next ranked operation rather than spending
+another unbounded round on this workload.

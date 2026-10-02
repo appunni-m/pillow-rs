@@ -17396,6 +17396,23 @@ fn native_float_rank_supported_for_image(
             .is_some_and(|bytes| img.as_bytes().len() == bytes as usize)
 }
 
+#[inline]
+fn native_uniform_f_mode_image(raw: &[u8], width: usize, height: usize) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    let Some(byte_count) = pixel_count.checked_mul(4) else {
+        return false;
+    };
+    if pixel_count == 0 || raw.len() != byte_count {
+        return false;
+    }
+    let Some(first) = raw.get(..4) else {
+        return false;
+    };
+    raw.chunks_exact(4).skip(1).all(|pixel| pixel == first)
+}
+
 /// Choose a useful active width for one `u8x16` pixel block.
 ///
 /// The image is interleaved, so the vector operates on one channel at a time.
@@ -18356,6 +18373,12 @@ fn simd_float_order_statistic_filter(
     let area = size * size;
     let rank = rank as usize;
     let raw = img.as_bytes();
+    if area > 1 && native_uniform_f_mode_image(raw, width, height) {
+        // The F-mode rank filter is the identity on bit-identical scalar
+        // samples; report the data fast path separately from vector work.
+        crate::compute::record_pipeline_operation_path("native-identity");
+        return Ok(preserve_mode(img, img.clone()));
+    }
     let mut output = raw.to_vec();
     #[cfg(feature = "parallel")]
     if width.saturating_mul(height) >= SIMD_FLOAT_ORDER_STATISTIC_PARALLEL_PIXEL_THRESHOLD {
