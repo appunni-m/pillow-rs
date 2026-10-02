@@ -14869,3 +14869,63 @@ MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/shape-row-fill.json \
 MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/shape-row-fill-parity.json \
 make migration-parity-benchmark-low-load
 ```
+
+## I-mode `Image.thumbnail` checkpoint — 2026-10-03
+
+The clean `main` baseline at `180f569960d0ab2a680be25cb95e0654e12a3afe`
+measured the 1024 × 768 native-I thumbnail workload at 0.861 ms for Pillow,
+1.733 ms for serial CPU, and 1.601 ms for SIMD (100 samples each). The GPU
+request completed on CPU for all 100 samples because exact reducing-gap and
+typed-I device semantics are not proven; its 2.333 ms is fallback latency, not
+GPU performance. The benchmark parity gate passed 3/3 CPU, SIMD, and GPU-request
+comparisons. The ordinary CPU and SIMD paths were already about 2.01× and 1.86×
+slower than Pillow, respectively.
+
+Four parity-preserving SIMD experiments were measured and discarded because
+none improved the full call over that baseline:
+
+| Attempt | Change under test | SIMD median | Result |
+| --- | --- | ---: | --- |
+| 1 | Vectorize boxed horizontal and vertical output lanes with per-lane coefficient gathers | 2.281 ms | 42% slower than baseline |
+| 2 | Reuse the ordinary I resizer when the reducing-gap source box is exactly the complete reduced image | 2.135 ms | 33% slower than baseline |
+| 3 | Add eight-lane wrapping INT32 arithmetic for full 2 × 2 I reduction blocks | 1.756 ms | 10% slower than baseline |
+| 4 | Decode 2 × 2 source samples directly from the byte carrier instead of first building a `Vec<i32>` | 2.097 ms | 31% slower than baseline and 19% slower than attempt 3 |
+
+Each dirty-tree benchmark still passed its 3/3 parity gate. The source changes
+from all four attempts were reverted; a focused unit test remains to compare
+SIMD and CPU I-thumbnail outputs for odd dimensions, lane tails, exact full
+boxes, signed extremes, and Bicubic, Lanczos, and Box filters. The clean-main
+baseline benchmark is `thumbnail-i32-main-standard-refresh-180f56996-20261002.json`;
+the four experiment receipts and parity receipts are the matching
+`thumbnail-i32-simd-vector-*`, `thumbnail-i32-fullbox-fastpath-*`,
+`thumbnail-i32-reduce2x2-vector-*`, and `thumbnail-i32-direct-samples-*` files
+under `build/migration-parity/`.
+
+The failed candidates explain the next attack. Across output x lanes, each
+boxed coefficient list has its own start and tap count; gathering and checking
+those variable spans, building temporary lane arrays, and packing tails cost
+more than the vector arithmetic saved. The full-box shortcut did not make the
+existing unboxed SIMD resizer fast enough to beat its original boxed route.
+Likewise, a separate raw-byte decode path removed one full-frame allocation
+but repeated byte indexing lost to a single sequential decode into `Vec<i32>`.
+Measure these representation and layout changes at the complete operation
+boundary; allocation count or apparent SIMD width alone is not evidence of a
+win.
+
+The I-mode storage is one little-endian signed 32-bit scalar per pixel carried
+in a four-byte raster variant, not four color channels. Pillow's reducing-gap
+interior combines each 2 × 2 quartet with wrapping INT32 arithmetic before
+promoting it to f64; partial right and bottom blocks instead accumulate each
+sample directly in f64. Preserve those separate rules and the rounded INT32
+intermediate between resize axes. A later SIMD attempt needs profiles proving
+which stage dominates and a lane mapping whose gathers are cheaper than the
+scalar indexed loop. This workload has no proven GPU route. The opt-in Parallel
+CPU profile measured 1.669 ms and passed its 1/1 parity gate, but the I reduce
+and resize functions in this path contain no Rayon row helper; compare that
+separate result with the same ordinary Pillow median (0.861 ms), and do not
+call it SIMD or GPU evidence.
+
+Move to the next ranked operation. Revisit I thumbnail only with stage-level
+profiles or a materially better contiguous arithmetic layout; retain the
+focused parity test and the device-fallback reason as blockers. No coverage was
+run.

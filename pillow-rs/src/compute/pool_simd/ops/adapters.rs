@@ -30779,6 +30779,60 @@ pub fn simd_alpha_composite(
 #[cfg(test)]
 mod tests {
     #[test]
+    fn i_thumbnail_simd_matches_cpu_at_tails_and_edges() {
+        use crate::compute::pool_cpu::ops::geometry::execute_thumbnail;
+        use crate::pipeline::{PipelineOp, ResampleFilter};
+
+        for (width, height, output_width, output_height) in [
+            (37u32, 29u32, 7u32, 5u32),
+            (41, 31, 8, 6),
+            (34, 27, 9, 7),
+            (40, 32, 10, 8),
+        ] {
+            let mut source = Vec::with_capacity(width as usize * height as usize * 4);
+            for index in 0..(width as usize * height as usize) {
+                let value = match index % 11 {
+                    0 => i32::MIN,
+                    1 => i32::MAX,
+                    2 => -1_048_573,
+                    3 => 1_000_003,
+                    _ => (index as i32)
+                        .wrapping_mul(73_921)
+                        .wrapping_add((index as i32 / 17).wrapping_mul(31_337)),
+                };
+                source.extend_from_slice(&value.to_le_bytes());
+            }
+            let image = crate::raster::DynamicImage::ImageRgba8(
+                crate::raster::RgbaImage::from_raw(width, height, source)
+                    .expect("I-mode test storage dimensions must be valid"),
+            );
+
+            for filter in [
+                ResampleFilter::Bicubic,
+                ResampleFilter::Lanczos,
+                ResampleFilter::Box,
+            ] {
+                let expected =
+                    execute_thumbnail(&image, output_width, output_height, &filter, Some("I"))
+                        .expect("scalar I thumbnail must succeed");
+                let operation = PipelineOp::Thumbnail {
+                    w: output_width,
+                    h: output_height,
+                    filter,
+                };
+                let actual = super::simd_thumbnail(&image, &operation, Some("I"))
+                    .expect("SIMD I thumbnail must succeed");
+
+                assert_eq!(
+                    actual.as_bytes(),
+                    expected.as_bytes(),
+                    "I thumbnail {width}x{height} -> {output_width}x{output_height} with {filter:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn native_rgb_3x5_vector_reduce_matches_scalar_with_partial_edges() {
         let (width, height) = (67u32, 53u32);
         let source: Vec<u8> = (0..width as usize * height as usize * 3)
