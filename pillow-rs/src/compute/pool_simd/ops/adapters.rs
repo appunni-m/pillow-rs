@@ -1983,6 +1983,170 @@ fn native_paste_l_masked_row(
     false
 }
 
+/// Blend one clipped native RGBA row with one L-mask sample per pixel.
+/// Expanding the four mask samples into each vector block avoids the generic
+/// adapter's per-byte channel division and repeated mask loads. The fourth
+/// stored RGBA byte is alpha and follows the same exact Pillow blend.
+#[inline]
+fn native_paste_rgba_l_masked_row(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    allow_short_masked_tail: bool,
+) -> (u64, u64, bool) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len() % 4, 0);
+    debug_assert_eq!(source.len() / 4, mask.len());
+
+    let vector_len16 = source.len() / 16 * 16;
+    let mut vector_blocks = 0u64;
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    let neon_prefix = vector_len16;
+    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+    let neon_prefix = 0usize;
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    {
+        let unrolled_len = neon_prefix / 64 * 64;
+        for start in (0..unrolled_len).step_by(64) {
+            native_paste_rgba_l_masked_neon_block(source, destination, mask, start);
+            native_paste_rgba_l_masked_neon_block(source, destination, mask, start + 16);
+            native_paste_rgba_l_masked_neon_block(source, destination, mask, start + 32);
+            native_paste_rgba_l_masked_neon_block(source, destination, mask, start + 48);
+        }
+        for start in (unrolled_len..neon_prefix).step_by(16) {
+            native_paste_rgba_l_masked_neon_block(source, destination, mask, start);
+        }
+        vector_blocks = vector_blocks.saturating_add((neon_prefix / 16) as u64);
+    }
+
+    for start in (neon_prefix..vector_len16).step_by(16) {
+        let source_block = <[u8; 16]>::try_from(&source[start..start + 16])
+            .expect("validated RGBA Paste row has a complete 16-byte block");
+        let destination_block = <[u8; 16]>::try_from(&destination[start..start + 16])
+            .expect("validated RGBA destination row has a complete 16-byte block");
+        let pixel = start / 4;
+        let m0 = mask[pixel];
+        let m1 = mask[pixel + 1];
+        let m2 = mask[pixel + 2];
+        let m3 = mask[pixel + 3];
+        let mask_block = [
+            m0, m0, m0, m0, m1, m1, m1, m1, m2, m2, m2, m2, m3, m3, m3, m3,
+        ];
+        let blended = native_paste_blend_vector16(source_block, destination_block, mask_block);
+        destination[start..start + 16].copy_from_slice(&blended);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    let vector_len8 = source.len() / 8 * 8;
+    for start in (vector_len16..vector_len8).step_by(8) {
+        let source_block = <[u8; 8]>::try_from(&source[start..start + 8])
+            .expect("validated RGBA Paste row has a complete 8-byte block");
+        let destination_block = <[u8; 8]>::try_from(&destination[start..start + 8])
+            .expect("validated RGBA destination row has a complete 8-byte block");
+        let pixel = start / 4;
+        let m0 = mask[pixel];
+        let m1 = mask[pixel + 1];
+        let mask_block = [m0, m0, m0, m0, m1, m1, m1, m1];
+        let blended = native_paste_blend_vector8(source_block, destination_block, mask_block);
+        destination[start..start + 8].copy_from_slice(&blended);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    let tail = source.len() - vector_len8;
+    let mut scalar_tail = 0u64;
+    if tail != 0 && allow_short_masked_tail {
+        // RGBA rows leave at most one complete four-byte pixel here. Pad its
+        // second vector half with zero so the short row stays on SIMD without
+        // reading past any input or writing outside the active pixel.
+        let mut source_block = [0u8; 8];
+        let mut destination_block = [0u8; 8];
+        let mut mask_block = [0u8; 8];
+        source_block[..tail].copy_from_slice(&source[vector_len8..]);
+        destination_block[..tail].copy_from_slice(&destination[vector_len8..]);
+        let mask_value = mask[vector_len8 / 4];
+        mask_block[..tail].fill(mask_value);
+        let blended = native_paste_blend_vector8(source_block, destination_block, mask_block);
+        destination[vector_len8..].copy_from_slice(&blended[..tail]);
+        vector_blocks = vector_blocks.saturating_add(1);
+        scalar_tail = tail as u64;
+    } else if tail != 0 {
+        let mask_value = u16::from(mask[vector_len8 / 4]);
+        let inverse = 255 - mask_value;
+        for channel in 0..4 {
+            let index = vector_len8 + channel;
+            let weighted = u16::from(source[index]) * mask_value
+                + u16::from(destination[index]) * inverse
+                + 127;
+            destination[index] = (weighted / 255) as u8;
+            scalar_tail = scalar_tail.saturating_add(1);
+        }
+    }
+
+    (vector_blocks, scalar_tail, neon_prefix != 0)
+}
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn native_paste_rgba_l_masked_neon_block(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    start: usize,
+) {
+    use core::arch::aarch64 as neon;
+
+    macro_rules! blend_half {
+        ($source:expr, $destination:expr, $mask:expr, $inverse:expr) => {{
+            let weighted = neon::vmlal_u8(neon::vmull_u8($source, $mask), $destination, $inverse);
+            let rounded = neon::vaddq_u16(weighted, neon::vdupq_n_u16(127));
+            let incremented = neon::vaddq_u16(rounded, neon::vdupq_n_u16(1));
+            let quotient = neon::vshrq_n_u16(
+                neon::vaddq_u16(incremented, neon::vshrq_n_u16(incremented, 8)),
+                8,
+            );
+            neon::vmovn_u16(quotient)
+        }};
+    }
+
+    let pixel = start / 4;
+    let m0 = mask[pixel];
+    let m1 = mask[pixel + 1];
+    let m2 = mask[pixel + 2];
+    let m3 = mask[pixel + 3];
+    let expanded_mask = [
+        m0, m0, m0, m0, m1, m1, m1, m1, m2, m2, m2, m2, m3, m3, m3, m3,
+    ];
+
+    // SAFETY: The caller only enters this block for a complete sixteen-byte
+    // prefix of the source and destination, which corresponds to four valid
+    // mask bytes. The expanded local mask is exactly sixteen bytes. NEON
+    // loads/stores permit unaligned pointers; Rust's borrows keep the output
+    // disjoint from the immutable source and mask slices.
+    unsafe {
+        let source = neon::vld1q_u8(source.as_ptr().add(start));
+        let destination_ptr = destination.as_mut_ptr().add(start);
+        let destination = neon::vld1q_u8(destination_ptr);
+        let mask = neon::vld1q_u8(expanded_mask.as_ptr());
+        let inverse = neon::vsubq_u8(neon::vdupq_n_u8(255), mask);
+        let output = neon::vcombine_u8(
+            blend_half!(
+                neon::vget_low_u8(source),
+                neon::vget_low_u8(destination),
+                neon::vget_low_u8(mask),
+                neon::vget_low_u8(inverse)
+            ),
+            blend_half!(
+                neon::vget_high_u8(source),
+                neon::vget_high_u8(destination),
+                neon::vget_high_u8(mask),
+                neon::vget_high_u8(inverse)
+            ),
+        );
+        neon::vst1q_u8(destination_ptr, output);
+    }
+}
+
 /// Blend one complete sixteen-byte L row block with NEON's widening byte
 /// multiplies. The identity `(x + 1 + ((x + 1) >> 8)) >> 8` is exact for the
 /// rounded blend numerator (at most 65,152), so this preserves Pillow's
@@ -2679,6 +2843,112 @@ fn native_paste_apply(
             crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
         }
         crate::compute::record_pipeline_operation_path("vector");
+        return true;
+    }
+
+    if plan.layout.mode == "RGBA"
+        && plan.layout.channels == 4
+        && region.width != 0
+        && region.height != 0
+        && let Some((mask_layout, mask_row_stride)) = mask_layout
+        && mask_layout.channels == 1
+        && mask_layout.value_index == 0
+        && !mask_layout.premultiplied
+        && !mask_layout.binary
+    {
+        let Some(destination_region_start) =
+            region.destination_top.checked_mul(destination_row_stride)
+        else {
+            return false;
+        };
+        let Some(destination_region_len) = region.height.checked_mul(destination_row_stride) else {
+            return false;
+        };
+        let Some(destination_region_end) =
+            destination_region_start.checked_add(destination_region_len)
+        else {
+            return false;
+        };
+        let Some(destination_rows) =
+            destination.get_mut(destination_region_start..destination_region_end)
+        else {
+            return false;
+        };
+        let mask = mask.expect("a validated L mask layout always has mask bytes");
+        let Some(source_x) = region.source_left.checked_mul(4) else {
+            return false;
+        };
+        let Some(destination_left) = region.destination_left.checked_mul(4) else {
+            return false;
+        };
+        let Some(destination_right) = destination_left.checked_add(region_row_bytes) else {
+            return false;
+        };
+        let Some(mask_x_end) = region.source_left.checked_add(region.width) else {
+            return false;
+        };
+        let mut vector_blocks = 0u64;
+        let mut scalar_tail = 0u64;
+        let mut used_neon = false;
+
+        for (row_index, destination_row) in destination_rows
+            .chunks_exact_mut(destination_row_stride)
+            .enumerate()
+        {
+            let Some(source_y) = region.source_top.checked_add(row_index) else {
+                return false;
+            };
+            let Some(source_start) = source_y
+                .checked_mul(source_row_stride)
+                .and_then(|row| row.checked_add(source_x))
+            else {
+                return false;
+            };
+            let Some(source_end) = source_start.checked_add(region_row_bytes) else {
+                return false;
+            };
+            let Some(source_row) = source.get(source_start..source_end) else {
+                return false;
+            };
+            let Some(mask_start) = source_y
+                .checked_mul(mask_row_stride)
+                .and_then(|row| row.checked_add(region.source_left))
+            else {
+                return false;
+            };
+            let Some(mask_end) = mask_start.checked_add(region.width) else {
+                return false;
+            };
+            if mask_x_end > mask_row_stride || mask_end > mask.len() {
+                return false;
+            }
+            let Some(destination_slice) =
+                destination_row.get_mut(destination_left..destination_right)
+            else {
+                return false;
+            };
+            let (blocks, tail, row_used_neon) = native_paste_rgba_l_masked_row(
+                source_row,
+                destination_slice,
+                &mask[mask_start..mask_end],
+                allow_short_masked_tail,
+            );
+            vector_blocks = vector_blocks.saturating_add(blocks);
+            scalar_tail = scalar_tail.saturating_add(tail);
+            used_neon |= row_used_neon;
+        }
+
+        if vector_blocks != 0 {
+            crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        }
+        if scalar_tail != 0 {
+            crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        }
+        crate::compute::record_pipeline_operation_path(if used_neon {
+            "neon-rgba-l-blend"
+        } else {
+            "rgba-l-mask-vector"
+        });
         return true;
     }
 
@@ -30997,6 +31267,121 @@ mod tests {
         assert_eq!(operation.path, "neon-blend");
         assert_eq!(operation.vector_block_count, 32);
         assert_eq!(operation.scalar_tail_count, 2);
+    }
+
+    #[test]
+    fn simd_rgba_l_masked_paste_uses_native_mask_expansion_and_exact_clipped_tail() {
+        use crate::pipeline::PipelineOp;
+        use crate::raster::{DynamicImage, GrayImage, RgbaImage};
+        use std::sync::Arc;
+
+        let (source_width, source_height) = (27usize, 4usize);
+        let (destination_width, destination_height) = (23usize, 3usize);
+        let source_bytes = (0..source_width * source_height * 4)
+            .map(|index| {
+                u8::try_from(index % 256)
+                    .expect("wrapped source sample fits in a byte")
+                    .wrapping_mul(37)
+                    .wrapping_add(13)
+            })
+            .collect::<Vec<_>>();
+        let destination_bytes = (0..destination_width * destination_height * 4)
+            .map(|index| {
+                u8::try_from(index % 256)
+                    .expect("wrapped destination sample fits in a byte")
+                    .wrapping_mul(71)
+                    .wrapping_add(29)
+            })
+            .collect::<Vec<_>>();
+        let mask_pattern = [0u8, 1, 127, 128, 254, 255];
+        let mask_bytes = (0..source_width * source_height)
+            .map(|index| mask_pattern[index % mask_pattern.len()])
+            .collect::<Vec<_>>();
+        let destination = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                destination_width as u32,
+                destination_height as u32,
+                destination_bytes.clone(),
+            )
+            .expect("RGBA destination dimensions must be valid"),
+        );
+        let source = Arc::new(crate::Image::from_dynamic(
+            DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(
+                    source_width as u32,
+                    source_height as u32,
+                    source_bytes.clone(),
+                )
+                .expect("RGBA source dimensions must be valid"),
+            ),
+            Some("RGBA".to_owned()),
+        ));
+        let mask = Arc::new(crate::Image::from_dynamic(
+            DynamicImage::ImageLuma8(
+                GrayImage::from_raw(
+                    source_width as u32,
+                    source_height as u32,
+                    mask_bytes.clone(),
+                )
+                .expect("L mask dimensions must be valid"),
+            ),
+            Some("L".to_owned()),
+        ));
+        let op = PipelineOp::Paste {
+            source,
+            x: -2,
+            y: 1,
+            w: source_width as i32,
+            h: source_height as i32,
+            mask: Some(mask),
+            mask_alpha: false,
+        };
+
+        let previous = crate::compute::Backend::set_pipeline_telemetry_enabled(true);
+        crate::compute::begin_pipeline_operation_telemetry("Paste");
+        let output = super::simd_paste(&destination, &op, Some("RGBA"))
+            .expect("SIMD RGBA/L Paste must use its native mask expansion path");
+        crate::compute::finish_pipeline_operation_telemetry();
+        let telemetry = crate::compute::Backend::take_pipeline_operation_telemetry();
+        crate::compute::Backend::set_pipeline_telemetry_enabled(previous);
+
+        let mut expected = destination_bytes;
+        // x=-2 shifts source and L mask by two pixels; y=1 leaves only two
+        // complete source rows visible in the destination.
+        for destination_y in 1..destination_height {
+            let source_y = destination_y - 1;
+            for destination_x in 0..destination_width {
+                let source_x = destination_x + 2;
+                let mask_value = u32::from(mask_bytes[source_y * source_width + source_x]);
+                for channel in 0..4 {
+                    let source_index = (source_y * source_width + source_x) * 4 + channel;
+                    let destination_index =
+                        (destination_y * destination_width + destination_x) * 4 + channel;
+                    let source_value = u32::from(source_bytes[source_index]);
+                    let destination_value = u32::from(expected[destination_index]);
+                    expected[destination_index] =
+                        ((source_value * mask_value + destination_value * (255 - mask_value) + 127)
+                            / 255) as u8;
+                }
+            }
+        }
+        assert_eq!(
+            output.as_bytes(),
+            expected,
+            "RGBA alpha is blended as stored data"
+        );
+
+        let operation = telemetry
+            .first()
+            .expect("SIMD Paste must publish operation telemetry");
+        let expected_path = if cfg!(all(target_arch = "aarch64", target_feature = "neon")) {
+            "neon-rgba-l-blend"
+        } else {
+            "rgba-l-mask-vector"
+        };
+        assert_eq!(operation.path, expected_path);
+        assert_eq!(operation.vector_block_count, 14);
+        assert_eq!(operation.scalar_tail_count, 8);
     }
 
     #[test]
