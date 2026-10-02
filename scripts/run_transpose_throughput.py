@@ -49,6 +49,11 @@ and requires one public operation and one GPU dispatch per request.
 L/RGB inputs. GPU receipts must account for the complete multichannel input
 upload as well as the smaller L readback.
 
+``--operation getchannel`` measures fresh ``Image.getchannel`` calls in L/RGB.
+L selects band 0; RGB selects the green band. Each request exports the complete
+L result and validates it byte-for-byte with live Pillow. This measures
+independent host requests sharing the GPU queue, not a multi-image GPU batch.
+
 ``--operation convert`` explicitly converts L to RGB and RGB to L, including
 fresh construction and terminal export. It does not use the default-mode copy.
 
@@ -234,7 +239,7 @@ def result_size(plan: dict[str, Any]) -> list[int]:
 def result_mode(plan: dict[str, Any]) -> str:
     if plan.get("operation") == "convert":
         return "RGB" if plan["mode"] == "L" else "L"
-    return "L" if plan.get("operation") == "grayscale" else plan["mode"]
+    return "L" if plan.get("operation") in ("grayscale", "getchannel") else plan["mode"]
 
 
 def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
@@ -255,6 +260,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             image = plan["imageops_api"].invert(image)
         elif plan.get("operation") == "grayscale":
             image = plan["imageops_api"].grayscale(image)
+        elif plan.get("operation") == "getchannel":
+            image = image.getchannel(plan["channel"])
         elif plan.get("operation") == "convert":
             image = image.convert(result_mode(plan))
         elif plan.get("operation") == "putpixel":
@@ -593,7 +600,7 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError(f"{operation} throughput requires mode 1")
     if operation not in ("logical-and", "logical-or", "logical-xor") and "1" in modes:
         raise ValueError("mode 1 throughput currently requires logical-and, logical-or, or logical-xor")
-    if operation in ("equalize", "autocontrast", "invert", "grayscale", "convert") and any(mode not in ("L", "RGB") for mode in modes):
+    if operation in ("equalize", "autocontrast", "invert", "grayscale", "getchannel", "convert") and any(mode not in ("L", "RGB") for mode in modes):
         raise ValueError(f"{operation} throughput supports L/RGB input")
     if operation == "transform" and any(mode not in ("L", "LA", "RGB") for mode in modes):
         raise ValueError("transform throughput supports L/LA/RGB input")
@@ -659,6 +666,8 @@ def run(args: argparse.Namespace) -> int:
             frames = patterned_frames(mode, tuple(args.size), directory, operation)
             plan = {"operation": operation, "mode": mode, "size": args.size, "frames": frames,
                     "reference_manifest": str(directory / "references.json")}
+            if operation == "getchannel":
+                plan["channel"] = 0 if mode == "L" else "G"
             if operation == "composite":
                 mask_directory = directory / "mask"
                 mask_directory.mkdir()
@@ -724,7 +733,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "autocontrast", "invert", "grayscale", "convert", "putpixel", "composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "autocontrast", "invert", "grayscale", "getchannel", "convert", "putpixel", "composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("1", "L", "LA", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))

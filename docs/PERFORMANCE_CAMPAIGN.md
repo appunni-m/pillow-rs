@@ -14385,6 +14385,44 @@ implementation does not schedule Rayon work, so the profile is reported
 separately and its timing is not evidence of Rayon acceleration. No coverage
 was collected.
 
+### RGB host-queue throughput diagnostic — 2026-10-02
+
+Because the GPU ExtractBand row loses badly on a materialized one-image call,
+I added `--operation getchannel` to the changing-input throughput diagnostic.
+For RGB it extracts the green channel from 1,024 × 768 inputs. The checked-in
+implementation still has no independent-image batch scheduler: Python worker
+threads submit separate requests to the shared `wgpu::Queue`, and each request
+owns its upload, dispatch, output mapping, and materialization. The diagnostic
+measures this host-request concurrency only; it does not claim simultaneous
+GPU kernels or a batched dispatch.
+
+At each depth, 16 changing inputs per window ran through five warmup windows
+and five measured samples of 20 windows (1,600 measured requests per subject,
+per depth). All 5,040 Pillow, CPU, SIMD, and GPU outputs per subject matched
+live Pillow exactly, with the target receipts locked to the named backend and
+no fallback. The rebuilt isolated comparison environment used Pillow 12.2.0.
+The diagnostic was run on clean implementation commit
+`0a677d79fbc3b798bcbbb523a187b4873acd917f`; `source_unchanged: true`, while
+repository provenance is marked dirty because the benchmark script and docs
+were the changes under test.
+
+| Host queue depth | Pillow images/s | Serial CPU images/s | SIMD images/s | GPU images/s | GPU / Pillow | GPU / SIMD |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1,839.5 | 6,153.5 | 4,497.3 | 1,211.0 | 0.66× | 0.27× |
+| 2 | 2,790.3 | 8,470.1 | 7,161.8 | 1,947.2 | 0.70× | 0.27× |
+| 4 | 3,088.9 | 7,837.6 | 9,823.4 | 2,543.4 | 0.82× | 0.26× |
+
+The queue hides some per-request waiting as concurrency rises, but RGB GPU
+throughput still trails Pillow and reaches only about one quarter of SIMD at
+depth four. Its actual GPU receipt reports one dispatch, 2,359,296 uploaded
+bytes, 786,432 readback bytes, zero mode conversions, and no fallback. This is
+evidence that simply submitting more one-image calls is not the desired GPU
+throughput strategy for ExtractBand. A same-shape/mode multi-image dispatch
+could amortize command and completion overhead, but still moves 3 MiB per
+image; treat the scheduler as a separate measured implementation, not as
+already supported batching. Standalone ExtractBand remains a GPU blocker.
+No coverage was collected.
+
 ## Masked L Paste NEON revisit — 2026-10-02
 
 This revisit measured the materialized L/L-mask workload

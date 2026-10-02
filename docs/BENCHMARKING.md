@@ -253,6 +253,17 @@ The transpose selector remains the default with its existing workload policy.
 Use `--operation invert` and a separate output path for fresh L/RGB inversion
 under the same window policy. Inversion requires one GPU dispatch and complete
 transfers; it uses the original full-range input tile.
+Use `--operation getchannel` to measure band 0 from fresh L images and the
+green band from fresh RGB images. The output is an L image, and every request
+is compared byte-for-byte with live Pillow. This reports independent host
+requests sharing the backend queue; it is not a multi-image GPU batch.
+
+```sh
+.venv/bin/python scripts/run_transpose_throughput.py \
+  --operation getchannel --mode RGB --size 1024 768 \
+  --output build/migration-parity/getchannel-rgb-throughput.json
+```
+
 Use `--operation blend` for two fresh images blended at alpha 0.3. The second
 image uses the next changing input frame; construction of both images is timed,
 and GPU receipts must include its auxiliary image transfer.
