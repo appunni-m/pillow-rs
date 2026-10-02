@@ -29,8 +29,10 @@ diagnostic measures host queue concurrency, not simultaneous GPU kernels.
 ``ImageOps.equalize`` calls in L/RGB. Its deterministic tile is reduced to 64
 levels before the per-frame offset to exercise nonidentity LUTs at the default
 size; reference metadata records whether each output changes. Equalize keeps
-input dimensions and requires one public operation and four GPU passes. The
-transpose default, stimulus, receipt rules, and timing policy are unchanged.
+input dimensions and requires one public operation, three GPU compute
+dispatches (histogram, LUT, remap), and a command-encoder buffer clear for the
+reusable histogram. The clear is not a compute dispatch. The transpose default,
+stimulus, receipt rules, and timing policy are unchanged.
 
 ``--operation autocontrast`` measures fresh ``ImageOps.autocontrast`` calls in
 L/RGB at cutoff zero. Its deterministic tile spans 32 levels and shifts by
@@ -351,7 +353,10 @@ def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = 
         return f"receipt does not contain {expected_operations} public {operation} operation(s)"
     if backend == "gpu":
         resource = receipt.get("resource") or {}
-        expected_dispatches = 4 if operation == "equalize" else 1
+        # Equalize clears its histogram with CommandEncoder::clear_buffer, then
+        # dispatches histogram gather, LUT derivation, and remap. The clear is
+        # device work but does not contribute to the compute-dispatch receipt.
+        expected_dispatches = 3 if operation == "equalize" else 1
         if receipt.get("dispatch_count") != expected_dispatches:
             return f"GPU receipt does not contain {expected_dispatches} {operation} dispatch(es)"
         upload_bytes = byte_count if input_byte_count is None else input_byte_count

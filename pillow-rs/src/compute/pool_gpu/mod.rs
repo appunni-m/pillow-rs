@@ -6988,11 +6988,21 @@ impl GpuInner {
                 // Share the workgroup-local histogram gather so a large
                 // image is spread across device workgroups instead of making
                 // one workgroup scan the complete image serially.
-                let histogram = self.resolve_pipeline(
-                    "__internal_equalize_histogram",
-                    "equalize_histogram.wgsl",
-                    include_str!("shaders/equalize_histogram.wgsl"),
-                )?;
+                let native_rgb_equalize =
+                    native_rgb_packed_output && matches!(op, PipelineOp::Equalize);
+                let histogram = if native_rgb_equalize {
+                    self.resolve_pipeline(
+                        "__internal_equalize_histogram_rgb_packed",
+                        "equalize_histogram_rgb_packed.wgsl",
+                        include_str!("shaders/equalize_histogram_rgb_packed.wgsl"),
+                    )?
+                } else {
+                    self.resolve_pipeline(
+                        "__internal_equalize_histogram",
+                        "equalize_histogram.wgsl",
+                        include_str!("shaders/equalize_histogram.wgsl"),
+                    )?
+                };
                 let derive = match op {
                     PipelineOp::Autocontrast { .. } => self.resolve_pipeline(
                         "__internal_autocontrast_lut",
@@ -7007,11 +7017,19 @@ impl GpuInner {
                         )?,
                     _ => unreachable!("histogram pipeline branch changed"),
                 };
-                let remap = self.resolve_pipeline(
-                    "__internal_histogram_remap",
-                    "point_op.wgsl",
-                    include_str!("shaders/point_op.wgsl"),
-                )?;
+                let remap = if native_rgb_equalize {
+                    self.resolve_pipeline(
+                        "__internal_histogram_remap_rgb_packed",
+                        "point_rgb_packed.wgsl",
+                        include_str!("shaders/point_rgb_packed.wgsl"),
+                    )?
+                } else {
+                    self.resolve_pipeline(
+                        "__internal_histogram_remap",
+                        "point_op.wgsl",
+                        include_str!("shaders/point_op.wgsl"),
+                    )?
+                };
                 resolved.push(ResolvedPipeline::Histogram {
                     clear,
                     histogram,
@@ -7562,7 +7580,10 @@ impl GpuInner {
                 binding: 2,
                 resource: params,
             });
-        } else if cached.variant_name == "__internal_equalize_histogram" {
+        } else if matches!(
+            cached.variant_name,
+            "__internal_equalize_histogram" | "__internal_equalize_histogram_rgb_packed"
+        ) {
             entries.push(wgpu::BindGroupEntry {
                 binding: 0,
                 resource: input_buf.as_entire_binding(),
@@ -7598,7 +7619,10 @@ impl GpuInner {
                 binding: 2,
                 resource: params,
             });
-        } else if cached.variant_name == "__internal_histogram_remap" {
+        } else if matches!(
+            cached.variant_name,
+            "__internal_histogram_remap" | "__internal_histogram_remap_rgb_packed"
+        ) {
             entries.push(wgpu::BindGroupEntry {
                 binding: 0,
                 resource: input_buf.as_entire_binding(),
@@ -8230,7 +8254,7 @@ impl GpuInner {
         let mut native_expand_output = None;
         let mut native_luma_transform_output = None;
         let native_rgb_packed_output = if native_rgb_packed_output {
-            let output_plan = if matches!(ops, [PipelineOp::Eval { .. }]) {
+            let output_plan = if matches!(ops, [PipelineOp::Eval { .. } | PipelineOp::Equalize]) {
                 plan_native_rgb_point_output(
                     w,
                     h,
@@ -8649,7 +8673,9 @@ impl GpuInner {
                 params[1] = 1;
                 params[2] = 0;
                 params[3] = 0;
-            } else if native_rgb_packed_output.is_some() && matches!(op, PipelineOp::Eval { .. }) {
+            } else if native_rgb_packed_output.is_some()
+                && matches!(op, PipelineOp::Eval { .. } | PipelineOp::Equalize)
+            {
                 let plan = native_rgb_packed_output.ok_or_else(|| {
                     PilError::InternalError(
                         "packed-RGB point parameters have no checked output plan".into(),
@@ -8657,7 +8683,9 @@ impl GpuInner {
                 })?;
                 params[0] = cur_w;
                 params[1] = cur_h;
-                params[2] = 0;
+                if !matches!(op, PipelineOp::Equalize) {
+                    params[2] = 0;
+                }
                 params[3] = if plan.row_tiled { 16 } else { 0 };
             } else if packed_luma_colorize && matches!(op, PipelineOp::Colorize { .. }) {
                 // Colorize has no row-offset input; reuse that word to select
@@ -9558,7 +9586,7 @@ impl GpuInner {
                 })?;
                 (plan.groups_x, plan.groups_y)
             }
-            "__internal_point_rgb_packed" => {
+            "__internal_point_rgb_packed" | "__internal_histogram_remap_rgb_packed" => {
                 let plan = resources.native_rgb_packed_output.ok_or_else(|| {
                     PilError::InternalError(
                         "packed-RGB point shader has no checked output plan".into(),
@@ -9600,7 +9628,7 @@ impl GpuInner {
             "__internal_resize_v_pad_rgbx" => {
                 (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16))
             }
-            "__internal_equalize_histogram" => {
+            "__internal_equalize_histogram" | "__internal_equalize_histogram_rgb_packed" => {
                 // About 16 packed pixels per lane amortizes each group's
                 // shared histogram. Cap groups to bound global bin merges;
                 // the shader grid-stride loop handles the remaining pixels.
@@ -9622,6 +9650,7 @@ impl GpuInner {
             cached.variant_name,
             "__internal_histogram_clear"
                 | "__internal_equalize_histogram"
+                | "__internal_equalize_histogram_rgb_packed"
                 | "__internal_autocontrast_lut"
                 | "__internal_equalize_lut"
         );
@@ -14033,8 +14062,8 @@ fn gpu_packed_luma_convert_input(
 
 /// Admit operations that consume a singleton native RGB upload. Convert
 /// widens to RGBA in its shader; Transform samples compact triples; the
-/// host-derived unmasked RGB AutoContrast LUT uses the matching packed point
-/// shader to keep both transfer boundaries native.
+/// host-derived unmasked RGB AutoContrast LUT and RGB Equalize use packed
+/// histogram/point shaders to keep both transfer boundaries native.
 #[cfg(target_endian = "little")]
 fn gpu_native_rgb_compact_input(
     ops: &[PipelineOp],
@@ -14052,6 +14081,7 @@ fn gpu_native_rgb_compact_input(
         ] => true,
         [PipelineOp::Transform { .. }] => true,
         [PipelineOp::Eval { .. }] => host_autocontrast_rgb_lut,
+        [PipelineOp::Equalize] => true,
         _ => false,
     };
     if !supported_consumer
@@ -21919,31 +21949,33 @@ impl GpuPool {
                 capacity,
             )
             .is_some();
-        let native_rgb_output_plan = if matches!(ops, [PipelineOp::Eval { .. }]) {
-            plan_native_rgb_point_output(
-                img.width(),
-                img.height(),
-                limits.max_compute_workgroups_per_dimension,
-                limits.max_storage_buffer_binding_size,
-                limits.max_buffer_size,
-                capacity,
-            )
-        } else {
-            plan_native_rgb_transform_output(
-                ops,
-                limits.max_compute_workgroups_per_dimension,
-                limits.max_storage_buffer_binding_size,
-                limits.max_buffer_size,
-                capacity,
-            )
-        };
+        let native_rgb_output_plan =
+            if matches!(ops, [PipelineOp::Eval { .. } | PipelineOp::Equalize]) {
+                plan_native_rgb_point_output(
+                    img.width(),
+                    img.height(),
+                    limits.max_compute_workgroups_per_dimension,
+                    limits.max_storage_buffer_binding_size,
+                    limits.max_buffer_size,
+                    capacity,
+                )
+            } else {
+                plan_native_rgb_transform_output(
+                    ops,
+                    limits.max_compute_workgroups_per_dimension,
+                    limits.max_storage_buffer_binding_size,
+                    limits.max_buffer_size,
+                    capacity,
+                )
+            };
         let native_rgb_packed_output =
             native_rgb_compact_input_candidate && native_rgb_output_plan.is_some();
-        // A native RGB Eval shader writes packed RGB too. If its checked
-        // output layout is unavailable, use the RGBA input/output contract;
-        // the generic Eval shader cannot consume compact triples by itself.
+        // Native RGB Eval and Equalize use packed RGB output shaders. If a
+        // checked output layout is unavailable, retain the standard RGBA
+        // input/output contract for those operations.
         let native_rgb_compact_input = native_rgb_compact_input_candidate
-            && (!matches!(ops, [PipelineOp::Eval { .. }]) || native_rgb_packed_output);
+            && (!matches!(ops, [PipelineOp::Eval { .. } | PipelineOp::Equalize])
+                || native_rgb_packed_output);
         let native_la_transform_output = native_la_transform_input
             && plan_native_la_transform_output(
                 ops,
@@ -30078,6 +30110,7 @@ mod tests {
             fill_is_none: true,
             palette_fill: None,
         };
+        let equalize = PipelineOp::Equalize;
         assert!(super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&convert_rgba),
             &rgb,
@@ -30100,6 +30133,24 @@ mod tests {
             std::slice::from_ref(&transform),
             &rgb,
             None,
+            false
+        ));
+        assert!(super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&equalize),
+            &rgb,
+            Some("RGB"),
+            false
+        ));
+        assert!(super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&equalize),
+            &rgb,
+            None,
+            false
+        ));
+        assert!(!super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&equalize),
+            &rgb,
+            Some("RGBA"),
             false
         ));
         assert!(!super::gpu_native_rgb_compact_input(
@@ -30352,6 +30403,96 @@ mod tests {
                 crate::compute::take_pipeline_dispatch_count(),
                 Some(1),
                 "{width}x{height} dispatch"
+            );
+            assert_eq!(
+                crate::compute::take_pipeline_backend_override(),
+                None,
+                "{width}x{height} fallback"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn rgb_equalize_packed_histogram_matches_cpu_for_every_rgb_tail() {
+        use crate::compute::BackendImpl;
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+
+        match super::GpuPool::ensure_init() {
+            Ok(_) => {}
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                return;
+            }
+            Err(error) => panic!("GPU RGB Equalize initialization failed: {error}"),
+        }
+
+        // Exercise every compact RGB word tail plus the row-tiled dispatch
+        // layout. These counts exceed Pillow's zero-step equalize boundary.
+        for (width, height) in [(257u32, 1u32), (258, 1), (259, 1), (260, 1), (16, 17)] {
+            let pixel_count = width as usize * height as usize;
+            let bytes: Vec<u8> = (0..pixel_count)
+                .flat_map(|pixel| {
+                    [
+                        pixel.wrapping_mul(73).wrapping_add(pixel / 17) as u8,
+                        pixel
+                            .wrapping_mul(41)
+                            .wrapping_add(pixel / 11)
+                            .wrapping_add(19) as u8,
+                        pixel
+                            .wrapping_mul(29)
+                            .wrapping_add(pixel / 7)
+                            .wrapping_add(37) as u8,
+                    ]
+                })
+                .collect();
+            let source = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, bytes).expect("RGB Equalize source"),
+            );
+            let op = PipelineOp::Equalize;
+            let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGB"))
+                .unwrap_or_else(|error| panic!("CPU RGB Equalize {width}x{height}: {error}"));
+            let actual = super::GpuPool
+                .execute_batch_strict(std::slice::from_ref(&op), &source, Some("RGB"))
+                .unwrap_or_else(|error| panic!("GPU RGB Equalize {width}x{height}: {error}"));
+            assert_eq!(actual.color(), expected.color(), "{width}x{height} mode");
+            assert_eq!(
+                actual.as_bytes(),
+                expected.as_bytes(),
+                "{width}x{height} pixels"
+            );
+
+            let resources = crate::compute::take_pipeline_resource_telemetry()
+                .unwrap_or_else(|| panic!("{width}x{height} resource receipt"));
+            let transfer_bytes = (pixel_count * 3).div_ceil(4) * 4;
+            assert_eq!(
+                resources.upload_bytes, transfer_bytes as u64,
+                "{width}x{height} upload"
+            );
+            assert_eq!(
+                resources.readback_bytes, transfer_bytes as u64,
+                "{width}x{height} readback"
+            );
+            assert_eq!(
+                resources.mode_conversion_count, 0,
+                "{width}x{height} conversion"
+            );
+            assert_eq!(
+                crate::compute::take_pipeline_dispatch_count(),
+                Some(3),
+                "{width}x{height} compute dispatches"
             );
             assert_eq!(
                 crate::compute::take_pipeline_backend_override(),

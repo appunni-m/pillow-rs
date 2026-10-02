@@ -206,7 +206,9 @@ window diagnostic with the equalize selector:
 It measures fresh L/RGB requests over 16 changing inputs at queue depths 1, 2,
 and 4. Each request includes construction, equalize, and terminal bytes; each
 output is compared exactly with live Pillow outside the timing window. GPU
-receipts must include histogram/LUT/remap execution and complete transfers.
+receipts must include the histogram, LUT, and remap compute dispatches and
+complete transfers. The histogram is cleared with a command-encoder buffer
+clear, which is device work but not a compute dispatch.
 `--check-only` verifies one window per depth without emitting timing summaries.
 The transpose selector remains the default with its existing workload policy.
 Use `--operation invert` and a separate output path for fresh L/RGB inversion
