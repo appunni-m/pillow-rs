@@ -1895,9 +1895,29 @@ fn native_paste_l_masked_row(
     destination: &mut [u8],
     mask: &[u8],
     allow_short_masked_tail: bool,
-) {
+) -> bool {
     debug_assert_eq!(source.len(), destination.len());
     debug_assert_eq!(source.len(), mask.len());
+
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    {
+        let neon_prefix = native_paste_l_masked_row_neon(source, destination, mask);
+        if neon_prefix != 0 {
+            // Pillow rounds the weighted sum before dividing by 255. Keep the
+            // scalar tail on that same exact integer formula; it is bounded
+            // to fewer than sixteen bytes and cannot read beyond the clipped
+            // row.
+            for index in neon_prefix..source.len() {
+                let weight = u16::from(mask[index]);
+                let inverse = 255 - weight;
+                let weighted = u16::from(source[index]) * weight
+                    + u16::from(destination[index]) * inverse
+                    + 127;
+                destination[index] = (weighted / 255) as u8;
+            }
+            return true;
+        }
+    }
 
     let vector_len16 = source.len() / 16 * 16;
     for start in (0..vector_len16).step_by(16) {
@@ -1960,6 +1980,91 @@ fn native_paste_l_masked_row(
             destination[index] = blended;
         }
     }
+    false
+}
+
+/// Blend one complete sixteen-byte L row block with NEON's widening byte
+/// multiplies. The identity `(x + 1 + ((x + 1) >> 8)) >> 8` is exact for the
+/// rounded blend numerator (at most 65,152), so this preserves Pillow's
+/// integer division by 255 while keeping all sixteen output lanes vectorized.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn native_paste_l_masked_neon_block(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    start: usize,
+) {
+    use core::arch::aarch64 as neon;
+
+    macro_rules! blend_half {
+        ($source:expr, $destination:expr, $mask:expr, $inverse:expr) => {{
+            let weighted = neon::vmlal_u8(neon::vmull_u8($source, $mask), $destination, $inverse);
+            let rounded = neon::vaddq_u16(weighted, neon::vdupq_n_u16(127));
+            let incremented = neon::vaddq_u16(rounded, neon::vdupq_n_u16(1));
+            let quotient = neon::vshrq_n_u16(
+                neon::vaddq_u16(incremented, neon::vshrq_n_u16(incremented, 8)),
+                8,
+            );
+            neon::vmovn_u16(quotient)
+        }};
+    }
+
+    // SAFETY: The caller bounds `start` to a complete sixteen-byte prefix of
+    // all three equally sized slices. NEON's byte loads and store allow
+    // unaligned pointers. The mutable destination slice is disjoint from the
+    // immutable inputs by Rust's borrowing rules, and only the sixteen bytes
+    // in this block are written.
+    unsafe {
+        let source = neon::vld1q_u8(source.as_ptr().add(start));
+        let destination_ptr = destination.as_mut_ptr().add(start);
+        let destination = neon::vld1q_u8(destination_ptr);
+        let mask = neon::vld1q_u8(mask.as_ptr().add(start));
+        let inverse = neon::vsubq_u8(neon::vdupq_n_u8(255), mask);
+        let output = neon::vcombine_u8(
+            blend_half!(
+                neon::vget_low_u8(source),
+                neon::vget_low_u8(destination),
+                neon::vget_low_u8(mask),
+                neon::vget_low_u8(inverse)
+            ),
+            blend_half!(
+                neon::vget_high_u8(source),
+                neon::vget_high_u8(destination),
+                neon::vget_high_u8(mask),
+                neon::vget_high_u8(inverse)
+            ),
+        );
+        neon::vst1q_u8(destination_ptr, output);
+    }
+}
+
+/// Process the largest complete sixteen-byte prefix of an L/mask row using
+/// NEON, returning the first scalar-tail offset (or zero when no block fits).
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn native_paste_l_masked_row_neon(source: &[u8], destination: &mut [u8], mask: &[u8]) -> usize {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len(), mask.len());
+
+    let vector_len = source.len() / 16 * 16;
+    if vector_len == 0 {
+        return 0;
+    }
+
+    let unrolled_len = vector_len / 64 * 64;
+    for start in (0..unrolled_len).step_by(64) {
+        native_paste_l_masked_neon_block(source, destination, mask, start);
+        native_paste_l_masked_neon_block(source, destination, mask, start + 16);
+        native_paste_l_masked_neon_block(source, destination, mask, start + 32);
+        native_paste_l_masked_neon_block(source, destination, mask, start + 48);
+    }
+    for start in (unrolled_len..vector_len).step_by(16) {
+        native_paste_l_masked_neon_block(source, destination, mask, start);
+    }
+    vector_len
 }
 
 /// Blend a clipped native-LA row with one L-mask byte per pixel. The stored
@@ -2825,9 +2930,10 @@ fn native_paste_apply(
                 &mut destination_row[destination_left..destination_right],
                 mask_row,
                 allow_short_masked_tail,
-            );
+            )
         };
 
+        let mut used_neon = false;
         #[cfg(feature = "parallel")]
         if region.height > 1
             && region.width.saturating_mul(region.height) >= SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD
@@ -2837,7 +2943,7 @@ fn native_paste_apply(
                 destination_row_stride,
                 region.height,
                 |_row_start, _row_end, row, destination_row| {
-                    apply_luma_row(row as usize, destination_row);
+                    used_neon |= apply_luma_row(row as usize, destination_row);
                 }
             );
         } else {
@@ -2845,7 +2951,7 @@ fn native_paste_apply(
                 .chunks_exact_mut(destination_row_stride)
                 .enumerate()
             {
-                apply_luma_row(row_index, destination_row);
+                used_neon |= apply_luma_row(row_index, destination_row);
             }
         }
 
@@ -2854,18 +2960,26 @@ fn native_paste_apply(
             .chunks_exact_mut(destination_row_stride)
             .enumerate()
         {
-            apply_luma_row(row_index, destination_row);
+            used_neon |= apply_luma_row(row_index, destination_row);
         }
 
-        let vector_len16 = region.width / 16 * 16;
-        let vector_len8 = region.width / 8 * 8;
-        let vector_blocks_per_row = (vector_len16 / 16 + (vector_len8 - vector_len16) / 8)
-            + usize::from(allow_short_masked_tail && vector_len8 < region.width);
-        let vector_blocks = vector_blocks_per_row.saturating_mul(region.height) as u64;
-        let scalar_tail = if allow_short_masked_tail {
-            0
+        let (vector_blocks, scalar_tail) = if used_neon {
+            (
+                (region.width / 16).saturating_mul(region.height) as u64,
+                (region.width % 16).saturating_mul(region.height) as u64,
+            )
         } else {
-            (region.width - vector_len8).saturating_mul(region.height) as u64
+            let vector_len16 = region.width / 16 * 16;
+            let vector_len8 = region.width / 8 * 8;
+            let vector_blocks_per_row = (vector_len16 / 16 + (vector_len8 - vector_len16) / 8)
+                + usize::from(allow_short_masked_tail && vector_len8 < region.width);
+            let vector_blocks = vector_blocks_per_row.saturating_mul(region.height) as u64;
+            let scalar_tail = if allow_short_masked_tail {
+                0
+            } else {
+                (region.width - vector_len8).saturating_mul(region.height) as u64
+            };
+            (vector_blocks, scalar_tail)
         };
         if vector_blocks != 0 {
             crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
@@ -2873,7 +2987,11 @@ fn native_paste_apply(
         if scalar_tail != 0 {
             crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
         }
-        crate::compute::record_pipeline_operation_path("vector");
+        crate::compute::record_pipeline_operation_path(if used_neon {
+            "neon-blend"
+        } else {
+            "vector"
+        });
         return true;
     }
 
@@ -30804,6 +30922,81 @@ mod tests {
         let result = super::simd_paste(&destination, &op, Some("HSV"))
             .expect("HSV masked Paste must use the native SIMD byte path");
         assert_eq!(result.as_bytes(), [105, 70, 100]);
+    }
+
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[test]
+    fn simd_l_masked_paste_uses_neon_and_keeps_exact_rounding_and_tail() {
+        use crate::pipeline::PipelineOp;
+        use crate::raster::{DynamicImage, GrayImage};
+        use std::sync::Arc;
+
+        let (width, height) = (257usize, 2usize);
+        let destination_bytes = (0..width * height)
+            .map(|index| (index * 37 + 13) as u8)
+            .collect::<Vec<_>>();
+        let source_bytes = (0..width * height)
+            .map(|index| (index * 91 + 7) as u8)
+            .collect::<Vec<_>>();
+        let mask_bytes = (0..width * height)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let destination = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(width as u32, height as u32, destination_bytes.clone())
+                .expect("L destination dimensions must be valid"),
+        );
+        let source = Arc::new(crate::Image::from_dynamic(
+            DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width as u32, height as u32, source_bytes.clone())
+                    .expect("L source dimensions must be valid"),
+            ),
+            Some("L".to_owned()),
+        ));
+        let mask = Arc::new(crate::Image::from_dynamic(
+            DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width as u32, height as u32, mask_bytes.clone())
+                    .expect("L mask dimensions must be valid"),
+            ),
+            Some("L".to_owned()),
+        ));
+        let op = PipelineOp::Paste {
+            source,
+            x: 0,
+            y: 0,
+            w: width as i32,
+            h: height as i32,
+            mask: Some(mask),
+            mask_alpha: false,
+        };
+
+        let previous = crate::compute::Backend::set_pipeline_telemetry_enabled(true);
+        crate::compute::begin_pipeline_operation_telemetry("Paste");
+        let output = super::simd_paste(&destination, &op, Some("L"))
+            .expect("SIMD L masked Paste must use its native NEON path");
+        crate::compute::finish_pipeline_operation_telemetry();
+        let telemetry = crate::compute::Backend::take_pipeline_operation_telemetry();
+        crate::compute::Backend::set_pipeline_telemetry_enabled(previous);
+
+        let expected = source_bytes
+            .iter()
+            .copied()
+            .zip(destination_bytes.iter().copied())
+            .zip(mask_bytes.iter().copied())
+            .map(|((source, destination), mask)| {
+                ((u32::from(source) * u32::from(mask)
+                    + u32::from(destination) * (255 - u32::from(mask))
+                    + 127)
+                    / 255) as u8
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(output.as_bytes(), expected);
+
+        let operation = telemetry
+            .first()
+            .expect("SIMD Paste must publish operation telemetry");
+        assert_eq!(operation.path, "neon-blend");
+        assert_eq!(operation.vector_block_count, 32);
+        assert_eq!(operation.scalar_tail_count, 2);
     }
 
     #[test]
