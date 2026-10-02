@@ -13010,3 +13010,81 @@ Checkpoint RGBA Color after four bounded attempts. Keep the exact base
 optimization; CPU meets its sampled latency target, while SIMD's 5× goal and
 all GPU/SIMD targets remain open. Continue with a different ranked
 operation/mode. Full CI, coverage, release, and push remain deferred.
+
+## Native-L `ImageOps.pad` contain-resize checkpoint — 2026-10-02
+
+This visit covers one materialized L workload: a 1024 × 768 byte image padded
+to 768 × 768, so Pillow first downsizes it to 768 × 576 with Bicubic and then
+adds 96 rows of fill above and below. The input is nonuniform noise and the
+fill sample is 73. Exact parity passed on CPU, SIMD, and GPU. The parity gate
+and standard benchmark both recorded the requested native backend for every
+profile with no fallback.
+
+Four bounded candidates were considered. The SIMD adapter now selects its
+checked i32 byte-accumulation kernel for L Bicubic instead of widening each
+sample into the generic i64 path. CPU and SIMD can write the vertical resize
+directly into the content rows of the final canvas; this preserves Pillow's
+two-pass quantization and avoids a separate resized image and row copy. The
+serial CPU's fixed-point scalar loops specialize the common five- and six-tap
+coefficient counts. At this 0.75× scale those lengths account for nearly all
+destination samples; preserving the original per-tap order keeps rounding
+exact. Other lengths retain the general loop.
+
+For GPU, a row-packed native-L path reuses the existing H/V resize shaders and
+the packed-L Pad placement shader. Real resizes are admitted only when the
+contained width is four-byte aligned, so packed intermediate rows remain
+compatible with placement. The planner checks both H/V grid axes, the final
+placement grid, and shader indexing limits before dispatch. A first parity
+run exposed that new pipeline variant names also need entries in coefficient
+buffer binding and resize-vs-LUT bookkeeping; after adding those entries, the
+GPU result matched every byte. The final path removed L→RGBA conversion and
+reduced host transfers from 3,145,728/2,359,296 bytes to 786,432/589,824 bytes
+for upload/readback. The path still requires three dispatches and a full host
+readback for the materialized result.
+
+The final correctness-gated standard benchmark was run before commit on the
+same source and fixture bytes later committed as `f03bf7083`. Its worktree
+provenance is dirty because it predates that commit; no Rust or fixture content
+changed between the measurement and commit. Receipt
+`pad-l-resize-taps-attempt4-20261002.json` reports these whole-call medians:
+
+| L Pad, 1024 × 768 → 768 × 768 | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Median latency | 2.6825 ms | 1.2647 ms | 2.4067 ms | 0.6539 ms |
+| Reciprocal-latency rate | 372.8 ops/s | 790.7 ops/s | 415.5 ops/s | 1,529.3 ops/s |
+
+This sample closes serial CPU latency for this workload: CPU is 2.12× faster
+than Pillow. GPU latency is 3.68× lower than SIMD and its reciprocal-latency
+rate is 3.68× higher. SIMD is only 1.11× faster than Pillow, far short of the
+5× goal. The standard workload has concurrency one; its reciprocal-latency
+rate is not saturated or changing-input throughput evidence. GPU p95 latency
+is 1.1785 ms, so the median does not establish a stable latency or throughput
+margin over SIMD.
+
+The final benchmark parity gate passed 3/3 profiles: `python-cpu`,
+`python-simd`, and `python-gpu`. The `pad_l_bicubic_full_width_contain_preserves_fill_and_resized_samples`
+Rust test and the packed-L dispatch-planner tests passed. `cargo fmt --all` and
+`git diff --check` passed. Full CI, coverage, release, and push were deferred.
+No parallel-CPU result was collected; this Pad fast path is separately
+feature-gated out when `parallel` is enabled and remains serial CPU evidence.
+
+The exact final benchmark command was:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.pad.materialized.native-l-noise-1024x768-to-768-square' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/pad-l-resize-taps-attempt4-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/pad-l-resize-taps-attempt4-parity-20261002.json \
+make migration-parity-benchmark
+```
+
+Checkpoint this L resize-Pad visit after four bounded candidates. Keep the
+native packed GPU path and the direct output-window plus five/six-tap CPU/SIMD
+changes. The serial CPU goal is met for this case; the remaining Pad blocker is
+the SIMD 5× target. Revisit it only with a concrete vector data-access or
+memory-layout hypothesis after other operations get a first pass. The older
+2026-09-30 full-operation run ranks I-mode 5 × 5 convolution among the largest
+CPU gaps (27.92 ms vs Pillow's 3.93 ms) and also misses the SIMD target; treat
+that stale receipt as a candidate selector only, then refresh its parity and
+baseline before editing. Do not report it as current performance evidence.
