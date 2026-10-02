@@ -14378,3 +14378,30 @@ is not a threaded Pillow comparison. No coverage was run. For each
 checkpoint, run the parity gate on the commit intended for `main` before
 pushing; carry the unresolved SIMD/Pillow and GPU/transfer gaps forward instead
 of extending this one indefinitely.
+
+### Clean checkpoint commit verification
+
+Commit `fff4770ff3806dd5902ea64ee32778020ee3ee90` passed the isolated
+standard-profile benchmark and parity gate with `dirty: false`: 3/3 CPU, SIMD,
+and GPU comparisons passed, each with 100 actual executions and no fallback.
+The exact-commit medians were:
+
+| Pillow ms / op/s | Serial CPU ms / op/s | SIMD ms / op/s | GPU ms / op/s |
+| ---: | ---: | ---: | ---: |
+| 0.216125 / 4,627 | 0.158188 / 6,322 | 0.129417 / 7,727 | 0.872417 / 1,146 |
+
+SIMD is 1.67× faster than Pillow on this sample, while GPU latency is 6.74×
+SIMD latency. Serial CPU remains faster than Pillow. The exact receipts are
+`paste-masked-l-main-commit-fff4770ff-20261002.json` and
+`paste-masked-l-main-commit-fff4770ff-parity-20261002.json`.
+
+The separate Parallel CPU target also passed parity 1/1 on the same clean
+commit, with 100 actual CPU executions and both parallel Cargo features
+enabled. Its median was 0.342334 ms / 2,921 operations per second. That is
+slower than the standard run's Pillow median (0.216125 ms), whereas the earlier
+exploratory Parallel CPU run was 0.230459 ms against its run's 0.232334 ms
+Pillow baseline. Treat Parallel CPU as noisy and currently unproven for this
+operation; investigate Rayon scheduling and row partition overhead if revisited.
+The receipts are `benchmark-result-parallel-cpu.json` and
+`benchmark-parity-result-parallel-cpu.json`. Both final benchmark profiles
+identify the same `fff4770ff` revision with `dirty: false`. No coverage was run.
