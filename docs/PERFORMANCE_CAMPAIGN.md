@@ -15145,3 +15145,70 @@ remains a separate entry point. This operation is checkpointed after four
 attempts. Remaining blockers are nonuniform serial CPU and SIMD latency, and
 one-shot GPU latency; move to the next ranked operation rather than spending
 another unbounded round on this workload.
+
+## Explicit `ImageBatch` GPU throughput checkpoint — 2026-10-03
+
+`PIL.ImageBatch.BatchExecutor` is already a separate, opt-in API. It does not
+change ordinary `Image` method routing. With `queue=False`, each `submit`
+materializes that image immediately. With `queue=True`, `join()` groups
+compatible `MedianFilter(3)` jobs that share dimensions and a native mode, then
+calls the existing MedianFilter pipeline once on a vertically packed raster
+and returns separate outputs in submission order. The grouped modes are L, LA,
+RGB, and RGBA. One duplicated top and bottom row per source preserves the
+single-image edge behavior. No input mode is widened to RGBA. Mixed sizes,
+modes, and unsupported filter sizes continue through the existing individual
+image path.
+
+This is the reuse-first design the explicit API needs: it reuses the current
+operation validation, mode-specific image representation, MedianFilter
+implementation, GPU shader selection, and materialization contract. Packing,
+GPU upload/readback, and splitting each output still cost bytes and host time;
+this is a grouped schedule, not a zero-copy multi-image descriptor API. It must
+remain a separate entry point so those costs and scheduling rules do not change
+normal single-image behavior.
+
+The live-Pillow parity script passed for all four grouped modes. It checked a
+64-image 64 × 64 batch against exact Pillow bytes and required actual GPU
+execution, one MedianFilter shader dispatch, zero mode conversions, and no
+fallback. The test also passed two-image 256 × 256 groups for L and RGB,
+submission-order grouping with an incompatible-size singleton for all four
+modes, and `queue=False` one- and three-image submissions with exact bytes and
+metadata in submission order. The grouped benchmark workload used 64 distinct
+inputs per window, three warmups, and twelve measured windows. Each timed
+window includes image construction, submissions, scheduling, GPU execution,
+materialization, and output splitting. The data bytes were prepared before the
+timer; exact comparisons ran in the separate parity script.
+
+| Mode | Pillow sequential (images/s) | SIMD sequential (images/s) | GPU eager `queue=False` (images/s) | GPU grouped `queue=True` (images/s) | Grouped GPU / SIMD | Grouped GPU / Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| L | 9,771 | 22,594 | 4,900 | 62,780 | 2.78× | 6.42× |
+| LA | 4,398 | 11,666 | 5,090 | 48,703 | 4.17× | 11.07× |
+| RGB | 3,562 | 7,958 | 4,882 | 57,980 | 7.29× | 16.28× |
+| RGBA | 2,263 | 5,942 | 4,790 | 33,868 | 5.70× | 14.96× |
+
+These are one-run medians on 64 × 64 images, not sustained production rates or
+single-image latency. For this workload, grouped GPU throughput exceeded the
+SIMD profile in each native mode and was 7.1–12.8× higher than eager GPU
+submission. The feature does not yet group other operations, palette/bit-packed
+modes, different dimensions, or work that exceeds safe GPU resource limits in
+one schedule. No high-resolution many-image resource-boundary measurement was
+made. Keep these scope limits visible; do not route ordinary image calls
+through this executor to improve its benchmark numbers.
+
+The benchmark helper now accepts `--backend pillow` for an isolated ordinary
+Pillow sequential baseline. It omits the checkout facade from `sys.path` and
+checks the oracle is Pillow 12.2.0. The four-mode receipts are under
+`build/migration-parity/imagebatch-20261003/`; target receipts name the actual
+backend and dispatch count. Reproduce the full exact-output check and an
+individual profile with:
+
+```sh
+.venv/bin/python scripts/test_imagebatch_parity.py
+
+.venv/bin/python scripts/benchmark_imagebatch.py --backend pillow --mode L --width 64 --height 64 --images 64 --samples 12 --warmups 3
+.venv/bin/python scripts/benchmark_imagebatch.py --backend simd --mode L --width 64 --height 64 --images 64 --samples 12 --warmups 3
+.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --mode L --width 64 --height 64 --images 64 --samples 12 --warmups 3
+.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --mode L --width 64 --height 64 --images 64 --samples 12 --warmups 3
+```
+
+No coverage was run.

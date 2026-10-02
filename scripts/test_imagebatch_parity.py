@@ -195,6 +195,27 @@ def run_target(expected_path: Path) -> None:
     require_gpu_execution(core, core.take_pipeline_telemetry(), "queue=False")
     print("queue=False: Pillow parity PASS; eager single-image execution")
 
+    for mode in MODES:
+        submission_order = (1, 2, 0)
+        eager = ImageBatch.BatchExecutor(queue=False, backend="gpu")
+        for input_index in submission_order:
+            size, seed = SIZES[input_index], SEEDS[input_index]
+            image = Image.frombytes(mode, size, pixels(mode, size, seed))
+            image.info["batch-seed"] = seed
+            eager.submit(image, ImageFilter.MedianFilter(3))
+        actual = eager.join()
+        actual_outputs = [image.tobytes().hex() for image in actual]
+        expected_outputs = [expected["outputs"][mode][index] for index in submission_order]
+        if actual_outputs != expected_outputs:
+            raise AssertionError(f"queue=False Pillow byte mismatch for mode {mode}")
+        actual_metadata = [image.info.get("batch-seed") for image in actual]
+        expected_metadata = [expected["metadata"][mode][index] for index in submission_order]
+        if actual_metadata != expected_metadata:
+            raise AssertionError(
+                f"queue=False Pillow metadata mismatch for mode {mode}: {actual_metadata}"
+            )
+        print(f"{mode} queue=False × 3: sequential submission order and Pillow parity PASS")
+
 
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="pillow-rs-imagebatch-") as directory:
