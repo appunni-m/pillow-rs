@@ -13936,3 +13936,83 @@ planner and execution tests; the HSV/native-mode regression passed with
 After four bounded attempts, keep the serial CPU append and native packed GPU
 route, leave the unhelpful SIMD append reverted, record the SIMD and GPU gaps,
 and move to another operation. No coverage, broad CI, release, or push was run.
+
+## CMYK `ImageOps.cover` resize checkpoint — 2026-10-02
+
+The selected workload is
+`pil-imageops.cover.materialized.cmyk-noise-1024x768`: Cover resizes a native
+1024 × 768 CMYK image to 1365 × 1024 with Pillow's default bicubic filter. The
+operation preserves four independent C/M/Y/K bytes; its fourth channel is K,
+not alpha. Cover does not crop the oversized result.
+
+The clean baseline exposed the CPU bottleneck: Pillow / serial CPU / SIMD / GPU
+measured 13.302 / 25.358 / 22.696 / 5.221 ms. CPU and SIMD each executed the
+four-channel two-pass resampler; CPU accumulated each channel in `i64`, while
+SIMD used its separate general resize adapter. The GPU already used native
+CMYK bytes, two dispatches, no mode conversion, and 3,145,728 uploaded plus
+5,591,040 readback bytes. CPU and SIMD were slower than Pillow; GPU's timing
+varied substantially between otherwise identical runs, so CPU-only changes
+are not credited with its timing shifts.
+
+Three bounded CPU changes retained exact four-channel output. First, a
+CMYK-only `i32` kernel uses the existing coefficient-bound proof and retains
+the original wide path as fallback; it cut CPU latency to 22.307 ms. Second,
+keeping the intermediate row-major removed a full-frame transpose and cut CPU
+latency to 14.684 / 14.530 ms on the candidate and repeat. Third, hoisting
+vertical coefficients per output row and specializing the four-tap path cut
+CPU latency to 13.986 / 13.488 ms. The final repeat is 46.8% faster than the
+clean CPU baseline, but remains 4.8% slower than contemporaneous Pillow
+(13.488 vs 12.870 ms). The separate SIMD path was unchanged and remains about
+1.7× slower than Pillow.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Clean baseline | 13.302 | 25.358 | 22.696 | 5.221 |
+| CMYK i32 attempt 1 | 13.116 | 22.307 | 21.807 | 2.345 |
+| Row-major attempt 2 | 12.838 | 14.684 | 22.827 | 5.228 |
+| Row-major repeat | 12.943 | 14.530 | 21.908 | 2.166 |
+| Hoisted four-tap attempt 3 | 13.489 | 13.986 | 22.470 | 2.366 |
+| Hoisted four-tap repeat | 12.870 | 13.488 | 21.954 | 2.178 |
+| Final exact-tree push check | 13.428 | 14.400 | 22.373 | 2.922 |
+
+All seven standard benchmark receipts passed all three CPU/SIMD/GPU parity
+comparisons (21/21 total); each backend ran on its requested backend for
+100/100 measured calls with no fallback. The final exact-tree run had CPU at
+14.400 ms versus Pillow at 13.428 ms; across the three final-tree measurements
+CPU was 3.7–7.2% slower than Pillow, so the target remains open. The focused Rust differential tests
+passed across five filters, varied and extreme channel bytes, tiny dimensions,
+and the full-size Cover shape, comparing against the existing wide path. On
+the final exact-tree run GPU latency was 2.922 ms versus SIMD at 22.373 ms, but
+the workload uses concurrency one, so this is reciprocal-latency throughput only.
+The SIMD gap remains open; the CPU gap is now small but still fails the
+no-slower-than-Pillow target. Continue with the SIMD adapter and the remaining
+CPU overhead before considering this operation complete.
+
+Receipts under `build/migration-parity/` are `cover-cmyk-before-86023bd9-20261002.json`,
+`cover-cmyk-narrow-i32-attempt1-86023bd9-20261002.json`,
+`cover-cmyk-rowmajor-attempt2-86023bd9-20261002.json`,
+`cover-cmyk-rowmajor-repeat1-86023bd9-20261002.json`,
+`cover-cmyk-hoisted-attempt3-86023bd9-20261002.json`, and
+`cover-cmyk-hoisted-repeat1-86023bd9-20261002.json`, and
+`cover-cmyk-prepush-final-86023bd9-20261002.json`; each has a matching
+`-parity.json` sidecar. The final exact-tree benchmark command was:
+
+```sh
+env VIRTUAL_ENV="$PWD/target/perf-venv" PATH="$PWD/target/perf-venv/bin:$PATH" \
+RUSTC_WRAPPER= make migration-parity-benchmark \
+  PYTHON=target/perf-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-cmyk-prepush-final-86023bd9-20261002.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-cmyk-prepush-final-86023bd9-20261002-parity.json \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.cmyk-noise-1024x768'
+```
+
+The isolated Python 3.12 environment uses the pinned `requirements-ci.txt` and
+`make build-parity`, which leaves the Pillow 12.2 oracle installed. The
+checkout's older `.venv` is Python 3.9 and lacks maturin; selecting the isolated
+environment through both `PYTHON` and `VIRTUAL_ENV` avoids building against
+that stale interpreter. The focused command
+`cargo test --locked -p pillow-rs --lib cmyk_narrow_ -- --nocapture` passed
+both tests. `RUSTC_WRAPPER= make fmt clippy`,
+`make docs-lint PYTHON=target/perf-venv/bin/python`, and `git diff --check`
+passed. No coverage, broad CI, or release was run.
