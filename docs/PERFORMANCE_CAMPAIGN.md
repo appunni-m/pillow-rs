@@ -13622,17 +13622,20 @@ six-dispatch route.
 | Direct RGB horizontal SIMD | 7.749 | 9.317 | 7.528 | 3.694 |
 | Rejected row-fused horizontal passes | 8.071 | 9.701 | 7.721 | 3.773 |
 | Retained candidate repeat | 7.729 | 8.065 | 7.602 | 3.712 |
+| Clean commit `2c3531a0f` | 7.600 | 9.306 | 7.625 | 3.683 |
 
-The retained SIMD path is 3.37× faster than its clean baseline and 1.02× faster
-than Pillow in the final run. It still misses the 5× SIMD goal by a wide margin;
-serial CPU also remains slightly slower than Pillow. The apparent CPU movement
-between runs is not attributed to this SIMD-only change. GPU latency is about
-2.05× lower than retained SIMD latency at concurrency one; this does not prove
-saturated throughput. After three bounded candidates, keep the two direct
-vector paths and record the SIMD and serial-CPU gaps as blockers for a later
-operation-ranked revisit.
+The clean commit run reduces SIMD median latency by 3.36× from baseline, but
+measures 7.625 ms versus Pillow at 7.600 ms, a near tie that is still slightly
+slower than Pillow. It misses the 5× SIMD goal by a wide margin; serial CPU is
+1.22× slower than Pillow. The apparent CPU movement between runs is not
+attributed to this SIMD-only change. GPU latency is 2.07× lower than SIMD at
+concurrency one; this does not prove saturated throughput. After three bounded
+candidates, keep the two direct vector paths and record the SIMD and serial-CPU
+gaps as blockers for a later operation-ranked revisit.
 
 The clean baseline is `gaussianblur-rgb-simd-before-b6593-20261002.json`. The
+clean committed repeat is `gaussianblur-rgb-simd-commit-2c3531a0-20261002.json`
+with gate `gaussianblur-rgb-simd-commit-2c3531a0-parity-20261002.json`. The
 retained parity-gated candidate and repeat receipts are
 `gaussianblur-rgb-simd-horizontal-vector-attempt2-20261002.json` and
 `gaussianblur-rgb-simd-direct-native-final-20261002.json`; the corresponding
@@ -13646,8 +13649,8 @@ The exact benchmark command was:
 PYTHON=build/parity-venv/bin/python \
 MIGRATION_BENCHMARK_PROFILE=standard \
 MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.unsharpmask.material-rgb-noise-1024x768-radius-2' \
-MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/gaussianblur-rgb-simd-direct-native-final-20261002.json \
-MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/gaussianblur-rgb-simd-direct-native-final-parity-20261002.json \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/gaussianblur-rgb-simd-commit-2c3531a0-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/gaussianblur-rgb-simd-commit-2c3531a0-parity-20261002.json \
 make migration-parity-benchmark
 ```
 
