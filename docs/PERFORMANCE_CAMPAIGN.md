@@ -12944,3 +12944,69 @@ this repeat but needs more paired q4 throughput evidence. No CI, coverage,
 release, or push was run. Continue with the next operation in the current
 per-operation ranking rather than spending another Equalize attempt without a
 new measured SIMD or GPU bottleneck hypothesis.
+
+## RGBA `ImageEnhance.Color` zero-factor base follow-up — 2026-10-02
+
+This follow-up keeps the stateful `Color` contract: construction still saves a
+materialized, independent `degenerate` image. For native RGBA, its
+`RGBA → LA → RGBA` conversion roundtrip is exactly the existing zero-factor
+`ColorSaturation` result. The constructor now builds and materializes that
+base in one operation. The serial CPU special case writes rounded BT.601
+luma into RGB while preserving alpha. The SIMD special case reuses the
+existing vector luma calculation and shuffles luma and alpha directly into
+`[L,L,L,A]`, avoiding the intermediate LA allocation. The optimized route is
+gated to logical RGBA backed by `ImageRgba8`; RGB remains on the prior path
+after the measured mode gate was narrowed. No GPU kernel or Parallel CPU path
+was changed.
+
+The first zero-factor candidate used the generic saturation kernel. It reduced
+GPU latency substantially but regressed CPU and SIMD because those kernels
+still evaluated the full blend at factor zero. The retained candidate adds a
+direct native CPU loop and direct SIMD pack. A focused Rust test compares the
+optimized constructor base with the original mode-conversion roundtrip for
+RGB and RGBA, from one through seventeen pixels to cover vector tails; the
+maintained changing-input run below additionally verifies the complete call
+against live Pillow on each requested backend.
+
+The exact-source receipt is
+`build/migration-parity/color-rgba-final-attempt4-exact-source-20261002.json`.
+It completed without errors, source/runtime hashes stayed stable, and all
+4,800 measured outputs matched Pillow exactly for each Rust backend (1,600 at
+each host queue depth). Receipts report actual CPU, SIMD, and GPU execution
+with no fallback. GPU uses one dispatch, uploads and reads back 3,145,728
+bytes each, and reports 3,145,728 auxiliary bytes with zero mode conversions.
+
+| RGBA Color, 1024 × 768 | Queue depth 1 | Queue depth 2 | Queue depth 4 |
+| --- | ---: | ---: | ---: |
+| Pillow p50 latency | 2.407 ms | 4.562 ms | 8.731 ms |
+| Serial CPU p50 latency | 1.604 ms | 2.586 ms | 4.582 ms |
+| SIMD p50 latency | 1.789 ms | 2.732 ms | 4.561 ms |
+| GPU p50 latency | 2.008 ms | 3.688 ms | 7.454 ms |
+| Pillow throughput | 401.6 img/s | 422.4 img/s | 430.6 img/s |
+| Serial CPU throughput | 619.1 img/s | 761.6 img/s | 826.2 img/s |
+| SIMD throughput | 557.5 img/s | 707.8 img/s | 829.9 img/s |
+| GPU throughput | 474.6 img/s | 501.8 img/s | 501.0 img/s |
+
+Serial CPU is faster than normal Pillow at all three queue depths. SIMD is
+1.36×, 1.70×, and 1.91× faster by throughput, below the 5× goal. GPU remains
+slower than SIMD in both p50 latency and throughput at all depths; GPU/SIMD
+throughput is 0.87×, 0.69×, and 0.59×. The constructor-base optimization is
+retained, but this Color workload remains incomplete. Parallel CPU was not
+included in this serial CPU/SIMD/GPU comparison and is not represented by any
+row above.
+
+Reproduce the focused check and final measurement with:
+
+```sh
+cargo test --locked -p pillow-rs --lib \
+  rgb_color_degenerate_matches_convert_roundtrip_across_vector_tails -- --nocapture
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/color-rgba-final-attempt4-exact-source-20261002.json \
+  MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation color --mode RGBA --size 1024 768' \
+  make migration-parity-transpose-throughput
+```
+
+Checkpoint RGBA Color after four bounded attempts. Keep the exact base
+optimization; CPU meets its sampled latency target, while SIMD's 5× goal and
+all GPU/SIMD targets remain open. Continue with a different ranked
+operation/mode. Full CI, coverage, release, and push remain deferred.

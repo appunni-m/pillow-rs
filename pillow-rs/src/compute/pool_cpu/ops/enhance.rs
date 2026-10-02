@@ -232,6 +232,30 @@ pub fn op_enhance_color_saturation(
         .as_bytes_mut()
         .ok_or_else(|| PilError::ValueError("image has wrong mode".into()))?;
     let factor = factor as f32;
+    if factor == 0.0
+        && channels == 4
+        && matches!(img, DynamicImage::ImageRgba8(_))
+        && matches!(mode, None | Some("RGBA"))
+    {
+        apply_enhance_rows(
+            output,
+            img.width() as usize,
+            img.height() as usize,
+            4,
+            |row_index, row| {
+                let row_start = row_index * img.width() as usize * 4;
+                let row_end = row_start + row.len();
+                for (pixel, original) in row
+                    .chunks_exact_mut(4)
+                    .zip(source[row_start..row_end].chunks_exact(4))
+                {
+                    let gray = crate::color::rgb_to_luma_u8(original[0], original[1], original[2]);
+                    pixel[..3].fill(gray);
+                }
+            },
+        );
+        return Ok(result);
+    }
     apply_enhance_rows(
         output,
         img.width() as usize,
