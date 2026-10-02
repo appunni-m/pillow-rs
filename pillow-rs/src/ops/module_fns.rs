@@ -38,6 +38,43 @@ enum GradientMode {
     Float,
 }
 
+const fn radial_integer_sqrt(value: u32) -> u32 {
+    let mut low = 0u32;
+    let mut high = 256u32;
+    while low < high {
+        let middle = (low + high + 1) / 2;
+        if middle * middle <= value {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    low
+}
+
+const fn build_radial_gradient_l_template() -> [u8; 256 * 256] {
+    let mut output = [0u8; 256 * 256];
+    let mut y = 0usize;
+    while y < 256 {
+        let dy = y as i32 - 128;
+        let mut x = 0usize;
+        while x < 256 {
+            let dx = x as i32 - 128;
+            let squared_radius = (dx * dx + dy * dy) as u32 * 2;
+            let distance = radial_integer_sqrt(squared_radius);
+            output[y * 256 + x] = if distance >= 255 { 255 } else { distance as u8 };
+            x += 1;
+        }
+        y += 1;
+    }
+    output
+}
+
+/// Compile-time Pillow-compatible native-L raster for the fixed radial
+/// gradient. The coordinate domain and integer square root preserve the exact
+/// truncation of Pillow's `sqrt((dx*dx + dy*dy) * 2.0)` formula.
+pub(crate) static RADIAL_GRADIENT_L_TEMPLATE: [u8; 256 * 256] = build_radial_gradient_l_template();
+
 fn parse_gradient_mode(mode: &str) -> Result<GradientMode, PilError> {
     if mode.len() != 1 {
         return Err(PilError::ValueError("image has wrong mode".into()));
@@ -694,6 +731,15 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
 /// [`PilError`] when raw image construction fails.
 pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
     let gradient_mode = parse_gradient_mode(mode)?;
+    if let Some(image) = crate::compute::try_simd_radial_gradient(mode)? {
+        return Ok(Image::from_generated_dynamic(image, mode));
+    }
+    if mode == "L" {
+        // L is the fixed dense one-byte output, so reuse its exact constant
+        // raster and allocate only the owned result buffer.
+        return Image::frombytes_owned(mode, (256, 256), RADIAL_GRADIENT_L_TEMPLATE.to_vec());
+    }
+
     let (bytes_per_pixel, row_bytes) = match gradient_mode {
         GradientMode::Byte => (1, 256),
         GradientMode::One => (1, 256usize.div_ceil(8)),

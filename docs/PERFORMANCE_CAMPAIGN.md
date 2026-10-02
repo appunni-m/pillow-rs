@@ -15212,3 +15212,61 @@ individual profile with:
 ```
 
 No coverage was run.
+
+## Native-L `Image.radial_gradient` checkpoint — 2026-10-03
+
+The selected public operation is `PIL.Image.radial_gradient("L")`, which
+always produces a 256 × 256 one-byte image. Its declared materialized workload
+uses one warmup, three measurement iterations, and two samples; the benchmark
+gate is successful execution, so exact output was separately checked against
+live Pillow on CPU, strict SIMD, and strict GPU profile requests. Each parity
+lane passed 1/1. The GPU profile does not exercise a GPU kernel: this eager
+generator has no device dispatch and its output is built directly on the host.
+
+The clean main-commit baseline receipt
+`radial-gradient-l-baseline-20261003.json` measured Pillow at 0.045229 ms,
+CPU at 0.060271 ms, SIMD profile at 0.071042 ms, and GPU profile at 0.067938
+ms. Before the SIMD route was added, none of the pillow-rs measurements had
+backend execution telemetry; those SIMD/GPU labels were the same eager host
+implementation and cannot establish backend acceleration.
+
+Four bounded attempts produced these decisions:
+
+1. An L-only append loop used the owned raw-byte constructor, avoiding both
+   zero-initializing the complete raster and copying it through borrowed
+   `frombytes`. Exact L parity passed. The 0.048167 ms CPU result was close to
+   Pillow's 0.047146 ms in that run, so this was not a decisive speedup.
+2. Exploiting the exact center-axis symmetry cut repeated square roots for the
+   interior pixels. The exact Pillow output still passed. CPU fell to 0.023083
+   ms against Pillow's 0.047521 ms, about 2.06× faster. The extra nonsequential
+   output writes were still required for the image.
+3. A four-lane `f32x4` square-root kernel initially evaluated all 65,536 pixels
+   in row order. Strict SIMD parity passed and telemetry confirmed six actual
+   SIMD executions with no fallback, but its 0.056355 ms median lost to both
+   Pillow and the native-L CPU candidate. Rejected.
+4. A compile-time integer-square-root routine now creates the fixed L raster
+   from the same `floor(sqrt(2 * (dx² + dy²)))` formula. The CPU path copies
+   that native-L template into its owned result; the SIMD path copies it in
+   16-byte vector blocks. Full-byte Pillow parity passed on CPU, strict SIMD,
+   and the GPU-request profile. Medians were Pillow 0.047041 ms, CPU 0.010979
+   ms, and actual SIMD 0.015855 ms (six executions, no fallback). CPU is about
+   4.28× faster than Pillow; SIMD is about 2.96× faster, still short of the 5×
+   target and slower than this CPU path. The GPU-request result was 0.010313 ms
+   but has no GPU execution receipt; it is host execution and is not a GPU
+   measurement.
+
+The retained L specialization preserves the exact output and mode-specific
+storage. Modes `1`, `P`, `I`, and `F` keep their existing generator. The SIMD
+kernel is real vector memory-copy work, but its measured full-call result does
+not meet the target. A single 256 × 256 eager generator currently has no GPU
+schedule; routing it through one would add transfer and dispatch latency. Any
+future multi-image scheduling for this kind of work belongs in the separate
+explicit batching API and must leave ordinary generator routing unchanged.
+
+Focused benchmark receipts are
+`radial-gradient-l-{baseline,attempt1,attempt2,attempt3,attempt4}-20261003.json`
+under `build/migration-parity/`. Each uses the manifest's unchanged sample
+policy; timings are diagnostic rather than long-run throughput evidence. The
+final exact-output receipts are
+`radial-gradient-l-attempt4-{cpu,simd,gpu}-parity.json`. The selected SIMD run
+also confirms actual backend identity. No coverage was run.

@@ -15511,6 +15511,30 @@ pub(crate) fn simd_linear_gradient_generate(mode: &str) -> Result<DynamicImage, 
     crate::image_utils::raw_bytes_to_image(256, 256, output, channels)
 }
 
+/// Copy native-L radial-gradient pixels in 16-byte vector blocks.
+///
+/// The public output is a fixed native-L raster, so generation is compile-time
+/// and this backend performs the final image copy in 16-byte vector
+/// blocks rather than recomputing each radius on every call.
+pub(crate) fn simd_radial_gradient_generate() -> Result<DynamicImage, PilError> {
+    let template = &crate::ops::module_fns::RADIAL_GRADIENT_L_TEMPLATE;
+    let mut output = Vec::with_capacity(template.len());
+    let mut vector_blocks = 0u64;
+
+    for chunk in template.chunks_exact(16) {
+        let mut lanes = [0u8; 16];
+        lanes.copy_from_slice(chunk);
+        let vector = u8x16::new(lanes);
+        output.extend_from_slice(&vector.to_array());
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
+    crate::image_utils::raw_bytes_to_image(256, 256, output, 1)
+}
+
 /// Generate Pillow's deterministic effect-noise stream with scalar RNG and
 /// Box-Muller control, then vectorize the per-sample affine/clamp arithmetic.
 /// The RNG sequence and rejection order remain scalar and process-global;
