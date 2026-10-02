@@ -12883,3 +12883,64 @@ case; SIMD has a small retained gain but remains below Pillow and the 5× goal.
 Do not spend another attempt on this mode without a new architecture-specific
 SIMD/data-access hypothesis. Move to the next uncheckpointed operation. No
 coverage, full CI, release, or push was run.
+
+## RGB `ImageOps.equalize` native GPU checkpoint — 2026-10-02
+
+The material workload is unmasked RGB equalize at 1024 × 768. Its prior GPU
+path widened three-byte RGB samples to RGBA before histogramming and widened
+the result back, transferring 3,145,728 bytes in each direction for a
+2,359,296-byte image. The retained path admits only native `ImageRgb8` and
+unmasked `Equalize`, builds the three channel histograms directly from compact
+RGB bytes, reuses the exact integer CDF/LUT logic, and remaps through the
+exclusive-word-owner packed RGB shader. It transfers 2,359,296 bytes each way,
+records zero mode conversions, and preserves the RGB result. Histogram clearing
+uses the command encoder's buffer clear, followed by three compute dispatches:
+histogram, LUT derivation, and remap. The receipt validator now reflects that
+clear-buffer work is not a compute dispatch; its parity or performance gates
+were not relaxed.
+
+The focused GPU regression
+`rgb_equalize_packed_histogram_matches_cpu_for_every_rgb_tail` verifies exact
+CPU parity for compact RGB pixel-count tails and a row-tiled case, with actual
+GPU execution and transfer/dispatch telemetry. The unchanged-policy throughput
+workflow then exercised 1,600 measured changing inputs per backend
+at each queue depth. Pillow, serial CPU, SIMD, and GPU outputs all matched
+exactly; source and runtime stayed unchanged across the repeat. The final
+receipt on the staged source is `build/migration-parity/equalize-rgb-p1-final-checkpoint-20261002.json`:
+
+| Queue depth | Pillow img/s | CPU img/s | SIMD img/s | GPU img/s | GPU/SIMD | Pillow p50 ms | CPU p50 ms | SIMD p50 ms | GPU p50 ms |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 451.7 | 589.0 | 599.7 | 1,005.6 | 1.68× | 2.209 | 1.704 | 1.668 | 1.009 |
+| 2 | 723.4 | 1,100.5 | 1,116.9 | 1,477.6 | 1.32× | 2.646 | 1.745 | 1.726 | 1.242 |
+| 4 | 940.5 | 1,780.0 | 1,809.3 | 1,868.6 | 1.03× | 4.018 | 2.114 | 2.087 | 1.808 |
+
+On this workload CPU beats normal Pillow at every tested queue depth. GPU has
+lower p50 latency and higher throughput than SIMD at all three depths in the
+repeat, with the q4 throughput lead narrow enough to warrant more paired runs.
+SIMD reaches only 1.33–1.92× Pillow throughput, far below the 5× goal, so
+Equalize remains incomplete. The result supports this specific RGB material
+case; it is not a claim for masked, small, L, palette, or other Equalize inputs.
+
+Two CPU/SIMD follow-ups were measured and removed. Mapping through a balanced
+out-of-place LUT tree reduced SIMD throughput by 26–29% across queue depths;
+the extra output allocation/initialization and likely register pressure from
+concurrent lookup work outweighed avoiding the source clone. Explicitly
+unrolling four histogram banks removed dynamic bank selection but left the
+measured SIMD backend median
+at 1.570 ms versus 1.571 ms, with no whole-call improvement. Keep neither
+candidate. This is evidence to profile the existing in-place LUT path and its
+allocation/copy cost before changing its lookup expression again.
+
+Focused tests passed:
+
+```sh
+cargo test --locked -p pillow-rs --lib rgb_equalize_packed_histogram_matches_cpu_for_every_rgb_tail -- --nocapture
+cargo test --locked -p pillow-rs --lib gpu_native_rgb_compact_input_requires_supported_native_rgb_operations -- --nocapture
+```
+
+The retained checkpoint is a partial GPU win after three bounded candidates.
+CPU's sampled target is met; SIMD's 5× target remains open; GPU beat SIMD in
+this repeat but needs more paired q4 throughput evidence. No CI, coverage,
+release, or push was run. Continue with the next operation in the current
+per-operation ranking rather than spending another Equalize attempt without a
+new measured SIMD or GPU bottleneck hypothesis.
