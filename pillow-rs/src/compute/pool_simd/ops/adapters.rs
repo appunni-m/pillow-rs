@@ -19419,6 +19419,83 @@ fn native_reduce_full_pixel_sums(
     sums
 }
 
+// Eight adjacent RGB destination pixels each consume a 3×5 source block.
+// This keeps the RGB source walk explicit and factor-bounded; only the final
+// rounded 24-bit reciprocal average is expressed as wide SIMD lanes. Partial
+// blocks, other factors, thumbnail reduction, and other three-byte modes stay
+// on the general path.
+#[inline]
+fn native_reduce_rgb_3x5_pixel_sums(
+    source: &[u8],
+    width: usize,
+    source_x: usize,
+    source_y: usize,
+) -> [u32; 3] {
+    let mut sums = [0u32; 3];
+    let mut source_row = source_y * width * 3 + source_x * 3;
+    for _ in 0..5 {
+        let mut source_index = source_row;
+        for _ in 0..3 {
+            sums[0] += u32::from(source[source_index]);
+            sums[1] += u32::from(source[source_index + 1]);
+            sums[2] += u32::from(source[source_index + 2]);
+            source_index += 3;
+        }
+        source_row += width * 3;
+    }
+    sums
+}
+
+#[inline]
+fn native_reduce_rgb_3x5_vector_block(
+    source: &[u8],
+    geometry: &NativeReduceGeometry,
+    output_x: usize,
+    output_y: usize,
+) -> Option<[u8; SIMD_REDUCE_LANES * 4]> {
+    if geometry.x_factor != 3
+        || geometry.y_factor != 5
+        || output_x > geometry.main_width.saturating_sub(SIMD_REDUCE_LANES)
+        || output_y >= geometry.main_height
+    {
+        return None;
+    }
+    let source_x = output_x.checked_mul(3)?;
+    let source_y = output_y.checked_mul(5)?;
+    let average = geometry.full?;
+    let mut red_sums = [0u32; SIMD_REDUCE_LANES];
+    let mut green_sums = [0u32; SIMD_REDUCE_LANES];
+    let mut blue_sums = [0u32; SIMD_REDUCE_LANES];
+    for lane in 0..SIMD_REDUCE_LANES {
+        let sums =
+            native_reduce_rgb_3x5_pixel_sums(source, geometry.width, source_x + lane * 3, source_y);
+        red_sums[lane] = sums[0];
+        green_sums[lane] = sums[1];
+        blue_sums[lane] = sums[2];
+    }
+
+    let multiplier = u32x8::splat(average.multiplier);
+    let amend = u32x8::splat(average.amend);
+    let red: [u8; SIMD_REDUCE_LANES] = (((u32x8::new(red_sums) + amend) * multiplier) >> 24u32)
+        .to_array()
+        .map(|value| value.min(255) as u8);
+    let green: [u8; SIMD_REDUCE_LANES] = (((u32x8::new(green_sums) + amend) * multiplier) >> 24u32)
+        .to_array()
+        .map(|value| value.min(255) as u8);
+    let blue: [u8; SIMD_REDUCE_LANES] = (((u32x8::new(blue_sums) + amend) * multiplier) >> 24u32)
+        .to_array()
+        .map(|value| value.min(255) as u8);
+
+    let mut output = [0u8; SIMD_REDUCE_LANES * 4];
+    for lane in 0..SIMD_REDUCE_LANES {
+        let destination = lane * 3;
+        output[destination] = red[lane];
+        output[destination + 1] = green[lane];
+        output[destination + 2] = blue[lane];
+    }
+    Some(output)
+}
+
 #[inline]
 fn native_reduce_vector_block(
     source: &[u8],
@@ -19428,7 +19505,20 @@ fn native_reduce_vector_block(
     valid_pixels: usize,
     channels: usize,
     premultiplied_alpha: bool,
+    rgb_3x5_fast_path: bool,
 ) -> Option<[u8; SIMD_REDUCE_LANES * 4]> {
+    if rgb_3x5_fast_path
+        && channels == 3
+        && !premultiplied_alpha
+        && valid_pixels == SIMD_REDUCE_LANES
+        && geometry.x_factor == 3
+        && geometry.y_factor == 5
+        && output_x <= geometry.main_width.saturating_sub(SIMD_REDUCE_LANES)
+        && output_y < geometry.main_height
+    {
+        return native_reduce_rgb_3x5_vector_block(source, geometry, output_x, output_y);
+    }
+
     let mut sums = [[0u32; SIMD_REDUCE_LANES]; 4];
     let mut multipliers = [0u32; SIMD_REDUCE_LANES];
     let mut amends = [0u32; SIMD_REDUCE_LANES];
@@ -19511,6 +19601,7 @@ fn native_reduce_bytes(
     premultiplied_alpha: bool,
     x_factor: u32,
     y_factor: u32,
+    rgb_3x5_fast_path: bool,
 ) -> Option<(Vec<u8>, u32, u32, u64, u64)> {
     let width = img.width() as usize;
     let height = img.height() as usize;
@@ -19569,6 +19660,7 @@ fn native_reduce_bytes(
                 valid_pixels,
                 channels,
                 premultiplied_alpha,
+                rgb_3x5_fast_path,
             ) else {
                 return false;
             };
@@ -26374,6 +26466,7 @@ pub fn simd_thumbnail(
                 native_thumbnail_has_alpha(img, mode),
                 factor_x,
                 factor_y,
+                false,
             )
             .ok_or_else(|| simd_unsupported("Thumbnail"))?;
             (
@@ -26819,9 +26912,14 @@ pub fn simd_reduce(
     }
     let (channels, premultiplied_alpha) =
         native_reduce_layout(img, mode).ok_or_else(|| simd_unsupported("Reduce"))?;
-    let Some((output, width, height, vector_blocks, scalar_tail)) =
-        native_reduce_bytes(img, channels, premultiplied_alpha, *x_factor, *y_factor)
-    else {
+    let Some((output, width, height, vector_blocks, scalar_tail)) = native_reduce_bytes(
+        img,
+        channels,
+        premultiplied_alpha,
+        *x_factor,
+        *y_factor,
+        matches!(mode, None | Some("RGB")) && matches!(img, DynamicImage::ImageRgb8(_)),
+    ) else {
         return Err(simd_unsupported("Reduce"));
     };
     if vector_blocks == 0 {
@@ -29943,6 +30041,62 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_rgb_3x5_vector_reduce_matches_scalar_with_partial_edges() {
+        let (width, height) = (67u32, 53u32);
+        let source: Vec<u8> = (0..width as usize * height as usize * 3)
+            .map(|index| (index.wrapping_mul(37).wrapping_add(index / 11 * 17 + 29) % 256) as u8)
+            .collect();
+        let image = crate::raster::DynamicImage::ImageRgb8(
+            crate::raster::RgbImage::from_raw(width, height, source.clone())
+                .expect("RGB source dimensions must be valid"),
+        );
+        let geometry = super::NativeReduceGeometry::new(width as usize, height as usize, 3, 5)
+            .expect("3×5 RGB reduction geometry must be supported");
+        let vector_block = super::native_reduce_rgb_3x5_vector_block(&source, &geometry, 0, 0)
+            .expect("an interior vector block must use the specialized kernel");
+        let mut expected_block = [0u8; super::SIMD_REDUCE_LANES * 3];
+        let average = geometry.full.expect("full blocks have an average");
+        for lane in 0..super::SIMD_REDUCE_LANES {
+            let (sums, _, multiplier, amend) =
+                super::native_reduce_pixel_sums(&source, &geometry, 3, false, lane, 0)
+                    .expect("the scalar reference block must be in bounds");
+            assert_eq!(multiplier, average.multiplier);
+            assert_eq!(amend, average.amend);
+            for channel in 0..3 {
+                expected_block[lane * 3 + channel] =
+                    super::native_reduce_average(sums[channel], multiplier, amend);
+            }
+        }
+        assert_eq!(
+            &vector_block[..expected_block.len()],
+            expected_block.as_slice()
+        );
+
+        let (actual, output_width, output_height, vector_blocks, scalar_tail) =
+            super::native_reduce_bytes(&image, 3, false, 3, 5, true)
+                .expect("native RGB reduction must succeed");
+        assert_eq!((output_width, output_height), (23, 11));
+        assert_eq!(vector_blocks, 22);
+        assert_eq!(scalar_tail, 77);
+        let mut expected = Vec::with_capacity(actual.len());
+        for y in 0..output_height as usize {
+            for x in 0..output_width as usize {
+                let (sums, _, multiplier, amend) =
+                    super::native_reduce_pixel_sums(&source, &geometry, 3, false, x, y)
+                        .expect("scalar reference pixel must be in bounds");
+                for channel in 0..3 {
+                    expected.push(super::native_reduce_average(
+                        sums[channel],
+                        multiplier,
+                        amend,
+                    ));
+                }
+            }
+        }
+        assert_eq!(actual, expected);
+    }
+
     #[test]
     fn rgba_blur_vector_pack_preserves_byte_lanes() {
         let values = super::u32x16::new([

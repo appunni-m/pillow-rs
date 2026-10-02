@@ -13361,3 +13361,90 @@ make migration-parity-benchmark-parallel-cpu
 Keep the native LA GPU path. The CPU remains close to Pillow but meets the
 latency target; SIMD and GPU meet their current targets for this workload. No
 coverage, broad CI, release, or push was run.
+
+## RGB `Image.reduce(3, 5)` SIMD checkpoint — 2026-10-02
+
+The material workload reduces seeded native RGB noise from 1024 × 768 by
+factors 3 × 5 and observes the complete returned bytes. The fresh baseline
+receipt `reduce-rgb-la-next-baseline-20261002.json` passed the Pillow parity
+gate on CPU, strict SIMD, and GPU, with 100/100 timed calls on each requested
+backend and no fallback. Its medians were 0.420 ms for Pillow, 0.681 ms for
+serial CPU, 1.055 ms for SIMD, and 0.708 ms for GPU. Telemetry attributed
+0.671 ms of the CPU call to its backend, with zero mode conversions and zero
+full-frame copies. The GPU kept the source at three bytes per pixel, uploaded
+2,359,296 bytes, read back 210,672 padded bytes, used one dispatch, and made no
+mode conversion.
+
+The first measured candidate applied a fixed 3 × 5 sum helper to serial CPU and
+added an RGB-only eight-output SIMD block. The CPU path did not improve relative
+to Pillow: baseline CPU/Pillow latency was 1.62× and the repeated candidate
+ratio was 1.63×. The CPU specialization was removed. Keep only the SIMD
+specialization: it bypasses the generic per-lane channel loop for full RGB
+3 × 5 blocks, uses three independent channel accumulators, and performs the
+same rounded 24-bit reciprocal average in `u32x8` lanes. It is admitted only
+for native `ImageRgb8` with logical mode RGB (or the default RGB mode) in
+`Image.reduce`; thumbnail reduction, edge blocks, scalar tails, other factors,
+and other three-byte modes keep the general implementation. It does not
+vectorize the source gathers, which remain scalar lane setup and are the main
+remaining SIMD cost.
+
+The focused vector regression compares the new eight-pixel block with the
+generic scalar reduction and checks odd right/bottom edges on a 67 × 53 image.
+It passed:
+
+```sh
+cargo test --locked -p pillow-rs --lib native_rgb_3x5_vector_reduce_matches_scalar_with_partial_edges
+```
+
+The final correctness-gated benchmark receipt
+`reduce-rgb-attempt4-final-simd-only-20261002.json` passed all three backends;
+the actual backend was recorded for every one of 100 timed executions, with
+no fallback:
+
+| RGB `Image.reduce(3, 5)`, 1024 × 768 | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Median latency | 0.436 ms | 0.700 ms | 0.723 ms | 0.690 ms |
+
+The retained SIMD kernel reduced its median from 1.055 ms to 0.723 ms (1.46×
+faster than its own baseline); relative to Pillow it improved from 2.51× to
+1.66× latency, but still misses the 5× SIMD goal and is slower than Pillow.
+Serial CPU remains about 1.60× slower than Pillow. GPU and SIMD medians were
+within 5% in the final run, with GPU slightly lower, but concurrency was one:
+these measurements establish latency and reciprocal-latency only, not
+saturated throughput. GPU still misses Pillow latency on this workload. No GPU
+code changed during this checkpoint, so its small run-to-run shift is not an
+optimization claim.
+
+Parallel CPU is a separate opt-in profile. Its parity-gated receipt
+`reduce-rgb-parallel-cpu-20261002.json` records 100/100 actual CPU executions
+with `pillow-rs-py/parallel` and `pillow-rs/parallel` enabled. Its median/mean
+latency was 0.202/0.210 ms. The ordinary Pillow row from the standard run was
+0.436/0.464 ms, so Parallel CPU was 2.16× faster by median and 2.21× by mean
+across the separate runs. This is not serial CPU, SIMD, GPU, or a threaded
+Pillow comparison. The Make target's default Parallel CPU result files were
+restored after saving these operation-specific receipts.
+
+The standard benchmark command was:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.reduce.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/reduce-rgb-attempt4-final-simd-only-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/reduce-rgb-attempt4-final-simd-only-parity-20261002.json \
+make migration-parity-benchmark
+```
+
+The separate profile used:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.reduce.standard' \
+make migration-parity-benchmark-parallel-cpu
+```
+
+Its generated default receipts were preserved to the operation-specific paths
+above and prior default files were restored byte-for-byte. After four bounded
+attempts, keep the SIMD-only gain, record CPU/SIMD/GPU as open goals, and move
+to the next operation. No coverage, broad CI, release, or push was run.
