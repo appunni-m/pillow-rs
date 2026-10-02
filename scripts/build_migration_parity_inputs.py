@@ -41802,6 +41802,25 @@ def build_nuanced_cases(
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
+        # RGB is a native three-byte layout. Keep material and boundary inputs
+        # so the median benchmark exercises its packed RGB path, including an
+        # odd-width tail that leaves a partial output word.
+        for name, size, seed in (
+            ("performance-material-rgb-noise-1024x768-size-3", [1024, 768], 20261018),
+            ("backend-noise-rgb-1x1-size-3", [1, 1], 20261019),
+            ("backend-noise-rgb-1x3-size-3", [1, 3], 20261020),
+            ("backend-noise-rgb-33x35-size-3", [33, 35], 20261021),
+        ):
+            specs += ({
+                "surface": "PIL.ImageFilter", "operation": "MedianFilter",
+                "requirement_suffix": "performance.standard",
+                "name": name, "mode": "RGB", "size": size,
+                "edge": "noise-fill", "seed": seed,
+                "observe_result": "tobytes",
+                "values": {"size": literal(3)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
+
         # The existing 9x9 material RankFilter input is constant-valued, which
         # makes insertion-sort comparisons exit immediately and does not
         # exercise useful order-statistic work. Keep varied native-L inputs
@@ -48069,6 +48088,36 @@ def build_pipeline_benchmark_document(
     }
     median_la_material_workload["context"]["operation_class"] = "neighborhood"
 
+    median_rgb_case_id = (
+        "PIL.ImageFilter.MedianFilter.nuanced."
+        "performance-material-rgb-noise-1024x768-size-3"
+    )
+    median_rgb_case = cases_by_id[median_rgb_case_id]
+    median_rgb_material_workload = {
+        "workload_id": "pipeline-op.medianfilter.material-rgb-noise-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.ImageFilter", "MedianFilter")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": median_rgb_case_id},
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["apply-filter", "observe-filter-result"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            median_rgb_case,
+            variant="medianfilter-material-rgb-noise-1024x768-size-3",
+            surface="PIL.ImageFilter",
+            operation="MedianFilter",
+        ),
+    }
+    median_rgb_material_workload["context"]["operation_class"] = "neighborhood"
+
     grayscale_rgb_case_id = (
         "PIL.ImageOps.grayscale.nuanced.performance-large-rgb-noise-1024x768"
     )
@@ -50654,6 +50703,7 @@ def build_pipeline_benchmark_document(
             *posterize_material_workloads,
             median_l_material_workload,
             median_la_material_workload,
+            median_rgb_material_workload,
             grayscale_rgb_material_workload,
             grayscale_ycbcr_material_workload,
             *thumbnail_scalar_workloads,

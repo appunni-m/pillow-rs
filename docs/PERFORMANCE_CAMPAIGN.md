@@ -13362,6 +13362,124 @@ Keep the native LA GPU path. The CPU remains close to Pillow but meets the
 latency target; SIMD and GPU meet their current targets for this workload. No
 coverage, broad CI, release, or push was run.
 
+## RGB `ImageFilter.MedianFilter(3)` checkpoint — 2026-10-02
+
+Added seeded 1024 × 768 RGB noise plus 1 × 1, 1 × 3, and odd 33 × 35
+parity inputs. The material workload is
+`pipeline-op.medianfilter.material-rgb-noise-1024x768`. Its input-only cases
+exercise degenerate axes, clamped edges, packed RGB word crossings, and the
+partial final transfer word.
+
+The initial native-RGB shader removed RGBA widening and cut upload/readback
+bytes by 25%, but its full 3-channel sort made GPU latency regress from
+3.093 ms to 4.014 ms. The byte reduction did not compensate for the shader's
+dynamic sort and neighborhood loops. Keep the mode-specific native path only
+with the follow-up shader: unroll the nine neighborhood samples and use the
+backward-live median slice of the existing nine-phase odd-even network. That
+slice retains the same compare order for the median lane while removing
+compare results that cannot reach it; each four-pixel vector keeps R, G, and B
+in separate lanes. This brought latency to 1.623 ms. A repeat measured
+1.627 ms, so the improvement was stable across the two candidate runs.
+
+The native route is restricted to a singleton RGB `MedianFilter(3)` over
+tightly packed `ImageRgb8`. Four adjacent RGB outputs occupy exactly three
+u32 words; each invocation owns those complete words, including groups that
+cross a row boundary. The final partial group writes only in-range words and
+zeros unused transfer lanes. The fallback remains unchanged when the compact
+RGB output plan cannot prove its buffer and dispatch bounds.
+
+The baseline and retained run medians were:
+
+| RGB `MedianFilter(3)`, 1024 × 768 | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline latency | 143.146 ms | 106.919 ms | 24.444 ms | 3.093 ms |
+| Native RGB, attempt 2 | 124.973 ms | 102.975 ms | 23.683 ms | 1.623 ms |
+| Native RGB repeat | 125.348 ms | 102.865 ms | 23.596 ms | 1.627 ms |
+
+The repeat is a correctness-gated 100-sample run on each standard subject.
+CPU was 1.22× faster than Pillow, SIMD was 5.31× faster, and GPU latency was
+14.50× lower than SIMD. The standard receipt recorded 100/100 actual GPU
+executions, one dispatch each, and no fallback. GPU upload and readback each
+fell from 3,145,728 to 2,359,296 bytes; mode-conversion count fell from one to
+zero. The throughput column is measured at concurrency one, so it records
+single-request operation rate rather than saturated multi-request throughput.
+
+Parallel CPU remains a separate opt-in profile with
+`pillow-rs-py/parallel` and `pillow-rs/parallel`; it was built and measured
+separately and its actual backend was CPU. Its median/mean latency was
+12.828/13.066 ms, compared with ordinary Pillow's 125.348/126.199 ms from the
+standard run. That is 9.77× faster by median and 9.66× by mean. Its own
+100/100 executions completed without fallback. This is not a SIMD result and
+does not use a parallel Pillow baseline.
+
+The focused GPU regression compares every RGB output byte with the CPU
+reference for 1 × 1, 1 × 3, and 33 × 35 inputs. It also checks that native
+readback returns `ImageRgb8`, transfer sizes are padded only to a u32 boundary,
+one dispatch executes, and mode conversion stays at zero. The three public
+boundary inputs passed live Pillow parity on CPU, SIMD, and strict GPU (9/9
+backend comparisons); the material benchmark's Pillow gate also passed for
+CPU, SIMD, and GPU.
+The boundary IDs are
+`PIL.ImageFilter.MedianFilter.nuanced.backend-noise-rgb-1x1-size-3`,
+`PIL.ImageFilter.MedianFilter.nuanced.backend-noise-rgb-1x3-size-3`, and
+`PIL.ImageFilter.MedianFilter.nuanced.backend-noise-rgb-33x35-size-3`.
+
+The retained standard receipts are
+`build/migration-parity/medianfilter-rgb-native-attempt2-20261002.json` and
+`build/migration-parity/medianfilter-rgb-native-attempt3-repeat-20261002.json`,
+with matching `-parity-20261002.json` sidecars. The slower first native
+candidate is `medianfilter-rgb-native-attempt1-20261002.json`; the original
+baseline is `medianfilter-rgb-baseline-20261002.json`. Parallel CPU receipts
+are `medianfilter-rgb-parallel-cpu-20261002.json` and
+`medianfilter-rgb-parallel-cpu-parity-20261002.json`. Boundary parity receipts
+are `medianfilter-rgb-cpu-boundaries-20261002.json`,
+`medianfilter-rgb-simd-boundaries-20261002.json`, and
+`medianfilter-rgb-gpu-boundaries-20261002.json`.
+
+The material standard benchmark command was:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.medianfilter.material-rgb-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/medianfilter-rgb-native-attempt2-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/medianfilter-rgb-native-attempt2-parity-20261002.json \
+make migration-parity-benchmark
+```
+
+The separate Parallel CPU command used the same workload and dedicated
+receipts:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.medianfilter.material-rgb-noise-1024x768' \
+make MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/medianfilter-rgb-parallel-cpu-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/medianfilter-rgb-parallel-cpu-parity-20261002.json \
+migration-parity-benchmark-parallel-cpu
+```
+
+The boundary lanes used `make migration-parity-test` with the three IDs above,
+separately for strict CPU, strict SIMD, and strict GPU. For example:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_TARGET_BACKEND=gpu MIGRATION_STRICT_TARGET_BACKEND=1 \
+MIGRATION_PARITY_CASE_IDS='PIL.ImageFilter.MedianFilter.nuanced.backend-noise-rgb-1x1-size-3,PIL.ImageFilter.MedianFilter.nuanced.backend-noise-rgb-1x3-size-3,PIL.ImageFilter.MedianFilter.nuanced.backend-noise-rgb-33x35-size-3' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/medianfilter-rgb-gpu-boundaries-20261002.json \
+make migration-parity-test
+```
+
+For CPU and SIMD, change `MIGRATION_TARGET_BACKEND` and the output filename;
+the three inputs are otherwise identical. The focused Rust test was:
+
+```sh
+cargo test -p pillow-rs gpu_packed_rgb_median_filter_preserves_edges_and_compact_transfers -- --nocapture
+```
+
+Keep this RGB native-GPU path and move to the next operation. No coverage,
+broad CI, release, or push was run.
+
 ## RGB `Image.reduce(3, 5)` SIMD checkpoint — 2026-10-02
 
 The material workload reduces seeded native RGB noise from 1024 × 768 by

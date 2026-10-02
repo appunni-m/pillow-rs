@@ -6971,6 +6971,16 @@ impl GpuInner {
                 index += 1;
                 continue;
             }
+            if native_rgb_packed_output && matches!(op, PipelineOp::MedianFilter { size: 3 }) {
+                let median = self.resolve_pipeline(
+                    "__internal_median_filter_3x3_rgb_packed",
+                    "median_filter_3x3_rgb_packed.wgsl",
+                    include_str!("shaders/median_filter_3x3_rgb_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(median));
+                index += 1;
+                continue;
+            }
             if packed_luma_order_statistic && matches!(op, PipelineOp::MedianFilter { size: 3 }) {
                 let median = self.resolve_pipeline(
                     "__internal_median_filter_3x3_luma_packed",
@@ -8376,7 +8386,12 @@ impl GpuInner {
         let mut native_expand_output = None;
         let mut native_luma_transform_output = None;
         let native_rgb_packed_output = if native_rgb_packed_output {
-            let output_plan = if matches!(ops, [PipelineOp::Eval { .. } | PipelineOp::Equalize]) {
+            let output_plan = if matches!(
+                ops,
+                [PipelineOp::Eval { .. }
+                    | PipelineOp::Equalize
+                    | PipelineOp::MedianFilter { size: 3 }]
+            ) {
                 plan_native_rgb_point_output(
                     w,
                     h,
@@ -8462,6 +8477,14 @@ impl GpuInner {
                     "__internal_median_filter_3x3_la_packed",
                     "median_filter_3x3_la_packed.wgsl",
                     include_str!("shaders/median_filter_3x3_la_packed.wgsl"),
+                )?
+            } else if native_rgb_packed_output.is_some()
+                && matches!(op, PipelineOp::MedianFilter { size: 3 })
+            {
+                self.resolve_pipeline(
+                    "__internal_median_filter_3x3_rgb_packed",
+                    "median_filter_3x3_rgb_packed.wgsl",
+                    include_str!("shaders/median_filter_3x3_rgb_packed.wgsl"),
                 )?
             } else if packed_native_byte_filter
                 && matches!(
@@ -8825,6 +8848,17 @@ impl GpuInner {
                 if !matches!(op, PipelineOp::Equalize) {
                     params[2] = 0;
                 }
+                params[3] = if plan.row_tiled { 16 } else { 0 };
+            } else if native_rgb_packed_output.is_some()
+                && matches!(op, PipelineOp::MedianFilter { size: 3 })
+            {
+                let plan = native_rgb_packed_output.ok_or_else(|| {
+                    PilError::InternalError(
+                        "packed-RGB median parameters have no checked output plan".into(),
+                    )
+                })?;
+                params[0] = cur_w;
+                params[1] = cur_h;
                 params[3] = if plan.row_tiled { 16 } else { 0 };
             } else if packed_luma_colorize && matches!(op, PipelineOp::Colorize { .. }) {
                 // Colorize has no row-offset input; reuse that word to select
@@ -9757,7 +9791,9 @@ impl GpuInner {
                 })?;
                 (plan.groups_x, plan.groups_y)
             }
-            "__internal_point_rgb_packed" | "__internal_histogram_remap_rgb_packed" => {
+            "__internal_point_rgb_packed"
+            | "__internal_histogram_remap_rgb_packed"
+            | "__internal_median_filter_3x3_rgb_packed" => {
                 let plan = resources.native_rgb_packed_output.ok_or_else(|| {
                     PilError::InternalError(
                         "packed-RGB point shader has no checked output plan".into(),
@@ -14292,8 +14328,8 @@ fn gpu_packed_luma_convert_input(
 
 /// Admit operations that consume a singleton native RGB upload. Convert
 /// widens to RGBA in its shader; Transform samples compact triples; the
-/// host-derived unmasked RGB AutoContrast LUT and RGB Equalize use packed
-/// histogram/point shaders to keep both transfer boundaries native.
+/// host-derived unmasked RGB AutoContrast LUT, RGB Equalize, and 3x3 median
+/// use packed shaders to keep transfer boundaries native.
 #[cfg(target_endian = "little")]
 fn gpu_native_rgb_compact_input(
     ops: &[PipelineOp],
@@ -14310,6 +14346,7 @@ fn gpu_native_rgb_compact_input(
             },
         ] => true,
         [PipelineOp::Transform { .. }] => true,
+        [PipelineOp::MedianFilter { size: 3 }] => true,
         [PipelineOp::Eval { .. }] => host_autocontrast_rgb_lut,
         [PipelineOp::Equalize] => true,
         _ => false,
@@ -22192,7 +22229,12 @@ impl GpuPool {
             )
             .is_some();
         let native_rgb_output_plan =
-            if matches!(ops, [PipelineOp::Eval { .. } | PipelineOp::Equalize]) {
+            if matches!(
+                ops,
+                [PipelineOp::Eval { .. }
+                    | PipelineOp::Equalize
+                    | PipelineOp::MedianFilter { size: 3 }]
+            ) {
                 plan_native_rgb_point_output(
                     img.width(),
                     img.height(),
@@ -22212,12 +22254,16 @@ impl GpuPool {
             };
         let native_rgb_packed_output =
             native_rgb_compact_input_candidate && native_rgb_output_plan.is_some();
-        // Native RGB Eval and Equalize use packed RGB output shaders. If a
-        // checked output layout is unavailable, retain the standard RGBA
-        // input/output contract for those operations.
+        // Native RGB Eval, Equalize, and 3x3 MedianFilter require the compact
+        // output plan as well as compact input. Otherwise keep both transfer
+        // boundaries on the standard RGBA contract.
         let native_rgb_compact_input = native_rgb_compact_input_candidate
-            && (!matches!(ops, [PipelineOp::Eval { .. } | PipelineOp::Equalize])
-                || native_rgb_packed_output);
+            && (!matches!(
+                ops,
+                [PipelineOp::Eval { .. }
+                    | PipelineOp::Equalize
+                    | PipelineOp::MedianFilter { size: 3 }]
+            ) || native_rgb_packed_output);
         let native_la_transform_output = native_la_transform_input
             && plan_native_la_transform_output(
                 ops,
@@ -30386,6 +30432,60 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
+    fn gpu_packed_rgb_median_filter_preserves_edges_and_compact_transfers() {
+        use crate::compute::{execute_prepared, prepare_execution};
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+        let op = [PipelineOp::MedianFilter { size: 3 }];
+        for (width, height) in [(1u32, 1u32), (1, 3), (33, 35)] {
+            let bytes = (0..width as usize * height as usize * 3)
+                .map(|index| ((index * 73 + index / 13 * 31 + 19) % 256) as u8)
+                .collect::<Vec<_>>();
+            let source = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, bytes).expect("RGB median source"),
+            );
+            let expected = crate::compute::registry::execute_cpu(&op[0], &source, Some("RGB"))
+                .expect("CPU RGB MedianFilter reference");
+            let prepared =
+                prepare_execution(&op, Some(Backend::Gpu)).expect("GPU RGB MedianFilter routing");
+            let actual = match execute_prepared(&prepared, &op, &source, Some("RGB")) {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    return;
+                }
+                Err(error) => panic!("native GPU RGB MedianFilter failed: {error}"),
+            };
+            assert!(matches!(&actual, DynamicImage::ImageRgb8(_)));
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
+
+            let receipt = Backend::take_pipeline_telemetry().expect("native RGB median receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native RGB median resources");
+            let transfer_bytes = (width as usize * height as usize * 3).div_ceil(4) * 4;
+            assert_eq!(resources.upload_bytes, transfer_bytes as u64);
+            assert_eq!(resources.readback_bytes, transfer_bytes as u64);
+            assert_eq!(resources.mode_conversion_count, 0);
+        }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
     fn gpu_packed_la_gaussian_blur_preserves_odd_width_rows_and_alpha() {
         use crate::compute::{execute_prepared, prepare_execution};
 
@@ -30569,6 +30669,7 @@ mod tests {
             palette_fill: None,
         };
         let equalize = PipelineOp::Equalize;
+        let median = PipelineOp::MedianFilter { size: 3 };
         assert!(super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&convert_rgba),
             &rgb,
@@ -30603,6 +30704,24 @@ mod tests {
             std::slice::from_ref(&equalize),
             &rgb,
             None,
+            false
+        ));
+        assert!(super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&median),
+            &rgb,
+            Some("RGB"),
+            false
+        ));
+        assert!(super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&median),
+            &rgb,
+            None,
+            false
+        ));
+        assert!(!super::gpu_native_rgb_compact_input(
+            &[PipelineOp::MedianFilter { size: 5 }],
+            &rgb,
+            Some("RGB"),
             false
         ));
         assert!(!super::gpu_native_rgb_compact_input(
