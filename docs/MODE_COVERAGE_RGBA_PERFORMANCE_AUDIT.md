@@ -403,20 +403,27 @@ or Parallel CPU route.
    full-call benchmarks and exact parity cases. P3 remains open for evidence
    beyond its allocation reduction.
 
-## Next measured transport candidate — 2026-10-02
+## LA GaussianBlur transport checkpoint — 2026-10-02
 
-The next P1/P9 probe is `PIL.ImageFilter.GaussianBlur` on native LA. The
-existing packed-L blur admission is explicitly limited to logical L in
-`gpu_packed_luma_blur_input`; LA therefore reaches `upload_standard_image`,
-which widens its two stored bytes per pixel to the four-byte RGBA carrier. The
-general blur shader also accumulates four channels although LA has two. The
-existing benchmark has a material L GaussianBlur row but no corresponding LA
-row.
+The former packed-L-only `ImageFilter.GaussianBlur` route now admits native LA
+for the singleton radius-bounded blur. Two interleaved `[L, A]` pixels travel
+per u32 through separate horizontal and vertical GPU shaders. The shaders
+derive each pixel's x/y from its flat index, so odd-width rows and the final
+partial word preserve both channels. The 1024 × 768 material case passed live
+Pillow parity on CPU, SIMD, and GPU (3/3); the GPU recorded six dispatches, no
+fallback, no mode conversion, and native upload/readback of 1,572,864 bytes
+each, half the former RGBA transfer. A 65 × 47 runtime GPU test additionally
+checks odd-width boundaries and exact alpha bytes.
 
-This is a source-level opportunity, not yet a measured speedup. The next visit
-must add a varied material LA input, pass live Pillow parity on CPU, SIMD, and
-GPU, then record actual backend execution and upload/readback bytes before
-choosing a compact two-channel kernel. Keep the logical mode and alpha channel
-semantics intact. `Image.blend` LA was checked as an alternative but is already
-covered by `gpu_native_byte_op_channels`' same-mode native transport, so it is
-not the next conversion target.
+The exact parity-gated benchmark measured GPU median latency at 2.500 ms versus
+4.349 ms SIMD and 5.652 ms Pillow. Concurrency was one, so reciprocal latency
+does not establish saturated throughput. SIMD improved from 17.955 ms to
+4.241 ms in its focused implementation attempt, but remains far below 5×
+Pillow. Serial CPU remains slower than Pillow (6.985 ms vs 5.652 ms); after
+four bounded candidates, direct scalar radius-one passes were discarded
+because they raised CPU latency to 7.727 ms. Keep the native SIMD and GPU
+paths, record serial CPU as a blocker, and continue the P1/P9 operation/mode
+review. `Image.blend` LA remains covered by
+`gpu_native_byte_op_channels`' same-mode native transport. Detailed attempts,
+commands, and profile-separated Parallel CPU results are in
+`PERFORMANCE_CAMPAIGN.md`.

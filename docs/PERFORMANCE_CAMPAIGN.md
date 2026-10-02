@@ -13190,17 +13190,83 @@ MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/i-filter-final-attempt4
 make migration-parity-benchmark
 ```
 
-Checkpoint after four bounded candidates: keep the contiguous SIMD loads and
-bounded CPU separable kernel; discard the full-frame SIMD separable experiment.
-The CPU target is met for bounded samples only, SIMD remains below 5× Pillow,
-and high-range CPU remains a large gap. Do not spend another attempt here
-without a new exactness and memory-traffic hypothesis. Resume the mode-coverage
-audit's next uncheckpointed operation/mode with measured RGBA staging cost.
-`Image.blend` on LA was considered but is already covered by
-`gpu_native_byte_op_channels`' same-mode native two-input path. The selected
-next baseline is `PIL.ImageFilter.GaussianBlur` on LA: the current packed-L blur
-admission is limited to mode L, so LA is widened to four-byte RGBA and the
-general shader computes unused channels. Add a varied material LA parity case,
-measure its upload/readback cost and backend timings, then choose whether a
-compact two-channel kernel pays off. No coverage, broad CI, release, or push
-was run.
+Checkpoint after four bounded I-filter candidates: retain contiguous SIMD
+loads and the proven bounded CPU separable kernel; discard the slower full-
+frame SIMD experiment. CPU meets its target only for the bounded I subset, SIMD
+remains below 5× Pillow, and arbitrary-range CPU remains a blocker. Continue to
+the next operation rather than spending another attempt without a new exactness
+and memory-traffic hypothesis.
+
+## LA `ImageFilter.GaussianBlur` checkpoint — 2026-10-02
+
+The material case is seeded 1024 × 768 native LA noise with
+`GaussianBlur(radius=2)`. Its benchmark input and live-Pillow parity case were
+added to `scripts/build_migration_parity_inputs.py` and generated into the
+ImageFilter benchmark/parity fixtures. The ordinary L GaussianBlur admission
+previously forced LA through a four-byte RGBA carrier, even though the image
+stores two independent byte channels.
+
+Attempt 1 fused the three horizontal passes into row buffers to reduce full-
+frame intermediates. It remained byte exact but serial CPU time was 7.058 ms
+versus a 7.072 ms baseline, so the row-fusion path was removed. Attempt 2 added
+an LA-specific SIMD kernel: direct eight-pixel vectors for horizontal passes,
+contiguous sixteen-byte vectors for vertical passes, and exact scalar border
+handling. The focused pass test checks tiny images, edges, and vector tails.
+SIMD fell from 17.955 ms to 4.241 ms, but that is only 1.31× Pillow's 5.570 ms
+and below the 5× goal.
+
+Attempt 3 added distinct GPU horizontal and vertical LA shaders. The little-
+endian transport packs two `[L, A]` pixels per u32, derives coordinates from
+the flat pixel index so odd-width rows remain correct, bounds the final partial
+word, and returns native LA bytes. It keeps the six Gaussian box passes on the
+GPU without widening channels. On the material case it reduced upload and
+readback from 3,145,728 bytes each to 1,572,864 bytes each and removed one mode
+conversion. Actual GPU execution used six dispatches with no fallback. The
+odd-width 65 × 47 GPU test compares every LA byte to the CPU reference and
+checks transfer sizes, alpha preservation, and the dispatch receipt.
+
+Attempt 4 evaluated direct scalar radius-one CPU passes. Both direct axes
+matched the generic fixed-point implementation in focused tests, but the final
+parity-gated benchmark measured 7.727 ms, slower than the 6.985 ms serial CPU
+result before the specialization. The first run exposed and caught an
+uninitialized input-buffer bug; after correction the complete parity gate
+passed, but the slower CPU path was discarded.
+
+The retained correctness-gated benchmark passed all three profiles, with the
+requested CPU/SIMD/GPU backends actually recorded and no fallback:
+
+| LA GaussianBlur, 1024 × 768 | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Median latency | 5.652 ms | 6.985 ms | 4.349 ms | 2.500 ms |
+| Mean latency | 5.671 ms | 6.991 ms | 4.357 ms | 2.637 ms |
+
+GPU's median latency is 1.74× lower than SIMD; its measured mean operation
+rate is 390.6 ops/s versus SIMD's 229.6 ops/s. This is a single-request,
+concurrency-one workload, so those rates are reciprocal-latency evidence, not
+saturated throughput. SIMD is 1.30× faster than Pillow here and remains short
+of the 5× target. Serial CPU is 1.24× slower than Pillow and remains open.
+
+Parallel CPU stays separate. A dedicated opt-in feature run passed parity 1/1
+and measured 3.051 ms against the ordinary Pillow row at 5.652 ms from the
+serial profile. The actual backend was CPU; it used
+`pillow-rs-py/parallel` and `pillow-rs/parallel`. This comparison is about
+Parallel CPU, not SIMD or GPU, and its two profile measurements came from
+separate runs.
+
+The exact final serial-profile command and receipts are:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.gaussianblur.material-la-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/gaussianblur-la-attempt3-native-gpu-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/gaussianblur-la-attempt3-native-gpu-parity-20261002.json \
+make migration-parity-benchmark
+```
+
+The separate Parallel CPU receipts are
+`build/migration-parity/gaussianblur-la-parallel-cpu-final-20261002.json` and
+`build/migration-parity/gaussianblur-la-parallel-cpu-final-parity-20261002.json`.
+Keep the SIMD optimization and compact GPU path. Record serial CPU as a blocker
+and move to the next operation after four bounded candidates. No coverage,
+broad CI, release, or push was run.
