@@ -18567,6 +18567,141 @@ fn simd_rgba_horizontal_radius_one_rows(
     }
 }
 
+#[inline(always)]
+fn simd_rgb_blur_scalar_sample(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    byte_index: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let x = byte_index / 3;
+    let channel = byte_index % 3;
+    let left = x.saturating_sub(1);
+    let right = x.saturating_add(1).min(width - 1);
+    let far_left = x.saturating_sub(2);
+    let far_right = x.saturating_add(2).min(width - 1);
+    let sample = |pixel: usize| u32::from(source[pixel * 3 + channel]);
+    let sum = sample(left) + sample(x) + sample(right);
+    let edge = sample(far_left) + sample(far_right);
+    let weighted = sum
+        .wrapping_mul(whole_weight)
+        .wrapping_add(edge.wrapping_mul(fractional_weight))
+        .wrapping_add(SIMD_BOX_BLUR_BIAS);
+    destination[byte_index] = (weighted >> 24) as u8;
+}
+
+#[inline]
+fn simd_rgb_horizontal_radius_one_row(
+    input: &[u8],
+    output: &mut [u8],
+    width: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_stride = width
+        .checked_mul(3)
+        .expect("validated RGB dimensions fit the native row stride");
+    debug_assert!(width > 0);
+    debug_assert_eq!(input.len(), row_stride);
+    debug_assert_eq!(output.len(), row_stride);
+
+    let interior_end = width.saturating_sub(2) * 3;
+    let prefix_end = width.min(2) * 3;
+    for byte_index in 0..prefix_end {
+        simd_rgb_blur_scalar_sample(
+            input,
+            output,
+            width,
+            byte_index,
+            whole_weight,
+            fractional_weight,
+        );
+    }
+
+    let mut byte_index = prefix_end;
+    while byte_index + 16 <= interior_end {
+        let load = |offset: usize| u32x16::from(u16x16::from(simd_blur_load_u8x16(input, offset)));
+        let sum = load(byte_index - 3) + load(byte_index) + load(byte_index + 3);
+        let edge = if fractional_weight == 0 {
+            u32x16::splat(0)
+        } else {
+            load(byte_index - 6) + load(byte_index + 6)
+        };
+        let weighted = sum * u32x16::splat(whole_weight)
+            + edge * u32x16::splat(fractional_weight)
+            + u32x16::splat(SIMD_BOX_BLUR_BIAS);
+        let packed = simd_blur_pack_u32x16_to_bytes(weighted >> 24u32);
+        output[byte_index..byte_index + 16].copy_from_slice(&packed);
+        byte_index += 16;
+    }
+
+    for byte_index in byte_index..interior_end {
+        simd_rgb_blur_scalar_sample(
+            input,
+            output,
+            width,
+            byte_index,
+            whole_weight,
+            fractional_weight,
+        );
+    }
+    for byte_index in interior_end.max(prefix_end)..row_stride {
+        simd_rgb_blur_scalar_sample(
+            input,
+            output,
+            width,
+            byte_index,
+            whole_weight,
+            fractional_weight,
+        );
+    }
+}
+
+/// Apply one horizontal radius-one RGB pass without the generic scalar
+/// rolling recurrence. Three-byte neighbors are 3/6 bytes apart, so vector
+/// loads may cross pixel boundaries while every lane still retains its own
+/// channel. Replicated borders and the short vector tail use the scalar path.
+fn simd_rgb_horizontal_radius_one_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_stride = width
+        .checked_mul(3)
+        .expect("validated RGB dimensions fit the native row stride");
+    debug_assert!(width > 0);
+    debug_assert!(height > 0);
+    debug_assert_eq!(source.len(), row_stride * height);
+    debug_assert_eq!(destination.len(), source.len());
+
+    let interior_end = width.saturating_sub(2) * 3;
+    let prefix_end = width.min(2) * 3;
+    let vector_blocks_per_row = interior_end.saturating_sub(prefix_end) / 16;
+    let scalar_samples_per_row = row_stride.saturating_sub(vector_blocks_per_row * 16);
+    crate::compute::record_pipeline_operation_vector_blocks(
+        vector_blocks_per_row.saturating_mul(height) as u64,
+    );
+    crate::compute::record_pipeline_operation_scalar_tail(
+        scalar_samples_per_row.saturating_mul(height) as u64,
+    );
+
+    for y in 0..height {
+        let row_start = y * row_stride;
+        simd_rgb_horizontal_radius_one_row(
+            &source[row_start..row_start + row_stride],
+            &mut destination[row_start..row_start + row_stride],
+            width,
+            whole_weight,
+            fractional_weight,
+        );
+    }
+}
+
 fn simd_rgba_vertical_radius_one_rows(
     source: &[u8],
     destination: &mut [u8],
@@ -18578,6 +18713,66 @@ fn simd_rgba_vertical_radius_one_rows(
     let row_stride = width
         .checked_mul(4)
         .expect("validated RGBA dimensions fit the native row stride");
+    debug_assert!(width > 0);
+    debug_assert!(height > 0);
+    debug_assert_eq!(source.len(), row_stride * height);
+    debug_assert_eq!(destination.len(), source.len());
+
+    let last_y = height - 1;
+    let vector_blocks = row_stride.div_ceil(16).saturating_mul(height) as u64;
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+
+    for y in 0..height {
+        let sum_top_base = y.saturating_sub(1) * row_stride;
+        let sum_middle_base = y * row_stride;
+        let sum_bottom_base = y.saturating_add(1).min(last_y) * row_stride;
+        let edge_top_base = y.saturating_sub(2) * row_stride;
+        let edge_bottom_base = y.saturating_add(2).min(last_y) * row_stride;
+        let output_row = y * row_stride;
+
+        for x in (0..row_stride).step_by(16) {
+            let count = (row_stride - x).min(16);
+            let load = |base: usize| {
+                if count == 16 {
+                    u32x16::from(u16x16::from(simd_blur_load_u8x16(source, base + x)))
+                } else {
+                    let mut padded = [0u8; 16];
+                    padded[..count].copy_from_slice(&source[base + x..base + x + count]);
+                    u32x16::from(u16x16::from(u8x16::new(padded)))
+                }
+            };
+            let sum = load(sum_top_base) + load(sum_middle_base) + load(sum_bottom_base);
+            let edge = if fractional_weight == 0 {
+                u32x16::splat(0)
+            } else {
+                load(edge_top_base) + load(edge_bottom_base)
+            };
+            let weighted = sum * u32x16::splat(whole_weight)
+                + edge * u32x16::splat(fractional_weight)
+                + u32x16::splat(SIMD_BOX_BLUR_BIAS);
+            let packed = simd_blur_pack_u32x16_to_bytes(weighted >> 24u32);
+            destination[output_row + x..output_row + x + count].copy_from_slice(&packed[..count]);
+        }
+    }
+}
+
+/// Apply one RGB vertical radius-one pass in row-major three-byte storage.
+///
+/// A vertical blur treats every channel byte as an independent sample, so a
+/// 16-byte vector may begin or end inside an RGB pixel. The same byte offset
+/// is loaded from each neighboring row; no channel reordering or transpose is
+/// needed. Tail vectors retain the exact fixed-point rounding.
+fn simd_rgb_vertical_radius_one_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_stride = width
+        .checked_mul(3)
+        .expect("validated RGB dimensions fit the native row stride");
     debug_assert!(width > 0);
     debug_assert!(height > 0);
     debug_assert_eq!(source.len(), row_stride * height);
@@ -18877,6 +19072,59 @@ fn simd_pil_gaussian_blur_l_radius_one(
 
     let result =
         crate::image_utils::raw_bytes_to_image(dimensions.width, dimensions.height, work, 1)?;
+    Ok(preserve_mode(img, result))
+}
+
+fn simd_pil_gaussian_blur_rgb_radius_one(
+    img: &DynamicImage,
+    radius: f32,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let dimensions = CheckedDims::new(img.width(), img.height(), 3)?;
+    if img.as_bytes().len() != dimensions.total_bytes() || !(1.0..2.0).contains(&radius) {
+        return Err(simd_unsupported("GaussianBlur"));
+    }
+    if native_small_uniform_byte_image(img, 3) {
+        return native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("GaussianBlur"));
+    }
+
+    let whole_weight = (SIMD_BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
+    let integer_window = 3u32;
+    let fractional_weight =
+        SIMD_BOX_BLUR_SCALE.wrapping_sub(integer_window.wrapping_mul(whole_weight)) / 2;
+    let width = dimensions.width as usize;
+    let height = dimensions.height as usize;
+    crate::compute::record_pipeline_operation_path("vector");
+    let mut work = img.as_bytes().to_vec();
+    let mut scratch = dimensions.alloc_buffer();
+
+    // Keep Pillow's three separately rounded horizontal passes, with each
+    // pass using vector loads at the native three-byte RGB offsets.
+    for _ in 0..3 {
+        simd_rgb_horizontal_radius_one_rows(
+            &work,
+            &mut scratch,
+            width,
+            height,
+            whole_weight,
+            fractional_weight,
+        );
+        std::mem::swap(&mut work, &mut scratch);
+    }
+    for _ in 0..3 {
+        simd_rgb_vertical_radius_one_rows(
+            &work,
+            &mut scratch,
+            width,
+            height,
+            whole_weight,
+            fractional_weight,
+        );
+        std::mem::swap(&mut work, &mut scratch);
+    }
+
+    let result =
+        crate::image_utils::raw_bytes_to_image(dimensions.width, dimensions.height, work, 3)?;
     Ok(preserve_mode(img, result))
 }
 
@@ -26999,6 +27247,13 @@ pub fn simd_gaussian_blur(
         {
             return simd_pil_gaussian_blur_la_radius_one(img, blur_radius, mode);
         }
+        if channels == 3
+            && matches!(img, DynamicImage::ImageRgb8(_))
+            && matches!(mode, None | Some("RGB"))
+            && (1.0..2.0).contains(&blur_radius)
+        {
+            return simd_pil_gaussian_blur_rgb_radius_one(img, blur_radius, mode);
+        }
         return simd_pil_box_blur(img, blur_radius, 3, channels, mode);
     }
     Err(PilError::ValueError("expected GaussianBlur op".into()))
@@ -30198,6 +30453,133 @@ mod tests {
                 assert_eq!(
                     vertical_actual, vertical_expected,
                     "vertical dimensions={width}x{height} radius={radius}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rgb_radius_one_direct_vertical_passes_match_transposed_simd() {
+        for radius in [1.0f32, 1.25, 1.9] {
+            let whole_weight = (super::SIMD_BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
+            let fractional_weight = super::SIMD_BOX_BLUR_SCALE.wrapping_sub(3 * whole_weight) / 2;
+
+            for (width, height) in [
+                (1, 1),
+                (2, 3),
+                (3, 2),
+                (4, 5),
+                (5, 9),
+                (8, 3),
+                (9, 4),
+                (19, 7),
+                (65, 47),
+                (67, 53),
+            ] {
+                let dimensions = crate::checked_dims::CheckedDims::new(width, height, 3)
+                    .expect("test RGB dimensions fit");
+                let source: Vec<u8> = (0..dimensions.total_bytes())
+                    .map(|index| (index.wrapping_mul(73).wrapping_add(29) % 256) as u8)
+                    .collect();
+
+                let mut expected = dimensions.alloc_buffer();
+                super::simd_transpose_interleaved_rows(
+                    &source,
+                    &mut expected,
+                    width as usize,
+                    height as usize,
+                    3,
+                );
+                let mut expected_scratch = dimensions.alloc_buffer();
+                for _ in 0..3 {
+                    super::simd_blur_rows(
+                        &expected,
+                        &mut expected_scratch,
+                        height as usize,
+                        width as usize,
+                        3,
+                        1,
+                        whole_weight,
+                        fractional_weight,
+                    );
+                    std::mem::swap(&mut expected, &mut expected_scratch);
+                }
+                super::simd_transpose_interleaved_rows(
+                    &expected,
+                    &mut expected_scratch,
+                    height as usize,
+                    width as usize,
+                    3,
+                );
+
+                let mut actual = source;
+                let mut actual_scratch = dimensions.alloc_buffer();
+                for _ in 0..3 {
+                    super::simd_rgb_vertical_radius_one_rows(
+                        &actual,
+                        &mut actual_scratch,
+                        width as usize,
+                        height as usize,
+                        whole_weight,
+                        fractional_weight,
+                    );
+                    std::mem::swap(&mut actual, &mut actual_scratch);
+                }
+                assert_eq!(
+                    actual, expected_scratch,
+                    "vertical dimensions={width}x{height} radius={radius}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rgb_radius_one_direct_horizontal_passes_match_generic_simd() {
+        for radius in [1.0f32, 1.25, 1.9] {
+            let whole_weight = (super::SIMD_BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
+            let fractional_weight = super::SIMD_BOX_BLUR_SCALE.wrapping_sub(3 * whole_weight) / 2;
+
+            for (width, height) in [
+                (1, 1),
+                (2, 3),
+                (3, 2),
+                (4, 5),
+                (5, 9),
+                (8, 3),
+                (9, 4),
+                (19, 7),
+                (65, 47),
+                (67, 53),
+                (1024, 3),
+            ] {
+                let dimensions = crate::checked_dims::CheckedDims::new(width, height, 3)
+                    .expect("test RGB dimensions fit");
+                let source: Vec<u8> = (0..dimensions.total_bytes())
+                    .map(|index| (index.wrapping_mul(73).wrapping_add(29) % 256) as u8)
+                    .collect();
+                let mut expected = dimensions.alloc_buffer();
+                super::simd_blur_rows(
+                    &source,
+                    &mut expected,
+                    width as usize,
+                    height as usize,
+                    3,
+                    1,
+                    whole_weight,
+                    fractional_weight,
+                );
+                let mut actual = dimensions.alloc_buffer();
+                super::simd_rgb_horizontal_radius_one_rows(
+                    &source,
+                    &mut actual,
+                    width as usize,
+                    height as usize,
+                    whole_weight,
+                    fractional_weight,
+                );
+                assert_eq!(
+                    actual, expected,
+                    "horizontal dimensions={width}x{height} radius={radius}"
                 );
             }
         }
