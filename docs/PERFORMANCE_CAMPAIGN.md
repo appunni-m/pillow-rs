@@ -15939,3 +15939,74 @@ ran `build-parity`, preserved the Pillow oracle, and recorded
 repeat recorded `thumbnail-20261003-low-load.json` and its parity receipt.
 No coverage was run. Checkpoint the remaining performance gap and continue to
 the next ranked operation.
+
+## Native-L GaussianBlur rolling-SIMD checkpoint — 2026-10-03
+
+The selected case is `pipeline-op.gaussianblur.material-l-noise-1024x768`,
+which evaluates `ImageFilter.GaussianBlur(radius=2)` on a materialized 1024 ×
+768 L image. The existing fast path is mode-specific and keeps bytes in L.
+Pillow's exact result still requires three horizontal then three vertical
+radius-one box passes, fractional edge weights, clamped image borders, and a
+rounded byte after every pass.
+
+The retained SIMD change replaces the vertical pass's independent five-row
+loads for every output row with a rolling vector recurrence. It holds the
+leaving, center, current, entering, and fractional far-edge rows in 16-lane
+vectors and loads only the newly entering row while scanning y. Vector lanes
+span adjacent L pixels, and fixed-point weights, wrapping accumulation,
+fractional edge sums, and per-pass byte rounding stay identical. A second
+retained change uses the existing SIMD narrowing helper for the u32-to-byte
+output pack, removing per-lane scalar extraction while preserving the byte
+range. No full-frame transpose, image-mode conversion, Rayon path, GPU dispatch
+change, or ordinary single-image API change was made. The GPU path remains its
+own native-L implementation with six dispatches; this work does not introduce
+or alter explicit batch scheduling.
+
+The original SIMD runs measured 7.420 ms and 7.246 ms median; the rolling
+candidate with scalar lane packing measured 5.468 ms, 5.512 ms, and 5.532 ms.
+After replacing scalar extraction with vector packing, two exact-source runs
+measured 5.359 ms and 5.421 ms. Each row is a separate run, so compare only
+like-for-like public medians and treat cross-run ratios as directional:
+
+| Run | Pillow p50 / p95 (ms) | CPU p50 / p95 (ms) | SIMD p50 / p95 (ms) | GPU p50 / p95 (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Original source | 3.890 / 4.052 | 5.882 / 6.353 | 7.420 / 7.903 | 1.514 / 1.659 |
+| Rolling SIMD, scalar-pack run 1 | 4.011 / 4.200 | 5.883 / 6.031 | 5.468 / 5.598 | 1.500 / 1.579 |
+| Rolling SIMD, scalar-pack run 2 | 3.808 / 3.859 | 5.769 / 5.813 | 5.532 / 5.657 | 1.491 / 1.540 |
+| SIMD vector-pack run 1 | 3.829 / 3.934 | 5.747 / 5.793 | 5.359 / 5.434 | 0.961 / 1.523 |
+| SIMD vector-pack repeat | 3.896 / 3.991 | 5.943 / 6.051 | 5.421 / 5.478 | 1.490 / 1.560 |
+
+Each run used five warmups and 20 iterations × five samples, with 100 measured
+operations per subject and concurrency one. Both vector-pack integrated strict
+parity gates passed 3/3. Each run recorded 100 actual CPU, SIMD, and GPU
+executions without fallback; GPU used six dispatches per operation. The
+vector-pack repeat corresponds to about 257 Pillow, 168 CPU, 185 SIMD, and 671
+GPU operations/s at this concurrency. This single-image latency test does not
+measure saturated GPU throughput. In that repeat CPU was 1.53× slower than
+Pillow and SIMD was 1.39× slower, so the CPU/SIMD goals remain unmet. GPU
+latency was 3.64× lower than SIMD latency. The first vector-pack run's 0.961 ms
+GPU median was an outlier relative to its 1.523 ms p95 and the 1.49 ms repeat;
+do not treat it as the normal single-image latency.
+
+Two alternatives were rejected after full correctness-gated public-workload
+measurements. A native-L CPU horizontal row-fusion attempt passed its stage
+test but changed public CPU latency by about 1% while the oracle and CPU both
+moved between runs; there was no defensible end-to-end gain, so that code was
+removed. A 64-byte SIMD tile intended to use complete cache lines per source
+row passed exact parity 3/3 but measured 6.093 ms SIMD median, about 11% slower
+than the 5.468 ms rolling run. The tile was removed. The retained vector-pack
+change reduced SIMD median 3.1% in its first run and 2.0% in its repeat
+relative to the prior 5.532 ms scalar-pack run. These gains are modest and do
+not meet the Pillow target. Do not infer speed from source-level row-load or
+packing counts alone: cache traversal, conversion, and benchmark noise still
+determine public latency.
+
+The retained rolling and vector-pack changes passed
+`cargo test -p pillow-rs --release --lib gaussian_blur_l_sliding_vertical_matches_cpu_edges_and_vector_tails -- --nocapture`.
+The vector-pack candidate used
+`RUSTC_WRAPPER= make migration-parity-benchmark MIGRATION_BENCHMARK_PROFILE=standard MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.gaussianblur.material-l-noise-1024x768' MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/gaussianblur-l-20261003-vector-pack.json MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/gaussianblur-l-20261003-vector-pack-parity.json`
+and one repeat with `gaussianblur-l-20261003-vector-pack-repeat` output names.
+Both targets built with `make build-parity`, preserving the isolated Pillow
+oracle. No coverage was run. Receipts use the `gaussianblur-l-20261003-`
+prefix. Checkpoint the remaining CPU and SIMD gaps and continue to another
+operation after the repository's final push checks.
