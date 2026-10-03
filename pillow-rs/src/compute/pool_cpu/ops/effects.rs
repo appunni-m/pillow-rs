@@ -682,6 +682,47 @@ fn paste_native_masked_pa_row(
     }
 }
 
+/// Blend native PA index/alpha pairs with an L mask without per-channel
+/// premultiplication checks or a nested channel loop.
+#[inline(always)]
+fn paste_native_masked_pa_blend_byte(source: u8, destination: u8, mask: u16, inverse: u16) -> u8 {
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+    )]
+    let weighted = u16::from(source) * mask + u16::from(destination) * inverse + 127;
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "DIV255 yields an 8-bit convex blend of byte channels"
+    )]
+    let blended = (weighted / 255) as u8;
+    blended
+}
+
+#[inline]
+fn paste_native_masked_pa_l_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len() % 2, 0);
+    debug_assert_eq!(source.len() / 2, mask.len());
+
+    for ((source_pixel, destination_pixel), mask_value) in source
+        .chunks_exact(2)
+        .zip(destination.chunks_exact_mut(2))
+        .zip(mask.iter().copied())
+    {
+        let mask = u16::from(mask_value);
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+        )]
+        let inverse = 255 - mask;
+        destination_pixel[0] =
+            paste_native_masked_pa_blend_byte(source_pixel[0], destination_pixel[0], mask, inverse);
+        destination_pixel[1] =
+            paste_native_masked_pa_blend_byte(source_pixel[1], destination_pixel[1], mask, inverse);
+    }
+}
+
 /// Blend native CMYK samples with an L mask. CMYK's fourth stored byte is K,
 /// so this path applies the same independent byte formula to all four samples
 /// without treating K as alpha or converting the image to RGBA colors.
@@ -973,6 +1014,12 @@ fn paste_native_masked(
             && !mask_pixels.layout.premultiplied
         {
             paste_native_masked_hsv_l_row(source_row, destination_row, mask_row);
+        } else if mode == "PA"
+            && mask_channels == 1
+            && mask_pixels.layout.value_index == 0
+            && !mask_pixels.layout.premultiplied
+        {
+            paste_native_masked_pa_l_row(source_row, destination_row, mask_row);
         } else if mode == "PA" {
             paste_native_masked_pa_row(source_row, destination_row, mask_row, mask_pixels.layout);
         } else if mode == "CMYK"
@@ -4931,6 +4978,33 @@ mod tests {
             }
             assert_eq!(result.as_bytes(), expected, "native masked {mode} bytes");
         }
+    }
+
+    #[test]
+    fn native_pa_l_masked_paste_row_matches_every_mask_weight() {
+        let mask: Vec<u8> = (0..=u8::MAX).collect();
+        let source: Vec<u8> = (0..mask.len() * 2)
+            .map(|index| (index.wrapping_mul(73).wrapping_add(19)) as u8)
+            .collect();
+        let mut actual: Vec<u8> = (0..mask.len() * 2)
+            .map(|index| (index.wrapping_mul(29).wrapping_add(211)) as u8)
+            .collect();
+        let mut expected = actual.clone();
+        for pixel in 0..mask.len() {
+            let weight = u32::from(mask[pixel]);
+            for channel in 0..2 {
+                let index = pixel * 2 + channel;
+                let source_value = u32::from(source[index]);
+                let destination_value = u32::from(expected[index]);
+                expected[index] =
+                    ((source_value * weight + destination_value * (255 - weight) + 127) / 255)
+                        as u8;
+            }
+        }
+
+        super::paste_native_masked_pa_l_row(&source, &mut actual, &mask);
+
+        assert_eq!(actual, expected);
     }
 
     #[test]

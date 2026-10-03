@@ -16129,3 +16129,58 @@ throughput. Do not retry the generic zero-factor route. A future attempt needs
 to eliminate dispatch/materialization overhead without regressing the fast
 native conversion path, or isolate a GPU-only benefit through normal backend
 dispatch. No coverage was run.
+
+## PA masked paste: remove pixel-branch barriers — 2026-10-03
+
+The selected workload is `pil-image-image.paste.masked.materialized.masked-pa-noise-1024x768`:
+1024 × 768 PA source and destination images with an L mask. PA remains its
+stored palette-index/alpha pair throughout. The original native CPU helper
+checked mask endpoints, then looped over both stored samples while branching
+on premultiplication inside that loop. A PA+L specialization hoisted the known
+non-premultiplied case and wrote both output bytes directly. Removing the
+per-pixel endpoint branches made the whole row a uniform blend loop; mask
+weights 0 and 255 still produce the exact destination and source bytes by the
+same rounded integer formula. No RGBA conversion or explicit SIMD/GPU code was
+added.
+
+Three measured CPU variants were kept within the requested attempt limit. Each
+benchmark used 100 samples per profile and the same one-workload selector; the
+parity gate ran all three target profiles against live Pillow. These are the
+recorded median public-call latencies, in milliseconds:
+
+| Run | Pillow | Serial CPU | SIMD | GPU | Exact parity |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Clean baseline | 0.9365 | 1.0079 | 0.5221 | 1.8697 | 3/3 |
+| PA specialization with endpoint branches | 0.6984 | 0.9356 | 0.4885 | 1.4926 | 3/3 |
+| Explicit reciprocal DIV255 arithmetic | 0.7046 | 0.9931 | 0.4692 | 1.1287 | 3/3 |
+| Uniform branchless PA+L blend (retained) | 0.7216 | 0.2686 | 0.4755 | 1.2167 | 3/3 |
+
+The reciprocal rewrite was removed: compiler constant-division lowering already
+handled division by 255, and the measured result was slower than the preceding
+variant. The branchless row specialization is retained. In its run it made
+serial CPU 2.69× faster than Pillow (0.269 ms versus 0.722 ms; 3,723 versus
+1,386 operations/s). Backend telemetry recorded 100 actual executions each
+for CPU, SIMD, and GPU with no fallbacks. The other backends were unchanged by
+this CPU edit: SIMD was 1.52× Pillow, below the 5× target, and GPU was 2.56×
+slower than SIMD latency. Those SIMD and GPU gaps remain open. Benchmark
+latencies varied between runs, so the paired values within each run are the
+reliable comparison; no claim is based on comparing an oracle from one run to
+a target from another.
+
+The retained implementation passed
+`RUSTC_WRAPPER= cargo test -p pillow-rs masked_paste -- --nocapture`
+(17 passed), including all 256 L-mask weights for the PA row. The exact final
+candidate benchmark command was:
+
+```sh
+RUSTC_WRAPPER= \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.paste.masked.materialized.masked-pa-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/paste-pa-attempt3-94bb7f3-20261003.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/paste-pa-attempt3-94bb7f3-parity-20261003.json \
+make migration-parity-benchmark
+```
+
+All three parity comparisons passed with zero byte diffs. No coverage was run.
+Checkpoint the CPU improvement and move to another operation; revisit PA
+masked paste later only for its SIMD and GPU blockers.
