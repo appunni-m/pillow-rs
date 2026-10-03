@@ -23789,6 +23789,169 @@ fn resize_vertical_hsv_i32_vector_row(
     Some((vector_blocks, scalar_tail))
 }
 
+/// CMYK's four stored bytes are independent samples, including K in the fourth
+/// lane. Once both coefficient tables pass the byte-domain bound, accumulate
+/// each native channel in i32 instead of widening every product to i64.
+#[allow(clippy::arithmetic_side_effects)] // The coefficient bound guarantees SIMD sums cannot wrap.
+fn resize_horizontal_cmyk_i32_vector_row(
+    source_row: &[u8],
+    coeffs: &FilterCoeffs,
+    plan: &ResizeHorizontalPlan,
+    output_width: usize,
+    output_row: &mut [u8],
+) -> Option<(u64, u64)> {
+    if source_row.is_empty() {
+        output_row.fill(0);
+        let vector_blocks = u64::try_from(plan.blocks.len()).ok()?;
+        let scalar_start = if output_width < SIMD_RESIZE_LANES {
+            output_width
+        } else {
+            plan.vector_width
+        };
+        return Some((
+            vector_blocks,
+            u64::try_from(output_width.saturating_sub(scalar_start)).ok()?,
+        ));
+    }
+
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    for (block_index, output_x) in (0..plan.vector_width)
+        .step_by(SIMD_RESIZE_LANES)
+        .enumerate()
+    {
+        let block = plan.blocks.get(block_index)?;
+        let mut sums = [i32x8::splat(0); 4];
+        for tap in &block.taps {
+            let mut samples = [[0i32; SIMD_RESIZE_LANES]; 4];
+            for lane in 0..SIMD_RESIZE_LANES {
+                if tap.weights[lane] != 0 {
+                    let source_base = tap.source_bases[lane];
+                    for (channel, channel_samples) in samples.iter_mut().enumerate() {
+                        channel_samples[lane] =
+                            i32::from(*source_row.get(source_base.checked_add(channel)?)?);
+                    }
+                }
+            }
+            let weights = i32x8::new(tap.weights);
+            for (sum, channel_samples) in sums.iter_mut().zip(samples) {
+                *sum += i32x8::new(channel_samples) * weights;
+            }
+        }
+        let result = sums.map(|sum| sum.to_array().map(resize_fixed_point_i32_to_u8));
+        for lane in 0..SIMD_RESIZE_LANES {
+            let x = output_x + lane;
+            if x < output_width {
+                let output_start = x.checked_mul(4)?;
+                for (channel, channel_result) in result.iter().enumerate() {
+                    *output_row.get_mut(output_start.checked_add(channel)?)? = channel_result[lane];
+                }
+            }
+        }
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    let scalar_start = if output_width < SIMD_RESIZE_LANES {
+        output_width
+    } else {
+        plan.vector_width
+    };
+    for output_x in scalar_start..output_width {
+        let output_start = output_x.checked_mul(4)?;
+        for channel in 0..4 {
+            *output_row.get_mut(output_start.checked_add(channel)?)? =
+                resize_horizontal_scalar(source_row, 4, coeffs, output_x, channel, false)?;
+        }
+        scalar_tail = scalar_tail.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail))
+}
+
+/// Vertical counterpart to the native CMYK i32 horizontal pass. Each of C,
+/// M, Y, and K is filtered independently; the fourth byte is not treated as
+/// alpha and is never premultiplied.
+#[allow(clippy::arithmetic_side_effects)] // The coefficient bound guarantees SIMD sums cannot wrap.
+fn resize_vertical_cmyk_i32_vector_row(
+    intermediate: &[u8],
+    output_width: usize,
+    source_height: usize,
+    coeffs: &FilterCoeffs,
+    output_y: usize,
+    output_row: &mut [u8],
+) -> Option<(u64, u64)> {
+    let weights = resize_coeff_slice(coeffs, output_y)?;
+    let y0 = usize::try_from(*coeffs.xmin.get(output_y)?).ok()?;
+    let vector_width = if output_width < SIMD_RESIZE_LANES {
+        SIMD_RESIZE_LANES
+    } else {
+        output_width / SIMD_RESIZE_LANES * SIMD_RESIZE_LANES
+    };
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    for output_x in (0..vector_width).step_by(SIMD_RESIZE_LANES) {
+        let count = output_width.saturating_sub(output_x).min(SIMD_RESIZE_LANES);
+        let mut sums = [i32x8::splat(0); 4];
+        for (tap, &weight) in weights.iter().enumerate() {
+            let source_y = y0.checked_add(tap)?;
+            if source_y >= source_height {
+                return None;
+            }
+            let source_start = source_y
+                .checked_mul(output_width)?
+                .checked_add(output_x)?
+                .checked_mul(4)?;
+            let source_end = source_start.checked_add(count.checked_mul(4)?)?;
+            let source_pixels = intermediate.get(source_start..source_end)?;
+            let mut samples = [[0i32; SIMD_RESIZE_LANES]; 4];
+            for (lane, pixel) in source_pixels.chunks_exact(4).enumerate() {
+                for channel in 0..4 {
+                    samples[channel][lane] = i32::from(pixel[channel]);
+                }
+            }
+            let weight = i32x8::splat(i32::try_from(weight).ok()?);
+            for (sum, channel_samples) in sums.iter_mut().zip(samples) {
+                *sum += i32x8::new(channel_samples) * weight;
+            }
+        }
+        let result = sums.map(|sum| sum.to_array().map(resize_fixed_point_i32_to_u8));
+        for lane in 0..count {
+            let output_start = (output_x + lane).checked_mul(4)?;
+            for (channel, channel_result) in result.iter().enumerate() {
+                *output_row.get_mut(output_start.checked_add(channel)?)? = channel_result[lane];
+            }
+        }
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    let scalar_start = if output_width < SIMD_RESIZE_LANES {
+        output_width
+    } else {
+        vector_width
+    };
+    for output_x in scalar_start..output_width {
+        let output_start = output_x.checked_mul(4)?;
+        for channel in 0..4 {
+            let mut sum = 0i32;
+            for (tap, &weight) in weights.iter().enumerate() {
+                let source_y = y0.checked_add(tap)?;
+                if source_y >= source_height {
+                    return None;
+                }
+                let source_index = source_y
+                    .checked_mul(output_width)?
+                    .checked_add(output_x)?
+                    .checked_mul(4)?
+                    .checked_add(channel)?;
+                sum += i32::from(*intermediate.get(source_index)?) * i32::try_from(weight).ok()?;
+            }
+            *output_row.get_mut(output_start.checked_add(channel)?)? =
+                resize_fixed_point_i32_to_u8(sum);
+        }
+        scalar_tail = scalar_tail.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail))
+}
+
 fn resize_horizontal_cover_i32_vector_row(
     source_row: &[u8],
     channels: usize,
@@ -23818,6 +23981,13 @@ fn resize_horizontal_cover_i32_vector_row(
         (3, false) => {
             resize_horizontal_hsv_i32_vector_row(source_row, coeffs, plan, output_width, output_row)
         }
+        (4, false) => resize_horizontal_cmyk_i32_vector_row(
+            source_row,
+            coeffs,
+            plan,
+            output_width,
+            output_row,
+        ),
         _ => None,
     }
 }
@@ -23850,6 +24020,14 @@ fn resize_vertical_cover_i32_vector_row(
             output_row,
         ),
         (3, false) => resize_vertical_hsv_i32_vector_row(
+            intermediate,
+            output_width,
+            source_height,
+            coeffs,
+            output_y,
+            output_row,
+        ),
+        (4, false) => resize_vertical_cmyk_i32_vector_row(
             intermediate,
             output_width,
             source_height,
@@ -24601,7 +24779,7 @@ fn simd_resize_convolution_into(
         && matches!(filter, ResampleFilter::Bicubic)
         && matches!(
             (channels, premultiplied_alpha),
-            (1, false) | (2, true) | (3, false)
+            (1, false) | (2, true) | (3, false) | (4, false)
         )
         && resize_u8_coefficients_fit_i32(&horizontal)
         && resize_u8_coefficients_fit_i32(&vertical);
@@ -24741,18 +24919,31 @@ fn simd_resize_convolution_into(
             let output_row = output
                 .get_mut(output_start..output_start + output_stride)
                 .ok_or_else(|| simd_unsupported("Resize"))?;
-            resize_vertical_vector_row(
-                &intermediate,
-                output_width,
-                source_height,
-                channels,
-                &vertical,
-                output_y,
-                output_row,
-                premultiplied_alpha,
-                vectorize_tail,
-            )
-            .ok_or_else(|| simd_unsupported("Resize"))?;
+            let row_result = if cover_byte_i32 {
+                resize_vertical_cover_i32_vector_row(
+                    &intermediate,
+                    output_width,
+                    source_height,
+                    channels,
+                    &vertical,
+                    output_y,
+                    output_row,
+                    premultiplied_alpha,
+                )
+            } else {
+                resize_vertical_vector_row(
+                    &intermediate,
+                    output_width,
+                    source_height,
+                    channels,
+                    &vertical,
+                    output_y,
+                    output_row,
+                    premultiplied_alpha,
+                    vectorize_tail,
+                )
+            };
+            row_result.ok_or_else(|| simd_unsupported("Resize"))?;
         }
     } else {
         let failed = AtomicBool::new(false);
@@ -25261,6 +25452,7 @@ fn native_aspect_resize_bytes(
     let use_cover_byte_i32 = allow_cover_byte_i32
         && matches!(filter, ResampleFilter::Bicubic)
         && match mode {
+            Some("CMYK") => matches!(img, DynamicImage::ImageRgba8(_)),
             Some("HSV") => matches!(img, DynamicImage::ImageRgb8(_)),
             None | Some("L" | "LA") => {
                 matches!(
@@ -33426,6 +33618,76 @@ mod tests {
                     .expect("bounded HSV vertical pass");
                 }
                 assert_eq!(narrow, widened, "vertical {pattern}");
+            }
+        }
+    }
+
+    #[test]
+    fn cover_cmyk_i32_two_pass_matches_widened_at_edges_and_tails() {
+        for (width, height, output_width, output_height) in
+            [(5u32, 3u32, 7u32, 5u32), (37, 17, 53, 23), (67, 29, 31, 41)]
+        {
+            let horizontal = super::precompute_coeffs(output_width, width, ResampleFilter::Bicubic);
+            let vertical = super::precompute_coeffs(output_height, height, ResampleFilter::Bicubic);
+            assert!(super::resize_u8_coefficients_fit_i32(&horizontal));
+            assert!(super::resize_u8_coefficients_fit_i32(&vertical));
+
+            for pattern in 0..4u32 {
+                let source = (0..width as usize * height as usize * 4)
+                    .map(|index| match pattern {
+                        0 => 0,
+                        1 => 255,
+                        2 => {
+                            let pixel = index / 4;
+                            if ((pixel % width as usize) ^ (pixel / width as usize)) & 1 == 0 {
+                                0
+                            } else {
+                                255
+                            }
+                        }
+                        _ => index
+                            .wrapping_mul(97)
+                            .wrapping_add((index / (width as usize * 4)).wrapping_mul(53))
+                            .to_le_bytes()[0],
+                    })
+                    .collect::<Vec<_>>();
+                let image = DynamicImage::ImageRgba8(
+                    RgbaImage::from_raw(width, height, source)
+                        .expect("test CMYK byte-storage image shape"),
+                );
+                let output_len = (output_width * output_height * 4) as usize;
+                let mut widened = vec![0u8; output_len];
+                let mut narrow = vec![0u8; output_len];
+                super::simd_resize_convolution_into(
+                    &image,
+                    output_width,
+                    output_height,
+                    ResampleFilter::Bicubic,
+                    4,
+                    false,
+                    false,
+                    0,
+                    false,
+                    &mut widened,
+                )
+                .expect("widened CMYK Cover resize must succeed");
+                super::simd_resize_convolution_into(
+                    &image,
+                    output_width,
+                    output_height,
+                    ResampleFilter::Bicubic,
+                    4,
+                    false,
+                    true,
+                    0,
+                    false,
+                    &mut narrow,
+                )
+                .expect("bounded i32 CMYK Cover resize must succeed");
+                assert_eq!(
+                    narrow, widened,
+                    "sample pattern {pattern}, {width}x{height} -> {output_width}x{output_height}"
+                );
             }
         }
     }

@@ -17269,3 +17269,73 @@ failure or a runtime fix. The receipt is
 `build/migration-parity/eval-rgb-lut-baseline-d5c76f7.json` with parity sidecar
 `eval-rgb-lut-baseline-d5c76f7-parity.json`. No implementation attempt or
 coverage run was made.
+
+## CMYK `ImageOps.cover` SIMD i32 accumulators — checkpoint 2026-10-04
+
+The fourth bounded attempt for the materialized
+`pil-imageops.cover.materialized.cmyk-noise-1024x768` workload specializes its
+four independent C/M/Y/K byte channels in the existing two-pass SIMD resizer.
+The image crate stores CMYK bytes in `ImageRgba8`, so fast-path admission checks
+both that physical carrier and the logical `CMYK` mode. The fourth byte is K,
+not alpha: it is filtered independently and never premultiplied. The kernel
+uses `i32x8` multiply/accumulate for each channel, preserving Pillow's Q22
+`+ 2^21` rounding and the byte intermediate between horizontal and vertical
+passes. Both coefficient tables must pass the existing absolute-weight byte
+bound; any unsafe table keeps the original wide-accumulator path.
+
+The focused differential test compares the full narrow and wide two-pass
+resizers for 5×3 → 7×5, 37×17 → 53×23, and 67×29 → 31×41, with all-zero,
+all-255, checkerboard, and channel-distinct varied inputs. This covers short
+rows, vector tails, clipped edge taps, and all four native samples. It passed.
+
+The parity-gated standard run and repeat used the same live Pillow 12.2 oracle
+and exact CMYK material workload. Each embedded parity sidecar passed all
+three CPU/SIMD/GPU comparisons. Target telemetry recorded the requested backend
+for 100/100 operations with no fallback; GPU recorded two dispatches per call.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Before specialization | 13.040 | 13.857 | 22.362 | 5.295 |
+| i32 attempt 1 | 12.527 | 13.314 | 15.427 | 1.766 |
+| i32 repeat | 12.813 | 13.719 | 15.681 | 5.179 |
+| Final-tree repeat | 12.525 | 13.405 | 16.069 | 5.217 |
+
+Across the three candidate runs, SIMD improved 28.2–31.0% against the
+working-tree baseline. Retain the specialization as a repeatable local SIMD
+gain, but do not mark Cover complete: SIMD remains about 1.22–1.28× slower than
+Pillow, far from the ≤0.5× latency target, and serial CPU remains about 6–7%
+slower than Pillow. GPU was not changed; its first candidate timing was
+unusually low and the later repeats returned near the baseline, so no GPU gain
+is credited. These single-image runs do not establish sustained GPU
+throughput. No coverage was run.
+
+The differential test passed in both the default build and the opt-in
+`parallel`-feature build. `make fmt clippy`, `make docs-lint`, and
+`git diff --check` passed on this candidate. Clippy reported the repository's
+existing warning set but exited successfully. The reusable
+`performance-parity-optimization` skill also passed its skill validator after
+recording the accumulator-bound and logical-mode lessons. The focused test
+commands were:
+
+```sh
+RUSTC_WRAPPER= cargo test --locked -p pillow-rs --lib cover_cmyk_i32_two_pass_matches_widened_at_edges_and_tails -- --nocapture
+RUSTC_WRAPPER= cargo test --locked -p pillow-rs --lib --features parallel cover_cmyk_i32_two_pass_matches_widened_at_edges_and_tails -- --nocapture
+RUSTC_WRAPPER= make fmt clippy PYTHON=.venv/bin/python
+make docs-lint PYTHON=.venv/bin/python
+```
+
+The receipts are `cover-cmyk-simd-before-f786ac876-20261004.json`,
+`cover-cmyk-simd-i32-attempt1-f786ac876-20261004.json`, and
+`cover-cmyk-simd-i32-attempt1-repeat-f786ac876-20261004.json`, and
+`cover-cmyk-simd-i32-final-f786ac876-20261004.json`, with matching parity
+sidecars in `build/migration-parity/`. Reproduce a parity-gated run with unique
+output names for each repeat:
+
+```sh
+RUSTC_WRAPPER= \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.cmyk-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-cmyk-simd-attemptN.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-cmyk-simd-attemptN-parity.json \
+make migration-parity-benchmark PYTHON=.venv/bin/python
+```
