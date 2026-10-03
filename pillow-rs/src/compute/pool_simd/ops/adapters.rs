@@ -18863,60 +18863,11 @@ fn simd_transpose_interleaved_rows(
     );
 }
 
-/// Apply one exact native-L vertical radius-one box pass directly in row-major
-/// storage. Each vector loads 16 contiguous samples from the three
-/// integer-window rows, widens before summation, and keeps Pillow's 24-bit
-/// multiply and byte rounding intact. Fractional-edge rows are loaded only
-/// when their weight is nonzero. This avoids transposing the complete image
-/// solely to make columns contiguous for the generic sliding-line kernel.
-fn simd_luma_vertical_radius_one_row(
-    source: &[u8],
-    destination: &mut [u8],
-    width: usize,
-    height: usize,
-    y: usize,
-    whole_weight: u32,
-    fractional_weight: u32,
-) {
-    debug_assert!(width > 0);
-    debug_assert!(height > 0);
-    debug_assert!(y < height);
-    debug_assert_eq!(source.len(), width * height);
-    debug_assert_eq!(destination.len(), width);
-
-    let last_y = height - 1;
-    let sum_top = y.saturating_sub(1);
-    let sum_bottom = y.saturating_add(1).min(last_y);
-    let edge_top = y.saturating_sub(2);
-    let edge_bottom = y.saturating_add(2).min(last_y);
-    let sum_top_base = sum_top * width;
-    let sum_bottom_base = sum_bottom * width;
-    let edge_top_base = edge_top * width;
-    let edge_bottom_base = edge_bottom * width;
-
-    for x in (0..width).step_by(16) {
-        let count = (width - x).min(16);
-        let load = |base: usize| {
-            let mut bytes = [0u8; 16];
-            bytes[..count].copy_from_slice(&source[base + x..base + x + count]);
-            u32x16::from(u16x16::from(u8x16::new(bytes)))
-        };
-        let sum = load(sum_top_base) + load(y * width) + load(sum_bottom_base);
-        let edge = if fractional_weight == 0 {
-            u32x16::splat(0)
-        } else {
-            load(edge_top_base) + load(edge_bottom_base)
-        };
-        let weighted = sum * u32x16::splat(whole_weight)
-            + edge * u32x16::splat(fractional_weight)
-            + u32x16::splat(SIMD_BOX_BLUR_BIAS);
-        let values = (weighted >> 24u32).to_array();
-        for lane in 0..count {
-            destination[x + lane] = values[lane] as u8;
-        }
-    }
-}
-
+/// Apply one native-L vertical radius-one box pass with vector lanes spanning
+/// adjacent columns. Keep Pillow's sliding window across output rows: the
+/// previous implementation reloaded three window rows plus both fractional
+/// edge rows for every output row. The rolling four-row state reads only the
+/// newly entering rows while preserving the unsigned fixed-point recurrence.
 fn simd_luma_vertical_radius_one_rows(
     source: &[u8],
     destination: &mut [u8],
@@ -18932,46 +18883,50 @@ fn simd_luma_vertical_radius_one_rows(
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     }
 
-    #[cfg(feature = "parallel")]
-    if width.saturating_mul(height) >= SIMD_BLUR_PARALLEL_PIXEL_THRESHOLD {
-        simd_rows_mut_serial!(destination, width, height, |row_start, row_end, y, row| {
-            let _ = (row_start, row_end);
-            simd_luma_vertical_radius_one_row(
-                source,
-                row,
-                width,
-                height,
-                y as usize,
-                whole_weight,
-                fractional_weight,
-            );
-        });
-    } else {
-        for y in 0..height {
-            let start = y * width;
-            simd_luma_vertical_radius_one_row(
-                source,
-                &mut destination[start..start + width],
-                width,
-                height,
-                y,
-                whole_weight,
-                fractional_weight,
-            );
-        }
+    if width == 0 || height == 0 {
+        return;
     }
-    #[cfg(not(feature = "parallel"))]
-    for y in 0..height {
-        let start = y * width;
-        simd_luma_vertical_radius_one_row(
-            source,
-            &mut destination[start..start + width],
-            width,
-            height,
-            y,
-            whole_weight,
-            fractional_weight,
-        );
+
+    let last_y = height - 1;
+    let whole_weight = u32x16::splat(whole_weight);
+    let fractional_weight = u32x16::splat(fractional_weight);
+    let rounding_bias = u32x16::splat(SIMD_BOX_BLUR_BIAS);
+
+    for x in (0..width).step_by(16) {
+        let count = (width - x).min(16);
+        let load_row = |y: usize| {
+            let mut bytes = [0u8; 16];
+            let start = y * width + x;
+            bytes[..count].copy_from_slice(&source[start..start + count]);
+            u32x16::from(u16x16::from(u8x16::new(bytes)))
+        };
+
+        // For output y, Pillow's leaving, center, entering, and fractional
+        // far-edge samples are respectively max(y-2, 0), max(y-1, 0),
+        // min(y+1, last), and min(y+2, last). Three initial copies of row 0
+        // reproduce blur_line's radius-one accumulator before its first step.
+        let mut leaving = load_row(0);
+        let mut center = load_row(0);
+        let mut current = load_row(0);
+        let mut entering = load_row(1.min(last_y));
+        let mut far_edge = load_row(2.min(last_y));
+        let mut accumulator = leaving * u32x16::splat(3);
+
+        for y in 0..height {
+            accumulator = accumulator - leaving + entering;
+            let edge_sum = leaving + far_edge;
+            let weighted =
+                accumulator * whole_weight + edge_sum * fractional_weight + rounding_bias;
+            let packed = simd_blur_pack_u32x16_to_bytes(weighted >> 24u32);
+            let output_start = y * width + x;
+            destination[output_start..output_start + count].copy_from_slice(&packed[..count]);
+
+            leaving = center;
+            center = current;
+            current = entering;
+            entering = far_edge;
+            far_edge = load_row(y.saturating_add(3).min(last_y));
+        }
     }
 }
 
@@ -30993,6 +30948,39 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn gaussian_blur_l_sliding_vertical_matches_cpu_edges_and_vector_tails() {
+        use crate::compute::pool_cpu::ops::filter::execute_gaussian_blur;
+        use crate::pipeline::PipelineOp;
+        use crate::raster::{DynamicImage, GrayImage};
+
+        for (width, height) in [(1u32, 1u32), (15, 2), (16, 3), (17, 5), (65, 47)] {
+            let source = (0..width as usize * height as usize)
+                .map(|index| (index.wrapping_mul(67).wrapping_add(index / 7 * 23 + 17) % 256) as u8)
+                .collect();
+            let image = DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width, height, source).expect("L blur source shape"),
+            );
+            let expected = execute_gaussian_blur(&image, 2.0).expect("CPU L GaussianBlur");
+            let actual = super::simd_pil_gaussian_blur_l_radius_one(&image, 1.375, Some("L"))
+                .expect("SIMD L radius-one GaussianBlur");
+            let operation = PipelineOp::GaussianBlur { sigma: 2.0 };
+            let dispatched = super::simd_gaussian_blur(&image, &operation, Some("L"))
+                .expect("SIMD L GaussianBlur adapter");
+
+            assert_eq!(
+                actual.as_bytes(),
+                expected.as_bytes(),
+                "size={width}x{height}"
+            );
+            assert_eq!(
+                dispatched.as_bytes(),
+                expected.as_bytes(),
+                "adapter size={width}x{height}"
+            );
+        }
+    }
+
     #[test]
     fn aligned_rgb_thumbnail_uses_exact_narrow_bicubic_resize() {
         use crate::compute::pool_cpu::ops::geometry::{execute_reduce, execute_thumbnail};
