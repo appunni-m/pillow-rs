@@ -152,6 +152,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- logical_or.wgsl
 |   |   |   |       |-- logical_xor.wgsl
 |   |   |   |       |-- max_filter.wgsl
+|   |   |   |       |-- max_filter_3x3_la_packed.wgsl
 |   |   |   |       |-- max_filter_3x3_luma_packed.wgsl
 |   |   |   |       |-- max_filter_3x3_rgb_packed.wgsl
 |   |   |   |       |-- median_filter.wgsl

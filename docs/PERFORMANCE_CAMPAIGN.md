@@ -15617,3 +15617,105 @@ The Make target writes canonical `benchmark-result-parallel-cpu.json` and
 `maxfilter-la-optimized-parallel-cpu` paths above. Continue P1 with the next
 uncheckpointed operation/mode that still pays measurable RGBA staging, and
 keep queued GPU measurements separate from this q1 comparison.
+
+## Native-LA `ImageFilter.MinFilter(3)` GPU transport checkpoint — 2026-10-03
+
+The LA MinFilter(3) path reuses the native two-byte LA staging and dispatch
+contract. Its dedicated packed shader calculates independent L and alpha
+minima for two adjacent pixels per u32, clamps each 3 × 3 neighborhood at the
+image edge, and writes one packed output word per invocation. The final odd
+pixel is covered without exposing its padding byte as an image sample. The
+route is admitted only for a singleton LA MinFilter(3) operation on
+little-endian targets; other modes, sizes, and composed pipelines retain their
+existing paths. Ordinary single-image calls and the separate `ImageBatch`
+scheduler were unchanged.
+
+The input is seeded 1024 × 768 LA noise. Exact live-Pillow parity passed 3/3
+for serial CPU, strict SIMD, strict GPU, and opt-in Parallel CPU; the additional
+small cases are 1 × 1 and 33 × 35. A focused GPU runtime test also checks
+1 × 1, 1 × 3, 4 × 3, 5 × 3, and 33 × 35 against CPU bytes, confirms the LA
+result mode and alpha lane, and asserts one actual GPU dispatch, no fallback,
+and no mode conversion. No coverage was run.
+
+The correctness-gated standard benchmark recorded 100 observations per
+subject. The Parallel CPU profile was built with both opt-in `parallel`
+features and compared with the same ordinary Pillow run; no threaded Pillow
+baseline was used.
+
+| Profile | Pillow median / p95 (ms) | pillow-rs median / p95 (ms) | Relative latency | Median throughput | Execution proof |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Serial CPU | 64.737 / 67.626 | 11.704 / 12.495 | 5.53× faster | 85.4 ops/s | CPU 100/100, no fallback |
+| SIMD | 64.737 / 67.626 | 9.261 / 9.574 | 6.99× faster | 108.0 ops/s | SIMD 100/100, no fallback |
+| GPU | 64.737 / 67.626 | 1.246 / 1.391 | 51.95× faster; 7.43× lower latency than SIMD | 802.5 ops/s | GPU 100/100, 1 dispatch/call, no fallback |
+| Parallel CPU (opt-in Rayon) | 64.737 / 67.626 | 1.386 / 1.661 | 46.70× faster | 721.3 ops/s | CPU 100/100, `parallel` feature |
+
+The earlier generic LA route measured 2.993 ms GPU median latency, uploaded
+and read back 3,145,728 bytes per call, and reported one mode conversion. The
+native route moves 1,572,864 bytes in each direction (half the bytes), reports
+zero conversions, and lowers median GPU latency by 58.4%. Serial CPU and SIMD
+timings stayed effectively flat against their baseline, as their implementations
+were not changed in this checkpoint. The GPU result is a queue-depth-one
+measurement; the 7.43× comparison is single-call throughput, not a queued-batch
+throughput claim. All four profiles beat Pillow for this measured case, and
+the measured SIMD and GPU goals are met here. P1 remains open for other modes
+and filter sizes.
+
+Baseline, optimized, and Parallel CPU receipts are
+`build/migration-parity/minfilter-la-baseline-benchmark.json`,
+`build/migration-parity/minfilter-la-optimized-benchmark.json`,
+`build/migration-parity/minfilter-la-baseline-parallel-cpu-benchmark.json`,
+and `build/migration-parity/minfilter-la-optimized-parallel-cpu-benchmark.json`.
+The exact parity and correctness-gated benchmark receipts share the
+`minfilter-la-` prefix. Input IDs are:
+
+```sh
+MINFILTER_LA_CASES='PIL.ImageFilter.MinFilter.nuanced.performance-material-la-noise-1024x768-size-3,PIL.ImageFilter.MinFilter.nuanced.backend-noise-la-1x1-size-3,PIL.ImageFilter.MinFilter.nuanced.backend-noise-la-33x35-size-3'
+```
+
+The final parity commands were:
+
+```sh
+MIGRATION_TARGET_BACKEND=cpu MIGRATION_PARITY_CASE_IDS="$MINFILTER_LA_CASES" \
+  MIGRATION_PARITY_OUTPUT=build/migration-parity/minfilter-la-optimized-cpu-parity.json \
+  make migration-parity-test
+
+MIGRATION_TARGET_BACKEND=simd MIGRATION_STRICT_TARGET_BACKEND=1 \
+  MIGRATION_PARITY_CASE_IDS="$MINFILTER_LA_CASES" \
+  MIGRATION_PARITY_OUTPUT=build/migration-parity/minfilter-la-optimized-simd-parity.json \
+  make migration-parity-test
+
+MIGRATION_TARGET_BACKEND=gpu MIGRATION_STRICT_TARGET_BACKEND=1 \
+  MIGRATION_PARITY_CASE_IDS="$MINFILTER_LA_CASES" \
+  MIGRATION_PARITY_OUTPUT=build/migration-parity/minfilter-la-optimized-gpu-parity.json \
+  make migration-parity-test
+
+make build-parity-parallel-cpu
+MIGRATION_TARGET_PROFILE=parallel-cpu MIGRATION_TARGET_BACKEND=cpu \
+  MIGRATION_STRICT_TARGET_BACKEND=1 \
+  MIGRATION_PARITY_CASE_IDS="$MINFILTER_LA_CASES" \
+  MIGRATION_PARITY_OUTPUT=build/migration-parity/minfilter-la-optimized-parallel-cpu-parity.json \
+  make migration-parity-test
+```
+
+The standard benchmark command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.minfilter.material-la-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/minfilter-la-optimized-benchmark.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/minfilter-la-optimized-benchmark-parity.json \
+make migration-parity-benchmark
+```
+
+The separate Parallel CPU run used:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.minfilter.material-la-noise-1024x768' \
+make migration-parity-benchmark-parallel-cpu
+```
+
+The Parallel CPU Make target writes canonical benchmark receipts, which were
+copied to the `minfilter-la-optimized-parallel-cpu` paths. Continue P1 with
+the next uncheckpointed mode/operation and keep any future queued-batch
+measurement separate from this single-call benchmark.

@@ -417,6 +417,19 @@ The explicit `ImageBatch` API and ordinary single-image paths were untouched.
 See `PERFORMANCE_CAMPAIGN.md` for the distinct Parallel CPU result and
 receipts.
 
+Native-LA `ImageFilter.MinFilter(3)` now has a corresponding packed GPU route.
+It keeps the L and alpha bytes independent, handles odd pixel counts and
+clamped image edges, and only admits the exact singleton operation/mode/size
+combination. Strict CPU, SIMD, and GPU parity plus opt-in Parallel CPU parity
+passed for the material LA case and two boundary sizes. GPU transfer bytes
+fell by half, mode conversions fell from one to zero, and median latency fell
+from 2.993 ms to 1.246 ms. Serial CPU measured 5.53× faster than Pillow, SIMD
+6.99× faster, and GPU had 7.43× lower latency than SIMD in this q1 test. The
+separate `ImageBatch` feature and normal single-image routing were not changed;
+queued throughput is not inferred from these measurements. P1 remains open
+for other operations and modes. See `PERFORMANCE_CAMPAIGN.md` for commands and
+receipts.
+
 P3 is partially addressed on main. The median-cut path borrows bytes for native
 RGB and avoids the unused tuple and flattened-byte buffers when `kmeans=0`;
 non-RGB modes retain conversion. Focused parity passed for default median-cut,
