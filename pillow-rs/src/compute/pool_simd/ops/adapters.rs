@@ -9437,6 +9437,22 @@ pub(crate) fn simd_execute_in_place(
                 return Ok(true);
             }
             let factor_fp = (*factor * 1000.0) as u32;
+            let shift_layout = matches!(
+                (&*img, mode),
+                (DynamicImage::ImageLumaA8(_), None | Some("LA"))
+            );
+            if shift_layout
+                && let Some(shift) = match factor_fp {
+                    500 => Some(1),
+                    250 => Some(2),
+                    125 => Some(3),
+                    _ => None,
+                }
+            {
+                return Ok(native_brightness_transform_in_place(img, mode, |input| {
+                    input >> shift
+                }));
+            }
             let lut: Vec<u8> = (0u32..=255)
                 .map(|value| ((value as u64 * factor_fp as u64) / 1000).min(255) as u8)
                 .collect();
@@ -14481,11 +14497,13 @@ pub fn simd_brightness(
     // 256-entry map once and apply it in native L/LA/RGB/RGBA/CMYK storage;
     // CMYK is admitted explicitly because all four bytes are active samples.
     let factor_fp = (*factor * 1000.0) as u32;
-    // For L and RGB, these power-of-two factors are exact right shifts in the
-    // adapter's fixed-point domain. RGB has no preserved alpha lane, so the
-    // transform applies to every byte in its native three-byte layout.
+    // For L, LA, and RGB, these power-of-two factors are exact right shifts
+    // in the adapter's fixed-point domain. LA's active-byte mask keeps alpha
+    // unchanged while shifting luma; RGB applies the shift to each native
+    // three-byte sample.
     let shift_layout = match (img, mode) {
         (DynamicImage::ImageLuma8(_), None | Some("L"))
+        | (DynamicImage::ImageLumaA8(_), None | Some("LA"))
         | (DynamicImage::ImageRgb8(_), None | Some("RGB")) => true,
         _ => false,
     };
@@ -31607,6 +31625,62 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn la_brightness_binary_shifts_match_float_truncation_and_preserve_alpha() {
+        use crate::pipeline::PipelineOp;
+        use crate::raster::{DynamicImage, GrayAlphaImage};
+
+        for (width, height) in [(256u32, 256u32), (17, 3), (3, 17)] {
+            let pixels = (width * height) as usize;
+            let source = if pixels == 256 * 256 {
+                (0..pixels)
+                    .flat_map(|index| [(index >> 8) as u8, index as u8])
+                    .collect::<Vec<_>>()
+            } else {
+                (0..pixels)
+                    .flat_map(|index| {
+                        [
+                            (index.wrapping_mul(71).wrapping_add(13)) as u8,
+                            (index.wrapping_mul(43).wrapping_add(29)) as u8,
+                        ]
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let image = DynamicImage::ImageLumaA8(
+                GrayAlphaImage::from_raw(width, height, source.clone())
+                    .expect("LA brightness source shape"),
+            );
+
+            for (factor, shift) in [(0.5, 1), (0.25, 2), (0.125, 3)] {
+                let operation = PipelineOp::Brightness { factor };
+                let expected = source
+                    .chunks_exact(2)
+                    .flat_map(|pixel| [(pixel[0] >> shift), pixel[1]])
+                    .collect::<Vec<_>>();
+                let direct = super::simd_brightness(&image, &operation, Some("LA"))
+                    .expect("direct SIMD LA brightness");
+                assert!(matches!(direct, DynamicImage::ImageLumaA8(_)));
+                assert_eq!(
+                    direct.as_bytes(),
+                    expected,
+                    "direct {factor} {width}x{height}"
+                );
+
+                let mut in_place = image.clone();
+                assert!(
+                    super::simd_execute_in_place(&mut in_place, &operation, Some("LA"))
+                        .expect("in-place SIMD LA brightness dispatch")
+                );
+                assert_eq!(
+                    in_place.as_bytes(),
+                    expected,
+                    "in-place {factor} {width}x{height}"
+                );
+                assert_eq!(image.as_bytes(), source, "source remains unchanged");
+            }
+        }
+    }
+
     #[test]
     fn rgb_box_blur_radius_one_direct_passes_match_cpu_at_edges_and_tails() {
         use crate::compute::pool_cpu::ops::filter::execute_box_blur;

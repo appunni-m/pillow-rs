@@ -17339,3 +17339,79 @@ MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-cmyk-simd-attemptN.json 
 MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-cmyk-simd-attemptN-parity.json \
 make migration-parity-benchmark PYTHON=.venv/bin/python
 ```
+
+## LA `ImageEnhance.Brightness(0.5)` native SIMD shifts — checkpoint 2026-10-04
+
+The material workload is
+`pil-imageenhance-brightness.enhance.materialized.la-noise-1024x768-factor-0-5`.
+Before this change, the LA SIMD adapter built a 256-entry fixed-point lookup
+table and applied it to the native two-byte pixels. The L and RGB paths already
+admitted exact power-of-two shifts, but LA missed that admission and did extra
+lookup work for luminance while retaining alpha. This source-path evidence
+identifies avoidable work; no instruction-level profile was collected.
+
+For factors whose fixed-point value is exactly 500, 250, or 125, truncating
+`luma * factor_fp / 1000` is exactly `luma >> 1`, `luma >> 2`, or `luma >> 3`.
+The LA specialization now transforms only byte 0 of each `[L, A]` pixel and
+leaves byte 1 unchanged. It is present in both direct SIMD brightness and the
+in-place SIMD-segment dispatcher, so a brightness operation is not sent back
+through the table path when it follows another operation in a vector segment.
+Other modes and factors still use the existing LUT. CPU and GPU code and
+ordinary automatic routing are unchanged.
+
+The focused regression enumerates all 65,536 luma/alpha byte pairs, then checks
+17×3 and 3×17 tails, for factors 0.5, 0.25, and 0.125. It compares both direct
+and in-place dispatch with the original fixed-point truncation, checks LA mode
+and alpha preservation, and verifies that direct execution leaves its source
+unchanged. `RUSTC_WRAPPER= cargo test -p pillow-rs --lib
+la_brightness_binary_shifts_match_float_truncation_and_preserve_alpha` passed.
+
+Each exact material benchmark passed its embedded live-Pillow parity gate for
+CPU, SIMD, and GPU (3/3 comparisons); each backend executed all 100 timed
+operations with no fallback. The paired baseline and two candidate runs were:
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Before specialization | 1.962 | 0.651 | 0.507 | 0.850 |
+| Shift attempt 1 | 1.769 | 0.654 | 0.144 | 0.825 |
+| Unchanged repeat | 1.807 | 0.631 | 0.157 | 0.957 |
+| Final exact-tree verification | 1.867 | 0.648 | 0.149 | 0.843 |
+
+The three candidate SIMD medians improved 3.24–3.52× against the measured SIMD
+baseline and were 11.55–12.57× faster than Pillow for this LA case. Serial CPU
+remained about 2.7–2.9× faster than Pillow. Keep this bounded SIMD
+specialization. GPU was not changed and remains about 5.67–6.11× slower than
+SIMD in these single-image timings; do not describe this as a GPU improvement.
+
+The separate `ImageBatch` throughput comparison used four 1024×768 LA images
+per window, 3 warmups, and 12 samples. Every window included image creation,
+submission, execution, GPU transfers and synchronization, output splitting,
+and materialization. The exact full-window medians were Pillow 11.878 ms,
+serial CPU 3.028 ms, SIMD 1.019 ms, GPU with `queue=False` 2.900 ms, and GPU
+with `queue=True` 3.257 ms. The queue grouped the four compatible images into
+one native-LA GPU pipeline/dispatch, as separately verified by the
+`test_imagebatch_parity.py` dispatch assertion. However, queued GPU throughput
+was only 0.31× SIMD and 0.89× eager GPU throughput: stacking and splitting
+outweighed the saved per-image scheduling/readback work at this size. Retain
+the explicit batch feature, but leave it opt-in and do not route ordinary
+Brightness calls through it. The normal CPU/SIMD/GPU batch comparison used the
+default build with Rayon disabled; Parallel CPU is not part of these results.
+
+Focused ImageBatch parity passed, including native LA Brightness on the eager
+CPU/SIMD routes and a queued GPU group with one actual dispatch. No coverage
+ran. The exact benchmark receipts are
+`brightness-la-simd-baseline-f567afa01-20261004.json`,
+`brightness-la-simd-attempt1-f567afa01-20261004.json`, and
+`brightness-la-simd-attempt1-repeat-f567afa01-20261004.json`, and
+`brightness-la-simd-final-f567afa01-20261004.json`, with matching parity
+sidecars in `build/migration-parity/`. The batch measurement command (run after
+`make build-parity`) was:
+
+```sh
+.venv/bin/python scripts/benchmark_imagebatch.py --backend BACKEND --operation brightness --mode LA --factor 0.5 --width 1024 --height 768 --images 4 --samples 12 --warmups 3
+```
+
+Run it once with each of `--backend pillow`, `cpu`, `simd`, and `gpu`; add
+`--queue` only for the queued GPU measurement. The benchmark script prints one
+JSON result per invocation. Keep queued and eager GPU results distinct because
+they measure different API behavior.
