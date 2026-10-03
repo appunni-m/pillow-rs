@@ -7303,7 +7303,7 @@ For RGB plus an L mask, the public result must still be RGBA. The previous CPU
 route expanded RGB to RGBA, then allocated and filled a second RGBA frame. CPU
 now copies the three source bytes and corresponding mask byte directly into
 the required result. SIMD uses a four-pixel 3-to-4 shuffle with a scalar tail
-and parallel row processing above 512 × 512 pixels. GPU now uploads native RGB
+and a row-serial loop above 512 × 512 pixels. GPU now uploads native RGB
 and L-mask bytes separately and writes one complete RGBA pixel per invocation;
 its checked planner bounds both input spans, the RGBA output binding, and both
 workgroup axes against the active adapter.
@@ -7319,22 +7319,74 @@ with no fallback. Benchmark run `migration-benchmark-98979c32a0f04cc28bd8515a271
 
 CPU is 1.31× faster than Pillow; SIMD is 1.58× faster, still short of the 5×
 goal. GPU is 2.05× slower than Pillow and 3.24× slower than SIMD, so it no
-longer matches SIMD after the row-parallel improvement. GPU completed one
+longer matches SIMD after that SIMD-path improvement. GPU completed one
 dispatch per sample, uploaded 2,359,296 RGB bytes plus 786,432 mask bytes, read
 back the required 3,145,728 RGBA bytes, and reported zero mode conversions.
 Those samples use concurrency one; reciprocal latency is not sustained
 throughput. The checkpoint follows three bounded changes: direct CPU
-interleave, native RGB+mask GPU input, and SIMD row parallelism. Retain the
+interleave, native RGB+mask GPU input, and SIMD row-serial vector interleave.
+Retain the
 parity-safe path and revisit GPU submission/wait/map and output materialization
 as a system-level batching problem; further tuning of the per-pixel shader
-cannot close that fixed-cost gap. No coverage was run.
+cannot close that fixed-cost gap. The SIMD timing in this earlier checkpoint
+came from a build where `parallel` was enabled by default; the row helper is
+serial, so this does not justify Rayon in SIMD. When `parallel` became default
+off, the same feature gate also hid this architecture-vectorized route from
+ordinary SIMD builds. The fourth attempt below restores it without enabling
+Rayon. No coverage was run.
+
+### RGB `Image.putalpha(mask)`: restore default serial SIMD dispatch — 2026-10-03
+
+The RGB plus L-mask route must materialize RGBA to match Pillow, but it can
+read the RGB triplets and mask samples directly. Its specialized SIMD kernel
+already handled four RGB pixels per `u8x16` shuffle plus a scalar tail. The row
+helper iterated `chunks_mut()` serially; it did not use Rayon. However, the
+kernel, helper, and serial row macro were behind `#[cfg(feature = "parallel")]`.
+With `parallel` default-off, normal SIMD therefore fell back to the generic
+packer, which builds temporary source, mask, and interleave blocks for each
+vector group. The feature gate hid architecture SIMD rather than controlling
+parallel CPU scheduling.
+
+The fourth bounded attempt makes that serial vector route available in the
+default SIMD profile above 512 × 512 pixels. It preserves RGB input and the L
+mask until the required RGBA output, uses one serial row pass, and adds no
+Rayon work or changes to Parallel CPU or GPU paths. The full-matrix baseline
+(`migration-benchmark-ef2d759a434742cc84eb47fedb2f312c`, revision
+`9903aee7`) and focused candidate benchmark
+(`migration-benchmark-07dcc53f4a5449ad8083ae64564e1b76`, revision
+`f8bf61c0b` plus this working-tree change) measured:
+
+| Median latency, ms | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Before: default `parallel` off, generic SIMD fallback | 0.749458 | 0.654500 | 3.255833 | 1.379937 |
+| After: default serial vector kernel | 0.737625 | 0.685937 | 0.368834 | 1.388355 |
+| After: reciprocal throughput, operations/s | 1,356 | 1,458 | 2,711 | 720 |
+
+The default SIMD route improved 8.8× over its generic fallback and is now
+2.0× faster than Pillow. CPU remains 1.08× faster than Pillow; its path was not
+changed. GPU remains 3.76× slower than SIMD. The selected workload passed its
+standard parity gate across CPU, SIMD, and GPU (3/3), with 100 actual backend
+executions and no fallback for each target; SIMD recorded the SIMD backend and
+GPU one dispatch per sample. Focused Rust `putalpha` tests passed 7/7.
+Benchmark receipt:
+`putalpha-rgb-mask-serial-simd-attempt4-f8bf61c0b-20261003.json`; parity
+receipt: `putalpha-rgb-mask-serial-simd-attempt4-f8bf61c0b-parity-20261003.json`.
+
+Checkpoint this operation after four bounded changes. The CPU target is met,
+but SIMD remains below 5× Pillow and GPU does not match SIMD latency or prove
+higher sustained throughput; this benchmark uses concurrency one and reports
+reciprocal latency only. Keep these as blockers while moving to another
+operation. Batching remains a separate explicit feature and this change leaves
+the ordinary GPU route untouched. No coverage was run.
 
 ### RGBA image-backed `Image.putalpha(mask)`: replace only native alpha — 2026-09-29
 
 For an exact RGBA image and L mask, RGBA is already the required output layout.
 The prior CPU route cloned through `to_rgba8()` and then built a second frame.
 CPU and SIMD now clone the existing four-byte pixels once and overwrite byte 3;
-the SIMD route parallelizes disjoint rows above its measured 512 × 512 cutoff.
+the SIMD route writes disjoint rows serially, including above its measured
+512 × 512 cutoff. The `parallel` feature gate on row slicing does not schedule
+those rows on Rayon.
 GPU keeps the RGBA source at four bytes per pixel, uploads the L mask at one
 byte per pixel, and writes one output word per invocation. Its planner checks
 pixel indices, padded transfer sizes, storage/buffer limits, and both
