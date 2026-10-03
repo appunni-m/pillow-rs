@@ -635,7 +635,7 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
         // Blend narrows alpha to f32 and uses fused interpolation on both
         // host and device; admission needs only the finite-alpha contract.
         PipelineOp::BlendModule { alpha, .. } => gpu_blend_alpha_params(*alpha).is_some(),
-        // Color3DLut uses the same signed 12.4 table preparation and 18.15
+        // Color3DLut uses the same signed 10.6 table preparation and 18.15
         // coordinate scales as the CPU implementation. The table is packed
         // into an auxiliary storage range by the GPU planner and the shader
         // performs the three fixed-point interpolations.

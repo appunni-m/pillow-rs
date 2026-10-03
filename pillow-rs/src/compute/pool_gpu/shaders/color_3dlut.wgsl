@@ -1,4 +1,4 @@
-// Color3DLUT: Pillow's signed 12.4 table and 18.15 trilinear interpolation.
+// Color3DLUT: Pillow's signed 10.6 table and 18.15 trilinear interpolation.
 // The second storage binding contains one table value per u32. Values are
 // sign-extended i16 samples in the low 16 bits; the host prepares these using
 // the same float32/rounding rules as ImageFilter.Color3DLUT.
@@ -49,7 +49,7 @@ fn lut_channel(x: u32, y: u32, z: u32, sx: i32, sy: i32, sz: i32, channel: u32) 
     let rr = interpolate(table_at(x, y1, z1, channel), table_at(x1, y1, z1, channel), sx);
     let r = interpolate(rl, rr, sy);
     let value = interpolate(l, r, sz);
-    return u32(clamp((value + 2i) >> 4u, 0i, 255i));
+    return u32(clamp((value + 32i) >> 6u, 0i, 255i));
 }
 
 @compute @workgroup_size(16, 16)
