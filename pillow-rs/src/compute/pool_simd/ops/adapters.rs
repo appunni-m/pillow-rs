@@ -13855,8 +13855,80 @@ fn grayscale_channel<const CHANNELS: usize, const CHANNEL: usize>(blocks: &[u8x1
     samples
 }
 
+/// Apply the exact RGB-to-luma integer formula to sixteen packed RGB pixels
+/// using NEON's structure load to deinterleave the channels in hardware.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn grayscale_rgb_luma_vector_neon(source: &[u8]) -> core::arch::aarch64::uint8x16_t {
+    use core::arch::aarch64 as neon;
+
+    debug_assert!(source.len() >= 48);
+    macro_rules! luma_half {
+        ($r:expr, $g:expr, $b:expr) => {{
+            let r = neon::vmovl_u8($r);
+            let g = neon::vmovl_u8($g);
+            let b = neon::vmovl_u8($b);
+            // 19595=77*256-117, 38470=150*256+70,
+            // 7471=29*256+47. Wrapping u16 arithmetic on this biased
+            // residual yields the exact rounded luma result.
+            let base = neon::vaddq_u16(
+                neon::vaddq_u16(neon::vmulq_n_u16(r, 77), neon::vmulq_n_u16(g, 150)),
+                neon::vmulq_n_u16(b, 29),
+            );
+            let residual = neon::vaddq_u16(
+                neon::vaddq_u16(
+                    neon::vsubq_u16(neon::vmulq_n_u16(g, 70), neon::vmulq_n_u16(r, 117)),
+                    neon::vmulq_n_u16(b, 47),
+                ),
+                neon::vdupq_n_u16(32768),
+            );
+            let carry = neon::vshrq_n_u16(residual, 8);
+            let rounded = neon::vshrq_n_u16(neon::vaddq_u16(base, carry), 8);
+            neon::vmovn_u16(rounded)
+        }};
+    }
+
+    // SAFETY: `grayscale_block::<3>` passes complete 48-byte RGB groups, or a
+    // zero-padded 64-byte tail buffer. `vld3q_u8` reads exactly 48 initialized
+    // bytes. The returned vector contains all sixteen computed luma values.
+    unsafe {
+        let rgb = neon::vld3q_u8(source.as_ptr());
+        let low = luma_half!(
+            neon::vget_low_u8(rgb.0),
+            neon::vget_low_u8(rgb.1),
+            neon::vget_low_u8(rgb.2)
+        );
+        let high = luma_half!(
+            neon::vget_high_u8(rgb.0),
+            neon::vget_high_u8(rgb.1),
+            neon::vget_high_u8(rgb.2)
+        );
+        neon::vcombine_u8(low, high)
+    }
+}
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn grayscale_rgb_block_neon(source: &[u8]) -> [u8; 16] {
+    use core::arch::aarch64 as neon;
+
+    let values = grayscale_rgb_luma_vector_neon(source);
+    let mut output = [0u8; 16];
+    // SAFETY: The local array has sixteen writable bytes and the NEON vector
+    // contains exactly sixteen luma samples.
+    unsafe { neon::vst1q_u8(output.as_mut_ptr(), values) };
+    output
+}
+
 #[inline(always)]
 fn grayscale_block<const CHANNELS: usize>(source: &[u8]) -> [u8; 16] {
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    if CHANNELS == 3 {
+        return grayscale_rgb_block_neon(source);
+    }
+
     let load = |offset| {
         u8x16::new(
             source[offset..offset + 16]
@@ -13901,18 +13973,22 @@ fn grayscale_block<const CHANNELS: usize>(source: &[u8]) -> [u8; 16] {
     simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array()
 }
 
-fn grayscale_interleaved<const CHANNELS: usize>(source: &[u8], output: &mut [u8]) {
+fn grayscale_interleaved<const CHANNELS: usize>(source: &[u8]) -> Vec<u8> {
+    debug_assert_eq!(source.len() % CHANNELS, 0);
     let mut inputs = source.chunks_exact(16 * CHANNELS);
-    let mut outputs = output.chunks_exact_mut(16);
-    for (input, output) in inputs.by_ref().zip(outputs.by_ref()) {
-        output.copy_from_slice(&grayscale_block::<CHANNELS>(input));
+    let mut output = Vec::with_capacity(source.len() / CHANNELS);
+    for input in inputs.by_ref() {
+        output.extend_from_slice(&grayscale_block::<CHANNELS>(input));
     }
-    let tail = outputs.into_remainder();
-    if !tail.is_empty() {
+    let remainder = inputs.remainder();
+    let active_pixels = remainder.len() / CHANNELS;
+    if active_pixels != 0 {
         let mut padded = [0u8; 64];
-        padded[..inputs.remainder().len()].copy_from_slice(inputs.remainder());
-        tail.copy_from_slice(&grayscale_block::<CHANNELS>(&padded)[..tail.len()]);
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let block = grayscale_block::<CHANNELS>(&padded);
+        output.extend_from_slice(&block[..active_pixels]);
     }
+    output
 }
 
 /// Convert sixteen native C/M/Y/K pixels directly to Pillow-compatible luma.
@@ -14045,15 +14121,23 @@ fn native_grayscale_bytes(img: &DynamicImage, channels: usize) -> Option<(Vec<u8
     if source.len() != pixels.checked_mul(channels)? {
         return None;
     }
-    let mut output = vec![0u8; pixels];
-    match channels {
-        1 => output.copy_from_slice(source),
-        2 => grayscale_interleaved::<2>(source, &mut output),
-        3 => grayscale_interleaved::<3>(source, &mut output),
-        4 => grayscale_interleaved::<4>(source, &mut output),
+    let (output, vector_blocks) = match channels {
+        1 => (source.to_vec(), 0),
+        2 => (
+            grayscale_interleaved::<2>(source),
+            pixels.div_ceil(16) as u64,
+        ),
+        3 => (
+            grayscale_interleaved::<3>(source),
+            pixels.div_ceil(16) as u64,
+        ),
+        4 => (
+            grayscale_interleaved::<4>(source),
+            pixels.div_ceil(16) as u64,
+        ),
         _ => return None,
     };
-    Some((output, pixels.div_ceil(16) as u64, 0))
+    Some((output, vector_blocks, 0))
 }
 
 /// Apply ImageOps.colorize's three per-value LUTs to native `L` samples.
@@ -33137,6 +33221,50 @@ mod tests {
             );
             assert_eq!(vector_blocks, pixels.div_ceil(16) as u64);
             assert_eq!(scalar_tail, 0);
+        }
+    }
+
+    #[test]
+    fn native_la_and_rgba_grayscale_match_exact_conversion_across_vector_tails() {
+        use crate::raster::GrayAlphaImage;
+
+        for width in [1u32, 15, 16, 17, 31, 32, 33] {
+            let height = 3u32;
+            let pixels = width as usize * height as usize;
+
+            let la_source: Vec<u8> = (0..pixels * 2)
+                .map(|index| ((index * 89 + index / 7 + 13) & 255) as u8)
+                .collect();
+            let la_image = DynamicImage::ImageLumaA8(
+                GrayAlphaImage::from_raw(width, height, la_source).expect("valid LA storage"),
+            );
+            let la_expected = crate::color::pil_grayscale(&la_image).expect("LA reference");
+            let (la_actual, la_vector_blocks, la_scalar_tail) =
+                super::native_grayscale_bytes(&la_image, 2).expect("native LA grayscale");
+            assert_eq!(
+                la_actual.as_slice(),
+                la_expected.as_raw().as_slice(),
+                "LA grayscale width {width}"
+            );
+            assert_eq!(la_vector_blocks, pixels.div_ceil(16) as u64);
+            assert_eq!(la_scalar_tail, 0);
+
+            let rgba_source: Vec<u8> = (0..pixels * 4)
+                .map(|index| ((index * 71 + index / 9 + 31) & 255) as u8)
+                .collect();
+            let rgba_image = DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(width, height, rgba_source).expect("valid RGBA storage"),
+            );
+            let rgba_expected = crate::color::pil_grayscale(&rgba_image).expect("RGBA reference");
+            let (rgba_actual, rgba_vector_blocks, rgba_scalar_tail) =
+                super::native_grayscale_bytes(&rgba_image, 4).expect("native RGBA grayscale");
+            assert_eq!(
+                rgba_actual.as_slice(),
+                rgba_expected.as_raw(),
+                "RGBA grayscale width {width}"
+            );
+            assert_eq!(rgba_vector_blocks, pixels.div_ceil(16) as u64);
+            assert_eq!(rgba_scalar_tail, 0);
         }
     }
 
