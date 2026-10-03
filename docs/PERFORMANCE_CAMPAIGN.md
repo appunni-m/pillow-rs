@@ -15761,3 +15761,68 @@ receipts use the `pad-la-attempt1-` prefix. The parity case is
 `PIL.ImageOps.pad.nuanced.performance-native-la-noise-1024x768-square`; the
 benchmark workload is
 `pil-imageops.pad.materialized.native-la-noise-1024x768-square`.
+
+## HSV `Image.Image.transpose` native GPU checkpoint — 2026-10-03
+
+HSV uses `ImageRgb8` as a three-byte carrier, but its stored bytes are H/S/V
+samples. A transpose only relocates complete triplets, so the existing packed
+RGB transpose shader is semantically exact when the logical HSV mode and RGB8
+storage agree. Before this change, the GPU logical-mode allowlist rejected a
+singleton HSV transpose; the requested-GPU baseline took exact host semantic
+control and reported CPU as the operation backend, one mode conversion, and
+2,371,584 bytes of input and output transport for the 768 × 772 materialized
+case. It did not execute the native transpose shader.
+
+The retained change admits only a singleton HSV `Transpose` over `ImageRgb8`
+and sends it through the existing packed three-byte RGB transpose executor.
+The branch does not convert the HSV values or widen them to RGBA. Odd 3 × 7
+inputs exercise all seven transpose methods; a heterogeneous aligned
+768 × 772 Rotate90 case exercises the tiled kernel. CPU and strict SIMD each
+passed all eight Pillow comparisons; strict GPU also passed 8/8 and recorded
+one real dispatch, 1,778,688 bytes uploaded and read back, and zero mode
+conversions. The GPU unit test checks exact stored pixels and the native
+transfer receipt for HSV.
+
+The baseline and four retained-path runs used the same materialized workload
+with 100 measured operations per subject:
+
+| Run | Pillow p50 / p95 (ms) | CPU p50 / p95 (ms) | SIMD p50 / p95 (ms) | GPU p50 / p95 (ms) | GPU execution |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Before admission | 0.576 / 0.690 | 0.382 / 0.435 | 0.251 / 0.301 | 1.336 / 1.428 | CPU semantic control; no native transpose |
+| Native packed GPU, run 1 | 0.565 / 0.618 | 0.384 / 0.434 | 0.267 / 0.308 | 0.516 / 0.570 | GPU; 1 dispatch; 1.78 MB each way |
+| Native packed GPU, run 2 | 0.634 / 0.732 | 0.420 / 0.471 | 0.253 / 0.301 | 0.532 / 0.604 | GPU; 1 dispatch; 1.78 MB each way |
+| Final exact-tree run | 0.629 / 0.684 | 0.388 / 0.450 | 0.245 / 0.287 | 0.532 / 0.679 | GPU; 1 dispatch; 1.78 MB each way |
+| Final guarded exact-tree run | 0.672 / 0.812 | 0.437 / 0.548 | 0.308 / 0.409 | 0.571 / 0.821 | GPU; 1 dispatch; 1.78 MB each way |
+
+The mode-specific admission cut measured GPU latency by 57–61% versus the
+fallback baseline, while removing RGBA widening and conversion. Serial CPU
+remained faster than Pillow in every candidate run. SIMD was 2.12–2.57× faster
+than Pillow, below the 5× objective. Native GPU latency was 1.86–2.17× slower
+than SIMD, so this checkpoint does not meet the GPU/SIMD latency target;
+one-image transfer and completion cost remains material.
+
+Two bounded GPU alternatives were tested and reverted. Forcing the general
+packed RGB shader instead of the existing tiled shader measured 0.525 ms GPU
+median, within the 0.516–0.532 ms tiled-run range, so it did not establish a
+gain. Replacing mapped input with `queue.write_buffer_with` preserved 8/8 strict
+GPU parity but regressed GPU median to 0.771 ms and introduced one full-frame
+copy; mapped input remains selected. The normal RGB dispatch and the separate
+opt-in `ImageBatch` scheduling path were not changed. Batch throughput remains
+a distinct measurement from this single-image latency workload.
+
+Focused checks were `make migration-parity-inputs-check`,
+`cargo fmt --all -- --check`,
+`cargo test --manifest-path pillow-rs/Cargo.toml --lib gpu_packed_rgb_hsv_transpose_tiled_public_pixels_and_receipts -- --nocapture`,
+and CPU, strict SIMD, and strict GPU `make migration-parity-test` runs for the
+eight HSV cases. The parity target was built with `make build-parity` to
+preserve the isolated Pillow oracle. No coverage was run.
+
+Benchmark receipts are `build/migration-parity/hsv-transpose-baseline.json`,
+`build/migration-parity/hsv-transpose-candidate-1.json`,
+`build/migration-parity/hsv-transpose-candidate-2.json`,
+`build/migration-parity/hsv-transpose-final.json`,
+`build/migration-parity/hsv-transpose-final-guard.json`,
+`build/migration-parity/hsv-transpose-general-1.json`, and
+`build/migration-parity/hsv-transpose-queue-upload-1.json`; strict parity
+receipts use the `hsv-transpose-` prefix. The benchmark workload is
+`pipeline-matrix.transpose-tiled.hsv-768x772-rotate90.operation-materialized`.
