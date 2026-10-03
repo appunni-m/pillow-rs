@@ -141,6 +141,7 @@ GPU/SIMD is equivalent to SIMD latency divided by queued-GPU latency.
 | LA 256×256 × 16 | 3.584 | 1.131 | 0.961 | 3.666 | 1.178 | 0.82× | 3.04× |
 | LA 1024×768 × 4 | 11.426 | 3.384 | 2.752 | 2.812 | 3.103 | 0.89× | 3.68× |
 | LA 1024×768 × 16 | 40.987 | — | 10.537 | 11.178 | 12.533 | 0.84× | 3.27× |
+| LA 1024×768 × 4, after SIMD brightness shift | 11.878 | 3.028 | 1.019 | 2.900 | 3.257 | 0.31× | 3.65× |
 
 Grouping clearly improves the small-image batch over eager GPU, but all three
 queued results remain slower than SIMD. At the larger sizes, grouping also
@@ -150,6 +151,16 @@ performance-limited checkpoint; do not claim it meets the GPU throughput goal
 or enable batching implicitly. The next useful optimization needs to reduce
 host-side stack copies and per-result reconstruction, then rerun these same
 workloads before expanding GPU grouping to larger images.
+
+The added LA 1024×768 × 4 row is a follow-up after the SIMD brightness path
+began using exact byte shifts. It used the same 12-window/3-warmup methodology
+on the same host: serial CPU reached 1,321 images/s, SIMD 3,926 images/s,
+eager GPU 1,379 images/s, and queued GPU 1,228 images/s. The queued executor
+formed one compatible native-LA GPU group, but that did not offset stack
+packing and result splitting; queued throughput was 0.31× SIMD and lower than
+eager GPU. This is explicit `ImageBatch` throughput only and does not change
+normal image routing. The normal build had Rayon disabled; no Parallel CPU
+results are folded into these rows.
 
 ### `ExtractBand` batch probe
 
