@@ -21,6 +21,11 @@ channels.submit(rgba_a, ImageBatch.ExtractBand(3))
 channels.submit(rgba_b, ImageBatch.ExtractBand(3))
 alpha_a, alpha_b = channels.join()
 
+brightness = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+brightness.submit(luma_a, ImageBatch.Brightness(0.5))
+brightness.submit(luma_b, ImageBatch.Brightness(0.5))
+darker_a, darker_b = brightness.join()
+
 products = ImageBatch.BatchExecutor(queue=True, backend="gpu")
 products.submit(image_a, ImageBatch.Multiply(image_b))
 products.submit(image_c, ImageBatch.Multiply(image_d))
@@ -45,10 +50,12 @@ With `queue=False` (the default), `submit` executes each operation immediately
 through its ordinary single-image pipeline. With `queue=True`, submissions wait
 until `join`, which returns results in submission order. A batch accepts
 `ImageFilter.MedianFilter(3)`, `ImageBatch.ExtractBand(channel)`,
-`ImageBatch.Multiply(other_image)`, full-frame `ImageBatch.Paste(source, mask)`,
-and a shared same-mode RGBA `ImageBatch.Color3DLUT(filter)` operation. Jobs with
-the same operation and compatible mode and dimensions are grouped when GPU is
-the selected backend; LUT jobs must also share the same wrapper instance.
+`ImageBatch.Brightness(factor)`, `ImageBatch.Multiply(other_image)`, full-frame
+`ImageBatch.Paste(source, mask)`, and a shared same-mode RGBA
+`ImageBatch.Color3DLUT(filter)` operation. Jobs with the same operation and
+compatible mode and dimensions are grouped when GPU is the selected backend;
+Brightness also requires an exact GPU factor and L, LA, or RGB mode. LUT jobs
+must share the same wrapper instance.
 Multiply requires each secondary image to match its primary image's mode and
 size. Batched Paste requires same-sized destination and source images in the
 same native mode, plus a same-sized `L` mask; it pastes the source at `(0, 0)`.
@@ -58,10 +65,13 @@ regular single-image operation at `join`.
 
 The GPU group is a native-mode vertical stack. For `MedianFilter(3)`, one
 replicated top and bottom row surrounds each image, so the filter cannot read
-pixels from a neighbor at a group boundary. For `ExtractBand`, `Multiply`,
-`Paste`, and `Color3DLUT`, images are stacked directly because each output
-pixel depends only on corresponding input pixels. For `Multiply`, primary and
-secondary operands are each stacked in their native mode. For `Paste`,
+pixels from a neighbor at a group boundary. For `ExtractBand`, `Brightness`,
+`Multiply`, `Paste`, and `Color3DLUT`, images are stacked directly because each
+output pixel depends only on corresponding input pixels. Brightness groups
+same-factor L, LA, and RGB images with the existing native-byte kernel; LA
+alpha is preserved. RGBA and factors the GPU cannot represent exactly continue
+through the existing per-image route. For `Multiply`, primary and secondary
+operands are each stacked in their native mode. For `Paste`,
 destinations, sources, and L masks are stacked separately; the existing
 full-frame masked paste runs at the origin and keeps each image independent.
 For `Color3DLUT`, the batch
@@ -107,6 +117,39 @@ submission and readback overhead by issuing one grouped operation. The parity
 and backend checks cover exact Pillow bytes, per-image `info` values, eager and
 queued execution, and one actual GPU dispatch for compatible groups in each
 listed mode and size.
+
+### Brightness batch probe
+
+`ImageBatch.Brightness(factor)` queues the same operation as
+`ImageEnhance.Brightness(image).enhance(factor)`. Equal-size L, LA, and RGB
+images can share the existing native-byte GPU kernel when the factor is exact
+for every byte. LA alpha remains unchanged. RGBA uses its ordinary
+single-image route. `queue=False` does not alter normal image routing. The
+Pillow parity lane compares bytes, mode, size, `info`, and the actual selected
+backend; it also verifies one `brightness_native.wgsl` dispatch for each
+compatible GPU group.
+
+The trial below uses factor `0.5` and LA images on one Apple M-series host.
+Each number is the median of 12 full-call windows after 3 warmups; one window
+includes image creation, submission, execution, GPU transfers, result splitting,
+and output materialization. The 1024×768 × 16 cohort was additionally checked
+against a matching eager-GPU run. Ratios use the same workload size, so
+GPU/SIMD is equivalent to SIMD latency divided by queued-GPU latency.
+
+| Mode and cohort | Pillow p50 (ms) | CPU p50 (ms) | SIMD p50 (ms) | GPU eager p50 (ms) | GPU queued p50 (ms) | GPU queued / SIMD throughput | GPU queued speedup vs Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| LA 256×256 × 16 | 3.584 | 1.131 | 0.961 | 3.666 | 1.178 | 0.82× | 3.04× |
+| LA 1024×768 × 4 | 11.426 | 3.384 | 2.752 | 2.812 | 3.103 | 0.89× | 3.68× |
+| LA 1024×768 × 16 | 40.987 | — | 10.537 | 11.178 | 12.533 | 0.84× | 3.27× |
+
+Grouping clearly improves the small-image batch over eager GPU, but all three
+queued results remain slower than SIMD. At the larger sizes, grouping also
+loses to eager GPU, which indicates stack packing and splitting outweigh the
+saved dispatch overhead for this operation. Treat this as a parity-complete,
+performance-limited checkpoint; do not claim it meets the GPU throughput goal
+or enable batching implicitly. The next useful optimization needs to reduce
+host-side stack copies and per-result reconstruction, then rerun these same
+workloads before expanding GPU grouping to larger images.
 
 ### `ExtractBand` batch probe
 

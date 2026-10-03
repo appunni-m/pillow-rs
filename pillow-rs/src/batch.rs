@@ -4,10 +4,11 @@
 //! image routing. Grouped workloads reuse the existing operation pipelines
 //! over compatible native-mode images packed into one image, then split the
 //! results back into ordinary per-image results. Grouped operations reuse
-//! `MedianFilter(3)`, `ExtractBand`, `ImageChops.multiply`, and same-mode RGBA
-//! `Color3DLUT` pipelines. Full-frame native-mode masked Paste jobs with L
-//! masks also reuse the existing Paste pipeline. Images that cannot be grouped
-//! use their ordinary single-image pipeline.
+//! `MedianFilter(3)`, `ExtractBand`, native-mode `Brightness`,
+//! `ImageChops.multiply`, and same-mode RGBA `Color3DLUT` pipelines. Full-frame
+//! native-mode masked Paste jobs with L masks also reuse the existing Paste
+//! pipeline. Images that cannot be grouped use their ordinary single-image
+//! pipeline.
 
 use crate::compute::Backend;
 use crate::error::PilError;
@@ -27,6 +28,11 @@ pub enum BatchOperation {
     ExtractBand {
         /// Zero-based source channel index.
         channel: i32,
+    },
+    /// Apply Pillow's `ImageEnhance.Brightness(image).enhance(factor)` operation.
+    Brightness {
+        /// Brightness multiplier.
+        factor: f64,
     },
     /// Apply Pillow's `ImageChops.multiply(image, other)` operation.
     Multiply {
@@ -59,6 +65,7 @@ impl BatchOperation {
         match self {
             Self::MedianFilter { size } => image.median_filter(*size),
             Self::ExtractBand { channel } => image.getchannel(*channel),
+            Self::Brightness { factor } => image.enhance_brightness(*factor),
             Self::Multiply { other } => crate::ops::chops::multiply(image, other),
             Self::Paste { source, mask } => {
                 let mut output = image.clone();
@@ -108,6 +115,18 @@ impl BatchOperation {
             Self::ExtractBand { channel } => {
                 usize::try_from(*channel).is_ok_and(|channel| channel < channels)
             }
+            Self::Brightness { factor } => {
+                #[cfg(feature = "gpu")]
+                {
+                    matches!(mode, "L" | "LA" | "RGB")
+                        && crate::compute::registry::gpu_brightness_factor_int(*factor).is_some()
+                }
+                #[cfg(not(feature = "gpu"))]
+                {
+                    let _ = factor;
+                    false
+                }
+            }
             Self::Multiply { other } => {
                 other.mode().is_ok_and(|other_mode| other_mode == mode)
                     && other.size().is_ok_and(|other_size| other_size == size)
@@ -136,6 +155,9 @@ impl BatchOperation {
                 left == right
             }
             (Self::ExtractBand { channel: left }, Self::ExtractBand { channel: right }) => {
+                left == right
+            }
+            (Self::Brightness { factor: left }, Self::Brightness { factor: right }) => {
                 left == right
             }
             (Self::Multiply { .. }, Self::Multiply { .. }) => true,
@@ -169,6 +191,7 @@ impl BatchOperation {
             Self::ExtractBand { channel } => Some(PipelineOp::ExtractBand {
                 index: u8::try_from(*channel).ok()?,
             }),
+            Self::Brightness { factor } => Some(PipelineOp::Brightness { factor: *factor }),
             Self::Multiply { other } => Some(PipelineOp::Multiply {
                 other: Arc::new((**other).clone()),
             }),
@@ -211,13 +234,15 @@ struct BatchJob {
 ///
 /// `queue = false` applies each operation immediately using the ordinary
 /// single-image route. With `queue = true`, [`join`](Self::join) groups
-/// compatible `MedianFilter(3)`, `ExtractBand`, `ImageChops.multiply`, full-
-/// frame masked Paste, and same-mode RGBA `Color3DLUT` jobs when GPU is the
-/// selected backend. Grouping currently requires equal-size native byte modes
-/// `L`, `LA`, `RGB`, and `RGBA`; masked Paste additionally requires same-mode
-/// sources and same-size `L` masks, while LUT groups require the same shared
-/// LUT object. Other jobs use the ordinary per-image operation. No conversion
-/// to RGBA is performed.
+/// compatible `MedianFilter(3)`, `ExtractBand`, exact-factor native-mode
+/// `Brightness`, `ImageChops.multiply`, full-frame masked Paste, and same-mode
+/// RGBA `Color3DLUT` jobs when GPU is the selected backend. Grouping currently
+/// requires equal-size native byte modes `L`, `LA`, `RGB`, and `RGBA`; batched
+/// Brightness additionally requires an exact GPU factor and one of `L`, `LA`,
+/// or `RGB`. Masked Paste additionally requires same-mode sources and
+/// same-size `L` masks, while LUT groups require the same shared LUT object.
+/// Other jobs use the ordinary per-image operation. No conversion to RGBA is
+/// performed.
 ///
 /// `backend` optionally locks each job to a backend. If it is `None`, normal
 /// automatic routing is used and grouping is attempted only when GPU is the
@@ -442,6 +467,14 @@ impl BatchExecutor {
                     .checked_mul(group_len)
                     .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
                 (0usize, stacked_height, "L", 1usize)
+            }
+            BatchOperation::Brightness { .. } => {
+                let group_len = u32::try_from(indices.len())
+                    .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
+                let stacked_height = height
+                    .checked_mul(group_len)
+                    .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
+                (0usize, stacked_height, mode, channels)
             }
             BatchOperation::Multiply { .. } => {
                 let group_len = u32::try_from(indices.len())
@@ -833,6 +866,59 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn brightness_groups_only_equal_exact_native_byte_operations() {
+        let operation = BatchOperation::Brightness { factor: 0.5 };
+        let same = BatchOperation::Brightness { factor: 0.5 };
+        let different = BatchOperation::Brightness { factor: 0.25 };
+        #[cfg(feature = "gpu")]
+        let inexact = BatchOperation::Brightness { factor: 1.0 / 3.0 };
+
+        assert!(operation.matches_group(&same));
+        assert!(!operation.matches_group(&different));
+        assert!(matches!(
+            operation.pipeline_op(),
+            Some(PipelineOp::Brightness { factor }) if factor == 0.5
+        ));
+        #[cfg(feature = "gpu")]
+        {
+            assert!(operation.can_group("L", (16, 16)));
+            assert!(operation.can_group("LA", (16, 16)));
+            assert!(operation.can_group("RGB", (16, 16)));
+            assert!(!operation.can_group("RGBA", (16, 16)));
+            assert!(!operation.can_group("P", (16, 16)));
+            assert!(!inexact.can_group("LA", (16, 16)));
+        }
+        #[cfg(not(feature = "gpu"))]
+        assert!(!operation.can_group("LA", (16, 16)));
+    }
+
+    #[test]
+    fn queued_brightness_uses_the_existing_native_single_image_operation() {
+        let sources = [
+            fixture("L", 7, 5, 1, 23),
+            fixture("LA", 7, 5, 2, 89),
+            fixture("RGB", 7, 5, 3, 173),
+        ];
+        let expected = sources
+            .iter()
+            .map(|source| source.enhance_brightness(0.5).unwrap().tobytes().unwrap())
+            .collect::<Vec<_>>();
+        let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+        for source in sources {
+            batch
+                .submit(source, BatchOperation::Brightness { factor: 0.5 })
+                .unwrap();
+        }
+        let actual = batch
+            .join()
+            .unwrap()
+            .iter()
+            .map(|image| image.tobytes().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
     }
 
     #[test]
