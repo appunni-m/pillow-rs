@@ -20,6 +20,7 @@ SIZES = ((7, 5), (7, 5), (1, 1))
 SEEDS = (3, 41, 97)
 LARGE_SIZE = (256, 256)
 LARGE_SEEDS = {"L": (131, 132), "RGB": (173, 174)}
+BENCHMARK_CHANNELS = {"L": 0, "LA": 1, "RGB": 1, "RGBA": 3}
 
 
 def pixels(mode: str, size: tuple[int, int], seed: int) -> bytes:
@@ -36,7 +37,11 @@ def benchmark_pixels(mode: str, seed: int) -> bytes:
 
 
 def require_gpu_execution(
-    core, receipt: dict | None, label: str, expected_median_dispatches: int = 1
+    core,
+    receipt: dict | None,
+    label: str,
+    expected_shader: str = "median_filter_3x3",
+    expected_shader_dispatches: int = 1,
 ) -> None:
     if (
         receipt is None
@@ -50,15 +55,15 @@ def require_gpu_execution(
     if not isinstance(resource, dict) or resource.get("mode_conversion_count") != 0:
         raise AssertionError(f"{label} changed pixel mode: {receipt}")
     shader_records = core.take_gpu_shader_coverage()
-    median_dispatches = sum(
+    matching_dispatches = sum(
         record["dispatches"]
         for record in shader_records
-        if "median_filter_3x3" in record["shader_file"]
+        if expected_shader in record["shader_file"]
     )
-    if median_dispatches != expected_median_dispatches:
+    if matching_dispatches != expected_shader_dispatches:
         raise AssertionError(
-            f"{label} used {median_dispatches} MedianFilter(3) shader dispatches; "
-            f"expected {expected_median_dispatches}: {shader_records}"
+            f"{label} used {matching_dispatches} {expected_shader} shader dispatches; "
+            f"expected {expected_shader_dispatches}: {shader_records}"
         )
 
 
@@ -71,6 +76,9 @@ def run_oracle(output: Path) -> None:
     expected: dict[str, list[str]] = {}
     metadata: dict[str, list[int | None]] = {}
     benchmark_outputs: dict[str, list[str]] = {}
+    extract_outputs: dict[str, list[str]] = {}
+    extract_metadata: dict[str, list[int | None]] = {}
+    extract_benchmark_outputs: dict[str, list[str]] = {}
     large_outputs: dict[str, list[str]] = {}
     large_metadata: dict[str, list[int | None]] = {}
     for mode in MODES:
@@ -88,6 +96,24 @@ def run_oracle(output: Path) -> None:
             benchmark_outputs[mode].append(
                 image.filter(ImageFilter.MedianFilter(3)).tobytes().hex()
             )
+        for channel in range(MODES[mode]):
+            key = f"{mode}:{channel}"
+            extract_outputs[key] = []
+            extract_metadata[key] = []
+            for size, seed in zip(SIZES[:2], SEEDS[:2], strict=True):
+                image = Image.frombytes(mode, size, pixels(mode, size, seed))
+                image.info["batch-seed"] = seed
+                result = image.getchannel(channel)
+                extract_outputs[key].append(result.tobytes().hex())
+                extract_metadata[key].append(result.info.get("batch-seed"))
+        benchmark_channel = BENCHMARK_CHANNELS[mode]
+        key = f"{mode}:{benchmark_channel}"
+        extract_benchmark_outputs[key] = []
+        for seed in range(64):
+            image = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
+            extract_benchmark_outputs[key].append(
+                image.getchannel(benchmark_channel).tobytes().hex()
+            )
     for mode, seeds in LARGE_SEEDS.items():
         large_outputs[mode] = []
         large_metadata[mode] = []
@@ -104,6 +130,9 @@ def run_oracle(output: Path) -> None:
                 "outputs": expected,
                 "metadata": metadata,
                 "benchmark_outputs": benchmark_outputs,
+                "extract_outputs": extract_outputs,
+                "extract_metadata": extract_metadata,
+                "extract_benchmark_outputs": extract_benchmark_outputs,
                 "large_outputs": large_outputs,
                 "large_metadata": large_metadata,
             }
@@ -146,7 +175,13 @@ def run_target(expected_path: Path) -> None:
             raise AssertionError(f"Pillow info mismatch for mode {mode}: {metadata}")
 
         receipt = core.take_pipeline_telemetry()
-        require_gpu_execution(core, receipt, mode, expected_median_dispatches=2)
+        require_gpu_execution(
+            core,
+            receipt,
+            mode,
+            expected_shader="median_filter_3x3",
+            expected_shader_dispatches=2,
+        )
         print(
             f"{mode}: Pillow parity PASS; actual GPU; compatible pair grouped in one dispatch; "
             "incompatible job used one single-image dispatch"
@@ -185,6 +220,66 @@ def run_target(expected_path: Path) -> None:
             raise AssertionError(f"256x256 Pillow info mismatch for {mode}")
         print(f"{mode} 256x256: Pillow parity PASS; actual GPU; grouped dispatch=1")
 
+    for mode, channels in MODES.items():
+        submission_order = (1, 0)
+        for channel in range(channels):
+            key = f"{mode}:{channel}"
+            batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+            for input_index in submission_order:
+                image = Image.frombytes(
+                    mode,
+                    SIZES[input_index],
+                    pixels(mode, SIZES[input_index], SEEDS[input_index]),
+                )
+                image.info["batch-seed"] = SEEDS[input_index]
+                batch.submit(image, ImageBatch.ExtractBand(channel))
+            actual = batch.join()
+            outputs = [image.tobytes().hex() for image in actual]
+            expected_outputs = [
+                expected["extract_outputs"][key][index] for index in submission_order
+            ]
+            if outputs != expected_outputs:
+                raise AssertionError(f"Pillow ExtractBand mismatch for {mode} channel {channel}")
+            actual_metadata = [image.info.get("batch-seed") for image in actual]
+            expected_metadata = [
+                expected["extract_metadata"][key][index] for index in submission_order
+            ]
+            if actual_metadata != expected_metadata:
+                raise AssertionError(
+                    f"ExtractBand info mismatch for {mode} channel {channel}: {actual_metadata}"
+                )
+            require_gpu_execution(
+                core,
+                core.take_pipeline_telemetry(),
+                f"{mode} ExtractBand({channel})",
+                expected_shader="extract_band.wgsl",
+            )
+            print(
+                f"{mode} ExtractBand({channel}): Pillow parity PASS; actual GPU; grouped dispatch=1"
+            )
+
+        channel = BENCHMARK_CHANNELS[mode]
+        key = f"{mode}:{channel}"
+        benchmark = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for seed in range(64):
+            benchmark.submit(
+                Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed)),
+                ImageBatch.ExtractBand(channel),
+            )
+        actual = benchmark.join()
+        outputs = [image.tobytes().hex() for image in actual]
+        if outputs != expected["extract_benchmark_outputs"][key]:
+            raise AssertionError(f"64x64 Pillow ExtractBand mismatch for {mode} channel {channel}")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} ExtractBand({channel}) 64x64 × 64",
+            expected_shader="extract_band.wgsl",
+        )
+        print(
+            f"{mode} ExtractBand({channel}) 64x64 × 64: Pillow parity PASS; grouped dispatch=1"
+        )
+
     # Verify that queue=False executes eagerly on the normal single-image path.
     image = Image.frombytes("L", SIZES[0], pixels("L", SIZES[0], SEEDS[0]))
     eager = ImageBatch.BatchExecutor(queue=False, backend="gpu")
@@ -194,6 +289,21 @@ def run_target(expected_path: Path) -> None:
         raise AssertionError("eager queue=False output differs from Pillow")
     require_gpu_execution(core, core.take_pipeline_telemetry(), "queue=False")
     print("queue=False: Pillow parity PASS; eager single-image execution")
+
+    for mode, channel in BENCHMARK_CHANNELS.items():
+        image = Image.frombytes(mode, SIZES[0], pixels(mode, SIZES[0], SEEDS[0]))
+        eager = ImageBatch.BatchExecutor(queue=False, backend="gpu")
+        eager.submit(image, ImageBatch.ExtractBand(channel))
+        result = eager.join()[0]
+        if result.tobytes().hex() != expected["extract_outputs"][f"{mode}:{channel}"][0]:
+            raise AssertionError(f"queue=False ExtractBand mismatch for {mode} channel {channel}")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"queue=False {mode} ExtractBand({channel})",
+            expected_shader="extract_band.wgsl",
+        )
+        print(f"queue=False {mode} ExtractBand({channel}): Pillow parity PASS; single-image path")
 
     for mode in MODES:
         submission_order = (1, 2, 0)

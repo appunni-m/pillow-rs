@@ -15826,3 +15826,68 @@ Benchmark receipts are `build/migration-parity/hsv-transpose-baseline.json`,
 `build/migration-parity/hsv-transpose-queue-upload-1.json`; strict parity
 receipts use the `hsv-transpose-` prefix. The benchmark workload is
 `pipeline-matrix.transpose-tiled.hsv-768x772-rotate90.operation-materialized`.
+
+## Explicit `ImageBatch.ExtractBand` GPU throughput checkpoint — 2026-10-03
+
+This probe adds `ImageBatch.ExtractBand(channel)` only to the explicit
+`BatchExecutor`. It stacks equal-size native `L`, `LA`, `RGB`, or `RGBA` images,
+uses the existing `Image.getchannel` pipeline once, then splits the L result
+images in submission order. The ordinary `Image.getchannel` route and automatic
+backend selection were not changed. LA alpha is channel 1; RGBA alpha is
+channel 3. A retained small optimization reads the grouped result through
+`materialized_shared().as_bytes()` and avoids cloning the whole stack through
+`tobytes()` before splitting.
+
+The isolated Pillow parity script passed every channel index for all four
+modes, including output mode, output bytes, result ordering, and per-image
+`info`. `queue=False` passed through the normal single-image path. Every
+compatible queued test reported one actual GPU dispatch, no fallback, and zero
+mode conversions. The run used `make build-parity` and
+`.venv/bin/python scripts/test_imagebatch_parity.py`; Rust checks included
+`cargo fmt --all -- --check` and
+`cargo test -p pillow-rs --lib batch::tests -- --nocapture`. No coverage ran.
+
+Benchmarks used 3 warmups and 12 measured windows, with image construction,
+submission, GPU transfer and synchronization, result splitting, output
+materialization, and `tobytes()` inside each window. The Pillow and SIMD
+profiles processed the same image count sequentially. Pixel throughput is the
+more useful comparison when image dimensions differ.
+
+| Mode/channel | Images per join | Size | Pillow p50 (ms) | SIMD p50 (ms) | GPU queued p50 (ms) | GPU/SIMD pixels/s |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| L / 0 | 64 | 64×64 | 0.346 | 0.304 | 0.572 | 0.53× |
+| LA / 1 | 64 | 64×64 | 0.475 | 0.340 | 0.687 | 0.50× |
+| RGB / 1 | 64 | 64×64 | 0.455 | 0.440 | 0.711 | 0.62× |
+| RGBA / 3 | 64 | 64×64 | 0.421 | 0.418 | 0.755 | 0.55× |
+| L / 0 | 16 | 256×256 | 0.230 | 0.224 | 1.046 | 0.21× |
+| LA / 1 | 16 | 256×256 | 0.795 | 0.434 | 1.436 | 0.30× |
+| RGB / 1 | 16 | 256×256 | 0.749 | 0.507 | 1.723 | 0.29× |
+| RGBA / 3 | 16 | 256×256 | 0.525 | 0.663 | 1.849 | 0.36× |
+| L / 0 | 4 | 1024×768 | 0.454 | 0.687 | 2.414 | 0.28× |
+| LA / 1 | 4 | 1024×768 | 3.068 | 1.168 | 3.424 | 0.34× |
+| RGB / 1 | 4 | 1024×768 | 6.434 | 1.494 | 3.536 | 0.42× |
+| RGBA / 3 | 4 | 1024×768 | 1.530 | 2.756 | 5.026 | 0.55× |
+
+At 64×64, one joined dispatch cut per-image GPU latency from 13.0–13.7 ms
+across 64 sequential GPU calls to 0.57–0.76 ms, an 18–24× GPU-throughput
+increase. However, grouped GPU pixel throughput reached only 0.50–0.62× SIMD
+at that size and remained below SIMD at 256×256 and 1024×768. The 1024×768
+Pillow and SIMD medians varied substantially between runs; the under-SIMD GPU
+result was consistent. Grouping amortizes command overhead but does not
+overcome host packing, upload, readback, synchronization, and per-image split
+costs for this byte-extraction operation. Do not present this as meeting the
+GPU throughput objective or generalize it to compute-heavy filters.
+
+The bounded output-copy removal was parity-clean, but its apparent timing
+change varied by mode and cohort; do not attribute the full observed spread to
+that change. Keep the explicit API operation isolated. A future ExtractBand
+throughput attempt should avoid building one concatenated raster and copying
+each result out, for example by using shared input/output storage with per-image
+descriptors or by keeping the extracted plane resident for a following GPU
+consumer. For now, move the main operation campaign to the next target.
+
+Receipts use the `build/migration-parity/extractband-batch-` prefix. They
+include the 64-image Pillow, SIMD, sequential-GPU, and queued-GPU profiles,
+16-image 256×256 profiles, and four-image 1024×768 profiles for each mode.
+The same parity script continues to cover the previously implemented
+MedianFilter(3) batch path.

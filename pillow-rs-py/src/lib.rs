@@ -90,19 +90,24 @@ impl PyBatchExecutor {
         py: Python<'_>,
     ) -> PyResult<usize> {
         let operation_type = operation.get_type().name()?.to_string();
-        if operation_type != "MedianFilter" {
-            return Err(PyTypeError::new_err(
-                "batch operation must be an ImageFilter.MedianFilter instance",
-            ));
-        }
-        let size = operation.getattr("size")?.extract::<i64>()?;
-        let size = filter_size_from_python(size, false)?;
+        let operation = match operation_type.as_str() {
+            "MedianFilter" => {
+                let size = operation.getattr("size")?.extract::<i64>()?;
+                let size = filter_size_from_python(size, false)?;
+                pillow_rs::BatchOperation::MedianFilter { size }
+            }
+            "ExtractBand" => pillow_rs::BatchOperation::ExtractBand {
+                channel: operation.getattr("channel")?.extract::<i32>()?,
+            },
+            _ => {
+                return Err(PyTypeError::new_err(
+                    "batch operation must be an ImageFilter.MedianFilter or ImageBatch.ExtractBand instance",
+                ));
+            }
+        };
         let source = image.borrow().inner.clone();
-        py.detach(|| {
-            self.inner
-                .submit(source, pillow_rs::BatchOperation::MedianFilter { size })
-        })
-        .map_err(map_error)
+        py.detach(|| self.inner.submit(source, operation))
+            .map_err(map_error)
     }
 
     fn join(&mut self, py: Python<'_>) -> PyResult<Vec<PyImage>> {
