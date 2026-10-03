@@ -1,11 +1,11 @@
 //! Explicit batching for compatible image jobs.
 //!
 //! This API is separate from [`crate::Image`] methods and never changes normal
-//! image routing. The first grouped workload is `MedianFilter(3)` over native
-//! byte modes `L`, `LA`, `RGB`, and `RGBA`. Compatible images are packed into
-//! one native-mode image, processed by the existing MedianFilter pipeline,
-//! then split back into per-image results. Images that cannot be grouped use
-//! their ordinary single-image pipeline.
+//! image routing. Grouped workloads reuse the existing operation pipelines
+//! over compatible native-mode images packed into one image, then split the
+//! results back into ordinary per-image results. The initial grouped
+//! operations are `MedianFilter(3)` and `ExtractBand`. Images that cannot be
+//! grouped use their ordinary single-image pipeline.
 
 use crate::compute::Backend;
 use crate::error::PilError;
@@ -19,18 +19,31 @@ pub enum BatchOperation {
         /// Odd square filter size.
         size: u32,
     },
+    /// Extract one byte channel using Pillow's `Image.getchannel` operation.
+    ExtractBand {
+        /// Zero-based source channel index.
+        channel: i32,
+    },
 }
 
 impl BatchOperation {
     fn apply(self, image: &Image) -> Result<Image, PilError> {
         match self {
             Self::MedianFilter { size } => image.median_filter(size),
+            Self::ExtractBand { channel } => image.getchannel(channel),
         }
     }
 
     fn can_group(self, mode: &str) -> bool {
-        matches!(self, Self::MedianFilter { size: 3 })
-            && matches!(mode, "L" | "LA" | "RGB" | "RGBA")
+        let Some(channels) = mode_channels(mode) else {
+            return false;
+        };
+        match self {
+            Self::MedianFilter { size } => size == 3,
+            Self::ExtractBand { channel } => {
+                usize::try_from(channel).is_ok_and(|channel| channel < channels)
+            }
+        }
     }
 }
 
@@ -45,8 +58,8 @@ struct BatchJob {
 ///
 /// `queue = false` applies each operation immediately using the ordinary
 /// single-image route. With `queue = true`, [`join`](Self::join) groups
-/// compatible 3x3 MedianFilter jobs when GPU is the selected backend. The
-/// first implementation groups only equal-size images in native byte modes
+/// compatible `MedianFilter(3)` and `ExtractBand` jobs when GPU is the
+/// selected backend. Grouping currently requires equal-size native byte modes
 /// `L`, `LA`, `RGB`, and `RGBA`; other jobs are executed through the ordinary
 /// per-image operation. No conversion to RGBA is performed.
 ///
@@ -234,7 +247,7 @@ impl BatchExecutor {
             .ok()
             .and_then(|width| width.checked_mul(channels))
             .ok_or_else(|| PilError::DimensionError("batch row size overflow".into()))?;
-        let (halo, stacked_height) = match first.operation {
+        let (halo, stacked_height, output_mode, output_channels) = match first.operation {
             BatchOperation::MedianFilter { size: 3 } => {
                 let group_len = u32::try_from(indices.len())
                     .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
@@ -242,7 +255,15 @@ impl BatchExecutor {
                     .checked_add(2)
                     .and_then(|height| height.checked_mul(group_len))
                     .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
-                (1usize, guarded_height)
+                (1usize, guarded_height, mode, channels)
+            }
+            BatchOperation::ExtractBand { .. } => {
+                let group_len = u32::try_from(indices.len())
+                    .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
+                let stacked_height = height
+                    .checked_mul(group_len)
+                    .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
+                (0usize, stacked_height, "L", 1usize)
             }
             _ => {
                 return Err(PilError::ValueError(
@@ -305,9 +326,17 @@ impl BatchExecutor {
         // constructors and MedianFilter dispatch own validation and routing.
         let stacked = Image::frombytes_owned(mode, (width, stacked_height), packed)?;
         let filtered = first.operation.apply(&stacked)?.use_backend(backend);
-        let filtered_bytes = filtered.tobytes_formatted(mode)?;
+        // These grouped byte modes already store output in their Pillow byte
+        // order. Borrow the materialized bytes directly instead of cloning
+        // the complete stack through `tobytes()` before splitting it.
+        let filtered_pixels = filtered.materialized_shared()?;
+        let filtered_bytes = filtered_pixels.as_bytes();
 
-        let halo_bytes = row_bytes
+        let output_row_bytes = usize::try_from(width)
+            .ok()
+            .and_then(|width| width.checked_mul(output_channels))
+            .ok_or_else(|| PilError::DimensionError("batch output row size overflow".into()))?;
+        let halo_bytes = output_row_bytes
             .checked_mul(halo)
             .ok_or_else(|| PilError::DimensionError("batch halo size overflow".into()))?;
         let image_rows =
@@ -316,10 +345,10 @@ impl BatchExecutor {
                     PilError::DimensionError("batch halo row count overflow".into())
                 })?)
                 .ok_or_else(|| PilError::DimensionError("batch row count overflow".into()))?;
-        let image_stride = row_bytes
+        let image_stride = output_row_bytes
             .checked_mul(image_rows)
             .ok_or_else(|| PilError::DimensionError("batch output stride overflow".into()))?;
-        let image_bytes = row_bytes
+        let image_bytes = output_row_bytes
             .checked_mul(height_usize)
             .ok_or_else(|| PilError::DimensionError("batch output size overflow".into()))?;
         let mut grouped_results = Vec::new();
@@ -345,7 +374,7 @@ impl BatchExecutor {
             let job = jobs[*job_index]
                 .as_ref()
                 .ok_or_else(|| PilError::InternalError("batch job was already consumed".into()))?;
-            let pixels = Image::frombytes(mode, (width, height), output)?.materialize()?;
+            let pixels = Image::frombytes(output_mode, (width, height), output)?.materialize()?;
             let mut image = job.operation.apply(&job.source)?;
             image.cache_batched_materialization(pixels)?;
             grouped_results.push((*job_index, image));
@@ -381,6 +410,7 @@ fn mode_storage(mode: &str) -> Option<crate::raster::ColorType> {
 mod tests {
     use super::{BatchExecutor, BatchOperation};
     use crate::compute::Backend;
+    use crate::error::PilError;
     use crate::image::Image;
 
     fn fixture(mode: &str, width: u32, height: u32, channels: usize, seed: u8) -> Image {
@@ -450,6 +480,84 @@ mod tests {
             .map(|image| image.tobytes().unwrap())
             .collect::<Vec<_>>();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn queued_extract_band_falls_back_to_exact_single_image_outputs() {
+        let modes = [("L", 1usize), ("LA", 2), ("RGB", 3), ("RGBA", 4)];
+        for (mode, channels) in modes {
+            for channel in 0..channels {
+                let sources = [
+                    fixture(mode, 7, 5, channels, 17),
+                    fixture(mode, 7, 5, channels, 203),
+                ];
+                let expected = sources
+                    .iter()
+                    .map(|source| {
+                        source
+                            .getchannel(i32::try_from(channel).unwrap())
+                            .unwrap()
+                            .tobytes()
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>();
+                let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+                for source in sources {
+                    batch
+                        .submit(
+                            source,
+                            BatchOperation::ExtractBand {
+                                channel: i32::try_from(channel).unwrap(),
+                            },
+                        )
+                        .unwrap();
+                }
+                let actual = batch
+                    .join()
+                    .unwrap()
+                    .iter()
+                    .map(|image| {
+                        assert_eq!(image.mode().unwrap(), "L");
+                        image.tobytes().unwrap()
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(actual, expected, "queued {mode} channel {channel} differs");
+            }
+        }
+    }
+
+    #[test]
+    fn extract_band_groups_only_valid_native_byte_channels() {
+        for (mode, channels) in [("L", 1usize), ("LA", 2), ("RGB", 3), ("RGBA", 4)] {
+            for channel in 0..channels {
+                assert!(
+                    BatchOperation::ExtractBand {
+                        channel: i32::try_from(channel).unwrap()
+                    }
+                    .can_group(mode)
+                );
+            }
+            assert!(
+                !BatchOperation::ExtractBand {
+                    channel: i32::try_from(channels).unwrap()
+                }
+                .can_group(mode)
+            );
+        }
+        assert!(!BatchOperation::ExtractBand { channel: -1 }.can_group("RGB"));
+        assert!(!BatchOperation::ExtractBand { channel: 0 }.can_group("P"));
+    }
+
+    #[test]
+    fn queued_extract_band_keeps_single_image_channel_errors() {
+        let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+        batch
+            .submit(
+                fixture("RGB", 3, 2, 3, 59),
+                BatchOperation::ExtractBand { channel: 3 },
+            )
+            .unwrap();
+        assert!(matches!(batch.join(), Err(PilError::ValueError(_))));
     }
 
     #[test]

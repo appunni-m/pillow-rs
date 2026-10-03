@@ -6,9 +6,27 @@ independent image jobs to join together.
 """
 
 from copy import deepcopy
+import operator
 
 from . import _core
 from .image import Image
+
+
+class ExtractBand:
+    """Request zero-based channel extraction in an explicit image batch.
+
+    Example::
+
+        batch.submit(image, ImageBatch.ExtractBand(3))  # RGBA alpha
+    """
+
+    __slots__ = ("channel",)
+
+    def __init__(self, channel):
+        try:
+            self.channel = operator.index(channel)
+        except TypeError as error:
+            raise TypeError("channel must be an integer") from error
 
 
 class BatchExecutor:
@@ -16,10 +34,10 @@ class BatchExecutor:
 
     ``queue=False`` (the default) executes each submitted operation
     immediately through its usual single-image path. With ``queue=True``,
-    ``join()`` groups compatible ``ImageFilter.MedianFilter(3)`` jobs on the
-    GPU when possible. The first grouped formats are native ``L``, ``LA``,
-    ``RGB``, and ``RGBA`` images of equal size. Incompatible jobs use the
-    ordinary per-image operation.
+    ``join()`` groups compatible ``ImageFilter.MedianFilter(3)`` or
+    ``ImageBatch.ExtractBand(channel)`` jobs on the GPU when possible. The
+    grouped formats are native ``L``, ``LA``, ``RGB``, and ``RGBA`` images of
+    equal size. Incompatible jobs use the ordinary per-image operation.
 
     Example::
 
@@ -30,8 +48,13 @@ class BatchExecutor:
         batch.submit(image_b, ImageFilter.MedianFilter(3))
         results = batch.join()
 
-    The current batch operation is intentionally limited to MedianFilter.
-    Inputs retain their mode; the executor does not convert them to RGBA.
+        channels = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        channels.submit(rgba_image, ImageBatch.ExtractBand(3))
+        alpha = channels.join()[0]
+
+    Batched extraction reuses ``Image.getchannel`` over a same-mode vertical
+    stack and returns one ``L`` image per input. Inputs retain their mode; the
+    executor does not convert them to RGBA.
     """
 
     def __init__(self, queue=False, backend=None):
@@ -47,9 +70,9 @@ class BatchExecutor:
         """
         if not isinstance(image, Image):
             raise TypeError("batch input must be a PIL.Image.Image instance")
-        if type(operation).__name__ != "MedianFilter":
+        if type(operation).__name__ not in ("MedianFilter", "ExtractBand"):
             raise TypeError(
-                "batch operation must be an ImageFilter.MedianFilter instance"
+                "batch operation must be an ImageFilter.MedianFilter or ImageBatch.ExtractBand instance"
             )
         metadata = (
             image._info.copy(),
