@@ -17087,8 +17087,66 @@ and parity sidecars are `boxblur-rgb-{baseline,attempt1,attempt2,attempt3}`,
 `boxblur-modes-{cpu,simd,gpu}`, and
 `boxblur-rgb-attempt3-parallel-cpu` under `build/migration-parity/`.
 
-The refreshed inventory places
-`FreeTypeFont.set_variation_by_axes` first among the remaining measured
-parity-backed gaps. Its 0 × 0 call-only workload has no image backend dispatch;
-measure and optimize it as a CPU/Pillow API operation, while GPU and SIMD are
-not applicable. No claim of GPU or SIMD coverage should be made for that API.
+The 2026-10-03 inventory had placed
+`FreeTypeFont.set_variation_by_axes` first among the remaining measured gaps.
+That setter already has a four-attempt blocker; the later named-setter and
+polygon checkpoints below supersede the old next-operation note. Select the
+next candidate from an updated ranking that excludes completed checkpoints.
+
+## FreeTypeFont.set_variation_by_name current-build regression — checkpoint 2026-10-04
+
+The historical 2026-09-27 four-attempt checkpoint recorded a warm CPU median
+of 7.292 µs against Pillow at 7.583 µs. A fresh call-only standard benchmark
+on the current main snapshot does not reproduce that result. The exact
+`pil-imagefont-freetypefont.set-variation-by-name.standard` workload passed
+its Pillow parity gate (1/1), but measured 333.500 µs for CPU versus 7.750 µs
+for Pillow, about 43.0× slower. The earlier 2026-10-03 full-run row on commit
+`29be957f` showed the same gap at 346.521 µs versus 8.000 µs. The focused
+receipt is `variation-name-before.json`; its parity sidecar is
+`variation-name-before-parity.json` under `build/migration-parity/`.
+
+SIMD and GPU profiles also reported roughly 334 µs, but their
+`actual_backend` is null: named-font metadata and FreeType state are host-only
+work, so these are not accelerator measurements. The current-call result
+supersedes the old claim that the setter meets Pillow latency for this build.
+The setter already reached the agreed four-attempt limit, so checkpoint this
+as a current-build blocker and move on; do not silently extend the attempt
+count. The next visit needs to reconcile the current workload and dependency
+behavior with the historical warm receipt before any fifth optimization is
+considered.
+
+## ImageDraw.polygon point-storage probe — checkpoint 2026-10-04
+
+The standard polygon row is not an execution benchmark: it measures a 16 × 16
+RGB draw call without observing image bytes, so CPU/SIMD/GPU operation receipts
+are absent. Its fresh parity-gated whole-workflow medians were 9.250 µs for
+Pillow and 11.792/11.875/11.917 µs for CPU/SIMD/GPU. Use the materialized
+`pipeline-op.drawpolygon.benchmark-materialized` row for execution evidence;
+it fills a 16 × 16 RGB rectangle and records actual backend work. That row's
+benchmark gate is `successful_execution`, not Pillow parity, so the separate
+parity lane remains necessary.
+
+The pre-change materialized medians were 17.938 µs Pillow, 21.563 µs CPU,
+23.771 µs SIMD, and 313.458 µs GPU. Attempt one removed a point-vector copy
+from the CPU rasterizer and transferred normalized points directly into the
+queued operation. Its 21.563/23.771/313.458 µs target medians became
+22.584/23.896/325.334 µs. Attempt two added a typed Python-pair path to avoid
+constructing nested vectors before normalization. Its medians were
+22.209/22.895/355.084 µs. Pillow varied from 17.938 to 18.458 µs across these
+runs, and each pipeline row has only two samples of three timed iterations;
+the small SIMD movement is not a demonstrated gain. Both source attempts
+were discarded, leaving no code change from this operation.
+
+The focused all-backends lane passed the selected ten cases on CPU, SIMD, GPU,
+Node WASM, and browser WASM. CPU/SIMD/GPU each completed 10/10 Pillow
+comparisons; the four image-producing cases recorded complete backend
+receipts without fallback. GPU full parity passed. Inputs covered RGB, LA, F,
+and CMYK output, clipping, malformed and short coordinate sequences, and the
+standard triangle. No coverage was run.
+
+The remaining bottleneck is not established: the materialized workload is too
+small and too lightly sampled to guide a meaningful drawing-kernel change.
+Before revisiting polygon, add a representative varied large-image workload
+with unchanged Pillow byte parity and enough samples to separate point parsing,
+draw execution, and materialization. Until then, keep the current implementation
+and continue to the next uncheckpointed operation.
