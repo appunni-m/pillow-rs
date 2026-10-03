@@ -15719,3 +15719,45 @@ The Parallel CPU Make target writes canonical benchmark receipts, which were
 copied to the `minfilter-la-optimized-parallel-cpu` paths. Continue P1 with
 the next uncheckpointed mode/operation and keep any future queued-batch
 measurement separate from this single-call benchmark.
+
+## LA `ImageOps.pad` vertical-fill SIMD probe — 2026-10-03
+
+The selected `1024 × 768` native-LA identity-contain workload pads to
+`1024 × 1024`. Before editing, SIMD measured 0.180 ms median / 0.251 ms p95
+against Pillow at 0.842 / 0.948 ms, a 4.68× median speed ratio. CPU already
+beat Pillow at 0.610 / 0.683 ms. The LA SIMD adapter built a full repeated fill
+canvas, then copied the source rows over it. A narrow candidate used the
+existing channel-aware SIMD fill-row helper and appended the source between
+only the top and bottom fill rows, avoiding initialization and overwrite of
+the 1.5 MiB source region. Its focused odd-width test checked LA's separate
+alpha fill byte, centered placement, and the SIMD tail.
+
+Exact Pillow parity passed for the selected case on serial CPU, strict SIMD,
+and strict GPU. The focused Rust test also passed. Three ordinary benchmark
+cohorts did not establish a repeatable SIMD gain:
+
+| Cohort | Pillow p50 / p95 (ms) | CPU p50 / p95 (ms) | SIMD p50 / p95 (ms) | GPU p50 / p95 (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Before edit | 0.842 / 0.948 | 0.610 / 0.683 | 0.180 / 0.251 | 0.843 / 0.942 |
+| Candidate, first run | 0.968 / 1.175 | 0.625 / 0.682 | 0.176 / 0.249 | 0.903 / 1.015 |
+| Candidate, repeat | 0.856 / 1.017 | 0.609 / 0.650 | 0.219 / 0.255 | 0.899 / 1.069 |
+
+The first candidate run appeared to clear 5× because Pillow's median increased
+about 15%; the repeat returned to 3.91× while the target SIMD median worsened
+about 22% against the original. A maintained `taskpolicy -c utility -b` run
+showed severe contention (Pillow p50/p95 4.341/23.104 ms), so it is excluded.
+That low-load policy was unsuitable on this host for this cohort. The apparent
+first-run speedup is therefore not accepted. The experimental code and test
+were reverted; ordinary single-image routing and the separate `ImageBatch`
+feature remain unchanged. Revisit LA Pad only with a stable paired measurement
+or profiling that identifies a larger removable cost; move to the next
+operation meanwhile. No coverage ran.
+
+Receipts are `build/migration-parity/pad-la-pre-attempt-benchmark.json`,
+`build/migration-parity/pad-la-attempt1-benchmark.json`,
+`build/migration-parity/pad-la-attempt1-repeat.json`, and
+`build/migration-parity/pad-la-attempt1-lowload.json`. The strict parity
+receipts use the `pad-la-attempt1-` prefix. The parity case is
+`PIL.ImageOps.pad.nuanced.performance-native-la-noise-1024x768-square`; the
+benchmark workload is
+`pil-imageops.pad.materialized.native-la-noise-1024x768-square`.
