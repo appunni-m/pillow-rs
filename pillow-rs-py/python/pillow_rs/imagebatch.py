@@ -29,6 +29,16 @@ class ExtractBand:
             raise TypeError("channel must be an integer") from error
 
 
+class Invert:
+    """Request ``ImageOps.invert(image)`` in an explicit image batch.
+
+    Equal-size L or RGB jobs can share one native-mode GPU dispatch. Other
+    modes use their ordinary ImageOps validation and execution path.
+    """
+
+    __slots__ = ()
+
+
 class Brightness:
     """Request ``ImageEnhance.Brightness(image).enhance(factor)`` in a batch.
 
@@ -101,7 +111,8 @@ class BatchExecutor:
     ``queue=False`` (the default) executes each submitted operation
     immediately through its usual single-image path. With ``queue=True``,
     ``join()`` groups compatible ``ImageFilter.MedianFilter(3)``,
-    ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Brightness(factor)``,
+    ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Invert()``,
+    ``ImageBatch.Brightness(factor)``,
     ``ImageBatch.Multiply(image2)``, or
     full-frame ``ImageBatch.Paste(source, mask)`` jobs, plus jobs using one
     shared RGBA-to-RGBA ``ImageBatch.Color3DLUT``, on the GPU when possible.
@@ -121,6 +132,11 @@ class BatchExecutor:
         channels = ImageBatch.BatchExecutor(queue=True, backend="gpu")
         channels.submit(rgba_image, ImageBatch.ExtractBand(3))
         alpha = channels.join()[0]
+
+        inversions = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        inversions.submit(gray_a, ImageBatch.Invert())
+        inversions.submit(gray_b, ImageBatch.Invert())
+        inverted_a, inverted_b = inversions.join()
 
         brightness = ImageBatch.BatchExecutor(queue=True, backend="gpu")
         brightness.submit(luma_a, ImageBatch.Brightness(0.5))
@@ -152,8 +168,9 @@ class BatchExecutor:
     ``ImageChops.multiply`` pipeline. Batched Paste stacks full-frame
     destinations, sources, and L masks, then reuses ``Image.paste`` at the
     origin. A Color3DLUT batch snapshots one shared LUT and applies the
-    existing RGBA pipeline to a vertical stack. Inputs retain their mode; the
-    executor does not convert them to RGBA.
+    existing RGBA pipeline to a vertical stack. Invert groups L and RGB images
+    through the existing ``ImageOps.invert`` pipeline. Inputs retain their
+    mode; the executor does not convert them to RGBA.
     """
 
     def __init__(self, queue=False, backend=None):
@@ -174,6 +191,7 @@ class BatchExecutor:
         if type(operation).__name__ not in (
             "MedianFilter",
             "ExtractBand",
+            "Invert",
             "Brightness",
             "Multiply",
             "Paste",
@@ -181,7 +199,7 @@ class BatchExecutor:
         ):
             raise TypeError(
                 "batch operation must be an ImageFilter.MedianFilter, "
-                "ImageBatch.ExtractBand, ImageBatch.Multiply, "
+                "ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Multiply, "
                 "ImageBatch.Brightness, "
                 "ImageBatch.Paste, or "
                 "ImageBatch.Color3DLUT instance"

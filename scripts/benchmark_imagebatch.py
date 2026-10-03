@@ -41,7 +41,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--queue", action="store_true", help="queue operations until join")
     parser.add_argument(
         "--operation",
-        choices=("median-filter", "extract-band", "brightness", "multiply", "paste", "color3dlut"),
+        choices=(
+            "median-filter",
+            "extract-band",
+            "invert",
+            "brightness",
+            "multiply",
+            "paste",
+            "color3dlut",
+        ),
         default="median-filter",
     )
     parser.add_argument("--mode", choices=("L", "LA", "RGB", "RGBA"), default="L")
@@ -62,6 +70,8 @@ def parse_args() -> argparse.Namespace:
         "RGBA": 4,
     }[args.mode]:
         parser.error("channel is outside the selected image mode")
+    if args.operation == "invert" and args.mode not in ("L", "RGB"):
+        parser.error("ImageOps.invert supports only L and RGB modes")
     if args.operation == "color3dlut" and args.mode != "RGBA":
         parser.error("the explicit Color3DLUT batch currently requires mode RGBA")
     if args.backend == "pillow" and args.queue:
@@ -75,7 +85,7 @@ def main() -> int:
     if args.backend != "pillow":
         sys.path.insert(0, str(root / "pillow-rs-py" / "python"))
         sys.path.insert(0, str(root / "scripts"))
-    from PIL import Image, ImageEnhance, ImageFilter
+    from PIL import Image, ImageEnhance, ImageFilter, ImageOps
     if args.backend == "pillow":
         import PIL
         from PIL import ImageChops
@@ -151,6 +161,8 @@ def main() -> int:
                     image.filter(ImageFilter.MedianFilter(3)).tobytes()
                 elif args.operation == "extract-band":
                     image.getchannel(args.channel).tobytes()
+                elif args.operation == "invert":
+                    ImageOps.invert(image).tobytes()
                 elif args.operation == "color3dlut":
                     image.filter(color_lut).tobytes()
                 elif args.operation == "brightness":
@@ -188,6 +200,8 @@ def main() -> int:
                 operation = ImageFilter.MedianFilter(3)
             elif args.operation == "extract-band":
                 operation = ImageBatch.ExtractBand(args.channel)
+            elif args.operation == "invert":
+                operation = ImageBatch.Invert()
             elif args.operation == "brightness":
                 operation = ImageBatch.Brightness(args.factor)
             elif args.operation == "color3dlut":
