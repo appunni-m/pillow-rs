@@ -2405,6 +2405,70 @@ fn execute_reduce_rgb(
     let corner_amend = corner_divider / 2;
     let source_stride = source_stride.expect("RGB source stride was checked");
 
+    // Pillow's reducing-gap thumbnail path commonly reduces RGB by 2×2
+    // before its final resample. Avoid four dynamic loops and per-block
+    // coordinate work for this dense interior case; keep odd dimensions on
+    // the general path so their partial right/bottom divisors are unchanged.
+    if fx == 2 && fy == 2 && width % 2 == 0 && height % 2 == 0 {
+        let output_stride = new_width as usize * 3;
+        let process_row = |output_y: usize, output_row: &mut [u8]| {
+            let source_top = output_y * 2 * source_stride;
+            let source_bottom = source_top + source_stride;
+            let top_row = &source[source_top..source_top + source_stride];
+            let bottom_row = &source[source_bottom..source_bottom + source_stride];
+
+            for (block_x, output_pixel) in output_row.chunks_exact_mut(3).enumerate() {
+                let source_x = block_x * 6;
+                let top_right = source_x + 3;
+                for channel in 0..3 {
+                    let sum = u32::from(top_row[source_x + channel])
+                        + u32::from(top_row[top_right + channel])
+                        + u32::from(bottom_row[source_x + channel])
+                        + u32::from(bottom_row[top_right + channel]);
+                    #[expect(
+                        clippy::arithmetic_side_effects,
+                        reason = "the 2x2 factor proves this reciprocal average fits u32"
+                    )]
+                    let average = ((sum + full_amend) * full_multiplier) >> 24;
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "the Pillow 2x2 average is bounded to one byte"
+                    )]
+                    {
+                        output_pixel[channel] = average as u8;
+                    }
+                }
+            }
+        };
+
+        #[cfg(feature = "parallel")]
+        {
+            const REDUCE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+            let input_pixels = (width as usize).saturating_mul(height as usize);
+            if input_pixels >= REDUCE_PARALLEL_PIXEL_THRESHOLD {
+                crate::par_rows_mut!(
+                    &mut output,
+                    output_stride,
+                    new_height as usize,
+                    |_row_start, _row_end, y, row| { process_row(y as usize, row) }
+                );
+            } else {
+                for y in 0..new_height as usize {
+                    let start = y * output_stride;
+                    process_row(y, &mut output[start..start + output_stride]);
+                }
+            }
+        }
+
+        #[cfg(not(feature = "parallel"))]
+        for y in 0..new_height as usize {
+            let start = y * output_stride;
+            process_row(y, &mut output[start..start + output_stride]);
+        }
+
+        return raw_bytes_to_image(new_width, new_height, output, 3).map(Some);
+    }
+
     let write_rgb_block = |row: &mut [u8],
                            output_x: usize,
                            source_x: usize,
@@ -3167,6 +3231,8 @@ mod tests {
             (7, 11, 3, 5),
             (4, 7, 1, 3),
             (13, 8, 4, 1),
+            (8, 6, 2, 2),
+            (32, 24, 2, 2),
             (9, 5, 2, 2),
         ] {
             let source = (0..width as usize * height as usize * 3)

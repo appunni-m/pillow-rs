@@ -15891,3 +15891,51 @@ include the 64-image Pillow, SIMD, sequential-GPU, and queued-GPU profiles,
 16-image 256×256 profiles, and four-image 1024×768 profiles for each mode.
 The same parity script continues to cover the previously implemented
 MedianFilter(3) batch path.
+
+## RGB thumbnail continuation checkpoint — 2026-10-03
+
+This bounded follow-up tried three code-level changes on the existing
+single-image path. The CPU RGB reducer now has an even-dimension-only 2×2
+kernel with the same reciprocal-and-amend rounding; odd edges stay on the
+general implementation. The CPU BICUBIC RGB resize manually unrolls exactly
+eight taps while preserving the existing i64 accumulation order. The SIMD
+thumbnail path reuses the checked narrow i32 RGB convolution only when the
+mode is RGB, the filter is BICUBIC, and the reduced-source box exactly covers
+the reduced image; partial safe boxes keep the boxed implementation. Rayon
+remains behind `parallel` for CPU row processing. The explicit ImageBatch API
+and all ordinary GPU scheduling are unchanged.
+
+Release microprofiles on dense synthetic data showed a faster isolated CPU
+2×2 reduction (about 0.48 ms versus about 1.00 ms before the specialization),
+about a 5% change for the unrolled CPU resize, and an exact narrow SIMD resize
+about 42% faster than its wide SIMD counterpart. These are stage diagnostics,
+not end-to-end wins. The parity-gated public workload remains
+`pipeline-op.thumbnail.material-rgb-1024x768` (1024×768 RGB to 256×192,
+BICUBIC, with `tobytes` in the timed boundary). Its ordinary-scheduler run
+passed exact Pillow parity 3/3 and reported 100 actual CPU, 100 actual SIMD,
+and 100 actual GPU executions, with no fallback; each GPU sample used three
+dispatches. Median latency was 0.911 ms Pillow, 2.398 ms CPU, 2.271 ms SIMD,
+and 2.290 ms GPU. In that run CPU was 2.63× slower than Pillow, SIMD was 2.49×
+slower, and GPU latency was 1.008× SIMD. The operation remains unresolved.
+
+The clean-source benchmark earlier that day measured 0.954 ms Pillow, 2.346
+ms CPU, 2.241 ms SIMD, and 2.226 ms GPU. Since the oracle shifted by about
+4.5% between runs and each target median also shifted, this is not a paired
+comparison and establishes no public-call speedup. The utility-priority repeat
+also passed parity 3/3 but made every subject 8–10× slower; discard its timings
+as scheduler-contaminated evidence. Do not retain a small optimization claim
+from kernel timings alone. A future thumbnail attempt needs a paired run or
+stage receipts from the actual workload to explain why these local wins did
+not move the public latency.
+
+Verification for this checkpoint: `cargo fmt --all -- --check`,
+`cargo test -p pillow-rs --release --lib aligned_rgb_thumbnail_uses_exact_narrow_bicubic_resize`,
+`cargo test -p pillow-rs --release --lib rgb_reduce_specialized_rows_match_generic_reference_at_edges`,
+`cargo check -p pillow-rs --features parallel`, `make fmt clippy`,
+`make docs-lint`, and the documented
+`make migration-parity-benchmark` target for the selected workload. The target
+ran `build-parity`, preserved the Pillow oracle, and recorded
+`thumbnail-20261003-final.json` plus its parity receipt; the utility-priority
+repeat recorded `thumbnail-20261003-low-load.json` and its parity receipt.
+No coverage was run. Checkpoint the remaining performance gap and continue to
+the next ranked operation.

@@ -1350,6 +1350,43 @@ fn horizontal_pass_row(
                 green_acc += i64::from(src_row[source_index + 1]) * weights[3];
                 blue_acc += i64::from(src_row[source_index + 2]) * weights[3];
                 (red_acc, green_acc, blue_acc)
+            } else if cnt == 8 {
+                let weights: &[i64; 8] = weights
+                    .try_into()
+                    .expect("an eight-tap coefficient span contains eight weights");
+                let mut source_index = x0 as usize * 3;
+                let mut red_acc = i64::from(src_row[source_index]) * weights[0];
+                let mut green_acc = i64::from(src_row[source_index + 1]) * weights[0];
+                let mut blue_acc = i64::from(src_row[source_index + 2]) * weights[0];
+                source_index += 3;
+                red_acc += i64::from(src_row[source_index]) * weights[1];
+                green_acc += i64::from(src_row[source_index + 1]) * weights[1];
+                blue_acc += i64::from(src_row[source_index + 2]) * weights[1];
+                source_index += 3;
+                red_acc += i64::from(src_row[source_index]) * weights[2];
+                green_acc += i64::from(src_row[source_index + 1]) * weights[2];
+                blue_acc += i64::from(src_row[source_index + 2]) * weights[2];
+                source_index += 3;
+                red_acc += i64::from(src_row[source_index]) * weights[3];
+                green_acc += i64::from(src_row[source_index + 1]) * weights[3];
+                blue_acc += i64::from(src_row[source_index + 2]) * weights[3];
+                source_index += 3;
+                red_acc += i64::from(src_row[source_index]) * weights[4];
+                green_acc += i64::from(src_row[source_index + 1]) * weights[4];
+                blue_acc += i64::from(src_row[source_index + 2]) * weights[4];
+                source_index += 3;
+                red_acc += i64::from(src_row[source_index]) * weights[5];
+                green_acc += i64::from(src_row[source_index + 1]) * weights[5];
+                blue_acc += i64::from(src_row[source_index + 2]) * weights[5];
+                source_index += 3;
+                red_acc += i64::from(src_row[source_index]) * weights[6];
+                green_acc += i64::from(src_row[source_index + 1]) * weights[6];
+                blue_acc += i64::from(src_row[source_index + 2]) * weights[6];
+                source_index += 3;
+                red_acc += i64::from(src_row[source_index]) * weights[7];
+                green_acc += i64::from(src_row[source_index + 1]) * weights[7];
+                blue_acc += i64::from(src_row[source_index + 2]) * weights[7];
+                (red_acc, green_acc, blue_acc)
             } else {
                 let mut red_acc = 0i64;
                 let mut green_acc = 0i64;
@@ -1518,6 +1555,43 @@ fn vertical_pass_col(
             red_acc += i64::from(intermediate[source_index]) * weights[3];
             green_acc += i64::from(intermediate[source_index + 1]) * weights[3];
             blue_acc += i64::from(intermediate[source_index + 2]) * weights[3];
+            (red_acc, green_acc, blue_acc)
+        } else if cnt == 8 {
+            let weights: &[i64; 8] = weights
+                .try_into()
+                .expect("an eight-tap coefficient span contains eight weights");
+            let mut source_index = y0 as usize * row_stride + x_index;
+            let mut red_acc = i64::from(intermediate[source_index]) * weights[0];
+            let mut green_acc = i64::from(intermediate[source_index + 1]) * weights[0];
+            let mut blue_acc = i64::from(intermediate[source_index + 2]) * weights[0];
+            source_index += row_stride;
+            red_acc += i64::from(intermediate[source_index]) * weights[1];
+            green_acc += i64::from(intermediate[source_index + 1]) * weights[1];
+            blue_acc += i64::from(intermediate[source_index + 2]) * weights[1];
+            source_index += row_stride;
+            red_acc += i64::from(intermediate[source_index]) * weights[2];
+            green_acc += i64::from(intermediate[source_index + 1]) * weights[2];
+            blue_acc += i64::from(intermediate[source_index + 2]) * weights[2];
+            source_index += row_stride;
+            red_acc += i64::from(intermediate[source_index]) * weights[3];
+            green_acc += i64::from(intermediate[source_index + 1]) * weights[3];
+            blue_acc += i64::from(intermediate[source_index + 2]) * weights[3];
+            source_index += row_stride;
+            red_acc += i64::from(intermediate[source_index]) * weights[4];
+            green_acc += i64::from(intermediate[source_index + 1]) * weights[4];
+            blue_acc += i64::from(intermediate[source_index + 2]) * weights[4];
+            source_index += row_stride;
+            red_acc += i64::from(intermediate[source_index]) * weights[5];
+            green_acc += i64::from(intermediate[source_index + 1]) * weights[5];
+            blue_acc += i64::from(intermediate[source_index + 2]) * weights[5];
+            source_index += row_stride;
+            red_acc += i64::from(intermediate[source_index]) * weights[6];
+            green_acc += i64::from(intermediate[source_index + 1]) * weights[6];
+            blue_acc += i64::from(intermediate[source_index + 2]) * weights[6];
+            source_index += row_stride;
+            red_acc += i64::from(intermediate[source_index]) * weights[7];
+            green_acc += i64::from(intermediate[source_index + 1]) * weights[7];
+            blue_acc += i64::from(intermediate[source_index + 2]) * weights[7];
             (red_acc, green_acc, blue_acc)
         } else {
             let mut red_acc = 0i64;

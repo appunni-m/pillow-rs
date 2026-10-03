@@ -27374,6 +27374,26 @@ pub fn simd_thumbnail(
     if factor_x != 1 || factor_y != 1 {
         let box_right = f64::from(img.width()) / f64::from(factor_x);
         let box_bottom = f64::from(img.height()) / f64::from(factor_y);
+        if mode == Some("RGB")
+            && matches!(effective_filter, ResampleFilter::Bicubic)
+            && box_right == f64::from(work_img.width())
+            && box_bottom == f64::from(work_img.height())
+        {
+            // An aligned full-source box is exactly the ordinary Resize
+            // geometry. Reuse its proven 32-bit RGB convolution path; the
+            // boxed general kernel otherwise accumulates these byte samples
+            // in wider lanes and is materially slower on the common 2×2
+            // reducing-gap thumbnail.
+            return simd_resize_convolution(
+                &work_img,
+                output_width,
+                output_height,
+                effective_filter,
+                channels,
+                premultiplied_alpha,
+                true,
+            );
+        }
         return simd_resize_convolution_boxed(
             &work_img,
             output_width,
@@ -30973,6 +30993,39 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn aligned_rgb_thumbnail_uses_exact_narrow_bicubic_resize() {
+        use crate::compute::pool_cpu::ops::geometry::{execute_reduce, execute_thumbnail};
+        use crate::pipeline::{PipelineOp, ResampleFilter};
+        use crate::raster::{DynamicImage, RgbImage};
+
+        let (width, height) = (64u32, 48u32);
+        let source = (0..width as usize * height as usize * 3)
+            .map(|index| (index.wrapping_mul(37).wrapping_add(index / 11 * 17 + 29) % 256) as u8)
+            .collect();
+        let image = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(width, height, source).expect("RGB thumbnail source shape"),
+        );
+        let filter = ResampleFilter::Bicubic;
+        let reduced = execute_reduce(&image, 2, 2, Some("RGB")).expect("RGB reduce stage");
+        let wide = super::simd_resize_convolution(&reduced, 16, 12, filter, 3, false, false)
+            .expect("wide SIMD RGB resize");
+        let narrow = super::simd_resize_convolution(&reduced, 16, 12, filter, 3, false, true)
+            .expect("narrow SIMD RGB resize");
+        assert_eq!(narrow.as_bytes(), wide.as_bytes());
+
+        let operation = PipelineOp::Thumbnail {
+            w: 16,
+            h: 12,
+            filter,
+        };
+        let expected =
+            execute_thumbnail(&image, 16, 12, &filter, Some("RGB")).expect("CPU RGB thumbnail");
+        let actual =
+            super::simd_thumbnail(&image, &operation, Some("RGB")).expect("SIMD RGB thumbnail");
+        assert_eq!(actual.as_bytes(), expected.as_bytes());
+    }
+
     #[test]
     fn native_rgb_merge_borrows_auxiliary_bands_from_full_channel_list() {
         use crate::pipeline::ColorMode;
