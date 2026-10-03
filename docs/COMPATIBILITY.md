@@ -39,18 +39,19 @@ first-party interface; it does not mean users cannot build a similar system
 around Pillow.
 
 These are the first-party system features in this checkout that do not have an
-equivalent in Pillow: job batching, selectable compute backends, built-in GPU
-execution, an opt-in Parallel CPU profile, Rust and JavaScript/WebAssembly
-integrations, and per-pipeline execution receipts. This is not a list of image
-operations pillow-rs implements; operations shared with Pillow belong to the
-compatibility surface. The table marks features that are only in this checkout
-separately from those in the latest published pillow-rs alpha,
-`12.2.0-alpha.5`. Check [installation](INSTALLATION.md) and the
-[release notes](../CHANGELOG.md) before relying on a source-only feature in a
-released package.
+equivalent in Pillow: deferred image-operation pipelines, explicit job
+batching, selectable compute backends, built-in GPU execution, an opt-in
+Parallel CPU profile, Rust and JavaScript/WebAssembly integrations, and
+per-pipeline execution receipts. This is not a list of image operations
+pillow-rs implements; operations shared with Pillow belong to the compatibility
+surface. The table marks features that are only in this checkout separately
+from those in the latest published pillow-rs alpha, `12.2.0-alpha.5`. Check
+[installation](INSTALLATION.md) and the [release notes](../CHANGELOG.md) before
+relying on a source-only feature in a released package.
 
 | Addition | What pillow-rs adds | Difference from Pillow 12.3.0 | Availability and limits |
 | --- | --- | --- | --- |
+| Deferred image-operation pipelines | The core `Image` handle can record supported operations as a chain and execute them when pixels are needed. Rust callers can force this with `Image::materialize()`, `Image::encode()`, or `Image::tobytes()`; Python image operations use the same deferred core where they map to a pipeline operation. | Pillow lazily decodes file-backed images after `Image.open()`, but methods that create a new image load the source pixels; for example, `resize()` returns a resized copy. Pillow does not expose an equivalent deferred operation-chain API. See the [Pillow file lifecycle](https://pillow.readthedocs.io/en/12.3.0/reference/open_files.html) and [Image API](https://pillow.readthedocs.io/en/12.3.0/reference/Image.html). | Included in the published alpha for operations represented by the current pipeline. Not every operation is deferred; validation, unresolved metadata queries, or unsupported paths can materialize earlier. Deferred errors may therefore surface at a later materialization boundary. |
 | Explicit image-job queue | `PIL.ImageBatch.BatchExecutor` accepts independent jobs with `submit()` and returns results in submission order from `join()`. `queue=False` executes each operation immediately; `queue=True` defers it until `join()`. | Pillow has no first-party `ImageBatch` executor for submitting independent image jobs and joining compatible work. | Current source only; absent from published `12.2.0-alpha.5`. Queued GPU grouping supports `MedianFilter(3)`, `ExtractBand`, `Multiply`, full-frame masked `Paste`, and shared-instance RGBA `Color3DLUT`. Compatible groups require native `L`, `LA`, `RGB`, or `RGBA` layouts and equal dimensions; Paste also requires an equal-sized `L` mask, and Color3DLUT jobs must reuse the same wrapper instance. Unsupported or incompatible jobs use the ordinary single-image path. See the [batching guide](IMAGE_BATCHING.md). |
 | Runtime backend controls | Python, Rust, and JavaScript/WebAssembly expose `available_backends`, `active_backends`, `backend_enabled`, `enable_backend`, and `disable_backend` for the routes compiled into that build: CPU, SIMD, and GPU where available. | Pillow's public API has no equivalent controls for selecting these image-compute routes. | Included in `12.2.0-alpha.5`. `available_backends()` lists compiled implementations, not device readiness. Selecting a route changes automatic routing; unsupported operations can still fall back. |
 | GPU compute | The Rust core runs registered image-operation kernels with `wgpu`; the `gpu` Cargo feature is enabled by default and is inherited by the standard Python build. | Pillow 12.3.0 has no built-in GPU image-compute backend in its first-party package. | Included in `12.2.0-alpha.5` for supported Rust and Python builds. Device and operation support vary. The standard JavaScript/WebAssembly build disables core defaults and does not include GPU. Requesting GPU does not prove that a kernel ran; inspect the selected backend and dispatch evidence. See [compatibility limits](#partial-or-unsupported). |
