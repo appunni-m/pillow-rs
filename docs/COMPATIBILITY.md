@@ -30,34 +30,48 @@ is available when you need to check a specific public path.
 ## pillow-rs additions beyond Pillow
 
 pillow-rs uses Pillow 12.2.0 as its behavior-parity target for the operations it
-implements. The feature comparison below checks the additions in this system
-against upstream [Pillow 12.3.0 source](https://github.com/python-pillow/Pillow/tree/12.3.0/src/PIL)
+implements. This comparison checks the system additions against upstream
+[Pillow 12.3.0 source](https://github.com/python-pillow/Pillow/tree/12.3.0/src/PIL)
 and its [first-party API reference](https://pillow.readthedocs.io/en/12.3.0/reference/index.html),
-released on 2026-07-01. Third-party plugins and application code are outside
-the comparison. “Not in Pillow” means upstream does not provide the equivalent
-first-party interface or runtime integration; it does not mean users cannot
-build a similar system around Pillow. The list covers runtime capabilities and
-repository tools, not ordinary image operations shared with Pillow.
+released on 2026-07-01 and still the latest stable Pillow release as checked on
+2026-10-04 ([upstream releases](https://github.com/python-pillow/Pillow/releases)).
+Third-party plugins and application code are outside the comparison. “Not in
+Pillow” means upstream does not provide the equivalent first-party interface
+or runtime integration; it does not mean users cannot build a similar system
+around Pillow.
 
-The differences are system-level capabilities around the selected Pillow API.
-In practical terms, this project adds:
+The additions are system capabilities around a selected Pillow-compatible
+image API, not a claim that ordinary Pillow image operations are unique to this
+project. The complete comparison below separates application/runtime features
+from contributor tooling and labels what is in the current source versus the
+published `12.2.0-alpha.5` release.
 
-- A Rust-owned image engine and Rust crate, with Python's familiar `PIL`
-  namespace delegating to that core.
-- Deferred operation chains for supported operations, plus an explicit
-  `PIL.ImageBatch.BatchExecutor` for independent jobs. Compatible queued jobs
-  can share a native-mode GPU workload; ordinary `Image` calls keep their
-  existing execution path.
-- Public controls for selecting compiled CPU, architecture-specific SIMD, and
-  GPU routes, with optional execution receipts that show the route actually
-  used. Pillow can use native SIMD internally; the difference is that
-  pillow-rs exposes route controls and has a built-in GPU compute path.
-- A Node.js and browser WebAssembly package, and an opt-in Rayon-backed
-  Parallel CPU profile. The companion profile is configured in this checkout
-  but is not part of the published `12.2.0-alpha.5` packages.
-- Contributor tools that run an isolated Pillow oracle, track selected API
-  parity inputs, publish separate operation and pipeline benchmarks, and
-  record actual GPU shader dispatches.
+**Application and runtime features added around Pillow's API:**
+
+- A Rust-owned image, font, and codec runtime, a public Rust crate, and a
+  Python `PIL` facade that delegates to the Rust core.
+- Deferred chains for supported image operations.
+- Explicit independent-image batching, including a bounded set of compatible
+  jobs that can share a GPU workload without changing ordinary `Image` calls.
+- Public CPU, architecture-specific SIMD, and GPU route controls, plus
+  optional execution receipts that show the route actually used. Pillow may
+  use native SIMD internally; the difference is that pillow-rs exposes route
+  controls and a built-in GPU compute path.
+- A published Node.js and browser WebAssembly package.
+- An opt-in Rayon-backed **Parallel CPU** profile. Its companion Python
+  distribution is configured in this source checkout but is not part of the
+  published `12.2.0-alpha.5` packages.
+
+**Contributor features added around the implementation:**
+
+- A generated contract for the selected API surface, arguments, parity inputs,
+  and benchmark workloads.
+- An isolated Pillow oracle and differential parity runner with separate
+  CPU, SIMD, GPU, and Parallel CPU lanes where applicable.
+- Separate individual-operation and composed-pipeline benchmark reports,
+  including mode and backend details.
+- GPU shader-dispatch evidence that distinguishes an actual kernel run from a
+  requested GPU route that fell back.
 
 These additions do not make Pillow-style image operations unique to pillow-rs.
 The Python `PIL` package delegates image work to the Rust core; Pillow is the
@@ -74,7 +88,7 @@ relying on a source-only feature in a released package.
 | Explicit image-job queue | Rust exposes `pillow_rs::BatchExecutor` and `BatchOperation`; Python exposes `PIL.ImageBatch.BatchExecutor`. Submit independent jobs and collect results in submission order from `join()`. `queue=False` executes each operation immediately; `queue=True` holds jobs until `join()`. | Pillow's [batch-processing tutorial](https://pillow.readthedocs.io/en/12.3.0/handbook/tutorial.html#batch-processing) loops over files; Pillow has no first-party `ImageBatch` executor that queues independent jobs and groups compatible work. | Current source only; absent from published `12.2.0-alpha.5`. Compatible GPU groups cover `MedianFilter(3)`, `ExtractBand`, L/RGB `ImageOps.invert`, `Multiply`, full-frame masked `Paste`, exact-factor L/LA/RGB `Brightness`, and shared-instance RGBA `Color3DLUT`. Grouping packs compatible same-size native-mode inputs into one stacked workload, executes that group through the existing pipeline, and splits results back into submission order. Invert uses the existing operation and accepts only L and RGB for grouping; other modes retain ordinary `ImageOps.invert` behavior. Paste requires an equal-sized `L` mask; Color3DLUT jobs must share the same wrapper instance. Other jobs use the ordinary single-image path. See the [batching guide](IMAGE_BATCHING.md) for supported combinations, parity, and measured throughput. |
 | Runtime backend controls | Python exports `PIL.available_backends()`, `active_backends()`, `backend_enabled()`, `enable_backend()`, and `disable_backend()`; Rust and JavaScript/WebAssembly expose corresponding controls. Rust also lets a caller attach a backend request to an `Image`. SIMD means architecture-specific vector implementations for supported operations; the serial CPU route is distinct from the optional Rayon Parallel CPU profile. | Pillow may use SIMD internally and [`PIL.features`](https://pillow.readthedocs.io/en/12.3.0/reference/features.html) reports compiled features and codecs, but Pillow has no equivalent public controls for enabling or disabling image-compute routes. | Included in `12.2.0-alpha.5`. `available_backends()` lists compiled implementations, not device readiness. Enabling a route changes automatic routing; unsupported operations can still fall back. Python controls routes globally; it does not expose Rust's per-image backend request. |
 | GPU compute | The Rust core runs registered image-operation kernels with `wgpu`; the `gpu` Cargo feature is enabled by default and is inherited by the standard Python build. | Pillow 12.3.0 has no built-in GPU image-compute backend in its first-party package. | Included in `12.2.0-alpha.5` for supported Rust and Python builds. Device and operation support vary. The standard JavaScript/WebAssembly build disables core defaults and does not include GPU. A GPU request does not prove that a kernel ran; inspect the actual backend and dispatch evidence. See [compatibility limits](#partial-or-unsupported). |
-| Optional Parallel CPU profile | A default-off Cargo feature and companion Python distribution enable Rayon-backed CPU execution for supported work. pillow-rs reports this as **Parallel CPU**, separately from serial CPU, SIMD, and GPU. | Pillow has no equivalent pillow-rs build profile and runtime selector. This is a profile comparison, not a claim that Pillow or its codecs never use threads internally. | Configured in the current source but not included in published `12.2.0-alpha.5`. When matching standard and companion wheels are published, install with `pip install 'pillow-rs[parallel]'`. Rayon is used only for CPU work; it is not part of SIMD or GPU execution. See [Python installation](INSTALLATION.md#python). |
+| Optional Parallel CPU profile | A default-off Cargo feature and companion Python distribution enable Rayon-backed CPU execution for supported work. pillow-rs reports this as **Parallel CPU**, separately from serial CPU, SIMD, and GPU. | Pillow has no equivalent pillow-rs build profile and runtime selector. This is a profile comparison, not a claim that Pillow or its codecs never use threads internally. | Configured in the current source but the companion wheel is not included in published `12.2.0-alpha.5`. When matching standard and companion wheels are published, install with `pip install 'pillow-rs[parallel]'`. Rayon is used only for CPU work; it is not part of SIMD or GPU execution. See [Python installation](INSTALLATION.md#python). |
 | Node.js and browser WebAssembly | The `pillow-rs` npm package exposes image operations to Node.js and browsers through WebAssembly. | Pillow has no first-party JavaScript or WebAssembly binding. | Published. JavaScript has its own method names; callers must release WASM-owned objects, and browser applications need a bundler or module server that serves the WASM asset. See the [JavaScript guide](../pillow-rs-js/README.md). |
 | Pipeline execution telemetry | Rust and JavaScript/WebAssembly can opt in to a receipt for the latest completed pipeline: requested and actual backend, per-operation paths, route/validation/backend timings, fallback reason, and available GPU dispatch/resource counters. Python exposes the hooks only through its internal binding. | Pillow's public image API has no equivalent per-pipeline backend receipt. | Included in `12.2.0-alpha.5`. This is diagnostic data, not an image-processing guarantee or whole-process profiler. Python helpers are in `pillow_rs._core`, not the public `PIL` namespace. Receipts retain only the latest sample on the executing thread. |
 
