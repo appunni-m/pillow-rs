@@ -47624,8 +47624,9 @@ def build_pipeline_workflow(
 
 def _scalar_convert_benchmark_workloads(
     operations: dict[tuple[str, str], dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Measure material-sized public conversions for Pillow I/F scalar modes."""
+    """Measure material-sized public conversions, including typed scalar modes."""
 
     measurement = {
         "boundary": "whole_workflow",
@@ -47697,6 +47698,44 @@ def _scalar_convert_benchmark_workloads(
                 ),
             }
         )
+
+    cmyk_to_rgb_case_id = (
+        "PIL.Image.Image.convert.nuanced.material-cmyk-to-rgb-1024x768"
+    )
+    cmyk_to_rgb_case = cases_by_id.get(cmyk_to_rgb_case_id)
+    if cmyk_to_rgb_case is None:
+        raise ValueError(
+            "material CMYK-to-RGB benchmark references missing parity case: "
+            f"{cmyk_to_rgb_case_id}"
+        )
+    cmyk_to_rgb_context = _workflow_benchmark_context(
+        cmyk_to_rgb_case,
+        variant="convert-mode-cmyk-to-rgb-1024x768",
+        surface="PIL.Image.Image",
+        operation="convert",
+    )
+    workloads.append(
+        {
+            "workload_id": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+            "covers": [
+                _performance_requirement(operations, "PIL.Image.Image", "convert")
+            ],
+            "subjects": benchmark_subjects(),
+            "input": {"kind": "parity_case", "case_id": cmyk_to_rgb_case_id},
+            "measurement": {
+                "boundary": "observed_steps",
+                "step_ids": ["call", "materialize"],
+                "metrics": ["latency", "throughput"],
+                "warmup_iterations": 5,
+                "measurement_iterations": 20,
+                "samples": 5,
+                "concurrency": 1,
+                "cache_state": "warm",
+                "correctness_gate": "parity_pass",
+            },
+            "context": cmyk_to_rgb_context,
+        }
+    )
     return workloads
 
 
@@ -48477,7 +48516,9 @@ def build_pipeline_benchmark_document(
                 ),
             }
         )
-    scalar_conversion_workloads = _scalar_convert_benchmark_workloads(operations)
+    scalar_conversion_workloads = _scalar_convert_benchmark_workloads(
+        operations, cases_by_id
+    )
 
     thumbnail_material_workload = {
         "workload_id": "pipeline-op.thumbnail.material-rgb-1024x768",

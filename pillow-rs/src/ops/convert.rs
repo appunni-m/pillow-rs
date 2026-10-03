@@ -301,6 +301,20 @@ impl Image {
                 .map(|result| Image::from_dynamic(result, explicit_mode_for(mode)));
         }
 
+        // CMYK shares the RGBA-sized transport but stores C/M/Y/K, not
+        // red/green/blue/alpha. Keep this conversion lazy so the executors
+        // can consume native CMYK channels with Pillow's exact integer math.
+        if src_mode == "CMYK" && mode == "RGB" {
+            return Ok(Image::push_op(
+                self,
+                PipelineOp::Convert {
+                    mode: ColorMode::RGB,
+                    matrix: None,
+                    dither: None,
+                },
+            ));
+        }
+
         if mode == src_mode {
             return Ok(self.copy());
         }
@@ -618,23 +632,23 @@ impl Image {
             let src_mode = effective_src_mode_name;
             // Extract palette before materializing (P-mode palette may be on Pipeline)
             let palette = self.palette();
-            let img = if src_mode == "PA" && mode == "RGBA" {
+            // Conversion helpers only read the source. Keep the validated
+            // materialized buffer shared instead of cloning the whole frame;
+            // output conversion below owns its own result where required.
+            let shared = self.materialized_shared_for_ops()?;
+            let img = shared.as_ref();
+            if src_mode == "PA" && mode == "RGBA" {
                 // PA pixels are already stored as native [index, alpha]
-                // samples. Borrow that validated materialization and expand
-                // directly into the requested owned RGBA result, avoiding
-                // both the DynamicImage clone and a second LA clone.
-                let shared = self.materialized_shared_for_ops()?;
-                if let DynamicImage::ImageLumaA8(indices_alpha) = shared.as_ref() {
+                // samples. Expand the borrowed bands straight into the
+                // requested owned RGBA result.
+                if let DynamicImage::ImageLumaA8(indices_alpha) = img {
                     let expanded = crate::image::expand_palette_alpha(
                         indices_alpha,
                         palette.as_deref().unwrap_or_default(),
                     );
                     return Ok(Image::from_dynamic(expanded, explicit_mode_for(mode)));
                 }
-                shared.as_ref().clone()
-            } else {
-                self.materialize()?
-            };
+            }
             let converted = if src_mode == "PA" {
                 // PA stores a palette index and a per-pixel alpha byte.
                 // Expand both before grayscale/CMYK conversion; treating
@@ -645,7 +659,7 @@ impl Image {
                     palette.as_deref().unwrap_or_default(),
                 )
             } else {
-                color::convert_from_nonstandard(src_mode, &img, palette.as_deref())
+                color::convert_from_nonstandard(src_mode, img, palette.as_deref())
                     .unwrap_or_else(|| img.to_rgb8().into())
             };
             // For mode "L" etc., derive from the RGB result.
@@ -658,13 +672,13 @@ impl Image {
                 if mode == "L" && src_mode == "YCbCr" {
                     // Pillow's C converter maps YCbCr to L through the Y
                     // band directly, not through the RGB luma.
-                    DynamicImage::ImageLuma8(ycbcr_luma8(&img))
+                    DynamicImage::ImageLuma8(ycbcr_luma8(img))
                 } else if mode == "LA" && src_mode == "YCbCr" {
                     // Convert.c's ycbcr2la likewise copies the Y band and
                     // installs an opaque alpha byte. Reconstructing RGB
                     // first would change the fixed-point Y value and expose
                     // a storage byte as alpha.
-                    let gray = ycbcr_luma8(&img);
+                    let gray = ycbcr_luma8(img);
                     let (width, height) = gray.dimensions();
                     let mut la = crate::raster::GrayAlphaImage::new(width, height);
                     for (output, gray_pixel) in la.pixels_mut().zip(gray.pixels()) {
@@ -709,7 +723,7 @@ impl Image {
             } else if mode == "RGB" {
                 // PA expansion carries the per-pixel alpha needed by RGBA
                 // conversion, but Pillow's RGB conversion drops that band.
-                DynamicImage::ImageRgb8(converted.to_rgb8())
+                DynamicImage::ImageRgb8(converted.into_rgb8())
             } else if mode == "RGBA" {
                 // P sources with palette alpha keep per-entry alpha when
                 // converting to RGBA; the RGB-only nonstandard path would

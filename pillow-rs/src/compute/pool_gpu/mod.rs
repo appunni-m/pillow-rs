@@ -22469,6 +22469,16 @@ impl GpuPool {
                             ..
                         }
                     ))
+                // Keep CMYK→RGB as one terminal native conversion. The
+                // convert shader interprets the four bytes as C/M/Y/K and
+                // applies Pillow's exact integer inverse before RGB readback.
+                || (logical_mode == "CMYK"
+                    && matches!(ops, [PipelineOp::Convert {
+                        mode: ColorMode::RGB,
+                        matrix: None,
+                        dither: None,
+                    }])
+                    && matches!(img, DynamicImage::ImageRgba8(_)))
                 || (matches!(logical_mode, "RGB" | "RGBA" | "CMYK")
                     && ops
                         .iter()
