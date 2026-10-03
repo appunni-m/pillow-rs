@@ -12,7 +12,7 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
 use crate::ops::pil_resize::{
-    pil_resize, pil_resize_boxed, pillow_sin_f64, precompute_coeffs_f64,
+    f32_samples_from_le_bytes, pil_resize, pil_resize_boxed, pillow_sin_f64, precompute_coeffs_f64,
     precompute_coeffs_f64_boxed, premultiply_alpha, round_up, unpremultiply_alpha,
 };
 use crate::pipeline::{ResampleFilter, TransposeMethod};
@@ -312,11 +312,7 @@ fn resize_f(
         }
     };
     let source_pixels = CheckedDims::new_allow_empty(sw, sh, 4)?.total_pixels();
-    let src_floats: Vec<f32> = source_bytes
-        .chunks_exact(4)
-        .take(source_pixels)
-        .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
-        .collect();
+    let src_floats = f32_samples_from_le_bytes(source_bytes, source_pixels);
 
     // Pillow's F-mode ImagingResample keeps an ordinary finite constant sample
     // unchanged because each normalized horizontal/vertical coefficient row

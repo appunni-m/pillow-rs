@@ -15,10 +15,10 @@ use crate::draw::{for_each_bresenham_point, for_each_polygon_fill_span, wide_lin
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::ops::pil_resize::{
-    FilterCoeffs, compact_resize_coeffs_to_source_span, filter_from_resample,
-    luma16_resample_big_endian, luma16_resample_read, luma16_resample_write, precompute_coeffs,
-    precompute_coeffs_boxed_for_filter, precompute_coeffs_f64, precompute_coeffs_f64_boxed,
-    round_up,
+    FilterCoeffs, compact_resize_coeffs_to_source_span, f32_samples_from_le_bytes,
+    filter_from_resample, luma16_resample_big_endian, luma16_resample_read, luma16_resample_write,
+    precompute_coeffs, precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
+    precompute_coeffs_f64_boxed, round_up,
 };
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
@@ -20704,11 +20704,7 @@ fn simd_thumbnail_reduce_f(
     let output_pixels = output_width
         .checked_mul(output_height)
         .ok_or_else(|| simd_unsupported("Thumbnail"))?;
-    let source: Vec<f32> = img
-        .as_bytes()
-        .chunks_exact(4)
-        .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
-        .collect();
+    let source = f32_samples_from_le_bytes(img.as_bytes(), source_len / 4);
     // The common 4× thumbnail first reduces each native F sample block to a
     // 2×2 average. Process eight independent output samples with vector adds,
     // preserving Pillow's left-to-right f32 quartet order before promoting
@@ -26568,11 +26564,21 @@ fn simd_resize_f(
                                 0
                             }
                         });
+                    // Most resize kernels (including bicubic downsampling by
+                    // two) have fewer than Pillow's 16-tap split point. Do
+                    // not materialize a second vector product for those
+                    // blocks: every active lane consumes the fused result.
+                    let max_vector_product_count = vector_product_counts[..count]
+                        .iter()
+                        .copied()
+                        .max()
+                        .unwrap_or(0);
                     // Keep Pillow's left-to-right f64 reduction order for each
                     // lane. The eight products are still calculated together;
                     // reducing the vector with reassociated adds would create
                     // tiny side lobes in cancellation-heavy Lanczos samples.
-                    let mut sums = [0.0; SIMD_RESIZE_LANES];
+                    let mut vector_sums = f64x8::splat(0.0);
+                    let mut ordered_sums = [0.0; SIMD_RESIZE_LANES];
                     for tap in 0..max_count {
                         let mut values = [0.0; SIMD_RESIZE_LANES];
                         let mut weights = [0.0; SIMD_RESIZE_LANES];
@@ -26604,26 +26610,42 @@ fn simd_resize_f(
                             );
                             weights[lane] = weight;
                         }
-                        let fused = f64x8::new(weights)
-                            .mul_add(f64x8::new(values), f64x8::new(sums))
-                            .to_array();
-                        // Keep the product out of the add for the wide-row
-                        // lanes. `black_box` prevents LLVM from contracting
-                        // this vector multiply/add back into an FMA.
-                        let products =
-                            std::hint::black_box(f64x8::new(weights) * f64x8::new(values))
+                        let weight_vector = f64x8::new(weights);
+                        let value_vector = f64x8::new(values);
+                        if max_vector_product_count == 0 {
+                            // Keep the common short-kernel path in vector
+                            // registers. Round-trip through `[f64; 8]` only
+                            // for the rare wide rows with Pillow's split
+                            // product/add rule.
+                            vector_sums = weight_vector.mul_add(value_vector, vector_sums);
+                        } else {
+                            let fused = weight_vector
+                                .mul_add(value_vector, f64x8::new(ordered_sums))
                                 .to_array();
-                        for lane in 0..count {
-                            sums[lane] = if tap < vector_product_counts[lane] {
-                                sums[lane] + products[lane]
+                            // Keep the product out of the add for wide-row
+                            // lanes. `black_box` prevents LLVM from
+                            // contracting this multiply/add back into an FMA.
+                            let products = if tap < max_vector_product_count {
+                                std::hint::black_box(weight_vector * value_vector).to_array()
                             } else {
-                                fused[lane]
+                                [0.0; SIMD_RESIZE_LANES]
                             };
+                            for lane in 0..count {
+                                ordered_sums[lane] = if tap < vector_product_counts[lane] {
+                                    ordered_sums[lane] + products[lane]
+                                } else {
+                                    fused[lane]
+                                };
+                            }
                         }
                     }
                     // Pillow's 32bpc path preserves the sign of zero. Do not
                     // canonicalize a negative cancellation result to +0.0.
-                    let values = sums.map(|value| value as f32);
+                    let values = if max_vector_product_count == 0 {
+                        vector_sums.to_array().map(|value| value as f32)
+                    } else {
+                        ordered_sums.map(|value| value as f32)
+                    };
                     intermediate[intermediate_row + output_x..intermediate_row + output_x + count]
                         .copy_from_slice(&values[..count]);
                     vector_blocks = vector_blocks.saturating_add(1);

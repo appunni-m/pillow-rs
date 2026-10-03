@@ -16775,3 +16775,67 @@ their matching `-parity-20261003.json` files under
 `build/migration-parity/`; strict lanes are
 `thumbnail-f-candidate3-cpu-parity-20261003.json` and
 `thumbnail-f-candidate3-simd-parity-20261003.json`. No coverage was run.
+
+## F-mode `Image.resize` checkpoint — 2026-10-03
+
+The selected workload is
+`pipeline-chain.resize-native-f32.bicubic-noise-1024x768`: seeded, nonuniform
+native F samples resized from 1024 × 768 to 512 × 384 with bicubic resampling,
+measuring the public call and materialization against live Pillow. Each
+standard run used five warmups, 20 iterations across five samples, and
+concurrency one. Baseline and all four candidate benchmark gates passed their
+three selected Pillow parity comparisons. The CPU, strict SIMD, and actual GPU
+routes each served all 100 timed observations without fallback; GPU used two
+dispatches per observation. The additional Parallel CPU run used the opt-in
+`parallel` features, confirmed the CPU backend for all 100 observations, and
+passed its one selected Pillow parity comparison. No coverage was run.
+
+| Profile / run | Pillow ms | CPU ms | SIMD ms | GPU ms | Parallel CPU ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 2.960 | 2.590 | 6.719 | 55.941 | — |
+| Candidate 2 | 2.942 | 2.604 | 5.654 | 53.742 | — |
+| Candidate 3, reverted | 3.034 | 2.629 | 5.739 | 54.803 | — |
+| Candidate 4 | 2.915 | 2.343 | 5.657 | 55.855 | — |
+| Parallel CPU, opt-in | 2.915¹ | — | — | — | 0.703 |
+
+¹ Pillow's normal serial profile was measured in Candidate 4; the separate
+Parallel CPU target intentionally does not enable parallelism in the oracle.
+The measured throughput medians were about 343 Pillow operations/s, 427 CPU,
+177 SIMD, 18 GPU, and 1,423 Parallel CPU. This concurrency-one result does not
+establish queued or concurrent throughput.
+
+Four bounded attempts narrowed the remaining bottlenecks. The first avoided a
+separate vector-product calculation when no lane needed Pillow's 16-tap
+split-product reduction rule; its timing coincided with another CPU-heavy
+build/benchmark, so those measurements were discarded. The second kept the
+common short-tap SIMD accumulation in `f64x8` registers and scalarized only
+wide rows that require Pillow's separate product/add rounding. It improved
+SIMD median latency from 6.719 ms to 5.654 ms, roughly 16%, while retaining
+the ordered accumulation needed for exact parity. The third reordered GPU
+kernel selection to prefer the integer marker proof before the f64 marker
+proof; it produced no repeatable gain and was reverted. The fourth borrows
+aligned little-endian F sample storage through a checked `bytemuck` view,
+retaining a bit-preserving decode path for unaligned or unsupported storage.
+It reduced CPU median latency from 2.590 ms to 2.343 ms; SIMD remained near
+Candidate 2, which indicates tap accumulation rather than sample decoding is
+still its main cost. The shared sample-view helper also replaces the matching
+decode allocation in SIMD F thumbnail reduction; its existing behavior is
+covered by the helper's aligned and unaligned tests.
+
+CPU now beats Pillow by about 1.24× on this workload, and opt-in Parallel CPU
+by about 4.15×. SIMD remains about 1.94× slower than Pillow, far short of the
+5× target. Actual GPU latency remains about 19.2× slower than Pillow and 9.9×
+slower than SIMD, despite two real dispatches; its 3,145,728-byte upload and
+786,432-byte readback are material costs. This single-request measurement does
+not show whether queued GPU batching can improve matched-total-work throughput.
+Keep the SIMD register-accumulation and safe F sample-view changes. The next
+SIMD investigation should isolate tap-loop instruction and lane-construction
+costs without changing Pillow's ordered f64 arithmetic; GPU should be revisited
+with a batched workload that includes queueing and readback in the same timing
+boundary. This operation remains open against both targets.
+
+The receipts are `f-resize-baseline-607736dc8.json`,
+`f-resize-simd-attempt{1,2}-607736dc8.json`,
+`f-resize-gpu-attempt3-607736dc8.json`, `f-resize-attempt4-607736dc8.json`,
+and `f-resize-parallel-cpu-attempt4-607736dc8.json` under
+`build/migration-parity/`, each with a matching parity sidecar.
