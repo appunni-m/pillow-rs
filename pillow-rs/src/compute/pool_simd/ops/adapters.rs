@@ -20709,6 +20709,59 @@ fn simd_thumbnail_reduce_f(
         .chunks_exact(4)
         .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
         .collect();
+    // The common 4× thumbnail first reduces each native F sample block to a
+    // 2×2 average. Process eight independent output samples with vector adds,
+    // preserving Pillow's left-to-right f32 quartet order before promoting
+    // each result to its f64 accumulator. Odd dimensions and partial blocks
+    // stay on the general scalar path below.
+    if factor_x == 2
+        && factor_y == 2
+        && source_width % 2 == 0
+        && source_height % 2 == 0
+        && output_width == source_width / 2
+        && output_height == source_height / 2
+        && output_width % SIMD_RESIZE_LANES == 0
+    {
+        let output_len = output_pixels
+            .checked_mul(4)
+            .ok_or_else(|| simd_unsupported("Thumbnail"))?;
+        let mut output = Vec::with_capacity(output_len);
+        let mut vector_blocks = 0u64;
+        for output_y in 0..output_height {
+            let source_row_top = output_y * 2 * source_width;
+            let source_row_bottom = source_row_top + source_width;
+            for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
+                let source_x = output_x * 2;
+                let top_left = f32x8::new(std::array::from_fn(|lane| {
+                    source[source_row_top + source_x + lane * 2]
+                }));
+                let top_right = f32x8::new(std::array::from_fn(|lane| {
+                    source[source_row_top + source_x + lane * 2 + 1]
+                }));
+                let bottom_left = f32x8::new(std::array::from_fn(|lane| {
+                    source[source_row_bottom + source_x + lane * 2]
+                }));
+                let bottom_right = f32x8::new(std::array::from_fn(|lane| {
+                    source[source_row_bottom + source_x + lane * 2 + 1]
+                }));
+                let quartets = (((top_left + top_right) + bottom_left) + bottom_right).to_array();
+                for quartet in quartets {
+                    let mut sum = 0.0f64;
+                    sum += f64::from(quartet);
+                    let value = (sum * 0.25) as f32;
+                    output.extend_from_slice(&value.to_le_bytes());
+                }
+                vector_blocks = vector_blocks.saturating_add(1);
+            }
+        }
+        let result = crate::image_utils::raw_bytes_to_image(
+            output_width as u32,
+            output_height as u32,
+            output,
+            4,
+        )?;
+        return Ok((result, vector_blocks, 0));
+    }
     let mut output = Vec::with_capacity(
         output_pixels
             .checked_mul(4)
@@ -31284,6 +31337,59 @@ mod tests {
         let actual =
             super::simd_thumbnail(&image, &operation, Some("RGB")).expect("SIMD RGB thumbnail");
         assert_eq!(actual.as_bytes(), expected.as_bytes());
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_thumbnail_vector_reduce_matches_scalar_pillow_grouping() {
+        use crate::raster::{DynamicImage, RgbaImage};
+
+        let (width, height) = (16usize, 8usize);
+        let edge_values = [
+            0x0000_0001u32,
+            0x8000_0001,
+            0x3f80_0001,
+            0xbf7f_ffff,
+            0x7f7f_ffff,
+            0xff7f_ffff,
+            0x7f80_0000,
+            0xff80_0000,
+            0x7fc1_2345,
+            0x0000_0000,
+            0x8000_0000,
+            0x3eaa_aaab,
+            0xbeaa_aaaa,
+            0x0080_0000,
+            0x8080_0000,
+            0x3f00_0001,
+        ];
+        let source: Vec<f32> = (0..width * height)
+            .map(|index| f32::from_bits(edge_values[index % edge_values.len()]))
+            .collect();
+        let source_bytes: Vec<u8> = source
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(width as u32, height as u32, source_bytes)
+                .expect("F thumbnail source shape"),
+        );
+
+        let (actual, vector_blocks, scalar_tail) =
+            super::simd_thumbnail_reduce_f(&image, 2, 2).expect("SIMD F thumbnail reduction");
+        let mut expected = Vec::with_capacity(width * height);
+        for y in 0..height / 2 {
+            for x in 0..width / 2 {
+                expected.extend_from_slice(
+                    &super::thumbnail_f_reduce_value(&source, width, height, 2, 2, x, y)
+                        .to_le_bytes(),
+                );
+            }
+        }
+
+        assert_eq!(actual.as_bytes(), expected);
+        assert_eq!(vector_blocks, height as u64 / 2);
+        assert_eq!(scalar_tail, 0);
     }
 
     #[test]

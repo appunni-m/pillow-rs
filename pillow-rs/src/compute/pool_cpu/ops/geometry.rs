@@ -2196,6 +2196,54 @@ fn reduce_f_thumbnail(
             ));
         }
     };
+    // `thumbnail` commonly applies a 2×2 reducing-gap pass before its F32
+    // resize. Keep that frequent interior case branch-free: read the four
+    // packed scalar samples by row offset, preserve Pillow's f32 quartet
+    // order, then promote only the completed quartet to the f64 accumulator.
+    if factor_x == 2
+        && factor_y == 2
+        && src_w % 2 == 0
+        && src_h % 2 == 0
+        && dst_w == src_w / 2
+        && dst_h == src_h / 2
+    {
+        let source_dims = CheckedDims::new_allow_empty(src_w, src_h, 4)?;
+        let source_bytes = source_image.as_raw();
+        if source_bytes.len() != source_dims.total_bytes() {
+            return Err(PilError::InternalError(
+                "F-mode thumbnail source buffer shape mismatch".into(),
+            ));
+        }
+        let output_dims = CheckedDims::new_allow_empty(dst_w, dst_h, 4)?;
+        let source_row_stride = source_dims.row_stride();
+        let mut output = Vec::with_capacity(output_dims.total_bytes());
+        let sample_f32 = |byte_index: usize| {
+            f32::from_le_bytes([
+                source_bytes[byte_index],
+                source_bytes[byte_index + 1],
+                source_bytes[byte_index + 2],
+                source_bytes[byte_index + 3],
+            ])
+        };
+        for y in 0..dst_h as usize {
+            let top_row = y * 2 * source_row_stride;
+            let bottom_row = top_row + source_row_stride;
+            for x in 0..dst_w as usize {
+                let source_x = x * 8;
+                let top_left = sample_f32(top_row + source_x);
+                let top_right = sample_f32(top_row + source_x + 4);
+                let bottom_left = sample_f32(bottom_row + source_x);
+                let bottom_right = sample_f32(bottom_row + source_x + 4);
+                let quartet = ((top_left + top_right) + bottom_left) + bottom_right;
+                let mut sum = 0.0f64;
+                sum += f64::from(quartet);
+                let value = (sum * 0.25) as f32;
+                output.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        return raw_bytes_to_image(dst_w, dst_h, output, 4);
+    }
+
     let sample_f32 = |x: u32, y: u32| {
         let sample = source_image.get_pixel(x, y);
         f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]])

@@ -16712,3 +16712,66 @@ correctness only for this edge case. No runtime code or parity expectation was
 changed. Do not rank or optimize Mandelbrot from this row; a separate
 non-degenerate, material performance input must be established before a
 performance claim is made. No coverage was run.
+
+## RGB 5 × 5 filter matrix row is nonrepresentative — checkpoint 2026-10-03
+
+The expanded pipeline row `pipeline-matrix.expanded.filter5x5.1024x768` is
+generated from `Image.new("RGB", (1024, 768), color=0)`, then applies `BLUR`
+and materializes the result. Its gate is `successful_execution`, not a
+Pillow-output parity comparison. The recorded 10.711 ms Pillow, 30.804 ms CPU,
+19.895 ms SIMD, and 4.210 ms GPU medians came from revision `7716bd958` with a
+dirty checkout and only two samples. They are not evidence about general
+convolution throughput: a constant image can take a shortcut, and the gate
+does not establish matching pixels. Do not optimize or rank RGB 5 × 5 from this
+row. Keep it as a smoke workload and add/select a varied, parity-backed input
+before drawing performance conclusions. No runtime implementation or parity
+expectation changed, and no coverage was run.
+
+## F-mode `Image.thumbnail` checkpoint — 2026-10-03
+
+The selected workload is `pipeline-op.thumbnail.native-f32-1024x768`: seeded
+nonuniform F samples are reduced from 1024 × 768 and resized to the requested
+thumbnail dimensions. Its whole public call plus output materialization is
+gated against live Pillow. Baseline and all three candidates used the standard
+five warmups, 20 iterations × five samples, and concurrency one. Every run
+passed its benchmark parity gate; CPU and SIMD were the actual requested
+backends for all 100 observations. The requested GPU profile executed CPU
+fallback for all 100 observations because the backend cannot prove the
+thumbnail reducing-gap and typed-F arithmetic contract; those numbers are not
+GPU results.
+
+| Run | Pillow ms | CPU ms | SIMD ms | Requested GPU profile ms / actual backend |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 1.121 | 1.585 | 1.706 | 2.367 / CPU fallback |
+| Candidate 1 | 1.093 | 1.865 | 1.326 | 2.615 / CPU fallback |
+| Candidate 2 | 1.172 | 2.099 | 1.485 | 2.873 / CPU fallback |
+| Candidate 3 | 1.075 | 1.473 | 1.317 | 2.255 / CPU fallback |
+
+Three bounded code attempts retained two useful narrow changes. Candidate 1
+read F's little-endian scalar words directly instead of calling `get_pixel`
+for every sample, and computed aligned 2 × 2 F reductions in eight SIMD lanes.
+It also mistakenly zero-filled the output before overwriting it, adding a
+complete extra frame write. Candidate 2 replaced that zeroed vector with
+reserved capacity and sequential output writes. Candidate 3 restricted the CPU
+fixed-row kernel to exact aligned 2 × 2 reductions and restored the existing
+generic `get_pixel` route for other factors, odd extents, and partial blocks.
+The SIMD kernel keeps the eight-output vector reduction and scalar generic
+fallback. These changes preserve F as a scalar float format carried in four
+bytes; no channel interpretation or RGBA conversion was introduced.
+
+The final strict Pillow lanes passed CPU 2/2
+(`PIL.Image.Image.thumbnail.nuanced.f-mode-specialized-path` and the
+material workload) and SIMD 1/1 (the material workload). The focused Rust
+command `RUSTC_WRAPPER= cargo test -p pillow-rs --lib f_thumbnail` passed 6/6.
+CPU still measures 1.37× slower than Pillow. SIMD still measures 1.23× slower
+than Pillow, far from the current 2× target. The GPU profile is unsupported for
+this input and must remain a blocker until typed F reduction and resize can be
+proven on an actual adapter. This selected CPU path has no `parallel`-feature
+row scheduler, so a separate Parallel CPU result is not applicable. Stop this
+operation after three attempts and move to the next uncheckpointed material
+operation. The exact candidate receipts and parity sidecars are
+`thumbnail-f-{baseline,candidate1,candidate2,candidate3}-20261003.json` and
+their matching `-parity-20261003.json` files under
+`build/migration-parity/`; strict lanes are
+`thumbnail-f-candidate3-cpu-parity-20261003.json` and
+`thumbnail-f-candidate3-simd-parity-20261003.json`. No coverage was run.
