@@ -35,9 +35,8 @@ use wide::{
 };
 
 // `parallel` may be enabled to select Parallel CPU kernels, but it must not
-// silently add Rayon scheduling to the SIMD backend. Keep feature-gated SIMD
-// routes row-serial while retaining their vectorized inner loops.
-#[cfg(feature = "parallel")]
+// silently add Rayon scheduling to the SIMD backend. Keep SIMD routes
+// row-serial while retaining their vectorized inner loops.
 macro_rules! simd_rows_mut_serial {
     ($data:expr, $stride:expr, $height:expr,
      |$row_start:ident, $row_end:ident, $y:ident, $row:ident| $body:block) => {{
@@ -30233,7 +30232,6 @@ fn simd_put_alpha_rgb_row(source: &[u8], output: &mut [u8], width: usize, alpha:
     }
 }
 
-#[cfg(feature = "parallel")]
 fn simd_put_alpha_rgb_mask_row(source: &[u8], mask: &[u8], output: &mut [u8], width: usize) {
     debug_assert_eq!(source.len(), width * 3);
     debug_assert_eq!(mask.len(), width);
@@ -30294,6 +30292,8 @@ fn simd_put_alpha_rgba_constant_bytes(
 
 #[cfg(feature = "parallel")]
 const SIMD_PUT_ALPHA_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+
+const SIMD_PUT_ALPHA_RGB_MASK_VECTOR_THRESHOLD: usize = 512 * 512;
 
 #[inline]
 fn simd_put_alpha_rgb_constant_bytes(
@@ -30561,11 +30561,13 @@ pub fn simd_put_alpha_data(
         simd_put_alpha_rgba_mask_row(output.as_mut(), mask.as_raw());
         return Ok(DynamicImage::ImageRgba8(output));
     }
-    #[cfg(feature = "parallel")]
     if *alpha_mode == PixelMode::RGB
-        && pixels >= SIMD_PUT_ALPHA_PARALLEL_PIXEL_THRESHOLD
+        && pixels >= SIMD_PUT_ALPHA_RGB_MASK_VECTOR_THRESHOLD
         && let DynamicImage::ImageRgb8(source) = img
     {
+        // This route is architecture-vectorized but row-serial. Keep it
+        // available in the default SIMD build; the `parallel` feature is not
+        // a prerequisite for the u8x16 interleave and must not add Rayon here.
         let width = usize::try_from(img.width())
             .map_err(|_| PilError::ValueError("SIMD PutAlphaData width overflow".into()))?;
         let height = usize::try_from(img.height())
