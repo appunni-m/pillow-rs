@@ -29,6 +29,8 @@ PASTE_BATCH_SEEDS = (11, 73)
 PASTE_LARGE_SIZE = (256, 256)
 PASTE_LARGE_IMAGE_COUNT = 16
 PASTE_PARALLEL_SIZE = (512, 512)
+INVERT_LARGE_SIZE = (1024, 768)
+INVERT_LARGE_IMAGE_COUNT = 4
 
 
 def pixels(mode: str, size: tuple[int, int], seed: int) -> bytes:
@@ -115,7 +117,7 @@ def require_gpu_execution(
 
 def run_oracle(output: Path) -> None:
     import PIL
-    from PIL import Image, ImageChops, ImageEnhance, ImageFilter
+    from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps
 
     if PIL.__version__ != "12.2.0":
         raise RuntimeError(f"unexpected Pillow oracle version: {PIL.__version__}")
@@ -141,6 +143,9 @@ def run_oracle(output: Path) -> None:
     paste_benchmark_outputs: dict[str, list[str]] = {}
     paste_large_outputs: dict[str, list[str]] = {}
     paste_parallel_outputs: dict[str, list[str]] = {}
+    invert_outputs: dict[str, list[str]] = {}
+    invert_metadata: dict[str, list[int | None]] = {}
+    invert_large_rgb_outputs: list[str] = []
     large_outputs: dict[str, list[str]] = {}
     large_metadata: dict[str, list[int | None]] = {}
     for mode in MODES:
@@ -217,6 +222,24 @@ def run_oracle(output: Path) -> None:
             extract_benchmark_outputs[key].append(
                 image.getchannel(benchmark_channel).tobytes().hex()
             )
+    for mode in ("L", "RGB"):
+        invert_outputs[mode] = []
+        invert_metadata[mode] = []
+        for size, seed in zip(SIZES[:2], SEEDS[:2], strict=True):
+            image = Image.frombytes(mode, size, pixels(mode, size, seed))
+            image.info["batch-seed"] = seed
+            result = ImageOps.invert(image)
+            invert_outputs[mode].append(result.tobytes().hex())
+            invert_metadata[mode].append(result.info.get("batch-seed"))
+    for seed in range(INVERT_LARGE_IMAGE_COUNT):
+        image = Image.frombytes(
+            "RGB",
+            INVERT_LARGE_SIZE,
+            benchmark_pixels("RGB", seed + 201, INVERT_LARGE_SIZE),
+        )
+        image.info["batch-seed"] = seed
+        result = ImageOps.invert(image)
+        invert_large_rgb_outputs.append(result.tobytes().hex())
     for mode, seeds in LARGE_SEEDS.items():
         large_outputs[mode] = []
         large_metadata[mode] = []
@@ -346,6 +369,9 @@ def run_oracle(output: Path) -> None:
                 "paste_benchmark_outputs": paste_benchmark_outputs,
                 "paste_large_outputs": paste_large_outputs,
                 "paste_parallel_outputs": paste_parallel_outputs,
+                "invert_outputs": invert_outputs,
+                "invert_metadata": invert_metadata,
+                "invert_large_rgb_outputs": invert_large_rgb_outputs,
                 "boundary_rgba_extract_alpha": boundary_reference.tobytes().hex(),
             }
         )
@@ -365,6 +391,108 @@ def run_target(expected_path: Path) -> None:
         raise RuntimeError("GPU backend unavailable for the required batch parity lane")
     core.set_pipeline_telemetry(True)
     core.set_gpu_shader_coverage(True)
+
+    # ImageBatch.Invert is an explicit wrapper around ImageOps.invert. Its
+    # grouping contract is L/RGB only; queue=False and non-GPU queues keep the
+    # usual single-image implementation and error behavior.
+    for backend in ("cpu", "simd"):
+        for selected in ("cpu", "simd", "gpu"):
+            core.disable_backend(selected)
+        if not core.enable_backend(backend):
+            raise AssertionError(f"{backend} backend unavailable for ImageOps.invert parity")
+        for mode in ("L", "RGB"):
+            order = (1, 0)
+            queued = ImageBatch.BatchExecutor(queue=True, backend=backend)
+            for input_index in order:
+                image = Image.frombytes(
+                    mode,
+                    SIZES[input_index],
+                    pixels(mode, SIZES[input_index], SEEDS[input_index]),
+                )
+                image.info["batch-seed"] = SEEDS[input_index]
+                queued.submit(image, ImageBatch.Invert())
+            results = queued.join()
+            if [image.tobytes().hex() for image in results] != [
+                expected["invert_outputs"][mode][index] for index in order
+            ]:
+                raise AssertionError(f"queued {backend}/{mode} ImageOps.invert differs from Pillow")
+            if any(image.mode != mode for image in results) or [image.size for image in results] != [
+                SIZES[index] for index in order
+            ]:
+                raise AssertionError(f"queued {backend}/{mode} ImageOps.invert changed mode or size")
+            if [image.info.get("batch-seed") for image in results] != [
+                expected["invert_metadata"][mode][index] for index in order
+            ]:
+                raise AssertionError(f"queued {backend}/{mode} ImageOps.invert changed info")
+        print(f"{backend} queued ImageOps.invert L/RGB: Pillow bytes/mode/size/info parity PASS")
+
+    for selected in ("cpu", "simd", "gpu"):
+        core.disable_backend(selected)
+    if not core.enable_backend("gpu"):
+        raise AssertionError("GPU backend unavailable for ImageOps.invert parity")
+    for mode in ("L", "RGB"):
+        order = (1, 0)
+        eager = ImageBatch.BatchExecutor(queue=False, backend="gpu")
+        for input_index in order:
+            image = Image.frombytes(
+                mode,
+                SIZES[input_index],
+                pixels(mode, SIZES[input_index], SEEDS[input_index]),
+            )
+            image.info["batch-seed"] = SEEDS[input_index]
+            eager.submit(image, ImageBatch.Invert())
+        results = eager.join()
+        if [image.tobytes().hex() for image in results] != [
+            expected["invert_outputs"][mode][index] for index in order
+        ]:
+            raise AssertionError(f"queue=False GPU/{mode} ImageOps.invert differs from Pillow")
+        if any(image.mode != mode for image in results):
+            raise AssertionError(f"queue=False GPU/{mode} ImageOps.invert changed mode")
+        print(f"queue=False GPU ImageOps.invert {mode}: Pillow byte/mode parity PASS")
+
+    # Two small L inputs and four material RGB inputs each form one native-mode
+    # stack and must execute as exactly one solarize.wgsl invert variant.
+    for mode, size, expected_outputs, seeds, metadata_seeds in (
+        ("L", (7, 5), expected["invert_outputs"]["L"], (3, 41), (3, 41)),
+        (
+            "RGB",
+            INVERT_LARGE_SIZE,
+            expected["invert_large_rgb_outputs"],
+            tuple(range(201, 201 + INVERT_LARGE_IMAGE_COUNT)),
+            tuple(range(INVERT_LARGE_IMAGE_COUNT)),
+        ),
+    ):
+        core.take_gpu_shader_coverage()
+        core.take_pipeline_telemetry()
+        batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for seed_index, seed in enumerate(seeds):
+            image = Image.frombytes(
+                mode,
+                size,
+                pixels(mode, size, seed) if size == SIZES[0]
+                else benchmark_pixels(mode, seed, size),
+            )
+            image.info["batch-seed"] = metadata_seeds[seed_index]
+            batch.submit(image, ImageBatch.Invert())
+        results = batch.join()
+        actual = [image.tobytes().hex() for image in results]
+        wanted = expected_outputs
+        if actual != wanted:
+            raise AssertionError(f"queued GPU/{mode} ImageOps.invert differs from Pillow")
+        if any(image.mode != mode or image.size != size for image in results):
+            raise AssertionError(f"queued GPU/{mode} ImageOps.invert changed mode or size")
+        if [image.info.get("batch-seed") for image in results] != list(metadata_seeds):
+            raise AssertionError(f"queued GPU/{mode} ImageOps.invert changed submission order/info")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} ImageOps.invert queued group {len(seeds)} images",
+            expected_shader="solarize.wgsl",
+        )
+        print(
+            f"{mode} ImageOps.invert queued × {len(seeds)}: Pillow bytes/mode/size/info parity PASS; "
+            "one actual GPU dispatch, zero mode conversions"
+        )
 
     for backend in ("cpu", "simd"):
         for selected in ("cpu", "simd", "gpu"):

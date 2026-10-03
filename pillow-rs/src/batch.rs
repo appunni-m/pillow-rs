@@ -4,7 +4,7 @@
 //! image routing. Grouped workloads reuse the existing operation pipelines
 //! over compatible native-mode images packed into one image, then split the
 //! results back into ordinary per-image results. Grouped operations reuse
-//! `MedianFilter(3)`, `ExtractBand`, native-mode `Brightness`,
+//! `MedianFilter(3)`, `ExtractBand`, `ImageOps.invert`, native-mode `Brightness`,
 //! `ImageChops.multiply`, and same-mode RGBA `Color3DLUT` pipelines. Full-frame
 //! native-mode masked Paste jobs with L masks also reuse the existing Paste
 //! pipeline. Images that cannot be grouped use their ordinary single-image
@@ -29,6 +29,8 @@ pub enum BatchOperation {
         /// Zero-based source channel index.
         channel: i32,
     },
+    /// Apply Pillow's `ImageOps.invert(image)` operation.
+    Invert,
     /// Apply Pillow's `ImageEnhance.Brightness(image).enhance(factor)` operation.
     Brightness {
         /// Brightness multiplier.
@@ -65,6 +67,7 @@ impl BatchOperation {
         match self {
             Self::MedianFilter { size } => image.median_filter(*size),
             Self::ExtractBand { channel } => image.getchannel(*channel),
+            Self::Invert => crate::ops::imageops::invert_ops(image),
             Self::Brightness { factor } => image.enhance_brightness(*factor),
             Self::Multiply { other } => crate::ops::chops::multiply(image, other),
             Self::Paste { source, mask } => {
@@ -115,6 +118,7 @@ impl BatchOperation {
             Self::ExtractBand { channel } => {
                 usize::try_from(*channel).is_ok_and(|channel| channel < channels)
             }
+            Self::Invert => matches!(mode, "L" | "RGB"),
             Self::Brightness { factor } => {
                 #[cfg(feature = "gpu")]
                 {
@@ -157,6 +161,7 @@ impl BatchOperation {
             (Self::ExtractBand { channel: left }, Self::ExtractBand { channel: right }) => {
                 left == right
             }
+            (Self::Invert, Self::Invert) => true,
             (Self::Brightness { factor: left }, Self::Brightness { factor: right }) => {
                 left == right
             }
@@ -191,6 +196,7 @@ impl BatchOperation {
             Self::ExtractBand { channel } => Some(PipelineOp::ExtractBand {
                 index: u8::try_from(*channel).ok()?,
             }),
+            Self::Invert => Some(PipelineOp::Invert),
             Self::Brightness { factor } => Some(PipelineOp::Brightness { factor: *factor }),
             Self::Multiply { other } => Some(PipelineOp::Multiply {
                 other: Arc::new((**other).clone()),
@@ -234,7 +240,7 @@ struct BatchJob {
 ///
 /// `queue = false` applies each operation immediately using the ordinary
 /// single-image route. With `queue = true`, [`join`](Self::join) groups
-/// compatible `MedianFilter(3)`, `ExtractBand`, exact-factor native-mode
+/// compatible `MedianFilter(3)`, `ExtractBand`, L/RGB `ImageOps.invert`, exact-factor native-mode
 /// `Brightness`, `ImageChops.multiply`, full-frame masked Paste, and same-mode
 /// RGBA `Color3DLUT` jobs when GPU is the selected backend. Grouping currently
 /// requires equal-size native byte modes `L`, `LA`, `RGB`, and `RGBA`; batched
@@ -467,6 +473,14 @@ impl BatchExecutor {
                     .checked_mul(group_len)
                     .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
                 (0usize, stacked_height, "L", 1usize)
+            }
+            BatchOperation::Invert => {
+                let group_len = u32::try_from(indices.len())
+                    .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
+                let stacked_height = height
+                    .checked_mul(group_len)
+                    .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
+                (0usize, stacked_height, mode, channels)
             }
             BatchOperation::Brightness { .. } => {
                 let group_len = u32::try_from(indices.len())
@@ -893,6 +907,49 @@ mod tests {
         }
         #[cfg(not(feature = "gpu"))]
         assert!(!operation.can_group("LA", (16, 16)));
+    }
+
+    #[test]
+    fn invert_groups_only_supported_imageops_modes() {
+        let operation = BatchOperation::Invert;
+        assert!(operation.can_group("L", (16, 16)));
+        assert!(operation.can_group("RGB", (16, 16)));
+        assert!(!operation.can_group("LA", (16, 16)));
+        assert!(!operation.can_group("RGBA", (16, 16)));
+        assert!(!operation.can_group("P", (16, 16)));
+        assert!(!operation.can_group("CMYK", (16, 16)));
+        assert!(operation.matches_group(&BatchOperation::Invert));
+        assert!(matches!(operation.pipeline_op(), Some(PipelineOp::Invert)));
+    }
+
+    #[test]
+    fn queued_invert_matches_existing_imageops_path() {
+        for (mode, channels) in [("L", 1usize), ("RGB", 3)] {
+            let sources = [
+                fixture(mode, 7, 5, channels, 23),
+                fixture(mode, 7, 5, channels, 89),
+            ];
+            let expected = sources
+                .iter()
+                .map(|source| {
+                    crate::ops::imageops::invert_ops(source)
+                        .unwrap()
+                        .tobytes()
+                        .unwrap()
+                })
+                .collect::<Vec<_>>();
+            let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+            for source in sources {
+                batch.submit(source, BatchOperation::Invert).unwrap();
+            }
+            let actual = batch
+                .join()
+                .unwrap()
+                .iter()
+                .map(|image| image.tobytes().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "queued {mode} ImageOps.invert differs");
+        }
     }
 
     #[test]

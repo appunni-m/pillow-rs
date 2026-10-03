@@ -18951,6 +18951,7 @@ fn gpu_batch_group_limit_for_limits(
 
     let multiply = matches!(op, PipelineOp::Multiply { .. });
     let native_brightness = matches!(op, PipelineOp::Brightness { .. });
+    let native_invert = matches!(op, PipelineOp::Invert);
     let masked_paste = matches!(
         op,
         PipelineOp::Paste {
@@ -18959,7 +18960,7 @@ fn gpu_batch_group_limit_for_limits(
             ..
         }
     );
-    let channels = if multiply || masked_paste || native_brightness {
+    let channels = if multiply || masked_paste || native_brightness || native_invert {
         match logical_mode {
             "L" => Some(1u64),
             "LA" => Some(2),
@@ -18976,6 +18977,7 @@ fn gpu_batch_group_limit_for_limits(
     let halo = match op {
         PipelineOp::MedianFilter { size: 3 } => 2u32,
         PipelineOp::ExtractBand { .. }
+        | PipelineOp::Invert
         | PipelineOp::Brightness { .. }
         | PipelineOp::Multiply { .. }
         | PipelineOp::Paste {
@@ -19011,7 +19013,7 @@ fn gpu_batch_group_limit_for_limits(
                 return false;
             };
             words
-        } else if multiply || native_brightness {
+        } else if multiply || native_brightness || native_invert {
             let Some(sample_bytes) = pixels.checked_mul(channels) else {
                 return false;
             };
@@ -19060,7 +19062,7 @@ fn gpu_batch_group_limit_for_limits(
             }
         }
 
-        if multiply || native_brightness {
+        if multiply || native_brightness || native_invert {
             let words = buffer_capacity;
             let columns = words.min(1024);
             let rows = words.div_ceil(columns);
@@ -33893,6 +33895,38 @@ mod tests {
             );
         }
 
+        // ImageOps.invert shares the packed native-byte shader path, so a
+        // stacked group is bounded by stored bytes and packed-word workgroups,
+        // not by one logical work item per pixel.
+        for (mode, expected_cap, expected_storage_cap) in [("L", 85, 21), ("RGB", 28, 7)] {
+            assert_eq!(
+                gpu_batch_group_limit_for_limits(
+                    &PipelineOp::Invert,
+                    mode,
+                    (1024, 768),
+                    100,
+                    default_limits.0,
+                    default_limits.1,
+                    default_limits.2,
+                ),
+                expected_cap,
+                "wrong native-byte ImageOps.invert cap for {mode}"
+            );
+            assert_eq!(
+                gpu_batch_group_limit_for_limits(
+                    &PipelineOp::Invert,
+                    mode,
+                    (1024, 768),
+                    100,
+                    16 * 1024 * 1024,
+                    16 * 1024 * 1024,
+                    default_limits.2,
+                ),
+                expected_storage_cap,
+                "wrong device-storage ImageOps.invert cap for {mode}"
+            );
+        }
+
         let multiply_rgba = PipelineOp::Multiply {
             other: Arc::new(Image::new(1024, 768, "RGBA", (0, 0, 0, 0)).unwrap()),
         };
@@ -34067,6 +34101,19 @@ mod tests {
             ),
             0,
             "Brightness packed-word dispatch must respect each adapter workgroup dimension"
+        );
+        assert_eq!(
+            gpu_batch_group_limit_for_limits(
+                &PipelineOp::Invert,
+                "L",
+                (1000, 500),
+                2,
+                u32::MAX,
+                u64::MAX,
+                63,
+            ),
+            0,
+            "ImageOps.invert packed-word dispatch must respect each adapter workgroup dimension"
         );
 
         // Each 1x16384 image needs exactly an 8x8 ExtractBand grid. Two

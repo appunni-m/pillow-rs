@@ -126,6 +126,7 @@ impl PyBatchExecutor {
             "ExtractBand" => pillow_rs::BatchOperation::ExtractBand {
                 channel: operation.getattr("channel")?.extract::<i32>()?,
             },
+            "Invert" => pillow_rs::BatchOperation::Invert,
             "Brightness" => pillow_rs::BatchOperation::Brightness {
                 factor: operation.getattr("factor")?.extract::<f64>()?,
             },
@@ -163,7 +164,7 @@ impl PyBatchExecutor {
             }
             _ => {
                 return Err(PyTypeError::new_err(
-                    "batch operation must be an ImageFilter.MedianFilter, ImageBatch.ExtractBand, ImageBatch.Brightness, ImageBatch.Multiply, ImageBatch.Paste, or ImageBatch.Color3DLUT instance",
+                    "batch operation must be an ImageFilter.MedianFilter, ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Brightness, ImageBatch.Multiply, ImageBatch.Paste, or ImageBatch.Color3DLUT instance",
                 ));
             }
         };

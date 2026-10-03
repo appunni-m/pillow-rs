@@ -21,6 +21,11 @@ channels.submit(rgba_a, ImageBatch.ExtractBand(3))
 channels.submit(rgba_b, ImageBatch.ExtractBand(3))
 alpha_a, alpha_b = channels.join()
 
+inversions = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+inversions.submit(gray_a, ImageBatch.Invert())
+inversions.submit(gray_b, ImageBatch.Invert())
+inverted_a, inverted_b = inversions.join()
+
 brightness = ImageBatch.BatchExecutor(queue=True, backend="gpu")
 brightness.submit(luma_a, ImageBatch.Brightness(0.5))
 brightness.submit(luma_b, ImageBatch.Brightness(0.5))
@@ -50,7 +55,8 @@ With `queue=False` (the default), `submit` executes each operation immediately
 through its ordinary single-image pipeline. With `queue=True`, submissions wait
 until `join`, which returns results in submission order. A batch accepts
 `ImageFilter.MedianFilter(3)`, `ImageBatch.ExtractBand(channel)`,
-`ImageBatch.Brightness(factor)`, `ImageBatch.Multiply(other_image)`, full-frame
+`ImageBatch.Invert()`, `ImageBatch.Brightness(factor)`,
+`ImageBatch.Multiply(other_image)`, full-frame
 `ImageBatch.Paste(source, mask)`, and a shared same-mode RGBA
 `ImageBatch.Color3DLUT(filter)` operation. Jobs with the same operation and
 compatible mode and dimensions are grouped when GPU is the selected backend;
@@ -65,12 +71,14 @@ regular single-image operation at `join`.
 
 The GPU group is a native-mode vertical stack. For `MedianFilter(3)`, one
 replicated top and bottom row surrounds each image, so the filter cannot read
-pixels from a neighbor at a group boundary. For `ExtractBand`, `Brightness`,
-`Multiply`, `Paste`, and `Color3DLUT`, images are stacked directly because each
+pixels from a neighbor at a group boundary. For `ExtractBand`, `Invert`,
+`Brightness`, `Multiply`, `Paste`, and `Color3DLUT`, images are stacked directly because each
 output pixel depends only on corresponding input pixels. Brightness groups
 same-factor L, LA, and RGB images with the existing native-byte kernel; LA
 alpha is preserved. RGBA and factors the GPU cannot represent exactly continue
-through the existing per-image route. For `Multiply`, primary and secondary
+through the existing per-image route. `ImageOps.invert` groups only L and RGB
+images, using its existing mode-specific pipeline; unsupported modes retain
+the ordinary ImageOps validation behavior. For `Multiply`, primary and secondary
 operands are each stacked in their native mode. For `Paste`,
 destinations, sources, and L masks are stacked separately; the existing
 full-frame masked paste runs at the origin and keeps each image independent.
@@ -161,6 +169,45 @@ packing and result splitting; queued throughput was 0.31× SIMD and lower than
 eager GPU. This is explicit `ImageBatch` throughput only and does not change
 normal image routing. The normal build had Rayon disabled; no Parallel CPU
 results are folded into these rows.
+
+### `ImageOps.invert` batch probe
+
+`ImageBatch.Invert()` queues the existing `ImageOps.invert` operation for
+native `L` and `RGB` images. Other modes keep the existing single-image
+validation and execution path. The parity check compares Pillow bytes and
+metadata for both modes, and confirms that a compatible queued GPU group uses
+one actual shader dispatch without fallback or mode conversion.
+
+The RGB workload below processes four 1024×768 images per window. It ran on
+2026-10-04 on an Apple M3 Pro with macOS 15.7.7, Python 3.12.13, and Rust
+1.96.1. The source was `main` at `8bc163521` with the uncommitted
+`ImageBatch.Invert` changes described here. Each result is the median of 12
+windows after 3 warmups. The benchmark command was
+`scripts/benchmark_imagebatch.py --operation invert --mode RGB --width 1024
+--height 768 --images 4 --samples 12 --warmups 3`, run once per Pillow, CPU,
+SIMD, and GPU profile, with `--queue` added for the final row. A window includes
+image construction, submission, execution, any GPU transfer and
+synchronization, output splitting, and output materialization. Pillow processes
+the same four images sequentially. The eager GPU row runs four individual
+operations, with one dispatch per image; the queued row uses one grouped
+dispatch. The standard build has the `parallel` feature disabled.
+
+| Profile | Queue | p50 per four-image window (ms) | Throughput (images/s) |
+| --- | --- | ---: | ---: |
+| Pillow 12.2.0 | Sequential reference | 7.352 | 544 |
+| Serial CPU | Immediate single-image path | 1.834 | 2,181 |
+| SIMD | Immediate single-image path | 2.745 | 1,457 |
+| GPU | Immediate single-image path | 3.274 | 1,222 |
+| GPU | Explicit queued group | 3.487 | 1,147 |
+
+In this run, serial CPU was 4.01× faster than Pillow, SIMD was 2.68× faster,
+and the queued GPU group was slower than both SIMD and eager GPU. A follow-up
+eight-image cohort showed queued GPU improving on eager GPU, but it still
+trailed CPU and SIMD; that run used 6 samples and 1 warmup rather than the
+12/3 samples above. These results establish parity and one-dispatch grouping,
+not a general batch speedup or the 5× SIMD / GPU-throughput goals. Keep this
+feature explicit and benchmark the actual cohort size and device before
+selecting it.
 
 ### `ExtractBand` batch probe
 
