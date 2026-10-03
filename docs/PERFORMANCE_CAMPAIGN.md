@@ -11988,6 +11988,26 @@ GPU median varied from 5.350 ms in the preceding repeat to 1.948 ms here even
 though this change did not touch GPU code; record both runs, and do not attribute
 that GPU difference to this optimization until it repeats consistently.
 
+A no-code recheck on 2026-10-03 confirms this case is already at its bounded
+attempt limit. The run on revision `edd677881` (dirty only from separate
+binding-docstring edits) measured Pillow / CPU / SIMD / GPU at 10.177 / 17.690 /
+11.855 / 4.893 ms. The parity gate
+`migration-parity-benchmark-gate-08809967d6f047eca92831af36e1c546` passed all
+three target lanes; CPU, SIMD, and GPU each ran on the requested backend for
+100/100 observations without fallback. The GPU used two dispatches, transferred
+2,359,296 bytes in and 5,591,040 bytes out, and made no mode conversion. This
+recheck is not an optimization claim: CPU is 1.74× and SIMD 1.16× slower than
+Pillow. Do not spend another implementation attempt on this HSV case without a
+new access-pattern hypothesis.
+
+```sh
+RUSTC_WRAPPER= MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.hsv-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-hsv-before-edd677881-20261003.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-hsv-before-edd677881-20261003-parity.json \
+make migration-parity-benchmark
+```
+
 Reproduce the retained unit checks and isolated Pillow comparison with:
 
 ```sh
