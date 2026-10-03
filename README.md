@@ -68,6 +68,14 @@ Continue with [Python recipes](https://appunni-m.github.io/pillow-rs/python/).
 The version prefix identifies the targeted Pillow version. It does not promise
 complete Pillow compatibility or stable alpha APIs.
 
+## What pillow-rs adds beyond Pillow
+
+Alongside its selected `PIL` compatibility surface, pillow-rs provides first-party
+Rust and Node.js/browser WebAssembly integrations, controls for its CPU/SIMD/GPU
+backends, an opt-in Rayon-backed Parallel CPU profile, and an explicit API for
+queueing compatible multi-image work. See the [feature comparison and limits](https://appunni-m.github.io/pillow-rs/compatibility/#pillow-rs-additions-beyond-pillow);
+availability depends on the package and release.
+
 ## Performance
 
 [View benchmark results](https://appunni-m.github.io/pillow-rs/benchmarks/) for
