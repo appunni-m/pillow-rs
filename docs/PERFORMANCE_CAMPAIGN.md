@@ -16935,3 +16935,17 @@ and GPU:
 The observed Parallel CPU gain is material for LA, RGB, and RGBA; L is
 essentially tied with Pillow. Do not generalize this result across modes or
 sizes. No coverage was run.
+
+## Documentation workload-count test is stale — checkpoint 2026-10-03
+
+`make docs-test` has one pre-existing failure in
+`test_current_workload_catalog_maps_all_entries_to_one_of_two_tables`
+(`scripts/test_docs_benchmark_view.py`). The unchanged fixture on `origin/main`,
+`pillow-rs/tests/fixtures/inputs/benchmark/pipeline-operations.json`, contains
+651 entries; the test still expects 644 total, 186 operations, and 458
+pipelines. The current categorizer maps all 651 entries to the two tables:
+191 operations and 460 pipelines. The test and fixture are unchanged by this
+checkpoint, so this is a stale cardinality expectation rather than a lost or
+uncategorized workload. Do not remove benchmark entries or weaken the catalog
+check to satisfy the obsolete totals. The other 43 documentation tests pass;
+`make docs-lint` and `make docs-build` pass.
