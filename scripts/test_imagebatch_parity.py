@@ -115,13 +115,16 @@ def require_gpu_execution(
 
 def run_oracle(output: Path) -> None:
     import PIL
-    from PIL import Image, ImageChops, ImageFilter
+    from PIL import Image, ImageChops, ImageEnhance, ImageFilter
 
     if PIL.__version__ != "12.2.0":
         raise RuntimeError(f"unexpected Pillow oracle version: {PIL.__version__}")
     expected: dict[str, list[str]] = {}
     metadata: dict[str, list[int | None]] = {}
     benchmark_outputs: dict[str, list[str]] = {}
+    brightness_outputs: dict[str, list[str]] = {}
+    brightness_metadata: dict[str, list[int | None]] = {}
+    brightness_benchmark_outputs: dict[str, list[str]] = {}
     extract_outputs: dict[str, list[str]] = {}
     extract_metadata: dict[str, list[int | None]] = {}
     extract_benchmark_outputs: dict[str, list[str]] = {}
@@ -143,6 +146,8 @@ def run_oracle(output: Path) -> None:
     for mode in MODES:
         expected[mode] = []
         metadata[mode] = []
+        brightness_outputs[mode] = []
+        brightness_metadata[mode] = []
         multiply_outputs[mode] = []
         multiply_metadata[mode] = []
         multiply_large_outputs[mode] = []
@@ -152,6 +157,9 @@ def run_oracle(output: Path) -> None:
             result = image.filter(ImageFilter.MedianFilter(3))
             expected[mode].append(result.tobytes().hex())
             metadata[mode].append(result.info.get("batch-seed"))
+            brightened = ImageEnhance.Brightness(image).enhance(0.5)
+            brightness_outputs[mode].append(brightened.tobytes().hex())
+            brightness_metadata[mode].append(brightened.info.get("batch-seed"))
             other = Image.frombytes(
                 mode, size, multiply_other_pixels(mode, size, seed)
             )
@@ -159,11 +167,15 @@ def run_oracle(output: Path) -> None:
             multiply_outputs[mode].append(multiplied.tobytes().hex())
             multiply_metadata[mode].append(multiplied.info.get("batch-seed"))
         benchmark_outputs[mode] = []
+        brightness_benchmark_outputs[mode] = []
         multiply_benchmark_outputs[mode] = []
         for seed in range(64):
             image = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
             benchmark_outputs[mode].append(
                 image.filter(ImageFilter.MedianFilter(3)).tobytes().hex()
+            )
+            brightness_benchmark_outputs[mode].append(
+                ImageEnhance.Brightness(image).enhance(0.5).tobytes().hex()
             )
             other = Image.frombytes(
                 mode,
@@ -313,6 +325,9 @@ def run_oracle(output: Path) -> None:
                 "outputs": expected,
                 "metadata": metadata,
                 "benchmark_outputs": benchmark_outputs,
+                "brightness_outputs": brightness_outputs,
+                "brightness_metadata": brightness_metadata,
+                "brightness_benchmark_outputs": brightness_benchmark_outputs,
                 "extract_outputs": extract_outputs,
                 "extract_metadata": extract_metadata,
                 "extract_benchmark_outputs": extract_benchmark_outputs,
@@ -350,6 +365,86 @@ def run_target(expected_path: Path) -> None:
         raise RuntimeError("GPU backend unavailable for the required batch parity lane")
     core.set_pipeline_telemetry(True)
     core.set_gpu_shader_coverage(True)
+
+    for backend in ("cpu", "simd"):
+        for selected in ("cpu", "simd", "gpu"):
+            core.disable_backend(selected)
+        if not core.enable_backend(backend):
+            raise AssertionError(f"{backend} backend unavailable for Brightness parity")
+        modes = MODES if backend == "cpu" else {mode: MODES[mode] for mode in ("L", "LA", "RGB")}
+        for mode in modes:
+            submission_order = (2, 0, 1)
+            small = ImageBatch.BatchExecutor(queue=True, backend=backend)
+            for input_index in submission_order:
+                image = Image.frombytes(
+                    mode,
+                    SIZES[input_index],
+                    pixels(mode, SIZES[input_index], SEEDS[input_index]),
+                )
+                image.info["batch-seed"] = SEEDS[input_index]
+                small.submit(image, ImageBatch.Brightness(0.5))
+            small_actual = small.join()
+            if [image.tobytes().hex() for image in small_actual] != [
+                expected["brightness_outputs"][mode][index]
+                for index in submission_order
+            ]:
+                raise AssertionError(f"small Pillow Brightness mismatch for {backend}/{mode}")
+            if [image.size for image in small_actual] != [
+                SIZES[index] for index in submission_order
+            ] or any(image.mode != mode for image in small_actual):
+                raise AssertionError(f"small {backend}/{mode} Brightness changed mode or size")
+            if [image.info.get("batch-seed") for image in small_actual] != [
+                expected["brightness_metadata"][mode][index]
+                for index in submission_order
+            ]:
+                raise AssertionError(f"small {backend}/{mode} Brightness info differs from Pillow")
+
+            batch = ImageBatch.BatchExecutor(queue=True, backend=backend)
+            for seed in range(64):
+                image = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
+                image.info["batch-seed"] = seed
+                batch.submit(image, ImageBatch.Brightness(0.5))
+            actual = batch.join()
+            if [image.tobytes().hex() for image in actual] != expected[
+                "brightness_benchmark_outputs"
+            ][mode]:
+                raise AssertionError(f"64x64 × 64 Pillow Brightness mismatch for {backend}/{mode}")
+            if any(
+                image.mode != mode or image.size != (64, 64)
+                for image in actual
+            ):
+                raise AssertionError(f"{backend}/{mode} Brightness changed mode or size")
+            if any(image.info.get("batch-seed") is not None for image in actual):
+                raise AssertionError(f"{backend}/{mode} Brightness metadata differs from Pillow")
+            print(f"{backend} queued Brightness {mode} 64x64 × 64: Pillow parity PASS")
+        if backend == "cpu":
+            eager_source = Image.frombytes("LA", SIZES[0], pixels("LA", SIZES[0], SEEDS[0]))
+            eager_source.info["batch-seed"] = SEEDS[0]
+            eager = ImageBatch.BatchExecutor(queue=False, backend="cpu")
+            if eager.submit(eager_source, ImageBatch.Brightness(0.5)) != 0:
+                raise AssertionError("queue=False Brightness returned an invalid index")
+            eager_result = eager.join()[0]
+            if (
+                eager_result.tobytes().hex() != expected["brightness_outputs"]["LA"][0]
+                or eager_result.mode != "LA"
+                or eager_result.size != SIZES[0]
+                or eager_result.info.get("batch-seed")
+                != expected["brightness_metadata"]["LA"][0]
+            ):
+                raise AssertionError("queue=False LA Brightness differs from Pillow")
+            print("CPU queue=False LA Brightness: Pillow parity PASS; eager route")
+        receipt = core.take_pipeline_telemetry()
+        if (
+            receipt is None
+            or receipt.get("actual_backend") != backend
+            or receipt.get("fallback_reason")
+        ):
+            raise AssertionError(f"queued Brightness did not use {backend}: {receipt}")
+
+    for selected in ("cpu", "simd", "gpu"):
+        core.disable_backend(selected)
+    if not core.enable_backend("gpu"):
+        raise AssertionError("GPU backend unavailable after Brightness CPU/SIMD parity")
 
     for mode in MODES:
         # The first 1x1 image uses the ordinary single-image path. The next
@@ -558,6 +653,85 @@ def run_target(expected_path: Path) -> None:
         print(
             f"{mode} ExtractBand({channel}) 64x64 × 64: Pillow parity PASS; grouped dispatch=1"
         )
+
+    for mode in MODES:
+        core.take_gpu_shader_coverage()
+        submission_order = (2, 0, 1)
+        small = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for input_index in submission_order:
+            image = Image.frombytes(
+                mode,
+                SIZES[input_index],
+                pixels(mode, SIZES[input_index], SEEDS[input_index]),
+            )
+            image.info["batch-seed"] = SEEDS[input_index]
+            small.submit(image, ImageBatch.Brightness(0.5))
+        small_actual = small.join()
+        if [image.tobytes().hex() for image in small_actual] != [
+            expected["brightness_outputs"][mode][index]
+            for index in submission_order
+        ]:
+            raise AssertionError(f"small Pillow Brightness mismatch for GPU/{mode}")
+        if [image.size for image in small_actual] != [
+            SIZES[index] for index in submission_order
+        ] or any(image.mode != mode for image in small_actual):
+            raise AssertionError(f"small GPU/{mode} Brightness changed mode or size")
+        if [image.info.get("batch-seed") for image in small_actual] != [
+            expected["brightness_metadata"][mode][index]
+            for index in submission_order
+        ]:
+            raise AssertionError(f"small GPU/{mode} Brightness info differs from Pillow")
+        receipt = core.take_pipeline_telemetry()
+        if mode in ("L", "LA", "RGB"):
+            require_gpu_execution(
+                core,
+                receipt,
+                f"{mode} Brightness mixed-size small batch",
+                expected_shader="brightness_native.wgsl",
+                expected_shader_dispatches=2,
+            )
+        else:
+            core.take_gpu_shader_coverage()
+
+        batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for seed in range(64):
+            image = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
+            image.info["batch-seed"] = seed
+            batch.submit(image, ImageBatch.Brightness(0.5))
+        actual = batch.join()
+        if [image.tobytes().hex() for image in actual] != expected[
+            "brightness_benchmark_outputs"
+        ][mode]:
+            raise AssertionError(f"64x64 × 64 Pillow Brightness mismatch for GPU/{mode}")
+        if any(
+            image.mode != mode or image.size != (64, 64)
+            for image in actual
+        ):
+            raise AssertionError(f"GPU/{mode} Brightness changed mode or size")
+        if any(image.info.get("batch-seed") is not None for image in actual):
+            raise AssertionError("GPU Brightness metadata differs from Pillow")
+        receipt = core.take_pipeline_telemetry()
+        if mode in ("L", "LA", "RGB"):
+            require_gpu_execution(
+                core,
+                receipt,
+                f"{mode} Brightness 64x64 × 64",
+                expected_shader="brightness_native.wgsl",
+            )
+            print(
+                f"GPU queued Brightness {mode} 64x64 × 64: Pillow parity PASS; "
+                "one native-mode dispatch"
+            )
+        else:
+            if (
+                receipt is None
+                or receipt.get("actual_backend") != "gpu"
+                or receipt.get("fallback_reason")
+            ):
+                raise AssertionError(
+                    f"RGBA Brightness should retain its ordinary GPU single-image path: {receipt}"
+                )
+            print("GPU queued Brightness RGBA: Pillow parity PASS; ordinary single-image route retained")
 
     # Verify that queue=False executes eagerly on the normal single-image path.
     image = Image.frombytes("L", SIZES[0], pixels("L", SIZES[0], SEEDS[0]))

@@ -41,11 +41,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--queue", action="store_true", help="queue operations until join")
     parser.add_argument(
         "--operation",
-        choices=("median-filter", "extract-band", "multiply", "paste", "color3dlut"),
+        choices=("median-filter", "extract-band", "brightness", "multiply", "paste", "color3dlut"),
         default="median-filter",
     )
     parser.add_argument("--mode", choices=("L", "LA", "RGB", "RGBA"), default="L")
     parser.add_argument("--channel", type=int, default=0)
+    parser.add_argument("--factor", type=float, default=0.5)
     parser.add_argument("--width", type=int, default=64)
     parser.add_argument("--height", type=int, default=64)
     parser.add_argument("--images", type=int, default=64)
@@ -74,7 +75,7 @@ def main() -> int:
     if args.backend != "pillow":
         sys.path.insert(0, str(root / "pillow-rs-py" / "python"))
         sys.path.insert(0, str(root / "scripts"))
-    from PIL import Image, ImageFilter
+    from PIL import Image, ImageEnhance, ImageFilter
     if args.backend == "pillow":
         import PIL
         from PIL import ImageChops
@@ -152,6 +153,8 @@ def main() -> int:
                     image.getchannel(args.channel).tobytes()
                 elif args.operation == "color3dlut":
                     image.filter(color_lut).tobytes()
+                elif args.operation == "brightness":
+                    ImageEnhance.Brightness(image).enhance(args.factor).tobytes()
                 elif args.operation == "paste":
                     source = Image.frombytes(
                         args.mode,
@@ -185,6 +188,8 @@ def main() -> int:
                 operation = ImageFilter.MedianFilter(3)
             elif args.operation == "extract-band":
                 operation = ImageBatch.ExtractBand(args.channel)
+            elif args.operation == "brightness":
+                operation = ImageBatch.Brightness(args.factor)
             elif args.operation == "color3dlut":
                 operation = batch_color_lut
             elif args.operation == "multiply":
@@ -195,7 +200,7 @@ def main() -> int:
                         other_inputs[start + image_index],
                     )
                 )
-            else:
+            elif args.operation == "paste":
                 source = Image.frombytes(
                     args.mode,
                     (args.width, args.height),
@@ -207,6 +212,14 @@ def main() -> int:
                     mask_inputs[start + image_index],
                 )
                 operation = ImageBatch.Paste(source, mask)
+            else:
+                operation = ImageBatch.Multiply(
+                    Image.frombytes(
+                        args.mode,
+                        (args.width, args.height),
+                        other_inputs[start + image_index],
+                    )
+                )
             executor.submit(image, operation)
         result = executor.join()
         if len(result) != args.images:
@@ -254,6 +267,7 @@ def main() -> int:
                 "mode": args.mode,
                 "operation": args.operation,
                 "channel": args.channel if args.operation == "extract-band" else None,
+                "factor": args.factor if args.operation == "brightness" else None,
                 "size": [args.width, args.height],
                 "images_per_window": args.images,
                 "backend": args.backend,

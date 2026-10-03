@@ -18950,6 +18950,7 @@ fn gpu_batch_group_limit_for_limits(
     }
 
     let multiply = matches!(op, PipelineOp::Multiply { .. });
+    let native_brightness = matches!(op, PipelineOp::Brightness { .. });
     let masked_paste = matches!(
         op,
         PipelineOp::Paste {
@@ -18958,7 +18959,7 @@ fn gpu_batch_group_limit_for_limits(
             ..
         }
     );
-    let channels = if multiply || masked_paste {
+    let channels = if multiply || masked_paste || native_brightness {
         match logical_mode {
             "L" => Some(1u64),
             "LA" => Some(2),
@@ -18975,6 +18976,7 @@ fn gpu_batch_group_limit_for_limits(
     let halo = match op {
         PipelineOp::MedianFilter { size: 3 } => 2u32,
         PipelineOp::ExtractBand { .. }
+        | PipelineOp::Brightness { .. }
         | PipelineOp::Multiply { .. }
         | PipelineOp::Paste {
             mask: Some(_),
@@ -18998,9 +19000,9 @@ fn gpu_batch_group_limit_for_limits(
         let stacked_dimensions = (width, stacked_height);
         let pixels = u64::from(width) * u64::from(stacked_height);
         // The ordinary filter/extract layouts address one packed u32 per
-        // pixel. Native-byte Multiply addresses four independent samples per
-        // word, so its device-buffer bound depends on the source mode's byte
-        // width while preserving each image's stored layout.
+        // pixel. Native-byte Multiply and Brightness address four stored
+        // samples per word, so their device-buffer bounds use the source
+        // mode's actual byte width.
         let buffer_words = if masked_paste {
             let Some(source_bytes) = pixels.checked_mul(channels) else {
                 return false;
@@ -19009,7 +19011,7 @@ fn gpu_batch_group_limit_for_limits(
                 return false;
             };
             words
-        } else if multiply {
+        } else if multiply || native_brightness {
             let Some(sample_bytes) = pixels.checked_mul(channels) else {
                 return false;
             };
@@ -19058,7 +19060,7 @@ fn gpu_batch_group_limit_for_limits(
             }
         }
 
-        if multiply {
+        if multiply || native_brightness {
             let words = buffer_capacity;
             let columns = words.min(1024);
             let rows = words.div_ceil(columns);
@@ -33847,6 +33849,40 @@ mod tests {
             );
         }
 
+        // Brightness batches use the same packed-byte transport sizes as
+        // Multiply, while retaining the brightness shader's own dispatch.
+        for (mode, expected_cap, expected_storage_cap) in
+            [("L", 85, 21), ("LA", 42, 10), ("RGB", 28, 7)]
+        {
+            let brightness = PipelineOp::Brightness { factor: 0.5 };
+            assert_eq!(
+                gpu_batch_group_limit_for_limits(
+                    &brightness,
+                    mode,
+                    (1024, 768),
+                    100,
+                    default_limits.0,
+                    default_limits.1,
+                    default_limits.2,
+                ),
+                expected_cap,
+                "wrong native-byte Brightness cap for {mode}"
+            );
+            assert_eq!(
+                gpu_batch_group_limit_for_limits(
+                    &brightness,
+                    mode,
+                    (1024, 768),
+                    100,
+                    16 * 1024 * 1024,
+                    16 * 1024 * 1024,
+                    default_limits.2,
+                ),
+                expected_storage_cap,
+                "wrong device-storage Brightness cap for {mode}"
+            );
+        }
+
         let multiply_rgba = PipelineOp::Multiply {
             other: Arc::new(Image::new(1024, 768, "RGBA", (0, 0, 0, 0)).unwrap()),
         };
@@ -34007,6 +34043,20 @@ mod tests {
             ),
             0,
             "packed-word dispatch must respect each adapter workgroup dimension"
+        );
+        let brightness_l = PipelineOp::Brightness { factor: 0.5 };
+        assert_eq!(
+            gpu_batch_group_limit_for_limits(
+                &brightness_l,
+                "L",
+                (1000, 500),
+                2,
+                u32::MAX,
+                u64::MAX,
+                63,
+            ),
+            0,
+            "Brightness packed-word dispatch must respect each adapter workgroup dimension"
         );
 
         // Each 1x16384 image needs exactly an 8x8 ExtractBand grid. Two

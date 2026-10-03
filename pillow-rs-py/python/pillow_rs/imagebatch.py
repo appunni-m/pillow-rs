@@ -29,6 +29,19 @@ class ExtractBand:
             raise TypeError("channel must be an integer") from error
 
 
+class Brightness:
+    """Request ``ImageEnhance.Brightness(image).enhance(factor)`` in a batch.
+
+    Equal-size L, LA, or RGB jobs with the same GPU-exact factor can share one
+    native-mode GPU dispatch. Other inputs use their ordinary image path.
+    """
+
+    __slots__ = ("factor",)
+
+    def __init__(self, factor):
+        self.factor = factor
+
+
 class Multiply:
     """Request ``ImageChops.multiply(image, other)`` in an explicit batch.
 
@@ -88,7 +101,8 @@ class BatchExecutor:
     ``queue=False`` (the default) executes each submitted operation
     immediately through its usual single-image path. With ``queue=True``,
     ``join()`` groups compatible ``ImageFilter.MedianFilter(3)``,
-    ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Multiply(image2)``, or
+    ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Brightness(factor)``,
+    ``ImageBatch.Multiply(image2)``, or
     full-frame ``ImageBatch.Paste(source, mask)`` jobs, plus jobs using one
     shared RGBA-to-RGBA ``ImageBatch.Color3DLUT``, on the GPU when possible.
     Grouped operands use native ``L``, ``LA``, ``RGB``, or ``RGBA`` storage
@@ -107,6 +121,11 @@ class BatchExecutor:
         channels = ImageBatch.BatchExecutor(queue=True, backend="gpu")
         channels.submit(rgba_image, ImageBatch.ExtractBand(3))
         alpha = channels.join()[0]
+
+        brightness = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        brightness.submit(luma_a, ImageBatch.Brightness(0.5))
+        brightness.submit(luma_b, ImageBatch.Brightness(0.5))
+        darker_a, darker_b = brightness.join()
 
         products = ImageBatch.BatchExecutor(queue=True, backend="gpu")
         products.submit(image_a, ImageBatch.Multiply(image_b))
@@ -155,6 +174,7 @@ class BatchExecutor:
         if type(operation).__name__ not in (
             "MedianFilter",
             "ExtractBand",
+            "Brightness",
             "Multiply",
             "Paste",
             "BatchColor3DLUT",
@@ -162,15 +182,29 @@ class BatchExecutor:
             raise TypeError(
                 "batch operation must be an ImageFilter.MedianFilter, "
                 "ImageBatch.ExtractBand, ImageBatch.Multiply, "
+                "ImageBatch.Brightness, "
                 "ImageBatch.Paste, or "
                 "ImageBatch.Color3DLUT instance"
             )
-        metadata = (
-            image._info.copy(),
-            deepcopy(image._native_info),
-            image._native_info_rebaseline,
-            image._native_info_omitted,
-        )
+        if isinstance(operation, Brightness):
+            # Pillow's ImageEnhance.Brightness creates a fresh result through
+            # Image.blend, whose metadata comes from its generated black base
+            # image. Keep the public info mapping empty while retaining the
+            # result's native snapshot so lazy compatibility fields do not
+            # reappear when Image.info is first read.
+            metadata = (
+                {},
+                deepcopy(image._rust_image.compatibility_info()),
+                False,
+                frozenset(),
+            )
+        else:
+            metadata = (
+                image._info.copy(),
+                deepcopy(image._native_info),
+                image._native_info_rebaseline,
+                image._native_info_omitted,
+            )
         index = self._executor.submit(image._rust_image, operation)
         if index != len(self._metadata):
             raise RuntimeError("batch executor returned an unexpected submission index")
