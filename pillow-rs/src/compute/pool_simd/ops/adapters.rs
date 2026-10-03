@@ -30893,17 +30893,38 @@ fn alpha_composite_repeated_pixel_pair<const CHANNELS: usize>(
     source: &[u8],
     output: &[u8],
 ) -> bool {
-    let source_pixel = &source[..CHANNELS];
-    let destination_pixel = &output[..CHANNELS];
-    for pixel in 1..8 {
-        let start = pixel * CHANNELS;
-        if source[start..start + CHANNELS] != *source_pixel
-            || output[start..start + CHANNELS] != *destination_pixel
+    debug_assert!(CHANNELS == 2 || CHANNELS == 4);
+    debug_assert_eq!(source.len(), CHANNELS * 8);
+    debug_assert_eq!(output.len(), CHANNELS * 8);
+
+    // Compare whole native pixels in packed lanes. The SIMD fallback must
+    // check this condition for each eight-pixel block, so avoid seven scalar
+    // slice comparisons for both source and destination on every block.
+    if CHANNELS == 4 {
+        let source_words: [u32; 8] = bytemuck::pod_read_unaligned(source);
+        if !u32x8::new(source_words)
+            .simd_eq(u32x8::splat(source_words[0]))
+            .all()
         {
             return false;
         }
+        let output_words: [u32; 8] = bytemuck::pod_read_unaligned(output);
+        u32x8::new(output_words)
+            .simd_eq(u32x8::splat(output_words[0]))
+            .all()
+    } else {
+        let source_words: [u16; 8] = bytemuck::pod_read_unaligned(source);
+        if !u16x8::new(source_words)
+            .simd_eq(u16x8::splat(source_words[0]))
+            .all()
+        {
+            return false;
+        }
+        let output_words: [u16; 8] = bytemuck::pod_read_unaligned(output);
+        u16x8::new(output_words)
+            .simd_eq(u16x8::splat(output_words[0]))
+            .all()
     }
-    true
 }
 
 #[inline]
