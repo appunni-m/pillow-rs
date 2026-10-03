@@ -11,8 +11,91 @@
 
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, FromColor, ImageBuffer, Luma, Rgba};
+use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, OnceLock};
+
+/// View little-endian F-mode sample bytes as native `f32` values when that is
+/// safe, otherwise decode into owned samples. Select at most `sample_count`
+/// words and ignore incomplete trailing bytes, matching the old
+/// `chunks_exact(4).take(sample_count)` decoders.
+#[must_use]
+pub(crate) fn f32_samples_from_le_bytes(bytes: &[u8], sample_count: usize) -> Cow<'_, [f32]> {
+    let sample_bytes = bytes.get(..sample_count.saturating_mul(4)).unwrap_or(bytes);
+    #[cfg(target_endian = "little")]
+    if let Ok(samples) = bytemuck::try_cast_slice::<u8, f32>(sample_bytes)
+        && samples.len() == sample_count
+    {
+        return Cow::Borrowed(samples);
+    }
+
+    Cow::Owned(
+        sample_bytes
+            .chunks_exact(4)
+            .take(sample_count)
+            .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
+            .collect(),
+    )
+}
+
+#[cfg(test)]
+mod f32_sample_view_tests {
+    use super::f32_samples_from_le_bytes;
+    use crate::raster::RgbaImage;
+    use std::borrow::Cow;
+
+    #[test]
+    fn aligned_little_endian_scalar_carrier_is_borrowed() {
+        let words = [1.25f32.to_bits(), (-0.0f32).to_bits()];
+        let bytes = words
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .collect::<Vec<_>>();
+        let image = RgbaImage::from_raw(2, 1, bytes).expect("two scalar samples");
+        let raw = image.as_raw();
+        let samples = f32_samples_from_le_bytes(raw, words.len());
+
+        if cfg!(target_endian = "little")
+            && (raw.as_ptr() as usize).is_multiple_of(std::mem::align_of::<f32>())
+        {
+            assert!(matches!(samples, Cow::Borrowed(_)));
+        } else {
+            assert!(matches!(samples, Cow::Owned(_)));
+        }
+        assert_eq!(
+            samples
+                .iter()
+                .map(|sample| sample.to_bits())
+                .collect::<Vec<_>>(),
+            words
+        );
+    }
+
+    #[test]
+    fn unaligned_little_endian_samples_decode_without_changing_word_bits() {
+        let expected = [1.25f32.to_bits(), (-0.0f32).to_bits(), 0x7fc1_2345];
+        let bytes = expected
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .collect::<Vec<_>>();
+        let mut storage = vec![0; bytes.len() + std::mem::align_of::<f32>()];
+        let base = storage.as_ptr() as usize;
+        let offset = (0..std::mem::align_of::<f32>())
+            .find(|offset| (base + offset) % std::mem::align_of::<f32>() != 0)
+            .expect("an unaligned byte offset must exist");
+        storage[offset..offset + bytes.len()].copy_from_slice(&bytes);
+
+        let samples = f32_samples_from_le_bytes(&storage[offset..], expected.len());
+        assert!(matches!(samples, Cow::Owned(_)));
+        assert_eq!(
+            samples
+                .iter()
+                .map(|sample| sample.to_bits())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+}
 
 /// Evaluate the scalar sine used by Pillow's ARM64 resampler on WASM.
 ///
