@@ -17181,3 +17181,61 @@ avoided conversion and allocation, but do not count getpixel as meeting the
 CPU target or claim SIMD/GPU acceleration. Revisit only with a profile or a
 benchmark that isolates a realistic read from an already-existing image while
 retaining an equivalent Pillow boundary. No coverage was run.
+
+## RGB `ImageEnhance.Color` factor-one result copy — checkpoint 2026-10-04
+
+`pil-imageenhance.color.standard` is a 16 × 16 RGB `Color(...).enhance(1.0)`
+workflow. Pillow returns a new image containing the source pixels. The wrapper
+also exposes `enhancer.degenerate` as an eager snapshot, so construction still
+performs the required RGB-to-grayscale-to-RGB work even when the requested
+factor is one. Keep that observable snapshot and its metadata behavior; the
+bounded optimization in `pillow-rs-py/python/pillow_rs/imageenhance.py` skips
+the later `blend(degenerate, image, 1.0)` call for same-size RGB images and
+returns an independent `image.copy()` with the metadata that `blend` would
+have copied from `degenerate`. Other factors, modes, dimension mismatches, and
+transpose-loaded metadata keep the existing blend path.
+
+Three standard runs passed their embedded live-Pillow parity gate (1/1 each)
+for CPU, SIMD, and GPU. Pillow medians were 9.958, 9.875, and 10.458 µs. The
+corresponding candidate medians were 14.125, 13.459, and 14.521 µs for CPU;
+14.438, 14.541, and 15.208 µs for SIMD; and 427.083, 422.937, and 660.354 µs
+for GPU. The single clean baseline run measured 10.375 µs for Pillow,
+15.209 µs for CPU, 15.542 µs for SIMD, and 420.188 µs for GPU. Candidate CPU
+and SIMD measurements consistently moved below that baseline, but still
+lagged Pillow by roughly 36–47%; one baseline run is not enough to separate
+the modest change from run-to-run noise. GPU remained around 0.42–0.66 ms and
+recorded two dispatches, so this small identity case remains unsuitable for
+GPU execution and shows no GPU gain. All three measured backends reported the
+requested backend with no fallback.
+
+The exact factor-one behavior and varied-RGB cases passed on each backend:
+`PIL.ImageEnhance.Color.enhance.behavior.default` and
+`PIL.ImageEnhance.Color.enhance.nuanced.audit-RGB-varied-1` passed 2/2 on CPU,
+2/2 on SIMD, and 2/2 on GPU. The fast path was also directly checked to avoid
+calling `operations.blend`. Runtime telemetry still records the eager Color
+construction work, and no Rust operation count or GPU dispatch is eliminated.
+Keep this narrowly scoped result-copy shortcut as a small CPU/SIMD improvement,
+but record the operation as below target: serial CPU remains slower than
+Pillow, SIMD remains far below 5×, and GPU is much slower than SIMD. A larger
+representative factor-one workload and repeated clean baselines would be
+needed to quantify the copy benefit independently of the eager constructor.
+The benchmark receipts are `color-rgb-identity-baseline-ce50a495.json` and
+`color-rgb-identity-attempt{1,2,3}-ce50a495.json`, with matching parity
+sidecars under `build/migration-parity/`. The additional selected parity
+receipts are `color-rgb-identity-parity-{cpu,simd,gpu}-20261004.json`.
+Reproduce a parity-gated standard run with unique output names for each repeat:
+
+```sh
+RUSTC_WRAPPER= \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageenhance.color.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/color-rgb-identity-attemptN.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/color-rgb-identity-attemptN-parity.json \
+make migration-parity-benchmark
+```
+
+The baseline receipt is clean on `ce50a495a`; candidate receipts include the
+working-tree change. For the extended factors, build safely with
+`make build-parity`, then run `make migration-parity-test` with
+`MIGRATION_TARGET_BACKEND=cpu`, `simd`, or `gpu` and the two case IDs above.
+No coverage was run.
