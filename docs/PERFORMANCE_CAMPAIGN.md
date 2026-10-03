@@ -17415,3 +17415,18 @@ Run it once with each of `--backend pillow`, `cpu`, `simd`, and `gpu`; add
 `--queue` only for the queued GPU measurement. The benchmark script prints one
 JSON result per invocation. Keep queued and eager GPU results distinct because
 they measure different API behavior.
+
+## HSV `ImageOps.cover` unchanged recheck — 2026-10-04
+
+This is a no-code remeasurement of the existing HSV Cover implementation, not
+a new optimization attempt. The parity-gated material run selected CPU, SIMD,
+and GPU for all 100 timed observations with no fallback; exact parity passed
+3/3 comparisons. Medians were Pillow 9.178 ms, serial CPU 16.234 ms, SIMD
+10.961 ms, and GPU 2.408 ms. The unchanged CPU and SIMD paths remain slower
+than Pillow, while the one-request GPU timing is 3.81× faster than Pillow and
+4.55× faster than SIMD. This single-request result does not establish sustained
+GPU throughput. Keep the prior attempt limit and do not count this recheck as a
+new implementation attempt.
+
+Receipts are `cover-hsv-baseline-f567afa01-20261004.json` and
+`cover-hsv-baseline-f567afa01-20261004-parity.json`. No coverage ran.
