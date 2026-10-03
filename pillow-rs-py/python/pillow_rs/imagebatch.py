@@ -45,6 +45,25 @@ class Multiply:
         self.image = image
 
 
+class Paste:
+    """Request full-frame ``Image.paste(source, mask=mask)`` in a batch.
+
+    Grouped GPU execution currently requires equal-sized native-mode source
+    and destination images and an equal-sized L mask. The operation pastes at
+    the origin; other combinations keep their ordinary single-image semantics.
+    """
+
+    __slots__ = ("source", "mask")
+
+    def __init__(self, source, mask):
+        if not isinstance(source, Image):
+            raise TypeError("paste source must be a PIL.Image.Image instance")
+        if not isinstance(mask, Image):
+            raise TypeError("paste mask must be a PIL.Image.Image instance")
+        self.source = source
+        self.mask = mask
+
+
 class Color3DLUT:
     """Snapshot a Pillow ``ImageFilter.Color3DLUT`` for shared batch use.
 
@@ -69,11 +88,12 @@ class BatchExecutor:
     ``queue=False`` (the default) executes each submitted operation
     immediately through its usual single-image path. With ``queue=True``,
     ``join()`` groups compatible ``ImageFilter.MedianFilter(3)``,
-    ``ImageBatch.ExtractBand(channel)``, or ``ImageBatch.Multiply(image2)``
-    jobs, plus jobs using one shared RGBA-to-RGBA ``ImageBatch.Color3DLUT``,
-    on the GPU when possible. Grouped operands use native ``L``, ``LA``,
-    ``RGB``, or ``RGBA`` storage with equal dimensions. Incompatible jobs use
-    the ordinary per-image operation.
+    ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Multiply(image2)``, or
+    full-frame ``ImageBatch.Paste(source, mask)`` jobs, plus jobs using one
+    shared RGBA-to-RGBA ``ImageBatch.Color3DLUT``, on the GPU when possible.
+    Grouped operands use native ``L``, ``LA``, ``RGB``, or ``RGBA`` storage
+    with equal dimensions; batched Paste requires an L mask. Incompatible jobs
+    use the ordinary per-image operation.
 
     Example::
 
@@ -93,6 +113,11 @@ class BatchExecutor:
         products.submit(image_c, ImageBatch.Multiply(image_d))
         product_a, product_c = products.join()
 
+        pastes = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        pastes.submit(destination_a, ImageBatch.Paste(source_a, mask_a))
+        pastes.submit(destination_b, ImageBatch.Paste(source_b, mask_b))
+        pasted_a, pasted_b = pastes.join()
+
         lut = ImageFilter.Color3DLUT.generate(
             17, callback, channels=4, target_mode="RGBA"
         )
@@ -105,9 +130,11 @@ class BatchExecutor:
     Batched extraction reuses ``Image.getchannel`` over a same-mode vertical
     stack and returns one ``L`` image per input. Batched multiplication stacks
     each primary and secondary operand separately, then reuses the existing
-    ``ImageChops.multiply`` pipeline. A Color3DLUT batch snapshots one shared
-    LUT and applies the existing RGBA pipeline to a vertical stack. Inputs
-    retain their mode; the executor does not convert them to RGBA.
+    ``ImageChops.multiply`` pipeline. Batched Paste stacks full-frame
+    destinations, sources, and L masks, then reuses ``Image.paste`` at the
+    origin. A Color3DLUT batch snapshots one shared LUT and applies the
+    existing RGBA pipeline to a vertical stack. Inputs retain their mode; the
+    executor does not convert them to RGBA.
     """
 
     def __init__(self, queue=False, backend=None):
@@ -129,11 +156,13 @@ class BatchExecutor:
             "MedianFilter",
             "ExtractBand",
             "Multiply",
+            "Paste",
             "BatchColor3DLUT",
         ):
             raise TypeError(
                 "batch operation must be an ImageFilter.MedianFilter, "
-                "ImageBatch.ExtractBand, ImageBatch.Multiply, or "
+                "ImageBatch.ExtractBand, ImageBatch.Multiply, "
+                "ImageBatch.Paste, or "
                 "ImageBatch.Color3DLUT instance"
             )
         metadata = (

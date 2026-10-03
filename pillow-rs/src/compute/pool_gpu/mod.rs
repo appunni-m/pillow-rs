@@ -18909,7 +18909,15 @@ fn gpu_batch_group_limit_for_limits(
     }
 
     let multiply = matches!(op, PipelineOp::Multiply { .. });
-    let channels = if multiply {
+    let masked_paste = matches!(
+        op,
+        PipelineOp::Paste {
+            mask: Some(_),
+            mask_alpha: false,
+            ..
+        }
+    );
+    let channels = if multiply || masked_paste {
         match logical_mode {
             "L" => Some(1u64),
             "LA" => Some(2),
@@ -18927,6 +18935,11 @@ fn gpu_batch_group_limit_for_limits(
         PipelineOp::MedianFilter { size: 3 } => 2u32,
         PipelineOp::ExtractBand { .. }
         | PipelineOp::Multiply { .. }
+        | PipelineOp::Paste {
+            mask: Some(_),
+            mask_alpha: false,
+            ..
+        }
         | PipelineOp::Color3DLut { .. } => 0,
         _ => return 0,
     };
@@ -18947,7 +18960,15 @@ fn gpu_batch_group_limit_for_limits(
         // pixel. Native-byte Multiply addresses four independent samples per
         // word, so its device-buffer bound depends on the source mode's byte
         // width while preserving each image's stored layout.
-        let buffer_words = if multiply {
+        let buffer_words = if masked_paste {
+            let Some(source_bytes) = pixels.checked_mul(channels) else {
+                return false;
+            };
+            let Some(words) = source_bytes.div_ceil(4).checked_add(pixels.div_ceil(4)) else {
+                return false;
+            };
+            words
+        } else if multiply {
             let Some(sample_bytes) = pixels.checked_mul(channels) else {
                 return false;
             };
@@ -18959,6 +18980,7 @@ fn gpu_batch_group_limit_for_limits(
             return false;
         };
         if pixels == 0
+            || (masked_paste && pixels > u64::from(GPU_BUFFER_CAPACITY))
             || buffer_words > u64::from(GPU_BUFFER_CAPACITY)
             || gpu_buffer_capacity_exceeds_limits(
                 buffer_capacity,
@@ -18967,6 +18989,32 @@ fn gpu_batch_group_limit_for_limits(
             )
         {
             return false;
+        }
+
+        if masked_paste {
+            // Use the same byte-aligned work-item and 1D/2D dispatch planner
+            // as the native masked-Paste executor. The general batch grid
+            // below is not equivalent for L/LA/RGB: those shaders reject a
+            // flat workgroup count above the device's per-dimension limit.
+            let Ok(bytes_per_pixel) = u8::try_from(channels) else {
+                return false;
+            };
+            if plan_gpu_native_masked_byte_paste(
+                width,
+                stacked_height,
+                width,
+                stacked_height,
+                width,
+                stacked_height,
+                bytes_per_pixel,
+                max_workgroups_per_dimension,
+                max_storage_buffer_binding_size,
+                max_buffer_size,
+            )
+            .is_none()
+            {
+                return false;
+            }
         }
 
         if multiply {
@@ -33752,6 +33800,131 @@ mod tests {
             ),
             5,
             "Multiply cap must respect the selected device storage limit"
+        );
+
+        // Masked Paste's shared source/mask binding contains both native
+        // source samples and one L-mask byte per output pixel. Its group cap
+        // must account for both buffers and use the same dispatch layout as
+        // the native masked-Paste executor.
+        for (mode, expected_unbounded, expected_storage_limited) in [
+            ("L", 21, 10),
+            ("LA", 10, 7),
+            ("RGB", 21, 5),
+            ("RGBA", 17, 4),
+        ] {
+            let source = Arc::new(Image::new(1024, 768, mode, (0, 0, 0, 0)).unwrap());
+            let mask = Arc::new(Image::new(1024, 768, "L", (255, 0, 0, 0)).unwrap());
+            let paste = PipelineOp::Paste {
+                source,
+                x: 0,
+                y: 0,
+                w: 1024,
+                h: 768,
+                mask: Some(mask),
+                mask_alpha: false,
+            };
+            assert_eq!(
+                gpu_batch_group_limit_for_limits(
+                    &paste,
+                    mode,
+                    (1024, 768),
+                    22,
+                    default_limits.0,
+                    default_limits.1,
+                    default_limits.2,
+                ),
+                expected_unbounded,
+                "wrong static masked-Paste cap for {mode}"
+            );
+            assert_eq!(
+                gpu_batch_group_limit_for_limits(
+                    &paste,
+                    mode,
+                    (1024, 768),
+                    22,
+                    16 * 1024 * 1024,
+                    16 * 1024 * 1024,
+                    default_limits.2,
+                ),
+                expected_storage_limited,
+                "wrong device-storage masked-Paste cap for {mode}"
+            );
+        }
+
+        let la_batch_height = 768 * 10;
+        assert!(
+            plan_gpu_native_masked_byte_paste(
+                1024,
+                la_batch_height,
+                1024,
+                la_batch_height,
+                1024,
+                la_batch_height,
+                2,
+                default_limits.2,
+                default_limits.0,
+                default_limits.1,
+            )
+            .is_some()
+        );
+        let over_limit_la_height = 768 * 11;
+        assert!(
+            plan_gpu_native_masked_byte_paste(
+                1024,
+                over_limit_la_height,
+                1024,
+                over_limit_la_height,
+                1024,
+                over_limit_la_height,
+                2,
+                default_limits.2,
+                default_limits.0,
+                default_limits.1,
+            )
+            .is_none()
+        );
+
+        // The batch planner must also honor adapters whose workgroup limit is
+        // below the static default. L uses one flat workgroup per 256 pixels;
+        // LA uses two bytes per pixel and reaches the boundary twice as early.
+        let small_limit_paste = |mode: &str| {
+            let source = Arc::new(Image::new(1000, 4, mode, (0, 0, 0, 0)).unwrap());
+            let mask = Arc::new(Image::new(1000, 4, "L", (255, 0, 0, 0)).unwrap());
+            PipelineOp::Paste {
+                source,
+                x: 0,
+                y: 0,
+                w: 1000,
+                h: 4,
+                mask: Some(mask),
+                mask_alpha: false,
+            }
+        };
+        assert_eq!(
+            gpu_batch_group_limit_for_limits(
+                &small_limit_paste("L"),
+                "L",
+                (1000, 4),
+                5,
+                u32::MAX,
+                u64::MAX,
+                63,
+            ),
+            4,
+            "L Paste batch must cap at the native flat-dispatch boundary"
+        );
+        assert_eq!(
+            gpu_batch_group_limit_for_limits(
+                &small_limit_paste("LA"),
+                "LA",
+                (1000, 4),
+                3,
+                u32::MAX,
+                u64::MAX,
+                63,
+            ),
+            2,
+            "LA Paste batch must cap at the native flat-dispatch boundary"
         );
 
         // A 1000×500 L image yields a generic 63×63 grid when two images are

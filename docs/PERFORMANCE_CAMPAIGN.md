@@ -16839,3 +16839,99 @@ The receipts are `f-resize-baseline-607736dc8.json`,
 `f-resize-gpu-attempt3-607736dc8.json`, `f-resize-attempt4-607736dc8.json`,
 and `f-resize-parallel-cpu-attempt4-607736dc8.json` under
 `build/migration-parity/`, each with a matching parity sidecar.
+
+## Explicit `ImageBatch.Paste` GPU throughput checkpoint — 2026-10-03
+
+This fourth bounded Paste visit adds masked paste only to the explicit
+`PIL.ImageBatch.BatchExecutor`. The eligible workload is a full-frame paste at
+the origin with equal-size destination and source images in native `L`, `LA`,
+`RGB`, or `RGBA` mode and a same-size `L` mask. It stacks each input role in
+its native layout, reuses the existing Paste operation, then returns individual
+images in submission order. Ordinary `Image.paste`, automatic routing, and
+queue-off execution semantics are unchanged. The GPU planner now consults the
+exact per-mode native masked-Paste dispatch planner and active device limits;
+the earlier generic-grid estimate could admit groups whose real L/LA/RGB
+kernel dispatch exceeded its workgroup limit.
+
+Verification on the measured source used:
+
+- `cargo fmt --all --check` (passed after formatting the test assertions).
+- `RUSTC_WRAPPER= cargo test -p pillow-rs --lib paste_groups_only_same_size_native_sources_with_l_masks` (1 passed).
+- `RUSTC_WRAPPER= cargo test -p pillow-rs --lib queued_paste_matches_the_single_image_operation_for_native_modes` (1 passed).
+- `RUSTC_WRAPPER= cargo test -p pillow-rs --lib explicit_gpu_batch_planner_caps_static_device_and_dispatch_boundaries` (1 passed).
+- `make build-parity` (passed, isolated comparison extension).
+- `.venv/bin/python scripts/test_imagebatch_parity.py` (passed; exact Pillow bytes, mode, size, `info`, submission order, eager CPU/SIMD/GPU for all four modes, and one actual GPU dispatch for each compatible queued pair and size cohort).
+
+No coverage ran. The planner boundaries are tested without giant image
+allocations. The real GPU parity cohorts cover queued pairs, 64×64 × 64, and
+256×256 × 16 for every mode. The benchmark command
+`.venv/bin/python scripts/benchmark_imagebatch.py --operation paste --samples 12 --warmups 3`
+was run for Pillow, CPU, SIMD, eager GPU, and queued GPU in each mode at both
+sizes. Its full-call window includes construction, submission, operation,
+transfer/readback, result splitting, and materialization; the Pillow baseline
+processes the same number of images sequentially. Requested CPU, SIMD, and GPU
+profiles reported no fallback, and each queued GPU preflight showed one real
+dispatch.
+
+| Mode / cohort | Pillow p50 (ms) | Serial CPU p50 (ms) | SIMD p50 (ms) | GPU eager p50 (ms) | GPU queued p50 (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L / 64 images @ 64×64 | 0.699 | 0.593 | 0.566 | 13.431 | 0.898 |
+| LA / 64 images @ 64×64 | 1.088 | 0.706 | 0.739 | 13.526 | 1.240 |
+| RGB / 64 images @ 64×64 | 1.141 | 0.729 | 0.906 | 14.586 | 1.626 |
+| RGBA / 64 images @ 64×64 | 0.995 | 0.905 | 0.983 | 15.858 | 2.061 |
+| L / 16 images @ 256×256 | 0.960 | 0.951 | 0.629 | 6.467 | 2.145 |
+| LA / 16 images @ 256×256 | 3.190 | 1.928 | 2.163 | 6.931 | 5.380 |
+| RGB / 16 images @ 256×256 | 2.572 | 1.478 | 3.571 | 7.900 | 4.010 |
+| RGBA / 16 images @ 256×256 | 1.838 | 2.576 | 1.935 | 7.154 | 6.287 |
+
+Grouping reduces small-image GPU full-call latency by 7.7–15.0× compared with
+eager per-image GPU execution; its 256×256 benefit is only 1.1–3.0×. Queued
+GPU remains slower than SIMD and sequential Pillow in every measured row. The
+eager serial-CPU profile beats Pillow in seven of eight rows; SIMD does so in
+six of eight. These two sizes are below the 512×512-pixel Rayon threshold for
+masked Paste. The 256×256 medians varied materially from an earlier run, so
+keep the table tied to this run and do not turn these values into a stable
+claim. The batch feature is correct and bounded but has not met the required
+GPU target.
+
+The inspected data flow points to host packing and result materialization
+before shader arithmetic. For N images of W×H and C native bytes per pixel,
+the device must receive destination and source (`2CNWH`) plus the L mask
+(`NWH`) and return `CNWH`, or `(3C + 1)NWH` boundary bytes. Before upload, the
+batch builder also copies destination/source/mask into concatenated host
+vectors, an additional `(2C + 1)NWH` bytes moved on the host. This is an
+implementation-derived hypothesis, not a stage profile. Next attack direct
+staging writes from each materialized native slice, then reduce result split
+and ownership copies; defer shader arithmetic until measured data shows it is
+the bottleneck. Stop this Paste visit at the four-attempt checkpoint and move
+to the next uncheckpointed operation. No code path should redirect ordinary
+`Image.paste` through the explicit scheduler.
+
+
+### Separate Parallel CPU comparison
+
+The normal-build rows above are serial CPU; their 64×64 and 256×256 images do
+not reach masked Paste's 512×512 row-parallel threshold. I rebuilt with the
+documented `make build-parity-parallel-cpu` target and reran
+`.venv/bin/python scripts/test_imagebatch_parity.py`. The added one-image
+512×512 threshold case matched Pillow bytes, mode, size, and `info` for L, LA,
+RGB, and RGBA, with actual CPU selection and no fallback. The focused feature
+check `RUSTC_WRAPPER= cargo test -p pillow-rs --features parallel --lib
+native_masked_paste_parallel_clipping_touches_only_the_intersection` passed.
+
+The large-image benchmark used four 1024×768 jobs per full-call window, 3
+warmups, and 12 timed samples. With the `parallel` feature enabled, each
+786,432-pixel masked Paste enters Rayon row processing. Pillow remained its
+ordinary sequential profile. These results are separate from serial CPU, SIMD,
+and GPU:
+
+| Mode | Pillow p50 (ms) | Parallel CPU p50 (ms) | Pillow / Parallel CPU |
+| --- | ---: | ---: | ---: |
+| L | 1.977 | 1.944 | 1.02× |
+| LA | 7.136 | 2.604 | 2.74× |
+| RGB | 10.505 | 4.789 | 2.19× |
+| RGBA | 6.713 | 5.131 | 1.31× |
+
+The observed Parallel CPU gain is material for LA, RGB, and RGBA; L is
+essentially tied with Pillow. Do not generalize this result across modes or
+sizes. No coverage was run.

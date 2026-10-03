@@ -682,10 +682,17 @@ fn paste_native_masked_pa_row(
     }
 }
 
-/// Blend native PA index/alpha pairs with an L mask without per-channel
-/// premultiplication checks or a nested channel loop.
+/// Blend two independent native byte channels with an L mask without
+/// per-channel premultiplication checks or a nested channel loop. This is
+/// used by LA and PA storage: paste treats both stored samples as bytes and
+/// does not reinterpret either one as color or premultiplied alpha.
 #[inline(always)]
-fn paste_native_masked_pa_blend_byte(source: u8, destination: u8, mask: u16, inverse: u16) -> u8 {
+fn paste_native_masked_two_channel_blend_byte(
+    source: u8,
+    destination: u8,
+    mask: u16,
+    inverse: u16,
+) -> u8 {
     #[expect(
         clippy::arithmetic_side_effects,
         reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
@@ -700,7 +707,7 @@ fn paste_native_masked_pa_blend_byte(source: u8, destination: u8, mask: u16, inv
 }
 
 #[inline]
-fn paste_native_masked_pa_l_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
+fn paste_native_masked_two_channel_l_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
     debug_assert_eq!(source.len(), destination.len());
     debug_assert_eq!(source.len() % 2, 0);
     debug_assert_eq!(source.len() / 2, mask.len());
@@ -716,10 +723,18 @@ fn paste_native_masked_pa_l_row(source: &[u8], destination: &mut [u8], mask: &[u
             reason = "mask is a byte, so subtracting it from 255 cannot underflow"
         )]
         let inverse = 255 - mask;
-        destination_pixel[0] =
-            paste_native_masked_pa_blend_byte(source_pixel[0], destination_pixel[0], mask, inverse);
-        destination_pixel[1] =
-            paste_native_masked_pa_blend_byte(source_pixel[1], destination_pixel[1], mask, inverse);
+        destination_pixel[0] = paste_native_masked_two_channel_blend_byte(
+            source_pixel[0],
+            destination_pixel[0],
+            mask,
+            inverse,
+        );
+        destination_pixel[1] = paste_native_masked_two_channel_blend_byte(
+            source_pixel[1],
+            destination_pixel[1],
+            mask,
+            inverse,
+        );
     }
 }
 
@@ -990,7 +1005,13 @@ fn paste_native_masked(
         let source_row = &source_bytes[source_start..source_start.saturating_add(copy_bytes)];
         let destination_row = &mut row[destination_x..destination_x_end];
         let mask_row = &mask_bytes[mask_start..mask_start.saturating_add(mask_copy_bytes)];
-        if mode == "L"
+        if mode == "LA"
+            && mask_channels == 1
+            && mask_pixels.layout.value_index == 0
+            && !mask_pixels.layout.premultiplied
+        {
+            paste_native_masked_two_channel_l_row(source_row, destination_row, mask_row);
+        } else if mode == "L"
             && mask_channels == 1
             && mask_pixels.layout.value_index == 0
             && !mask_pixels.layout.premultiplied
@@ -1019,7 +1040,7 @@ fn paste_native_masked(
             && mask_pixels.layout.value_index == 0
             && !mask_pixels.layout.premultiplied
         {
-            paste_native_masked_pa_l_row(source_row, destination_row, mask_row);
+            paste_native_masked_two_channel_l_row(source_row, destination_row, mask_row);
         } else if mode == "PA" {
             paste_native_masked_pa_row(source_row, destination_row, mask_row, mask_pixels.layout);
         } else if mode == "CMYK"
@@ -4981,7 +5002,7 @@ mod tests {
     }
 
     #[test]
-    fn native_pa_l_masked_paste_row_matches_every_mask_weight() {
+    fn native_two_channel_l_masked_paste_row_matches_every_mask_weight() {
         let mask: Vec<u8> = (0..=u8::MAX).collect();
         let source: Vec<u8> = (0..mask.len() * 2)
             .map(|index| (index.wrapping_mul(73).wrapping_add(19)) as u8)
@@ -5002,7 +5023,7 @@ mod tests {
             }
         }
 
-        super::paste_native_masked_pa_l_row(&source, &mut actual, &mask);
+        super::paste_native_masked_two_channel_l_row(&source, &mut actual, &mask);
 
         assert_eq!(actual, expected);
     }

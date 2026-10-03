@@ -135,6 +135,20 @@ impl PyBatchExecutor {
                     other: Box::new(other),
                 }
             }
+            "Paste" => {
+                let source = operation.getattr("source")?;
+                let source = image_from_python(&source).ok_or_else(|| {
+                    PyTypeError::new_err("ImageBatch.Paste requires a PIL.Image.Image source")
+                })?;
+                let mask = operation.getattr("mask")?;
+                let mask = image_from_python(&mask).ok_or_else(|| {
+                    PyTypeError::new_err("ImageBatch.Paste requires a PIL.Image.Image mask")
+                })?;
+                pillow_rs::BatchOperation::Paste {
+                    source: Box::new(source),
+                    mask: Box::new(mask),
+                }
+            }
             "BatchColor3DLUT" => {
                 let lut = operation.extract::<PyRef<'_, PyBatchColor3DLut>>()?;
                 pillow_rs::BatchOperation::Color3DLut {
@@ -146,7 +160,7 @@ impl PyBatchExecutor {
             }
             _ => {
                 return Err(PyTypeError::new_err(
-                    "batch operation must be an ImageFilter.MedianFilter, ImageBatch.ExtractBand, ImageBatch.Multiply, or ImageBatch.Color3DLUT instance",
+                    "batch operation must be an ImageFilter.MedianFilter, ImageBatch.ExtractBand, ImageBatch.Multiply, ImageBatch.Paste, or ImageBatch.Color3DLUT instance",
                 ));
             }
         };
