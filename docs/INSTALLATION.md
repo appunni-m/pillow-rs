@@ -23,11 +23,13 @@ On Windows, replace `.venv/bin/python` with `.venv\Scripts\python.exe`.
 Save the [first-image example](../README.md#make-your-first-image) as `first_image.py`
 and run it with that environment's Python.
 
-The normal wheel uses serial CPU execution. This checkout configures a
-separately built Rayon-backed **Parallel CPU** extension through the optional
-`parallel` extra. The published `12.2.0-alpha.5` wheel predates that extra, so
-the PyPI install will work only after matching standard and companion wheels
-are published. For the next alpha candidate, opt into pre-releases explicitly:
+The normal wheel keeps Rayon disabled. Supported operations can still use the
+compiled SIMD or GPU route through automatic backend selection. This checkout
+also configures a separately built Rayon-backed **Parallel CPU** extension
+through the optional `parallel` extra. The published `12.2.0-alpha.5` wheel
+predates that extra, so the PyPI install will work only after matching standard
+and companion wheels are published. For the next alpha candidate, opt into
+pre-releases explicitly:
 
 ```sh
 .venv/bin/python -m pip install --pre 'pillow-rs[parallel]'

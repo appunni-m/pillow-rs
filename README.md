@@ -70,13 +70,46 @@ complete Pillow compatibility or stable alpha APIs.
 
 ## What pillow-rs adds beyond Pillow
 
-Alongside its selected `PIL` compatibility surface, pillow-rs provides an
-independent Rust image engine, deferred operation pipelines, selectable
-CPU/SIMD/GPU routes, per-pipeline execution receipts, and an opt-in
-Parallel CPU profile. Rust and Node.js/browser WebAssembly applications can use
-the engine directly, while `PIL.ImageBatch` queues compatible multi-image GPU
-work. See the [feature comparison and limits](https://appunni-m.github.io/pillow-rs/compatibility/#pillow-rs-additions-beyond-pillow);
-availability depends on the package and release.
+Pillow is the behavior reference for the selected compatibility surface.
+pillow-rs adds these system capabilities around that surface:
+
+**For applications**
+
+- A Rust-owned image, font, and codec runtime, available as a Rust crate and
+  through the Python `PIL` facade. Runtime processing does not call back into
+  Pillow, FreeType, or native codec libraries.
+- Deferred image-operation pipelines in the Rust core, so supported chained
+  operations can execute when pixels are requested rather than after every
+  individual call.
+- Selectable CPU, architecture-specific SIMD, and GPU execution routes, with
+  controls to inspect and enable or disable compiled routes. A compiled route
+  does not guarantee that every operation or device uses it.
+- `PIL.ImageBatch`, an explicit queue for independent image jobs. Compatible
+  same-size jobs can share a GPU workload; ordinary `Image` calls keep their
+  existing path.
+- An opt-in Rayon **Parallel CPU** profile, separate from ordinary CPU, SIMD,
+  and GPU execution. The current published alpha does not yet include the
+  companion wheel.
+- A published JavaScript package for Node.js and browser WebAssembly.
+- Optional pipeline receipts that report the requested and actual backend,
+  per-operation paths, fallback, timing, and available resource details. Rust
+  and WebAssembly expose these hooks; Python exposes them only through its
+  internal binding module.
+
+**For contributors**
+
+- An isolated, pinned Pillow oracle and generated manifest for selected API
+  parity inputs.
+- Separate individual-operation and composed-pipeline benchmark reports,
+  with backend and mode details and a separately labeled Parallel CPU profile.
+- GPU shader-dispatch evidence for distinguishing an actual kernel run from a
+  requested route that fell back.
+
+The [feature comparison and limits](https://appunni-m.github.io/pillow-rs/compatibility/#pillow-rs-additions-beyond-pillow)
+records where each capability is available and what it does not guarantee.
+These system additions do not mean the image operations themselves are unique
+to pillow-rs; the selected compatibility surface and unsupported cases are
+listed in the [compatibility guide](https://appunni-m.github.io/pillow-rs/compatibility/).
 
 ## Performance
 
