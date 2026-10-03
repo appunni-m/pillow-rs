@@ -39,10 +39,12 @@ first-party interface; it does not mean users cannot build a similar system
 around Pillow.
 
 The runtime additions in this checkout without a first-party equivalent in
-Pillow are deferred image-operation pipelines, explicit job batching,
-selectable compute backends, built-in GPU execution, an opt-in Parallel CPU
-profile, Rust and JavaScript/WebAssembly integrations, and per-pipeline
-execution receipts. This is not a list of image operations pillow-rs
+Pillow are an independently implemented Rust image engine, deferred
+image-operation pipelines, explicit job batching, selectable compute backends,
+built-in GPU execution, an opt-in Parallel CPU profile, Rust and
+JavaScript/WebAssembly integrations, and per-pipeline execution receipts. The
+Python `PIL` package delegates image work to the Rust core; it does not use
+Pillow as a runtime backend. This is not a list of image operations pillow-rs
 implements; operations shared with Pillow belong to the compatibility surface.
 The table marks features that are only in this checkout separately from those
 in the latest published pillow-rs alpha, `12.2.0-alpha.5`. Check
@@ -56,7 +58,7 @@ relying on a source-only feature in a released package.
 | Runtime backend controls | Python, Rust, and JavaScript/WebAssembly expose `available_backends`, `active_backends`, `backend_enabled`, `enable_backend`, and `disable_backend` for routes compiled into that build: CPU, SIMD, and GPU where available. SIMD names architecture-specific vector implementations for supported operations; CPU remains the general CPU route. | Pillow may use SIMD internally, but its public API has no equivalent controls for requesting these routes or inspecting which image-compute route ran. | Included in `12.2.0-alpha.5`. `available_backends()` lists compiled implementations, not device readiness. Selecting a route changes automatic routing; unsupported operations can still fall back. |
 | GPU compute | The Rust core runs registered image-operation kernels with `wgpu`; the `gpu` Cargo feature is enabled by default and is inherited by the standard Python build. | Pillow 12.3.0 has no built-in GPU image-compute backend in its first-party package. | Included in `12.2.0-alpha.5` for supported Rust and Python builds. Device and operation support vary. The standard JavaScript/WebAssembly build disables core defaults and does not include GPU. Requesting GPU does not prove that a kernel ran; inspect the selected backend and dispatch evidence. See [compatibility limits](#partial-or-unsupported). |
 | Optional Parallel CPU profile | A default-off Cargo feature and companion Python distribution enable Rayon-backed CPU execution for supported work. pillow-rs reports this as **Parallel CPU**, separately from serial CPU, SIMD, and GPU. | Pillow has no equivalent pillow-rs build profile and runtime selector. This is a profile comparison, not a claim that Pillow or its codecs never use threads internally. | Configured in the current source but not included in published `12.2.0-alpha.5`. When matching standard and companion wheels are published, install with `pip install 'pillow-rs[parallel]'`. Rayon is used only for CPU work; it is not part of SIMD or GPU execution. See [Python installation](INSTALLATION.md#python). |
-| Rust library | The `pillow-rs` crate exposes the implemented Pillow-style image surface directly to Rust callers, without requiring Python. | Pillow's first-party package does not provide a Rust crate API. | Published; see the [Rust guide](RUST.md). The crate implements a selected surface and does not promise complete Pillow coverage. |
+| Rust-native engine and library | The `pillow-rs` crate contains the image engine and exposes its selected Pillow-style surface directly to Rust callers. The Python `PIL` package delegates image operations to this core; it does not call Pillow at runtime. | Pillow's first-party package does not provide this Rust engine or a Rust crate API. | Published; see the [Rust guide](RUST.md). The crate implements a selected surface and does not promise complete Pillow coverage. |
 | Node.js and browser WebAssembly | The `pillow-rs` npm package exposes image operations to Node.js and browsers through WebAssembly. | Pillow has no first-party JavaScript or WebAssembly binding. | Published. JavaScript has its own method names; callers must release WASM-owned objects, and browser applications need a bundler or module server that serves the WASM asset. See the [JavaScript guide](../pillow-rs-js/README.md). |
 | Pipeline execution telemetry | Rust and JavaScript/WebAssembly can opt in to a receipt for the latest completed pipeline: requested and actual backend, per-operation paths, route/validation/backend timings, fallback reason, and available GPU dispatch/resource counters. | Pillow's public image API has no equivalent per-pipeline backend receipt. | Included in `12.2.0-alpha.5`. This is diagnostic data, not an image-processing guarantee or whole-process profiler. Python helpers are only in the internal `pillow_rs._core` module, not the public `PIL` namespace. Receipts retain only the latest sample on the executing thread. |
 
