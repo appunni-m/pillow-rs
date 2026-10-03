@@ -50,6 +50,11 @@ pub fn op_convert(
             }
             Ok(DynamicImage::ImageLumaA8(ga))
         }
+        ColorMode::RGB if source_mode == Some("CMYK") => {
+            // CMYK occupies the same four-byte transport as RGBA, but its
+            // samples are C/M/Y/K. Do not discard K as if it were alpha.
+            Ok(crate::color::cmyk_to_rgb(img))
+        }
         ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
         ColorMode::RGBA => {
             let mut rgba = img.to_rgba8();

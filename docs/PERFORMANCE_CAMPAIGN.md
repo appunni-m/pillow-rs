@@ -17430,3 +17430,65 @@ new implementation attempt.
 
 Receipts are `cover-hsv-baseline-f567afa01-20261004.json` and
 `cover-hsv-baseline-f567afa01-20261004-parity.json`. No coverage ran.
+
+## CMYK to RGB conversion checkpoint — 2026-10-04
+
+The logical `CMYK` image is physically held in an `ImageRgba8` carrier. Its
+fourth byte is black ink, so the generic RGBA-to-RGB path incorrectly drops K.
+Keep the logical-mode check through lazy pipeline execution and implement the
+same rounded Pillow arithmetic on each backend:
+
+```text
+ink = 255 - K
+R = ink - MULDIV255(C, ink)
+G = ink - MULDIV255(M, ink)
+B = ink - MULDIV255(Y, ink)
+```
+
+The selected parity cases were the material 1024×768 conversion and a 17×3
+mode audit. Final CPU, strict SIMD, and strict GPU lanes each passed both cases
+(6/6 backend comparisons). The benchmark row measured the complete public
+`convert` plus materialization boundary and passed its embedded parity gate.
+Its 100 timed samples per backend all recorded the requested backend with no
+fallback:
+
+| Backend | Median latency | p95 latency | Single-request rate |
+| --- | ---: | ---: | ---: |
+| Pillow | 6.252 ms | 6.820 ms | 160 ops/s |
+| Serial CPU | 3.935 ms | 4.066 ms | 254 ops/s |
+| SIMD | 2.304 ms | 2.417 ms | 434 ops/s |
+| GPU | 8.086 ms | 8.366 ms | 124 ops/s |
+
+For this workload, CPU is 1.59× faster than Pillow and SIMD is 2.71× faster.
+The GPU did execute one dispatch per conversion, but 3 MiB uploads and 3 MiB
+readbacks leave its latency 3.51× slower than SIMD. These concurrency-one
+rates are reciprocals of the latency samples, not sustained multi-image
+throughput measurements. The GPU goal therefore remains open; no claim is made
+that transfers or dispatch are the only cause.
+
+The first portable `wide` deinterleave-and-scatter kernel passed parity but took
+10.679 ms SIMD against Pillow's 6.418 ms, so it was discarded. On this AArch64
+host, the NEON structure load (`vld4q_u8`) version measured 2.304 ms. Keep the
+operation checkpointed after four bounded implementation attempts: the next
+candidate, if revisited, should first replace the temporary channel arrays and
+scalar RGB interleave with a structure store such as `vst3q_u8`, then remeasure
+the complete call. Do not tune the multiply sequence before measuring that
+remaining output-layout cost.
+
+Receipts: `cmyk-rgb-final-cpu.json`, `cmyk-rgb-final-simd.json`,
+`cmyk-rgb-final-gpu.json`, and `cmyk-rgb-neon-candidate-1.json` under
+`build/migration-parity/`. The benchmark command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.convert-mode-cmyk-to-rgb-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cmyk-rgb-neon-candidate-1.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cmyk-rgb-neon-candidate-1-parity.json \
+make migration-parity-benchmark-low-load
+```
+
+Final strict lanes used
+`make migration-parity-test-simd-strict` and
+`make migration-parity-test-gpu-strict`; CPU used `make migration-parity-test`
+with `MIGRATION_TARGET_BACKEND=cpu` and strict routing. `cargo fmt --all --
+--check` and `git diff --check` passed. No coverage ran.

@@ -51,6 +51,11 @@ fn arithmetic_shift6(value: i32) -> i32 {
     return value / 64;
 }
 
+fn muldiv255(a: u32, b: u32) -> u32 {
+    let value = a * b + 128u;
+    return ((value >> 8u) + value) >> 8u;
+}
+
 fn source_rgb_r(src: u32, r: u32) -> u32 {
     return r;
 }
@@ -303,6 +308,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         else if dst == 1u { /* RGBA→LA: luma to R, keep A */ let l = bt601_luma(r, g, b); out_r = l; out_g = l; out_b = l; }
         else if dst == 2u { /* RGBA→RGB: drop A */ out_a = 255u; }
         else if dst == 3u { /* RGBA→RGBA: passthrough */ }
+    }
+    // CMYK's fourth byte is black ink, not alpha. Pillow's C/M/Y/K to RGB
+    // path uses the same rounded MULDIV255 arithmetic as color::cmyk_to_rgb.
+    else if src == 4u && dst == 2u {
+        let ink = 255u - a;
+        out_r = ink - muldiv255(r, ink);
+        out_g = ink - muldiv255(g, ink);
+        out_b = ink - muldiv255(b, ink);
+        out_a = 255u;
     }
     // RGBX (6) → anything. Byte three is padding, never an alpha sample.
     else if src == 6u {
