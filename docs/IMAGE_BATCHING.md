@@ -20,25 +20,34 @@ channels = ImageBatch.BatchExecutor(queue=True, backend="gpu")
 channels.submit(rgba_a, ImageBatch.ExtractBand(3))
 channels.submit(rgba_b, ImageBatch.ExtractBand(3))
 alpha_a, alpha_b = channels.join()
+
+products = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+products.submit(image_a, ImageBatch.Multiply(image_b))
+products.submit(image_c, ImageBatch.Multiply(image_d))
+product_a, product_c = products.join()
 ```
 
 With `queue=False` (the default), `submit` executes each operation immediately
 through its ordinary single-image pipeline. With `queue=True`, submissions wait
 until `join`, which returns results in submission order. A batch accepts
-`ImageFilter.MedianFilter(3)` and `ImageBatch.ExtractBand(channel)` operations.
-Jobs with the same operation, mode, and dimensions are grouped when GPU is the
-selected backend. The initial native-mode group layouts are `L`, `LA`, `RGB`,
-and `RGBA`; no image is converted to RGBA. A queued job that has no compatible
-peer runs through the regular single-image operation at `join`.
+`ImageFilter.MedianFilter(3)`, `ImageBatch.ExtractBand(channel)`, and
+`ImageBatch.Multiply(other_image)` operations. Jobs with the same operation,
+mode, and dimensions are grouped when GPU is the selected backend. Multiply
+also requires each secondary image to match its primary image's mode and size.
+The native-mode group layouts are `L`, `LA`, `RGB`, and `RGBA`; no image is
+converted to RGBA. A queued job that has no compatible peer runs through the
+regular single-image operation at `join`.
 
 The GPU group is a native-mode vertical stack. For `MedianFilter(3)`, one
 replicated top and bottom row surrounds each image, so the filter cannot read
 pixels from a neighbor at a group boundary. For `ExtractBand`, images are
 stacked directly because each output pixel depends only on the corresponding
-input pixel. The existing single-image operation processes each stack, and its
-output is split back into ordinary per-image results. Split results use the
-same operation result and metadata path as single-image calls. Other filter
-sizes and unsupported modes continue through the existing single-image path.
+input pixel. For `Multiply`, primary images and secondary images are each
+stacked in their native mode, then passed to the existing Multiply pipeline
+once. The existing single-image operation processes each stack, and its output
+is split back into ordinary per-image results. Split results use the same
+operation result and metadata path as single-image calls. Other filter sizes
+and unsupported modes continue through the existing single-image path.
 
 If `backend` is omitted, automatic routing remains in effect; grouping is
 attempted only when GPU is the preferred active backend. A backend can be
@@ -118,3 +127,48 @@ not route ordinary `getchannel` calls through it or infer that other operations
 will benefit. A future throughput attempt should remove full-frame packing and
 splitting with shared buffers or fuse extraction into a later device-resident
 consumer before tuning the shader.
+
+### `Multiply` batch probe
+
+`ImageBatch.Multiply(other_image)` keeps both operands in native `L`, `LA`,
+`RGB`, or `RGBA` storage and reuses the existing `ImageChops.multiply`
+pipeline. The isolated Pillow parity lane checked byte-for-byte results and
+source `info` in all four modes, reversed submission order, a 64-image group,
+`queue=False`, and one actual `multiply.wgsl` dispatch per compatible queued
+group with no fallback or mode conversion. Pillow's LA and RGBA behavior
+multiplies the stored alpha byte too; the native batch path preserves it.
+
+Each timing is the median of 12 full-call windows after 3 warmups, on the same
+Apple M-series host. A window creates both operands, submits the images,
+executes the operation, waits for GPU completion, splits results, and calls
+`tobytes()` on every result. The Pillow profile processes image pairs
+sequentially. The parity lane checked every input in the 64×64 × 64 and
+256×256 × 16 cohorts byte-for-byte; GPU telemetry confirmed one real dispatch
+for each queued group. Values are milliseconds per full window.
+
+| Mode | Size × images | Pillow | CPU | SIMD | GPU, queue off | GPU, queued | GPU/SIMD throughput |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| L | 64×64 × 64 | 0.646 | 0.418 | 0.457 | 12.694 | 0.720 | 0.63× |
+| LA | 64×64 × 64 | 1.344 | 0.534 | 0.531 | 13.060 | 0.895 | 0.59× |
+| RGB | 64×64 × 64 | 1.431 | 0.621 | 0.693 | 15.848 | 1.104 | 0.63× |
+| RGBA | 64×64 × 64 | 1.274 | 0.667 | 1.557 | 20.368 | 2.399 | 0.65× |
+| L | 256×256 × 16 | 0.895 | — | 0.443 | — | 1.053 | 0.42× |
+| LA | 256×256 × 16 | 3.695 | — | 0.773 | — | 2.016 | 0.38× |
+| RGB | 256×256 × 16 | 3.680 | — | 0.877 | — | 2.616 | 0.34× |
+| RGBA | 256×256 × 16 | 2.949 | — | 1.371 | — | 3.214 | 0.43× |
+
+The command reference contains the exact invocation for each backend and both
+workload sizes. Each benchmark profile uses 12 samples and 3 warmups.
+
+For 64 small images, grouping makes GPU execution about 8–18× faster than
+issuing the same GPU operation once per image, but queued GPU throughput still
+reaches only 0.59–0.65× SIMD. At 256×256 it reaches 0.34–0.43× SIMD. The
+larger exploratory 1024×768 × 4 measurements for L and LA also remained below
+SIMD; the RGB/RGBA cohort was stopped because the complete four-mode results
+at both smaller sizes already showed no crossover. This is a working GPU
+batch operation, not evidence that GPU is the fastest backend. Keep it
+explicitly selected; ordinary `ImageChops.multiply` routing is unchanged.
+The performance blocker is the cost of packing two full image stacks and
+splitting the readback around a simple byte-wise kernel. A follow-up should
+change the separate batch transport/scheduling design, not the ordinary
+single-image Multiply path.

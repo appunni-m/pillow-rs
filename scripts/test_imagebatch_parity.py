@@ -20,6 +20,7 @@ SIZES = ((7, 5), (7, 5), (1, 1))
 SEEDS = (3, 41, 97)
 LARGE_SIZE = (256, 256)
 LARGE_SEEDS = {"L": (131, 132), "RGB": (173, 174)}
+MULTIPLY_LARGE_IMAGE_COUNT = 16
 BOUNDARY_SIZE = (1024, 768)
 BOUNDARY_IMAGE_COUNT = 22
 BENCHMARK_CHANNELS = {"L": 0, "LA": 1, "RGB": 1, "RGBA": 3}
@@ -30,12 +31,24 @@ def pixels(mode: str, size: tuple[int, int], seed: int) -> bytes:
     return bytes((i * 31 + seed * 47 + (i // 9) * 13) & 255 for i in range(count))
 
 
-def benchmark_pixels(mode: str, seed: int) -> bytes:
-    count = 64 * 64 * MODES[mode]
+def benchmark_pixels(
+    mode: str, seed: int, size: tuple[int, int] = (64, 64)
+) -> bytes:
+    count = size[0] * size[1] * MODES[mode]
     return bytes(
         (i * 73 + (i // 11) * 19 + seed * 47 + (seed >> 2)) & 255
         for i in range(count)
     )
+
+
+def multiply_other_pixels(mode: str, size: tuple[int, int], seed: int) -> bytes:
+    return pixels(mode, size, seed ^ 0xA5)
+
+
+def multiply_benchmark_other_pixels(
+    mode: str, seed: int, size: tuple[int, int] = (64, 64)
+) -> bytes:
+    return benchmark_pixels(mode, seed + 137, size)
 
 
 def boundary_rgba_pixels(seed: int) -> bytes:
@@ -79,7 +92,7 @@ def require_gpu_execution(
 
 def run_oracle(output: Path) -> None:
     import PIL
-    from PIL import Image, ImageFilter
+    from PIL import Image, ImageChops, ImageFilter
 
     if PIL.__version__ != "12.2.0":
         raise RuntimeError(f"unexpected Pillow oracle version: {PIL.__version__}")
@@ -89,22 +102,58 @@ def run_oracle(output: Path) -> None:
     extract_outputs: dict[str, list[str]] = {}
     extract_metadata: dict[str, list[int | None]] = {}
     extract_benchmark_outputs: dict[str, list[str]] = {}
+    multiply_outputs: dict[str, list[str]] = {}
+    multiply_metadata: dict[str, list[int | None]] = {}
+    multiply_benchmark_outputs: dict[str, list[str]] = {}
+    multiply_large_outputs: dict[str, list[str]] = {}
     large_outputs: dict[str, list[str]] = {}
     large_metadata: dict[str, list[int | None]] = {}
     for mode in MODES:
         expected[mode] = []
         metadata[mode] = []
+        multiply_outputs[mode] = []
+        multiply_metadata[mode] = []
+        multiply_large_outputs[mode] = []
         for size, seed in zip(SIZES, SEEDS, strict=True):
             image = Image.frombytes(mode, size, pixels(mode, size, seed))
             image.info["batch-seed"] = seed
             result = image.filter(ImageFilter.MedianFilter(3))
             expected[mode].append(result.tobytes().hex())
             metadata[mode].append(result.info.get("batch-seed"))
+            other = Image.frombytes(
+                mode, size, multiply_other_pixels(mode, size, seed)
+            )
+            multiplied = ImageChops.multiply(image, other)
+            multiply_outputs[mode].append(multiplied.tobytes().hex())
+            multiply_metadata[mode].append(multiplied.info.get("batch-seed"))
         benchmark_outputs[mode] = []
+        multiply_benchmark_outputs[mode] = []
         for seed in range(64):
             image = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
             benchmark_outputs[mode].append(
                 image.filter(ImageFilter.MedianFilter(3)).tobytes().hex()
+            )
+            other = Image.frombytes(
+                mode,
+                (64, 64),
+                multiply_benchmark_other_pixels(mode, seed),
+            )
+            multiply_benchmark_outputs[mode].append(
+                ImageChops.multiply(image, other).tobytes().hex()
+            )
+        for seed in range(MULTIPLY_LARGE_IMAGE_COUNT):
+            image = Image.frombytes(
+                mode,
+                LARGE_SIZE,
+                benchmark_pixels(mode, seed, LARGE_SIZE),
+            )
+            other = Image.frombytes(
+                mode,
+                LARGE_SIZE,
+                multiply_benchmark_other_pixels(mode, seed, LARGE_SIZE),
+            )
+            multiply_large_outputs[mode].append(
+                ImageChops.multiply(image, other).tobytes().hex()
             )
         for channel in range(MODES[mode]):
             key = f"{mode}:{channel}"
@@ -146,6 +195,10 @@ def run_oracle(output: Path) -> None:
                 "extract_outputs": extract_outputs,
                 "extract_metadata": extract_metadata,
                 "extract_benchmark_outputs": extract_benchmark_outputs,
+                "multiply_outputs": multiply_outputs,
+                "multiply_metadata": multiply_metadata,
+                "multiply_benchmark_outputs": multiply_benchmark_outputs,
+                "multiply_large_outputs": multiply_large_outputs,
                 "large_outputs": large_outputs,
                 "large_metadata": large_metadata,
                 "boundary_rgba_extract_alpha": boundary_reference.tobytes().hex(),
@@ -318,6 +371,109 @@ def run_target(expected_path: Path) -> None:
             expected_shader="extract_band.wgsl",
         )
         print(f"queue=False {mode} ExtractBand({channel}): Pillow parity PASS; single-image path")
+
+    for mode in MODES:
+        submission_order = (1, 0)
+        batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for input_index in submission_order:
+            size, seed = SIZES[input_index], SEEDS[input_index]
+            image = Image.frombytes(mode, size, pixels(mode, size, seed))
+            image.info["batch-seed"] = seed
+            other = Image.frombytes(
+                mode,
+                size,
+                multiply_other_pixels(mode, size, seed),
+            )
+            batch.submit(image, ImageBatch.Multiply(other))
+        actual = batch.join()
+        outputs = [image.tobytes().hex() for image in actual]
+        expected_outputs = [
+            expected["multiply_outputs"][mode][index]
+            for index in submission_order
+        ]
+        if outputs != expected_outputs:
+            raise AssertionError(f"Pillow Multiply mismatch for {mode}")
+        actual_metadata = [image.info.get("batch-seed") for image in actual]
+        expected_metadata = [
+            expected["multiply_metadata"][mode][index]
+            for index in submission_order
+        ]
+        if actual_metadata != expected_metadata:
+            raise AssertionError(f"Multiply info mismatch for {mode}: {actual_metadata}")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} Multiply queued pair",
+            expected_shader="multiply.wgsl",
+        )
+        print(f"{mode} Multiply: Pillow byte/info parity PASS; actual GPU; grouped dispatch=1")
+
+        benchmark = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for seed in range(64):
+            image = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
+            other = Image.frombytes(
+                mode,
+                (64, 64),
+                multiply_benchmark_other_pixels(mode, seed),
+            )
+            benchmark.submit(image, ImageBatch.Multiply(other))
+        actual = benchmark.join()
+        outputs = [image.tobytes().hex() for image in actual]
+        if outputs != expected["multiply_benchmark_outputs"][mode]:
+            raise AssertionError(f"64x64 × 64 Pillow Multiply mismatch for {mode}")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} Multiply 64x64 × 64",
+            expected_shader="multiply.wgsl",
+        )
+        print(f"{mode} Multiply 64x64 × 64: Pillow parity PASS; grouped dispatch=1")
+
+        large = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for seed in range(MULTIPLY_LARGE_IMAGE_COUNT):
+            image = Image.frombytes(
+                mode, LARGE_SIZE, benchmark_pixels(mode, seed, LARGE_SIZE)
+            )
+            other = Image.frombytes(
+                mode,
+                LARGE_SIZE,
+                multiply_benchmark_other_pixels(mode, seed, LARGE_SIZE),
+            )
+            large.submit(image, ImageBatch.Multiply(other))
+        actual = large.join()
+        outputs = [image.tobytes().hex() for image in actual]
+        if outputs != expected["multiply_large_outputs"][mode]:
+            raise AssertionError(f"256x256 × {MULTIPLY_LARGE_IMAGE_COUNT} Pillow Multiply mismatch for {mode}")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} Multiply 256x256 × {MULTIPLY_LARGE_IMAGE_COUNT}",
+            expected_shader="multiply.wgsl",
+        )
+        print(
+            f"{mode} Multiply 256x256 × {MULTIPLY_LARGE_IMAGE_COUNT}: "
+            "Pillow parity PASS; grouped dispatch=1"
+        )
+
+        # Eager submission is still a single-image Multiply through its regular
+        # path; the batch API only queues/group schedules when explicitly asked.
+        size, seed = SIZES[0], SEEDS[0]
+        image = Image.frombytes(mode, size, pixels(mode, size, seed))
+        other = Image.frombytes(
+            mode, size, multiply_other_pixels(mode, size, seed)
+        )
+        eager = ImageBatch.BatchExecutor(queue=False, backend="gpu")
+        eager.submit(image, ImageBatch.Multiply(other))
+        result = eager.join()[0]
+        if result.tobytes().hex() != expected["multiply_outputs"][mode][0]:
+            raise AssertionError(f"queue=False Multiply mismatch for {mode}")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"queue=False {mode} Multiply",
+            expected_shader="multiply.wgsl",
+        )
+        print(f"queue=False {mode} Multiply: Pillow parity PASS; ordinary single-image path")
 
     # The first 21 compatible images fit the checked GPU image-buffer cap;
     # the 22nd must become its own safe GPU call. RGB bytes vary per image

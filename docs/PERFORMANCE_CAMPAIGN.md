@@ -16185,6 +16185,55 @@ All three parity comparisons passed with zero byte diffs. No coverage was run.
 Checkpoint the CPU improvement and move to another operation; revisit PA
 masked paste later only for its SIMD and GPU blockers.
 
+## `ImageChops.multiply`: isolated GPU batch checkpoint — 2026-10-03
+
+The ordinary single-image `ImageChops.multiply` route was already exact, but
+its GPU run paid upload, readback, and synchronization for a byte-wise kernel.
+The recorded 1024 × 1024 RGB standard-workload baseline was Pillow 6.450 ms,
+CPU 0.892 ms, SIMD 1.088 ms, and GPU 1.402 ms. The workload returned exact
+bytes in all four profiles; the target profiles each recorded 100 actual
+executions without fallback.
+
+Two shader-only candidates were tested and removed. First, replacing the
+shader's divide-by-255 expression did not produce a repeatable end-to-end gain.
+Second, an RGB-specific vector kernel passed exact RGB parity but measured
+1.431 ms GPU latency against the 1.402 ms baseline. Both variants were
+reverted; `multiply.wgsl` and ordinary Multiply dispatch were left unchanged.
+
+The separate `PIL.ImageBatch` path now accepts
+`ImageBatch.Multiply(other_image)`. It packs compatible primary and secondary
+images independently in native L, LA, RGB, or RGBA storage, then invokes the
+existing Multiply pipeline once on the stack. The adapter enforces matching
+operand modes and dimensions; the planner checks the actual byte width,
+storage-buffer limits, and workgroup grid before allocation. Nothing routes an
+ordinary `ImageChops.multiply` call through this API.
+
+`make build-parity && .venv/bin/python scripts/test_imagebatch_parity.py`
+passed exact Pillow byte and source-info parity for all four modes, `queue=False`,
+64-image 64 × 64 groups, and 16-image 256 × 256 groups. Telemetry confirmed one
+real `multiply.wgsl` dispatch, zero mode conversions, and no fallback for each
+compatible GPU group. LA and RGBA alpha bytes were checked as stored samples.
+
+The full-call benchmarks used 12 samples and 3 warmups. At 64 × 64 × 64,
+queued GPU throughput was only 0.59–0.65× SIMD; at 256 × 256 × 16, it was
+0.34–0.43× SIMD. At 64 × 64, queuing nevertheless improved GPU throughput by
+about 8–18× over submitting the same number of independent GPU calls. A
+partial 1024 × 768 × 4 probe also showed no crossover for L (GPU 2.776 ms,
+SIMD 0.837 ms) or LA (GPU 4.809 ms, SIMD 1.824 ms); RGB/RGBA at that size were
+not measured because every mode already missed at the two smaller sizes.
+Per-mode tables and all measured medians are in the
+[ImageBatch guide](IMAGE_BATCHING.md#multiply-batch-probe).
+
+Keep Multiply available only through explicit batching: it amortizes repeated
+GPU scheduling and preserves parity, but this adapter does not meet the GPU
+throughput target against SIMD. The remaining cost is full-frame host packing
+of both operands plus readback and per-image splitting around a simple kernel.
+A future attempt belongs inside the separate batch transport/scheduling
+design—for example, reusing shared upload/output buffers or keeping results
+resident for a following GPU operation. Do not change ordinary Multiply
+routing to hide the batch cost, and do not spend another shader-only attempt
+on the same arithmetic. Continue the operation campaign elsewhere.
+
 ## RGBA `Image.alpha_composite` block-local SIMD checkpoint — 2026-10-03
 
 The parity-backed material workload is

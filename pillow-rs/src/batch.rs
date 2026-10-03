@@ -4,16 +4,17 @@
 //! image routing. Grouped workloads reuse the existing operation pipelines
 //! over compatible native-mode images packed into one image, then split the
 //! results back into ordinary per-image results. The initial grouped
-//! operations are `MedianFilter(3)` and `ExtractBand`. Images that cannot be
-//! grouped use their ordinary single-image pipeline.
+//! operations are `MedianFilter(3)`, `ExtractBand`, and `ImageChops.multiply`.
+//! Images that cannot be grouped use their ordinary single-image pipeline.
 
 use crate::compute::Backend;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
+use std::sync::Arc;
 
 /// One explicitly submitted Pillow operation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum BatchOperation {
     /// Apply Pillow's `ImageFilter.MedianFilter(size)` operation.
     MedianFilter {
@@ -25,33 +26,60 @@ pub enum BatchOperation {
         /// Zero-based source channel index.
         channel: i32,
     },
+    /// Apply Pillow's `ImageChops.multiply(image, other)` operation.
+    Multiply {
+        /// The second image operand. Compatible images are stacked separately
+        /// in their native mode and passed through the ordinary Multiply pipeline.
+        other: Box<Image>,
+    },
 }
 
 impl BatchOperation {
-    fn apply(self, image: &Image) -> Result<Image, PilError> {
+    fn apply(&self, image: &Image) -> Result<Image, PilError> {
         match self {
-            Self::MedianFilter { size } => image.median_filter(size),
-            Self::ExtractBand { channel } => image.getchannel(channel),
+            Self::MedianFilter { size } => image.median_filter(*size),
+            Self::ExtractBand { channel } => image.getchannel(*channel),
+            Self::Multiply { other } => crate::ops::chops::multiply(image, other),
         }
     }
 
-    fn can_group(self, mode: &str) -> bool {
+    fn can_group(&self, mode: &str, size: (u32, u32)) -> bool {
         let Some(channels) = mode_channels(mode) else {
             return false;
         };
         match self {
-            Self::MedianFilter { size } => size == 3,
+            Self::MedianFilter { size } => *size == 3,
             Self::ExtractBand { channel } => {
-                usize::try_from(channel).is_ok_and(|channel| channel < channels)
+                usize::try_from(*channel).is_ok_and(|channel| channel < channels)
+            }
+            Self::Multiply { other } => {
+                other.mode().is_ok_and(|other_mode| other_mode == mode)
+                    && other.size().is_ok_and(|other_size| other_size == size)
             }
         }
     }
 
-    fn pipeline_op(self) -> Option<PipelineOp> {
+    fn matches_group(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::MedianFilter { size: left }, Self::MedianFilter { size: right }) => {
+                left == right
+            }
+            (Self::ExtractBand { channel: left }, Self::ExtractBand { channel: right }) => {
+                left == right
+            }
+            (Self::Multiply { .. }, Self::Multiply { .. }) => true,
+            _ => false,
+        }
+    }
+
+    fn pipeline_op(&self) -> Option<PipelineOp> {
         match self {
-            Self::MedianFilter { size } => Some(PipelineOp::MedianFilter { size }),
+            Self::MedianFilter { size } => Some(PipelineOp::MedianFilter { size: *size }),
             Self::ExtractBand { channel } => Some(PipelineOp::ExtractBand {
-                index: u8::try_from(channel).ok()?,
+                index: u8::try_from(*channel).ok()?,
+            }),
+            Self::Multiply { other } => Some(PipelineOp::Multiply {
+                other: Arc::new((**other).clone()),
             }),
         }
     }
@@ -68,10 +96,11 @@ struct BatchJob {
 ///
 /// `queue = false` applies each operation immediately using the ordinary
 /// single-image route. With `queue = true`, [`join`](Self::join) groups
-/// compatible `MedianFilter(3)` and `ExtractBand` jobs when GPU is the
-/// selected backend. Grouping currently requires equal-size native byte modes
-/// `L`, `LA`, `RGB`, and `RGBA`; other jobs are executed through the ordinary
-/// per-image operation. No conversion to RGBA is performed.
+/// compatible `MedianFilter(3)`, `ExtractBand`, and `ImageChops.multiply` jobs
+/// when GPU is the selected backend. Grouping currently requires equal-size
+/// native byte modes `L`, `LA`, `RGB`, and `RGBA`; other jobs are executed
+/// through the ordinary per-image operation. No conversion to RGBA is
+/// performed.
 ///
 /// `backend` optionally locks each job to a backend. If it is `None`, normal
 /// automatic routing is used and grouping is attempted only when GPU is the
@@ -165,11 +194,11 @@ impl BatchExecutor {
                 && batch_backend.is_some()
                 && job.size.0 != 0
                 && job.size.1 != 0
-                && job.operation.can_group(&job.mode)
+                && job.operation.can_group(&job.mode, job.size)
             {
                 group.extend((index..jobs.len()).filter(|candidate| {
                     jobs[*candidate].as_ref().is_some_and(|other| {
-                        other.operation == job.operation
+                        job.operation.matches_group(&other.operation)
                             && other.mode == job.mode
                             && other.size == job.size
                     })
@@ -271,7 +300,7 @@ impl BatchExecutor {
             .ok()
             .and_then(|width| width.checked_mul(channels))
             .ok_or_else(|| PilError::DimensionError("batch row size overflow".into()))?;
-        let (halo, stacked_height, output_mode, output_channels) = match first.operation {
+        let (halo, stacked_height, output_mode, output_channels) = match &first.operation {
             BatchOperation::MedianFilter { size: 3 } => {
                 let group_len = u32::try_from(indices.len())
                     .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
@@ -288,6 +317,14 @@ impl BatchExecutor {
                     .checked_mul(group_len)
                     .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
                 (0usize, stacked_height, "L", 1usize)
+            }
+            BatchOperation::Multiply { .. } => {
+                let group_len = u32::try_from(indices.len())
+                    .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
+                let stacked_height = height
+                    .checked_mul(group_len)
+                    .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
+                (0usize, stacked_height, mode, channels)
             }
             _ => {
                 return Err(PilError::ValueError(
@@ -311,6 +348,17 @@ impl BatchExecutor {
                 "unable to allocate {capacity} batch bytes: {error}"
             ))
         })?;
+        let mut packed_other = if matches!(first.operation, BatchOperation::Multiply { .. }) {
+            let mut packed_other = Vec::new();
+            packed_other.try_reserve_exact(capacity).map_err(|error| {
+                PilError::MemoryError(format!(
+                    "unable to allocate {capacity} secondary batch bytes: {error}"
+                ))
+            })?;
+            Some(packed_other)
+        } else {
+            None
+        };
 
         for index in indices {
             let job = jobs[*index]
@@ -339,22 +387,67 @@ impl BatchExecutor {
             for _ in 0..halo {
                 packed.extend_from_slice(&pixel_bytes[last_row_start..expected]);
             }
+
+            if let BatchOperation::Multiply { other } = &job.operation {
+                let other_pixels = other.materialized_shared()?;
+                if other.mode()? != mode
+                    || other.size()? != (width, height)
+                    || other_pixels.color() != native_storage
+                {
+                    return Err(PilError::DimensionError(
+                        "multiply batch operands must have matching native dimensions".into(),
+                    ));
+                }
+                let other_bytes = other_pixels.as_bytes();
+                if other_bytes.len() != expected {
+                    return Err(PilError::InternalError(format!(
+                        "native multiply batch input length mismatch: expected {expected}, got {}",
+                        other_bytes.len()
+                    )));
+                }
+                packed_other
+                    .as_mut()
+                    .ok_or_else(|| {
+                        PilError::InternalError("multiply batch has no secondary buffer".into())
+                    })?
+                    .extend_from_slice(other_bytes);
+            }
         }
         if packed.len() != capacity {
             return Err(PilError::InternalError(
                 "native batch packing produced an unexpected byte count".into(),
             ));
         }
+        if packed_other
+            .as_ref()
+            .is_some_and(|packed_other| packed_other.len() != capacity)
+        {
+            return Err(PilError::InternalError(
+                "native multiply batch packing produced an unexpected byte count".into(),
+            ));
+        }
 
         // Keep each source mode's physical pixel layout. Existing Image
-        // constructors and MedianFilter dispatch own validation and routing.
+        // constructors and operation dispatch own validation and routing.
         let stacked = Image::frombytes_owned(mode, (width, stacked_height), packed)?;
-        let filtered = first.operation.apply(&stacked)?.use_backend(backend);
+        let operated = if matches!(first.operation, BatchOperation::Multiply { .. }) {
+            let secondary = Image::frombytes_owned(
+                mode,
+                (width, stacked_height),
+                packed_other.ok_or_else(|| {
+                    PilError::InternalError("multiply batch lost its secondary buffer".into())
+                })?,
+            )?;
+            crate::ops::chops::multiply(&stacked, &secondary)?
+        } else {
+            first.operation.apply(&stacked)?
+        };
+        let operated = operated.use_backend(backend);
         // These grouped byte modes already store output in their Pillow byte
         // order. Borrow the materialized bytes directly instead of cloning
         // the complete stack through `tobytes()` before splitting it.
-        let filtered_pixels = filtered.materialized_shared()?;
-        let filtered_bytes = filtered_pixels.as_bytes();
+        let operated_pixels = operated.materialized_shared()?;
+        let operated_bytes = operated_pixels.as_bytes();
 
         let output_row_bytes = usize::try_from(width)
             .ok()
@@ -392,7 +485,7 @@ impl BatchExecutor {
             let end = start
                 .checked_add(image_bytes)
                 .ok_or_else(|| PilError::DimensionError("batch output end overflow".into()))?;
-            let output = filtered_bytes.get(start..end).ok_or_else(|| {
+            let output = operated_bytes.get(start..end).ok_or_else(|| {
                 PilError::InternalError("native batch output was shorter than expected".into())
             })?;
             let job = jobs[*job_index]
@@ -551,6 +644,53 @@ mod tests {
     }
 
     #[test]
+    fn queued_multiply_reuses_native_mode_pipeline_and_preserves_order() {
+        let modes = [("L", 1usize), ("LA", 2), ("RGB", 3), ("RGBA", 4)];
+        for (mode, channels) in modes {
+            let operands = [
+                (
+                    fixture(mode, 7, 5, channels, 17),
+                    fixture(mode, 7, 5, channels, 81),
+                ),
+                (
+                    fixture(mode, 7, 5, channels, 203),
+                    fixture(mode, 7, 5, channels, 149),
+                ),
+            ];
+            let expected = operands
+                .iter()
+                .map(|(image, other)| {
+                    crate::ops::chops::multiply(image, other)
+                        .unwrap()
+                        .tobytes()
+                        .unwrap()
+                })
+                .collect::<Vec<_>>();
+            let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+            for (image, other) in operands {
+                batch
+                    .submit(
+                        image,
+                        BatchOperation::Multiply {
+                            other: Box::new(other),
+                        },
+                    )
+                    .unwrap();
+            }
+            let actual = batch
+                .join()
+                .unwrap()
+                .iter()
+                .map(|image| {
+                    assert_eq!(image.mode().unwrap(), mode);
+                    image.tobytes().unwrap()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "queued {mode} Multiply outputs differ");
+        }
+    }
+
+    #[test]
     fn extract_band_groups_only_valid_native_byte_channels() {
         for (mode, channels) in [("L", 1usize), ("LA", 2), ("RGB", 3), ("RGBA", 4)] {
             for channel in 0..channels {
@@ -558,18 +698,34 @@ mod tests {
                     BatchOperation::ExtractBand {
                         channel: i32::try_from(channel).unwrap()
                     }
-                    .can_group(mode)
+                    .can_group(mode, (1, 1))
                 );
             }
             assert!(
                 !BatchOperation::ExtractBand {
                     channel: i32::try_from(channels).unwrap()
                 }
-                .can_group(mode)
+                .can_group(mode, (1, 1))
             );
         }
-        assert!(!BatchOperation::ExtractBand { channel: -1 }.can_group("RGB"));
-        assert!(!BatchOperation::ExtractBand { channel: 0 }.can_group("P"));
+        assert!(!BatchOperation::ExtractBand { channel: -1 }.can_group("RGB", (1, 1)));
+        assert!(!BatchOperation::ExtractBand { channel: 0 }.can_group("P", (1, 1)));
+    }
+
+    #[test]
+    fn multiply_groups_only_equal_native_mode_operands() {
+        let matching = BatchOperation::Multiply {
+            other: Box::new(fixture("RGB", 3, 2, 3, 41)),
+        };
+        assert!(matching.can_group("RGB", (3, 2)));
+        assert!(!matching.can_group("RGB", (2, 3)));
+        assert!(!matching.can_group("RGBA", (3, 2)));
+        assert!(
+            !BatchOperation::Multiply {
+                other: Box::new(fixture("P", 3, 2, 1, 41)),
+            }
+            .can_group("P", (3, 2))
+        );
     }
 
     #[test]
