@@ -16072,3 +16072,60 @@ the GPU queued and eager profiles above. The live parity script kept its Pillow
 oracle isolated and covered all grouped modes/channels plus the 1024 × 768
 boundary. No coverage was run. This group-limit change is ready to checkpoint;
 the 20% high-resolution throughput gap remains a separate batch-layout problem.
+
+## RGB `ImageEnhance.Color` direct-base experiment — 2026-10-03
+
+RGB's stateful `ImageEnhance.Color` still constructs its base with the native
+`RGB → L → RGB` conversion route. I tested replacing that with a materialized
+`ColorSaturation(0)` operation, preserving the retained snapshot and exact
+Pillow output. The comparison used 16 changing 1024 × 768 RGB images, queue
+depths 1/2/4, five warmup windows, and five measured samples of 20 windows per
+depth. Each table value is aggregate completed images/second for the full
+public call, including base construction, `enhance(0.3)`, and output export.
+
+| Run | Backend | q1 | q2 | q4 |
+| --- | --- | ---: | ---: | ---: |
+| Existing conversions | Pillow | 361 | 390 | 408 |
+| Existing conversions | CPU | 974 | 1,073 | 1,097 |
+| Existing conversions | SIMD | 839 | 1,018 | 1,080 |
+| Existing conversions | GPU | 288 | 345 | 322 |
+| Generic `ColorSaturation(0)` | CPU | 377 | 574 | 776 |
+| Generic `ColorSaturation(0)` | SIMD | 153 | 260 | 243 |
+| Generic `ColorSaturation(0)` | GPU | 251 | 283 | 594 |
+| Integer CPU + fused RGB SIMD base | CPU | 709 | 901 | 960 |
+| Integer CPU + fused RGB SIMD base | SIMD | 802 | 1,017 | 1,114 |
+| Integer CPU + fused RGB SIMD base | GPU | 428 | 554 | 600 |
+
+All 4,800 measured results per backend matched live Pillow byte-for-byte,
+reported the requested actual backend, and had no fallback. The generic
+zero-factor route was exact but materially slower on serial CPU and SIMD. The
+integer CPU and fused SIMD version recovered most of that loss, but serial CPU
+remained 13–27% slower than the conversion baseline, and SIMD showed no
+consistent gain. GPU improved to 1.17–1.47× Pillow throughput, but delivered
+only 0.53–0.54× SIMD throughput and about 1.8× SIMD's q1 request latency. The
+mixed result does not justify changing the shared RGB constructor path; both
+experimental source changes were discarded, and ordinary single-image paths
+remain unchanged. This is separate from explicit GPU batching, which is not
+used or modified here.
+
+The measured benchmark artifacts are
+`color-rgb-baseline-20261003-main9903.json`,
+`color-rgb-after-20261003-main9903.json`, and
+`color-rgb-after-fast-20261003-main9903.json` under
+`build/migration-parity/`. Reproduce each with
+`make migration-parity-transpose-throughput` after `make build-parity`; for
+example:
+
+```sh
+RUSTC_WRAPPER= \
+MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/color-rgb-baseline-20261003-main9903.json \
+MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation color --mode RGB --size 1024 768' \
+make migration-parity-transpose-throughput
+```
+
+RGB `ImageEnhance.Color` remains open: serial CPU still needs a measured gain,
+SIMD remains below the 5× target, and GPU must catch up to SIMD latency and
+throughput. Do not retry the generic zero-factor route. A future attempt needs
+to eliminate dispatch/materialization overhead without regressing the fast
+native conversion path, or isolate a GPU-only benefit through normal backend
+dispatch. No coverage was run.
