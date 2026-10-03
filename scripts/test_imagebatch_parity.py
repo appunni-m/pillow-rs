@@ -20,6 +20,8 @@ SIZES = ((7, 5), (7, 5), (1, 1))
 SEEDS = (3, 41, 97)
 LARGE_SIZE = (256, 256)
 LARGE_SEEDS = {"L": (131, 132), "RGB": (173, 174)}
+BOUNDARY_SIZE = (1024, 768)
+BOUNDARY_IMAGE_COUNT = 22
 BENCHMARK_CHANNELS = {"L": 0, "LA": 1, "RGB": 1, "RGBA": 3}
 
 
@@ -33,6 +35,14 @@ def benchmark_pixels(mode: str, seed: int) -> bytes:
     return bytes(
         (i * 73 + (i // 11) * 19 + seed * 47 + (seed >> 2)) & 255
         for i in range(count)
+    )
+
+
+def boundary_rgba_pixels(seed: int) -> bytes:
+    count = BOUNDARY_SIZE[0] * BOUNDARY_SIZE[1] * 4
+    return bytes(
+        173 if index % 4 == 3 else (index * 31 + seed * 47 + (index // 9) * 13) & 255
+        for index in range(count)
     )
 
 
@@ -123,6 +133,9 @@ def run_oracle(output: Path) -> None:
             result = image.filter(ImageFilter.MedianFilter(3))
             large_outputs[mode].append(result.tobytes().hex())
             large_metadata[mode].append(result.info.get("batch-seed"))
+    boundary_reference = Image.frombytes(
+        "RGBA", BOUNDARY_SIZE, boundary_rgba_pixels(0)
+    ).getchannel(3)
     output.write_text(
         json.dumps(
             {
@@ -135,6 +148,7 @@ def run_oracle(output: Path) -> None:
                 "extract_benchmark_outputs": extract_benchmark_outputs,
                 "large_outputs": large_outputs,
                 "large_metadata": large_metadata,
+                "boundary_rgba_extract_alpha": boundary_reference.tobytes().hex(),
             }
         )
     )
@@ -304,6 +318,37 @@ def run_target(expected_path: Path) -> None:
             expected_shader="extract_band.wgsl",
         )
         print(f"queue=False {mode} ExtractBand({channel}): Pillow parity PASS; single-image path")
+
+    # The first 21 compatible images fit the checked GPU image-buffer cap;
+    # the 22nd must become its own safe GPU call. RGB bytes vary per image
+    # while alpha remains fixed, so exact output plus metadata checks cover
+    # both chunk boundaries and returned submission order.
+    boundary_expected = bytes.fromhex(expected["boundary_rgba_extract_alpha"])
+    boundary_batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+    boundary_metadata = list(range(BOUNDARY_IMAGE_COUNT))
+    for seed in boundary_metadata:
+        image = Image.frombytes("RGBA", BOUNDARY_SIZE, boundary_rgba_pixels(seed))
+        image.info["batch-seed"] = seed
+        boundary_batch.submit(image, ImageBatch.ExtractBand(3))
+    boundary_results = boundary_batch.join()
+    if len(boundary_results) != BOUNDARY_IMAGE_COUNT:
+        raise AssertionError("resource-boundary batch omitted an output")
+    for index, image in enumerate(boundary_results):
+        if image.tobytes() != boundary_expected:
+            raise AssertionError(f"resource-boundary alpha mismatch at output {index}")
+        if image.info.get("batch-seed") != boundary_metadata[index]:
+            raise AssertionError(f"resource-boundary metadata order mismatch at output {index}")
+    require_gpu_execution(
+        core,
+        core.take_pipeline_telemetry(),
+        "RGBA ExtractBand(3) 1024x768 × 22 safe resource-boundary chunks",
+        expected_shader="extract_band.wgsl",
+        expected_shader_dispatches=2,
+    )
+    print(
+        "RGBA ExtractBand(3) 1024x768 × 22: Pillow parity PASS; "
+        "two actual GPU dispatches across bounded groups"
+    )
 
     for mode in MODES:
         submission_order = (1, 2, 0)

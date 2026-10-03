@@ -18891,6 +18891,109 @@ fn gpu_buffer_capacity_exceeds_limits(
     bytes > u64::from(max_storage_buffer_binding_size) || bytes > max_buffer_size
 }
 
+/// Find the largest safe vertical stack for one explicitly queued image batch.
+/// The bound includes the median filter's duplicated edge rows and proves the
+/// same byte capacity, workgroup grid, and shader-work limits used by normal
+/// GPU execution before the caller allocates the stacked host image.
+fn gpu_batch_group_limit_for_limits(
+    op: &PipelineOp,
+    logical_mode: &str,
+    (width, height): (u32, u32),
+    requested: usize,
+    max_storage_buffer_binding_size: u32,
+    max_buffer_size: u64,
+    max_workgroups_per_dimension: u32,
+) -> usize {
+    if requested == 0 || width == 0 || height == 0 {
+        return 0;
+    }
+
+    let halo = match op {
+        PipelineOp::MedianFilter { size: 3 } => 2u32,
+        PipelineOp::ExtractBand { .. } => 0,
+        _ => return 0,
+    };
+    let Some(per_image_height) = height.checked_add(halo) else {
+        return 0;
+    };
+
+    let is_safe = |count: usize| {
+        let Ok(count) = u32::try_from(count) else {
+            return false;
+        };
+        let Some(stacked_height) = per_image_height.checked_mul(count) else {
+            return false;
+        };
+        let stacked_dimensions = (width, stacked_height);
+        let pixels = u64::from(width) * u64::from(stacked_height);
+        let Ok(buffer_capacity) = u32::try_from(pixels) else {
+            return false;
+        };
+        if pixels == 0
+            || pixels > u64::from(GPU_BUFFER_CAPACITY)
+            || gpu_buffer_capacity_exceeds_limits(
+                buffer_capacity,
+                max_storage_buffer_binding_size,
+                max_buffer_size,
+            )
+        {
+            return false;
+        }
+
+        let ops = [op.clone()];
+        !gpu_dispatch_dimensions_require_cpu(
+            &ops,
+            stacked_dimensions,
+            max_workgroups_per_dimension,
+            Some(logical_mode),
+            false,
+        ) && !gpu_shader_work_requires_cpu(
+            op,
+            stacked_dimensions,
+            stacked_dimensions,
+            Some(logical_mode),
+        )
+    };
+
+    let mut low = 0usize;
+    let mut high = requested;
+    while low < high {
+        let middle = low + (high - low).div_ceil(2);
+        if is_safe(middle) {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    low
+}
+
+/// Return the safe queued-group length for the actual selected GPU adapter.
+/// Adapter initialization or unavailable GPU support simply disables grouping.
+pub(crate) fn gpu_batch_group_limit(
+    op: &PipelineOp,
+    logical_mode: &str,
+    dimensions: (u32, u32),
+    requested: usize,
+) -> usize {
+    let Ok(gpu) = GpuPool::ensure_init() else {
+        return 0;
+    };
+    if gpu.failure_detail().is_some() {
+        return 0;
+    }
+    let limits = gpu.device.limits();
+    gpu_batch_group_limit_for_limits(
+        op,
+        logical_mode,
+        dimensions,
+        requested,
+        limits.max_storage_buffer_binding_size,
+        limits.max_buffer_size,
+        limits.max_compute_workgroups_per_dimension,
+    )
+}
+
 /// Validate the dispatch grid against the adapter limit. Pixel-count limits
 /// alone are insufficient: a very wide, short image can fit in storage while
 /// still requiring more workgroups in one dimension than the device accepts.
@@ -23950,9 +24053,10 @@ mod tests {
         BLUR_WORKGROUP_SIZE, F64OrderedKind, F64OrderedState, F64SignedMagnitude,
         GPU_BUFFER_CAPACITY, GPU_MASKED_RGBA_WORKGROUP_SIZE, GPU_POLL_BACKOFF,
         GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, encode_resize_compact_box_axis,
-        gpu_buffer_capacity_exceeds_limits, gpu_buffer_reuse_allowed, gpu_byte_point_mode_allowed,
-        gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix, gpu_dimensions_require_cpu,
-        gpu_dispatch_count, gpu_dispatch_dimensions_require_cpu, gpu_f_pad_f64_is_exact,
+        gpu_batch_group_limit_for_limits, gpu_buffer_capacity_exceeds_limits,
+        gpu_buffer_reuse_allowed, gpu_byte_point_mode_allowed, gpu_contrast_mean,
+        gpu_contrast_mean_after_exact_prefix, gpu_dimensions_require_cpu, gpu_dispatch_count,
+        gpu_dispatch_dimensions_require_cpu, gpu_f_pad_f64_is_exact,
         gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
         gpu_f_resize_compact_box_axis, gpu_f_resize_compact_box_is_exact,
         gpu_f_resize_compact_box_vertical_only_geometry, gpu_f_resize_constant_bits,
@@ -33541,6 +33645,66 @@ mod tests {
         assert!(plan_extract_band_dispatch(5 * 256, 1, 0).is_err());
         assert!(plan_extract_band_dispatch(5 * 256, 1, 1).is_err());
         assert!(plan_extract_band_dispatch(u32::MAX, 2, 65_535).is_err());
+    }
+
+    #[test]
+    fn explicit_gpu_batch_planner_caps_static_device_and_dispatch_boundaries() {
+        let extract_band = PipelineOp::ExtractBand { index: 3 };
+        let default_limits = (u32::MAX, u64::MAX, 65_535);
+        let cap = gpu_batch_group_limit_for_limits(
+            &extract_band,
+            "RGBA",
+            (1024, 768),
+            22,
+            default_limits.0,
+            default_limits.1,
+            default_limits.2,
+        );
+        assert_eq!(cap, 21);
+        assert!(1024u64 * 768 * cap as u64 <= u64::from(GPU_BUFFER_CAPACITY));
+        assert!(1024u64 * 768 * (cap as u64 + 1) > u64::from(GPU_BUFFER_CAPACITY));
+
+        let storage_limited_cap = gpu_batch_group_limit_for_limits(
+            &extract_band,
+            "RGBA",
+            (1024, 768),
+            8,
+            16 * 1024 * 1024,
+            16 * 1024 * 1024,
+            65_535,
+        );
+        assert_eq!(storage_limited_cap, 5);
+
+        // Each 1x16384 image needs exactly an 8x8 ExtractBand grid. Two
+        // stacked images would require 8x16 groups and exceed this adapter.
+        assert_eq!(
+            gpu_batch_group_limit_for_limits(
+                &extract_band,
+                "L",
+                (1, 16_384),
+                2,
+                u32::MAX,
+                u64::MAX,
+                8,
+            ),
+            1
+        );
+
+        let median_filter = PipelineOp::MedianFilter { size: 3 };
+        let median_cap = gpu_batch_group_limit_for_limits(
+            &median_filter,
+            "RGBA",
+            (1024, 768),
+            9,
+            default_limits.0,
+            default_limits.1,
+            default_limits.2,
+        );
+        assert_eq!(median_cap, 8);
+        let safe_height = 770u64 * median_cap as u64;
+        let over_height = 770u64 * (median_cap as u64 + 1);
+        assert!(1024 * safe_height * 324 <= super::MAX_GPU_SHADER_WORK_ITEMS);
+        assert!(1024 * over_height * 324 > super::MAX_GPU_SHADER_WORK_ITEMS);
     }
 
     #[test]
