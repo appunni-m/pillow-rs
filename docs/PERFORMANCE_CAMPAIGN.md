@@ -16445,3 +16445,54 @@ throughput. The exact parity cases establish behavior but are not a substitute
 for that performance measurement. The operation remains open: SIMD is below
 5× Pillow, GPU latency trails SIMD, and material LA performance has not been
 measured in this checkpoint. No coverage was run.
+
+## RGB `ImageOps.grayscale` grouped GPU loads — checkpoint 2026-10-03
+
+The selected public workload is
+`pipeline-op.grayscale.material-rgb-noise-1024x768`: 1024 × 768 native RGB,
+`ImageOps.grayscale`, then complete L-byte materialization. The exact luma
+contract is `(19595R + 38470G + 7471B + 32768) >> 16`. CPU already computes
+directly from native triples and beats Pillow; SIMD's 16-lane kernel deinterleaves
+triples with byte shuffles but remains near Pillow. GPU already uploads native
+RGB and returns native L with zero mode conversions. Its packed `u32` shader
+previously gathered each RGB pixel separately; four neighboring 3-byte pixels
+overlap across three packed input words, causing the same words to be loaded
+repeatedly: the four per-pixel gathers issue six word reads for those three
+unique words.
+
+The retained GPU specialization handles only complete four-pixel RGB groups.
+Each group is twelve aligned source bytes, exactly three `u32` words; it loads
+those once, extracts the four RGB triplets, computes the unchanged integer luma,
+and writes the four adjacent output bytes together. The final one-to-three
+pixels continue through the existing guarded per-pixel gather. YCbCr keeps its
+separate Y-byte path, and other modes are unchanged. Ordinary single-image
+routing and the separate explicit `ImageBatch` scheduler were not changed.
+
+The standard run uses five warmups and 100 measured calls per subject. Median
+end-to-end milliseconds:
+
+| Run | Pillow | Serial CPU | SIMD | GPU | Parity gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Clean `c31391d0f` baseline | 0.208312 | 0.122646 | 0.180792 | 0.807584 | 3/3 |
+| Grouped RGB loads, attempt 1 | 0.199312 | 0.121188 | 0.182416 | 0.778251 | 3/3 |
+| Unchanged repeat | 0.202896 | 0.120584 | 0.191021 | 0.662354 | 3/3 |
+
+Every run recorded 100 actual CPU, SIMD, and GPU executions with no fallback.
+GPU remained one dispatch with 2,359,296 uploaded bytes, 786,432 readback
+bytes, and zero mode conversions. Its backend phase median went from 773.7 µs
+to 729.3 µs and 635.1 µs; the unchanged repeat's end-to-end GPU median is 18%
+below the clean baseline. A separate strict GPU comparison of the existing
+three-pixel odd-byte-tail case passed 1/1, exercising the guarded partial-group
+path. No coverage was run.
+
+Checkpoint this narrow GPU revisit after one attempt: serial CPU is 1.68× faster
+than Pillow, but SIMD is only 1.06× faster and GPU remains 3.47× slower than
+SIMD. The unchanged-repeat gain is useful but does not meet the GPU latency or
+throughput target; reciprocal latency is not batch-throughput evidence. Explore
+the explicit batch API independently, and move the ordinary single-image
+operation campaign to another uncapped operation.
+
+Receipts are `build/migration-parity/grayscale-rgb-baseline-c31391d0f.json`,
+`grayscale-rgb-grouped-loads-attempt1.json`,
+`grayscale-rgb-grouped-loads-attempt1-repeat.json`, their matching `-parity.json`
+sidecars, and `grayscale-rgb-attempt1-odd-tail-gpu-parity.json`.
