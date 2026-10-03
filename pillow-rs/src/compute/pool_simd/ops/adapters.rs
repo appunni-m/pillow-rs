@@ -15611,8 +15611,8 @@ pub fn simd_effect_noise(
 #[inline]
 fn color3dlut_prepare_fixed(value: f64) -> i16 {
     // Keep this conversion identical to `op_color3dlut`: Pillow first
-    // narrows table values to float32 and then rounds signed 12.4 samples.
-    const PRECISION_BITS: i32 = 4;
+    // narrows table values to float32 and then rounds signed 10.6 samples.
+    const PRECISION_BITS: i32 = 6;
     let item = value as f32;
     let scaled = item * ((255 << PRECISION_BITS) as f32);
     if scaled >= i16::MAX as f32 - 0.5 {
@@ -15658,7 +15658,7 @@ fn color3dlut_write_scalar_pixel(
     target_channels: usize,
     output: &mut [u8],
 ) {
-    const PRECISION_BITS: i32 = 4;
+    const PRECISION_BITS: i32 = 6;
     const SCALE_BITS: u32 = 18;
     const SCALE_MASK: u32 = (1 << SCALE_BITS) - 1;
     const SHIFT_BITS: u32 = 15;
@@ -15727,7 +15727,7 @@ fn color3dlut_write_vector_batch(
     target_channels: usize,
     output: &mut [u8],
 ) {
-    const PRECISION_BITS: i32 = 4;
+    const PRECISION_BITS: i32 = 6;
     const SCALE_BITS: u32 = 18;
     const SCALE_MASK: u32 = (1 << SCALE_BITS) - 1;
     const SHIFT_BITS: u32 = 15;

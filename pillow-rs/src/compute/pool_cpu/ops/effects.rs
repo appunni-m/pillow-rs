@@ -4262,7 +4262,7 @@ pub fn op_color3dlut(
     let sxy = sx * sy;
 
     let (w, h) = img.dimensions();
-    const PRECISION_BITS: i32 = 4;
+    const PRECISION_BITS: i32 = 6;
     const SCALE_BITS: u32 = 18;
     const SCALE_MASK: u32 = (1 << SCALE_BITS) - 1;
     const SHIFT_BITS: u32 = 15;
@@ -4271,8 +4271,8 @@ pub fn op_color3dlut(
         ((sy - 1) as f64 / 255.0 * f64::from(1 << SCALE_BITS)) as u32,
         ((sz - 1) as f64 / 255.0 * f64::from(1 << SCALE_BITS)) as u32,
     ];
-    // Pillow converts Python sequences to float32 before preparing signed
-    // 12.4 fixed-point entries in `_prepare_lut_table`.
+    // Pillow converts Python sequences to float32 before preparing the signed
+    // 10.6 fixed-point entries in `_prepare_lut_table`.
     let prepared: Vec<i16> = table
         .iter()
         .map(|value| {

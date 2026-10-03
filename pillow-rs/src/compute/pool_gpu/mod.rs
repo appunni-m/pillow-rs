@@ -5811,12 +5811,12 @@ fn pack_luma8_putdata(data: &[u8], capacity: u32) -> Result<Vec<u32>, PilError> 
     Ok(packed)
 }
 
-/// Prepare Color3DLut table entries in the same signed 12.4 representation
+/// Prepare Color3DLut table entries in the same signed 10.6 representation
 /// used by the CPU interpolation path. The returned i16 values are serialized
 /// as one little-endian u32 word per table component for a read-only shader
 /// buffer; keeping this conversion shared prevents f32/table rounding drift.
 fn color3dlut_table_words(table: &[f64]) -> Result<Vec<u32>, PilError> {
-    const PRECISION_BITS: i32 = 4;
+    const PRECISION_BITS: i32 = 6;
     let mut words = Vec::with_capacity(table.len());
     for &value in table {
         if !value.is_finite() {
@@ -15743,7 +15743,7 @@ fn extract_second_image(
     }
     if let PipelineOp::Color3DLut { table, .. } = op {
         // Color3DLut table entries are prepared once on the host using the
-        // exact signed 12.4 conversion from the CPU implementation. Store one
+        // exact signed 10.6 conversion from the CPU implementation. Store one
         // signed i16 value per synthetic pixel; the shader reads the low 16
         // bits through the normal packed RGBA upload path.
         let values = color3dlut_table_words(table)?;
