@@ -15,7 +15,7 @@ enabled.
 | Build npm package | `make build-wasm-release` | Compiles the shared Node/browser WASM artifact |
 | One parity case | `make migration-parity-case CASE_ID=<id>` | Runs the selected input against source and target |
 | Explicit image-batch parity | `make build-parity && .venv/bin/python scripts/test_imagebatch_parity.py` | Compares `PIL.ImageBatch` with isolated Pillow; verifies one GPU shader dispatch per compatible group and a separate dispatch per fallback job |
-| Explicit image-batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --operation multiply --mode L --width 64 --height 64 --images 64` | Run after `make build-parity`; measures full-call queued `ImageBatch.Multiply`. `--operation` also accepts `median-filter` and `extract-band`; compare with ordinary Pillow and `--backend simd` without `--queue` |
+| Explicit image-batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --operation color3dlut --mode RGBA --width 256 --height 256 --images 16 --samples 12 --warmups 3` | Run after `make build-parity`; measures full-call queued `ImageBatch.Color3DLUT`. `--operation` also accepts `median-filter`, `extract-band`, and `multiply`; compare with `--backend pillow`, `cpu`, or `simd` without `--queue` |
 | Review repetitive cases | `make migration-parity-reduction MIGRATION_REDUCTION_ARGS='--candidates <pairs.json> --output-dir <directory>'` | Measures removal batches and binary restoration against separate CPU/SIMD/GPU baselines; see [coverage](COVERAGE.md#reduce-repetitive-parity-inputs) |
 | Complete runtime campaign | `make test` | Runs backend, Node/browser, and reverse Pillow coverage lanes |
 | Format check / fix | `make fmt` / `make fmt-fix` | Checks / changes Rust formatting |
@@ -39,6 +39,15 @@ to measure independent GPU calls. To reproduce the 256×256 × 16 cohort, change
 the dimensions and image count to `--width 256 --height 256 --images 16` and
 run the Pillow, SIMD, and queued-GPU profiles. Both profiles default to 12
 samples and 3 warmups.
+
+The Color3DLUT batch workload uses one shared non-identity 17³ RGBA table.
+Run the same command with `--operation color3dlut --mode RGBA` at
+`--width 64 --height 64 --images 64`, `--width 256 --height 256 --images 16`,
+and `--width 1024 --height 768 --images 4`. Use `--backend pillow`, `cpu`, and
+`simd` without `--queue`, plus `--backend gpu` both with and without `--queue`.
+`scripts/test_imagebatch_parity.py` compares every output against the isolated
+Pillow oracle and checks that compatible queued groups execute one actual
+`color_3dlut.wgsl` dispatch with no mode conversion or fallback.
 
 Setup installs dependencies; ordinary help and documentation builds do not.
 Documentation builds require `make docs-setup` once. They do not execute

@@ -17,13 +17,31 @@ import sys
 import time
 
 
+def make_color3dlut(ImageFilter):
+    def transform(red, green, blue):
+        return (
+            0.02 + 0.78 * red + 0.12 * green * blue,
+            0.04 + 0.75 * green + 0.12 * red * (1.0 - blue),
+            0.03 + 0.74 * blue + 0.18 * red * green,
+            0.02
+            + 0.20 * red
+            + 0.28 * green
+            + 0.40 * blue
+            + 0.10 * red * green * blue,
+        )
+
+    return ImageFilter.Color3DLUT.generate(
+        17, transform, channels=4, target_mode="RGBA"
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend", choices=("pillow", "cpu", "simd", "gpu"), default="gpu")
     parser.add_argument("--queue", action="store_true", help="queue operations until join")
     parser.add_argument(
         "--operation",
-        choices=("median-filter", "extract-band", "multiply"),
+        choices=("median-filter", "extract-band", "multiply", "color3dlut"),
         default="median-filter",
     )
     parser.add_argument("--mode", choices=("L", "LA", "RGB", "RGBA"), default="L")
@@ -43,6 +61,8 @@ def parse_args() -> argparse.Namespace:
         "RGBA": 4,
     }[args.mode]:
         parser.error("channel is outside the selected image mode")
+    if args.operation == "color3dlut" and args.mode != "RGBA":
+        parser.error("the explicit Color3DLUT batch currently requires mode RGBA")
     if args.backend == "pillow" and args.queue:
         parser.error("Pillow baseline is ordinary sequential execution; omit --queue")
     return args
@@ -63,11 +83,15 @@ def main() -> int:
             raise RuntimeError(f"unexpected Pillow baseline version: {PIL.__version__}")
         pillow_version = PIL.__version__
         core = None
+        color_lut = make_color3dlut(ImageFilter) if args.operation == "color3dlut" else None
+        batch_color_lut = None
     else:
         from PIL import ImageBatch
         import pillow_rs._core as core
 
         pillow_version = None
+        color_lut = make_color3dlut(ImageFilter) if args.operation == "color3dlut" else None
+        batch_color_lut = ImageBatch.Color3DLUT(color_lut) if color_lut is not None else None
 
     channels = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4}[args.mode]
     frame_bytes = args.width * args.height * channels
@@ -115,6 +139,8 @@ def main() -> int:
                     image.filter(ImageFilter.MedianFilter(3)).tobytes()
                 elif args.operation == "extract-band":
                     image.getchannel(args.channel).tobytes()
+                elif args.operation == "color3dlut":
+                    image.filter(color_lut).tobytes()
                 else:
                     other = Image.frombytes(
                         args.mode,
@@ -137,11 +163,15 @@ def main() -> int:
                 else (
                     ImageBatch.ExtractBand(args.channel)
                     if args.operation == "extract-band"
-                    else ImageBatch.Multiply(
-                        Image.frombytes(
-                            args.mode,
-                            (args.width, args.height),
-                            other_inputs[start + image_index],
+                    else (
+                        batch_color_lut
+                        if args.operation == "color3dlut"
+                        else ImageBatch.Multiply(
+                            Image.frombytes(
+                                args.mode,
+                                (args.width, args.height),
+                                other_inputs[start + image_index],
+                            )
                         )
                     )
                 )
@@ -150,10 +180,10 @@ def main() -> int:
         result = executor.join()
         if len(result) != args.images:
             raise RuntimeError(f"expected {args.images} outputs, received {len(result)}")
-        if args.operation in ("extract-band", "multiply"):
-            # Match Pillow's materialized byte result inside the timing window.
-            for image in result:
-                image.tobytes()
+        # Match Pillow's materialized byte result inside the timing window for
+        # every operation, including LUT and filter output images.
+        for image in result:
+            image.tobytes()
         return result
 
     if args.backend == "pillow":

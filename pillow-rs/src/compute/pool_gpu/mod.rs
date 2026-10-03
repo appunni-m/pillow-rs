@@ -18925,7 +18925,9 @@ fn gpu_batch_group_limit_for_limits(
     };
     let halo = match op {
         PipelineOp::MedianFilter { size: 3 } => 2u32,
-        PipelineOp::ExtractBand { .. } | PipelineOp::Multiply { .. } => 0,
+        PipelineOp::ExtractBand { .. }
+        | PipelineOp::Multiply { .. }
+        | PipelineOp::Color3DLut { .. } => 0,
         _ => return 0,
     };
     let Some(per_image_height) = height.checked_add(halo) else {
