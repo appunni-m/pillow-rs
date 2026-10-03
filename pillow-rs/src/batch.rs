@@ -10,6 +10,7 @@
 use crate::compute::Backend;
 use crate::error::PilError;
 use crate::image::Image;
+use crate::pipeline::PipelineOp;
 
 /// One explicitly submitted Pillow operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +44,15 @@ impl BatchOperation {
             Self::ExtractBand { channel } => {
                 usize::try_from(channel).is_ok_and(|channel| channel < channels)
             }
+        }
+    }
+
+    fn pipeline_op(self) -> Option<PipelineOp> {
+        match self {
+            Self::MedianFilter { size } => Some(PipelineOp::MedianFilter { size }),
+            Self::ExtractBand { channel } => Some(PipelineOp::ExtractBand {
+                index: u8::try_from(channel).ok()?,
+            }),
         }
     }
 }
@@ -164,6 +174,20 @@ impl BatchExecutor {
                             && other.size == job.size
                     })
                 }));
+            }
+
+            if group.len() >= 2 {
+                let operation = job
+                    .operation
+                    .pipeline_op()
+                    .expect("groupable batch operation has a pipeline operation");
+                let safe_group_len = crate::compute::gpu_batch_group_limit(
+                    &operation,
+                    job.mode.as_str(),
+                    job.size,
+                    group.len(),
+                );
+                group.truncate(safe_group_len);
             }
 
             if group.len() >= 2 {

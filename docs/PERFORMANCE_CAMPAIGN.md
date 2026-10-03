@@ -16010,3 +16010,65 @@ Both targets built with `make build-parity`, preserving the isolated Pillow
 oracle. No coverage was run. Receipts use the `gaussianblur-l-20261003-`
 prefix. Checkpoint the remaining CPU and SIMD gaps and continue to another
 operation after the repository's final push checks.
+
+## Explicit `ImageBatch` GPU resource-boundary checkpoint — 2026-10-03
+
+The change is contained in the explicit `BatchExecutor` path. It does not
+change ordinary `Image` calls, `queue=False`, operation registration, or the
+existing MedianFilter and ExtractBand kernels. Before allocating a stacked
+host image, `join()` now asks the GPU planner for the largest safe prefix of
+compatible queued images. The planner checks the static pixel cap, the active
+adapter's storage-binding and buffer-size limits, dispatch workgroup dimensions,
+and the existing shader-work budget. MedianFilter includes both duplicated
+border rows per image in its height and work estimates. After one safe group
+runs, `join()` discovers and schedules any remaining compatible jobs in order;
+a safe singleton uses the existing single-image execution route.
+
+The planner is a binary search over group length because every checked cost is
+monotone with the number of stacked images. It reuses the existing GPU safety
+checks and current image operation, and declines grouping when GPU
+initialization or limits cannot be established. Tests exercise the 1024 × 768
+RGBA ExtractBand static-cap boundary without allocating the stack: 21 images
+fit in 16,777,216 logical pixels and 22 do not. Additional pure-planner tests
+cover a narrower 16 MiB storage-buffer limit, the ExtractBand workgroup-grid
+boundary, and MedianFilter's quadratic shader-work limit (eight 1024 × 768 RGBA
+images fit; nine exceed it).
+
+The earlier unbounded 22-image ExtractBand probe terminated with exit code 139;
+its exact crash site was not captured. The input stack required 17,301,504
+logical pixels, above the existing 16,777,216-pixel GPU buffer cap. After the
+planner was added, the same 22 distinct 1024 × 768 RGBA inputs completed as a
+21-image group plus one single-image call. Live Pillow output bytes and
+submission-order metadata matched for all 22 results. The parity receipt
+observed exactly two actual `extract_band.wgsl` dispatches and no backend
+fallback. `queue=False` and the ordinary image paths remain independently
+covered by the existing parity checks.
+
+The boundary throughput profile used three measured windows and one warmup;
+each window constructed 22 distinct inputs, submitted all jobs, joined, and
+materialized every L output. Input bytes were prepared outside the timer. The
+same workload measured:
+
+| Profile | Median window (ms) | Images/s | Pixels/s |
+| --- | ---: | ---: | ---: |
+| GPU `queue=True` | 35.498 | 620 | 487.4 million |
+| GPU `queue=False` | 28.358 | 776 | 610.1 million |
+
+The grouped path was about 20% slower than eager GPU for this large image
+workload. Stacking and splitting outweighed the saved per-image scheduling, so
+this measurement is a safety/parity result, not evidence that large-image
+batching improves throughput. Keep the explicit feature for its measured
+small-image use cases; do not route single-image operations through it or
+claim a high-resolution throughput win. The benchmark's pipeline receipt
+reports the last materialization only; the separate parity collector is what
+verified two dispatches for the complete 22-image join. No Pillow, CPU, or SIMD
+benchmark was run for this boundary case.
+
+Verification on the edited source used `cargo test -p pillow-rs --lib batch`
+(8 passed), `RUSTC_WRAPPER= make build-parity`,
+`.venv/bin/python scripts/test_imagebatch_parity.py`,
+`make fmt clippy`, and the two `scripts/benchmark_imagebatch.py` commands for
+the GPU queued and eager profiles above. The live parity script kept its Pillow
+oracle isolated and covered all grouped modes/channels plus the 1024 × 768
+boundary. No coverage was run. This group-limit change is ready to checkpoint;
+the 20% high-resolution throughput gap remains a separate batch-layout problem.
