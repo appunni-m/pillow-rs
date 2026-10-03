@@ -3,14 +3,15 @@
 //! This API is separate from [`crate::Image`] methods and never changes normal
 //! image routing. Grouped workloads reuse the existing operation pipelines
 //! over compatible native-mode images packed into one image, then split the
-//! results back into ordinary per-image results. The initial grouped
-//! operations are `MedianFilter(3)`, `ExtractBand`, and `ImageChops.multiply`.
-//! Images that cannot be grouped use their ordinary single-image pipeline.
+//! results back into ordinary per-image results. Grouped operations reuse
+//! `MedianFilter(3)`, `ExtractBand`, `ImageChops.multiply`, and same-mode RGBA
+//! `Color3DLUT` pipelines. Images that cannot be grouped use their ordinary
+//! single-image pipeline.
 
 use crate::compute::Backend;
 use crate::error::PilError;
 use crate::image::Image;
-use crate::pipeline::PipelineOp;
+use crate::pipeline::{PipelineOp, PixelMode};
 use std::sync::Arc;
 
 /// One explicitly submitted Pillow operation.
@@ -32,6 +33,17 @@ pub enum BatchOperation {
         /// in their native mode and passed through the ordinary Multiply pipeline.
         other: Box<Image>,
     },
+    /// Apply a shared same-mode RGBA 3D color lookup table.
+    Color3DLut {
+        /// LUT dimensions.
+        size: (u32, u32, u32),
+        /// Shared Pillow-order LUT values.
+        table: Arc<[f64]>,
+        /// Number of output channels per LUT entry.
+        channels: u32,
+        /// Explicit target mode, if supplied by the filter.
+        target_mode: Option<String>,
+    },
 }
 
 impl BatchOperation {
@@ -40,6 +52,33 @@ impl BatchOperation {
             Self::MedianFilter { size } => image.median_filter(*size),
             Self::ExtractBand { channel } => image.getchannel(*channel),
             Self::Multiply { other } => crate::ops::chops::multiply(image, other),
+            Self::Color3DLut {
+                size,
+                table,
+                channels,
+                target_mode,
+            } => {
+                if image.mode()? == "RGBA"
+                    && *channels == 4
+                    && matches!(target_mode.as_deref(), None | Some("RGBA"))
+                {
+                    Ok(Image::push_mode_changing_op(
+                        image,
+                        self.pipeline_op()
+                            .expect("same-mode RGBA LUT has a pipeline operation"),
+                        "RGBA",
+                    ))
+                } else {
+                    image.color3dlut(
+                        crate::PreparedColor3DLut {
+                            size: *size,
+                            table: table.to_vec(),
+                            channels: *channels,
+                        },
+                        target_mode.as_deref(),
+                    )
+                }
+            }
         }
     }
 
@@ -56,6 +95,15 @@ impl BatchOperation {
                 other.mode().is_ok_and(|other_mode| other_mode == mode)
                     && other.size().is_ok_and(|other_size| other_size == size)
             }
+            Self::Color3DLut {
+                channels,
+                target_mode,
+                ..
+            } => {
+                mode == "RGBA"
+                    && *channels == 4
+                    && matches!(target_mode.as_deref(), None | Some("RGBA"))
+            }
         }
     }
 
@@ -68,6 +116,25 @@ impl BatchOperation {
                 left == right
             }
             (Self::Multiply { .. }, Self::Multiply { .. }) => true,
+            (
+                Self::Color3DLut {
+                    size: left_size,
+                    table: left_table,
+                    channels: left_channels,
+                    target_mode: left_target,
+                },
+                Self::Color3DLut {
+                    size: right_size,
+                    table: right_table,
+                    channels: right_channels,
+                    target_mode: right_target,
+                },
+            ) => {
+                left_size == right_size
+                    && left_channels == right_channels
+                    && left_target == right_target
+                    && Arc::ptr_eq(left_table, right_table)
+            }
             _ => false,
         }
     }
@@ -80,6 +147,18 @@ impl BatchOperation {
             }),
             Self::Multiply { other } => Some(PipelineOp::Multiply {
                 other: Arc::new((**other).clone()),
+            }),
+            Self::Color3DLut {
+                size,
+                table,
+                channels,
+                ..
+            } => Some(PipelineOp::Color3DLut {
+                size: *size,
+                table: Arc::clone(table),
+                channels: *channels,
+                source_mode: PixelMode::RGBA,
+                target_mode: PixelMode::RGBA,
             }),
         }
     }
@@ -96,11 +175,12 @@ struct BatchJob {
 ///
 /// `queue = false` applies each operation immediately using the ordinary
 /// single-image route. With `queue = true`, [`join`](Self::join) groups
-/// compatible `MedianFilter(3)`, `ExtractBand`, and `ImageChops.multiply` jobs
-/// when GPU is the selected backend. Grouping currently requires equal-size
-/// native byte modes `L`, `LA`, `RGB`, and `RGBA`; other jobs are executed
-/// through the ordinary per-image operation. No conversion to RGBA is
-/// performed.
+/// compatible `MedianFilter(3)`, `ExtractBand`, `ImageChops.multiply`, and
+/// same-mode RGBA `Color3DLUT` jobs when GPU is the selected backend. Grouping
+/// currently requires equal-size native byte modes `L`, `LA`, `RGB`, and
+/// `RGBA`; LUT groups additionally require the same shared LUT object. Other
+/// jobs are executed through the ordinary per-image operation. No conversion
+/// to RGBA is performed.
 ///
 /// `backend` optionally locks each job to a backend. If it is `None`, normal
 /// automatic routing is used and grouping is attempted only when GPU is the
@@ -310,6 +390,14 @@ impl BatchExecutor {
                     .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
                 (1usize, guarded_height, mode, channels)
             }
+            BatchOperation::Color3DLut { .. } => {
+                let group_len = u32::try_from(indices.len())
+                    .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
+                let stacked_height = height
+                    .checked_mul(group_len)
+                    .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
+                (0usize, stacked_height, mode, channels)
+            }
             BatchOperation::ExtractBand { .. } => {
                 let group_len = u32::try_from(indices.len())
                     .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
@@ -439,6 +527,15 @@ impl BatchExecutor {
                 })?,
             )?;
             crate::ops::chops::multiply(&stacked, &secondary)?
+        } else if matches!(first.operation, BatchOperation::Color3DLut { .. }) {
+            Image::push_mode_changing_op(
+                &stacked,
+                first
+                    .operation
+                    .pipeline_op()
+                    .expect("groupable Color3DLut has a pipeline operation"),
+                output_mode,
+            )
         } else {
             first.operation.apply(&stacked)?
         };
@@ -529,6 +626,8 @@ mod tests {
     use crate::compute::Backend;
     use crate::error::PilError;
     use crate::image::Image;
+    use crate::pipeline::{PipelineOp, PixelMode};
+    use std::sync::Arc;
 
     fn fixture(mode: &str, width: u32, height: u32, channels: usize, seed: u8) -> Image {
         let pixel_count = usize::try_from(width)
@@ -543,6 +642,43 @@ mod tests {
             pixels.push(value);
         }
         Image::frombytes(mode, (width, height), &pixels).unwrap()
+    }
+
+    #[test]
+    fn color3dlut_groups_only_shared_same_mode_rgba_tables() {
+        let table = Arc::<[f64]>::from(vec![0.0; 2 * 2 * 2 * 4]);
+        let operation = BatchOperation::Color3DLut {
+            size: (2, 2, 2),
+            table: Arc::clone(&table),
+            channels: 4,
+            target_mode: Some("RGBA".into()),
+        };
+        let same = BatchOperation::Color3DLut {
+            size: (2, 2, 2),
+            table: Arc::clone(&table),
+            channels: 4,
+            target_mode: Some("RGBA".into()),
+        };
+        let equal_but_distinct = BatchOperation::Color3DLut {
+            size: (2, 2, 2),
+            table: Arc::from(table.to_vec()),
+            channels: 4,
+            target_mode: Some("RGBA".into()),
+        };
+
+        assert!(operation.can_group("RGBA", (8, 5)));
+        assert!(!operation.can_group("RGB", (8, 5)));
+        assert!(operation.matches_group(&same));
+        assert!(!operation.matches_group(&equal_but_distinct));
+        assert!(matches!(
+            operation.pipeline_op(),
+            Some(PipelineOp::Color3DLut {
+                source_mode: PixelMode::RGBA,
+                target_mode: PixelMode::RGBA,
+                channels: 4,
+                ..
+            })
+        ));
     }
 
     #[test]

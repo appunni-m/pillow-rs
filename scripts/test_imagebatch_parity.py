@@ -24,6 +24,7 @@ MULTIPLY_LARGE_IMAGE_COUNT = 16
 BOUNDARY_SIZE = (1024, 768)
 BOUNDARY_IMAGE_COUNT = 22
 BENCHMARK_CHANNELS = {"L": 0, "LA": 1, "RGB": 1, "RGBA": 3}
+COLOR3DLUT_WORKLOADS = ((64, 64, 64), (256, 256, 16), (1024, 768, 4))
 
 
 def pixels(mode: str, size: tuple[int, int], seed: int) -> bytes:
@@ -56,6 +57,24 @@ def boundary_rgba_pixels(seed: int) -> bytes:
     return bytes(
         173 if index % 4 == 3 else (index * 31 + seed * 47 + (index // 9) * 13) & 255
         for index in range(count)
+    )
+
+
+def make_batch_color3dlut(ImageFilter):
+    def transform(red: float, green: float, blue: float) -> tuple[float, float, float, float]:
+        return (
+            0.02 + 0.78 * red + 0.12 * green * blue,
+            0.04 + 0.75 * green + 0.12 * red * (1.0 - blue),
+            0.03 + 0.74 * blue + 0.18 * red * green,
+            0.02
+            + 0.20 * red
+            + 0.28 * green
+            + 0.40 * blue
+            + 0.10 * red * green * blue,
+        )
+
+    return ImageFilter.Color3DLUT.generate(
+        17, transform, channels=4, target_mode="RGBA"
     )
 
 
@@ -106,6 +125,10 @@ def run_oracle(output: Path) -> None:
     multiply_metadata: dict[str, list[int | None]] = {}
     multiply_benchmark_outputs: dict[str, list[str]] = {}
     multiply_large_outputs: dict[str, list[str]] = {}
+    color3dlut_outputs: list[str] = []
+    color3dlut_metadata: list[int | None] = []
+    color3dlut_benchmark_outputs: list[str] = []
+    color3dlut_workload_outputs: dict[str, list[str]] = {}
     large_outputs: dict[str, list[str]] = {}
     large_metadata: dict[str, list[int | None]] = {}
     for mode in MODES:
@@ -182,6 +205,26 @@ def run_oracle(output: Path) -> None:
             result = image.filter(ImageFilter.MedianFilter(3))
             large_outputs[mode].append(result.tobytes().hex())
             large_metadata[mode].append(result.info.get("batch-seed"))
+    color3dlut = make_batch_color3dlut(ImageFilter)
+    for size, seed in zip(SIZES, SEEDS, strict=True):
+        image = Image.frombytes("RGBA", size, pixels("RGBA", size, seed))
+        image.info["batch-seed"] = seed
+        result = image.filter(color3dlut)
+        color3dlut_outputs.append(result.tobytes().hex())
+        color3dlut_metadata.append(result.info.get("batch-seed"))
+    for seed in range(64):
+        image = Image.frombytes("RGBA", (64, 64), benchmark_pixels("RGBA", seed))
+        color3dlut_benchmark_outputs.append(image.filter(color3dlut).tobytes().hex())
+    for width, height, image_count in COLOR3DLUT_WORKLOADS[1:]:
+        key = f"{width}x{height}x{image_count}"
+        color3dlut_workload_outputs[key] = []
+        for seed in range(image_count):
+            image = Image.frombytes(
+                "RGBA",
+                (width, height),
+                benchmark_pixels("RGBA", seed, (width, height)),
+            )
+            color3dlut_workload_outputs[key].append(image.filter(color3dlut).tobytes().hex())
     boundary_reference = Image.frombytes(
         "RGBA", BOUNDARY_SIZE, boundary_rgba_pixels(0)
     ).getchannel(3)
@@ -201,6 +244,10 @@ def run_oracle(output: Path) -> None:
                 "multiply_large_outputs": multiply_large_outputs,
                 "large_outputs": large_outputs,
                 "large_metadata": large_metadata,
+                "color3dlut_outputs": color3dlut_outputs,
+                "color3dlut_metadata": color3dlut_metadata,
+                "color3dlut_benchmark_outputs": color3dlut_benchmark_outputs,
+                "color3dlut_workload_outputs": color3dlut_workload_outputs,
                 "boundary_rgba_extract_alpha": boundary_reference.tobytes().hex(),
             }
         )
@@ -287,6 +334,88 @@ def run_target(expected_path: Path) -> None:
             raise AssertionError(f"256x256 Pillow info mismatch for {mode}")
         print(f"{mode} 256x256: Pillow parity PASS; actual GPU; grouped dispatch=1")
 
+    shared_lut = ImageBatch.Color3DLUT(make_batch_color3dlut(ImageFilter))
+    lut_order = (1, 0, 2)
+    lut_batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+    for input_index in lut_order:
+        size, seed = SIZES[input_index], SEEDS[input_index]
+        image = Image.frombytes("RGBA", size, pixels("RGBA", size, seed))
+        image.info["batch-seed"] = seed
+        lut_batch.submit(image, shared_lut)
+    lut_actual = lut_batch.join()
+    if [image.mode for image in lut_actual] != ["RGBA"] * len(lut_order):
+        raise AssertionError("Color3DLUT batch changed the RGBA output mode")
+    if [image.size for image in lut_actual] != [SIZES[index] for index in lut_order]:
+        raise AssertionError("Color3DLUT batch changed output dimensions")
+    if [image.tobytes().hex() for image in lut_actual] != [
+        expected["color3dlut_outputs"][index] for index in lut_order
+    ]:
+        raise AssertionError("small Color3DLUT batch differs from Pillow")
+    if [image.info.get("batch-seed") for image in lut_actual] != [
+        expected["color3dlut_metadata"][index] for index in lut_order
+    ]:
+        raise AssertionError("Color3DLUT batch changed per-image info")
+    require_gpu_execution(
+        core,
+        core.take_pipeline_telemetry(),
+        "RGBA Color3DLUT compatible pair and singleton",
+        expected_shader="color_3dlut.wgsl",
+        expected_shader_dispatches=2,
+    )
+    print("RGBA Color3DLUT: Pillow bytes, mode, size, order, and info PASS")
+
+    for width, height, image_count in COLOR3DLUT_WORKLOADS:
+        key = f"{width}x{height}x{image_count}"
+        expected_outputs = (
+            expected["color3dlut_benchmark_outputs"]
+            if (width, height, image_count) == COLOR3DLUT_WORKLOADS[0]
+            else expected["color3dlut_workload_outputs"][key]
+        )
+        batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for seed in range(image_count):
+            batch.submit(
+                Image.frombytes(
+                    "RGBA",
+                    (width, height),
+                    benchmark_pixels("RGBA", seed, (width, height)),
+                ),
+                shared_lut,
+            )
+        actual = batch.join()
+        if len(actual) != image_count or any(image.mode != "RGBA" for image in actual):
+            raise AssertionError(f"{key} Color3DLUT batch returned an invalid mode/count")
+        if [image.tobytes().hex() for image in actual] != expected_outputs:
+            raise AssertionError(f"{key} RGBA Color3DLUT bytes differ from Pillow")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"RGBA Color3DLUT {key}",
+            expected_shader="color_3dlut.wgsl",
+        )
+        print(f"RGBA Color3DLUT {key}: Pillow parity PASS; one actual GPU dispatch")
+
+    other_lut = ImageBatch.Color3DLUT(make_batch_color3dlut(ImageFilter))
+    distinct_lut_batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+    for operation in (shared_lut, other_lut):
+        distinct_lut_batch.submit(
+            Image.frombytes("RGBA", (7, 5), pixels("RGBA", (7, 5), 41)),
+            operation,
+        )
+    distinct_lut_results = distinct_lut_batch.join()
+    if [image.tobytes().hex() for image in distinct_lut_results] != [
+        expected["color3dlut_outputs"][1],
+        expected["color3dlut_outputs"][1],
+    ]:
+        raise AssertionError("distinct Color3DLUT instances changed per-image results")
+    require_gpu_execution(
+        core,
+        core.take_pipeline_telemetry(),
+        "distinct Color3DLUT instances",
+        expected_shader="color_3dlut.wgsl",
+        expected_shader_dispatches=2,
+    )
+    print("distinct Color3DLUT instances: kept separate; two actual GPU dispatches")
+
     for mode, channels in MODES.items():
         submission_order = (1, 0)
         for channel in range(channels):
@@ -371,6 +500,65 @@ def run_target(expected_path: Path) -> None:
             expected_shader="extract_band.wgsl",
         )
         print(f"queue=False {mode} ExtractBand({channel}): Pillow parity PASS; single-image path")
+
+    eager_lut = ImageBatch.BatchExecutor(queue=False, backend="gpu")
+    eager_lut.submit(
+        Image.frombytes("RGBA", SIZES[0], pixels("RGBA", SIZES[0], SEEDS[0])),
+        shared_lut,
+    )
+    eager_lut_result = eager_lut.join()[0]
+    if eager_lut_result.mode != "RGBA" or eager_lut_result.tobytes().hex() != expected[
+        "color3dlut_outputs"
+    ][0]:
+        raise AssertionError("queue=False Color3DLUT differs from Pillow or changed mode")
+    require_gpu_execution(
+        core,
+        core.take_pipeline_telemetry(),
+        "queue=False RGBA Color3DLUT",
+        expected_shader="color_3dlut.wgsl",
+    )
+    print("queue=False Color3DLUT: Pillow parity PASS; eager single-image execution")
+
+    for backend in ("cpu", "simd"):
+        for selected in ("cpu", "simd", "gpu"):
+            core.disable_backend(selected)
+        if not core.enable_backend(backend):
+            raise AssertionError(f"{backend} backend unavailable for Color3DLUT parity")
+        backend_indices = (
+            lut_order
+            if backend == "cpu"
+            else tuple(index for index in lut_order if SIZES[index][0] * SIZES[index][1] >= 8)
+        )
+        sequential = ImageBatch.BatchExecutor(queue=False, backend=backend)
+        for input_index in backend_indices:
+            size, seed = SIZES[input_index], SEEDS[input_index]
+            image = Image.frombytes("RGBA", size, pixels("RGBA", size, seed))
+            image.info["batch-seed"] = seed
+            sequential.submit(image, shared_lut)
+        actual = sequential.join()
+        if [image.tobytes().hex() for image in actual] != [
+            expected["color3dlut_outputs"][index] for index in backend_indices
+        ]:
+            raise AssertionError(f"{backend} eager Color3DLUT differs from Pillow")
+        if any(image.mode != "RGBA" for image in actual):
+            raise AssertionError(f"{backend} eager Color3DLUT changed the output mode")
+        receipt = core.take_pipeline_telemetry()
+        if (
+            receipt is None
+            or receipt.get("actual_backend") != backend
+            or receipt.get("fallback_reason")
+        ):
+            raise AssertionError(f"{backend} Color3DLUT did not use the requested backend: {receipt}")
+        resource = receipt.get("resource")
+        if isinstance(resource, dict) and resource.get("mode_conversion_count") != 0:
+            raise AssertionError(f"{backend} Color3DLUT converted RGBA: {receipt}")
+        detail = "; SIMD checked only vector-eligible images" if backend == "simd" else ""
+        print(f"queue=False Color3DLUT on {backend}: Pillow parity PASS; no fallback{detail}")
+
+    for selected in ("cpu", "simd", "gpu"):
+        core.disable_backend(selected)
+    if not core.enable_backend("gpu"):
+        raise AssertionError("GPU backend unavailable after Color3DLUT serial parity")
 
     for mode in MODES:
         submission_order = (1, 0)

@@ -42,7 +42,7 @@ use pyo3::types::PyTypeMethods;
 use pyo3::wrap_pyfunction;
 use std::borrow::Cow;
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 mod putdata;
 
@@ -65,6 +65,33 @@ pub struct PyImage {
 /// Python wrapper for an explicitly queued group of image operations.
 pub struct PyBatchExecutor {
     inner: pillow_rs::BatchExecutor,
+}
+
+#[pyclass(name = "BatchColor3DLUT")]
+/// Immutable, shared LUT parameters accepted by the explicit batch API.
+pub struct PyBatchColor3DLut {
+    size: (u32, u32, u32),
+    table: Arc<[f64]>,
+    channels: u32,
+    target_mode: Option<String>,
+}
+
+#[pymethods]
+impl PyBatchColor3DLut {
+    #[new]
+    fn new(filter: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let size = filter.getattr("size")?.extract::<(u32, u32, u32)>()?;
+        let channels = filter.getattr("channels")?.extract::<u32>()?;
+        let values = filter.getattr("table")?.extract::<Vec<f64>>()?;
+        let prepared = pillow_rs::prepare_color3dlut(values, size, channels).map_err(map_error)?;
+        let target_mode = filter.getattr("mode")?.extract::<Option<String>>()?;
+        Ok(Self {
+            size,
+            table: Arc::from(prepared.table),
+            channels,
+            target_mode,
+        })
+    }
 }
 
 #[pymethods]
@@ -108,9 +135,18 @@ impl PyBatchExecutor {
                     other: Box::new(other),
                 }
             }
+            "BatchColor3DLUT" => {
+                let lut = operation.extract::<PyRef<'_, PyBatchColor3DLut>>()?;
+                pillow_rs::BatchOperation::Color3DLut {
+                    size: lut.size,
+                    table: Arc::clone(&lut.table),
+                    channels: lut.channels,
+                    target_mode: lut.target_mode.clone(),
+                }
+            }
             _ => {
                 return Err(PyTypeError::new_err(
-                    "batch operation must be an ImageFilter.MedianFilter, ImageBatch.ExtractBand, or ImageBatch.Multiply instance",
+                    "batch operation must be an ImageFilter.MedianFilter, ImageBatch.ExtractBand, ImageBatch.Multiply, or ImageBatch.Color3DLUT instance",
                 ));
             }
         };
@@ -2553,6 +2589,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     m.add_class::<PyImage>()?;
     m.add_class::<PyBatchExecutor>()?;
+    m.add_class::<PyBatchColor3DLut>()?;
     m.add_class::<PyPointTransform>()?;
     m.add_class::<PyImageSequenceIterator>()?;
     m.add_class::<PyDraw>()?;

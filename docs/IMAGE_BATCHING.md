@@ -25,29 +25,42 @@ products = ImageBatch.BatchExecutor(queue=True, backend="gpu")
 products.submit(image_a, ImageBatch.Multiply(image_b))
 products.submit(image_c, ImageBatch.Multiply(image_d))
 product_a, product_c = products.join()
+
+lut = ImageFilter.Color3DLUT.generate(
+    17, callback, channels=4, target_mode="RGBA"
+)
+shared_lut = ImageBatch.Color3DLUT(lut)
+colors = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+colors.submit(rgba_a, shared_lut)
+colors.submit(rgba_b, shared_lut)
+color_a, color_b = colors.join()
 ```
 
 With `queue=False` (the default), `submit` executes each operation immediately
 through its ordinary single-image pipeline. With `queue=True`, submissions wait
 until `join`, which returns results in submission order. A batch accepts
-`ImageFilter.MedianFilter(3)`, `ImageBatch.ExtractBand(channel)`, and
-`ImageBatch.Multiply(other_image)` operations. Jobs with the same operation,
-mode, and dimensions are grouped when GPU is the selected backend. Multiply
-also requires each secondary image to match its primary image's mode and size.
-The native-mode group layouts are `L`, `LA`, `RGB`, and `RGBA`; no image is
-converted to RGBA. A queued job that has no compatible peer runs through the
-regular single-image operation at `join`.
+`ImageFilter.MedianFilter(3)`, `ImageBatch.ExtractBand(channel)`,
+`ImageBatch.Multiply(other_image)`, and a shared same-mode RGBA
+`ImageBatch.Color3DLUT(filter)` operation. Jobs with the same operation, mode,
+dimensions, and LUT instance are grouped when GPU is the selected backend.
+Multiply also requires each secondary image to match its primary image's mode
+and size. The native-mode group layouts are `L`, `LA`, `RGB`, and `RGBA`; no
+image is converted to RGBA. A queued job that has no compatible peer runs
+through the regular single-image operation at `join`.
 
 The GPU group is a native-mode vertical stack. For `MedianFilter(3)`, one
 replicated top and bottom row surrounds each image, so the filter cannot read
-pixels from a neighbor at a group boundary. For `ExtractBand`, images are
-stacked directly because each output pixel depends only on the corresponding
-input pixel. For `Multiply`, primary images and secondary images are each
-stacked in their native mode, then passed to the existing Multiply pipeline
-once. The existing single-image operation processes each stack, and its output
-is split back into ordinary per-image results. Split results use the same
-operation result and metadata path as single-image calls. Other filter sizes
-and unsupported modes continue through the existing single-image path.
+pixels from a neighbor at a group boundary. For `ExtractBand`, `Multiply`, and
+`Color3DLUT`, images are stacked directly because each output pixel depends
+only on the corresponding input pixel. For `Multiply`, primary and secondary
+operands are each stacked in their native mode. For `Color3DLUT`, the batch
+captures one immutable LUT and applies the existing RGBA-to-RGBA pipeline to
+the stack; each job must reuse the same `ImageBatch.Color3DLUT` instance.
+The existing single-image operation processes each stack, and its output is
+split back into ordinary per-image results. Split results use the same
+operation result and metadata path as single-image calls. Other filter sizes,
+incompatible LUT objects, and unsupported modes continue through the existing
+single-image path.
 
 If `backend` is omitted, automatic routing remains in effect; grouping is
 attempted only when GPU is the preferred active backend. A backend can be
@@ -172,3 +185,61 @@ The performance blocker is the cost of packing two full image stacks and
 splitting the readback around a simple byte-wise kernel. A follow-up should
 change the separate batch transport/scheduling design, not the ordinary
 single-image Multiply path.
+
+### RGBA `Color3DLUT` batch probe
+
+`ImageBatch.Color3DLUT(filter)` snapshots a four-channel LUT with an RGBA
+target. A queued group requires the same wrapper instance and equal-sized
+RGBA inputs. It stacks those native RGBA bytes, runs the existing
+`Color3DLUT` pipeline once, then splits the result images. `Image.filter`,
+automatic backend selection, and other single-image routes are not redirected
+through this batch path.
+
+The first byte-for-byte Pillow comparison exposed a pre-existing arithmetic
+parity defect shared by the CPU, SIMD, and GPU implementations: they prepared
+table samples with four fractional bits, while Pillow prepares signed 10.6
+samples. The shared implementation now uses six fractional bits for table
+preparation and output rounding; pixel-coordinate interpolation remains
+18.15. The focused regression also covers Pillow's negative and clamped LUT
+values on CPU, SIMD, and GPU.
+
+The parity run checks full output bytes, mode, dimensions, input order, and
+per-image `info`. It exercises eager CPU, vector-eligible eager SIMD, eager
+GPU, and queued GPU, and proves one actual GPU dispatch for compatible groups
+at 64×64 × 64, 256×256 × 16, and 1024×768 × 4. It also verifies that distinct
+LUT wrapper instances stay in separate groups. The command reference lists
+the isolated comparison and benchmark commands.
+
+These are full-window throughput measurements on the same Apple M-series host,
+with 12 samples and 3 warmups. Every returned image is materialized to bytes
+inside the timed window. Pillow runs sequentially through its ordinary filter;
+CPU, SIMD, and GPU run through `BatchExecutor(queue=False)`, and the last
+column is queued GPU. Values are million pixels per second. The queued GPU
+preflight reported the requested backend with no fallback, and parity verified
+one dispatch for each listed queued cohort.
+
+| RGBA workload | Pillow | CPU | SIMD | GPU, queue off | GPU, queued | queued/SIMD | queued/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 64×64 × 64 | 27.1 | 41.6 | 42.2 | 13.8 | 191.4 | 4.54× | 7.05× |
+| 256×256 × 16 | 63.9 | 47.2 | 51.2 | 142.2 | 268.3 | 5.24× | 4.20× |
+| 1024×768 × 4 | 67.6 | 50.7 | 50.3 | 338.1 | 200.3 | 3.98× | 2.96× |
+
+Queueing pays off strongly for many small images and for the 256×256 cohort.
+At 1024×768 × 4, the per-image GPU path is faster than stacking and splitting
+the four results; queued GPU still exceeds SIMD throughput, but reaches only
+59% of the queue-off GPU throughput. Shorter exploratory runs at 1024×768 × 8
+and × 16 showed the crossover toward queued execution (286 versus 200 Mpix/s
+at × 8; 363 versus 344 Mpix/s at × 16), but those smaller samples are not in
+the table. This feature should remain explicit, and callers processing only a
+few large images should compare both queue settings. The serial CPU and SIMD
+profiles are also slower than Pillow in the two larger listed cohorts, so this
+batch feature does not close the separate single-image performance gap.
+There is no separate Parallel CPU result for this operation: the Color3DLUT
+CPU kernel contains no Rayon work, so enabling the `parallel` feature does not
+create a distinct execution path to benchmark.
+
+For a reproducible profile, run `scripts/benchmark_imagebatch.py` with
+`--operation color3dlut --mode RGBA`, the workload's width, height, and image
+count, and `--samples 12 --warmups 3`. Use `--backend pillow`, `cpu`, `simd`,
+or `gpu`; add `--queue` only for queued GPU. See the command reference for a
+complete invocation.

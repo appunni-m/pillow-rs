@@ -45,6 +45,24 @@ class Multiply:
         self.image = image
 
 
+class Color3DLUT:
+    """Snapshot a Pillow ``ImageFilter.Color3DLUT`` for shared batch use.
+
+    Reuse the same ``ImageBatch.Color3DLUT`` instance for compatible RGBA
+    images. The lookup table is captured once and remains immutable while
+    queued jobs are pending.
+    """
+
+    __slots__ = ("_prepared",)
+
+    def __init__(self, lut):
+        from .imagefilter import Color3DLUT as Color3DLUTFilter
+
+        if not isinstance(lut, Color3DLUTFilter):
+            raise TypeError("lut must be a PIL.ImageFilter.Color3DLUT instance")
+        self._prepared = _core.BatchColor3DLUT(lut)
+
+
 class BatchExecutor:
     """Submit built-in image filters and join their results in input order.
 
@@ -52,7 +70,8 @@ class BatchExecutor:
     immediately through its usual single-image path. With ``queue=True``,
     ``join()`` groups compatible ``ImageFilter.MedianFilter(3)``,
     ``ImageBatch.ExtractBand(channel)``, or ``ImageBatch.Multiply(image2)``
-    jobs on the GPU when possible. Grouped operands use native ``L``, ``LA``,
+    jobs, plus jobs using one shared RGBA-to-RGBA ``ImageBatch.Color3DLUT``,
+    on the GPU when possible. Grouped operands use native ``L``, ``LA``,
     ``RGB``, or ``RGBA`` storage with equal dimensions. Incompatible jobs use
     the ordinary per-image operation.
 
@@ -74,11 +93,21 @@ class BatchExecutor:
         products.submit(image_c, ImageBatch.Multiply(image_d))
         product_a, product_c = products.join()
 
+        lut = ImageFilter.Color3DLUT.generate(
+            17, callback, channels=4, target_mode="RGBA"
+        )
+        shared_lut = ImageBatch.Color3DLUT(lut)
+        colors = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        colors.submit(rgba_a, shared_lut)
+        colors.submit(rgba_b, shared_lut)
+        color_a, color_b = colors.join()
+
     Batched extraction reuses ``Image.getchannel`` over a same-mode vertical
     stack and returns one ``L`` image per input. Batched multiplication stacks
     each primary and secondary operand separately, then reuses the existing
-    ``ImageChops.multiply`` pipeline. Inputs retain their mode; the executor
-    does not convert them to RGBA.
+    ``ImageChops.multiply`` pipeline. A Color3DLUT batch snapshots one shared
+    LUT and applies the existing RGBA pipeline to a vertical stack. Inputs
+    retain their mode; the executor does not convert them to RGBA.
     """
 
     def __init__(self, queue=False, backend=None):
@@ -94,10 +123,18 @@ class BatchExecutor:
         """
         if not isinstance(image, Image):
             raise TypeError("batch input must be a PIL.Image.Image instance")
-        if type(operation).__name__ not in ("MedianFilter", "ExtractBand", "Multiply"):
+        if isinstance(operation, Color3DLUT):
+            operation = operation._prepared
+        if type(operation).__name__ not in (
+            "MedianFilter",
+            "ExtractBand",
+            "Multiply",
+            "BatchColor3DLUT",
+        ):
             raise TypeError(
                 "batch operation must be an ImageFilter.MedianFilter, "
-                "ImageBatch.ExtractBand, or ImageBatch.Multiply instance"
+                "ImageBatch.ExtractBand, ImageBatch.Multiply, or "
+                "ImageBatch.Color3DLUT instance"
             )
         metadata = (
             image._info.copy(),
