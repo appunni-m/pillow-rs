@@ -16949,3 +16949,74 @@ checkpoint, so this is a stale cardinality expectation rather than a lost or
 uncategorized workload. Do not remove benchmark entries or weaken the catalog
 check to satisfy the obsolete totals. The other 43 documentation tests pass;
 `make docs-lint` and `make docs-build` pass.
+
+## I-mode bicubic resize — four-attempt checkpoint — 2026-10-03
+
+This visit targeted the parity-backed workload
+`pipeline-chain.resize-native-i32.bicubic-noise-1024x768`:
+`Image.resize((512, 384), BICUBIC)` on a deterministic 1024×768 `I` image,
+with output materialization inside the timing boundary. Each benchmark used
+five warmups and 100 timed observations. The exact Pillow gate passed for the
+measured input.
+
+The starting implementation had already removed a redundant same-layout
+carrier-image clone, but still decoded every I32 source word into an owned
+`Vec<i32>` for the CPU and SIMD resizers. The retained source-view change uses
+`bytemuck::try_cast_slice` to borrow the little-endian bytes when they are
+aligned on a little-endian host; unaligned or other-endian buffers use the
+existing signed little-endian decode. This preserved safe fallback behavior
+and saved one full source-sample allocation and decode on both CPU profiles.
+
+The next attempted output optimization tried to reinterpret `Vec<i32>` as
+`Vec<u8>` with `bytemuck::cast_vec`. That is not a valid zero-copy conversion:
+`bytemuck` requires equal element alignment so the original allocation can be
+deallocated with its original layout. Do not replace this with an unchecked
+`Vec::from_raw_parts`. The retained CPU output optimization instead writes
+each final signed word directly into its checked little-endian byte buffer in
+the nearest and filtered output loops. It removes the final `Vec<i32>` plus
+repack pass. The horizontal `Vec<i32>` intermediate remains necessary: Pillow
+rounds and stores the horizontal pass before the vertical accumulation.
+
+All numbers below are median latency in milliseconds from the corresponding
+run. Pillow is the ordinary sequential Pillow 12.2.0 oracle. The first run is
+the refreshed starting point; later rows are independent reruns on the same
+host, so small differences include normal run-to-run variation.
+
+| Run | Pillow | Serial CPU | SIMD | GPU | Exact parity |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Starting point | 2.173208 | 2.619688 | 5.232084 | 40.278375 | CPU, SIMD, GPU: 3/3 |
+| Borrowed I32 source view | 2.088792 | 2.381563 | 4.681187 | 39.975458 | CPU, SIMD, GPU: 3/3 |
+| Direct CPU output bytes | 2.129271 | 2.312876 | 4.851729 | 51.688125 | CPU, SIMD, GPU: 3/3 |
+
+The final standard run used only `pillow-rs-py/default` and
+`pillow-rs/default`, so the `parallel` feature remained disabled. CPU is still
+8.6% slower than Pillow. SIMD is 2.28× slower than Pillow, well short of the
+5× speed target. GPU is 10.65× slower than SIMD; its reciprocal-latency
+throughput is about 0.094× SIMD. GPU telemetry recorded 100 actual GPU
+executions, two dispatches per call, no fallback, 3,145,728 upload bytes,
+786,432 readback bytes, 125,440 auxiliary bytes, 6,423,308 retained-cache
+bytes, and one full-frame copy.
+
+The separate `make migration-parity-benchmark-parallel-cpu` run also passed its
+single exact parity case. Its artifact identifies `python-parallel-cpu` and
+the explicit `pillow-rs-py/parallel` and `pillow-rs/parallel` features. Its
+median was 0.697750 ms. Compared with the 2.129271 ms ordinary Pillow median
+from the separate standard run, this is 3.05× lower latency; treat that ratio
+as a cross-run comparison, not a paired same-run measurement. Rayon remains
+off by default and this result is not SIMD.
+
+The remaining GPU cost has a concrete suspect in the source path: before the
+two device passes, `gpu_i_resize_f64_is_exact` computes the horizontal and
+vertical sample results on the host to prove that the shader result matches
+Pillow. That per-image, sample-dependent proof is inside the GPU backend
+timing, so this GPU number includes substantial CPU work as well as transfer,
+dispatch, and readback. The next GPU visit should attack the proof cost with a
+data-independent exactness proof or an equivalent correctness argument; do
+not remove it or weaken parity without proving the same signed I32 rounding
+contract.
+
+This completes the four-attempt visit. The retained source borrowing and
+direct CPU output path passed formatting, focused Rust tests, and exact parity
+for CPU, SIMD, GPU, and Parallel CPU. The operation remains open because all
+three required standard-backend goals are unmet. Checkpoint the gap and move
+to the next ranked operation before revisiting I resize.

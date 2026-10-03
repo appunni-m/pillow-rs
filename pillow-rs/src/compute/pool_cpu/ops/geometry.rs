@@ -12,8 +12,9 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
 use crate::ops::pil_resize::{
-    f32_samples_from_le_bytes, pil_resize, pil_resize_boxed, pillow_sin_f64, precompute_coeffs_f64,
-    precompute_coeffs_f64_boxed, premultiply_alpha, round_up, unpremultiply_alpha,
+    f32_samples_from_le_bytes, i32_samples_from_le_bytes, pil_resize, pil_resize_boxed,
+    pillow_sin_f64, precompute_coeffs_f64, precompute_coeffs_f64_boxed, premultiply_alpha,
+    round_up, unpremultiply_alpha,
 };
 use crate::pipeline::{ResampleFilter, TransposeMethod};
 
@@ -546,7 +547,9 @@ fn resize_i(
         return Ok(img.clone());
     }
 
-    let (_, _, src_ints) = i32_samples_from_native_storage(img)?;
+    let (_, _, source_bytes) = i32_sample_bytes_from_native_storage(img)?;
+    let source_pixels = CheckedDims::new_allow_empty(sw, sh, 4)?.total_pixels();
+    let src_ints = i32_samples_from_le_bytes(source_bytes, source_pixels);
 
     let (kernel, support) = resample_kernel(filter);
     let sw_f = sw as f64;
@@ -558,7 +561,8 @@ fn resize_i(
     let _sx_scale = (sw_f / dw_f).max(1.0);
     let _sy_scale = (sh_f / dh_f).max(1.0);
 
-    let n = (dst_w * dst_h) as usize;
+    let output_dims = CheckedDims::new(dst_w, dst_h, 4)?;
+    let output_stride = output_dims.row_stride();
 
     // NEAREST: Pillow's mode-I path uses the same half-destination-pixel
     // point samples as its native point resampler:
@@ -571,34 +575,33 @@ fn resize_i(
     // so keep the correction in the native I branch rather than changing the
     // byte-image transform contract.
     if matches!(filter, ResampleFilter::Nearest) {
-        let mut out_ints = vec![0i32; n];
+        let mut output_bytes = output_dims.alloc_buffer();
         #[cfg(feature = "parallel")]
-        crate::par_rows_mut_typed!(
-            &mut out_ints,
-            dst_w as usize,
+        crate::par_rows_mut!(
+            &mut output_bytes,
+            output_stride,
             dst_h as usize,
             |_row_start, _row_end, dy, row| {
                 let sy = ((f64::from(dy) + 0.5) * sh_f / dh_f).floor() as i64;
                 let sy = sy.clamp(0, sh as i64 - 1) as u32;
-                for (dx, output) in row.iter_mut().enumerate() {
+                for (dx, output) in row.chunks_exact_mut(4).enumerate() {
                     let sx = ((dx as f64 + 0.5) * sw_f / dw_f).floor() as i64;
                     let sx = sx.clamp(0, sw as i64 - 1) as u32;
-                    *output = src_ints[(sy * sw + sx) as usize];
+                    output.copy_from_slice(&src_ints[(sy * sw + sx) as usize].to_le_bytes());
                 }
             }
         );
         #[cfg(not(feature = "parallel"))]
-        for (dy, row) in out_ints.chunks_mut(dst_w as usize).enumerate() {
+        for (dy, row) in output_bytes.chunks_mut(output_stride).enumerate() {
             let sy = ((dy as f64 + 0.5) * sh_f / dh_f).floor() as i64;
             let sy = sy.clamp(0, sh as i64 - 1) as u32;
-            for (dx, output) in row.iter_mut().enumerate() {
+            for (dx, output) in row.chunks_exact_mut(4).enumerate() {
                 let sx = ((dx as f64 + 0.5) * sw_f / dw_f).floor() as i64;
                 let sx = sx.clamp(0, sw as i64 - 1) as u32;
-                *output = src_ints[(sy * sw + sx) as usize];
+                output.copy_from_slice(&src_ints[(sy * sw + sx) as usize].to_le_bytes());
             }
         }
-        let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
-        let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+        let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, output_bytes)
             .expect("resize_i output shape must match its dimensions");
         return Ok(DynamicImage::ImageRgba8(out));
     }
@@ -647,47 +650,45 @@ fn resize_i(
     }
 
     // Vertical pass
-    let mut out_ints = vec![0i32; n];
+    let mut output_bytes = output_dims.alloc_buffer();
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut_typed!(
-        &mut out_ints,
-        dst_w as usize,
+    crate::par_rows_mut!(
+        &mut output_bytes,
+        output_stride,
         dst_h as usize,
         |_row_start, _row_end, dy, row| {
             let y0 = v_coeffs_f64.xmin[dy as usize];
-            for (dx, output) in row.iter_mut().enumerate() {
+            for (dx, output) in row.chunks_exact_mut(4).enumerate() {
                 let mut acc: f64 = 0.0;
                 for (cix, &weight) in v_coeffs_f64.weights[dy as usize].iter().enumerate() {
                     let sy = (y0 + cix as i64) as usize;
                     acc = weight.mul_add(f64::from(intermediate[(sy * dst_w as usize) + dx]), acc);
                 }
-                *output = round_up(acc) as i32;
+                output.copy_from_slice(&(round_up(acc) as i32).to_le_bytes());
             }
         }
     );
     #[cfg(not(feature = "parallel"))]
-    for (dy, row) in out_ints.chunks_mut(dst_w as usize).enumerate() {
+    for (dy, row) in output_bytes.chunks_mut(output_stride).enumerate() {
         let y0 = v_coeffs_f64.xmin[dy];
-        for (dx, output) in row.iter_mut().enumerate() {
+        for (dx, output) in row.chunks_exact_mut(4).enumerate() {
             let mut acc: f64 = 0.0;
             for (cix, &weight) in v_coeffs_f64.weights[dy].iter().enumerate() {
                 let sy = (y0 + cix as i64) as usize;
                 acc = weight.mul_add(f64::from(intermediate[(sy * dst_w as usize) + dx]), acc);
             }
-            *output = round_up(acc) as i32;
+            output.copy_from_slice(&(round_up(acc) as i32).to_le_bytes());
         }
     }
 
-    // Re-pack each i32 as 4 RGBA8 bytes (little-endian).
-    let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
-    let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+    let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, output_bytes)
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
     Ok(DynamicImage::ImageRgba8(out))
 }
 
-/// Decode I-mode samples from their little-endian four-byte carrier without
-/// cloning that carrier into an RGBA image.
-fn i32_samples_from_native_storage(img: &DynamicImage) -> Result<(u32, u32, Vec<i32>), PilError> {
+/// Borrow I-mode's little-endian four-byte carrier after validating its
+/// concrete storage. `I` samples are signed scalar words, not RGBA channels.
+fn i32_sample_bytes_from_native_storage(img: &DynamicImage) -> Result<(u32, u32, &[u8]), PilError> {
     let (width, height) = img.dimensions();
     let source_bytes = match img {
         DynamicImage::ImageRgba8(rgba) => rgba.as_raw().as_slice(),
@@ -697,6 +698,14 @@ fn i32_samples_from_native_storage(img: &DynamicImage) -> Result<(u32, u32, Vec<
             ));
         }
     };
+    CheckedDims::new_allow_empty(width, height, 4)?;
+    Ok((width, height, source_bytes))
+}
+
+/// Decode I-mode samples for boxed resize, whose existing materialized path
+/// keeps owned values while it constructs the fractional source window.
+fn i32_samples_from_native_storage(img: &DynamicImage) -> Result<(u32, u32, Vec<i32>), PilError> {
+    let (width, height, source_bytes) = i32_sample_bytes_from_native_storage(img)?;
     let source_pixels = CheckedDims::new_allow_empty(width, height, 4)?.total_pixels();
     let samples = source_bytes
         .chunks_exact(4)
