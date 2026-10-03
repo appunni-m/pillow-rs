@@ -17150,3 +17150,34 @@ Before revisiting polygon, add a representative varied large-image workload
 with unchanged Pillow byte parity and enough samples to separate point parsing,
 draw execution, and materialization. Until then, keep the current implementation
 and continue to the next uncheckpointed operation.
+
+## Image.Image.getpixel RGB scalar path — checkpoint 2026-10-04
+
+The standard `pil-image-image.getpixel.standard` row creates a 16 × 16 RGB
+image, reads one pixel, and compares the full workflow with Pillow. The fresh
+baseline measured 6.250 µs for serial CPU and 5.500 µs for Pillow. The benchmark
+also printed SIMD and GPU timings, but all three target receipts had
+`actual_backend: null` and `status: not_proven`: this scalar host-side read does
+not enter the image-compute dispatcher. Those values are not SIMD or GPU
+results; treat those routes as inapplicable to a one-pixel read.
+
+The fast-path variant reads a
+three-byte pixel directly from an already-loaded native `RgbImage`, returns a
+fixed `[u8; 3]`, and skips the generic RGBA pixel conversion and component
+`Vec`. It is deliberately gated on loaded RGB storage: encoded images and lazy
+pipelines keep the existing GIL-released materialization path. An immutable
+PyO3 receiver and inline helper did not produce a separate measurable gain.
+The direct path unit test passed, as did all 7 selected getpixel parity cases
+including the RGB default, other declared modes, and out-of-bounds behavior.
+
+Three repeated parity-gated standard runs measured Pillow at 5.334, 5.291, and
+5.375 µs, versus CPU at 6.500, 6.333, and 6.333 µs. The complete operation
+still runs about 18% slower than Pillow; the roughly 0.04 µs movement in the
+reported call phase was not a repeatable whole-workflow win. The measured row
+includes image setup, so the remaining fixed cost may include Python/Rust
+boundary and construction work as well as the scalar read; that attribution is
+an inference, not a profile result. Keep the native-format fast path for its
+avoided conversion and allocation, but do not count getpixel as meeting the
+CPU target or claim SIMD/GPU acceleration. Revisit only with a profile or a
+benchmark that isolates a realistic read from an already-existing image while
+retaining an equivalent Pillow boundary. No coverage was run.
