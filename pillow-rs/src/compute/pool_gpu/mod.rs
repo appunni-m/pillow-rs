@@ -7243,11 +7243,28 @@ impl GpuInner {
                 // These internal variants expand one public blur operation
                 // into horizontal and vertical dispatches without a host
                 // materialization between them.
-                let (horizontal, vertical) = if packed_native_byte_filter
+                let (horizontal, vertical) = if native_rgb_packed_output
+                    && matches!(logical_mode, None | Some("RGB"))
+                    && matches!(op, PipelineOp::BoxBlur { radius: 1 })
+                {
+                    (
+                        self.resolve_pipeline(
+                            "__internal_blur_h_rgb_packed",
+                            "box_blur_h_rgb_packed.wgsl",
+                            include_str!("shaders/box_blur_h_rgb_packed.wgsl"),
+                        )?,
+                        self.resolve_pipeline(
+                            "__internal_blur_v_rgb_packed",
+                            "box_blur_v_rgb_packed.wgsl",
+                            include_str!("shaders/box_blur_v_rgb_packed.wgsl"),
+                        )?,
+                    )
+                } else if packed_native_byte_filter
                     && matches!(
                         op,
                         PipelineOp::GaussianBlur { .. } | PipelineOp::BoxBlur { radius: 1 }
-                    ) {
+                    )
+                {
                     if matches!(logical_mode, Some("LA")) {
                         (
                             self.resolve_pipeline(
@@ -8519,7 +8536,8 @@ impl GpuInner {
                     | PipelineOp::Equalize
                     | PipelineOp::MedianFilter { size: 3 }
                     | PipelineOp::MinFilter { size: 3 }
-                    | PipelineOp::MaxFilter { size: 3 }]
+                    | PipelineOp::MaxFilter { size: 3 }
+                    | PipelineOp::BoxBlur { radius: 1 }]
             ) {
                 plan_native_rgb_point_output(
                     w,
@@ -8648,6 +8666,15 @@ impl GpuInner {
                     "__internal_min_filter_3x3_rgb_packed",
                     "min_filter_3x3_rgb_packed.wgsl",
                     include_str!("shaders/min_filter_3x3_rgb_packed.wgsl"),
+                )?
+            } else if native_rgb_packed_output.is_some()
+                && matches!(logical_mode, None | Some("RGB"))
+                && matches!(op, PipelineOp::BoxBlur { radius: 1 })
+            {
+                self.resolve_pipeline(
+                    "__internal_blur_h_rgb_packed",
+                    "box_blur_h_rgb_packed.wgsl",
+                    include_str!("shaders/box_blur_h_rgb_packed.wgsl"),
                 )?
             } else if packed_native_byte_filter
                 && matches!(
@@ -9054,6 +9081,17 @@ impl GpuInner {
                 let plan = native_rgb_packed_output.ok_or_else(|| {
                     PilError::InternalError(
                         "packed-RGB MinFilter parameters have no checked output plan".into(),
+                    )
+                })?;
+                params[0] = cur_w;
+                params[1] = cur_h;
+                params[3] = if plan.row_tiled { 16 } else { 0 };
+            } else if native_rgb_packed_output.is_some()
+                && matches!(op, PipelineOp::BoxBlur { radius: 1 })
+            {
+                let plan = native_rgb_packed_output.ok_or_else(|| {
+                    PilError::InternalError(
+                        "packed-RGB BoxBlur parameters have no checked output plan".into(),
                     )
                 })?;
                 params[0] = cur_w;
@@ -10021,7 +10059,9 @@ impl GpuInner {
             | "__internal_histogram_remap_rgb_packed"
             | "__internal_median_filter_3x3_rgb_packed"
             | "__internal_min_filter_3x3_rgb_packed"
-            | "__internal_max_filter_3x3_rgb_packed" => {
+            | "__internal_max_filter_3x3_rgb_packed"
+            | "__internal_blur_h_rgb_packed"
+            | "__internal_blur_v_rgb_packed" => {
                 let plan = resources.native_rgb_packed_output.ok_or_else(|| {
                     PilError::InternalError(
                         "packed-RGB point shader has no checked output plan".into(),
@@ -14890,6 +14930,7 @@ fn gpu_native_rgb_compact_input(
         [PipelineOp::MedianFilter { size: 3 }] => true,
         [PipelineOp::MinFilter { size: 3 }] => true,
         [PipelineOp::MaxFilter { size: 3 }] => true,
+        [PipelineOp::BoxBlur { radius: 1 }] => true,
         [PipelineOp::Eval { .. }] => host_autocontrast_rgb_lut,
         [PipelineOp::Equalize] => true,
         _ => false,
@@ -23073,7 +23114,8 @@ impl GpuPool {
                 | PipelineOp::Equalize
                 | PipelineOp::MedianFilter { size: 3 }
                 | PipelineOp::MinFilter { size: 3 }
-                | PipelineOp::MaxFilter { size: 3 }]
+                | PipelineOp::MaxFilter { size: 3 }
+                | PipelineOp::BoxBlur { radius: 1 }]
         ) {
             plan_native_rgb_point_output(
                 img.width(),
@@ -23104,7 +23146,8 @@ impl GpuPool {
                     | PipelineOp::Equalize
                     | PipelineOp::MedianFilter { size: 3 }
                     | PipelineOp::MinFilter { size: 3 }
-                    | PipelineOp::MaxFilter { size: 3 }]
+                    | PipelineOp::MaxFilter { size: 3 }
+                    | PipelineOp::BoxBlur { radius: 1 }]
             ) || native_rgb_packed_output);
         let native_la_transform_output = native_la_transform_input
             && plan_native_la_transform_output(
@@ -32481,6 +32524,7 @@ mod tests {
         let median = PipelineOp::MedianFilter { size: 3 };
         let min_filter = PipelineOp::MinFilter { size: 3 };
         let max_filter = PipelineOp::MaxFilter { size: 3 };
+        let box_blur = PipelineOp::BoxBlur { radius: 1 };
         assert!(super::gpu_native_rgb_compact_input(
             std::slice::from_ref(&convert_rgba),
             &rgb,
@@ -32551,6 +32595,24 @@ mod tests {
             std::slice::from_ref(&max_filter),
             &rgb,
             None,
+            false
+        ));
+        assert!(super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&box_blur),
+            &rgb,
+            Some("RGB"),
+            false
+        ));
+        assert!(super::gpu_native_rgb_compact_input(
+            std::slice::from_ref(&box_blur),
+            &rgb,
+            None,
+            false
+        ));
+        assert!(!super::gpu_native_rgb_compact_input(
+            &[PipelineOp::BoxBlur { radius: 2 }],
+            &rgb,
+            Some("RGB"),
             false
         ));
         assert!(!super::gpu_native_rgb_compact_input(

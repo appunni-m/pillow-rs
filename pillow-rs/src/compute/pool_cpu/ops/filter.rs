@@ -1196,23 +1196,38 @@ fn blur_line_step(
     let output = &mut destination[output_base..output_base + element_width];
     let subtract = &source[subtract_base..subtract_base + element_width];
     let add = &source[add_base..add_base + element_width];
-    let far_left = &source[far_left_base..far_left_base + element_width];
-    let far_right = &source[far_right_base..far_right_base + element_width];
-    for (((((accumulator, output), &subtract), &add), &far_left), &far_right) in accumulator
-        [..element_width]
-        .iter_mut()
-        .zip(output)
-        .zip(subtract)
-        .zip(add)
-        .zip(far_left)
-        .zip(far_right)
-    {
-        *accumulator = accumulator
-            .wrapping_sub(u32::from(subtract))
-            .wrapping_add(u32::from(add));
-        let far = (u32::from(far_left) + u32::from(far_right)).wrapping_mul(fractional_weight);
-        let bulk = accumulator.wrapping_mul(whole_weight).wrapping_add(far);
-        *output = (bulk.wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    if fractional_weight == 0 {
+        for (((accumulator, output), &subtract), &add) in accumulator[..element_width]
+            .iter_mut()
+            .zip(output)
+            .zip(subtract)
+            .zip(add)
+        {
+            *accumulator = accumulator
+                .wrapping_sub(u32::from(subtract))
+                .wrapping_add(u32::from(add));
+            let bulk = accumulator.wrapping_mul(whole_weight);
+            *output = (bulk.wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+        }
+    } else {
+        let far_left = &source[far_left_base..far_left_base + element_width];
+        let far_right = &source[far_right_base..far_right_base + element_width];
+        for (((((accumulator, output), &subtract), &add), &far_left), &far_right) in accumulator
+            [..element_width]
+            .iter_mut()
+            .zip(output)
+            .zip(subtract)
+            .zip(add)
+            .zip(far_left)
+            .zip(far_right)
+        {
+            *accumulator = accumulator
+                .wrapping_sub(u32::from(subtract))
+                .wrapping_add(u32::from(add));
+            let far = (u32::from(far_left) + u32::from(far_right)).wrapping_mul(fractional_weight);
+            let bulk = accumulator.wrapping_mul(whole_weight).wrapping_add(far);
+            *output = (bulk.wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+        }
     }
 }
 

@@ -19233,7 +19233,11 @@ fn simd_rgb_blur_scalar_sample(
     let far_right = x.saturating_add(2).min(width - 1);
     let sample = |pixel: usize| u32::from(source[pixel * 3 + channel]);
     let sum = sample(left) + sample(x) + sample(right);
-    let edge = sample(far_left) + sample(far_right);
+    let edge = if fractional_weight == 0 {
+        0
+    } else {
+        sample(far_left) + sample(far_right)
+    };
     let weighted = sum
         .wrapping_mul(whole_weight)
         .wrapping_add(edge.wrapping_mul(fractional_weight))
@@ -19823,6 +19827,43 @@ fn simd_pil_box_blur_xy(
     let (horizontal_radius, horizontal_weight, horizontal_fractional_weight) =
         blur_parameters(radius_x);
     let (vertical_radius, vertical_weight, vertical_fractional_weight) = blur_parameters(radius_y);
+
+    if channels == 3
+        && matches!(img, DynamicImage::ImageRgb8(_))
+        && matches!(mode, None | Some("RGB"))
+        && passes == 1
+        && radius_x == 1.0
+        && radius_y == 1.0
+    {
+        // Radius-one RGB BoxBlur already has an exact packed-byte SIMD row
+        // kernel. Keep vertical neighbors in row-major RGB storage instead
+        // of transposing the full frame to make columns contiguous.
+        let mut horizontal = dimensions.alloc_buffer();
+        simd_rgb_horizontal_radius_one_rows(
+            img.as_bytes(),
+            &mut horizontal,
+            width,
+            height,
+            horizontal_weight,
+            horizontal_fractional_weight,
+        );
+        let mut output = dimensions.alloc_buffer();
+        simd_rgb_vertical_radius_one_rows(
+            &horizontal,
+            &mut output,
+            width,
+            height,
+            vertical_weight,
+            vertical_fractional_weight,
+        );
+        let result = crate::image_utils::raw_bytes_to_image(
+            dimensions.width,
+            dimensions.height,
+            output,
+            channels,
+        )?;
+        return Ok(preserve_mode(img, result));
+    }
 
     let mut work = img.as_bytes().to_vec();
     let mut scratch = dimensions.alloc_buffer();
@@ -31374,6 +31415,43 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn rgb_box_blur_radius_one_direct_passes_match_cpu_at_edges_and_tails() {
+        use crate::compute::pool_cpu::ops::filter::execute_box_blur;
+        use crate::pipeline::PipelineOp;
+        use crate::raster::{DynamicImage, RgbImage};
+
+        let operation = PipelineOp::BoxBlur { radius: 1 };
+        for (width, height) in [
+            (1u32, 1u32),
+            (2, 3),
+            (3, 2),
+            (4, 5),
+            (5, 9),
+            (8, 3),
+            (9, 4),
+            (19, 7),
+            (65, 47),
+            (67, 53),
+            (1024, 3),
+        ] {
+            let source: Vec<u8> = (0..width as usize * height as usize * 3)
+                .map(|index| (index.wrapping_mul(73).wrapping_add(29) % 256) as u8)
+                .collect();
+            let image = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, source).expect("RGB blur source shape"),
+            );
+            let expected = execute_box_blur(&image, 1).expect("CPU RGB BoxBlur");
+            let actual =
+                super::simd_box_blur(&image, &operation, Some("RGB")).expect("SIMD RGB BoxBlur");
+            assert_eq!(
+                actual.as_bytes(),
+                expected.as_bytes(),
+                "size={width}x{height}"
+            );
+        }
+    }
+
     #[test]
     fn gaussian_blur_l_sliding_vertical_matches_cpu_edges_and_vector_tails() {
         use crate::compute::pool_cpu::ops::filter::execute_gaussian_blur;
