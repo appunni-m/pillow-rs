@@ -1673,13 +1673,14 @@ fn pad_native_bytes(
     let fill = &fill[..channels];
     let output_dims = CheckedDims::new(w, h, channels as u8)?;
 
-    // Full-width vertical RGB, HSV, and RGBA padding can construct the
+    // Full-width vertical L, RGB, HSV, and RGBA padding can construct the
     // destination in one pass: append filled border rows around the
     // already-contiguous source rows instead of initializing a canvas and
     // overwriting its center. Keep the logical modes explicit; HSV copies raw
     // stored triplets, while RGBX and CMYK retain their separate fourth-byte
     // semantics.
     let append_identity_vertical_rows = match (explicit_mode, channels) {
+        (None | Some("L"), 1) => true,
         (Some("RGB"), 3) => true,
         (Some("HSV"), 3) => true,
         (Some("RGBA"), 4) => true,
