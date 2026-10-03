@@ -10815,6 +10815,50 @@ one-shot GPU readback gap. Do not spend more attempts on this Pad case until a
 cleaner benchmark window or a fused device-resident workload becomes
 available; continue the campaign with the next measured operation.
 
+### Native-L identity-contain Pad — CPU path selection correction, 2026-10-03
+
+The 2026-09-30 note above said CPU and SIMD both assembled this case as fill
+rows, source bytes, and fill rows. A fresh call-path trace showed that was not
+true for serial CPU: `op_pad` returned early through `pad_native_bytes`, whose
+vertical-append allowlist contained RGB, HSV, and RGBA but omitted L. The L
+operation therefore initialized a full 1 MiB canvas, scanned its rows, and
+copied the 768 KiB source into the middle. The later `pad_native_rows` helper
+did have an L append path, but the hot workload never reached it. SIMD already
+used a contiguous append for this exact geometry.
+
+The correction admits only native L (`None` or explicit `L`, one stored byte
+per pixel) to the existing identity-contain vertical append branch. It reuses
+the established fill-row/source-row construction and leaves resize, crop,
+horizontal-pad, and other mode paths unchanged. This avoids zero-initializing
+and traversing the entire destination before overwriting its source region;
+the content bytes and Pillow's default L border value are unchanged.
+
+The selected workload is still
+`pil-imageops.pad.materialized.native-l-noise-1024x768-square`. Two fresh
+pre-change `make migration-parity-benchmark` runs measured CPU p50 at 0.406 and
+0.410 ms, versus Pillow at 0.189 and 0.213 ms. After the correction, two runs
+measured CPU at 0.0361 and 0.0371 ms (about 4.6–5.1× faster than Pillow).
+This closes the serial-CPU regression for this case. Exact parity passed for
+CPU, SIMD, and GPU on both candidate runs (3/3 each; 100/100 executions per
+backend, no fallback).
+The 3×2→3×5 odd-width case with fill 173 also passed 1/1 on CPU, strict SIMD,
+and strict GPU; its receipts are `pad-l-odd-tail-20261003.json`,
+`pad-l-odd-tail-simd-strict-20261003.json`, and
+`pad-l-odd-tail-gpu-strict-20261003.json`.
+
+SIMD p50 was 0.0358 ms in the first candidate run and 0.0672 ms in the repeat.
+That does not establish a stable ≥5× result against the corresponding Pillow
+medians (0.183 and 0.172 ms); do not claim the target from the faster run
+alone. GPU p50 stayed at 0.595–0.603 ms with one dispatch, 786,432 upload
+bytes, and 1,048,576 readback bytes. The one-shot readback still dominates GPU
+latency. Receipts are `pad-l-baseline-5b4a2e2f8-20261003.json`,
+`pad-l-baseline-repeat-5b4a2e2f8-20261003.json`,
+`pad-l-cpu-append-5b4a2e2f8-20261003.json`, and
+`pad-l-cpu-append-repeat-5b4a2e2f8-20261003.json` under
+`build/migration-parity/`. Keep the CPU change; checkpoint Pad here and
+continue with the next operation. Remaining Pad blockers are stable SIMD ≥5×
+evidence and single-image GPU transfer/readback latency.
+
 ### Masked native-LA Paste — LA/L-mask specialization checkpoint, 2026-09-30
 
 The active materialized workload is
