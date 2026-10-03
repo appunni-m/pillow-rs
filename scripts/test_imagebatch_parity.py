@@ -25,6 +25,10 @@ BOUNDARY_SIZE = (1024, 768)
 BOUNDARY_IMAGE_COUNT = 22
 BENCHMARK_CHANNELS = {"L": 0, "LA": 1, "RGB": 1, "RGBA": 3}
 COLOR3DLUT_WORKLOADS = ((64, 64, 64), (256, 256, 16), (1024, 768, 4))
+PASTE_BATCH_SEEDS = (11, 73)
+PASTE_LARGE_SIZE = (256, 256)
+PASTE_LARGE_IMAGE_COUNT = 16
+PASTE_PARALLEL_SIZE = (512, 512)
 
 
 def pixels(mode: str, size: tuple[int, int], seed: int) -> bytes:
@@ -129,6 +133,11 @@ def run_oracle(output: Path) -> None:
     color3dlut_metadata: list[int | None] = []
     color3dlut_benchmark_outputs: list[str] = []
     color3dlut_workload_outputs: dict[str, list[str]] = {}
+    paste_batch_outputs: dict[str, list[str]] = {}
+    paste_batch_metadata: dict[str, list[int | None]] = {}
+    paste_benchmark_outputs: dict[str, list[str]] = {}
+    paste_large_outputs: dict[str, list[str]] = {}
+    paste_parallel_outputs: dict[str, list[str]] = {}
     large_outputs: dict[str, list[str]] = {}
     large_metadata: dict[str, list[int | None]] = {}
     for mode in MODES:
@@ -205,6 +214,75 @@ def run_oracle(output: Path) -> None:
             result = image.filter(ImageFilter.MedianFilter(3))
             large_outputs[mode].append(result.tobytes().hex())
             large_metadata[mode].append(result.info.get("batch-seed"))
+    for mode in MODES:
+        paste_batch_outputs[mode] = []
+        paste_batch_metadata[mode] = []
+        for seed in PASTE_BATCH_SEEDS:
+            destination = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed)
+            )
+            destination.info["paste-seed"] = seed
+            source = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed + 101)
+            )
+            mask = Image.frombytes(
+                "L", (64, 64), benchmark_pixels("L", seed + 211)
+            )
+            destination.paste(source, (0, 0), mask)
+            paste_batch_outputs[mode].append(destination.tobytes().hex())
+            paste_batch_metadata[mode].append(destination.info.get("paste-seed"))
+        paste_benchmark_outputs[mode] = []
+        for seed in range(64):
+            destination = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed)
+            )
+            source = Image.frombytes(
+                mode,
+                (64, 64),
+                multiply_benchmark_other_pixels(mode, seed),
+            )
+            mask = Image.frombytes("L", (64, 64), benchmark_pixels("L", seed))
+            destination.paste(source, (0, 0), mask)
+            paste_benchmark_outputs[mode].append(destination.tobytes().hex())
+        paste_large_outputs[mode] = []
+        for seed in range(PASTE_LARGE_IMAGE_COUNT):
+            destination = Image.frombytes(
+                mode,
+                PASTE_LARGE_SIZE,
+                benchmark_pixels(mode, seed, PASTE_LARGE_SIZE),
+            )
+            source = Image.frombytes(
+                mode,
+                PASTE_LARGE_SIZE,
+                multiply_benchmark_other_pixels(mode, seed, PASTE_LARGE_SIZE),
+            )
+            mask = Image.frombytes(
+                "L",
+                PASTE_LARGE_SIZE,
+                benchmark_pixels("L", seed, PASTE_LARGE_SIZE),
+            )
+            destination.paste(source, (0, 0), mask)
+            paste_large_outputs[mode].append(destination.tobytes().hex())
+        paste_parallel_outputs[mode] = []
+        for seed in range(1):
+            destination = Image.frombytes(
+                mode,
+                PASTE_PARALLEL_SIZE,
+                benchmark_pixels(mode, seed, PASTE_PARALLEL_SIZE),
+            )
+            destination.info["paste-seed"] = seed
+            source = Image.frombytes(
+                mode,
+                PASTE_PARALLEL_SIZE,
+                multiply_benchmark_other_pixels(mode, seed, PASTE_PARALLEL_SIZE),
+            )
+            mask = Image.frombytes(
+                "L",
+                PASTE_PARALLEL_SIZE,
+                benchmark_pixels("L", seed, PASTE_PARALLEL_SIZE),
+            )
+            destination.paste(source, (0, 0), mask)
+            paste_parallel_outputs[mode].append(destination.tobytes().hex())
     color3dlut = make_batch_color3dlut(ImageFilter)
     for size, seed in zip(SIZES, SEEDS, strict=True):
         image = Image.frombytes("RGBA", size, pixels("RGBA", size, seed))
@@ -248,6 +326,11 @@ def run_oracle(output: Path) -> None:
                 "color3dlut_metadata": color3dlut_metadata,
                 "color3dlut_benchmark_outputs": color3dlut_benchmark_outputs,
                 "color3dlut_workload_outputs": color3dlut_workload_outputs,
+                "paste_batch_outputs": paste_batch_outputs,
+                "paste_batch_metadata": paste_batch_metadata,
+                "paste_benchmark_outputs": paste_benchmark_outputs,
+                "paste_large_outputs": paste_large_outputs,
+                "paste_parallel_outputs": paste_parallel_outputs,
                 "boundary_rgba_extract_alpha": boundary_reference.tobytes().hex(),
             }
         )
@@ -714,6 +797,219 @@ def run_target(expected_path: Path) -> None:
                 f"queue=False Pillow metadata mismatch for mode {mode}: {actual_metadata}"
             )
         print(f"{mode} queue=False × 3: sequential submission order and Pillow parity PASS")
+
+    paste_order = (1, 0)
+    for mode in MODES:
+        core.take_gpu_shader_coverage()
+        core.take_pipeline_telemetry()
+        batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for input_index in paste_order:
+            seed = PASTE_BATCH_SEEDS[input_index]
+            destination = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed)
+            )
+            destination.info["paste-seed"] = seed
+            source = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed + 101)
+            )
+            mask = Image.frombytes(
+                "L", (64, 64), benchmark_pixels("L", seed + 211)
+            )
+            batch.submit(destination, ImageBatch.Paste(source, mask))
+
+        actual = batch.join()
+        if [image.mode for image in actual] != [mode, mode]:
+            raise AssertionError(f"{mode} Paste batch changed output modes")
+        if [image.size for image in actual] != [(64, 64), (64, 64)]:
+            raise AssertionError(f"{mode} Paste batch changed output sizes")
+        if [image.tobytes().hex() for image in actual] != [
+            expected["paste_batch_outputs"][mode][index]
+            for index in paste_order
+        ]:
+            raise AssertionError(f"{mode} Paste batch differs from Pillow")
+        if [image.info.get("paste-seed") for image in actual] != [
+            expected["paste_batch_metadata"][mode][index]
+            for index in paste_order
+        ]:
+            raise AssertionError(f"{mode} Paste batch changed per-image info")
+
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} full-frame masked Paste pair",
+            expected_shader=f"paste_native_masked_{mode.lower()}.wgsl",
+        )
+        print(
+            f"{mode} full-frame masked Paste × 2: Pillow bytes/info/order PASS; "
+            "one actual native-mode GPU dispatch"
+        )
+
+        benchmark = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for seed in range(64):
+            destination = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed)
+            )
+            source = Image.frombytes(
+                mode,
+                (64, 64),
+                multiply_benchmark_other_pixels(mode, seed),
+            )
+            mask = Image.frombytes("L", (64, 64), benchmark_pixels("L", seed))
+            benchmark.submit(destination, ImageBatch.Paste(source, mask))
+        actual = benchmark.join()
+        if [image.tobytes().hex() for image in actual] != expected[
+            "paste_benchmark_outputs"
+        ][mode]:
+            raise AssertionError(f"{mode} 64x64 × 64 Paste differs from Pillow")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} 64x64 × 64 masked Paste",
+            expected_shader=f"paste_native_masked_{mode.lower()}.wgsl",
+        )
+        print(f"{mode} 64x64 × 64 masked Paste: Pillow parity PASS; one GPU dispatch")
+
+        large = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for seed in range(PASTE_LARGE_IMAGE_COUNT):
+            destination = Image.frombytes(
+                mode,
+                PASTE_LARGE_SIZE,
+                benchmark_pixels(mode, seed, PASTE_LARGE_SIZE),
+            )
+            source = Image.frombytes(
+                mode,
+                PASTE_LARGE_SIZE,
+                multiply_benchmark_other_pixels(mode, seed, PASTE_LARGE_SIZE),
+            )
+            mask = Image.frombytes(
+                "L",
+                PASTE_LARGE_SIZE,
+                benchmark_pixels("L", seed, PASTE_LARGE_SIZE),
+            )
+            large.submit(destination, ImageBatch.Paste(source, mask))
+        actual = large.join()
+        if [image.tobytes().hex() for image in actual] != expected[
+            "paste_large_outputs"
+        ][mode]:
+            raise AssertionError(
+                f"{mode} 256x256 × {PASTE_LARGE_IMAGE_COUNT} Paste differs from Pillow"
+            )
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} 256x256 × {PASTE_LARGE_IMAGE_COUNT} masked Paste",
+            expected_shader=f"paste_native_masked_{mode.lower()}.wgsl",
+        )
+        print(
+            f"{mode} 256x256 × {PASTE_LARGE_IMAGE_COUNT} masked Paste: "
+            "Pillow parity PASS; one GPU dispatch"
+        )
+
+        for backend in ("cpu", "simd", "gpu"):
+            for selected in ("cpu", "simd", "gpu"):
+                core.disable_backend(selected)
+            if not core.enable_backend(backend):
+                raise AssertionError(f"{backend} backend unavailable for {mode} Paste")
+            destination = Image.frombytes(
+                mode,
+                (64, 64),
+                benchmark_pixels(mode, PASTE_BATCH_SEEDS[0]),
+            )
+            destination.info["paste-seed"] = PASTE_BATCH_SEEDS[0]
+            source = Image.frombytes(
+                mode,
+                (64, 64),
+                benchmark_pixels(mode, PASTE_BATCH_SEEDS[0] + 101),
+            )
+            mask = Image.frombytes(
+                "L",
+                (64, 64),
+                benchmark_pixels("L", PASTE_BATCH_SEEDS[0] + 211),
+            )
+            eager = ImageBatch.BatchExecutor(queue=False, backend=backend)
+            eager.submit(destination, ImageBatch.Paste(source, mask))
+            result = eager.join()[0]
+            if (
+                result.mode != mode
+                or result.size != (64, 64)
+                or result.tobytes().hex() != expected["paste_batch_outputs"][mode][0]
+                or result.info.get("paste-seed")
+                != expected["paste_batch_metadata"][mode][0]
+            ):
+                raise AssertionError(f"queue=False {mode} Paste differs from Pillow")
+            receipt = core.take_pipeline_telemetry()
+            if (
+                receipt is None
+                or receipt.get("actual_backend") != backend
+                or receipt.get("fallback_reason")
+            ):
+                raise AssertionError(
+                    f"queue=False {mode} Paste missed {backend}: {receipt}"
+                )
+            resource = receipt.get("resource")
+            if isinstance(resource, dict) and resource.get("mode_conversion_count") != 0:
+                raise AssertionError(f"queue=False {mode} Paste converted modes: {receipt}")
+            if backend == "gpu":
+                require_gpu_execution(
+                    core,
+                    receipt,
+                    f"queue=False {mode} masked Paste",
+                    expected_shader=f"paste_native_masked_{mode.lower()}.wgsl",
+                )
+            print(
+                f"queue=False {mode} Paste on {backend}: Pillow bytes/mode/size/info PASS; "
+                "requested backend executed without fallback"
+            )
+
+        # This exact 512×512 input reaches the feature-gated Rayon threshold
+        # in native masked Paste; the default build checks the same contract
+        # on its serial CPU path.
+        for selected in ("cpu", "simd", "gpu"):
+            core.disable_backend(selected)
+        if not core.enable_backend("cpu"):
+            raise AssertionError(f"CPU backend unavailable for {mode} Paste threshold case")
+        destination = Image.frombytes(
+            mode,
+            PASTE_PARALLEL_SIZE,
+            benchmark_pixels(mode, 0, PASTE_PARALLEL_SIZE),
+        )
+        destination.info["paste-seed"] = 0
+        source = Image.frombytes(
+            mode,
+            PASTE_PARALLEL_SIZE,
+            multiply_benchmark_other_pixels(mode, 0, PASTE_PARALLEL_SIZE),
+        )
+        mask = Image.frombytes(
+            "L",
+            PASTE_PARALLEL_SIZE,
+            benchmark_pixels("L", 0, PASTE_PARALLEL_SIZE),
+        )
+        threshold = ImageBatch.BatchExecutor(queue=False, backend="cpu")
+        threshold.submit(destination, ImageBatch.Paste(source, mask))
+        result = threshold.join()[0]
+        if (
+            result.mode != mode
+            or result.size != PASTE_PARALLEL_SIZE
+            or result.tobytes().hex() != expected["paste_parallel_outputs"][mode][0]
+            or result.info.get("paste-seed") != 0
+        ):
+            raise AssertionError(f"512×512 native CPU Paste parity mismatch for {mode}")
+        receipt = core.take_pipeline_telemetry()
+        if (
+            receipt is None
+            or receipt.get("actual_backend") != "cpu"
+            or receipt.get("fallback_reason")
+        ):
+            raise AssertionError(f"512×512 native CPU Paste fell back for {mode}: {receipt}")
+        print(
+            f"{mode} CPU Paste 512×512 threshold: Pillow bytes/mode/size/info PASS; "
+            "CPU executed without fallback"
+        )
+
+    for selected in ("cpu", "simd", "gpu"):
+        core.disable_backend(selected)
+    if not core.enable_backend("gpu"):
+        raise AssertionError("GPU backend unavailable after masked Paste parity")
 
 
 def main() -> int:

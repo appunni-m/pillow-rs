@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--queue", action="store_true", help="queue operations until join")
     parser.add_argument(
         "--operation",
-        choices=("median-filter", "extract-band", "multiply", "color3dlut"),
+        choices=("median-filter", "extract-band", "multiply", "paste", "color3dlut"),
         default="median-filter",
     )
     parser.add_argument("--mode", choices=("L", "LA", "RGB", "RGBA"), default="L")
@@ -117,7 +117,18 @@ def main() -> int:
             )
             for seed in range(args.images * window_count)
         ]
-        if args.operation == "multiply"
+        if args.operation in ("multiply", "paste")
+        else []
+    )
+    mask_inputs = (
+        [
+            bytes(
+                (index * 73 + (index // 11) * 19 + seed * 47 + (seed >> 2)) & 255
+                for index in range(args.width * args.height)
+            )
+            for seed in range(args.images * window_count)
+        ]
+        if args.operation == "paste"
         else []
     )
 
@@ -141,6 +152,19 @@ def main() -> int:
                     image.getchannel(args.channel).tobytes()
                 elif args.operation == "color3dlut":
                     image.filter(color_lut).tobytes()
+                elif args.operation == "paste":
+                    source = Image.frombytes(
+                        args.mode,
+                        (args.width, args.height),
+                        other_inputs[start + image_index],
+                    )
+                    mask = Image.frombytes(
+                        "L",
+                        (args.width, args.height),
+                        mask_inputs[start + image_index],
+                    )
+                    image.paste(source, (0, 0), mask)
+                    image.tobytes()
                 else:
                     other = Image.frombytes(
                         args.mode,
@@ -157,25 +181,32 @@ def main() -> int:
                 (args.width, args.height),
                 inputs[start + image_index],
             )
-            operation = (
-                ImageFilter.MedianFilter(3)
-                if args.operation == "median-filter"
-                else (
-                    ImageBatch.ExtractBand(args.channel)
-                    if args.operation == "extract-band"
-                    else (
-                        batch_color_lut
-                        if args.operation == "color3dlut"
-                        else ImageBatch.Multiply(
-                            Image.frombytes(
-                                args.mode,
-                                (args.width, args.height),
-                                other_inputs[start + image_index],
-                            )
-                        )
+            if args.operation == "median-filter":
+                operation = ImageFilter.MedianFilter(3)
+            elif args.operation == "extract-band":
+                operation = ImageBatch.ExtractBand(args.channel)
+            elif args.operation == "color3dlut":
+                operation = batch_color_lut
+            elif args.operation == "multiply":
+                operation = ImageBatch.Multiply(
+                    Image.frombytes(
+                        args.mode,
+                        (args.width, args.height),
+                        other_inputs[start + image_index],
                     )
                 )
-            )
+            else:
+                source = Image.frombytes(
+                    args.mode,
+                    (args.width, args.height),
+                    other_inputs[start + image_index],
+                )
+                mask = Image.frombytes(
+                    "L",
+                    (args.width, args.height),
+                    mask_inputs[start + image_index],
+                )
+                operation = ImageBatch.Paste(source, mask)
             executor.submit(image, operation)
         result = executor.join()
         if len(result) != args.images:

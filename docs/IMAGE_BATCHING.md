@@ -26,6 +26,11 @@ products.submit(image_a, ImageBatch.Multiply(image_b))
 products.submit(image_c, ImageBatch.Multiply(image_d))
 product_a, product_c = products.join()
 
+pastes = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+pastes.submit(destination_a, ImageBatch.Paste(source_a, mask_a))
+pastes.submit(destination_b, ImageBatch.Paste(source_b, mask_b))
+pasted_a, pasted_b = pastes.join()
+
 lut = ImageFilter.Color3DLUT.generate(
     17, callback, channels=4, target_mode="RGBA"
 )
@@ -40,20 +45,26 @@ With `queue=False` (the default), `submit` executes each operation immediately
 through its ordinary single-image pipeline. With `queue=True`, submissions wait
 until `join`, which returns results in submission order. A batch accepts
 `ImageFilter.MedianFilter(3)`, `ImageBatch.ExtractBand(channel)`,
-`ImageBatch.Multiply(other_image)`, and a shared same-mode RGBA
-`ImageBatch.Color3DLUT(filter)` operation. Jobs with the same operation, mode,
-dimensions, and LUT instance are grouped when GPU is the selected backend.
-Multiply also requires each secondary image to match its primary image's mode
-and size. The native-mode group layouts are `L`, `LA`, `RGB`, and `RGBA`; no
-image is converted to RGBA. A queued job that has no compatible peer runs
-through the regular single-image operation at `join`.
+`ImageBatch.Multiply(other_image)`, full-frame `ImageBatch.Paste(source, mask)`,
+and a shared same-mode RGBA `ImageBatch.Color3DLUT(filter)` operation. Jobs with
+the same operation and compatible mode and dimensions are grouped when GPU is
+the selected backend; LUT jobs must also share the same wrapper instance.
+Multiply requires each secondary image to match its primary image's mode and
+size. Batched Paste requires same-sized destination and source images in the
+same native mode, plus a same-sized `L` mask; it pastes the source at `(0, 0)`.
+The native-mode group layouts are `L`, `LA`, `RGB`, and `RGBA`; no image is
+converted to RGBA. A queued job that has no compatible peer runs through the
+regular single-image operation at `join`.
 
 The GPU group is a native-mode vertical stack. For `MedianFilter(3)`, one
 replicated top and bottom row surrounds each image, so the filter cannot read
-pixels from a neighbor at a group boundary. For `ExtractBand`, `Multiply`, and
-`Color3DLUT`, images are stacked directly because each output pixel depends
-only on the corresponding input pixel. For `Multiply`, primary and secondary
-operands are each stacked in their native mode. For `Color3DLUT`, the batch
+pixels from a neighbor at a group boundary. For `ExtractBand`, `Multiply`,
+`Paste`, and `Color3DLUT`, images are stacked directly because each output
+pixel depends only on corresponding input pixels. For `Multiply`, primary and
+secondary operands are each stacked in their native mode. For `Paste`,
+destinations, sources, and L masks are stacked separately; the existing
+full-frame masked paste runs at the origin and keeps each image independent.
+For `Color3DLUT`, the batch
 captures one immutable LUT and applies the existing RGBA-to-RGBA pipeline to
 the stack; each job must reuse the same `ImageBatch.Color3DLUT` instance.
 The existing single-image operation processes each stack, and its output is
@@ -243,3 +254,109 @@ For a reproducible profile, run `scripts/benchmark_imagebatch.py` with
 count, and `--samples 12 --warmups 3`. Use `--backend pillow`, `cpu`, `simd`,
 or `gpu`; add `--queue` only for queued GPU. See the command reference for a
 complete invocation.
+
+### Full-frame masked `Paste` batch probe
+
+`ImageBatch.Paste(source, mask)` groups only full-frame pastes at `(0, 0)` with
+equal-size destination and source images in the same native `L`, `LA`, `RGB`,
+or `RGBA` mode and a same-size `L` mask. The grouped path stacks destinations,
+sources, and masks separately, then reuses the existing native masked-Paste
+pipeline. It returns per-image results in submission order with each
+destination's `info`; ordinary `Image.paste` and automatic routing are
+unchanged. The GPU admission planner calls the same mode-specific dispatch
+planner as the native kernel and applies the active adapter's buffer and
+workgroup limits before building a group. Unsupported or unsafe groups use the
+single-image path.
+
+The isolated Pillow parity run checked exact bytes, mode, size, `info`, and
+result order for L, LA, RGB, and RGBA, including queued pairs, 64-image
+64×64 groups, and 16-image 256×256 groups. Eager `queue=False` Paste also
+matched Pillow on CPU, SIMD, and GPU for all four modes; each requested backend
+executed without fallback. Every queued cohort used one native-mode GPU
+dispatch. The pure planner tests cover both the default 65,535-workgroup edge
+and lower adapter workgroup limits without allocating boundary-sized images.
+
+These full-call medians were measured on one Apple M-series host with 3 warmups
+and 12 timed windows. The window includes image construction, submission,
+execution, GPU upload/readback and synchronization, result splitting, and
+`tobytes()` on each result. Pillow processes the same number of image jobs
+sequentially. The eager columns use `BatchExecutor(queue=False)`; the queued
+column uses `BatchExecutor(queue=True)`. All selected CPU, SIMD, and GPU
+profiles executed their requested backend without fallback. Times are
+milliseconds per complete window.
+
+| Mode | Cohort | Pillow | Serial CPU | SIMD | GPU, eager | GPU, queued |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| L | 64 images @ 64×64 | 0.699 | 0.593 | 0.566 | 13.431 | 0.898 |
+| LA | 64 images @ 64×64 | 1.088 | 0.706 | 0.739 | 13.526 | 1.240 |
+| RGB | 64 images @ 64×64 | 1.141 | 0.729 | 0.906 | 14.586 | 1.626 |
+| RGBA | 64 images @ 64×64 | 0.995 | 0.905 | 0.983 | 15.858 | 2.061 |
+| L | 16 images @ 256×256 | 0.960 | 0.951 | 0.629 | 6.467 | 2.145 |
+| LA | 16 images @ 256×256 | 3.190 | 1.928 | 2.163 | 6.931 | 5.380 |
+| RGB | 16 images @ 256×256 | 2.572 | 1.478 | 3.571 | 7.900 | 4.010 |
+| RGBA | 16 images @ 256×256 | 1.838 | 2.576 | 1.935 | 7.154 | 6.287 |
+
+At 64×64, queueing reduced full-call GPU time by 7.7–15.0× compared with
+submitting the same jobs eagerly. At 256×256, the reduction was only 1.1–3.0×.
+Queued GPU remained slower than SIMD and sequential Pillow in every listed
+mode and cohort. Eager CPU was faster than Pillow in all four small-image rows
+and in the L, LA, and RGB medium rows; SIMD was faster than Pillow in all four
+small rows and in the L and LA medium rows. The medium timings varied
+materially between runs, so treat these as observations for this exact run,
+not stable performance guarantees. These CPU measurements use the normal
+default build with Rayon disabled; neither cohort reaches the 512×512-pixel
+threshold used by the feature-gated masked-Paste row scheduler. This batch
+feature does not meet the GPU latency or throughput target.
+
+The next optimization should remove the input-atlas copies before touching
+the shader. For N images of W×H pixels with C native bytes per pixel, masked
+Paste must upload destination and source (`2CNWH` bytes), upload the L mask
+(`NWH`), and read back the output (`CNWH`): `(3C + 1)NWH` logical payload
+bytes across the device boundary, excluding alignment padding. The current batch builder additionally copies
+`(2C + 1)NWH` bytes into separate contiguous host stacks before the GPU staging
+write. Replace those redundant host stacks with direct writes from each
+materialized native image slice into the final upload staging ranges. Then
+measure output splitting/ownership copies; specialize the full-frame shader's
+index arithmetic only if those data-movement costs are no longer dominant.
+The traffic explanation follows the inspected call path; stage-level timings
+have not yet confirmed its exact share. Keep this work inside `ImageBatch` and
+leave ordinary `Image.paste` on its existing path.
+
+Use the [command reference](COMMANDS.md) for the full-call benchmark and
+isolated Pillow parity commands.
+
+### Parallel CPU Paste profile
+
+Masked Paste has a feature-gated Parallel CPU path when the clipped region
+contains at least 262,144 pixels (the area of a 512×512 image). A batch with `queue=False` still executes
+each image operation in submission order; when built with `parallel`, each
+sufficiently large Paste distributes independent output rows through Rayon.
+This is separately named **Parallel CPU** and is not SIMD or GPU work. The
+isolated benchmark compares that build with ordinary, sequential Pillow.
+
+The feature-enabled correctness lane added one
+512×512 CPU parity input per native mode, exactly at the row-parallel
+threshold. Pillow bytes, mode, size, and destination `info` matched for L, LA,
+RGB, and RGBA, with the CPU backend selected and no fallback. A focused
+feature-enabled Rust test also passed for clipped masked Paste.
+
+The full-call benchmark used four 1024×768 images per window, 3 warmups, and
+12 samples. The Rayon feature was enabled in the pillow-rs extension, and each
+Paste covered 786,432 pixels, above the row-parallel threshold. Pillow ran its
+ordinary sequential profile. Times are p50 milliseconds per complete window.
+
+| Mode | Pillow | Parallel CPU | Pillow / Parallel CPU |
+| --- | ---: | ---: | ---: |
+| L | 1.977 | 1.944 | 1.02× |
+| LA | 7.136 | 2.604 | 2.74× |
+| RGB | 10.505 | 4.789 | 2.19× |
+| RGBA | 6.713 | 5.131 | 1.31× |
+
+Parallel CPU is materially faster for LA, RGB, and RGBA in this run, while L
+is effectively tied with Pillow. Treat these as per-mode observations rather
+than a promise that Rayon always wins. The measurements stay separate from the
+default-build serial CPU rows above, and Pillow does not use this project's
+parallel feature. Use the default pillow-rs installation when measuring ordinary
+CPU, SIMD, or GPU profiles, as described in the command reference.
+
+The command reference contains the exact Parallel CPU invocation.

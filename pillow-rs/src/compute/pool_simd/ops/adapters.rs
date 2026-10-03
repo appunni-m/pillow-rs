@@ -2233,19 +2233,93 @@ fn native_paste_l_masked_row_neon(source: &[u8], destination: &mut [u8], mask: &
 /// Blend a clipped native-LA row with one L-mask byte per pixel. The stored
 /// luminance and alpha bytes share each mask value; rows are independent and
 /// can use the same bounded parallel path as native L Paste.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn native_paste_la_masked_neon_block(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    start: usize,
+) {
+    use core::arch::aarch64 as neon;
+
+    macro_rules! blend {
+        ($source:expr, $destination:expr, $mask:expr) => {{
+            let inverse = neon::vsub_u8(neon::vdup_n_u8(255), $mask);
+            let weighted = neon::vmlal_u8(neon::vmull_u8($source, $mask), $destination, inverse);
+            // The byte blend rounds with +127 before exact DIV255. The
+            // quotient correction contributes +1, so combine both constants.
+            let incremented = neon::vaddq_u16(weighted, neon::vdupq_n_u16(128));
+            let quotient = neon::vshrq_n_u16(
+                neon::vaddq_u16(incremented, neon::vshrq_n_u16(incremented, 8)),
+                8,
+            );
+            neon::vmovn_u16(quotient)
+        }};
+    }
+
+    let mask_start = start / 2;
+    // SAFETY: The caller bounds `start` to a complete sixteen-byte LA source
+    // and destination block, corresponding to eight L-mask bytes. NEON's
+    // interleaved byte loads/stores permit unaligned pointers; Rust's borrows
+    // keep destination disjoint from the source and mask slices.
+    unsafe {
+        let source_pair = neon::vld2_u8(source.as_ptr().add(start));
+        let destination_ptr = destination.as_mut_ptr().add(start);
+        let destination_pair = neon::vld2_u8(destination_ptr);
+        let mask = neon::vld1_u8(mask.as_ptr().add(mask_start));
+        let output = neon::uint8x8x2_t(
+            blend!(source_pair.0, destination_pair.0, mask),
+            blend!(source_pair.1, destination_pair.1, mask),
+        );
+        neon::vst2_u8(destination_ptr, output);
+    }
+}
+
+/// Blend complete interleaved LA blocks with NEON's deinterleaving byte loads.
+/// Each L-mask lane is used once for luminance and once for alpha, avoiding
+/// expansion into sixteen repeated mask bytes before the two channel blends.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn native_paste_la_masked_row_neon(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    vector_len: usize,
+) -> usize {
+    let unrolled_len = vector_len / 64 * 64;
+    for start in (0..unrolled_len).step_by(64) {
+        native_paste_la_masked_neon_block(source, destination, mask, start);
+        native_paste_la_masked_neon_block(source, destination, mask, start + 16);
+        native_paste_la_masked_neon_block(source, destination, mask, start + 32);
+        native_paste_la_masked_neon_block(source, destination, mask, start + 48);
+    }
+    for start in (unrolled_len..vector_len).step_by(16) {
+        native_paste_la_masked_neon_block(source, destination, mask, start);
+    }
+    vector_len
+}
+
 #[inline]
 fn native_paste_la_masked_row(
     source: &[u8],
     destination: &mut [u8],
     mask: &[u8],
     allow_short_masked_tail: bool,
-) {
+) -> bool {
     debug_assert_eq!(source.len(), destination.len());
     debug_assert_eq!(source.len() % 2, 0);
     debug_assert_eq!(source.len() / 2, mask.len());
 
     let vector_len16 = source.len() / 16 * 16;
-    for start in (0..vector_len16).step_by(16) {
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    let neon_prefix = native_paste_la_masked_row_neon(source, destination, mask, vector_len16);
+    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+    let neon_prefix = 0;
+
+    for start in (neon_prefix..vector_len16).step_by(16) {
         let source_block = <[u8; 16]>::try_from(&source[start..start + 16])
             .expect("validated LA Paste row has a complete 16-byte block");
         let destination_block = <[u8; 16]>::try_from(&destination[start..start + 16])
@@ -2268,7 +2342,7 @@ fn native_paste_la_masked_row(
 
     let tail = source.len() - vector_len8;
     if tail == 0 {
-        return;
+        return neon_prefix != 0;
     }
     if allow_short_masked_tail {
         let mut source_block = [0u8; 8];
@@ -2307,6 +2381,7 @@ fn native_paste_la_masked_row(
             destination[index] = blended;
         }
     }
+    neon_prefix != 0
 }
 
 /// Blend a native-PA row with an L mask. Palette indices and alpha remain two
@@ -3001,9 +3076,10 @@ fn native_paste_apply(
                 &mut destination_row[destination_left..destination_right],
                 mask_row,
                 allow_short_masked_tail,
-            );
+            )
         };
 
+        let mut used_neon = false;
         #[cfg(feature = "parallel")]
         if region.height > 1
             && region.width.saturating_mul(region.height) >= SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD
@@ -3013,7 +3089,7 @@ fn native_paste_apply(
                 destination_row_stride,
                 region.height,
                 |_row_start, _row_end, row, destination_row| {
-                    apply_la_row(row as usize, destination_row);
+                    used_neon |= apply_la_row(row as usize, destination_row);
                 }
             );
         } else {
@@ -3021,7 +3097,7 @@ fn native_paste_apply(
                 .chunks_exact_mut(destination_row_stride)
                 .enumerate()
             {
-                apply_la_row(row_index, destination_row);
+                used_neon |= apply_la_row(row_index, destination_row);
             }
         }
 
@@ -3030,7 +3106,7 @@ fn native_paste_apply(
             .chunks_exact_mut(destination_row_stride)
             .enumerate()
         {
-            apply_la_row(row_index, destination_row);
+            used_neon |= apply_la_row(row_index, destination_row);
         }
 
         let vector_len16 = region_row_bytes / 16 * 16;
@@ -3049,7 +3125,11 @@ fn native_paste_apply(
         if scalar_tail != 0 {
             crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
         }
-        crate::compute::record_pipeline_operation_path("vector");
+        crate::compute::record_pipeline_operation_path(if used_neon {
+            "neon-la-l-blend"
+        } else {
+            "vector"
+        });
         return true;
     }
 
@@ -32295,17 +32375,14 @@ mod tests {
 
     #[test]
     fn native_la_masked_paste_row_duplicates_l_mask_per_pixel_across_vector_tails() {
-        let masks = [0u8, 1, 127, 128, 254, 255];
-        for width in 1..=17 {
+        for width in 1..=256 {
             let source = (0..width * 2)
                 .map(|index| (index * 37 + 11) as u8)
                 .collect::<Vec<_>>();
             let destination = (0..width * 2)
                 .map(|index| (index * 53 + 7) as u8)
                 .collect::<Vec<_>>();
-            let mask = (0..width)
-                .map(|index| masks[index % masks.len()])
-                .collect::<Vec<_>>();
+            let mask = (0..width).map(|index| index as u8).collect::<Vec<_>>();
             let mut expected = destination.clone();
             for byte_index in 0..expected.len() {
                 let mask_value = u32::from(mask[byte_index / 2]);
@@ -32318,7 +32395,7 @@ mod tests {
 
             for allow_short_masked_tail in [false, true] {
                 let mut actual = destination.clone();
-                super::native_paste_la_masked_row(
+                let used_neon = super::native_paste_la_masked_row(
                     &source,
                     &mut actual,
                     &mask,
@@ -32327,6 +32404,11 @@ mod tests {
                 assert_eq!(
                     actual, expected,
                     "width {width}, padded tail {allow_short_masked_tail}"
+                );
+                assert_eq!(
+                    used_neon,
+                    cfg!(all(target_arch = "aarch64", target_feature = "neon")) && width >= 8,
+                    "width {width}, padded tail {allow_short_masked_tail} NEON route"
                 );
             }
         }

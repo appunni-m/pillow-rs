@@ -5,8 +5,9 @@
 //! over compatible native-mode images packed into one image, then split the
 //! results back into ordinary per-image results. Grouped operations reuse
 //! `MedianFilter(3)`, `ExtractBand`, `ImageChops.multiply`, and same-mode RGBA
-//! `Color3DLUT` pipelines. Images that cannot be grouped use their ordinary
-//! single-image pipeline.
+//! `Color3DLUT` pipelines. Full-frame native-mode masked Paste jobs with L
+//! masks also reuse the existing Paste pipeline. Images that cannot be grouped
+//! use their ordinary single-image pipeline.
 
 use crate::compute::Backend;
 use crate::error::PilError;
@@ -33,6 +34,13 @@ pub enum BatchOperation {
         /// in their native mode and passed through the ordinary Multiply pipeline.
         other: Box<Image>,
     },
+    /// Paste a same-sized image through an L mask at the origin.
+    Paste {
+        /// Source image to paste.
+        source: Box<Image>,
+        /// L-mode mask with the same dimensions as the destination.
+        mask: Box<Image>,
+    },
     /// Apply a shared same-mode RGBA 3D color lookup table.
     Color3DLut {
         /// LUT dimensions.
@@ -52,6 +60,15 @@ impl BatchOperation {
             Self::MedianFilter { size } => image.median_filter(*size),
             Self::ExtractBand { channel } => image.getchannel(*channel),
             Self::Multiply { other } => crate::ops::chops::multiply(image, other),
+            Self::Paste { source, mask } => {
+                let mut output = image.clone();
+                output.paste_at(
+                    crate::PasteSource::Image(Box::new((**source).clone())),
+                    None,
+                    Some(mask),
+                )?;
+                Ok(output)
+            }
             Self::Color3DLut {
                 size,
                 table,
@@ -95,6 +112,12 @@ impl BatchOperation {
                 other.mode().is_ok_and(|other_mode| other_mode == mode)
                     && other.size().is_ok_and(|other_size| other_size == size)
             }
+            Self::Paste { source, mask } => {
+                source.mode().is_ok_and(|source_mode| source_mode == mode)
+                    && source.size().is_ok_and(|source_size| source_size == size)
+                    && mask.mode().is_ok_and(|mask_mode| mask_mode == "L")
+                    && mask.size().is_ok_and(|mask_size| mask_size == size)
+            }
             Self::Color3DLut {
                 channels,
                 target_mode,
@@ -116,6 +139,7 @@ impl BatchOperation {
                 left == right
             }
             (Self::Multiply { .. }, Self::Multiply { .. }) => true,
+            (Self::Paste { .. }, Self::Paste { .. }) => true,
             (
                 Self::Color3DLut {
                     size: left_size,
@@ -148,6 +172,18 @@ impl BatchOperation {
             Self::Multiply { other } => Some(PipelineOp::Multiply {
                 other: Arc::new((**other).clone()),
             }),
+            Self::Paste { source, mask } => {
+                let (width, height) = source.size().ok()?;
+                Some(PipelineOp::Paste {
+                    source: Arc::new((**source).clone()),
+                    x: 0,
+                    y: 0,
+                    w: i32::try_from(width).ok()?,
+                    h: i32::try_from(height).ok()?,
+                    mask: Some(Arc::new((**mask).clone())),
+                    mask_alpha: false,
+                })
+            }
             Self::Color3DLut {
                 size,
                 table,
@@ -175,11 +211,12 @@ struct BatchJob {
 ///
 /// `queue = false` applies each operation immediately using the ordinary
 /// single-image route. With `queue = true`, [`join`](Self::join) groups
-/// compatible `MedianFilter(3)`, `ExtractBand`, `ImageChops.multiply`, and
-/// same-mode RGBA `Color3DLUT` jobs when GPU is the selected backend. Grouping
-/// currently requires equal-size native byte modes `L`, `LA`, `RGB`, and
-/// `RGBA`; LUT groups additionally require the same shared LUT object. Other
-/// jobs are executed through the ordinary per-image operation. No conversion
+/// compatible `MedianFilter(3)`, `ExtractBand`, `ImageChops.multiply`, full-
+/// frame masked Paste, and same-mode RGBA `Color3DLUT` jobs when GPU is the
+/// selected backend. Grouping currently requires equal-size native byte modes
+/// `L`, `LA`, `RGB`, and `RGBA`; masked Paste additionally requires same-mode
+/// sources and same-size `L` masks, while LUT groups require the same shared
+/// LUT object. Other jobs use the ordinary per-image operation. No conversion
 /// to RGBA is performed.
 ///
 /// `backend` optionally locks each job to a backend. If it is `None`, normal
@@ -414,6 +451,14 @@ impl BatchExecutor {
                     .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
                 (0usize, stacked_height, mode, channels)
             }
+            BatchOperation::Paste { .. } => {
+                let group_len = u32::try_from(indices.len())
+                    .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
+                let stacked_height = height
+                    .checked_mul(group_len)
+                    .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
+                (0usize, stacked_height, mode, channels)
+            }
             _ => {
                 return Err(PilError::ValueError(
                     "this operation has no compatible batch layout".into(),
@@ -436,7 +481,10 @@ impl BatchExecutor {
                 "unable to allocate {capacity} batch bytes: {error}"
             ))
         })?;
-        let mut packed_other = if matches!(first.operation, BatchOperation::Multiply { .. }) {
+        let mut packed_other = if matches!(
+            first.operation,
+            BatchOperation::Multiply { .. } | BatchOperation::Paste { .. }
+        ) {
             let mut packed_other = Vec::new();
             packed_other.try_reserve_exact(capacity).map_err(|error| {
                 PilError::MemoryError(format!(
@@ -444,6 +492,23 @@ impl BatchExecutor {
                 ))
             })?;
             Some(packed_other)
+        } else {
+            None
+        };
+        let mask_capacity = usize::try_from(width)
+            .ok()
+            .and_then(|width| width.checked_mul(stacked_height_usize))
+            .ok_or_else(|| PilError::DimensionError("batch mask size overflow".into()))?;
+        let mut packed_mask = if matches!(first.operation, BatchOperation::Paste { .. }) {
+            let mut packed_mask = Vec::new();
+            packed_mask
+                .try_reserve_exact(mask_capacity)
+                .map_err(|error| {
+                    PilError::MemoryError(format!(
+                        "unable to allocate {mask_capacity} batch mask bytes: {error}"
+                    ))
+                })?;
+            Some(packed_mask)
         } else {
             None
         };
@@ -476,29 +541,90 @@ impl BatchExecutor {
                 packed.extend_from_slice(&pixel_bytes[last_row_start..expected]);
             }
 
-            if let BatchOperation::Multiply { other } = &job.operation {
-                let other_pixels = other.materialized_shared()?;
-                if other.mode()? != mode
-                    || other.size()? != (width, height)
-                    || other_pixels.color() != native_storage
-                {
-                    return Err(PilError::DimensionError(
-                        "multiply batch operands must have matching native dimensions".into(),
-                    ));
+            match &job.operation {
+                BatchOperation::Multiply { other } => {
+                    let other_pixels = other.materialized_shared()?;
+                    if other.mode()? != mode
+                        || other.size()? != (width, height)
+                        || other_pixels.color() != native_storage
+                    {
+                        return Err(PilError::DimensionError(
+                            "multiply batch operands must have matching native dimensions".into(),
+                        ));
+                    }
+                    let other_bytes = other_pixels.as_bytes();
+                    if other_bytes.len() != expected {
+                        return Err(PilError::InternalError(format!(
+                            "native multiply batch input length mismatch: expected {expected}, got {}",
+                            other_bytes.len()
+                        )));
+                    }
+                    packed_other
+                        .as_mut()
+                        .ok_or_else(|| {
+                            PilError::InternalError("multiply batch has no secondary buffer".into())
+                        })?
+                        .extend_from_slice(other_bytes);
                 }
-                let other_bytes = other_pixels.as_bytes();
-                if other_bytes.len() != expected {
-                    return Err(PilError::InternalError(format!(
-                        "native multiply batch input length mismatch: expected {expected}, got {}",
-                        other_bytes.len()
-                    )));
+                BatchOperation::Paste { source, mask } => {
+                    let source_pixels = source.materialized_shared()?;
+                    if source.mode()? != mode
+                        || source.size()? != (width, height)
+                        || source_pixels.color() != native_storage
+                    {
+                        return Err(PilError::DimensionError(
+                            "paste batch sources must match the destination's native dimensions"
+                                .into(),
+                        ));
+                    }
+                    let source_bytes = source_pixels.as_bytes();
+                    if source_bytes.len() != expected {
+                        return Err(PilError::InternalError(format!(
+                            "native Paste batch source length mismatch: expected {expected}, got {}",
+                            source_bytes.len()
+                        )));
+                    }
+                    packed_other
+                        .as_mut()
+                        .ok_or_else(|| {
+                            PilError::InternalError("Paste batch has no source buffer".into())
+                        })?
+                        .extend_from_slice(source_bytes);
+
+                    let mask_pixels = mask.materialized_shared()?;
+                    if mask.mode()? != "L"
+                        || mask.size()? != (width, height)
+                        || mask_pixels.color() != crate::raster::ColorType::L8
+                    {
+                        return Err(PilError::DimensionError(
+                            "Paste batch masks must be same-size native L images".into(),
+                        ));
+                    }
+                    let mask_bytes = mask_pixels.as_bytes();
+                    let expected_mask = usize::try_from(width)
+                        .ok()
+                        .and_then(|width| {
+                            usize::try_from(height)
+                                .ok()
+                                .and_then(|height| width.checked_mul(height))
+                        })
+                        .ok_or_else(|| {
+                            PilError::DimensionError("Paste mask size overflow".into())
+                        })?;
+                    if mask_bytes.len() != expected_mask {
+                        return Err(PilError::InternalError(format!(
+                            "native Paste batch mask length mismatch: expected {expected_mask}, got {}",
+                            mask_bytes.len()
+                        )));
+                    }
+                    packed_mask
+                        .as_mut()
+                        .ok_or_else(|| {
+                            PilError::InternalError("Paste batch has no mask buffer".into())
+                        })?
+                        .extend_from_slice(mask_bytes);
                 }
-                packed_other
-                    .as_mut()
-                    .ok_or_else(|| {
-                        PilError::InternalError("multiply batch has no secondary buffer".into())
-                    })?
-                    .extend_from_slice(other_bytes);
+                _ => {}
             }
         }
         if packed.len() != capacity {
@@ -514,6 +640,14 @@ impl BatchExecutor {
                 "native multiply batch packing produced an unexpected byte count".into(),
             ));
         }
+        if packed_mask
+            .as_ref()
+            .is_some_and(|packed_mask| packed_mask.len() != mask_capacity)
+        {
+            return Err(PilError::InternalError(
+                "native Paste batch packing produced an unexpected mask byte count".into(),
+            ));
+        }
 
         // Keep each source mode's physical pixel layout. Existing Image
         // constructors and operation dispatch own validation and routing.
@@ -527,6 +661,26 @@ impl BatchExecutor {
                 })?,
             )?;
             crate::ops::chops::multiply(&stacked, &secondary)?
+        } else if matches!(first.operation, BatchOperation::Paste { .. }) {
+            let source = Image::frombytes_owned(
+                mode,
+                (width, stacked_height),
+                packed_other.ok_or_else(|| {
+                    PilError::InternalError("Paste batch lost its source buffer".into())
+                })?,
+            )?;
+            let mask = Image::frombytes_owned(
+                "L",
+                (width, stacked_height),
+                packed_mask.ok_or_else(|| {
+                    PilError::InternalError("Paste batch lost its mask buffer".into())
+                })?,
+            )?;
+            BatchOperation::Paste {
+                source: Box::new(source),
+                mask: Box::new(mask),
+            }
+            .apply(&stacked)?
         } else if matches!(first.operation, BatchOperation::Color3DLut { .. }) {
             Image::push_mode_changing_op(
                 &stacked,
@@ -862,6 +1016,90 @@ mod tests {
             }
             .can_group("P", (3, 2))
         );
+    }
+
+    #[test]
+    fn paste_groups_only_same_size_native_sources_with_l_masks() {
+        for (mode, channels) in [("L", 1), ("LA", 2), ("RGB", 3), ("RGBA", 4)] {
+            let operation = BatchOperation::Paste {
+                source: Box::new(fixture(mode, 3, 2, channels, 41)),
+                mask: Box::new(fixture("L", 3, 2, 1, 23)),
+            };
+            assert!(operation.can_group(mode, (3, 2)), "mode {mode}");
+            assert!(operation.matches_group(&operation), "mode {mode}");
+            assert!(matches!(
+                operation.pipeline_op(),
+                Some(PipelineOp::Paste { .. })
+            ));
+        }
+
+        let wrong_mask_mode = BatchOperation::Paste {
+            source: Box::new(fixture("LA", 3, 2, 2, 41)),
+            mask: Box::new(fixture("LA", 3, 2, 2, 23)),
+        };
+        assert!(!wrong_mask_mode.can_group("LA", (3, 2)));
+
+        let wrong_source_size = BatchOperation::Paste {
+            source: Box::new(fixture("LA", 2, 2, 2, 41)),
+            mask: Box::new(fixture("L", 3, 2, 1, 23)),
+        };
+        assert!(!wrong_source_size.can_group("LA", (3, 2)));
+        assert!(!wrong_source_size.can_group("PA", (3, 2)));
+    }
+
+    #[test]
+    fn queued_paste_matches_the_single_image_operation_for_native_modes() {
+        for (mode, channels) in [("L", 1), ("LA", 2), ("RGB", 3), ("RGBA", 4)] {
+            let inputs = [
+                (
+                    fixture(mode, 7, 5, channels, 17),
+                    fixture(mode, 7, 5, channels, 91),
+                    fixture("L", 7, 5, 1, 39),
+                ),
+                (
+                    fixture(mode, 7, 5, channels, 203),
+                    fixture(mode, 7, 5, channels, 147),
+                    fixture("L", 7, 5, 1, 71),
+                ),
+            ];
+            let expected = inputs
+                .iter()
+                .map(|(destination, source, mask)| {
+                    let mut expected = destination.clone();
+                    expected
+                        .paste_at(
+                            crate::PasteSource::Image(Box::new(source.clone())),
+                            None,
+                            Some(mask),
+                        )
+                        .unwrap();
+                    expected.tobytes().unwrap()
+                })
+                .collect::<Vec<_>>();
+
+            let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+            for (destination, source, mask) in inputs {
+                batch
+                    .submit(
+                        destination,
+                        BatchOperation::Paste {
+                            source: Box::new(source),
+                            mask: Box::new(mask),
+                        },
+                    )
+                    .unwrap();
+            }
+            let actual = batch
+                .join()
+                .unwrap()
+                .iter()
+                .map(|image| {
+                    assert_eq!(image.mode().unwrap(), mode);
+                    image.tobytes().unwrap()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "queued {mode} Paste results differ");
+        }
     }
 
     #[test]
