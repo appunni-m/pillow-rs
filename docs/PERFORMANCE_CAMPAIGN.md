@@ -16497,6 +16497,85 @@ Receipts are `build/migration-parity/grayscale-rgb-baseline-c31391d0f.json`,
 `grayscale-rgb-grouped-loads-attempt1-repeat.json`, their matching `-parity.json`
 sidecars, and `grayscale-rgb-attempt1-odd-tail-gpu-parity.json`.
 
+## RGB `ImageOps.grayscale` SIMD checkpoint — 2026-10-03
+
+This follow-up keeps the normal single-image route unchanged and targets its
+material RGB path. The portable SIMD kernel extracted R, G, and B from packed
+three-byte pixels with three compile-time swizzle masks across each four-vector
+block. On AArch64, `vld3q_u8` already performs that deinterleave as one NEON
+structure load. The specialized kernel uses it for sixteen RGB pixels, widens
+the channels, and preserves Pillow's exact integer luma `(19595R + 38470G +
+7471B + 32768) >> 16` with the existing bit-8 coefficient decomposition. The
+other modes and non-AArch64 fallback retain their format-specific portable
+kernel. RGB conversion-to-L shares this same internal byte operation.
+
+Removing a full-frame zero-fill before the SIMD output writes was simple but
+did not produce a repeatable timing change by itself. The NEON load did: SIMD
+fell from about 0.180 ms to 0.099–0.103 ms. A third attempt wrote complete
+NEON blocks directly into the output's spare capacity and handled an odd tail
+scalar. Its 0.0957 ms result repeated at 0.1004 ms, overlapping the previous
+NEON range, so the added unsafe buffer path and split tail accounting were
+discarded. The retained implementation only uses NEON for RGB deinterleave and
+keeps ordinary vector output construction and padded SIMD tails.
+
+All rows use the strict standard `pipeline-op.grayscale.material-rgb-noise-1024x768`
+workload, five warmups, 100 timed samples, and the live Pillow parity gate. The
+CPU, SIMD, and GPU subjects each recorded 100 actual executions with no
+fallback. Median end-to-end milliseconds:
+
+| Implementation | Pillow | Serial CPU | Parallel CPU | SIMD | GPU | Parity gate |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Original SIMD baseline, run 1 | 0.2255 | 0.1197 | — | 0.1797 | 0.7596 | 3/3 |
+| Original SIMD baseline, repeat | 0.2171 | 0.1242 | — | 0.1802 | 0.7933 | 3/3 |
+| Zero-fill removed | 0.1708 | 0.1232 | — | 0.1774 | 0.6960 | 3/3 |
+| NEON `vld3q_u8`, run 1 | 0.2190 | 0.1194 | — | 0.0993 | 0.7419 | 3/3 |
+| NEON `vld3q_u8`, repeat | 0.2298 | 0.1198 | — | 0.1029 | 0.7410 | 3/3 |
+| Direct output stores, attempt 3 | 0.2111 | 0.1209 | — | 0.0957 | 0.6513 | 3/3 |
+| Direct-store repeat | 0.2054 | 0.1205 | — | 0.1004 | 0.6368 | 3/3 |
+| Retained NEON path after rejecting direct stores | 0.2376 | 0.1211 | 0.1204 | 0.1026 | 0.7570 | 3/3 + PC 1/1 |
+
+The retained SIMD path is about 2.1–2.3× faster than Pillow for this RGB
+material workload, a substantial improvement but short of the 5× campaign
+target. Serial CPU remains about 1.7–1.9× faster than Pillow. The separately
+built Parallel CPU profile uses the opt-in `pillow-rs/parallel` and
+`pillow-rs-py/parallel` features; its median was 0.1204 ms (p95 0.1368 ms),
+against the 0.2376 ms ordinary Pillow baseline from the matching standard run.
+`op_grayscale` has no Rayon branch, so Parallel CPU correctly executes as CPU
+and provides no throughput increase over serial CPU for this operation. The
+parallel preflight passed 1/1 against Pillow; no threaded Pillow baseline was
+timed. Single-image GPU latency is still about 6.4–7.4× slower than SIMD. Each
+GPU call makes one dispatch, uploads 2,359,296 bytes, reads back 786,432 bytes,
+and performs no mode conversion. These single-image measurements do not
+establish the separate queued-batch throughput target.
+
+Focused Rust checks passed for RGB vector tails and LA/RGBA grayscale
+semantics. The strict workload's correctness gate passed for Pillow, CPU, SIMD,
+and GPU on every row. The exhaustive domain diagnostic also compared all
+16,777,216 RGB triples with live Pillow: Pillow, CPU, SIMD, and GPU each matched
+all output bytes exactly, with the GPU path verified native and without
+fallback. It ran as
+`RUSTC_WRAPPER= make build-parity && .venv/bin/python scripts/test_grayscale_rgb_domain.py --output-dir build/migration-parity/grayscale-rgb-domain-neon-20261003`.
+No coverage was run. The direct-store experiment was rejected after its repeat
+showed no reliable gain. Stop work on this RGB case
+after three implementation attempts as requested; if it is revisited, inspect
+generated AArch64 assembly for multiply/add instruction count before testing a
+multiply-accumulate formulation. Then measure the full call again rather than
+accepting a kernel-only win.
+
+Receipts under `build/migration-parity/` are
+`grayscale-rgb-baseline-20261003-main301b9ffc4.json`,
+`grayscale-rgb-baseline-repeat-20261003-main301b9ffc4.json`,
+`grayscale-rgb-nozero-attempt1-20261003.json`,
+`grayscale-rgb-neon-attempt2-20261003.json`,
+`grayscale-rgb-neon-repeat-20261003.json`,
+`grayscale-rgb-directstore-attempt3-20261003.json`, and
+`grayscale-rgb-directstore-repeat-20261003.json`,
+`grayscale-rgb-final-retained-20261003.json`, each with a matching parity
+sidecar. The separate `parallel-cpu` run is recorded in
+`benchmark-result-parallel-cpu.json` and
+`benchmark-parity-result-parallel-cpu.json`. The exhaustive parity report and byte outputs are under
+`build/migration-parity/grayscale-rgb-domain-neon-20261003/`.
+
 ## Rejected `ImageBatch.Expand` batch probe — checkpoint 2026-10-03
 
 I tested adding scalar-border `ImageBatch.Expand(border, fill)` as a new
