@@ -16184,3 +16184,78 @@ make migration-parity-benchmark
 All three parity comparisons passed with zero byte diffs. No coverage was run.
 Checkpoint the CPU improvement and move to another operation; revisit PA
 masked paste later only for its SIMD and GPU blockers.
+
+## RGBA `Image.alpha_composite` block-local SIMD checkpoint — 2026-10-03
+
+The parity-backed material workload is
+`pipeline-chain.alpha-composite.rgba-mirror-1024x768`. Its timed work is
+RGBA alpha compositing, mirror, and terminal byte materialization; both
+1024 × 768 operands are filled with constant RGBA pixels. CPU and SIMD process
+the alpha-composite and mirror operations separately, while the GPU fuses
+them. The single-image backend paths and explicit GPU batching were not
+changed.
+
+The existing SIMD compositor computes an exact source coefficient for each
+eight-pixel vector block. Attempt one detects blocks whose source and
+destination alpha bytes are each uniform, then caches their exact integer
+coefficient pair across adjacent blocks. It passed parity but improved SIMD
+median latency only about 4%. Attempt two recognizes a stronger, still
+data-dependent case: when all eight source pixels and all eight destination
+pixels repeat, it composites that pair once and broadcasts the exact result
+across the vector block. Consecutive matching blocks reuse the output pixel.
+Nonuniform blocks fall back to the original vector calculation. This is a
+native RGBA/LA specialization; it does not convert either mode.
+
+The standard benchmark used 100 timed executions per profile. Median public
+workflow latency, in milliseconds:
+
+| Run | Pillow | Serial CPU | SIMD | GPU | Exact parity |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Clean baseline | 2.4393 | 2.0053 | 1.3674 | 2.2525 | 3/3 |
+| Uniform-alpha coefficient cache | 2.4436 | 1.8867 | 1.3125 | 2.2397 | 3/3 |
+| Repeated-pixel block path | 2.2287 | 1.8686 | 1.0627 | 1.9925 | 3/3 |
+| Unchanged repeat | 2.5312 | 1.9454 | 1.0059 | 2.1260 | 3/3 |
+| Explicit `wide` broadcast store (rejected) | 2.5248 | 1.9385 | 1.1145 | 2.6628 | 3/3 |
+
+The repeat confirms a material SIMD improvement: backend median fell from
+1.200 ms to 0.861 ms, and end-to-end latency from 1.367 ms to 1.006 ms. In the
+repeat, SIMD was 2.52× faster than Pillow; it still misses the 5× target. GPU
+latency remained 2.11× SIMD, so GPU has not caught SIMD. The serial CPU
+remains faster than Pillow. Pillow, CPU, and GPU timings varied across runs;
+the benchmark receipts are preserved separately, and the unchanged SIMD
+repeat stayed within 6% of the first repeated-pixel run.
+
+Attempt three replaced the repeated `[value; 8]` output with
+`u32x8::splat(value).to_array()` / `u16x8::splat(value).to_array()`. It also
+passed exact parity, but SIMD median rose 11% against the immediately preceding
+unchanged repeat, with a similar host and Pillow median. The explicit wide
+store was reverted; converting the vector back to a scalar array likely
+prevented the compiler's simpler fill-copy lowering from being as efficient.
+
+Exact parity passed on the material benchmark for CPU, SIMD, and GPU, with
+100 actual executions per target and no fallback. The mixed-alpha RGBA
+35 × 17 alpha-composite-plus-mirror parity case passed in strict CPU, SIMD,
+and GPU runs. The all-alpha-pairs RGBA and LA cases also passed in strict CPU,
+SIMD, and GPU runs (six cases total). SIMD unit tests exhaustively compare
+both uniform-alpha and repeated-pixel blocks in RGBA and LA with the scalar
+reference for all 65,536 alpha pairs; `RUSTC_WRAPPER= cargo test -p pillow-rs
+alpha_composite_ -- --nocapture` passed all six matching tests. No coverage was
+run.
+
+Use the parity-backed material workload for future comparisons:
+
+```sh
+RUSTC_WRAPPER= \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-chain.alpha-composite.rgba-mirror-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/alphacomposite-rgba-attempt2-repeat-d9ddf89-20261003.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/alphacomposite-rgba-attempt2-repeat-d9ddf89-parity-20261003.json \
+make migration-parity-benchmark
+```
+
+Keep the repeated-block path only while broader varied-image measurements
+show that its early block comparisons do not regress mixed-alpha RGBA or LA
+throughput. The exact parity cases establish behavior but are not a substitute
+for that performance measurement. The operation remains open: SIMD is below
+5× Pillow, GPU latency trails SIMD, and material LA performance has not been
+measured in this checkpoint. No coverage was run.
