@@ -1278,6 +1278,28 @@ mod mode1_byte_block_tests {
     }
 }
 
+#[cfg(test)]
+mod getpixel_rgb_fast_path_tests {
+    use super::{Image, PilError};
+
+    #[test]
+    fn fast_path_reads_only_loaded_native_rgb_pixels() -> Result<(), PilError> {
+        let rgb = Image::new(2, 1, "RGB", (17, 83, 211, 255))?;
+        assert_eq!(rgb.getpixel_rgb_if_loaded(1, 0)?, Some([17, 83, 211]));
+        assert!(matches!(
+            rgb.getpixel_rgb_if_loaded(2, 0),
+            Err(PilError::IndexError(_))
+        ));
+
+        let gray = Image::new(1, 1, "L", (42, 0, 0, 255))?;
+        assert_eq!(gray.getpixel_rgb_if_loaded(0, 0)?, None);
+
+        let deferred = crate::ops::imageops::invert(&rgb)?;
+        assert_eq!(deferred.getpixel_rgb_if_loaded(0, 0)?, None);
+        Ok(())
+    }
+}
+
 pub(crate) enum ScalarImageSamples {
     Integer(Vec<i32>),
     Float(Vec<f64>),
@@ -3067,6 +3089,35 @@ impl Image {
             rgba.get(2).copied().unwrap_or(0),
             rgba.get(3).copied().unwrap_or(255),
         ))
+    }
+
+    /// Returns an already-loaded native RGB pixel without converting it to RGBA.
+    ///
+    /// This binding fast path returns `None` unless this handle already owns a
+    /// loaded `RGB` image backed by three-byte RGB pixels. Callers can then
+    /// preserve deferred decoding and pipeline execution on their ordinary
+    /// materialization path. Coordinates are checked before reading a pixel.
+    #[doc(hidden)]
+    #[inline]
+    pub fn getpixel_rgb_if_loaded(&self, x: u32, y: u32) -> Result<Option<[u8; 3]>, PilError> {
+        let Image::Loaded(data) = self else {
+            return Ok(None);
+        };
+        if data
+            .explicit_mode
+            .as_deref()
+            .unwrap_or_else(|| image_mode_name(data.decoded_mode))
+            != "RGB"
+        {
+            return Ok(None);
+        }
+        if x >= data.image.width() || y >= data.image.height() {
+            return Err(PilError::IndexError("image index out of range".into()));
+        }
+        let DynamicImage::ImageRgb8(rgb) = data.image.as_ref() else {
+            return Ok(None);
+        };
+        Ok(Some(rgb.get_pixel(x, y).0))
     }
 
     /// Returns one pixel with Pillow's mode-specific scalar or tuple shape.
