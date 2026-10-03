@@ -42111,6 +42111,8 @@ def build_nuanced_cases(
 
         # The LA MaxFilter route packs independent L/alpha bytes into each
         # word. Keep a separate workload and edge pair to prove both channels.
+        # The matching LA MinFilter route also packs L and alpha independently;
+        # vary its seed so the two operators do not share a sample accidentally.
         for name, size, seed, requirement_suffix, extra_requirements in (
             (
                 "performance-material-la-noise-1024x768-size-3",
@@ -42137,6 +42139,47 @@ def build_nuanced_cases(
             spec = {
                 "surface": "PIL.ImageFilter",
                 "operation": "MaxFilter",
+                "append_at_end": True,
+                "requirement_suffix": requirement_suffix,
+                "name": name,
+                "mode": "LA",
+                "size": size,
+                "edge": "noise-fill",
+                "seed": seed,
+                "observe_result": "tobytes",
+                "values": {"size": literal(3)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            if extra_requirements:
+                spec["additional_requirement_suffixes"] = list(extra_requirements)
+            specs += (spec,)
+
+        for name, size, seed, requirement_suffix, extra_requirements in (
+            (
+                "performance-material-la-noise-1024x768-size-3",
+                [1024, 768],
+                20261077,
+                "performance.standard",
+                (),
+            ),
+            (
+                "backend-noise-la-1x1-size-3",
+                [1, 1],
+                20261078,
+                "mode.la",
+                ("performance.standard",),
+            ),
+            (
+                "backend-noise-la-33x35-size-3",
+                [33, 35],
+                20261079,
+                "mode.la",
+                ("performance.standard",),
+            ),
+        ):
+            spec = {
+                "surface": "PIL.ImageFilter",
+                "operation": "MinFilter",
                 "append_at_end": True,
                 "requirement_suffix": requirement_suffix,
                 "name": name,
@@ -48714,6 +48757,25 @@ def build_pipeline_benchmark_document(
     }
     minfilter_l_material_workload["context"]["operation_class"] = "neighborhood"
     extreme_filter_material_workloads.append(minfilter_l_material_workload)
+
+    minfilter_la_case_id = (
+        "PIL.ImageFilter.MinFilter.nuanced."
+        "performance-material-la-noise-1024x768-size-3"
+    )
+    minfilter_la_case = cases_by_id[minfilter_la_case_id]
+    minfilter_la_material_workload = copy.deepcopy(minfilter_l_material_workload)
+    minfilter_la_material_workload["workload_id"] = (
+        "pipeline-op.minfilter.material-la-noise-1024x768"
+    )
+    minfilter_la_material_workload["input"]["case_id"] = minfilter_la_case_id
+    minfilter_la_material_workload["context"] = _workflow_benchmark_context(
+        minfilter_la_case,
+        variant="minfilter-material-la-noise-1024x768-size-3",
+        surface="PIL.ImageFilter",
+        operation="MinFilter",
+    )
+    minfilter_la_material_workload["context"]["operation_class"] = "neighborhood"
+    extreme_filter_material_workloads.append(minfilter_la_material_workload)
 
     grayscale_rgb_case_id = (
         "PIL.ImageOps.grayscale.nuanced.performance-large-rgb-noise-1024x768"

@@ -7086,6 +7086,19 @@ impl GpuInner {
                 index += 1;
                 continue;
             }
+            if packed_native_byte_filter
+                && matches!(logical_mode, Some("LA"))
+                && matches!(op, PipelineOp::MinFilter { size: 3 })
+            {
+                let min_filter = self.resolve_pipeline(
+                    "__internal_min_filter_3x3_la_packed",
+                    "min_filter_3x3_la_packed.wgsl",
+                    include_str!("shaders/min_filter_3x3_la_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(min_filter));
+                index += 1;
+                continue;
+            }
             if packed_luma_order_statistic && matches!(op, PipelineOp::RankFilter { size: 9, .. }) {
                 let rank = if input_dims[index].0 % 4 == 0 {
                     self.resolve_pipeline(
@@ -8603,6 +8616,15 @@ impl GpuInner {
                     "max_filter_3x3_la_packed.wgsl",
                     include_str!("shaders/max_filter_3x3_la_packed.wgsl"),
                 )?
+            } else if packed_native_byte_filter
+                && matches!(logical_mode, Some("LA"))
+                && matches!(op, PipelineOp::MinFilter { size: 3 })
+            {
+                self.resolve_pipeline(
+                    "__internal_min_filter_3x3_la_packed",
+                    "min_filter_3x3_la_packed.wgsl",
+                    include_str!("shaders/min_filter_3x3_la_packed.wgsl"),
+                )?
             } else if native_rgb_packed_output.is_some()
                 && matches!(op, PipelineOp::MedianFilter { size: 3 })
             {
@@ -9907,6 +9929,11 @@ impl GpuInner {
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
             "__internal_max_filter_3x3_la_packed" => plan_packed_la_dispatch(
+                input_dims.0,
+                input_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
+            "__internal_min_filter_3x3_la_packed" => plan_packed_la_dispatch(
                 input_dims.0,
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
@@ -14525,9 +14552,9 @@ fn gpu_packed_luma_order_statistic_input(
 }
 
 /// Keep supported singleton native-L and LA byte filters in compact storage.
-/// LA MedianFilter(3) and MaxFilter(3) use two adjacent pixels per word, while
-/// the existing blur paths preserve their exact channel-wise fixed-point
-/// arithmetic.
+/// LA MedianFilter(3), MaxFilter(3), and MinFilter(3) use two adjacent pixels
+/// per word, while the existing blur paths preserve their exact channel-wise
+/// fixed-point arithmetic.
 #[cfg(target_endian = "little")]
 fn gpu_packed_native_byte_filter_input(
     ops: &[PipelineOp],
@@ -14561,7 +14588,8 @@ fn gpu_packed_native_byte_filter_input(
                 }
                 [PipelineOp::BoxBlur { radius: 1 }]
                 | [PipelineOp::MedianFilter { size: 3 }]
-                | [PipelineOp::MaxFilter { size: 3 }] => true,
+                | [PipelineOp::MaxFilter { size: 3 }]
+                | [PipelineOp::MinFilter { size: 3 }] => true,
                 _ => false,
             };
             if !supported {
@@ -31221,6 +31249,7 @@ mod tests {
         let box_blur = PipelineOp::BoxBlur { radius: 1 };
         let median = PipelineOp::MedianFilter { size: 3 };
         let max_filter = PipelineOp::MaxFilter { size: 3 };
+        let min_filter = PipelineOp::MinFilter { size: 3 };
         let luma =
             DynamicImage::ImageLuma8(GrayImage::from_raw(65, 47, vec![37; 65 * 47]).unwrap());
         let la = DynamicImage::ImageLumaA8(
@@ -31276,6 +31305,11 @@ mod tests {
             &la,
             Some("LA")
         ));
+        assert!(super::gpu_packed_native_byte_filter_input(
+            std::slice::from_ref(&min_filter),
+            &la,
+            Some("LA")
+        ));
         assert!(!super::gpu_packed_native_byte_filter_input(
             std::slice::from_ref(&median),
             &la,
@@ -31288,6 +31322,11 @@ mod tests {
         ));
         assert!(!super::gpu_packed_native_byte_filter_input(
             &[PipelineOp::MaxFilter { size: 5 }],
+            &la,
+            Some("LA")
+        ));
+        assert!(!super::gpu_packed_native_byte_filter_input(
+            &[PipelineOp::MinFilter { size: 5 }],
             &la,
             Some("LA")
         ));
@@ -31465,6 +31504,61 @@ mod tests {
             assert_eq!(receipt.6, Some(1));
             assert_eq!(receipt.7, None);
             let resources = receipt.8.expect("native LA max resources");
+            let transfer_bytes = (pixel_count * 2).div_ceil(4) * 4;
+            assert_eq!(resources.upload_bytes, transfer_bytes as u64);
+            assert_eq!(resources.readback_bytes, transfer_bytes as u64);
+            assert_eq!(resources.mode_conversion_count, 0);
+        }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_packed_la_min_filter_preserves_edges_alpha_and_compact_transfers() {
+        use crate::compute::{execute_prepared, prepare_execution};
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+        let op = [PipelineOp::MinFilter { size: 3 }];
+        for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (5, 3), (33, 35)] {
+            let pixel_count = width as usize * height as usize;
+            let bytes = (0..pixel_count * 2)
+                .map(|index| ((index * 79 + index / 9 * 23 + 31) % 256) as u8)
+                .collect::<Vec<_>>();
+            let source = DynamicImage::ImageLumaA8(
+                GrayAlphaImage::from_raw(width, height, bytes).expect("LA min-filter source"),
+            );
+            let expected = crate::compute::registry::execute_cpu(&op[0], &source, Some("LA"))
+                .expect("CPU LA MinFilter reference");
+            let prepared =
+                prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA MinFilter routing");
+            let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    return;
+                }
+                Err(error) => panic!("native GPU LA MinFilter failed: {error}"),
+            };
+            assert!(matches!(&actual, DynamicImage::ImageLumaA8(_)));
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
+
+            let receipt = Backend::take_pipeline_telemetry().expect("native LA min receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native LA min resources");
             let transfer_bytes = (pixel_count * 2).div_ceil(4) * 4;
             assert_eq!(resources.upload_bytes, transfer_bytes as u64);
             assert_eq!(resources.readback_bytes, transfer_bytes as u64);
