@@ -39,14 +39,33 @@ first-party interface or runtime integration; it does not mean users cannot
 build a similar system around Pillow. The list covers runtime capabilities and
 repository tools, not ordinary image operations shared with Pillow.
 
-The additions group into two areas: application runtime capabilities and
-parity/performance tools for contributors. The Python `PIL` package delegates
-image work to the Rust core; Pillow is the behavior reference, not a runtime
-backend. The availability column distinguishes features that are only in this
-checkout from those in the latest published pillow-rs alpha,
-`12.2.0-alpha.5`. Check [installation](INSTALLATION.md) and the
-[release notes](../CHANGELOG.md) before relying on a source-only feature in a
-released package.
+The differences are system-level capabilities around the selected Pillow API.
+In practical terms, this project adds:
+
+- A Rust-owned image engine and Rust crate, with Python's familiar `PIL`
+  namespace delegating to that core.
+- Deferred operation chains for supported operations, plus an explicit
+  `PIL.ImageBatch.BatchExecutor` for independent jobs. Compatible queued jobs
+  can share a native-mode GPU workload; ordinary `Image` calls keep their
+  existing execution path.
+- Public controls for selecting compiled CPU, architecture-specific SIMD, and
+  GPU routes, with optional execution receipts that show the route actually
+  used. Pillow can use native SIMD internally; the difference is that
+  pillow-rs exposes route controls and has a built-in GPU compute path.
+- A Node.js and browser WebAssembly package, and an opt-in Rayon-backed
+  Parallel CPU profile. The companion profile is configured in this checkout
+  but is not part of the published `12.2.0-alpha.5` packages.
+- Contributor tools that run an isolated Pillow oracle, track selected API
+  parity inputs, publish separate operation and pipeline benchmarks, and
+  record actual GPU shader dispatches.
+
+These additions do not make Pillow-style image operations unique to pillow-rs.
+The Python `PIL` package delegates image work to the Rust core; Pillow is the
+behavior reference, not a runtime backend. The availability column
+distinguishes features that are only in this checkout from those in the latest
+published pillow-rs alpha, `12.2.0-alpha.5`. Check
+[installation](INSTALLATION.md) and the [release notes](../CHANGELOG.md) before
+relying on a source-only feature in a released package.
 
 | Addition | What pillow-rs adds | Difference from Pillow 12.3.0 | Availability and limits |
 | --- | --- | --- | --- |
