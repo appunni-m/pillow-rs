@@ -17239,3 +17239,33 @@ working-tree change. For the extended factors, build safely with
 `make build-parity`, then run `make migration-parity-test` with
 `MIGRATION_TARGET_BACKEND=cpu`, `simd`, or `gpu` and the two case IDs above.
 No coverage was run.
+
+## `PIL.Image.eval` standard timing boundary — checkpoint 2026-10-04
+
+Do not optimize from `pil-image.eval.standard`'s current latency comparison.
+Its input case, `PIL.Image.eval.nuanced.rgb-expanded-lut`, creates a 16 × 16 RGB
+image and calls `Image.eval` with a 768-entry lookup table, but observes only
+the returned image. It has no timed `tobytes` step. The benchmark harness stops
+the `whole_workflow` timer after the call steps and serializes observations
+after that timer. Pillow applies the lookup eagerly inside `Image.eval`; this
+repository's `Image.point` queues a lazy Rust operation, and its pixels are
+materialized only while serializing the observation. The timed work is
+therefore asymmetric even though the post-timing parity check is exact.
+
+On `d5c76f740`, the parity-gated standard run measured Pillow at 95.333 µs and
+the target profiles at 126.813 µs CPU, 126.750 µs SIMD, and 127.042 µs GPU.
+Target execution receipts had `actual_backend: null` and no operation samples,
+confirming that no target pixel backend ran in the timed interval. The parity
+gate passed because output serialization materialized the lazy target after
+timing. These measurements do not show that the complete eval operation is
+slower than Pillow, nor do the SIMD/GPU labels establish accelerator work.
+
+Keep the parity input intact. Correct future performance evidence needs a
+benchmark workflow that explicitly times output materialization on both sides
+(for example, a `tobytes` step) and then reruns the exact-output gate. Until
+that exists, mark this workload invalid for operation-latency ranking and move
+to a different candidate. This is a benchmark-boundary defect, not a parity
+failure or a runtime fix. The receipt is
+`build/migration-parity/eval-rgb-lut-baseline-d5c76f7.json` with parity sidecar
+`eval-rgb-lut-baseline-d5c76f7-parity.json`. No implementation attempt or
+coverage run was made.
