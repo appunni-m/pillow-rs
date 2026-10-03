@@ -16699,3 +16699,16 @@ RUSTC_WRAPPER= cargo test -p pillow-rs --lib luma_brightness_binary_factors_matc
 RUSTC_WRAPPER= MIGRATION_BENCHMARK_PROFILE=standard MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageenhance-brightness.enhance.materialized.l-noise-1024x768-factor-0-5' MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/brightness-l-after-candidate1-repeat-7716bd958-20261003.json MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/brightness-l-after-candidate1-repeat-7716bd958-20261003-parity.json make migration-parity-benchmark
 RUSTC_WRAPPER= MIGRATION_ALL_BACKENDS_CASE_IDS='PIL.ImageEnhance.Brightness.enhance.nuanced.simd-native-l-shift-factor-0-25,PIL.ImageEnhance.Brightness.enhance.nuanced.simd-native-l-shift-factor-0-125' MIGRATION_ALL_BACKENDS_OUTPUT=build/migration-parity/brightness-l-shifts-all-backends-20261003.json make migration-parity-test-all-backends MATURIN_DEVELOP_FLAGS=--skip-install
 ```
+
+## Mandelbrot performance workload validity — checkpoint 2026-10-03
+
+The full benchmark's `pil-image.effect-mandelbrot.standard` entry is mapped to
+the `PIL.Image.effect_mandelbrot.nuanced.width-one` parity case, whose output
+size is only 1 × 4. That case intentionally exercises Pillow's degenerate
+one-pixel-axis behavior; it is not representative evidence for Mandelbrot
+throughput. Its roughly 3.7 µs Pillow versus 5.2 µs CPU medians cannot identify
+the steady-state kernel bottleneck. The parity gate passed, but that proves
+correctness only for this edge case. No runtime code or parity expectation was
+changed. Do not rank or optimize Mandelbrot from this row; a separate
+non-degenerate, material performance input must be established before a
+performance claim is made. No coverage was run.
