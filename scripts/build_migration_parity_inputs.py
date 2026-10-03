@@ -46195,7 +46195,7 @@ def transpose_tiled_parity_cases(surface_id: str) -> list[dict[str, Any]]:
 
     def patterned_bytes(mode: str, size: tuple[int, int], seed: int) -> bytes:
         width, height = size
-        channels = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4,
+        channels = {"L": 1, "LA": 2, "RGB": 3, "HSV": 3, "RGBA": 4,
                     "RGBX": 4, "CMYK": 4}
         data = bytearray()
         for y in range(height):
@@ -46282,6 +46282,13 @@ def transpose_tiled_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 f"{mode.lower()}-{size[0]}x{size[1]}-method-{method}",
                 mode, size, (method,), mode_index * 7 + method,
             ))
+    # HSV is physically stored as three native bytes per pixel. Exercise every
+    # transpose method with odd dimensions so the packed RGB kernel must retain
+    # HSV's logical mode while moving the exact stored samples.
+    for method in range(7):
+        cases.append(make_case(
+            f"hsv-3x7-method-{method}", "HSV", (3, 7), (method,), 181 + method,
+        ))
     # Each method sees a heterogeneous image above the 256k-pixel parallel
     # crossover. Odd dimensions leave both row and tile remainders.
     for method in range(7):
@@ -46299,6 +46306,9 @@ def transpose_tiled_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     # edge cases; a constant frame cannot detect a wrong tile permutation.
     cases.append(make_case(
         "aligned-rgb-768x772-method-2", "RGB", (768, 772), (2,), 43,
+    ))
+    cases.append(make_case(
+        "aligned-hsv-768x772-method-2", "HSV", (768, 772), (2,), 182,
     ))
     cases.append(make_case(
         "aligned-rgba-772x768-methods-5-0", "RGBA", (772, 768), (5, 0), 44,
@@ -48264,6 +48274,7 @@ def _transpose_tiled_benchmark_workloads(
         ("rgba-515x513-rotate90", "parallel-rgba-515x513-method-2"),
         ("rgba-9x31-transpose-mirror", "chain-rgba-9x31-methods-5-0"),
         ("rgb-768x772-rotate90", "aligned-rgb-768x772-method-2"),
+        ("hsv-768x772-rotate90", "aligned-hsv-768x772-method-2"),
         ("rgba-772x768-transpose-mirror", "aligned-rgba-772x768-methods-5-0"),
         ("rgb-768x772-rotate-cancel-mirror", "identity-rgb-768x772-methods-2-4-0"),
         ("rgb-513x515-mirror", "row-rgb-513x515-method-0"),

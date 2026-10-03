@@ -21952,6 +21952,15 @@ impl GpuPool {
                 // this native-mode interpretation in its fourth uniform.
                 || (logical_mode == "YCbCr"
                     && gpu_native_grayscale_rgb_input(ops, img, mode))
+                // On little-endian targets, HSV uses the same packed
+                // three-byte storage as RGB. A singleton transpose only
+                // relocates complete triplets; it does not interpret or
+                // convert H/S/V samples. Keep other targets on the proven
+                // semantic-control path until their native upload is covered.
+                || (cfg!(target_endian = "little")
+                    && logical_mode == "HSV"
+                    && matches!(ops, [PipelineOp::Transpose { .. }])
+                    && matches!(img, DynamicImage::ImageRgb8(_)))
                 // LAB shares RGB8 storage. The core has already encoded its
                 // public signed A/B samples into the stored +128 byte domain,
                 // so the raw three-channel PutPixel shader is exact here.
@@ -23398,7 +23407,7 @@ impl GpuPool {
         }
 
         #[cfg(target_endian = "little")]
-        if matches!(mode, None | Some("RGB"))
+        if matches!(mode, None | Some("RGB" | "HSV"))
             && let ([op @ PipelineOp::Transpose { .. }], DynamicImage::ImageRgb8(rgb)) = (ops, img)
             && let Some(layout) = packed_rgb_transpose_layout(
                 rgb.width(),
@@ -23407,8 +23416,9 @@ impl GpuPool {
             )
         {
             // Fusion and ordinary preflight have already validated the full
-            // batch. This representation is confined to one native RGB
-            // transpose; mixed operations keep the ordinary packed RGBA path.
+            // batch. RGB and HSV share physical RGB8 triplets here; the
+            // singleton transpose only relocates bytes, while mixed
+            // operations keep the ordinary packed RGBA path.
             let mut buffers = gpu.acquire_buffers(capacity)?;
             let result = gpu.execute_packed_rgb_transpose(op, rgb, &layout, &mut buffers)?;
             gpu.recycle_buffers(buffers);
@@ -26007,7 +26017,7 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
-    fn gpu_packed_rgb_transpose_tiled_public_pixels_and_receipts() {
+    fn gpu_packed_rgb_hsv_transpose_tiled_public_pixels_and_receipts() {
         use crate::compute::{execute_prepared, prepare_execution};
         use crate::pipeline::TransposeMethod;
 
@@ -26063,7 +26073,7 @@ mod tests {
                     }
                 }
                 let ops = [PipelineOp::Transpose { method }];
-                for mode in [None, Some("RGB")] {
+                for mode in [None, Some("RGB"), Some("HSV")] {
                     let prepared = prepare_execution(&ops, Some(Backend::Gpu)).unwrap();
                     let actual = execute_prepared(&prepared, &ops, &source, mode).unwrap();
                     assert_eq!(actual.dimensions(), (height, width));

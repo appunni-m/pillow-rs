@@ -245138,6 +245138,115 @@
       }
     },
     {
+      "workload_id": "pipeline-matrix.transpose-tiled.hsv-768x772-rotate90.whole-workflow",
+      "covers": [
+        "PIL.Image.Image.transpose.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.transpose.nuanced.tiled-aligned-hsv-768x772-method-2"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "source_target_match"
+      },
+      "context": {
+        "size": [
+          768,
+          772
+        ],
+        "mode": "HSV",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-matrix.transpose-tiled.hsv-768x772-rotate90.operation-materialized",
+      "covers": [
+        "PIL.Image.Image.transpose.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.transpose.nuanced.tiled-aligned-hsv-768x772-method-2"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "transpose-0",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "source_target_match"
+      },
+      "context": {
+        "size": [
+          768,
+          772
+        ],
+        "mode": "HSV",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-matrix.transpose-tiled.rgba-772x768-transpose-mirror.whole-workflow",
       "covers": [
         "PIL.Image.Image.transpose.performance.standard"
