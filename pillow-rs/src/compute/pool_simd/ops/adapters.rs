@@ -18866,7 +18866,7 @@ fn simd_transpose_interleaved_rows(
 /// Apply one native-L vertical radius-one box pass with vector lanes spanning
 /// adjacent columns. Keep Pillow's sliding window across output rows: the
 /// previous implementation reloaded three window rows plus both fractional
-/// edge rows for every output row. The rolling four-row state reads only the
+/// edge rows for every output row. The rolling row state reads only the
 /// newly entering rows while preserving the unsigned fixed-point recurrence.
 fn simd_luma_vertical_radius_one_rows(
     source: &[u8],
