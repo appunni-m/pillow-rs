@@ -18,6 +18,10 @@ fn muldiv255(a: u32, b: u32) -> u32 {
     return ((value >> 8u) + value) >> 8u;
 }
 
+fn rgb_luma(red: u32, green: u32, blue: u32) -> u32 {
+    return (19595u * red + 38470u * green + 7471u * blue + 32768u) >> 16u;
+}
+
 fn pixel_luma(pixel: u32) -> u32 {
     let first = pixel & 0xffu;
     let second = (pixel >> 8u) & 0xffu;
@@ -28,11 +32,11 @@ fn pixel_luma(pixel: u32) -> u32 {
         let red = ink - muldiv255(first, ink);
         let green = ink - muldiv255(second, ink);
         let blue = ink - muldiv255(third, ink);
-        return (19595u * red + 38470u * green + 7471u * blue + 32768u) >> 16u;
+        return rgb_luma(red, green, blue);
     }
     // L and LA uploads replicate their luma value across RGB. RGBA ignores
     // alpha, matching Pillow's ImageOps.grayscale contract.
-    return (19595u * first + 38470u * second + 7471u * third + 32768u) >> 16u;
+    return rgb_luma(first, second, third);
 }
 
 fn native_triple(pixel_index: u32) -> u32 {
@@ -59,6 +63,21 @@ fn native_ycbcr_y(pixel_index: u32) -> u32 {
     return (input[word_index] >> shift) & 0xffu;
 }
 
+fn native_rgb_group_luma(output_word: u32) -> u32 {
+    // One output word contains four adjacent L samples. Their twelve RGB
+    // bytes are exactly three aligned input words, so load each source word
+    // once instead of having four independent 3-byte gathers reread overlaps.
+    let first = input[output_word * 3u];
+    let second = input[output_word * 3u + 1u];
+    let third = input[output_word * 3u + 2u];
+
+    let l0 = rgb_luma(first & 0xffu, (first >> 8u) & 0xffu, (first >> 16u) & 0xffu);
+    let l1 = rgb_luma(first >> 24u, second & 0xffu, (second >> 8u) & 0xffu);
+    let l2 = rgb_luma((second >> 16u) & 0xffu, second >> 24u, third & 0xffu);
+    let l3 = rgb_luma((third >> 8u) & 0xffu, (third >> 16u) & 0xffu, third >> 24u);
+    return l0 | (l1 << 8u) | (l2 << 16u) | (l3 << 24u);
+}
+
 fn source_luma(pixel_index: u32) -> u32 {
     if params._pad == 1u {
         return pixel_luma(native_triple(pixel_index));
@@ -82,10 +101,16 @@ fn main(
     if output_word >= output_word_count { return; }
 
     var packed = 0u;
-    for (var lane = 0u; lane < 4u; lane += 1u) {
-        let pixel_index = output_word * 4u + lane;
-        if pixel_index < pixel_count {
-            packed |= source_luma(pixel_index) << (lane * 8u);
+    if params._pad == 1u && output_word < pixel_count / 4u {
+        // The complete four-pixel groups use three aligned RGB loads. A final
+        // partial group stays on the bounds-checked scalar gather below.
+        packed = native_rgb_group_luma(output_word);
+    } else {
+        for (var lane = 0u; lane < 4u; lane += 1u) {
+            let pixel_index = output_word * 4u + lane;
+            if pixel_index < pixel_count {
+                packed |= source_luma(pixel_index) << (lane * 8u);
+            }
         }
     }
     output[output_word] = packed;
