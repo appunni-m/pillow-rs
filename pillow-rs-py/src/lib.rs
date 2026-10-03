@@ -99,9 +99,18 @@ impl PyBatchExecutor {
             "ExtractBand" => pillow_rs::BatchOperation::ExtractBand {
                 channel: operation.getattr("channel")?.extract::<i32>()?,
             },
+            "Multiply" => {
+                let other = operation.getattr("image")?;
+                let other = image_from_python(&other).ok_or_else(|| {
+                    PyTypeError::new_err("ImageBatch.Multiply requires a PIL.Image.Image operand")
+                })?;
+                pillow_rs::BatchOperation::Multiply {
+                    other: Box::new(other),
+                }
+            }
             _ => {
                 return Err(PyTypeError::new_err(
-                    "batch operation must be an ImageFilter.MedianFilter or ImageBatch.ExtractBand instance",
+                    "batch operation must be an ImageFilter.MedianFilter, ImageBatch.ExtractBand, or ImageBatch.Multiply instance",
                 ));
             }
         };

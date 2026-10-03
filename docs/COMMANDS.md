@@ -15,7 +15,7 @@ enabled.
 | Build npm package | `make build-wasm-release` | Compiles the shared Node/browser WASM artifact |
 | One parity case | `make migration-parity-case CASE_ID=<id>` | Runs the selected input against source and target |
 | Explicit image-batch parity | `make build-parity && .venv/bin/python scripts/test_imagebatch_parity.py` | Compares `PIL.ImageBatch` with isolated Pillow; verifies one GPU shader dispatch per compatible group and a separate dispatch per fallback job |
-| Explicit image-batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --mode L --width 64 --height 64 --images 64` | Run after `make build-parity`; measures full-call queued `MedianFilter(3)` throughput. Use `--backend simd` without `--queue` for single-image SIMD comparison |
+| Explicit image-batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --operation multiply --mode L --width 64 --height 64 --images 64` | Run after `make build-parity`; measures full-call queued `ImageBatch.Multiply`. `--operation` also accepts `median-filter` and `extract-band`; compare with ordinary Pillow and `--backend simd` without `--queue` |
 | Review repetitive cases | `make migration-parity-reduction MIGRATION_REDUCTION_ARGS='--candidates <pairs.json> --output-dir <directory>'` | Measures removal batches and binary restoration against separate CPU/SIMD/GPU baselines; see [coverage](COVERAGE.md#reduce-repetitive-parity-inputs) |
 | Complete runtime campaign | `make test` | Runs backend, Node/browser, and reverse Pillow coverage lanes |
 | Format check / fix | `make fmt` / `make fmt-fix` | Checks / changes Rust formatting |
@@ -32,6 +32,13 @@ enabled.
 | Release preparation | `make release-check` | Builds and inspects registry artifacts; requires a clean checkout |
 | Cache cleanup | `make clean` | Removes Python bytecode and the temporary report |
 | Build cleanup | `make clean-all` | Also removes Cargo build outputs |
+
+For the 64×64 × 64 Multiply comparison, run the listed command with each of
+`--backend pillow`, `cpu`, and `simd`; use `--backend gpu` without `--queue`
+to measure independent GPU calls. To reproduce the 256×256 × 16 cohort, change
+the dimensions and image count to `--width 256 --height 256 --images 16` and
+run the Pillow, SIMD, and queued-GPU profiles. Both profiles default to 12
+samples and 3 warmups.
 
 Setup installs dependencies; ordinary help and documentation builds do not.
 Documentation builds require `make docs-setup` once. They do not execute

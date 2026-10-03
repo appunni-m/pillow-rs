@@ -18908,9 +18908,24 @@ fn gpu_batch_group_limit_for_limits(
         return 0;
     }
 
+    let multiply = matches!(op, PipelineOp::Multiply { .. });
+    let channels = if multiply {
+        match logical_mode {
+            "L" => Some(1u64),
+            "LA" => Some(2),
+            "RGB" => Some(3),
+            "RGBA" => Some(4),
+            _ => None,
+        }
+    } else {
+        Some(1)
+    };
+    let Some(channels) = channels else {
+        return 0;
+    };
     let halo = match op {
         PipelineOp::MedianFilter { size: 3 } => 2u32,
-        PipelineOp::ExtractBand { .. } => 0,
+        PipelineOp::ExtractBand { .. } | PipelineOp::Multiply { .. } => 0,
         _ => return 0,
     };
     let Some(per_image_height) = height.checked_add(halo) else {
@@ -18926,11 +18941,23 @@ fn gpu_batch_group_limit_for_limits(
         };
         let stacked_dimensions = (width, stacked_height);
         let pixels = u64::from(width) * u64::from(stacked_height);
-        let Ok(buffer_capacity) = u32::try_from(pixels) else {
+        // The ordinary filter/extract layouts address one packed u32 per
+        // pixel. Native-byte Multiply addresses four independent samples per
+        // word, so its device-buffer bound depends on the source mode's byte
+        // width while preserving each image's stored layout.
+        let buffer_words = if multiply {
+            let Some(sample_bytes) = pixels.checked_mul(channels) else {
+                return false;
+            };
+            sample_bytes.div_ceil(4)
+        } else {
+            pixels
+        };
+        let Ok(buffer_capacity) = u32::try_from(buffer_words) else {
             return false;
         };
         if pixels == 0
-            || pixels > u64::from(GPU_BUFFER_CAPACITY)
+            || buffer_words > u64::from(GPU_BUFFER_CAPACITY)
             || gpu_buffer_capacity_exceeds_limits(
                 buffer_capacity,
                 max_storage_buffer_binding_size,
@@ -18938,6 +18965,17 @@ fn gpu_batch_group_limit_for_limits(
             )
         {
             return false;
+        }
+
+        if multiply {
+            let words = buffer_capacity;
+            let columns = words.min(1024);
+            let rows = words.div_ceil(columns);
+            if columns.div_ceil(16) > max_workgroups_per_dimension
+                || rows.div_ceil(16) > max_workgroups_per_dimension
+            {
+                return false;
+            }
         }
 
         let ops = [op.clone()];
@@ -33674,6 +33712,65 @@ mod tests {
             65_535,
         );
         assert_eq!(storage_limited_cap, 5);
+
+        // Multiply transports the stored bytes as independent packed samples:
+        // its safe batch size depends on the native mode's byte width.
+        for (mode, expected_cap) in [("L", 85), ("LA", 42), ("RGB", 28), ("RGBA", 21)] {
+            let image = Image::new(1024, 768, mode, (0, 0, 0, 0)).unwrap();
+            let multiply = PipelineOp::Multiply {
+                other: Arc::new(image),
+            };
+            assert_eq!(
+                gpu_batch_group_limit_for_limits(
+                    &multiply,
+                    mode,
+                    (1024, 768),
+                    100,
+                    default_limits.0,
+                    default_limits.1,
+                    default_limits.2,
+                ),
+                expected_cap,
+                "wrong native-byte Multiply cap for {mode}"
+            );
+        }
+
+        let multiply_rgba = PipelineOp::Multiply {
+            other: Arc::new(Image::new(1024, 768, "RGBA", (0, 0, 0, 0)).unwrap()),
+        };
+        assert_eq!(
+            gpu_batch_group_limit_for_limits(
+                &multiply_rgba,
+                "RGBA",
+                (1024, 768),
+                8,
+                16 * 1024 * 1024,
+                16 * 1024 * 1024,
+                65_535,
+            ),
+            5,
+            "Multiply cap must respect the selected device storage limit"
+        );
+
+        // A 1000×500 L image yields a generic 63×63 grid when two images are
+        // stacked, but the packed-byte Multiply grid needs 64 groups in X.
+        // The planner must reject it for an adapter capped at 63 groups.
+        let multiply_l = PipelineOp::Multiply {
+            other: Arc::new(Image::new(1000, 500, "L", (0, 0, 0, 0)).unwrap()),
+        };
+        assert_eq!(
+            gpu_batch_group_limit_for_limits(
+                &multiply_l,
+                "L",
+                (1000, 500),
+                2,
+                u32::MAX,
+                u64::MAX,
+                63,
+            ),
+            0,
+            "packed-word dispatch must respect each adapter workgroup dimension"
+        );
 
         // Each 1x16384 image needs exactly an 8x8 ExtractBand grid. Two
         // stacked images would require 8x16 groups and exceed this adapter.

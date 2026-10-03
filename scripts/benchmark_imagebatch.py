@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--queue", action="store_true", help="queue operations until join")
     parser.add_argument(
         "--operation",
-        choices=("median-filter", "extract-band"),
+        choices=("median-filter", "extract-band", "multiply"),
         default="median-filter",
     )
     parser.add_argument("--mode", choices=("L", "LA", "RGB", "RGBA"), default="L")
@@ -57,6 +57,7 @@ def main() -> int:
     from PIL import Image, ImageFilter
     if args.backend == "pillow":
         import PIL
+        from PIL import ImageChops
 
         if PIL.__version__ != "12.2.0":
             raise RuntimeError(f"unexpected Pillow baseline version: {PIL.__version__}")
@@ -78,6 +79,23 @@ def main() -> int:
         )
         for seed in range(args.images * window_count)
     ]
+    other_inputs = (
+        [
+            bytes(
+                (
+                    index * 73
+                    + (index // 11) * 19
+                    + (seed + 137) * 47
+                    + ((seed + 137) >> 2)
+                )
+                & 255
+                for index in range(frame_bytes)
+            )
+            for seed in range(args.images * window_count)
+        ]
+        if args.operation == "multiply"
+        else []
+    )
 
     if core is not None:
         for backend in ("cpu", "simd", "gpu"):
@@ -95,8 +113,15 @@ def main() -> int:
                 )
                 if args.operation == "median-filter":
                     image.filter(ImageFilter.MedianFilter(3)).tobytes()
-                else:
+                elif args.operation == "extract-band":
                     image.getchannel(args.channel).tobytes()
+                else:
+                    other = Image.frombytes(
+                        args.mode,
+                        (args.width, args.height),
+                        other_inputs[start + image_index],
+                    )
+                    ImageChops.multiply(image, other).tobytes()
             return []
 
         executor = ImageBatch.BatchExecutor(queue=args.queue, backend=args.backend)
@@ -109,13 +134,23 @@ def main() -> int:
             operation = (
                 ImageFilter.MedianFilter(3)
                 if args.operation == "median-filter"
-                else ImageBatch.ExtractBand(args.channel)
+                else (
+                    ImageBatch.ExtractBand(args.channel)
+                    if args.operation == "extract-band"
+                    else ImageBatch.Multiply(
+                        Image.frombytes(
+                            args.mode,
+                            (args.width, args.height),
+                            other_inputs[start + image_index],
+                        )
+                    )
+                )
             )
             executor.submit(image, operation)
         result = executor.join()
         if len(result) != args.images:
             raise RuntimeError(f"expected {args.images} outputs, received {len(result)}")
-        if args.operation == "extract-band":
+        if args.operation in ("extract-band", "multiply"):
             # Match Pillow's materialized byte result inside the timing window.
             for image in result:
                 image.tobytes()
