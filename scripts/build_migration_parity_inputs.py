@@ -41922,6 +41922,20 @@ def build_nuanced_cases(
             "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
+        # The RGB BoxBlur entry in pipeline-operations is a constant image,
+        # which does not expose its neighborhood passes. Keep a varied RGB
+        # workload beside the native-L case so interleaved-channel SIMD and
+        # GPU transport costs are measured on actual filter work.
+        specs += ({
+            "surface": "PIL.ImageFilter", "operation": "BoxBlur",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-rgb-noise-1024x768-radius-1",
+            "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
+            "seed": 20261003, "observe_result": "tobytes",
+            "values": {"radius": literal(1.0)},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
         # The standard UnsharpMask input is a tiny constant RGB image. Keep a
         # material varied RGB case so the Gaussian blur and per-channel
         # threshold/blend work are measured without an implicit mode change.
@@ -52472,6 +52486,33 @@ def build_inputs(
                 members.append(
                     {
                         "workload_id": l_workload["workload_id"],
+                        "weight": 1,
+                    }
+                )
+                rgb_case_id = (
+                    "PIL.ImageFilter.BoxBlur.nuanced."
+                    "performance-material-rgb-noise-1024x768-radius-1"
+                )
+                rgb_case = all_cases_by_id[rgb_case_id]
+                rgb_workload = copy.deepcopy(l_workload)
+                rgb_workload["workload_id"] = (
+                    "pipeline-op.boxblur.material-rgb-noise-1024x768-radius-1"
+                )
+                rgb_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": rgb_case_id,
+                }
+                rgb_workload["context"] = _workflow_benchmark_context(
+                    rgb_case,
+                    variant="material-rgb-noise-1024x768-radius-1",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                rgb_workload["context"]["operation_class"] = "neighborhood"
+                workloads.append(rgb_workload)
+                members.append(
+                    {
+                        "workload_id": rgb_workload["workload_id"],
                         "weight": 1,
                     }
                 )

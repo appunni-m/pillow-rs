@@ -17020,3 +17020,75 @@ direct CPU output path passed formatting, focused Rust tests, and exact parity
 for CPU, SIMD, GPU, and Parallel CPU. The operation remains open because all
 three required standard-backend goals are unmet. Checkpoint the gap and move
 to the next ranked operation before revisiting I resize.
+
+## RGB `ImageFilter.BoxBlur(1)` — three-attempt checkpoint — 2026-10-03
+
+This visit added a parity-backed material workload for seeded RGB noise at
+1024 × 768 so the filter's individual RGB cost was no longer represented only
+by a constant-color smoke input. It filters the source and observes the full
+result. The new case also raises the indexed workload inventory from 936 to
+937; the earlier full standard run measured 936 workloads, while this new row
+was measured separately. All benchmark ratios below are single-run diagnostics
+on the same host, not stable guarantees.
+
+| Run | Pillow (ms) | Serial CPU (ms) | SIMD (ms) | GPU (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 2.863667 | 3.217854 | 11.997125 | 2.155125 |
+| Direct row-major RGB SIMD | 2.896646 | 3.304166 | 2.037292 | 2.215000 |
+| Skip zero-weight far-edge reads | 3.073229 | 2.845042 | 2.231646 | 2.373521 |
+| Native compact RGB GPU | 2.883646 | 2.777667 | 1.995958 | 2.399146 |
+
+Attempt 1 added a direct RGB radius-one SIMD route that reuses the existing
+horizontal and vertical byte-vector kernels instead of the generic path with
+full-frame transposes. It passed the focused CPU-equivalence test across tiny,
+border, vector-tail, and larger shapes. SIMD fell from 11.997 ms to about
+2.0 ms, but remains only 1.45× faster than Pillow, short of the 5× target.
+Attempt 2 omitted far-edge sample loads and multiplies when their exact
+fixed-point weight is zero. In the final run serial CPU is 3.8% faster than
+Pillow on this input, but the margin is narrow. The SIMD timing moved from
+2.232 to 1.996 ms between runs; treat the change as a candidate gain, not a
+repeatable speedup yet.
+
+Attempt 3 keeps eligible native RGB `BoxBlur(1)` input, intermediate passes,
+and output in packed RGB storage. The shader groups four pixels so each
+invocation owns the three u32 words holding their 12 output bytes; tail groups
+guard every pixel and word, while the checked compact-output planner bounds
+the dispatch. The actual GPU receipt records two dispatches, no fallback, and
+zero mode conversions. Upload and readback fall from 3,145,728 RGBA bytes each
+to 2,359,296 compact-RGB bytes each, a 25% reduction. Yet the median moved from
+2.374 to 2.399 ms and is about 20% slower than SIMD. Less transfer alone did
+not improve the full call; shader byte gathering/packing and per-request GPU
+latency remain unprofiled hypotheses, not proven bottlenecks.
+
+The final material benchmark parity gate passed CPU, SIMD, and GPU (3/3 each),
+with 100 actual executions and no fallback per target. A strict live-Pillow
+cohort also passed 9/9 cases on each backend (27/27 total), covering L, LA,
+RGB, and RGBA; varied odd-width RGB/L data; tuple and fractional radii; the
+material L and RGB inputs; and the compact RGB kernel's flattened tail layout.
+The focused Rust test
+`rgb_box_blur_radius_one_direct_passes_match_cpu_at_edges_and_tails` and GPU
+admission test
+`gpu_native_rgb_compact_input_requires_supported_native_rgb_operations` pass.
+No coverage was run.
+
+The separately built opt-in Parallel CPU profile measured 1.716750 ms and
+passed its own Pillow parity gate (1/1), with 100 actual CPU executions and no
+fallback. Against the 2.883646 ms Pillow median from the adjacent standard
+run, that is about 1.68× lower latency; this is a cross-run comparison. The
+profile used `pillow-rs-py/parallel` and `pillow-rs/parallel` and is not SIMD.
+
+The final standard ratios are CPU/Pillow 0.963, Pillow/SIMD 1.445, and
+GPU/SIMD 1.202. Thus CPU clears Pillow only narrowly, SIMD misses its 5× goal,
+and GPU is slower in latency and reciprocal-latency throughput. Keep the
+parity-correct direct SIMD and packed GPU routes for now, but revisit RGB
+BoxBlur only with a profile or a specific measured hypothesis; do not equate
+the 25% transfer reduction with a GPU performance win. The focused receipts
+and parity sidecars are `boxblur-rgb-{baseline,attempt1,attempt2,attempt3}`,
+`boxblur-modes-{cpu,simd,gpu}`, and
+`boxblur-rgb-attempt3-parallel-cpu` under `build/migration-parity/`.
+
+The refreshed inventory places
+`FreeTypeFont.set_variation_by_axes` first among the remaining measured
+parity-backed gaps. Its 0 × 0 call-only workload has no image backend dispatch;
+measure and optimize it as a CPU/Pillow API operation, while GPU and SIMD are
+not applicable. No claim of GPU or SIMD coverage should be made for that API.
