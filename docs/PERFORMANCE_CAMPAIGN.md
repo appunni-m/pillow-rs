@@ -16496,3 +16496,70 @@ Receipts are `build/migration-parity/grayscale-rgb-baseline-c31391d0f.json`,
 `grayscale-rgb-grouped-loads-attempt1.json`,
 `grayscale-rgb-grouped-loads-attempt1-repeat.json`, their matching `-parity.json`
 sidecars, and `grayscale-rgb-attempt1-odd-tail-gpu-parity.json`.
+
+## Rejected `ImageBatch.Expand` batch probe — checkpoint 2026-10-03
+
+I tested adding scalar-border `ImageBatch.Expand(border, fill)` as a new
+operation in the explicit queue. The prototype reused `ImageOps.expand` over a
+native-mode horizontal atlas: pack compatible images with two fill-width
+separators, apply Expand once, then split equal-width output tiles. Ordinary
+`ImageOps.expand` routing was never changed. Exact Pillow bytes and GPU receipts
+passed for L, LA, RGB, and RGBA, queued pairs, 64-image 64×64 groups,
+16-image 256×256 groups, reversed submission order, and eager `queue=False`.
+The grouped GPU path dispatched `expand.wgsl` once, with no fallback or mode
+conversion. LA fill retained its alpha byte; RGB/RGBA ordering matched Pillow.
+
+Parity caught and corrected a real wrapper mismatch before the final prototype
+run: Pillow's `ImageOps.expand` returns a fresh canvas and drops the source
+`Image.info` mapping. The first prototype copied that mapping. The final test
+also rejected tuple and negative borders rather than silently approximating
+unequal borders with their maximum. These checks passed in the temporary
+prototype; the Expand extension and its tests were removed after its benchmark
+failed the optimization target.
+
+Median full-window milliseconds, 12 samples after 3 warmups, Apple M-series
+host. Image construction, submission, operation, transfer, splitting, and
+`tobytes()` were timed. The Pillow profile processes images sequentially; CPU
+and SIMD use eager ImageBatch submissions, so these rows describe the batch API
+boundary and do not measure Parallel CPU.
+
+| Mode | Workload | Pillow | Batch CPU | Batch SIMD | GPU, eager | GPU, queued |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| L | 64×64 × 64 | 0.398 | 0.300 | 0.332 | 12.863 | 0.579 |
+| LA | 64×64 × 64 | 0.613 | 0.357 | 0.413 | 12.620 | 0.774 |
+| RGB | 64×64 × 64 | 0.661 | 0.406 | 0.435 | 12.852 | 0.995 |
+| RGBA | 64×64 × 64 | 0.562 | 0.496 | 0.483 | 13.510 | 1.101 |
+| L | 256×256 × 16 | 0.250 | 0.212 | 0.253 | 3.787 | 1.344 |
+| LA | 256×256 × 16 | 1.279 | 0.496 | 0.523 | 8.558 | 1.919 |
+| RGB | 256×256 × 16 | 1.519 | 0.634 | 0.631 | 5.874 | 2.317 |
+| RGBA | 256×256 × 16 | 1.153 | 1.099 | 0.923 | 6.251 | 3.900 |
+
+One dispatch cut GPU time by 1.6–22.2× versus eager per-image GPU calls, but
+the queued path lost to CPU and SIMD in every complete row and to sequential
+Pillow in all 64×64 and 256×256 rows. An exploratory 1024×768 subset measured
+queued GPU at 8.772 ms for L × 16 and 9.563 ms for LA × 8. Large LA was about
+10% faster than Pillow but still 3.6× slower than CPU and 1.8× slower than SIMD;
+L lost to all three. The probe stopped after these two modes because GPU did not
+cross CPU or SIMD.
+
+The evidence rejects Expand as a useful GPU batch operator on this path. Atlas
+packing, upload, complete readback, per-image splitting, and materialization
+surround a copy-and-fill kernel; this is a memory-traffic explanation inferred
+from the call path and whole-call timings, not a measured per-stage breakdown.
+A dispatch reduction alone is insufficient. Do not add this operator or route
+ordinary Expand calls through batching. Reconsider it only with a transport
+change that demonstrably removes material packing/splitting traffic, and require
+matched-total-work throughput to beat both CPU/SIMD and sequential Pillow.
+
+The temporary prototype passed these focused checks before being removed:
+`RUSTC_WRAPPER= cargo test -p pillow-rs batch::`,
+`RUSTC_WRAPPER= cargo test -p pillow-rs explicit_gpu_expand_batch_planner_checks_native_buffers_and_grid_limits`,
+`RUSTC_WRAPPER= make build-parity`,
+`.venv/bin/python scripts/test_imagebatch_parity.py`, `RUSTC_WRAPPER= make fmt clippy`,
+`make docs-lint`, and Python `py_compile`. No coverage was run. The parity
+script and benchmark CLI are restored to their pre-probe forms, so those
+Expand-specific checks are historical prototype evidence, not runnable commands
+on the current tree. The complete 40-row measurement remains in
+`build/migration-parity/imagebatch-expand-throughput-20261003.jsonl`; the
+partial 1024×768 L/LA probe is in
+`build/migration-parity/imagebatch-expand-throughput-1024x768-20261003.jsonl`.
