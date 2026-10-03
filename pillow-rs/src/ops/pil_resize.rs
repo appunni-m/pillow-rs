@@ -38,6 +38,29 @@ pub(crate) fn f32_samples_from_le_bytes(bytes: &[u8], sample_count: usize) -> Co
     )
 }
 
+/// View little-endian I-mode sample bytes as native `i32` values when the
+/// storage is aligned; otherwise decode them without changing sample bits.
+/// Select at most `sample_count` words and ignore incomplete trailing bytes,
+/// matching the existing four-byte scalar-carrier readers.
+#[must_use]
+pub(crate) fn i32_samples_from_le_bytes(bytes: &[u8], sample_count: usize) -> Cow<'_, [i32]> {
+    let sample_bytes = bytes.get(..sample_count.saturating_mul(4)).unwrap_or(bytes);
+    #[cfg(target_endian = "little")]
+    if let Ok(samples) = bytemuck::try_cast_slice::<u8, i32>(sample_bytes)
+        && samples.len() == sample_count
+    {
+        return Cow::Borrowed(samples);
+    }
+
+    Cow::Owned(
+        sample_bytes
+            .chunks_exact(4)
+            .take(sample_count)
+            .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
+            .collect(),
+    )
+}
+
 #[cfg(test)]
 mod f32_sample_view_tests {
     use super::f32_samples_from_le_bytes;
@@ -94,6 +117,51 @@ mod f32_sample_view_tests {
                 .collect::<Vec<_>>(),
             expected
         );
+    }
+}
+
+#[cfg(test)]
+mod i32_sample_view_tests {
+    use super::i32_samples_from_le_bytes;
+    use std::borrow::Cow;
+
+    #[test]
+    fn aligned_little_endian_integer_carrier_is_borrowed() {
+        let expected = [i32::MIN, -123_456_789, -1, 0, 1, i32::MAX];
+        let bytes = expected
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect::<Vec<_>>();
+        let samples = i32_samples_from_le_bytes(&bytes, expected.len());
+
+        if cfg!(target_endian = "little")
+            && (bytes.as_ptr() as usize).is_multiple_of(std::mem::align_of::<i32>())
+        {
+            assert!(matches!(samples, Cow::Borrowed(_)));
+        } else {
+            assert!(matches!(samples, Cow::Owned(_)));
+        }
+        assert_eq!(samples.as_ref(), expected);
+    }
+
+    #[test]
+    fn unaligned_integer_carrier_decodes_signed_words_and_ignores_trailing_bytes() {
+        let expected = [i32::MIN, -1, 0, i32::MAX];
+        let bytes = expected
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect::<Vec<_>>();
+        let mut storage = vec![0; bytes.len() + std::mem::align_of::<i32>() + 1];
+        let base = storage.as_ptr() as usize;
+        let offset = (0..std::mem::align_of::<i32>())
+            .find(|offset| (base + offset) % std::mem::align_of::<i32>() != 0)
+            .expect("an unaligned byte offset must exist");
+        storage[offset..offset + bytes.len()].copy_from_slice(&bytes);
+        storage[offset + bytes.len()] = 0xa5;
+
+        let samples = i32_samples_from_le_bytes(&storage[offset..], expected.len());
+        assert!(matches!(samples, Cow::Owned(_)));
+        assert_eq!(samples.as_ref(), expected);
     }
 }
 

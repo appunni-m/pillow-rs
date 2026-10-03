@@ -16,9 +16,10 @@ use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::ops::pil_resize::{
     FilterCoeffs, compact_resize_coeffs_to_source_span, f32_samples_from_le_bytes,
-    filter_from_resample, luma16_resample_big_endian, luma16_resample_read, luma16_resample_write,
-    precompute_coeffs, precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
-    precompute_coeffs_f64_boxed, round_up,
+    filter_from_resample, i32_samples_from_le_bytes, luma16_resample_big_endian,
+    luma16_resample_read, luma16_resample_write, precompute_coeffs,
+    precompute_coeffs_boxed_for_filter, precompute_coeffs_f64, precompute_coeffs_f64_boxed,
+    round_up,
 };
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
@@ -26887,9 +26888,11 @@ fn simd_resize_i32(
     let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Resize"))?;
     let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Resize"))?;
     let output_height = usize::try_from(output_height).map_err(|_| simd_unsupported("Resize"))?;
-    let source_len = source_width
+    let source_pixels = source_width
         .checked_mul(source_height)
-        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| simd_unsupported("Resize"))?;
+    let source_len = source_pixels
+        .checked_mul(4)
         .ok_or_else(|| simd_unsupported("Resize"))?;
     if img.as_bytes().len() != source_len {
         return Err(PilError::InternalError(
@@ -26903,11 +26906,7 @@ fn simd_resize_i32(
         .checked_mul(output_height)
         .and_then(|pixels| pixels.checked_mul(4))
         .ok_or_else(|| simd_unsupported("Resize"))?;
-    let source_values: Vec<i32> = img
-        .as_bytes()
-        .chunks_exact(4)
-        .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
-        .collect();
+    let source_values = i32_samples_from_le_bytes(img.as_bytes(), source_pixels);
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = 0u64;
 
