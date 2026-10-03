@@ -40,6 +40,26 @@ class Color(_Enhance):
                     self.degenerate._info["transparency"] = image._rust_image.color_transparency(transparency)
 
     def enhance(self, factor: float):
+        # Blend(degenerate, image, 1.0) is an independent copy of image. Keep
+        # Color's eagerly exposed degenerate snapshot and metadata validation,
+        # but avoid routing that no-op second operation through the image
+        # backend for the common native RGB case.
+        if (
+            type(factor) in (int, float)
+            and factor == 1.0
+            and isinstance(self.image, Image)
+            and isinstance(self.degenerate, Image)
+            and self.image.mode == "RGB"
+            and self.degenerate.mode == "RGB"
+            and self.image.size == self.degenerate.size
+            and not self.degenerate._transpose_loads_info
+        ):
+            result = self.image.copy()
+            result._info = self.degenerate._info.copy()
+            result._native_info = self.degenerate._native_info
+            result._native_info_rebaseline = True
+            result._native_info_omitted = self.degenerate._native_info_omitted
+            return result
         from .operations import blend
         return blend(self.degenerate, self.image, factor)
 
