@@ -16361,6 +16361,9 @@ workflow latency, in milliseconds:
 | Repeated-pixel block path | 2.2287 | 1.8686 | 1.0627 | 1.9925 | 3/3 |
 | Unchanged repeat | 2.5312 | 1.9454 | 1.0059 | 2.1260 | 3/3 |
 | Explicit `wide` broadcast store (rejected) | 2.5248 | 1.9385 | 1.1145 | 2.6628 | 3/3 |
+| Clean current-main baseline, 2026-10-03 | 2.6243 | 1.9804 | 1.0704 | 2.1955 | 3/3 |
+| SIMD packed equality predicate, attempt 4 | 2.7034 | 2.0163 | 0.7490 | 2.2219 | 3/3 |
+| Unchanged attempt-4 repeat | 2.5168 | 1.9105 | 0.8163 | 2.6003 | 3/3 |
 
 The repeat confirms a material SIMD improvement: backend median fell from
 1.200 ms to 0.861 ms, and end-to-end latency from 1.367 ms to 1.006 ms. In the
@@ -16376,6 +16379,44 @@ passed exact parity, but SIMD median rose 11% against the immediately preceding
 unchanged repeat, with a similar host and Pillow median. The explicit wide
 store was reverted; converting the vector back to a scalar array likely
 prevented the compiler's simpler fill-copy lowering from being as efficient.
+
+Attempt four replaces the repeated-pixel predicate's seven per-pixel slice
+comparisons with all-lane equality: eight RGBA pixels are compared as `u32x8`
+and eight LA pixels as `u16x8`. It tests the source first, then the destination,
+so a nonuniform source still exits before loading destination comparison lanes.
+Only block classification changed; exact alpha arithmetic, repeated-result
+caching, mixed-block SIMD fallback, and scalar tails are unchanged. The
+standard
+`pipeline-chain.alpha-composite.rgba-mirror-1024x768` benchmark passed exact
+CPU/SIMD/GPU parity on both attempt-4 runs. Each target recorded 100 actual
+backend executions with no fallback; GPU used one dispatch per sample.
+Final candidate receipts are
+`alpha-composite-rgba-mirror-attempt4-final-7d1fc1422-20261003.json` and
+unchanged repeat
+`alpha-composite-rgba-mirror-attempt4-final-repeat-7d1fc1422-20261003.json`;
+both have matching parity receipts. The final run used:
+
+```sh
+RUSTC_WRAPPER= \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-chain.alpha-composite.rgba-mirror-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/alpha-composite-rgba-mirror-attempt4-final-7d1fc1422-20261003.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/alpha-composite-rgba-mirror-attempt4-final-7d1fc1422-parity-20261003.json \
+make migration-parity-benchmark
+```
+
+The focused `RUSTC_WRAPPER= cargo test -p pillow-rs --lib alpha_composite_`
+passed 6/6, including exhaustive RGBA and LA alpha-pair checks. The final
+candidate was built from `7d1fc1422` with only this SIMD predicate changed.
+
+Across the two final candidate runs, SIMD measured 0.749–0.816 ms, 1.3–1.4×
+faster than the clean-main 1.070 ms baseline and 3.1–3.6× faster than Pillow.
+CPU remained faster than Pillow, while GPU latency remained about 3.0–3.2×
+SIMD. The workload contains repeated pixels; it does not establish the same gain
+on mixed-alpha inputs. A mixed-input performance workload is still needed before
+claiming a general alpha-composite gain. Checkpoint after four attempts and
+move to another operation; keep SIMD ≥5× Pillow and GPU ≤ SIMD latency /
+higher-throughput targets open. No coverage was run.
 
 Exact parity passed on the material benchmark for CPU, SIMD, and GPU, with
 100 actual executions per target and no fallback. The mixed-alpha RGBA
