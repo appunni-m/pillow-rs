@@ -49,6 +49,18 @@ fn preserve_alpha_result(original: &DynamicImage, rgba: RgbaImage) -> DynamicIma
     }
 }
 
+fn luma_brightness_shift(factor: f64) -> Option<u32> {
+    if factor == 0.5 {
+        Some(1)
+    } else if factor == 0.25 {
+        Some(2)
+    } else if factor == 0.125 {
+        Some(3)
+    } else {
+        None
+    }
+}
+
 pub fn op_enhance_brightness(
     img: &DynamicImage,
     factor: f64,
@@ -121,17 +133,34 @@ pub fn op_enhance_brightness(
         // three equal RGB channels only to convert the result back to L.
         let mut luma = source.clone();
         let (width, height) = luma.dimensions();
-        apply_enhance_rows(
-            luma.as_mut(),
-            width as usize,
-            height as usize,
-            1,
-            |_y, row| {
-                for sample in row {
-                    *sample = (*sample as f64 * factor).clamp(0.0, 255.0) as u8;
-                }
-            },
-        );
+        if let Some(shift) = luma_brightness_shift(factor) {
+            // These exact binary fractions truncate to the same values as
+            // Pillow's byte blend, while avoiding one floating multiply per
+            // sample on the serial CPU path.
+            apply_enhance_rows(
+                luma.as_mut(),
+                width as usize,
+                height as usize,
+                1,
+                |_y, row| {
+                    for sample in row {
+                        *sample >>= shift;
+                    }
+                },
+            );
+        } else {
+            apply_enhance_rows(
+                luma.as_mut(),
+                width as usize,
+                height as usize,
+                1,
+                |_y, row| {
+                    for sample in row {
+                        *sample = (*sample as f64 * factor).clamp(0.0, 255.0) as u8;
+                    }
+                },
+            );
+        }
         return Ok(DynamicImage::ImageLuma8(luma));
     }
     if matches!(img, DynamicImage::ImageRgba8(_)) {
@@ -195,6 +224,27 @@ pub fn op_enhance_contrast(
 #[cfg(test)]
 mod tests {
     use crate::Image;
+
+    use super::op_enhance_brightness;
+    use crate::raster::{DynamicImage, GrayImage};
+
+    #[test]
+    fn luma_brightness_binary_factors_match_float_truncation_for_every_byte() {
+        let input: Vec<u8> = (0..=u8::MAX).collect();
+        let source = GrayImage::from_raw(input.len() as u32, 1, input.clone())
+            .expect("valid one-row grayscale image");
+        let source = DynamicImage::ImageLuma8(source);
+
+        for factor in [0.5, 0.25, 0.125] {
+            let result = op_enhance_brightness(&source, factor, Some("L"))
+                .expect("brightness transform succeeds");
+            let expected: Vec<u8> = input
+                .iter()
+                .map(|sample| (*sample as f64 * factor).clamp(0.0, 255.0) as u8)
+                .collect();
+            assert_eq!(result.as_bytes(), expected);
+        }
+    }
 
     #[test]
     fn contrast_preserves_empty_cmyk_images() {

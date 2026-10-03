@@ -16642,3 +16642,40 @@ on the current tree. The complete 40-row measurement remains in
 `build/migration-parity/imagebatch-expand-throughput-20261003.jsonl`; the
 partial 1024×768 L/LA probe is in
 `build/migration-parity/imagebatch-expand-throughput-1024x768-20261003.jsonl`.
+
+## L `ImageEnhance.Brightness` exact-factor CPU path — checkpoint 2026-10-03
+
+The full 936-workload run showed a real executed L workload where CPU was
+slower than Pillow: `pil-imageenhance-brightness.enhance.materialized.l-noise-1024x768-factor-0-5` measured 0.547 ms CPU versus 0.485 ms Pillow, with 0.081 ms SIMD and 0.677 ms GPU. The retained native-L CPU path avoided RGBA expansion but still multiplied each byte by `f64` and clamped it individually. SIMD already had an exact shift path for factors 0.5, 0.25, and 0.125.
+
+The CPU specialization now uses right shifts for those exact factors only. For an unsigned byte `x` and `k` in 1 through 3, truncating `x * 2^-k` is exactly `x >> k`. Every other factor keeps the original floating-point multiply, clamp, and truncation path. This changes only native-L serial CPU execution; it does not change LA, other modes, SIMD, GPU, or automatic routing. A focused Rust regression compares every byte value against the original arithmetic for all three optimized factors.
+
+| Run | Pillow ms | CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Before candidate | 0.516708 | 0.558063 | 0.058979 | 0.649292 |
+| Candidate 1 | 0.525605 | 0.094792 | 0.100417 | 0.768375 |
+| Candidate 1 repeat | 0.541854 | 0.085479 | 0.085625 | 0.712792 |
+
+Both post-change runs passed the live-Pillow correctness gate; CPU, SIMD, and GPU were each selected for all 100 timed observations with no fallback. The repeat puts CPU 6.34× and SIMD 6.33× faster than its matched Pillow median. The additional public parity run selected
+`PIL.ImageEnhance.Brightness.enhance.nuanced.simd-native-l-shift-factor-0-25`
+and
+`PIL.ImageEnhance.Brightness.enhance.nuanced.simd-native-l-shift-factor-0-125`;
+CPU, strict SIMD, and strict GPU each passed both cases with the requested
+backend confirmed (2/2 per lane). `make migration-parity-test-all-backends`
+also reported the corresponding Node and browser WASM comparisons passed; the
+WASM package uses CPU and does not claim GPU execution. No coverage ran.
+
+The GPU remains a separate blocker. On the repeated material workload it is
+8.33× slower than SIMD at concurrency one, with one dispatch, 786,432 bytes
+uploaded and read back, and zero mode conversions. This does not prove queued
+GPU throughput. Keep the exact CPU shift and the existing SIMD path; do not
+claim this operation meets the GPU target until a measured queued workload
+beats matched-total-work SIMD throughput and its latency is accounted for.
+
+The focused commands and receipts are:
+
+```sh
+RUSTC_WRAPPER= cargo test -p pillow-rs --lib luma_brightness_binary_factors_match_float_truncation_for_every_byte
+RUSTC_WRAPPER= MIGRATION_BENCHMARK_PROFILE=standard MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageenhance-brightness.enhance.materialized.l-noise-1024x768-factor-0-5' MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/brightness-l-after-candidate1-repeat-7716bd958-20261003.json MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/brightness-l-after-candidate1-repeat-7716bd958-20261003-parity.json make migration-parity-benchmark
+RUSTC_WRAPPER= MIGRATION_ALL_BACKENDS_CASE_IDS='PIL.ImageEnhance.Brightness.enhance.nuanced.simd-native-l-shift-factor-0-25,PIL.ImageEnhance.Brightness.enhance.nuanced.simd-native-l-shift-factor-0-125' MIGRATION_ALL_BACKENDS_OUTPUT=build/migration-parity/brightness-l-shifts-all-backends-20261003.json make migration-parity-test-all-backends MATURIN_DEVELOP_FLAGS=--skip-install
+```
