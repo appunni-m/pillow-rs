@@ -291,11 +291,14 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.eval.nuanced.rgb-expanded-lut"
+        "case_id": "PIL.Image.eval.nuanced.performance-materialized-rgb-noise-1024x768"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -309,8 +312,8 @@
       },
       "context": {
         "size": [
-          16,
-          16
+          1024,
+          768
         ],
         "mode": "RGB",
         "chain_length": 1,

@@ -125,7 +125,9 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-image.alpha-composite.standard": "PIL.Image.alpha_composite.mode.rgba",
     "pil-image.composite.standard": "PIL.Image.composite.mode.l",
     "pil-image.effect-mandelbrot.standard": "PIL.Image.effect_mandelbrot.nuanced.width-one",
-    "pil-image.eval.standard": "PIL.Image.eval.nuanced.rgb-expanded-lut",
+    "pil-image.eval.standard": (
+        "PIL.Image.eval.nuanced.performance-materialized-rgb-noise-1024x768"
+    ),
     "pil-image.fromarray.standard": "PIL.Image.fromarray.nuanced.buffer-backed-rgb-values",
     "pil-image.frombytes.standard": "PIL.Image.frombytes.performance.bytearray-rgb-throughput",
     "pil-image.linear-gradient.standard": "PIL.Image.linear_gradient.mode.l",
@@ -351,6 +353,17 @@ BENCHMARK_DEFAULT_EXCLUSIONS = {
     and workload_id not in BENCHMARK_SUCCESS_WORKFLOW_IDS
 }
 BENCHMARK_PIPELINE_WORKLOADS: dict[str, dict[str, Any]] = {
+    # Pillow evaluates Image.eval eagerly while pillow-rs may defer the point
+    # transform until Image.load. Time the call and materialization together;
+    # keep the full tobytes parity observation outside timing so export cost is
+    # not charged only to the lazy implementation.
+    "pil-image.eval.standard": {
+        "case_id": (
+            "PIL.Image.eval.nuanced."
+            "performance-materialized-rgb-noise-1024x768"
+        ),
+        "step_ids": ["call", "materialize"],
+    },
     "pil-image-image.transpose.standard": {
         "case_id": "PIL.Image.Image.transpose.benchmark.materialized-pipeline-1024",
         # Measure the complete public workflow, including input image
@@ -2117,6 +2130,7 @@ class WorkflowBuilder:
     scenario_noise_seed: int | None = None
     scenario_chain: str | None = None
     scenario_observe_result: str | None = None
+    scenario_materialize_result: bool = False
     scenario_observe_receiver: bool = False
     scenario_observe_stat_properties: bool = False
     scenario_outline_curve: bool = False
@@ -7040,6 +7054,18 @@ class WorkflowBuilder:
             self.primary_surface == "PIL.ImageFilter"
             and operation["kind"] == "type"
         )
+        if self.scenario_materialize_result:
+            # Match eager Pillow operations by forcing deferred results to
+            # compute in the timed operation boundary. Keep the independent
+            # byte observation below for exact output parity.
+            self.add_step(
+                "PIL.Image.Image",
+                "load",
+                receiver=binding(call_id),
+                arguments={},
+                step_id="materialize",
+            )
+
         if self.scenario_observe_result is not None and not observe_filter_result:
             # Observe a returned public object through the declared public
             # operation. ``getdata`` uses ``bytes(ImagingCore)`` here; other
@@ -7151,6 +7177,7 @@ def build_parity_case(
     scenario_noise_seed: int | None = None,
     scenario_chain: str | None = None,
     scenario_observe_result: str | None = None,
+    scenario_materialize_result: bool = False,
     scenario_observe_receiver: bool = False,
     scenario_observe_stat_properties: bool = False,
     scenario_outline_curve: bool = False,
@@ -7200,6 +7227,7 @@ def build_parity_case(
         scenario_noise_seed=scenario_noise_seed,
         scenario_chain=scenario_chain,
         scenario_observe_result=scenario_observe_result,
+        scenario_materialize_result=scenario_materialize_result,
         scenario_observe_receiver=scenario_observe_receiver,
         scenario_observe_stat_properties=scenario_observe_stat_properties,
         scenario_outline_curve=scenario_outline_curve,
@@ -24498,6 +24526,26 @@ def build_nuanced_cases(
             "mode": "RGB",
             "values": {
                 "args": literal([[index % 256 for index in range(768)]]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "eval",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-materialized-rgb-noise-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "noise-fill",
+            "seed": 20261004,
+            "materialize_result": True,
+            "observe_result": "tobytes",
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "values": {
+                "args": literal([[
+                    *((sample * 3 + 5) % 256 for sample in range(256)),
+                    *((sample * 5 + 13) % 256 for sample in range(256)),
+                    *(255 - sample for sample in range(256)),
+                ]]),
             },
         },
         {
@@ -42342,6 +42390,7 @@ def build_nuanced_cases(
             scenario_exif_variant=spec.get("exif_variant"),
             scenario_chain=spec.get("chain"),
             scenario_observe_result=spec.get("observe_result"),
+            scenario_materialize_result=spec.get("materialize_result", False),
             scenario_observe_receiver=spec.get("observe_receiver", False),
             scenario_observe_stat_properties=spec.get(
                 "observe_stat_properties", False

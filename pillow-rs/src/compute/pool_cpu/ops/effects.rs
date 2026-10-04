@@ -1983,19 +1983,56 @@ fn map_native_byte_lut<const CHANNELS: usize>(source: &[u8], lut: &[u8]) -> Opti
     if CHANNELS == 0 || lut.len() != CHANNELS.checked_mul(256)? || source.len() % CHANNELS != 0 {
         return None;
     }
-    if CHANNELS == 1 {
-        return Some(
-            source
-                .iter()
-                .map(|&sample| lut[usize::from(sample)])
-                .collect(),
-        );
+    let mut affine = [(0u8, 0u8); CHANNELS];
+    let mut all_affine = true;
+    for channel in 0..CHANNELS {
+        let start = channel * 256;
+        let Some(coefficients) =
+            crate::compute::byte_lut_affine_coefficients(&lut[start..start + 256])
+        else {
+            all_affine = false;
+            break;
+        };
+        affine[channel] = coefficients;
     }
     let mut output = Vec::with_capacity(source.len());
-    for pixel in source.chunks_exact(CHANNELS) {
-        for (channel, &sample) in pixel.iter().enumerate() {
-            output.push(lut[channel * 256 + usize::from(sample)]);
+    if all_affine {
+        for pixel in source.chunks_exact(CHANNELS) {
+            for (channel, &sample) in pixel.iter().enumerate() {
+                let (multiplier, offset) = affine[channel];
+                output.push(sample.wrapping_mul(multiplier).wrapping_add(offset));
+            }
         }
+        return Some(output);
+    }
+    match CHANNELS {
+        1 => {
+            for &sample in source {
+                output.push(lut[usize::from(sample)]);
+            }
+        }
+        2 => {
+            for pixel in source.chunks_exact(2) {
+                output.push(lut[usize::from(pixel[0])]);
+                output.push(lut[256 + usize::from(pixel[1])]);
+            }
+        }
+        3 => {
+            for pixel in source.chunks_exact(3) {
+                output.push(lut[usize::from(pixel[0])]);
+                output.push(lut[256 + usize::from(pixel[1])]);
+                output.push(lut[512 + usize::from(pixel[2])]);
+            }
+        }
+        4 => {
+            for pixel in source.chunks_exact(4) {
+                output.push(lut[usize::from(pixel[0])]);
+                output.push(lut[256 + usize::from(pixel[1])]);
+                output.push(lut[512 + usize::from(pixel[2])]);
+                output.push(lut[768 + usize::from(pixel[3])]);
+            }
+        }
+        _ => return None,
     }
     Some(output)
 }
@@ -2049,7 +2086,6 @@ pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError>
     // operation, and internal PointOp fusion constructs complete tables. A
     // malformed Eval descriptor is outside the supported public input
     // boundary, so the executor does not duplicate that validation.
-    let band_luts: Vec<&[u8]> = (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect();
     if let Some(output) = eval_native_byte_lut(img, lut) {
         return Ok(output);
     }
@@ -2061,7 +2097,7 @@ pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError>
         let mut out = GrayImage::new(w, h);
         for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
             let idx = ip[0] as usize;
-            op[0] = band_luts[0][idx];
+            op[0] = lut[idx];
         }
         return Ok(DynamicImage::ImageLuma8(out));
     }
@@ -2071,8 +2107,8 @@ pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError>
     for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
         for b in 0..4 {
             let idx = ip[b] as usize;
-            let band = b.min(band_luts.len() - 1);
-            op[b] = band_luts[band][idx];
+            let band = b.min(n_bands - 1);
+            op[b] = lut[band * 256 + idx];
         }
     }
     Ok(preserve_mode(img, DynamicImage::ImageRgba8(out)))
@@ -4648,6 +4684,37 @@ mod tests {
             }
             jumped.advance(steps);
             assert_eq!(jumped.next(), sequential.next(), "after {steps} draws");
+        }
+    }
+
+    #[test]
+    fn native_rgb_eval_affine_luts_are_exact_and_non_affine_tables_fall_back() {
+        let coefficients = [(3u8, 5u8), (5, 13), (255, 255)];
+        let lut = coefficients
+            .iter()
+            .flat_map(|&(multiplier, offset)| {
+                (0..=u8::MAX)
+                    .map(move |sample| sample.wrapping_mul(multiplier).wrapping_add(offset))
+            })
+            .collect::<Vec<_>>();
+        let source = (0..768usize)
+            .map(|index| index.wrapping_mul(73).wrapping_add(index / 7) as u8)
+            .collect::<Vec<_>>();
+
+        let mut variants = vec![lut.clone()];
+        let mut non_affine = lut;
+        non_affine[512 + 173] ^= 1;
+        variants.push(non_affine);
+
+        for variant in variants {
+            let expected = source
+                .iter()
+                .enumerate()
+                .map(|(index, &sample)| variant[(index % 3) * 256 + usize::from(sample)])
+                .collect::<Vec<_>>();
+            let actual =
+                super::map_native_byte_lut::<3>(&source, &variant).expect("native RGB LUT");
+            assert_eq!(actual, expected);
         }
     }
 

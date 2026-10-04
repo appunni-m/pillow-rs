@@ -87,7 +87,9 @@ upstream Pillow does not bundle as equivalents.
   does not guarantee that every operation or device uses it.
 - `PIL.ImageBatch`, an explicit queue for independent image jobs. Compatible
   same-size jobs can share a GPU workload; ordinary `Image` calls keep their
-  existing path.
+  existing path. This is available in the current source checkout, but not in
+  the published alpha yet; see the
+  [feature comparison](https://appunni-m.github.io/pillow-rs/compatibility/#pillow-rs-additions-beyond-pillow).
 - An opt-in Rayon **Parallel CPU** profile, separate from ordinary CPU, SIMD,
   and GPU execution. The current published alpha does not yet include the
   companion wheel.
