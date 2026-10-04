@@ -17798,3 +17798,78 @@ MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/rgb-to-rgba-candidate-neon-dir
 MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/rgb-to-rgba-candidate-neon-direct-main-parity.json.gz \
 make migration-parity-benchmark
 ```
+
+## RGBA `Image.reduce(4, 3)` checkpoint — 2026-10-04
+
+The retained change specializes only explicit logical `RGBA` images backed by
+`DynamicImage::ImageRgba8` when Pillow-compatible premultiplied-alpha reduction
+is active. It walks the native four-byte pixels, loads alpha once per input
+pixel, and accumulates R, G, B, and A directly. It keeps Pillow's per-input
+premultiply rounding `((channel * alpha + 127) / 255)`, the existing fixed-point
+average and edge multipliers, and the final integer unpremultiply. Every other
+mode and storage carrier stays on the generic reducer. The regression test
+compares the specialized path byte-for-byte with that generic reference for
+aligned blocks, partial right/bottom blocks, and several factors.
+
+The first experiment was this narrow CPU specialization. The generic nested
+loop checks channel count on each sample, reloads alpha for each color channel,
+and recomputes the averaged alpha while writing each output color. The native
+path removes those repeated operations without changing the reduction order or
+rounding. The same-run final sample measured CPU at 1.274 ms versus Pillow at
+1.630 ms (1.28× faster, six samples each). The absolute latency moved between
+runs, so use the same-run ratio rather than comparing raw times across rows.
+
+Two SIMD experiments were rejected after measuring the public whole workflow.
+The first vectorized strided reduction outputs with eight byte lanes; its p50
+rose from the baseline 1.723 ms to 2.945 ms. The second packed four output
+channels in `u32x4` vectors; p50 rose to 3.797 ms. Both implementations were
+removed. Their source layout shows why they are poor default strategies:
+neighboring output pixels read independently located source blocks, and the
+RGBA work also needs channel promotion, per-pixel alpha premultiplication,
+block sums, and exact unpremultiplication. The additional lane setup, gathers,
+and scalar extraction outweighed fewer scalar loop iterations. This is a
+source-level explanation, not a disassembly or hardware-counter measurement.
+Do not retry these lane layouts without changing the memory strategy or
+profiling evidence that isolates a vectorizable inner loop.
+
+| Run | Pillow p50 | CPU p50 | SIMD p50 | GPU p50 |
+| --- | ---: | ---: | ---: | ---: |
+| Clean baseline `ac3767e16` | 1.504 ms | 1.661 ms | 1.723 ms | 0.928 ms |
+| CPU specialization retained, first run | 1.484 ms | 1.164 ms | 1.798 ms | 1.427 ms |
+| Strided 8-lane SIMD, rejected | 1.439 ms | 1.144 ms | 2.945 ms | 1.195 ms |
+| `u32x4` SIMD, rejected | 1.689 ms | 1.209 ms | 3.797 ms | 1.527 ms |
+| Retained CPU specialization, repeat | 1.630 ms | 1.274 ms | 1.786 ms | 1.573 ms |
+
+Each benchmark row is the `pipeline-chain.geometry-material.reduce-rgba-1024x768`
+whole-workflow workload with six observations per subject and concurrency one.
+Its benchmark correctness gate is `successful_execution`; it is not Pillow
+parity evidence. Separate strict parity ran three RGBA reduce cases on CPU
+(3/3), then the seeded nontrivial RGBA factor-3×5 case on SIMD (1/1) and GPU
+(1/1). All byte comparisons passed. The final benchmark receipt confirms six
+actual CPU executions, six actual SIMD executions, and six actual GPU
+executions; GPU had six real dispatches and no fallback. Its 1024×768 input
+uploads 3,145,728 bytes and reads back 262,144 output bytes per sample.
+
+This is a checkpoint, not completion of the operation's performance goals. The
+retained CPU path is faster than Pillow in the final paired run. SIMD remains
+about 1.10× slower than Pillow and far from the 5× target. GPU latency is below
+SIMD in the final sample, but this one-image, concurrency-one benchmark does
+not establish higher sustained throughput. Keep any future multi-image
+schedule in the separate explicit `ImageBatch` API; ordinary `Image.reduce`
+routing remains unchanged. Move to another operation and revisit this SIMD/GPU
+blocker only after a materially different memory or execution strategy is
+identified.
+
+Verification for this checkpoint:
+
+```sh
+cargo test --locked -p pillow-rs --lib rgba_reduce_native_channel_sums_match_generic_reference_at_edges
+MIGRATION_TARGET_BACKEND=cpu MIGRATION_STRICT_TARGET_BACKEND=1 MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.reduce.mode.rgba,PIL.Image.Image.reduce.nuanced.backend-noise-rgba-64x48-factor-3x5,PIL.Image.Image.reduce.nuanced.rgba-no-reduce-alpha-simd' MIGRATION_PARITY_OUTPUT=build/migration-parity/reduce-rgba-final-cpu-strict.json make migration-parity-test
+MIGRATION_TARGET_BACKEND=simd MIGRATION_STRICT_TARGET_BACKEND=1 MIGRATION_PARITY_CASE_IDS=PIL.Image.Image.reduce.nuanced.backend-noise-rgba-64x48-factor-3x5 MIGRATION_PARITY_OUTPUT=build/migration-parity/reduce-rgba-final-simd-strict.json make migration-parity-test
+MIGRATION_TARGET_BACKEND=gpu MIGRATION_STRICT_TARGET_BACKEND=1 MIGRATION_PARITY_CASE_IDS=PIL.Image.Image.reduce.nuanced.backend-noise-rgba-64x48-factor-3x5 MIGRATION_PARITY_OUTPUT=build/migration-parity/reduce-rgba-final-gpu-strict.json make migration-parity-test
+MIGRATION_BENCHMARK_PROFILE=standard MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-chain.geometry-material.reduce-rgba-1024x768' MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/reduce-rgba-final-retained.json MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/reduce-rgba-final-retained-parity.json make migration-parity-benchmark
+```
+
+All four receipts are under `build/migration-parity/`; the strict parity
+receipts report no failures and the benchmark passed schema validation. No
+coverage ran.

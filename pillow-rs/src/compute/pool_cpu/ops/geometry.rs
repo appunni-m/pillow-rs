@@ -2666,6 +2666,40 @@ fn execute_reduce_rgb(
     raw_bytes_to_image(new_width, new_height, output, 3).map(Some)
 }
 
+/// Sum one RGBA reduction block after Pillow's per-input premultiplication.
+///
+/// Keep the four stored RGBA channels explicit here: the generic byte-mode
+/// loop checks the channel count and alpha condition for every sample, and
+/// reloads alpha while visiting each color channel. Alpha is read once per
+/// pixel and the RGB multiply/divide is performed directly on the native
+/// four-byte carrier.
+#[inline]
+fn reduce_rgba_premultiplied_block_sums(
+    source: &[u8],
+    width: usize,
+    source_x: usize,
+    source_y: usize,
+    block_width: usize,
+    block_height: usize,
+) -> [u64; 4] {
+    let mut sums = [0u64; 4];
+    for dy in 0..block_height {
+        let mut source_index = ((source_y + dy) * width + source_x) * 4;
+        for _ in 0..block_width {
+            let alpha = u32::from(source[source_index + 3]);
+            let red = u32::from(source[source_index]);
+            let green = u32::from(source[source_index + 1]);
+            let blue = u32::from(source[source_index + 2]);
+            sums[0] += u64::from((red * alpha + 127) / 255);
+            sums[1] += u64::from((green * alpha + 127) / 255);
+            sums[2] += u64::from((blue * alpha + 127) / 255);
+            sums[3] += u64::from(alpha);
+            source_index += 4;
+        }
+    }
+    sums
+}
+
 /// Execute a Reduce operation matching Pillow's `Reduce.c`.
 ///
 /// Pillow computes ceil(w/xscale) x ceil(h/yscale) output pixels, averages
@@ -2704,6 +2738,9 @@ pub fn execute_reduce(
         explicit_mode,
         Some("CMYK" | "RGBa" | "La" | "PA" | "RGBX" | "F" | "I")
     );
+    let native_rgba_reduce = premultiplied_alpha
+        && explicit_mode == Some("RGBA")
+        && matches!(img, DynamicImage::ImageRgba8(_));
     let mut out = CheckedDims::new(new_w, new_h, channels as u8)?.alloc_buffer();
     if new_w == 0 || new_h == 0 {
         return raw_bytes_to_image(new_w, new_h, out, channels);
@@ -2748,33 +2785,59 @@ pub fn execute_reduce(
                 (true, false) => (bottom_multiplier, bottom_amend),
                 (false, false) => (corner_multiplier, corner_amend),
             };
-            let mut sums = [0u64; 4];
-            for dy in 0..y_count {
-                for dx in 0..x_count {
-                    let src_idx = ((source_y + dy) * w + source_x + dx) as usize * channels;
-                    for c in 0..channels {
-                        let sample = if premultiplied_alpha && c + 1 < channels {
-                            ((u16::from(raw[src_idx + c]) * u16::from(raw[src_idx + channels - 1])
-                                + 127)
-                                / 255) as u8
-                        } else {
-                            raw[src_idx + c]
-                        };
-                        sums[c] += u64::from(sample);
-                    }
-                }
-            }
             let dst_idx = x as usize * channels;
-            for c in 0..channels {
-                let mut value = (((sums[c] + u64::from(amend)) * multiplier) >> 24) as u8;
-                if premultiplied_alpha && c + 1 < channels {
-                    let alpha =
-                        (((sums[channels - 1] + u64::from(amend)) * multiplier) >> 24) as u8;
-                    if alpha != 0 {
-                        value = (u16::from(value) * 255 / u16::from(alpha)) as u8;
+            if native_rgba_reduce {
+                let sums = reduce_rgba_premultiplied_block_sums(
+                    raw,
+                    w as usize,
+                    source_x as usize,
+                    source_y as usize,
+                    x_count as usize,
+                    y_count as usize,
+                );
+                let average = |sum: u64| (((sum + u64::from(amend)) * multiplier) >> 24) as u8;
+                let alpha = average(sums[3]);
+                let mut red = average(sums[0]);
+                let mut green = average(sums[1]);
+                let mut blue = average(sums[2]);
+                if alpha != 0 {
+                    red = (u16::from(red) * 255 / u16::from(alpha)) as u8;
+                    green = (u16::from(green) * 255 / u16::from(alpha)) as u8;
+                    blue = (u16::from(blue) * 255 / u16::from(alpha)) as u8;
+                }
+                row[dst_idx] = red;
+                row[dst_idx + 1] = green;
+                row[dst_idx + 2] = blue;
+                row[dst_idx + 3] = alpha;
+            } else {
+                let mut sums = [0u64; 4];
+                for dy in 0..y_count {
+                    for dx in 0..x_count {
+                        let src_idx = ((source_y + dy) * w + source_x + dx) as usize * channels;
+                        for c in 0..channels {
+                            let sample = if premultiplied_alpha && c + 1 < channels {
+                                ((u16::from(raw[src_idx + c])
+                                    * u16::from(raw[src_idx + channels - 1])
+                                    + 127)
+                                    / 255) as u8
+                            } else {
+                                raw[src_idx + c]
+                            };
+                            sums[c] += u64::from(sample);
+                        }
                     }
                 }
-                row[dst_idx + c] = value;
+                for c in 0..channels {
+                    let mut value = (((sums[c] + u64::from(amend)) * multiplier) >> 24) as u8;
+                    if premultiplied_alpha && c + 1 < channels {
+                        let alpha =
+                            (((sums[channels - 1] + u64::from(amend)) * multiplier) >> 24) as u8;
+                        if alpha != 0 {
+                            value = (u16::from(value) * 255 / u16::from(alpha)) as u8;
+                        }
+                    }
+                    row[dst_idx + c] = value;
+                }
             }
         }
     };
@@ -3303,6 +3366,34 @@ mod tests {
                 optimized.as_bytes(),
                 reference.as_bytes(),
                 "RGB Reduce mismatch for {width}×{height} by {x_factor}×{y_factor}"
+            );
+        }
+    }
+
+    #[test]
+    fn rgba_reduce_native_channel_sums_match_generic_reference_at_edges() {
+        for (width, height, x_factor, y_factor) in [
+            (32, 24, 4, 3),
+            (34, 27, 4, 3),
+            (19, 23, 3, 5),
+            (11, 9, 2, 2),
+        ] {
+            let source = (0..width as usize * height as usize * 4)
+                .map(|index| ((index * 73 + index / 13 * 41 + 19) % 256) as u8)
+                .collect();
+            let image = DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(width, height, source)
+                    .expect("RGBA source shape must be valid"),
+            );
+            let optimized = execute_reduce(&image, x_factor, y_factor, Some("RGBA"))
+                .expect("native RGBA Reduce must succeed");
+            let reference = execute_reduce(&image, x_factor, y_factor, None)
+                .expect("generic RGBA Reduce reference must succeed");
+
+            assert_eq!(
+                optimized.as_bytes(),
+                reference.as_bytes(),
+                "RGBA Reduce mismatch for {width}×{height} by {x_factor}×{y_factor}"
             );
         }
     }
