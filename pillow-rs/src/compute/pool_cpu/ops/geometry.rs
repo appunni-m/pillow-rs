@@ -1765,6 +1765,8 @@ pub fn execute_rotate(
 
 /// Execute a Transpose operation.
 const TRANSPOSE_TILE_SIZE: u32 = 32;
+#[cfg(not(feature = "parallel"))]
+const TRANSPOSE_RGBA_TILE_SIZE: u32 = 16;
 const TRANSPOSE_TILE_THRESHOLD_PIXELS: usize = 256 * 1024;
 
 #[inline]
@@ -1786,14 +1788,16 @@ fn transpose_bytes_tiled<const CHANNELS: usize>(
     width: u32,
     height: u32,
     method: &TransposeMethod,
+    tile_size: u32,
 ) {
     let width = width as usize;
     let height = height as usize;
+    let tile_size = tile_size as usize;
     let output_stride = height * CHANNELS;
     let source_stride = width * CHANNELS;
     #[cfg(feature = "parallel")]
-    let tile_stride = output_stride * TRANSPOSE_TILE_SIZE as usize;
-    let tile_rows = width.div_ceil(TRANSPOSE_TILE_SIZE as usize);
+    let tile_stride = output_stride * tile_size;
+    let tile_rows = width.div_ceil(tile_size);
     let (reverse_x, reverse_y) = match method {
         TransposeMethod::Transpose => (false, false),
         TransposeMethod::Transverse => (true, true),
@@ -1802,10 +1806,10 @@ fn transpose_bytes_tiled<const CHANNELS: usize>(
         _ => unreachable!("unsupported tiled transpose method"),
     };
     let process_tile = |tile_index: usize, rows: &mut [u8]| {
-        for block_x in (0..height).step_by(TRANSPOSE_TILE_SIZE as usize) {
-            let end_x = (block_x + TRANSPOSE_TILE_SIZE as usize).min(height);
+        for block_x in (0..height).step_by(tile_size) {
+            let end_x = (block_x + tile_size).min(height);
             for (local_y, row) in rows.chunks_exact_mut(output_stride).enumerate() {
-                let output_y = tile_index * TRANSPOSE_TILE_SIZE as usize + local_y;
+                let output_y = tile_index * tile_size + local_y;
                 let source_x = if reverse_x {
                     width - 1 - output_y
                 } else {
@@ -1844,8 +1848,8 @@ fn transpose_bytes_tiled<const CHANNELS: usize>(
 
     #[cfg(not(feature = "parallel"))]
     for tile_index in 0..tile_rows {
-        let output_y_start = tile_index * TRANSPOSE_TILE_SIZE as usize;
-        let output_y_end = (output_y_start + TRANSPOSE_TILE_SIZE as usize).min(width);
+        let output_y_start = tile_index * tile_size;
+        let output_y_end = (output_y_start + tile_size).min(width);
         let row_start = output_y_start * output_stride;
         let row_end = output_y_end * output_stride;
         let rows = &mut output[row_start..row_end];
@@ -2003,7 +2007,16 @@ pub fn execute_transpose(
         let (width, height) = img.dimensions();
         if width != 0 && height != 0 && (width != 1 || height != 1) {
             let channels = img.color().channel_count() as usize;
-            let mut output = CheckedDims::new(height, width, channels as u8)?.alloc_buffer();
+            let output_dims = CheckedDims::new(height, width, channels as u8)?;
+            let mut output = output_dims.alloc_buffer();
+            #[cfg(feature = "parallel")]
+            let transpose_tile_size = TRANSPOSE_TILE_SIZE;
+            #[cfg(not(feature = "parallel"))]
+            let transpose_tile_size = if channels == 4 {
+                TRANSPOSE_RGBA_TILE_SIZE
+            } else {
+                TRANSPOSE_TILE_SIZE
+            };
             // Specialize the opaque pixel size once per image so each tile
             // copies a fixed-size sample instead of calling a variable-size
             // slice copy for every pixel.
@@ -2016,6 +2029,7 @@ pub fn execute_transpose(
                             width,
                             height,
                             method,
+                            transpose_tile_size,
                         );
                     } else {
                         transpose_bytes_serial::<$channels>(
@@ -2973,6 +2987,7 @@ mod tests {
                                     width,
                                     height,
                                     &method,
+                                    super::TRANSPOSE_TILE_SIZE,
                                 )
                             };
                         }
