@@ -102,9 +102,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- box_blur_h.wgsl
 |   |   |   |       |-- box_blur_h_la_packed.wgsl
 |   |   |   |       |-- box_blur_h_luma_packed.wgsl
+|   |   |   |       |-- box_blur_h_rgb_packed.wgsl
 |   |   |   |       |-- box_blur_v.wgsl
 |   |   |   |       |-- box_blur_v_la_packed.wgsl
 |   |   |   |       |-- box_blur_v_luma_packed.wgsl
+|   |   |   |       |-- box_blur_v_rgb_packed.wgsl
 |   |   |   |       |-- brightness.wgsl
 |   |   |   |       |-- brightness_native.wgsl
 |   |   |   |       |-- color_3dlut.wgsl

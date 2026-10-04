@@ -16937,19 +16937,104 @@ The observed Parallel CPU gain is material for LA, RGB, and RGBA; L is
 essentially tied with Pillow. Do not generalize this result across modes or
 sizes. No coverage was run.
 
-## Documentation workload-count test is stale — checkpoint 2026-10-03
+## Documentation workload-count assertion drift — resolved 2026-10-04
 
-`make docs-test` has one pre-existing failure in
+`make docs-test` found that
 `test_current_workload_catalog_maps_all_entries_to_one_of_two_tables`
-(`scripts/test_docs_benchmark_view.py`). The unchanged fixture on `origin/main`,
-`pillow-rs/tests/fixtures/inputs/benchmark/pipeline-operations.json`, contains
-651 entries; the test still expects 644 total, 186 operations, and 458
-pipelines. The current categorizer maps all 651 entries to the two tables:
-191 operations and 460 pipelines. The test and fixture are unchanged by this
-checkpoint, so this is a stale cardinality expectation rather than a lost or
-uncategorized workload. Do not remove benchmark entries or weaken the catalog
-check to satisfy the obsolete totals. The other 43 documentation tests pass;
-`make docs-lint` and `make docs-build` pass.
+(`scripts/test_docs_benchmark_view.py`) still expected 651 entries and 191
+individual-operation rows. The tracked benchmark fixture at `HEAD` contains
+652 entries; the current categorizer maps all of them into 192 operation rows
+and 460 pipeline rows. This was a stale exact-count assertion, not a missing
+or uncategorized workload. Updating the three exact counts preserved the guard
+against additions, removals, and rows that do not fit either table. The
+corrected `make docs-lint docs-test docs-build` run passed: 44 tests, all 19
+public documentation pages checked, and all 23 rendered pages validated.
+
+## `Image.getcolors` — three-attempt checkpoint — 2026-10-04
+
+This checkpoint targeted `PIL.Image.Image.getcolors` and retained three
+changes: a bounded direct Pillow-slot table for sufficiently large scans, a
+large native-RGB grayscale path, and inline storage for the small multiband
+values returned by `getcolors`. The direct table is admitted only when it is
+at most 8 MiB and at most twice the input pixel count; `try_reserve_exact`
+falls back to the sparse table on allocation failure. The grayscale path
+counts directly from native RGB triples into 256 bins, exits to the ordinary
+path when it finds a non-gray pixel, rejects as soon as distinct colors exceed
+`maxcolors`, and reproduces Pillow's open-addressing slot order for the final
+256-or-fewer colors. Inline components avoid allocating one `Vec<u8>` for
+every result color; Python and JavaScript convert only the active band bytes.
+The public Rust `FormattedPixelValue` enum now has an `InlineComponents`
+variant, so downstream exhaustive matches must account for it.
+
+An earlier benchmark result used the existing random-RGB
+`high-cardinality-rgb-1024x768` case with default `maxcolors`. Pillow exits
+after seeing 257 colors, so its roughly 2.8 microsecond timing measures the
+early-return path and says nothing about a complete image scan. A new
+parity-backed workload now uses a deterministic 1024×768 native RGB grayscale
+cycle, `maxcolors=1_000_000`, and times only the public call. Its benchmark
+gate compares the full returned list with live Pillow before measuring.
+
+Two standard runs used 5 warmups and 100 measured calls per subject. Pillow
+repeated at 0.963/1.027 ms; serial CPU repeated at 0.357/0.359 ms, or 2.70×
+and 2.86× faster in those paired runs. The direct RGB grayscale path is thus
+materially faster for this full-scan workload. The benchmark also listed SIMD
+and GPU profiles, but both report `actual_backend: null`: `getcolors` is a
+host-side terminal reduction with no architecture-specific SIMD or GPU kernel.
+Those rows do not count as SIMD or GPU execution. The ordinary small default
+workload remains slightly slower than Pillow (2.29 vs 1.96 microseconds on the
+repeat); 16×16 varied RGB is near parity (10.54 vs 10.42 microseconds). Keep
+that small-call CPU gap as a blocker rather than hiding it in the large-image
+win. No Parallel CPU path exists for this operation.
+
+The first implementation unit tests compare dense and sparse slot ordering,
+the grayscale fast path and the generic reference, and bounded admission. The
+maintained parity corpus passed 37/37 `getcolors` cases on CPU, SIMD, GPU,
+Node WASM, and browser WASM, plus 23/23 `getpixel` cases on those five
+surfaces. These are output-parity results; only CPU executed the
+getcolors-specific backend code. `make fmt`, `make clippy`, the focused Rust
+tests, Python binding compilation, and the JavaScript/WASM check passed. No
+coverage ran.
+
+For the next attempt, optimize the remaining small-call overhead without
+changing Pillow's slot order or result type, then measure the standard case
+again. Do not add SIMD, Rayon, or GPU labels without a genuinely separate
+execution path. Keep any new architecture-specific or multi-image work in its
+own explicit profile/API.
+
+Verification and benchmark commands:
+
+```sh
+make migration-parity-inputs
+cargo test --locked -p pillow-rs --lib pillow_color_counts_tests
+case_ids="$(.venv/bin/python - <<'PY'
+from pathlib import Path
+from scripts.run_migration_parity import load_cases, load_manifest
+manifest = load_manifest(Path('pillow-rs/tests/fixtures/manifest.yaml'))
+cases, _ = load_cases(manifest, case_ids=None, surface='PIL.Image.Image')
+print(','.join(case['case_id'] for case in cases if case['operation'] == 'getcolors'))
+PY
+)"
+make migration-parity-test-all-backends MIGRATION_ALL_BACKENDS_OUTPUT=build/migration-parity/getcolors-attempt3-final-all-backends.json MIGRATION_ALL_BACKENDS_CASE_IDS="$case_ids"
+pixel_case_ids="$(.venv/bin/python - <<'PY'
+from pathlib import Path
+from scripts.run_migration_parity import load_cases, load_manifest
+manifest = load_manifest(Path('pillow-rs/tests/fixtures/manifest.yaml'))
+cases, _ = load_cases(manifest, case_ids=None, surface='PIL.Image.Image')
+print(','.join(case['case_id'] for case in cases if case['operation'] == 'getpixel'))
+PY
+)"
+make migration-parity-test-all-backends MIGRATION_ALL_BACKENDS_OUTPUT=build/migration-parity/getcolors-attempt3-getpixel-regression-all-backends.json MIGRATION_ALL_BACKENDS_CASE_IDS="$pixel_case_ids"
+MIGRATION_PARITY_CASE_IDS=PIL.Image.Image.getcolors.nuanced.performance-full-scan-grayscale-rgb-1024x768-high-maxcolors MIGRATION_PARITY_OUTPUT=build/migration-parity/getcolors-full-scan-cpu-parity.json make migration-parity-test
+MIGRATION_BENCHMARK_PROFILE=standard MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.getcolors.materialized.full-scan-grayscale-rgb-1024x768-high-maxcolors' MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/getcolors-full-scan-attempt3.json MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/getcolors-full-scan-attempt3-parity.json make migration-parity-benchmark
+MIGRATION_BENCHMARK_PROFILE=standard MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.getcolors.materialized.full-scan-grayscale-rgb-1024x768-high-maxcolors' MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/getcolors-full-scan-attempt3-repeat.json MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/getcolors-full-scan-attempt3-repeat-parity.json make migration-parity-benchmark
+make fmt clippy
+cargo test --locked -p pillow-rs-py --lib --no-run
+cargo check --locked -p pillow-rs-js --target wasm32-unknown-unknown
+```
+
+The two paired benchmark outputs and parity receipts remain under
+`build/migration-parity/`; every benchmark result passed its schema and Pillow
+parity gates.
 
 ## I-mode bicubic resize — four-attempt checkpoint — 2026-10-03
 

@@ -39,8 +39,11 @@ python3 -m venv .venv
 
 On Windows, use `.venv\Scripts\python.exe` instead of `.venv/bin/python`.
 See [installation requirements](https://appunni-m.github.io/pillow-rs/installation/) for supported platforms.
-The next alpha will offer the separately built Rayon-backed **Parallel CPU**
-wheel through `pillow-rs[parallel]`; the normal wheel remains serial CPU.
+The separately built Rayon-backed **Parallel CPU** wheel is configured in the
+current source tree, but a matching package-registry release is not available
+yet. The ordinary wheel remains serial CPU. See the
+[release matrix](https://github.com/appunni-m/pillow-rs/blob/main/docs/REGISTRY_RELEASE_MATRIX.md)
+for package availability.
 
 ## Make your first image
 
@@ -88,12 +91,14 @@ upstream Pillow does not bundle as equivalents.
   does not guarantee that every operation or device uses it.
 - `PIL.ImageBatch`, an explicit queue for independent image jobs. Compatible
   same-size jobs can share a GPU workload; ordinary `Image` calls keep their
-  existing path. This is available in the current source checkout, but not in
-  the published alpha yet; see the
+  existing path. This was added to main after the tagged
+  `12.2.0-alpha.5` GitHub pre-release; see the
   [feature comparison](https://appunni-m.github.io/pillow-rs/compatibility/#pillow-rs-additions-beyond-pillow).
 - An opt-in Rayon **Parallel CPU** profile, separate from ordinary CPU, SIMD,
-  and GPU execution. The current published alpha does not yet include the
-  companion wheel.
+  and GPU execution. Its matching companion wheel is not available from the
+  package registries yet; check the
+  [release matrix](https://github.com/appunni-m/pillow-rs/blob/main/docs/REGISTRY_RELEASE_MATRIX.md)
+  before expecting the `parallel` extra to install.
 - A published JavaScript package for Node.js and browser WebAssembly.
 - Optional pipeline receipts that report the requested and actual backend,
   per-operation paths, fallback, timing, and available resource details. Rust

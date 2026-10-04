@@ -336,6 +336,9 @@ GETCOLORS_PERFORMANCE_CASES = (
     ("varied-rgb-16x16", "RGB", [16, 16], 20260925),
     ("high-cardinality-rgb-1024x768", "RGB", [1024, 768], 20260926),
 )
+GETCOLORS_FULL_SCAN_CASES = (
+    ("full-scan-grayscale-rgb-1024x768-high-maxcolors", "RGB", [1024, 768]),
+)
 GETCOLORS_SLOT_ORDER_CASES = (
     ("varied-la-slot-order", "LA", [8, 8], 20260924),
     ("varied-rgba-slot-order", "RGBA", [8, 8], 20260923),
@@ -3052,6 +3055,30 @@ class WorkflowBuilder:
             data_desc = self.inline_bytes(
                 "rgb-pixels", data, "application/octet-stream"
             )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal("RGB"),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge == "grayscale-cycle-rgb-fill" and label == "image":
+            size = self.scenario_size or [1024, 768]
+            if requested_mode != "RGB":
+                raise ValueError("getcolors grayscale-cycle input requires RGB mode")
+            pixel_count = size[0] * size[1]
+            data = bytes(
+                channel
+                for pixel in range(pixel_count)
+                for channel in (pixel & 0xFF,) * 3
+            )
+            data_desc = self.ref_bytes("image-grayscale-cycle", data)
             step_id = self.add_step(
                 "PIL.Image",
                 "frombytes",
@@ -15295,6 +15322,20 @@ def build_nuanced_cases(
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, seed in GETCOLORS_PERFORMANCE_CASES
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getcolors",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-{name}",
+                "mode": mode,
+                "size": size,
+                "edge": "grayscale-cycle-rgb-fill",
+                "values": {"maxcolors": literal(1_000_000)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for name, mode, size in GETCOLORS_FULL_SCAN_CASES
         ),
         {
             "surface": "PIL.ImageFilter",
@@ -53796,6 +53837,44 @@ def build_inputs(
             if getcolors_benchmark is not None:
                 operation, requirement = getcolors_benchmark
                 for name, _mode, _size, _seed in GETCOLORS_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.getcolors.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.Image.Image.getcolors.nuanced.performance-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"getcolors-{slug(name)}",
+                                surface=surface_id,
+                                operation="getcolors",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
+                for name, _mode, _size in GETCOLORS_FULL_SCAN_CASES:
                     workload_id = (
                         f"{storage_slug}.getcolors.materialized.{slug(name)}"
                     )
