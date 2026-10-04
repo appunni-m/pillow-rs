@@ -2742,7 +2742,7 @@ impl Image {
     /// mode, palette, and metadata path as its single-image equivalent.
     pub(crate) fn cache_batched_materialization(
         &mut self,
-        image: DynamicImage,
+        image: Arc<DynamicImage>,
     ) -> Result<(), PilError> {
         let Image::Pipeline { materialized, .. } = self else {
             return Err(PilError::InternalError(
@@ -2750,7 +2750,7 @@ impl Image {
             ));
         };
         materialized
-            .set(Ok(Arc::new(image)))
+            .set(Ok(image))
             .map_err(|_| PilError::InternalError("batch result was already materialized".into()))
     }
 

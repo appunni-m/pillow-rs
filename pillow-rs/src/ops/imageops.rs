@@ -35,7 +35,7 @@ pub enum ImageOpsMask {
 }
 
 /// Host-neutral color input for `ImageOps.pad` and `ImageOps.expand`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImageOpsColor {
     /// No explicit color was supplied; use the operation default.
     None,

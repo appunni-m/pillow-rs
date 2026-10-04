@@ -165,6 +165,12 @@ impl PyBatchExecutor {
                     mask: Box::new(mask),
                 }
             }
+            "Expand" => {
+                let border = operation.getattr("border")?.extract::<i64>()?;
+                let border = filter_size_from_python(border, false)?;
+                let fill = imageops_color_from_python(Some(&operation.getattr("fill")?));
+                pillow_rs::BatchOperation::Expand { border, fill }
+            }
             "BatchColor3DLUT" => {
                 let lut = operation.extract::<PyRef<'_, PyBatchColor3DLut>>()?;
                 pillow_rs::BatchOperation::Color3DLut {
@@ -176,7 +182,7 @@ impl PyBatchExecutor {
             }
             _ => {
                 return Err(PyTypeError::new_err(
-                    "batch operation must be an ImageFilter.MedianFilter, ImageFilter.MaxFilter, or ImageFilter.RankFilter, ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Brightness, ImageBatch.Multiply, ImageBatch.Paste, or ImageBatch.Color3DLUT instance",
+                    "batch operation must be an ImageFilter.MedianFilter, ImageFilter.MaxFilter, or ImageFilter.RankFilter, ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Brightness, ImageBatch.Multiply, ImageBatch.Paste, ImageBatch.Expand, or ImageBatch.Color3DLUT instance",
                 ));
             }
         };
