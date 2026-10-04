@@ -2289,7 +2289,9 @@ fn validate_transposed_font_length(orientation: Option<&str>) -> PyResult<()> {
     pillow_rs::validate_transposed_length(orientation).map_err(map_error)
 }
 
-/// Activate a compute backend. Returns true if the backend exists on this machine.
+/// Enable a backend route for future automatic image routing.
+///
+/// Returns true if this call changed the backend from inactive to active.
 #[pyfunction]
 fn enable_backend(name: &str) -> PyResult<bool> {
     match pillow_rs::Backend::parse(name) {
@@ -2313,7 +2315,7 @@ fn disable_backend(name: &str) -> PyResult<bool> {
     }
 }
 
-/// List backends that exist on this machine.
+/// List backend implementations compiled into this extension.
 #[pyfunction]
 fn available_backends() -> Vec<String> {
     pillow_rs::available_backends()

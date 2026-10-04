@@ -1,9 +1,12 @@
 """Prevent incomplete or fallback measurements from satisfying optimization goals."""
 
 import copy
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
-from scripts.report_optimization_goals import assess_workload
+from scripts.report_optimization_goals import assess_workload, read_parity_artifact
 
 
 def measured_subject(name, milliseconds):
@@ -77,6 +80,39 @@ class OptimizationGoalEvidenceTests(unittest.TestCase):
         subject["measurements"][0]["sample_count"] = 1
         subject["execution"]["sample_count"] = 1
         self.assertIn("incomplete_declared_samples", self.assess()["subjects"]["python-gpu"]["reasons"])
+
+    def test_parity_artifact_reader_skips_large_nested_output_streaming(self):
+        identity = {"manifest": {"sha256": "manifest"}, "targets": [{"target_profile": "python-cpu"}]}
+        document = {
+            "schema": "migration-parity/parity-result@1",
+            "identity": identity,
+            "comparisons": [
+                {
+                    "case_id": "case-a",
+                    "target_profile": "python-cpu",
+                    "outcome": "pass",
+                    "actual": {"bytes": "x" * 200_000, "notes": ['escaped \\"[{}],']},
+                },
+                {
+                    "details": [None, False, {"value": "tail"}],
+                    "case_id": "case-b",
+                    "target_profile": "python-simd",
+                    "outcome": "fail",
+                },
+            ],
+            "trailing": {"nested": ["after comparisons", {"braces": "} ] ,"}]},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "parity.json"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            schema, actual_identity, outcomes = read_parity_artifact(path)
+
+        self.assertEqual(schema, document["schema"])
+        self.assertEqual(actual_identity, identity)
+        self.assertEqual(outcomes, {
+            ("case-a", "python-cpu"): "pass",
+            ("case-b", "python-simd"): "fail",
+        })
 
 
 if __name__ == "__main__":

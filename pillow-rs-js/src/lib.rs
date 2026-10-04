@@ -4704,7 +4704,8 @@ pub fn composite(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
         .map_err(err)
 }
 
-/// Activate a compute backend. Returns true if the backend exists.
+/// Enable a backend route for future automatic image routing.
+/// Returns true if this call changed the backend from inactive to active.
 #[wasm_bindgen]
 pub fn enable_backend(name: &str) -> Result<bool, JsValue> {
     let backend = pillow_rs::Backend::parse(name).ok_or_else(|| {
@@ -4726,7 +4727,7 @@ pub fn disable_backend(name: &str) -> Result<bool, JsValue> {
     pillow_rs::disable_backend(backend).map_err(err)
 }
 
-/// List backends that exist on this machine.
+/// List backend implementations compiled into this module.
 #[wasm_bindgen]
 pub fn available_backends() -> Vec<String> {
     pillow_rs::available_backends()

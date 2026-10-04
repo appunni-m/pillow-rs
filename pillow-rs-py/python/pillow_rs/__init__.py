@@ -53,10 +53,13 @@ __all__ = [
 ]
 
 def enable_backend(name):
-    """Activate a compute backend. Returns True if the backend exists.
+    """Enable a backend route for future automatic image routing.
 
     Args:
-        name: Backend name - ``"cpu"``, ``"gpu"``
+        name: Backend name - ``"cpu"``, ``"simd"``, or ``"gpu"``
+
+    Returns:
+        True if this call changed the backend from inactive to active.
     """
     return _core.enable_backend(name)
 
@@ -64,15 +67,16 @@ def disable_backend(name):
     """Deactivate a compute backend. Returns True if it was active.
 
     Args:
-        name: Backend name - ``"cpu"``, ``"gpu"``
+        name: Backend name - ``"cpu"``, ``"simd"``, or ``"gpu"``
     """
     return _core.disable_backend(name)
 
 def available_backends():
-    """List backends that exist on this machine.
+    """List backend implementations compiled into this extension.
 
     Returns:
-        List of backend name strings (e.g. ``["gpu", "cpu"]``)
+        List of backend names such as ``["gpu", "simd", "cpu"]``. A listed
+        GPU backend does not guarantee that a usable device is available.
     """
     return _core.available_backends()
 
@@ -84,7 +88,7 @@ def active_backends():
     """List currently active backends in priority order.
 
     Returns:
-        List of backend name strings (e.g. ``["gpu", "cpu"]``)
+        List of backend name strings (e.g. ``["gpu", "simd", "cpu"]``)
     """
     return _core.active_backends()
 
@@ -92,6 +96,6 @@ def backend_enabled(name):
     """Check if a specific backend is active.
 
     Args:
-        name: Backend name - ``"cpu"``, ``"gpu"``
+        name: Backend name - ``"cpu"``, ``"simd"``, or ``"gpu"``
     """
     return _core.backend_enabled(name)
