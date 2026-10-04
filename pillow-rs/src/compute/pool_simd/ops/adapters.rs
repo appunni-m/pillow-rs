@@ -30060,8 +30060,45 @@ pub fn simd_constant(
 /// Duplicate an image through its native byte layout.
 ///
 /// Unlike the packed scalar adapter, this preserves raw P/PA samples and the
-/// fourth CMYK byte. The copy kernel also handles a short final block without
-/// routing the operation through a CPU pixel loop.
+/// fourth CMYK byte. The NEON path copies directly into uninitialized output
+/// storage, so it does not first zero every byte before overwriting it.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+fn simd_copy_native_bytes(source: &[u8]) -> (Vec<u8>, u64, u64) {
+    use core::arch::aarch64 as neon;
+
+    let vector_len = source.len() / 64 * 64;
+    let scalar_tail = source.len() - vector_len;
+    let mut output = Vec::<u8>::with_capacity(source.len());
+
+    // SAFETY: `output` has capacity for the full source but its length is
+    // still zero. Each NEON load/store covers a complete 16-byte block within
+    // `vector_len`; the remaining bytes are copied with the exact bounded
+    // scalar-tail length. The source is immutable and cannot overlap the new
+    // allocation. After these writes, every byte in `0..source.len()` is
+    // initialized before the vector length is published.
+    unsafe {
+        let source_ptr = source.as_ptr();
+        let output_ptr = output.as_mut_ptr();
+        for offset in (0..vector_len).step_by(64) {
+            let block = neon::vld1q_u8_x4(source_ptr.add(offset));
+            neon::vst1q_u8_x4(output_ptr.add(offset), block);
+        }
+        std::ptr::copy_nonoverlapping(
+            source_ptr.add(vector_len),
+            output_ptr.add(vector_len),
+            scalar_tail,
+        );
+        output.set_len(source.len());
+    }
+
+    (output, (vector_len / 16) as u64, scalar_tail as u64)
+}
+
+/// Duplicate an image through its native byte layout.
+///
+/// The NEON copy handles full blocks without a zero-fill pass; other targets
+/// retain the portable vector implementation and its bounded final block.
 pub fn simd_duplicate(
     img: &DynamicImage,
     op: &PipelineOp,
@@ -30085,13 +30122,24 @@ pub fn simd_duplicate(
     if source.len() != expected_len {
         return Err(simd_unsupported("Duplicate"));
     }
-    let mut output = vec![0u8; expected_len];
-    let (vector_blocks, scalar_tail) = copy_native_bytes(source, &mut output)
-        .ok_or_else(|| PilError::InternalError("SIMD duplicate buffer shape mismatch".into()))?;
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    let (output, vector_blocks, scalar_tail) = simd_copy_native_bytes(source);
+    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+    let (output, vector_blocks, scalar_tail) = {
+        let mut output = vec![0u8; expected_len];
+        let (vector_blocks, scalar_tail) =
+            copy_native_bytes(source, &mut output).ok_or_else(|| {
+                PilError::InternalError("SIMD duplicate buffer shape mismatch".into())
+            })?;
+        (output, vector_blocks, scalar_tail)
+    };
     let result = crate::image_utils::raw_bytes_to_image(width, height, output, channels)?;
-    crate::compute::record_pipeline_operation_path("native-copy");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    crate::compute::record_pipeline_operation_path("neon-copy");
+    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+    crate::compute::record_pipeline_operation_path("native-copy");
     Ok(preserve_mode(img, result))
 }
 
@@ -32511,6 +32559,22 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[test]
+    fn neon_duplicate_copy_writes_complete_blocks_and_bounded_tails() {
+        for length in [0usize, 1, 15, 16, 63, 64, 65, 127, 128, 129] {
+            let source = (0..length)
+                .map(|index| (index.wrapping_mul(73).wrapping_add(19)) as u8)
+                .collect::<Vec<_>>();
+            let (output, vector_blocks, scalar_tail) = super::simd_copy_native_bytes(&source);
+            let vector_len = length / 64 * 64;
+
+            assert_eq!(output, source, "duplicate copy length {length}");
+            assert_eq!(vector_blocks, (vector_len / 16) as u64);
+            assert_eq!(scalar_tail, (length - vector_len) as u64);
+        }
+    }
+
     #[test]
     fn la_brightness_binary_shifts_match_float_truncation_and_preserve_alpha() {
         use crate::pipeline::PipelineOp;

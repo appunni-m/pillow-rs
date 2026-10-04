@@ -18238,6 +18238,86 @@ nonuniform material-size input, and require completed actual-backend receipts
 before labeling a CPU, SIMD, or GPU result. No runtime change was made for this
 checkpoint; no coverage ran.
 
+## `ImageChops.duplicate` — materialized native-byte copy — 2026-10-04
+
+The invalid 16 × 16 call-only row is now supplemented by
+`PIL.ImageChops.duplicate.nuanced.performance-material-l-noise-1024x768` and
+`pil-imagechops.duplicate.standard`. The seeded, nonuniform 1024 × 768 L input
+is prepared outside timing; each measured step includes both the duplicate
+call and `tobytes()` on its result. This forces deferred pillow-rs execution
+inside the same observation boundary as Pillow's eager `image.copy()`. The
+standard run used five warmups, 100 measured calls, five samples, and
+concurrency one. Strict CPU, SIMD, and GPU parity passed all 11 duplicate
+cases each, including L, P, LA, RGB, RGBA, alpha-preservation, small-image,
+and materialized cases.
+
+The ordinary CPU path was already a native deep copy and measured 1.73× faster
+than Pillow on this run. The SIMD adapter also copied native bytes, but first
+zero-initialized the full destination and then overwrote every byte. On
+AArch64 it now allocates uninitialized output storage, copies complete 64-byte
+blocks with four NEON 16-byte loads/stores, copies the bounded tail, and sets
+the vector length only after every byte has been initialized. That removes a
+full redundant memory write while preserving exact bytes. It is only 1.65×
+faster than Pillow and 4% slower than serial CPU in this run. This operation is
+a bandwidth-bound copy; NEON does not create a 5× gain over a compiler/runtime
+copy that already approaches memory bandwidth. More unrolling is not the next
+useful attack.
+
+The generic GPU path uploaded the L input expanded to RGBA and read the
+expanded image back. Duplicate now uses the native-byte GPU route: packed
+`u32` words copy the original storage bytes, and the final partial word is
+zero-padded for transport then trimmed during reconstruction. The run
+recorded one actual GPU dispatch, no fallback, zero mode conversions, and
+786,432 bytes in each transfer direction instead of 3,145,728. This cut the
+GPU median from 1.76 ms in the earlier valid generic-path run to 0.363 ms in
+the native-byte run, but the GPU is still 5.40× slower than SIMD at
+concurrency one. Host upload, synchronous dispatch/readback, and result
+materialization dominate such a small kernel. Keep ordinary duplicate
+unchanged for now; explore transfer amortization only through the separate
+explicit `ImageBatch` API.
+
+| Subject | p50 latency | p95 latency | Median throughput | Actual execution |
+| --- | ---: | ---: | ---: | --- |
+| Pillow | 0.111208 ms | 0.151208 ms | 8,992 ops/s | Pillow |
+| Serial CPU | 0.064438 ms | 0.091625 ms | 15,519 ops/s | CPU; complete, no fallback |
+| SIMD | 0.067146 ms | 0.087667 ms | 14,893 ops/s | SIMD; complete, no fallback |
+| GPU | 0.362750 ms | 0.627084 ms | 2,757 ops/s | GPU; complete, no fallback; one dispatch |
+
+These are within-run comparisons; separate runs varied with host load. The
+serial CPU target is met for this workload. The SIMD 5× target and the
+single-image GPU latency target remain unmet. GPU's higher-throughput goal is
+not established by single-image latency and must be assessed with explicit
+queued batches. No Parallel CPU profile was measured; do not treat the
+feature-default CPU profile or SIMD measurement as Rayon results.
+
+The best next optimization order for copy-like operations is: first ensure
+the benchmark includes returned-byte materialization and exact parity; then
+remove avoidable full-frame writes/conversions; next verify the backend receipt
+proves real SIMD/GPU work and inspect bytes moved; only then consider algorithm
+or dispatch tuning. When every byte must be copied, avoid promising large SIMD
+gains over a tuned native copy, and attack GPU fixed transfer/synchronization
+cost through an explicitly batched API. Do not weaken byte parity or change
+the ordinary execution route to manufacture a batch result. The existing
+target-only ImageBatch Paste fault-contract lane remains separate from this
+Duplicate operation. `make imagebatch-paste-fault-contract` passed its
+grouped-dimension and grouped-memory fallback cases (1/1 each) and restored the
+ordinary comparison build. No new Duplicate-specific injected failure
+contract was added because this optimization introduces no new failure
+contract. No coverage ran.
+
+Focused verification used `make build-parity`, the SIMD boundary test
+`cargo test --locked -p pillow-rs --lib neon_duplicate_copy_writes_complete_blocks_and_bounded_tails`,
+and the GPU mode-layout test
+`cargo test --locked -p pillow-rs --lib gpu_duplicate_uses_native_storage_bytes_for_matching_modes`.
+The 11-case strict Pillow comparisons used `make migration-parity-test` once
+for each of `MIGRATION_TARGET_BACKEND=cpu`, `simd`, and `gpu`, with
+`MIGRATION_STRICT_TARGET_BACKEND=1`. The correctness-gated standard benchmark
+used `make migration-parity-benchmark` filtered to
+`pil-imagechops.duplicate.standard`; all three target receipts reported
+completed terminal execution on their requested backend. Do not use `make
+build` for this comparison because it can replace the Pillow oracle. No
+coverage ran.
+
 ## `ImageDraw.getfont` CPU result — 2026-10-04
 
 The focused `PIL.ImageDraw.ImageDraw.getfont.behavior.default` strict CPU

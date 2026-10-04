@@ -1,13 +1,11 @@
 // Duplicate: identity copy
-// output[idx] = input[idx]
-// Mode-aware: preserves pixel channels, sets alpha=255 for non-alpha modes.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
-// Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
+// Modes 0-3 copy the generic RGBA transport. Mode 9 copies packed native
+// bytes, four bytes per word, so L/LA/RGB/RGBA and indexed data stay native.
 
 struct Params {
     width: u32,
     height: u32,
-    mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
+    mode: u32,    // 0-3=generic RGBA modes; 9=packed native bytes
     _pad: u32,
 }
 
@@ -26,6 +24,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
     let idx = gid.y * params.width + gid.x;
+    if params.mode == 9u {
+        if idx >= params._pad { return; }
+        output[idx] = input[idx];
+        return;
+    }
+
     let pixel = input[idx];
     let r = pixel & 0xffu;
     let g = (pixel >> 8u) & 0xffu;
