@@ -814,59 +814,101 @@ pub fn effect_mandelbrot(
         return Err(PilError::ValueError("unrecognized argument value".into()));
     }
 
+    if let Some(image) = crate::compute::try_simd_mandelbrot(size, extent, quality)? {
+        return Ok(Image::from_generated_dynamic(image, "L"));
+    }
+
     // Pillow's C implementation divides by ``width - 1`` and ``height - 1``
     // without a degenerate-dimension guard.  For a one-pixel axis this yields
     // NaN, and every comparison in the iteration loop remains false, producing
     // the all-zero row/column observed from the public API.  Preserve that
     // version-matched behavior instead of replacing it with a finite stride.
+    let telemetry = crate::compute::begin_eager_cpu_mandelbrot_telemetry();
     let dr = width / (w - 1) as f64;
     let di = height / (h - 1) as f64;
 
-    // PIL uses escape radius 100.0 (NOT the common 4.0)
-    let radius = 100.0f64;
+    // Pillow uses escape radius 100.0 (NOT the common 4.0).
     let mut data = CheckedDims::new(w, h, 1)?.alloc_buffer();
+
+    // These two connected components are provably bounded: points inside the
+    // main cardioid and period-2 bulb never reach Pillow's escape radius. Keep
+    // a quality-scaled floating-point margin so coordinates near their
+    // boundaries still take the exact reference loop below.
+    let membership_margin = mandelbrot_membership_margin(quality);
 
     for y in 0..h {
         let row_start = (y * w) as usize;
+        // `ci` is constant for the row. Pillow computes this same expression
+        // per pixel; hoisting it preserves the exact rounded value while
+        // removing redundant coordinate arithmetic from the inner loop.
+        let ci = y as f64 * di + y0;
         for x in 0..w {
             let cr = x as f64 * dr + x0;
-            let ci = y as f64 * di + y0;
 
-            // PIL's exact loop: for (k = 1;; k++) with check order:
-            //   1. compute Mandelbrot iteration
-            //   2. check escape → pixel = k*255/quality (as u8, may overflow)
-            //   3. check k > quality → pixel = 0 (never escaped)
-            let mut zx = 0.0f64;
-            let mut zy = 0.0f64;
-            let mut zx2 = 0.0f64;
-            let mut zy2 = 0.0f64;
-
-            let mut k: i32 = 1;
-            loop {
-                // y1 = 2 * x1 * y1 + ci
-                zy = 2.0 * zx * zy + ci;
-                // x1 = xi2 - yi2 + cr  (using OLD xi2/yi2)
-                zx = zx2 - zy2 + cr;
-                zx2 = zx * zx;
-                zy2 = zy * zy;
-
-                if zx2 + zy2 > radius {
-                    // PIL: buf[x] = k * 255 / quality (stored as UINT8)
-                    // In C: int val = k * 255 / quality; buf[x] = (UINT8)val;
-                    let val = (k * 255 / quality) as u8;
-                    data[row_start + x as usize] = val;
-                    break;
-                }
-                if k > quality {
-                    data[row_start + x as usize] = 0;
-                    break;
-                }
-                k += 1;
+            if mandelbrot_known_interior(cr, ci, membership_margin) {
+                data[row_start + x as usize] = 0;
+                continue;
             }
+            data[row_start + x as usize] = mandelbrot_pixel_value(cr, ci, quality);
         }
     }
 
-    Image::frombytes("L", (w, h), &data)
+    // Transfer the completed L buffer into raster storage; borrowing here
+    // would copy the entire generated frame before returning it.
+    let image = Image::frombytes_owned("L", (w, h), data)?;
+    crate::compute::finish_eager_cpu_mandelbrot_telemetry(telemetry, size);
+    Ok(image)
+}
+
+#[inline]
+pub(crate) fn mandelbrot_membership_margin(quality: i32) -> f64 {
+    128.0 * f64::EPSILON * (f64::from(quality) + 1.0).powi(2)
+}
+
+#[inline]
+pub(crate) fn mandelbrot_known_interior(cr: f64, ci: f64, margin: f64) -> bool {
+    let ci2 = ci * ci;
+
+    // Main cardioid: q * (q + x) <= y^2 / 4, x = cr - 1/4.
+    let x = cr - 0.25;
+    let q = x * x + ci2;
+    let cardioid_left = q * (q + x);
+    let cardioid_right = 0.25 * ci2;
+    if cardioid_left < cardioid_right - margin * (1.0 + cardioid_left.abs() + cardioid_right.abs())
+    {
+        return true;
+    }
+
+    // Period-2 bulb: (cr + 1)^2 + ci^2 < 1/16.
+    let bulb_x = cr + 1.0;
+    let bulb_distance = bulb_x * bulb_x + ci2;
+    bulb_distance < 0.0625 - margin * (1.0 + bulb_distance.abs())
+}
+
+#[inline(always)]
+pub(crate) fn mandelbrot_pixel_value(cr: f64, ci: f64, quality: i32) -> u8 {
+    let mut zx = 0.0f64;
+    let mut zy = 0.0f64;
+    let mut zx2 = 0.0f64;
+    let mut zy2 = 0.0f64;
+
+    let mut k: i32 = 1;
+    loop {
+        // Preserve Pillow's operation order: compute y first, then x from the
+        // previous squares, then test escape before testing quality.
+        zy = 2.0 * zx * zy + ci;
+        zx = zx2 - zy2 + cr;
+        zx2 = zx * zx;
+        zy2 = zy * zy;
+
+        if zx2 + zy2 > 100.0 {
+            return (k * 255 / quality) as u8;
+        }
+        if k > quality {
+            return 0;
+        }
+        k += 1;
+    }
 }
 
 /// Validates a host-provided Mandelbrot extent and delegates to the typed

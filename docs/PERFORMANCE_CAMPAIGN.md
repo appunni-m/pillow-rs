@@ -17958,3 +17958,108 @@ MIGRATION_BENCHMARK_PROFILE=standard MIGRATION_BENCHMARK_ARGS='--workload-id pip
 All four receipts are under `build/migration-parity/`; the strict parity
 receipts report no failures and the benchmark passed schema validation. No
 coverage ran.
+
+## `Image.effect_mandelbrot` — four-attempt checkpoint — 2026-10-04
+
+The old standard input was only 1 × 4 and did not force result-byte
+materialization, so it could not rank a real raster workload. The standard
+workload now uses an L image of 1024 × 768 at quality 100, observes `tobytes`,
+and is shared by the individual-operation and pipeline-operation benchmarks.
+The former width-one case remains an edge case. Added oracle inputs cover exact
+cardioid-cusp and period-2-bulb boundaries, neighborhoods on both sides of
+those boundaries at quality 1000, one-pixel axes, invalid extents, and the
+quality-one error.
+
+The eager constructor used to bypass backend routing: the SIMD and GPU
+benchmark labels both ran the scalar CPU loop and emitted no actual-backend
+receipt. The retained implementation adds an eager SIMD entry point for rows
+wide enough to contain a vector and reports the direct CPU path when SIMD
+declines or GPU is requested. The scalar path hoists the row-invariant `ci`
+coordinate, skips points strictly inside the main cardioid or period-2 bulb
+only outside a quality-scaled uncertainty strip, and keeps Pillow's exact
+double recurrence for every other pixel. Escaping remains checked before the
+quality cutoff. The result buffer is transferred through `frombytes_owned`,
+avoiding a second full-frame byte copy while keeping Pillow's L-mode decoder
+and validation semantics.
+
+The SIMD path groups eight adjacent x coordinates, updates the eight complex
+orbits with `f64x8`, and handles lane escape decisions and the row tail without
+changing the recurrence order. Do not fuse the multiply/add stages. The
+byte-for-byte boundary cases are important because a one-iteration difference
+changes the escape byte. The quality-scaled strip deliberately sends uncertain
+points through that reference recurrence rather than trusting the analytic
+membership shortcut.
+
+The materialized benchmark ran 100 samples per subject. The initial scalar
+optimization plus row hoisting moved CPU from 23.593 ms to 7.446 ms in its
+first candidate run, with all three materialized Pillow comparisons passing.
+The best measured SIMD variant was the direct eight-lane recurrence with a
+per-lane scan. A four-lane group plus escaped-lane bitmask measured 9.817 ms;
+restoring eight lanes but retaining bitmask extraction measured 8.566 ms. Both
+lost to the original eight-lane scan, so those variants were reverted. The
+measurements show that narrower grouping and mask extraction cost more than
+they save for this orbit distribution; that mechanism is inferred from the
+code and timing, not from hardware counters.
+
+| Same-run subject | p50 latency | p95 latency | Median throughput | Actual execution |
+| --- | ---: | ---: | ---: | --- |
+| Pillow | 21.181 ms | 21.673 ms | 47.2 ops/s | Pillow |
+| Serial CPU | 7.135 ms | 7.424 ms | 140.2 ops/s | CPU, 100/100 |
+| SIMD | 6.353 ms | 6.521 ms | 157.4 ops/s | SIMD, 100/100 |
+| GPU requested | 7.262 ms | 7.454 ms | 137.7 ops/s | CPU fallback, 100/100 |
+
+CPU is 2.97× faster than Pillow on this sample. SIMD is 3.33× faster, so it
+passes a 2× floor but remains short of the repository's 5× target (4.236 ms at
+this Pillow median). The GPU row is not GPU performance: its receipt says
+`actual_backend=cpu` and records the eager-constructor fallback for all 100
+samples. The strict-target parity runner also returns matching bytes for this
+eager API without proving device execution, so GPU parity is still unavailable
+until this constructor has a real GPU kernel and an actual-dispatch receipt.
+
+The final materialized benchmark's Pillow parity receipt passed 3/3 target
+comparisons. Boundary parity passed CPU 3/3 and SIMD 3/3; the GPU-requested
+profile also produced 3/3 matching outputs, all through CPU fallback. The CPU
+edge/error set passed 4/4. None of those GPU-requested results is a GPU parity
+pass. No coverage ran.
+
+The final benchmark and focused parity commands were:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image.effect-mandelbrot.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/mandelbrot-final-winner-1024x768.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/mandelbrot-final-winner-1024x768-parity.json.gz \
+make migration-parity-benchmark
+
+MIGRATION_TARGET_BACKEND=cpu \
+MIGRATION_PARITY_CASE_IDS='PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-boundaries,PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-near-cardioid-cusp,PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-near-period-two-bulb' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/mandelbrot-boundaries-cpu-final.json \
+make migration-parity-test
+
+MIGRATION_TARGET_BACKEND=simd \
+MIGRATION_PARITY_CASE_IDS='PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-boundaries,PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-near-cardioid-cusp,PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-near-period-two-bulb' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/mandelbrot-boundaries-simd-final.json \
+make migration-parity-test
+
+MIGRATION_TARGET_BACKEND=gpu \
+MIGRATION_PARITY_CASE_IDS='PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-boundaries,PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-near-cardioid-cusp,PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-near-period-two-bulb' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/mandelbrot-boundaries-gpu-final.json \
+make migration-parity-test
+
+MIGRATION_TARGET_BACKEND=cpu \
+MIGRATION_PARITY_CASE_IDS='PIL.Image.effect_mandelbrot.nuanced.width-one,PIL.Image.effect_mandelbrot.nuanced.height-one,PIL.Image.effect_mandelbrot.nuanced.negative-extent,PIL.Image.effect_mandelbrot.nuanced.quality-one-error' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/mandelbrot-cpu-edge-final.json \
+make migration-parity-test
+```
+
+Receipts are under `build/migration-parity/`. Move to another operation after
+checkpointing this best measured path; revisit Mandelbrot only with a different
+algorithm or a real GPU implementation rather than repeating lane-width or
+mask-reduction variants.
+
+`make migration-parity-inputs-check` was also run and reported that the
+committed `pil-imagefont-freetypefont.json` differs from its generator. The
+generator output had removed existing `getname`, variation-switch, and
+font-variant observations; that unrelated fixture was restored to keep those
+parity assertions intact. The Mandelbrot input changes themselves are
+generated, and no coverage execution was run.
