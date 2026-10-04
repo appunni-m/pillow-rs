@@ -263,28 +263,59 @@ where
     let input_channels = channels_in as usize;
     let output_channels = channels_out as usize;
     let mut output = vec![0.0; color3dlut_expected_len(size, channels_out)];
-    let mut index_in = 0;
-    let mut index_out = 0;
+    let mut index_in = 0usize;
+    let mut index_out = 0usize;
+    let mut output_layout_unchanged = true;
     for b in 0..s3 {
         for g in 0..s2 {
             for r in 0..s1 {
                 let values = &table[index_in..index_in + input_channels];
-                let mut args = Vec::with_capacity(input_channels + usize::from(with_normals) * 3);
-                if with_normals {
-                    args.extend([
-                        r as f64 / (s1 - 1) as f64,
-                        g as f64 / (s2 - 1) as f64,
-                        b as f64 / (s3 - 1) as f64,
-                    ]);
+                let new_values = if with_normals {
+                    // Valid LUTs have three or four channels. Keep callback
+                    // arguments on the stack instead of allocating a Vec for
+                    // every entry; retain a dynamic fallback for manually
+                    // constructed PreparedColor3DLut values with more bands.
+                    if input_channels <= 4 {
+                        let mut args = [0.0; 7];
+                        args[0] = r as f64 / (s1 - 1) as f64;
+                        args[1] = g as f64 / (s2 - 1) as f64;
+                        args[2] = b as f64 / (s3 - 1) as f64;
+                        args[3..3 + input_channels].copy_from_slice(values);
+                        callback(&args[..3 + input_channels])?
+                    } else {
+                        let mut args = Vec::with_capacity(input_channels + 3);
+                        args.extend([
+                            r as f64 / (s1 - 1) as f64,
+                            g as f64 / (s2 - 1) as f64,
+                            b as f64 / (s3 - 1) as f64,
+                        ]);
+                        args.extend_from_slice(values);
+                        callback(&args)?
+                    }
+                } else {
+                    callback(values)?
+                };
+
+                // Most callbacks return exactly the requested channel count.
+                // Write that common case in place; use the original Vec splice
+                // semantics for an incorrectly sized result so Pillow's later
+                // constructor validation still sees the same resized table.
+                let output_end = index_out.checked_add(output_channels).filter(|end| {
+                    output_layout_unchanged
+                        && new_values.len() == output_channels
+                        && *end <= output.len()
+                });
+                if let Some(output_end) = output_end {
+                    output[index_out..output_end].copy_from_slice(&new_values);
+                } else {
+                    output_layout_unchanged = false;
+                    color3dlut_assign_callback_values(
+                        &mut output,
+                        index_out,
+                        output_channels,
+                        new_values,
+                    );
                 }
-                args.extend_from_slice(values);
-                let new_values = callback(&args)?;
-                color3dlut_assign_callback_values(
-                    &mut output,
-                    index_out,
-                    output_channels,
-                    new_values,
-                );
                 index_in += input_channels;
                 index_out += output_channels;
             }
@@ -712,5 +743,86 @@ mod unsharp_tests {
                 "difference={difference}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod color3dlut_transform_tests {
+    use super::{PilError, PreparedColor3DLut, color3dlut_transform_table};
+
+    fn fixture() -> PreparedColor3DLut {
+        PreparedColor3DLut {
+            size: (2, 2, 2),
+            table: (0..24).map(f64::from).collect(),
+            channels: 3,
+        }
+    }
+
+    #[test]
+    fn exact_width_results_preserve_the_preallocated_output_layout() {
+        let input = fixture();
+        let (actual, channels) = color3dlut_transform_table(
+            &input,
+            None,
+            false,
+            |values| Ok::<_, PilError>(values.to_vec()),
+            |error| error,
+        )
+        .unwrap();
+
+        assert_eq!(channels, 3);
+        assert_eq!(actual, input.table);
+    }
+
+    #[test]
+    fn with_normals_keeps_pillow_cube_traversal_order() {
+        let input = fixture();
+        let (actual, channels) = color3dlut_transform_table(
+            &input,
+            None,
+            true,
+            |args| {
+                assert_eq!(args.len(), 6);
+                Ok::<_, PilError>(args[..3].to_vec())
+            },
+            |error| error,
+        )
+        .unwrap();
+
+        let mut expected = Vec::with_capacity(24);
+        for b in 0..2 {
+            for g in 0..2 {
+                for r in 0..2 {
+                    expected.extend([r as f64, g as f64, b as f64]);
+                }
+            }
+        }
+        assert_eq!(channels, 3);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn wrong_callback_width_retains_pillow_slice_resize_behavior() {
+        let input = fixture();
+        let (actual, channels) = color3dlut_transform_table(
+            &input,
+            None,
+            false,
+            |values| Ok::<_, PilError>(values[..2].to_vec()),
+            |error| error,
+        )
+        .unwrap();
+
+        let mut expected = vec![0.0; 24];
+        for entry in 0..8 {
+            let start = (entry * 3).min(expected.len());
+            let end = (entry * 3 + 3).min(expected.len());
+            expected.splice(
+                start..end,
+                [input.table[entry * 3], input.table[entry * 3 + 1]],
+            );
+        }
+        assert_eq!(channels, 3);
+        assert_eq!(actual, expected);
     }
 }

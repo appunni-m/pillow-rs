@@ -18395,3 +18395,74 @@ make migration-parity-benchmark-parallel-cpu \
   MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/i-filter-chain-noise-parallel-post-4256e34.json \
   MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/i-filter-chain-noise-parallel-post-4256e34-parity.json
 ```
+
+## `Color3DLUT.transform` callback-path checkpoint — 2026-10-04
+
+The standard `pil-imagefilter-color3dlut.transform.standard` case constructs a
+2 × 2 × 2 RGB lookup table, applies an identity callback to its eight entries,
+and returns a transformed LUT. It is a small Python-callback/API workflow, not
+per-pixel image work. Target receipts have no actual image backend, so the
+SIMD- and GPU-labelled measurements are not SIMD or GPU evidence; Parallel
+CPU is also inapplicable.
+
+The clean `main` baseline at `7d619266e` passed its embedded Pillow gate. The
+candidate retained two narrowly guarded changes: the exact built-in class
+reuses the already-converted result table when its length is valid, while
+subclasses and malformed callback lengths still take the constructor path;
+the Rust traversal passes native input slices or stack-backed normal arguments
+to callbacks, writes correctly sized results in place, and preserves Pillow's
+resizing behavior through the original splice path after any wrong-sized
+callback result. Attempt 3 combined constructor size/table validation into one
+binding call, but setup time did not improve, so that experiment was reverted.
+
+| Run | Pillow whole workflow | CPU whole workflow | Pillow transform phase | CPU transform phase |
+| --- | ---: | ---: | ---: | ---: |
+| Clean baseline | 8.917 µs | 11.708 µs | 3.583 µs | 4.416 µs |
+| Attempt 1: reuse built-in result table | 9.125 µs | 11.000 µs | 3.625 µs | 3.750 µs |
+| Attempt 2: stack arguments and direct writes | 9.333 µs | 11.208 µs | 3.750 µs | 3.667 µs |
+| Attempt 3: combine constructor validation, reverted | 9.125 µs | 10.708 µs | 3.666 µs | 3.541 µs |
+| Final repeat: attempts 1 and 2 retained | 9.125 µs | 11.666 µs | 3.708 µs | 3.833 µs |
+
+The final CPU whole-workflow measurement remains 1.28× slower than Pillow.
+Attempt 2's transform phase was slightly faster than Pillow in its first run,
+but its final repeat was slightly slower; the end-to-end result did not
+improve repeatably. Keep the parity-safe reduction in per-entry allocations,
+but do not claim that the CPU target is met. Setup and the Python callback
+boundary dominate this eight-entry workload. A larger, input-only LUT case is
+needed to measure the traversal changes at realistic sizes before another
+optimization attempt. Do not route this host callback through a fictitious
+SIMD or GPU path.
+
+The final strict Pillow parity cohort passed all 34 declared constructor,
+representation, generation, and transform cases; the 7 transform-specific
+cases include normals, output-channel changes, target mode, RGBA output,
+short callback results, and invalid channels. The three focused Rust tests for
+exact-width writes, normals traversal order, and wrong-width slice resizing
+passed. `make build-parity` succeeded, and each standard benchmark passed its
+embedded parity gate. The focused Python check confirmed the base-class result
+has independent table storage and that subclasses still invoke their
+constructor. `make fmt clippy` and `make docs-lint` passed.
+
+The broad `cargo test -p pillow-rs --lib` run reported 484 passed and 10
+failures, all in unrelated GPU dispatch/resource-receipt tests. One failing
+dispatch-count test passed when rerun alone; parallel GPU test interference is
+likely, but a full serial rerun was not performed. No coverage ran.
+
+Reproduce a benchmark run with:
+
+```sh
+RUSTC_WRAPPER= \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imagefilter-color3dlut.transform.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/color3dlut-transform-repeat-final-20261004.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/color3dlut-transform-repeat-final-parity-20261004.json \
+make migration-parity-benchmark
+```
+
+Baseline and attempt receipts are `color3dlut-transform-main-7d619266e-20261004.json`,
+`color3dlut-transform-attempt{1,2,3}-20261004.json`, and
+`color3dlut-transform-repeat-final-20261004.json` under
+`build/migration-parity/`. The final 34-case parity result is
+`color3dlut-final-parity-20261004.json`. Checkpoint after three bounded
+attempts and move to the next ranked operation; CPU whole-workflow latency
+remains an open blocker.
