@@ -19130,3 +19130,61 @@ Exact strict parity passed 15/15 comparisons across CPU, SIMD, and GPU: large L,
 The existing ImageBatch fault-contract gates were included separately: `make imagebatch-rank-filter-fault-contract`, `make imagebatch-paste-fault-contract`, and `make imagebatch-expand-fault-contract` each passed their dimension- and memory-failure contracts (6/6 total, `oracle=not_applicable`). These target-only fallback/recovery cases are not Pillow parity cases and do not count toward transpose parity. No transpose fault case was invented because ordinary public transpose inputs reach the behavior and no distinct target-only injected failure contract applies.
 
 Coverage MCP was attempted for the repository report, but its DuckDB daemon again returned an invalidated-database error; no coverage report or coverage claim was produced. Keep the serial RGBA tile-size change as this visit's checkpoint, retain the SIMD/GPU gaps in the operation matrix, and move to the next ranked operation under the three-to-four-attempt limit. Revisit transpose only when broader mode and orientation measurements show a distinct high-return path.
+
+## Native-L `Image.composite` / `ImageChops.composite` checkpoint — 2026-10-05
+
+The selected workload is `pipeline-matrix.expanded.composite.1024x768`, whose
+declared operation is `PIL.ImageChops.composite`: three seeded 1024 × 768 L
+planes, an L mask, and full output materialization. The `ImageChops` facade
+delegates to the same core `CompositeModule` path as `PIL.Image.composite`.
+The benchmark uses one warmup, three measured calls per sample, two samples,
+and concurrency one. Its gate is `successful_execution`, so exact Pillow
+parity is reported separately rather than attributed to the benchmark.
+
+The first CPU attempt specializes the native one-byte source/destination/mask
+case. The general kernel formed one-byte chunks for every pixel, then nested
+three iterators; the L row loop now reads and writes flat byte slices directly
+while preserving Pillow's `(source * mask + destination * (255 - mask) +
+127) / 255` rounding. No mode conversion is involved. The SIMD attempt starts
+the L output from `image2.as_bytes().to_vec()` instead of zero-filling an
+output and then copying every destination byte into it. The other channel
+layouts retain their vector-copy path and telemetry. A third attempt flattened
+full-frame L rows so vector blocks crossed row boundaries; it did not improve
+SIMD latency and was reverted.
+
+| Run | Pillow p50 | CPU p50 | SIMD p50 | GPU p50 |
+| --- | ---: | ---: | ---: | ---: |
+| Pre-change baseline `migration-benchmark-a86c6ed0ec8140b4a417702f5f6a23ff` | 0.426 ms | 0.924 ms | 0.224 ms | 1.555 ms |
+| CPU L-loop candidate `migration-benchmark-27cc8b67eb924157ab5f06d6e437cdc5` | 0.389 ms | 0.283 ms | 0.248 ms | 1.521 ms |
+| SIMD copy candidate `migration-benchmark-cd051bc4a44347929965ea896fe65ed0` | 0.386 ms | 0.315 ms | 0.198 ms | 1.292 ms |
+| Flattened-row SIMD trial, reverted `migration-benchmark-3641817be0564f17b1d299410569f8e0` | 0.402 ms | 0.584 ms | 0.225 ms | 1.160 ms |
+| Final retained code `migration-benchmark-34ebd62a98f14ba18b05a1a0c63e8a5f` | 0.407 ms | 0.326 ms | 0.189 ms | 1.244 ms |
+
+These are small-sample separate runs, so the CPU change's before/after delta
+is not a paired causal measurement. In the final run, serial CPU is 1.25×
+faster than Pillow and SIMD is 2.16× faster; SIMD remains well short of 5×.
+At concurrency one, p50 reciprocal rates are about 2,458 Pillow calls/s,
+3,064 CPU calls/s, 5,300 SIMD calls/s, and 803 GPU calls/s; these are not
+saturated-throughput results. All three target profiles executed six times
+with no fallback. GPU used one dispatch per call, uploaded 2,359,296 bytes,
+read back 786,432 bytes, and performed zero mode conversions. Its p50 latency
+is 6.59× SIMD. The target materialization phase is about 0.178 ms for CPU,
+0.082 ms for SIMD, and 1.072 ms for GPU; synchronous staging and readback
+dominate the GPU result, so kernel arithmetic is not the next GPU attack.
+
+The final code passed `PIL.Image.composite.mode.l` strict parity 1/1 on each
+of CPU, SIMD, and GPU. The CPU rounding/tail test passed at widths 0, 1, 15,
+16, 17, 31, 32, 33, and 257. `make build-parity`, the selected
+`make migration-parity-benchmark` workload, and its nine benchmark-selection
+tests passed. Benchmark and parity receipts were stored in temporary
+directories and removed. The strict mode fixture is small; this checkpoint
+does not claim exact-output parity coverage for every full-frame input, other
+modes, different image dimensions, or the `ImageBatch` queued path.
+
+The three existing ImageBatch fault-contract gates remain distinct from this
+oracle comparison: RankFilter, Paste, and Expand passed six injected
+dimension/memory-failure cases (`oracle=not_applicable`) in the preceding
+checkpoint. They do not count as composite parity. Coverage MCP again
+returned an invalidated shared DuckDB error; no coverage result or claim was
+produced. The next composite work is the separate queued GPU workload; do not
+route ordinary single-image calls through that batch path.

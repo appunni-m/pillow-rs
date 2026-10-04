@@ -4306,12 +4306,22 @@ pub fn simd_composite_module(
         return Err(simd_unsupported("CompositeModule"));
     }
 
-    // Composite starts from an image2 copy. Allocate the output once, then
-    // copy the secondary image through the native vector type so this
-    // required semantic copy is visible in execution telemetry.
-    let mut output = vec![0u8; destination.as_bytes().len()];
-    let (copy_blocks, copy_tail) = copy_native_bytes(destination.as_bytes(), &mut output)
-        .ok_or_else(|| PilError::InternalError("SIMD composite buffer shape mismatch".into()))?;
+    // Composite starts from an image2 copy. For native L, clone the existing
+    // byte plane directly: zero-filling a new output before copying every
+    // destination byte adds a full redundant write pass. Keep the explicit
+    // vector copy and its telemetry for the other layouts.
+    let mut output = if plan.layout.mode == "L" {
+        destination.as_bytes().to_vec()
+    } else {
+        let mut output = vec![0u8; destination.as_bytes().len()];
+        let (copy_blocks, copy_tail) = copy_native_bytes(destination.as_bytes(), &mut output)
+            .ok_or_else(|| {
+                PilError::InternalError("SIMD composite buffer shape mismatch".into())
+            })?;
+        crate::compute::record_pipeline_operation_vector_blocks(copy_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(copy_tail);
+        output
+    };
     if !native_paste_apply(
         &mut output,
         img.as_bytes(),
@@ -4323,8 +4333,6 @@ pub fn simd_composite_module(
     ) {
         return Err(simd_unsupported("CompositeModule"));
     }
-    crate::compute::record_pipeline_operation_vector_blocks(copy_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(copy_tail);
     let result = crate::image_utils::raw_bytes_to_image_allow_empty(
         destination.width(),
         destination.height(),
