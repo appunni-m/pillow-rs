@@ -31,6 +31,43 @@ PASTE_LARGE_IMAGE_COUNT = 16
 PASTE_PARALLEL_SIZE = (512, 512)
 INVERT_LARGE_SIZE = (1024, 768)
 INVERT_LARGE_IMAGE_COUNT = 4
+PASTE_FAULT_CONTRACT_REQUIREMENTS = {
+    "imagebatch.paste.group-fallback": (
+        "A compatible queued native-mode masked Paste group recovers exact ordered "
+        "outputs after a dimension or allocation failure, leaves submitted inputs "
+        "unchanged, and keeps the executor usable."
+    ),
+}
+PASTE_FAULT_CONTRACT_CASES = (
+    {
+        "case_id": "imagebatch.paste.group-dimension-failure.fallback",
+        "verification": "fault-contract",
+        "operation": "ImageBatch.Paste",
+        "target_profile": "python-gpu",
+        "oracle": "not_applicable",
+        "requirements": ("imagebatch.paste.group-fallback",),
+        "fault": {
+            "point": "image_batch.paste.group_dimension_failure",
+            "contract": "grouped-paste-error-falls-back-and-recovers",
+        },
+        "mode": "RGBA",
+        "input_seeds": PASTE_BATCH_SEEDS,
+    },
+    {
+        "case_id": "imagebatch.paste.group-memory-failure.fallback",
+        "verification": "fault-contract",
+        "operation": "ImageBatch.Paste",
+        "target_profile": "python-gpu",
+        "oracle": "not_applicable",
+        "requirements": ("imagebatch.paste.group-fallback",),
+        "fault": {
+            "point": "image_batch.paste.group_memory_failure",
+            "contract": "grouped-paste-error-falls-back-and-recovers",
+        },
+        "mode": "RGBA",
+        "input_seeds": PASTE_BATCH_SEEDS,
+    },
+)
 
 
 def pixels(mode: str, size: tuple[int, int], seed: int) -> bytes:
@@ -263,9 +300,10 @@ def run_oracle(output: Path) -> None:
             mask = Image.frombytes(
                 "L", (64, 64), benchmark_pixels("L", seed + 211)
             )
-            destination.paste(source, (0, 0), mask)
-            paste_batch_outputs[mode].append(destination.tobytes().hex())
-            paste_batch_metadata[mode].append(destination.info.get("paste-seed"))
+            result = destination.copy()
+            result.paste(source, (0, 0), mask)
+            paste_batch_outputs[mode].append(result.tobytes().hex())
+            paste_batch_metadata[mode].append(result.info.get("paste-seed"))
         paste_benchmark_outputs[mode] = []
         for seed in range(64):
             destination = Image.frombytes(
@@ -277,8 +315,9 @@ def run_oracle(output: Path) -> None:
                 multiply_benchmark_other_pixels(mode, seed),
             )
             mask = Image.frombytes("L", (64, 64), benchmark_pixels("L", seed))
-            destination.paste(source, (0, 0), mask)
-            paste_benchmark_outputs[mode].append(destination.tobytes().hex())
+            result = destination.copy()
+            result.paste(source, (0, 0), mask)
+            paste_benchmark_outputs[mode].append(result.tobytes().hex())
         paste_large_outputs[mode] = []
         for seed in range(PASTE_LARGE_IMAGE_COUNT):
             destination = Image.frombytes(
@@ -296,8 +335,9 @@ def run_oracle(output: Path) -> None:
                 PASTE_LARGE_SIZE,
                 benchmark_pixels("L", seed, PASTE_LARGE_SIZE),
             )
-            destination.paste(source, (0, 0), mask)
-            paste_large_outputs[mode].append(destination.tobytes().hex())
+            result = destination.copy()
+            result.paste(source, (0, 0), mask)
+            paste_large_outputs[mode].append(result.tobytes().hex())
         paste_parallel_outputs[mode] = []
         for seed in range(1):
             destination = Image.frombytes(
@@ -316,8 +356,9 @@ def run_oracle(output: Path) -> None:
                 PASTE_PARALLEL_SIZE,
                 benchmark_pixels("L", seed, PASTE_PARALLEL_SIZE),
             )
-            destination.paste(source, (0, 0), mask)
-            paste_parallel_outputs[mode].append(destination.tobytes().hex())
+            result = destination.copy()
+            result.paste(source, (0, 0), mask)
+            paste_parallel_outputs[mode].append(result.tobytes().hex())
     color3dlut = make_batch_color3dlut(ImageFilter)
     for size, seed in zip(SIZES, SEEDS, strict=True):
         image = Image.frombytes("RGBA", size, pixels("RGBA", size, seed))
@@ -1105,12 +1146,14 @@ def run_target(expected_path: Path) -> None:
         core.take_gpu_shader_coverage()
         core.take_pipeline_telemetry()
         batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        submitted_inputs = []
         for input_index in paste_order:
             seed = PASTE_BATCH_SEEDS[input_index]
             destination = Image.frombytes(
                 mode, (64, 64), benchmark_pixels(mode, seed)
             )
             destination.info["paste-seed"] = seed
+            submitted_inputs.append((destination, destination.tobytes()))
             source = Image.frombytes(
                 mode, (64, 64), benchmark_pixels(mode, seed + 101)
             )
@@ -1120,6 +1163,8 @@ def run_target(expected_path: Path) -> None:
             batch.submit(destination, ImageBatch.Paste(source, mask))
 
         actual = batch.join()
+        if any(destination.tobytes() != original for destination, original in submitted_inputs):
+            raise AssertionError(f"queued {mode} Paste mutated a submitted destination")
         if [image.mode for image in actual] != [mode, mode]:
             raise AssertionError(f"{mode} Paste batch changed output modes")
         if [image.size for image in actual] != [(64, 64), (64, 64)]:
@@ -1218,6 +1263,7 @@ def run_target(expected_path: Path) -> None:
                 benchmark_pixels(mode, PASTE_BATCH_SEEDS[0]),
             )
             destination.info["paste-seed"] = PASTE_BATCH_SEEDS[0]
+            original_destination = destination.tobytes()
             source = Image.frombytes(
                 mode,
                 (64, 64),
@@ -1231,6 +1277,8 @@ def run_target(expected_path: Path) -> None:
             eager = ImageBatch.BatchExecutor(queue=False, backend=backend)
             eager.submit(destination, ImageBatch.Paste(source, mask))
             result = eager.join()[0]
+            if destination.tobytes() != original_destination:
+                raise AssertionError(f"queue=False {mode} Paste mutated its destination")
             if (
                 result.mode != mode
                 or result.size != (64, 64)
@@ -1314,6 +1362,144 @@ def run_target(expected_path: Path) -> None:
         raise AssertionError("GPU backend unavailable after masked Paste parity")
 
 
+def assert_grouped_paste_failure_fallback(case: dict, expected: dict) -> None:
+    """Check exact public recovery after one injected grouped Paste failure."""
+
+    from PIL import Image, ImageBatch
+    import pillow_rs._core as core
+
+    fault_point = case["fault"]["point"]
+    if os.environ.get("PILLOW_RS_MIGRATION_FAULT_POINT") != fault_point:
+        raise RuntimeError(f"fault point was not selected: {fault_point}")
+    if case["mode"] not in MODES or case["input_seeds"] != PASTE_BATCH_SEEDS:
+        raise ValueError(f"invalid Paste fault input declaration: {case['case_id']}")
+
+    for backend in ("cpu", "simd", "gpu"):
+        core.disable_backend(backend)
+    if not core.enable_backend("gpu"):
+        raise RuntimeError("GPU backend unavailable for Paste fallback fault contract")
+    core.set_pipeline_telemetry(True)
+    core.set_gpu_shader_coverage(True)
+    core.take_pipeline_telemetry()
+    core.take_gpu_shader_coverage()
+
+    mode = case["mode"]
+    batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+    submitted_inputs = []
+    for seed in case["input_seeds"]:
+        destination = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
+        destination.info["paste-seed"] = seed
+        submitted_inputs.append((destination, destination.tobytes()))
+        source = Image.frombytes(
+            mode, (64, 64), benchmark_pixels(mode, seed + 101)
+        )
+        mask = Image.frombytes(
+            "L", (64, 64), benchmark_pixels("L", seed + 211)
+        )
+        batch.submit(destination, ImageBatch.Paste(source, mask))
+
+    recovered = batch.join()
+    if any(
+        destination.tobytes() != original
+        for destination, original in submitted_inputs
+    ):
+        raise AssertionError("Paste fallback mutated a submitted destination")
+
+    expected_by_seed = {
+        seed: index for index, seed in enumerate(PASTE_BATCH_SEEDS)
+    }
+    for image, seed in zip(recovered, case["input_seeds"], strict=True):
+        index = expected_by_seed[seed]
+        if (
+            image.mode != mode
+            or image.size != (64, 64)
+            or image.tobytes().hex() != expected["paste_batch_outputs"][mode][index]
+            or image.info.get("paste-seed")
+            != expected["paste_batch_metadata"][mode][index]
+        ):
+            raise AssertionError(
+                f"fault-contract Paste fallback differs from Pillow for seed {seed}"
+            )
+
+    shader = f"paste_native_masked_{mode.lower()}.wgsl"
+    records = core.take_gpu_shader_coverage()
+    dispatches = sum(
+        record["dispatches"]
+        for record in records
+        if shader in record["shader_file"]
+    )
+    if dispatches != len(case["input_seeds"]):
+        raise AssertionError(
+            "Paste group failure did not run one GPU fallback per input: "
+            f"{records}"
+        )
+
+    seed = PASTE_BATCH_SEEDS[0]
+    destination = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
+    destination.info["paste-seed"] = seed
+    source = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed + 101))
+    mask = Image.frombytes("L", (64, 64), benchmark_pixels("L", seed + 211))
+    core.take_pipeline_telemetry()
+    core.take_gpu_shader_coverage()
+    if batch.submit(destination, ImageBatch.Paste(source, mask)) != 0:
+        raise AssertionError("a drained Paste batch did not reset its submission index")
+    followup = batch.join()
+    index = expected_by_seed[seed]
+    if (
+        len(followup) != 1
+        or followup[0].mode != mode
+        or followup[0].size != (64, 64)
+        or followup[0].tobytes().hex()
+        != expected["paste_batch_outputs"][mode][index]
+        or followup[0].info.get("paste-seed")
+        != expected["paste_batch_metadata"][mode][index]
+    ):
+        raise AssertionError("Paste executor follow-up result differs from Pillow")
+    require_gpu_execution(
+        core,
+        core.take_pipeline_telemetry(),
+        "fault-contract follow-up Paste join",
+        expected_shader=shader,
+    )
+
+
+def run_paste_fault_contracts(expected_path: Path) -> None:
+    expected = json.loads(expected_path.read_text())
+    if expected.get("pillow_version") != "12.2.0":
+        raise RuntimeError("oracle artifact version mismatch")
+    contracts = {
+        "grouped-paste-error-falls-back-and-recovers":
+            assert_grouped_paste_failure_fallback,
+    }
+    case_id = os.environ.get("PASTE_BATCH_FAULT_CONTRACT_CASE_ID")
+    case = next(
+        (item for item in PASTE_FAULT_CONTRACT_CASES if item["case_id"] == case_id),
+        None,
+    )
+    if case is None:
+        raise ValueError(f"unknown Paste fault-contract case: {case_id!r}")
+    if (
+        case["verification"] != "fault-contract"
+        or case["operation"] != "ImageBatch.Paste"
+        or case["target_profile"] != "python-gpu"
+        or case["oracle"] != "not_applicable"
+        or not case["requirements"]
+        or any(
+            requirement not in PASTE_FAULT_CONTRACT_REQUIREMENTS
+            for requirement in case["requirements"]
+        )
+    ):
+        raise ValueError(f"invalid Paste fault-contract declaration: {case_id}")
+    assertion = contracts.get(case["fault"]["contract"])
+    if assertion is None:
+        raise ValueError(f"unknown Paste fault contract: {case['fault']['contract']}")
+    assertion(case, expected)
+    print(
+        f"fault-contract case={case_id} selected=1 executed=1 passed=1 failed=0 "
+        f"requirements={','.join(case['requirements'])} oracle=not_applicable"
+    )
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="pillow-rs-imagebatch-") as directory:
         expected = Path(directory) / "pillow-expected.json"
@@ -1335,12 +1521,26 @@ def main() -> int:
         )
         target_env["IMAGEBATCH_PARITY_MODE"] = "target"
         target_env["IMAGEBATCH_PARITY_EXPECTED"] = str(expected)
+        target_env.pop("PILLOW_RS_MIGRATION_FAULT_POINT", None)
+        target_env.pop("PASTE_BATCH_FAULT_CONTRACT_CASE_ID", None)
         subprocess.run(
             [sys.executable, str(Path(__file__).resolve())],
             cwd=ROOT,
             env=target_env,
             check=True,
         )
+        if os.environ.get("PASTE_BATCH_INCLUDE_FAULT_CONTRACT") == "1":
+            for case in PASTE_FAULT_CONTRACT_CASES:
+                fault_env = target_env.copy()
+                fault_env["IMAGEBATCH_PARITY_MODE"] = "paste-fault-contract"
+                fault_env["PILLOW_RS_MIGRATION_FAULT_POINT"] = case["fault"]["point"]
+                fault_env["PASTE_BATCH_FAULT_CONTRACT_CASE_ID"] = case["case_id"]
+                subprocess.run(
+                    [sys.executable, str(Path(__file__).resolve())],
+                    cwd=ROOT,
+                    env=fault_env,
+                    check=True,
+                )
     return 0
 
 
@@ -1351,5 +1551,8 @@ if __name__ == "__main__":
         raise SystemExit(0)
     if mode == "target":
         run_target(Path(os.environ["IMAGEBATCH_PARITY_EXPECTED"]))
+        raise SystemExit(0)
+    if mode == "paste-fault-contract":
+        run_paste_fault_contracts(Path(os.environ["IMAGEBATCH_PARITY_EXPECTED"]))
         raise SystemExit(0)
     raise SystemExit(main())

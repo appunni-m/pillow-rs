@@ -24,6 +24,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static RANK_FILTER_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
 #[cfg(feature = "migration-fault-injection")]
 static EXPAND_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "migration-fault-injection")]
+static PASTE_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(feature = "migration-fault-injection")]
 fn injected_rank_filter_group_failure(job: &BatchJob, backend: Backend) -> Option<PilError> {
@@ -73,6 +75,31 @@ fn injected_expand_group_failure(job: &BatchJob, backend: Backend) -> Option<Pil
     };
 
     EXPAND_GROUP_FAILURE_INJECTED
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .ok()?;
+    Some(error)
+}
+
+#[cfg(feature = "migration-fault-injection")]
+fn injected_paste_group_failure(job: &BatchJob, backend: Backend) -> Option<PilError> {
+    if backend != Backend::Gpu
+        || !matches!(&job.operation, BatchOperation::Paste { .. })
+        || PASTE_GROUP_FAILURE_INJECTED.load(Ordering::Relaxed)
+    {
+        return None;
+    }
+
+    let error = match std::env::var("PILLOW_RS_MIGRATION_FAULT_POINT").as_deref() {
+        Ok("image_batch.paste.group_dimension_failure") => {
+            PilError::DimensionError("injected grouped Paste dimension failure".into())
+        }
+        Ok("image_batch.paste.group_memory_failure") => {
+            PilError::MemoryError("injected grouped Paste memory failure".into())
+        }
+        _ => return None,
+    };
+
+    PASTE_GROUP_FAILURE_INJECTED
         .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
         .ok()?;
     Some(error)
@@ -580,6 +607,10 @@ impl BatchExecutor {
         }
         #[cfg(feature = "migration-fault-injection")]
         if let Some(error) = injected_expand_group_failure(first, backend) {
+            return Err(error);
+        }
+        #[cfg(feature = "migration-fault-injection")]
+        if let Some(error) = injected_paste_group_failure(first, backend) {
             return Err(error);
         }
 
