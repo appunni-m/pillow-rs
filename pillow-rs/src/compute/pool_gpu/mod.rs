@@ -3914,6 +3914,21 @@ struct NativeByteFlipDispatch {
     groups_y: u32,
 }
 
+/// Tile the native Composite shader's packed-word work across the selected
+/// adapter's two-dimensional workgroup grid.
+fn plan_native_composite_dispatch(
+    word_count: u32,
+    max_workgroups_per_dimension: u32,
+) -> Option<(u32, u32)> {
+    if word_count == 0 || max_workgroups_per_dimension == 0 {
+        return None;
+    }
+    let total_workgroups = word_count.div_ceil(64);
+    let groups_x = total_workgroups.min(max_workgroups_per_dimension);
+    let groups_y = total_workgroups.div_ceil(groups_x);
+    (groups_y <= max_workgroups_per_dimension).then_some((groups_x, groups_y))
+}
+
 #[cfg(target_endian = "little")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum NativeFlipFormat {
@@ -11223,11 +11238,13 @@ impl GpuInner {
         let word_count = u32::try_from(output_transfer / 4)
             .map_err(|_| PilError::ValueError("GPU native composite is too large".into()))?;
         let workgroups = word_count.div_ceil(64);
-        if workgroups > self.device.limits().max_compute_workgroups_per_dimension {
-            return Err(PilError::ValueError(
-                "GPU native composite exceeds adapter workgroup limit".into(),
-            ));
-        }
+        let (groups_x, groups_y) = plan_native_composite_dispatch(
+            word_count,
+            self.device.limits().max_compute_workgroups_per_dimension,
+        )
+        .ok_or_else(|| {
+            PilError::ValueError("GPU native composite exceeds adapter workgroup grid limit".into())
+        })?;
 
         buffers.img2_arena.ensure_capacity(
             &self.device,
@@ -11258,6 +11275,7 @@ impl GpuInner {
         parameters[3] = u32::try_from(output_length)
             .map_err(|_| PilError::ValueError("GPU native composite is too large".into()))?;
         parameters[4] = word_count;
+        parameters[5] = groups_x;
         let write_bytes = |buffer: &wgpu::Buffer, bytes: &[u8], size: u64| {
             let size = NonZeroU64::new(size).ok_or_else(|| {
                 PilError::InternalError("GPU native composite upload is empty".into())
@@ -11360,7 +11378,7 @@ impl GpuInner {
                 cached.shader_file,
                 u64::from(workgroups),
             );
-            pass.dispatch_workgroups(workgroups, 1, 1);
+            pass.dispatch_workgroups(groups_x, groups_y, 1);
         }
         let readback = self.prepare_readback(&buffers.buf_b, output_transfer)?;
         if let ReadbackTarget::Staging(staging) = &readback {
@@ -19477,6 +19495,13 @@ fn gpu_batch_group_limit_for_limits(
     let native_brightness = matches!(op, PipelineOp::Brightness { .. });
     let native_invert = matches!(op, PipelineOp::Invert);
     let native_expand = matches!(op, PipelineOp::Expand { .. });
+    let native_composite = matches!(
+        op,
+        PipelineOp::CompositeModule {
+            mask_alpha: false,
+            ..
+        }
+    );
     let masked_paste = matches!(
         op,
         PipelineOp::Paste {
@@ -19485,18 +19510,23 @@ fn gpu_batch_group_limit_for_limits(
             ..
         }
     );
-    let channels =
-        if multiply || masked_paste || native_brightness || native_invert || native_expand {
-            match logical_mode {
-                "L" => Some(1u64),
-                "LA" => Some(2),
-                "RGB" => Some(3),
-                "RGBA" => Some(4),
-                _ => None,
-            }
-        } else {
-            Some(1)
-        };
+    let channels = if multiply
+        || masked_paste
+        || native_brightness
+        || native_invert
+        || native_expand
+        || native_composite
+    {
+        match logical_mode {
+            "L" => Some(1u64),
+            "LA" => Some(2),
+            "RGB" => Some(3),
+            "RGBA" => Some(4),
+            _ => None,
+        }
+    } else {
+        Some(1)
+    };
     let Some(channels) = channels else {
         return 0;
     };
@@ -19505,6 +19535,7 @@ fn gpu_batch_group_limit_for_limits(
         | PipelineOp::MaxFilter { size: 3 }
         | PipelineOp::RankFilter { size: 3, rank: 1 } => 2u32,
         PipelineOp::ExtractBand { .. }
+        | PipelineOp::CompositeModule { .. }
         | PipelineOp::Invert
         | PipelineOp::Brightness { .. }
         | PipelineOp::Multiply { .. }
@@ -19591,7 +19622,7 @@ fn gpu_batch_group_limit_for_limits(
                 return false;
             };
             words
-        } else if multiply || native_brightness || native_invert {
+        } else if multiply || native_brightness || native_invert || native_composite {
             let Some(sample_bytes) = input_pixels.checked_mul(channels) else {
                 return false;
             };
@@ -19653,6 +19684,16 @@ fn gpu_batch_group_limit_for_limits(
             {
                 return false;
             }
+        }
+
+        if native_composite
+            && plan_native_composite_dispatch(buffer_capacity, max_workgroups_per_dimension)
+                .is_none()
+        {
+            // The compact Composite shader uses its own 2D packed-word grid;
+            // cap the group before allocating a stack the selected adapter
+            // cannot dispatch.
+            return false;
         }
 
         let ops = [op.clone()];
@@ -35218,6 +35259,86 @@ mod tests {
         let over_height = 770u64 * (median_cap as u64 + 1);
         assert!(1024 * safe_height * 324 <= super::MAX_GPU_SHADER_WORK_ITEMS);
         assert!(1024 * over_height * 324 > super::MAX_GPU_SHADER_WORK_ITEMS);
+    }
+
+    #[test]
+    fn composite_batch_planner_respects_each_auxiliary_buffer_limit() {
+        let default_limits = (u32::MAX, u64::MAX, 65_535);
+        for (mode, channels, default_cap, storage_cap) in [
+            ("L", 1u64, 22u32, 21),
+            ("LA", 2, 22, 10),
+            ("RGB", 3, 22, 7),
+            ("RGBA", 4, 21, 5),
+        ] {
+            let composite = PipelineOp::CompositeModule {
+                other: Arc::new(Image::new(1024, 768, mode, (0, 0, 0, 0)).unwrap()),
+                mask: Arc::new(Image::new(1024, 768, "L", (0, 0, 0, 0)).unwrap()),
+                mask_alpha: false,
+            };
+            assert_eq!(
+                gpu_batch_group_limit_for_limits(
+                    &composite,
+                    mode,
+                    (1024, 768),
+                    22,
+                    default_limits.0,
+                    default_limits.1,
+                    default_limits.2,
+                ),
+                usize::try_from(default_cap).expect("small GPU group cap fits usize"),
+                "wrong native Composite workgroup cap for {mode}"
+            );
+            assert_eq!(
+                gpu_batch_group_limit_for_limits(
+                    &composite,
+                    mode,
+                    (1024, 768),
+                    22,
+                    16 * 1024 * 1024,
+                    16 * 1024 * 1024,
+                    default_limits.2,
+                ),
+                usize::try_from(storage_cap).expect("small GPU group cap fits usize"),
+                "Composite must respect the selected device's storage-binding limit for {mode}"
+            );
+
+            let bytes_per_image = 1024u64 * 768 * channels;
+            let word_count = bytes_per_image.div_ceil(4);
+            assert!(
+                super::plan_native_composite_dispatch(
+                    u32::try_from(word_count * u64::from(default_cap))
+                        .expect("default Composite batch fits u32 words"),
+                    default_limits.2,
+                )
+                .is_some(),
+                "safe {mode} Composite group must fit the adapter's 2D dispatch grid"
+            );
+        }
+    }
+
+    #[test]
+    fn native_composite_dispatch_tiles_across_both_workgroup_dimensions() {
+        const GROUP_SIZE: u32 = 64;
+        const LIMIT: u32 = 65_535;
+
+        assert_eq!(
+            super::plan_native_composite_dispatch(LIMIT * GROUP_SIZE, LIMIT),
+            Some((LIMIT, 1))
+        );
+        assert_eq!(
+            super::plan_native_composite_dispatch((LIMIT + 1) * GROUP_SIZE, LIMIT),
+            Some((LIMIT, 2))
+        );
+        assert_eq!(
+            super::plan_native_composite_dispatch(4 * GROUP_SIZE, 2),
+            Some((2, 2))
+        );
+        assert_eq!(
+            super::plan_native_composite_dispatch(5 * GROUP_SIZE, 2),
+            None
+        );
+        assert_eq!(super::plan_native_composite_dispatch(0, LIMIT), None);
+        assert_eq!(super::plan_native_composite_dispatch(GROUP_SIZE, 0), None);
     }
 
     #[test]

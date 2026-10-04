@@ -165,6 +165,22 @@ impl PyBatchExecutor {
                     mask: Box::new(mask),
                 }
             }
+            "Composite" => {
+                let background = operation.getattr("background")?;
+                let background = image_from_python(&background).ok_or_else(|| {
+                    PyTypeError::new_err(
+                        "ImageBatch.Composite requires a PIL.Image.Image background",
+                    )
+                })?;
+                let mask = operation.getattr("mask")?;
+                let mask = image_from_python(&mask).ok_or_else(|| {
+                    PyTypeError::new_err("ImageBatch.Composite requires a PIL.Image.Image mask")
+                })?;
+                pillow_rs::BatchOperation::Composite {
+                    background: Box::new(background),
+                    mask: Box::new(mask),
+                }
+            }
             "Expand" => {
                 let border = operation.getattr("border")?.extract::<i64>()?;
                 let border = filter_size_from_python(border, false)?;
@@ -182,7 +198,7 @@ impl PyBatchExecutor {
             }
             _ => {
                 return Err(PyTypeError::new_err(
-                    "batch operation must be an ImageFilter.MedianFilter, ImageFilter.MaxFilter, or ImageFilter.RankFilter, ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Brightness, ImageBatch.Multiply, ImageBatch.Paste, ImageBatch.Expand, or ImageBatch.Color3DLUT instance",
+                    "batch operation must be an ImageFilter.MedianFilter, ImageFilter.MaxFilter, or ImageFilter.RankFilter, ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Brightness, ImageBatch.Multiply, ImageBatch.Paste, ImageBatch.Composite, ImageBatch.Expand, or ImageBatch.Color3DLUT instance",
                 ));
             }
         };

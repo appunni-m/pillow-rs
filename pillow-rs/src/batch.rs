@@ -7,9 +7,9 @@
 //! `MedianFilter(3)`, `MaxFilter(3)`, native-L `RankFilter(3, 1)`,
 //! `ExtractBand`, `ImageOps.invert`, native-mode `Brightness`,
 //! `ImageChops.multiply`, and same-mode RGBA `Color3DLUT` pipelines. Full-frame
-//! native-mode masked Paste jobs with L masks and native-mode `ImageOps.expand`
-//! jobs also reuse their existing pipelines. Images that cannot be grouped use
-//! their ordinary single-image pipeline.
+//! native-mode masked Paste and Composite jobs with L masks, plus native-mode
+//! `ImageOps.expand` jobs, also reuse their existing pipelines. Images that
+//! cannot be grouped use their ordinary single-image pipeline.
 
 use crate::compute::Backend;
 use crate::error::PilError;
@@ -26,6 +26,8 @@ static RANK_FILTER_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
 static EXPAND_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
 #[cfg(feature = "migration-fault-injection")]
 static PASTE_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "migration-fault-injection")]
+static COMPOSITE_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(feature = "migration-fault-injection")]
 fn injected_rank_filter_group_failure(job: &BatchJob, backend: Backend) -> Option<PilError> {
@@ -105,6 +107,31 @@ fn injected_paste_group_failure(job: &BatchJob, backend: Backend) -> Option<PilE
     Some(error)
 }
 
+#[cfg(feature = "migration-fault-injection")]
+fn injected_composite_group_failure(job: &BatchJob, backend: Backend) -> Option<PilError> {
+    if backend != Backend::Gpu
+        || !matches!(&job.operation, BatchOperation::Composite { .. })
+        || COMPOSITE_GROUP_FAILURE_INJECTED.load(Ordering::Relaxed)
+    {
+        return None;
+    }
+
+    let error = match std::env::var("PILLOW_RS_MIGRATION_FAULT_POINT").as_deref() {
+        Ok("image_batch.composite.group_dimension_failure") => {
+            PilError::DimensionError("injected grouped Composite dimension failure".into())
+        }
+        Ok("image_batch.composite.group_memory_failure") => {
+            PilError::MemoryError("injected grouped Composite memory failure".into())
+        }
+        _ => return None,
+    };
+
+    COMPOSITE_GROUP_FAILURE_INJECTED
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .ok()?;
+    Some(error)
+}
+
 /// One explicitly submitted Pillow operation.
 #[derive(Debug, Clone)]
 pub enum BatchOperation {
@@ -150,6 +177,13 @@ pub enum BatchOperation {
         /// L-mode mask with the same dimensions as the destination.
         mask: Box<Image>,
     },
+    /// Composite a foreground and background through a same-size L mask.
+    Composite {
+        /// Background image; the result keeps this image's mode and metadata.
+        background: Box<Image>,
+        /// L-mode mask with the same dimensions as the foreground.
+        mask: Box<Image>,
+    },
     /// Add a native-mode border using Pillow's `ImageOps.expand` semantics.
     Expand {
         /// Symmetric border width in pixels.
@@ -188,6 +222,9 @@ impl BatchOperation {
                     Some(mask),
                 )?;
                 Ok(output)
+            }
+            Self::Composite { background, mask } => {
+                crate::ops::module_fns::composite(image, background, mask)
             }
             Self::Expand { border, fill } => {
                 crate::ops::imageops::expand_with_input(image, *border, fill.clone())
@@ -255,6 +292,17 @@ impl BatchOperation {
                     && mask.mode().is_ok_and(|mask_mode| mask_mode == "L")
                     && mask.size().is_ok_and(|mask_size| mask_size == size)
             }
+            Self::Composite { background, mask } => {
+                matches!(mode, "L" | "LA" | "RGB" | "RGBA")
+                    && background
+                        .mode()
+                        .is_ok_and(|background_mode| background_mode == mode)
+                    && background
+                        .size()
+                        .is_ok_and(|background_size| background_size == size)
+                    && mask.mode().is_ok_and(|mask_mode| mask_mode == "L")
+                    && mask.size().is_ok_and(|mask_size| mask_size == size)
+            }
             Self::Expand { border, fill } => {
                 let Some(border_twice) = border.checked_mul(2) else {
                     return false;
@@ -304,6 +352,7 @@ impl BatchOperation {
             }
             (Self::Multiply { .. }, Self::Multiply { .. }) => true,
             (Self::Paste { .. }, Self::Paste { .. }) => true,
+            (Self::Composite { .. }, Self::Composite { .. }) => true,
             (
                 Self::Expand {
                     border: left_border,
@@ -365,6 +414,11 @@ impl BatchOperation {
                     mask_alpha: false,
                 })
             }
+            Self::Composite { background, mask } => Some(PipelineOp::CompositeModule {
+                other: Arc::new((**background).clone()),
+                mask: Arc::new((**mask).clone()),
+                mask_alpha: false,
+            }),
             Self::Expand { .. } => None,
             Self::Color3DLut {
                 size,
@@ -408,13 +462,16 @@ struct BatchJob {
 /// single-image route. With `queue = true`, [`join`](Self::join) groups
 /// compatible `MedianFilter(3)`, `MaxFilter(3)`, and native-L
 /// `RankFilter(3, rank=1)`, `ExtractBand`, L/RGB `ImageOps.invert`, exact-factor native-mode
-/// `Brightness`, `ImageChops.multiply`, full-frame masked Paste, and same-mode
-/// RGBA `Color3DLUT` and native-mode `ImageOps.expand` jobs when GPU is the
-/// selected backend. Grouping currently
+/// `Brightness`, `ImageChops.multiply`, full-frame masked Paste, same-mode
+/// `Image.composite` through an L mask, same-mode RGBA `Color3DLUT`, and
+/// native-mode `ImageOps.expand` jobs when GPU is the selected backend.
+/// Grouping currently
 /// requires equal-size native byte modes `L`, `LA`, `RGB`, and `RGBA`; batched
 /// Brightness additionally requires an exact GPU factor and one of `L`, `LA`,
 /// or `RGB`. Masked Paste additionally requires same-mode sources and
-/// same-size `L` masks, while LUT groups require the same shared LUT object.
+/// same-size `L` masks. Composite groups require equal-size foreground and
+/// background images in the same native mode plus a same-size `L` mask, while
+/// LUT groups require the same shared LUT object.
 /// Other jobs use the ordinary per-image operation. No conversion to RGBA is
 /// performed.
 ///
@@ -613,6 +670,10 @@ impl BatchExecutor {
         if let Some(error) = injected_paste_group_failure(first, backend) {
             return Err(error);
         }
+        #[cfg(feature = "migration-fault-injection")]
+        if let Some(error) = injected_composite_group_failure(first, backend) {
+            return Err(error);
+        }
 
         let mode = first.mode.as_str();
         let channels = mode_channels(mode).ok_or_else(|| {
@@ -682,7 +743,7 @@ impl BatchExecutor {
                     .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
                 (0usize, stacked_height, mode, channels)
             }
-            BatchOperation::Paste { .. } => {
+            BatchOperation::Paste { .. } | BatchOperation::Composite { .. } => {
                 let group_len = u32::try_from(indices.len())
                     .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
                 let stacked_height = height
@@ -731,7 +792,9 @@ impl BatchExecutor {
         })?;
         let mut packed_other = if matches!(
             first.operation,
-            BatchOperation::Multiply { .. } | BatchOperation::Paste { .. }
+            BatchOperation::Multiply { .. }
+                | BatchOperation::Paste { .. }
+                | BatchOperation::Composite { .. }
         ) {
             let mut packed_other = Vec::new();
             packed_other.try_reserve_exact(capacity).map_err(|error| {
@@ -747,7 +810,10 @@ impl BatchExecutor {
             .ok()
             .and_then(|width| width.checked_mul(stacked_height_usize))
             .ok_or_else(|| PilError::DimensionError("batch mask size overflow".into()))?;
-        let mut packed_mask = if matches!(first.operation, BatchOperation::Paste { .. }) {
+        let mut packed_mask = if matches!(
+            first.operation,
+            BatchOperation::Paste { .. } | BatchOperation::Composite { .. }
+        ) {
             let mut packed_mask = Vec::new();
             packed_mask
                 .try_reserve_exact(mask_capacity)
@@ -914,6 +980,66 @@ impl BatchExecutor {
                         })?
                         .extend_from_slice(mask_bytes);
                 }
+                BatchOperation::Composite { background, mask } => {
+                    let background_pixels = background.materialized_shared()?;
+                    if background.mode()? != mode
+                        || background.size()? != (width, height)
+                        || background_pixels.color() != native_storage
+                    {
+                        return Err(PilError::DimensionError(
+                            "composite backgrounds must match the foreground's native dimensions"
+                                .into(),
+                        ));
+                    }
+                    let background_bytes = background_pixels.as_bytes();
+                    if background_bytes.len() != expected {
+                        return Err(PilError::InternalError(format!(
+                            "native Composite batch background length mismatch: expected {expected}, got {}",
+                            background_bytes.len()
+                        )));
+                    }
+                    packed_other
+                        .as_mut()
+                        .ok_or_else(|| {
+                            PilError::InternalError(
+                                "Composite batch has no background buffer".into(),
+                            )
+                        })?
+                        .extend_from_slice(background_bytes);
+
+                    let mask_pixels = mask.materialized_shared()?;
+                    if mask.mode()? != "L"
+                        || mask.size()? != (width, height)
+                        || mask_pixels.color() != crate::raster::ColorType::L8
+                    {
+                        return Err(PilError::DimensionError(
+                            "Composite batch masks must be same-size native L images".into(),
+                        ));
+                    }
+                    let mask_bytes = mask_pixels.as_bytes();
+                    let expected_mask = usize::try_from(width)
+                        .ok()
+                        .and_then(|width| {
+                            usize::try_from(height)
+                                .ok()
+                                .and_then(|height| width.checked_mul(height))
+                        })
+                        .ok_or_else(|| {
+                            PilError::DimensionError("Composite mask size overflow".into())
+                        })?;
+                    if mask_bytes.len() != expected_mask {
+                        return Err(PilError::InternalError(format!(
+                            "native Composite batch mask length mismatch: expected {expected_mask}, got {}",
+                            mask_bytes.len()
+                        )));
+                    }
+                    packed_mask
+                        .as_mut()
+                        .ok_or_else(|| {
+                            PilError::InternalError("Composite batch has no mask buffer".into())
+                        })?
+                        .extend_from_slice(mask_bytes);
+                }
                 _ => {}
             }
         }
@@ -985,6 +1111,26 @@ impl BatchExecutor {
             )?;
             BatchOperation::Paste {
                 source: Box::new(source),
+                mask: Box::new(mask),
+            }
+            .apply(&stacked)?
+        } else if matches!(first.operation, BatchOperation::Composite { .. }) {
+            let background = Image::frombytes_owned(
+                mode,
+                (width, stacked_height),
+                packed_other.ok_or_else(|| {
+                    PilError::InternalError("Composite batch lost its background buffer".into())
+                })?,
+            )?;
+            let mask = Image::frombytes_owned(
+                "L",
+                (width, stacked_height),
+                packed_mask.ok_or_else(|| {
+                    PilError::InternalError("Composite batch lost its mask buffer".into())
+                })?,
+            )?;
+            BatchOperation::Composite {
+                background: Box::new(background),
                 mask: Box::new(mask),
             }
             .apply(&stacked)?
@@ -1692,6 +1838,93 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             assert_eq!(actual, expected, "queued {mode} Paste results differ");
+        }
+    }
+
+    #[test]
+    fn composite_groups_only_matching_native_images_with_l_masks() {
+        for (mode, channels) in [("L", 1), ("LA", 2), ("RGB", 3), ("RGBA", 4)] {
+            let operation = BatchOperation::Composite {
+                background: Box::new(fixture(mode, 3, 2, channels, 61)),
+                mask: Box::new(fixture("L", 3, 2, 1, 23)),
+            };
+            assert!(operation.can_group(mode, (3, 2)), "mode {mode}");
+            assert!(operation.matches_group(&operation), "mode {mode}");
+            assert!(matches!(
+                operation.pipeline_op(),
+                Some(PipelineOp::CompositeModule {
+                    mask_alpha: false,
+                    ..
+                })
+            ));
+        }
+
+        let wrong_background_mode = BatchOperation::Composite {
+            background: Box::new(fixture("RGBA", 3, 2, 4, 61)),
+            mask: Box::new(fixture("L", 3, 2, 1, 23)),
+        };
+        assert!(!wrong_background_mode.can_group("RGB", (3, 2)));
+
+        let wrong_background_size = BatchOperation::Composite {
+            background: Box::new(fixture("LA", 2, 2, 2, 61)),
+            mask: Box::new(fixture("L", 3, 2, 1, 23)),
+        };
+        assert!(!wrong_background_size.can_group("LA", (3, 2)));
+
+        let wrong_mask_mode = BatchOperation::Composite {
+            background: Box::new(fixture("LA", 3, 2, 2, 61)),
+            mask: Box::new(fixture("LA", 3, 2, 2, 23)),
+        };
+        assert!(!wrong_mask_mode.can_group("LA", (3, 2)));
+    }
+
+    #[test]
+    fn queued_composite_reuses_the_existing_native_mode_operation() {
+        for (mode, channels) in [("L", 1), ("LA", 2), ("RGB", 3), ("RGBA", 4)] {
+            let inputs = [
+                (
+                    fixture(mode, 7, 5, channels, 17),
+                    fixture(mode, 7, 5, channels, 91),
+                    fixture("L", 7, 5, 1, 39),
+                ),
+                (
+                    fixture(mode, 7, 5, channels, 203),
+                    fixture(mode, 7, 5, channels, 147),
+                    fixture("L", 7, 5, 1, 71),
+                ),
+            ];
+            let expected = inputs
+                .iter()
+                .map(|(foreground, background, mask)| {
+                    crate::ops::module_fns::composite(foreground, background, mask)
+                        .unwrap()
+                        .tobytes()
+                        .unwrap()
+                })
+                .collect::<Vec<_>>();
+
+            let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+            for (foreground, background, mask) in inputs {
+                batch
+                    .submit(
+                        foreground,
+                        BatchOperation::Composite {
+                            background: Box::new(background),
+                            mask: Box::new(mask),
+                        },
+                    )
+                    .unwrap();
+            }
+            let actual = batch
+                .join()
+                .unwrap()
+                .iter()
+                .map(|image| {
+                    assert_eq!(image.mode().unwrap(), mode);
+                    image.tobytes().unwrap()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "queued {mode} Composite outputs differ");
         }
     }
 

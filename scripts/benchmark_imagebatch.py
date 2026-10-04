@@ -37,7 +37,11 @@ def make_color3dlut(ImageFilter):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backend", choices=("pillow", "cpu", "simd", "gpu"), default="gpu")
+    parser.add_argument(
+        "--backend",
+        choices=("pillow", "cpu", "parallel-cpu", "simd", "gpu"),
+        default="gpu",
+    )
     parser.add_argument("--queue", action="store_true", help="queue operations until join")
     parser.add_argument(
         "--operation",
@@ -50,6 +54,7 @@ def parse_args() -> argparse.Namespace:
             "brightness",
             "multiply",
             "paste",
+            "composite",
             "expand",
             "color3dlut",
         ),
@@ -107,6 +112,11 @@ def main() -> int:
         from PIL import ImageBatch
         import pillow_rs._core as core
 
+        if args.backend == "parallel-cpu" and not core.parallel_feature_enabled():
+            raise RuntimeError(
+                "parallel-cpu requires `make build-parity-parallel-cpu`; "
+                "the installed extension is serial"
+            )
         pillow_version = None
         color_lut = make_color3dlut(ImageFilter) if args.operation == "color3dlut" else None
         batch_color_lut = ImageBatch.Color3DLUT(color_lut) if color_lut is not None else None
@@ -135,7 +145,7 @@ def main() -> int:
             )
             for seed in range(args.images * window_count)
         ]
-        if args.operation in ("multiply", "paste")
+        if args.operation in ("multiply", "paste", "composite")
         else []
     )
     mask_inputs = (
@@ -146,14 +156,15 @@ def main() -> int:
             )
             for seed in range(args.images * window_count)
         ]
-        if args.operation == "paste"
+        if args.operation in ("paste", "composite")
         else []
     )
 
     if core is not None:
         for backend in ("cpu", "simd", "gpu"):
             core.disable_backend(backend)
-        if not core.enable_backend(args.backend):
+        selected_backend = "cpu" if args.backend == "parallel-cpu" else args.backend
+        if not core.enable_backend(selected_backend):
             raise RuntimeError(f"{args.backend} backend is unavailable")
 
     def run_window(start: int) -> list[Image.Image]:
@@ -178,6 +189,18 @@ def main() -> int:
                     image.filter(color_lut).tobytes()
                 elif args.operation == "brightness":
                     ImageEnhance.Brightness(image).enhance(args.factor).tobytes()
+                elif args.operation == "composite":
+                    background = Image.frombytes(
+                        args.mode,
+                        (args.width, args.height),
+                        other_inputs[start + image_index],
+                    )
+                    mask = Image.frombytes(
+                        "L",
+                        (args.width, args.height),
+                        mask_inputs[start + image_index],
+                    )
+                    Image.composite(image, background, mask).tobytes()
                 elif args.operation == "paste":
                     source = Image.frombytes(
                         args.mode,
@@ -206,7 +229,8 @@ def main() -> int:
                     ImageChops.multiply(image, other).tobytes()
             return []
 
-        executor = ImageBatch.BatchExecutor(queue=args.queue, backend=args.backend)
+        executor_backend = "cpu" if args.backend == "parallel-cpu" else args.backend
+        executor = ImageBatch.BatchExecutor(queue=args.queue, backend=executor_backend)
         for image_index in range(args.images):
             image = Image.frombytes(
                 args.mode,
@@ -247,6 +271,18 @@ def main() -> int:
                     mask_inputs[start + image_index],
                 )
                 operation = ImageBatch.Paste(source, mask)
+            elif args.operation == "composite":
+                background = Image.frombytes(
+                    args.mode,
+                    (args.width, args.height),
+                    other_inputs[start + image_index],
+                )
+                mask = Image.frombytes(
+                    "L",
+                    (args.width, args.height),
+                    mask_inputs[start + image_index],
+                )
+                operation = ImageBatch.Composite(background, mask)
             elif args.operation == "expand":
                 operation = ImageBatch.Expand(args.border, args.fill)
             else:
@@ -282,10 +318,16 @@ def main() -> int:
         core.set_pipeline_telemetry(False)
         if (
             receipt is None
-            or receipt.get("actual_backend") != args.backend
+            or receipt.get("actual_backend") != selected_backend
             or receipt.get("fallback_reason")
         ):
             raise RuntimeError(f"requested {args.backend}, but preflight routed differently: {receipt}")
+        if args.backend == "gpu" and args.queue and args.operation == "composite":
+            if receipt.get("dispatch_count", 0) < 1:
+                raise RuntimeError(
+                    "queued Composite benchmark did not execute on the GPU: "
+                    f"{receipt}"
+                )
 
     for warmup in range(args.warmups):
         run_window((warmup + 1) * args.images)
@@ -324,6 +366,11 @@ def main() -> int:
                     "operation_count": receipt["operation_count"],
                     "dispatch_count": receipt["dispatch_count"],
                     "fallback_reason": receipt["fallback_reason"],
+                    "mode_conversion_count": (
+                        receipt.get("resource", {}).get("mode_conversion_count")
+                        if receipt.get("resource")
+                        else None
+                    ),
                 },
             },
             indent=2,

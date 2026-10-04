@@ -208,6 +208,7 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-case CASE_ID=...$(NC) Run one public parity case for fast iteration\n"
 	@printf "  $(CYAN)make imagebatch-rank-filter-fault-contract$(NC) Run ImageBatch RankFilter's isolated target-only fallback fault contracts\n"
 	@printf "  $(CYAN)make imagebatch-paste-fault-contract$(NC) Run ImageBatch Paste's isolated target-only fallback fault contracts\n"
+	@printf "  $(CYAN)make imagebatch-composite-fault-contract$(NC) Run ImageBatch Composite's isolated target-only fallback fault contracts\n"
 	@printf "  $(CYAN)make imagebatch-expand-fault-contract$(NC) Run ImageBatch Expand's isolated target-only fallback fault contracts\n"
 	@printf "  $(CYAN)make migration-parity-oracle-identity$(NC) Verify the pinned Pillow oracle identity\n"
 	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
@@ -459,7 +460,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
-.PHONY: migration-parity-test migration-parity-case imagebatch-rank-filter-fault-contract imagebatch-paste-fault-contract imagebatch-expand-fault-contract migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: migration-parity-test migration-parity-case imagebatch-rank-filter-fault-contract imagebatch-paste-fault-contract imagebatch-composite-fault-contract imagebatch-expand-fault-contract migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -544,6 +545,22 @@ imagebatch-paste-fault-contract: ## Run target-only ImageBatch Paste fallback fa
 	build_status=$$?; \
 	if [ $$build_status -eq 0 ]; then \
 		PASTE_BATCH_INCLUDE_FAULT_CONTRACT=1 $(PYTHON) scripts/test_imagebatch_parity.py; \
+		test_status=$$?; \
+	else \
+		test_status=0; \
+	fi; \
+	$(MAKE) build-parity; \
+	restore_status=$$?; \
+	if [ $$restore_status -ne 0 ]; then exit $$restore_status; fi; \
+	if [ $$build_status -ne 0 ]; then exit $$build_status; fi; \
+	exit $$test_status
+
+imagebatch-composite-fault-contract: ## Run target-only ImageBatch Composite fallback fault contracts
+	@set +e; \
+	$(MATURIN) develop --skip-install --manifest-path $(PY_SRC)/Cargo.toml --locked --features migration-fault-injection; \
+	build_status=$$?; \
+	if [ $$build_status -eq 0 ]; then \
+		COMPOSITE_BATCH_INCLUDE_FAULT_CONTRACT=1 $(PYTHON) scripts/test_imagebatch_parity.py; \
 		test_status=$$?; \
 	else \
 		test_status=0; \
