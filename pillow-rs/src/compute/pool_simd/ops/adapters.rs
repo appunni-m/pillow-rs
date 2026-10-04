@@ -29586,6 +29586,99 @@ fn native_merge_vector_block(
     ))
 }
 
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+fn native_merge_rgb_interleave_neon(
+    width: u32,
+    height: u32,
+    pixels: usize,
+    output_len: usize,
+    bands: &[&[u8]],
+) -> Result<(DynamicImage, u64, u64), PilError> {
+    use std::arch::aarch64::{uint8x16x3_t, vld1q_u8, vst3q_u8};
+
+    let [red, green, blue] = bands else {
+        return Err(PilError::InternalError(
+            "SIMD RGB merge requires exactly three bands".into(),
+        ));
+    };
+    if red.len() != pixels || green.len() != pixels || blue.len() != pixels {
+        return Err(PilError::InternalError(
+            "SIMD RGB merge band lengths do not match".into(),
+        ));
+    }
+
+    let vector_pixels = pixels / 16 * 16;
+    let mut output: Vec<u8> = Vec::with_capacity(output_len);
+
+    // SAFETY: each source contains exactly `pixels` bytes, and every NEON
+    // load starts at a 16-pixel boundary below `vector_pixels`, so its 16-byte
+    // read is in bounds. Each `vst3q_u8` writes 48 bytes for those same 16
+    // pixels; its destination offset is below `output_len - 47`. The scalar
+    // tail writes three bytes per remaining pixel, also within `output_len`.
+    // The fresh output allocation cannot overlap the immutable sources, and
+    // its length stays zero until all vector and tail bytes are initialized.
+    unsafe {
+        let red_ptr = red.as_ptr();
+        let green_ptr = green.as_ptr();
+        let blue_ptr = blue.as_ptr();
+        let output_ptr = output.as_mut_ptr();
+        let mut pixel = 0usize;
+        while pixel + 64 <= vector_pixels {
+            let channels_0 = uint8x16x3_t(
+                vld1q_u8(red_ptr.add(pixel)),
+                vld1q_u8(green_ptr.add(pixel)),
+                vld1q_u8(blue_ptr.add(pixel)),
+            );
+            let channels_1 = uint8x16x3_t(
+                vld1q_u8(red_ptr.add(pixel + 16)),
+                vld1q_u8(green_ptr.add(pixel + 16)),
+                vld1q_u8(blue_ptr.add(pixel + 16)),
+            );
+            let channels_2 = uint8x16x3_t(
+                vld1q_u8(red_ptr.add(pixel + 32)),
+                vld1q_u8(green_ptr.add(pixel + 32)),
+                vld1q_u8(blue_ptr.add(pixel + 32)),
+            );
+            let channels_3 = uint8x16x3_t(
+                vld1q_u8(red_ptr.add(pixel + 48)),
+                vld1q_u8(green_ptr.add(pixel + 48)),
+                vld1q_u8(blue_ptr.add(pixel + 48)),
+            );
+            vst3q_u8(output_ptr.add(pixel * 3), channels_0);
+            vst3q_u8(output_ptr.add((pixel + 16) * 3), channels_1);
+            vst3q_u8(output_ptr.add((pixel + 32) * 3), channels_2);
+            vst3q_u8(output_ptr.add((pixel + 48) * 3), channels_3);
+            pixel += 64;
+        }
+        while pixel < vector_pixels {
+            let channels = uint8x16x3_t(
+                vld1q_u8(red_ptr.add(pixel)),
+                vld1q_u8(green_ptr.add(pixel)),
+                vld1q_u8(blue_ptr.add(pixel)),
+            );
+            vst3q_u8(output_ptr.add(pixel * 3), channels);
+            pixel += 16;
+        }
+        for pixel in vector_pixels..pixels {
+            let offset = pixel * 3;
+            output_ptr.add(offset).write(*red.get_unchecked(pixel));
+            output_ptr
+                .add(offset + 1)
+                .write(*green.get_unchecked(pixel));
+            output_ptr.add(offset + 2).write(*blue.get_unchecked(pixel));
+        }
+        output.set_len(output_len);
+    }
+
+    let image = crate::image_utils::raw_bytes_to_image_allow_empty(width, height, output, 3)?;
+    Ok((
+        image,
+        (vector_pixels / 16) as u64,
+        ((pixels - vector_pixels) * 3) as u64,
+    ))
+}
+
 fn native_merge_interleave(
     width: u32,
     height: u32,
@@ -29596,6 +29689,11 @@ fn native_merge_interleave(
     let output_len = pixels
         .checked_mul(channels)
         .ok_or_else(|| PilError::ValueError("SIMD merge output length overflow".into()))?;
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    if channels == 3 && pixels >= 16 {
+        return native_merge_rgb_interleave_neon(width, height, pixels, output_len, band_bytes);
+    }
+
     let mut output = vec![0u8; output_len];
     let pixels_per_vector = match channels {
         1 => 16,
@@ -32823,6 +32921,33 @@ mod tests {
         );
         assert_eq!(vector_blocks, 1);
         assert_eq!(scalar_tail, 3);
+    }
+
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[test]
+    fn neon_native_rgb_merge_writes_complete_structure_blocks_and_tails() {
+        for length in [0usize, 1, 15, 16, 17, 31, 32, 33] {
+            let red = (0..length).map(|i| (i * 7 + 1) as u8).collect::<Vec<_>>();
+            let green = (0..length).map(|i| (i * 11 + 3) as u8).collect::<Vec<_>>();
+            let blue = (0..length).map(|i| (i * 13 + 5) as u8).collect::<Vec<_>>();
+            let expected = (0..length)
+                .flat_map(|i| [red[i], green[i], blue[i]])
+                .collect::<Vec<_>>();
+            let bands = [&red[..], &green[..], &blue[..]];
+
+            let (actual, vector_blocks, scalar_tail) = super::native_merge_rgb_interleave_neon(
+                length as u32,
+                1,
+                length,
+                length * 3,
+                &bands,
+            )
+            .expect("native RGB merge should succeed");
+
+            assert_eq!(actual.as_bytes(), expected, "pixel count {length}");
+            assert_eq!(vector_blocks, (length / 16) as u64);
+            assert_eq!(scalar_tail, ((length % 16) * 3) as u64);
+        }
     }
 
     #[test]

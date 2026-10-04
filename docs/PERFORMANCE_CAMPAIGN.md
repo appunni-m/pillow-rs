@@ -15540,6 +15540,56 @@ ordinary Pillow for this image size. Move to the next operation rather than
 spending another round on Merge without a different SIMD kernel or a measured
 GPU scheduling hypothesis.
 
+### Material RGB/L follow-up — 2026-10-05
+
+Three bounded attempts revisited the same spatially varying 1024 × 768
+three-L-band workload. The first added an exact-capacity serial CPU interleave
+and an AArch64 NEON `vst3q_u8` route; the second unrolled four 16-pixel NEON
+stores per loop; the third added a narrow GPU-native L-to-RGB path that packs
+the final RGB bytes directly. The CPU helper writes each sample once into its
+final allocation. The GPU route removes RGBA staging and reduces uploads to
+the three native L planes, but it still pays per-call dispatch, synchronization,
+and readback costs. The explicit multi-image scheduler remains a separate API
+and was not used for this one-image operation.
+
+| Profile | Pillow p50 / p95 (ms) | pillow-rs p50 / p95 (ms) | Throughput (ops/s) | Result |
+| --- | ---: | ---: | ---: | --- |
+| Pillow | 0.897 / 1.069 | — | 1,115 | reference |
+| Serial CPU | 0.897 / 1.069 | 0.220 / 0.314 | 4,544 | 4.08× faster than Pillow |
+| SIMD | 0.897 / 1.069 | 0.239 / 0.339 | 4,191 | 3.76× faster than Pillow; 8.4% slower than CPU |
+| GPU | 0.897 / 1.069 | 1.134 / 1.479 | 881 | 1.26× slower than Pillow and 4.75× slower than SIMD |
+| Parallel CPU (`parallel` feature) | 0.897 / 1.069 | 0.414 / 0.507 | 2,417 | 2.17× faster than Pillow; 1.88× slower than serial CPU |
+
+The native GPU route improved median latency about 2.89× over the previous
+generic GPU attempt, with one dispatch, no fallback, zero mode conversions,
+2,359,296 uploaded bytes, and 2,359,296 readback bytes. Transfer and
+completion latency still dominate. The GPU target is not met; batching belongs
+to the separate explicit batching feature and is not folded into `Image.merge`.
+The Parallel CPU result was collected separately with the opt-in Rayon build;
+its Pillow baseline is the ordinary sequential Pillow run for this same
+workload, not a separate threaded baseline. Rayon is slower than the serial
+specialization here, so it stays a separately reported feature profile. The
+NEON unroll was a modest improvement over the first vector attempt but does
+not reach the 5× SIMD target. Keep these as bounded checkpoints and move on
+unless a new algorithm or measured scheduling hypothesis appears.
+
+Current live-Pillow evidence: the canonical matrix ran all 71 active
+`PIL.Image.merge` cases on CPU (71/71 passed). The material case passed strict
+SIMD and strict GPU parity (1/1 each). The focused incremental Rust coverage
+target passed that material case on CPU and SIMD (1/1 each); Coverage-MCP could
+not analyze the report because its DuckDB service returned an invalidated
+database error. This is not a coverage or parity failure.
+
+Fault-contract evidence is tracked separately from those oracle counts. The
+existing RankFilter, Paste, and Expand batch lanes passed their injected
+dimension- and memory-failure cases (6/6, `oracle=not_applicable`), verifying
+fallback output and executor reuse. No target-only `Image.merge` fault case is
+added: its invalid-mode, wrong-band-count, invalid-item, and mismatched-band
+failures are all reachable through ordinary public inputs and remain live
+Pillow parity cases. The merge dispatch planner's device-limit boundaries are
+covered by deterministic planner tests rather than by fabricated injected
+faults.
+
 ## Native-L `ImageFilter.MaxFilter(3)` GPU transport checkpoint — 2026-10-03
 
 The L specialization reuses the packed-L input and readback infrastructure
