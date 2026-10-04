@@ -110,7 +110,8 @@ class BatchExecutor:
 
     ``queue=False`` (the default) executes each submitted operation
     immediately through its usual single-image path. With ``queue=True``,
-    ``join()`` groups compatible ``ImageFilter.MedianFilter(3)``,
+    ``join()`` groups compatible ``ImageFilter.MedianFilter(3)`` and
+    ``ImageFilter.MaxFilter(3)``,
     ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Invert()``,
     ``ImageBatch.Brightness(factor)``,
     ``ImageBatch.Multiply(image2)``, or
@@ -162,7 +163,10 @@ class BatchExecutor:
         colors.submit(rgba_b, shared_lut)
         color_a, color_b = colors.join()
 
-    Batched extraction reuses ``Image.getchannel`` over a same-mode vertical
+    Batched ``MaxFilter(3)`` reuses the ordinary max-filter pipeline over a
+    native-mode stack with one replicated edge row on each side of every
+    image, so neighboring jobs cannot affect one another. Batched extraction
+    reuses ``Image.getchannel`` over a same-mode vertical
     stack and returns one ``L`` image per input. Batched multiplication stacks
     each primary and secondary operand separately, then reuses the existing
     ``ImageChops.multiply`` pipeline. Batched Paste stacks full-frame
@@ -190,6 +194,7 @@ class BatchExecutor:
             operation = operation._prepared
         if type(operation).__name__ not in (
             "MedianFilter",
+            "MaxFilter",
             "ExtractBand",
             "Invert",
             "Brightness",
@@ -198,7 +203,8 @@ class BatchExecutor:
             "BatchColor3DLUT",
         ):
             raise TypeError(
-                "batch operation must be an ImageFilter.MedianFilter, "
+                "batch operation must be an ImageFilter.MedianFilter or "
+                "ImageFilter.MaxFilter, "
                 "ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Multiply, "
                 "ImageBatch.Brightness, "
                 "ImageBatch.Paste, or "

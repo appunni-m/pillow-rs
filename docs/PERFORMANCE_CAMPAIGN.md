@@ -18063,3 +18063,85 @@ generator output had removed existing `getname`, variation-switch, and
 font-variant observations; that unrelated fixture was restored to keep those
 parity assertions intact. The Mandelbrot input changes themselves are
 generated, and no coverage execution was run.
+
+## Explicit native-mode `ImageFilter.MaxFilter(3)` batch checkpoint — 2026-10-04
+
+This adds `ImageFilter.MaxFilter(3)` to the separate `PIL.ImageBatch`
+`BatchExecutor` API. It does not reroute or modify ordinary `Image.filter`
+calls. With `queue=False`, each submission follows the existing single-image
+MaxFilter path. With `queue=True`, compatible equal-size L, LA, RGB, and RGBA
+images share a group and reuse the existing mode-specific MaxFilter pipeline.
+No mode conversion or new shader was needed.
+
+The correctness issue to solve when stacking stencil-filter inputs is the
+vertical boundary between independent images. A 3×3 filter reads the row above
+and below each output row; directly concatenating images lets a filter at one
+image's top or bottom consume pixels from its neighbor. The grouped layout now
+copies each image's first and last row into a one-row top and bottom halo,
+respectively, giving each input an `H + 2` vertical slot. It runs the existing
+kernel over the stack and crops away the halo outputs before splitting results
+in submission order. The GPU group planner includes both halo rows in buffer
+capacity calculations, so a group is not admitted using the unpadded height.
+Other sizes and incompatible shapes use the existing per-image route.
+
+`cargo test --locked -p pillow-rs --lib batch::tests` passed 16/16, including
+the new all-mode comparison of queued output against each ordinary MaxFilter
+result. `cargo test --locked -p pillow-rs --lib
+explicit_gpu_batch_planner_caps_static_device_and_dispatch_boundaries`
+passed 1/1 and checks that the RGB 1024×768 group cap is 21 when each image
+occupies 770 stacked rows. The isolated `make build-parity` build and
+`scripts/test_imagebatch_max_filter_parity.py` both passed. The parity script
+compares exact bytes, mode, size, metadata, order, and cross-image isolation
+against Pillow 12.2.0. It covers L, LA, RGB, and RGBA on CPU, SIMD, and GPU at
+64×64 × 64 and 256×256 × 16, plus small incompatible-size jobs and eager
+`queue=False`. GPU checks confirmed actual GPU execution, one dispatch per
+compatible group, zero mode conversions, and no fallback. No coverage ran.
+
+The benchmark script measures the whole batch call: it creates each input
+image, submits and runs the operation, waits for GPU completion where
+applicable, and calls `tobytes()` on each returned image before stopping the
+clock. Pillow runs images sequentially. CPU and SIMD use independent eager
+submissions; GPU is measured both eagerly and queued. There were 3 warmups and
+12 measured windows per row on one Apple M-series host. Inputs are 64 images
+at 64×64 or 16 images at 256×256. Throughput below is completed images per
+second at matched total work; each requested backend passed the benchmark's
+preflight check with no fallback, and queued GPU receipts recorded one
+dispatch per window.
+
+| Mode | Cohort | Pillow | CPU | SIMD | GPU eager | GPU queued | Queued GPU / SIMD | Queued GPU / Pillow |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| L | 64 images @ 64×64 | 8,696 | 15,339 | 34,755 | 4,825 | 74,017 | 2.13× | 8.51× |
+| LA | 64 images @ 64×64 | 4,505 | 13,945 | 19,058 | 5,013 | 65,330 | 3.43× | 14.50× |
+| RGB | 64 images @ 64×64 | 1,777 | 6,658 | 12,468 | 2,904 | 57,605 | 4.62× | 32.41× |
+| RGBA | 64 images @ 64×64 | 2,267 | 9,255 | 9,653 | 1,089 | 47,542 | 4.93× | 20.97× |
+| L | 16 images @ 256×256 | 634 | 1,093 | 2,268 | 3,972 | 11,991 | 5.29× | 18.91× |
+| LA | 16 images @ 256×256 | 351 | 973 | 1,333 | 3,780 | 9,164 | 6.87× | 26.11× |
+| RGB | 16 images @ 256×256 | 236 | 736 | 869 | 2,998 | 6,761 | 7.78× | 28.65× |
+| RGBA | 16 images @ 256×256 | 172 | 612 | 651 | 3,015 | 4,889 | 7.51× | 28.42× |
+
+Queued GPU throughput beats SIMD for every measured cohort and beats Pillow
+by 8.5–32.4× at 64×64 and 18.9–28.7× at 256×256. The ordinary CPU path is
+faster than Pillow in these cohorts. SIMD ranges from 2.1–7.0× Pillow at
+64×64 and 3.6–3.8× at 256×256, so this does not demonstrate the repository's
+5× SIMD target for most mode/size pairs. Eager GPU loses to queued GPU in all
+small cohorts; at 256×256 it also loses in all four modes, although it beats
+Pillow. This is a batch throughput result, not a claim that single-image GPU
+latency meets the SIMD target.
+
+The stored receipts are
+`build/migration-parity/imagebatch-maxfilter-64x64x64.json` and
+`build/migration-parity/imagebatch-maxfilter-256x256x16.json`. Reproduce each
+profile with `scripts/benchmark_imagebatch.py --operation max-filter`, the
+mode and dimensions from the table, `--samples 12 --warmups 3`, and each of
+`--backend pillow`, `cpu`, `simd`, and `gpu`; add `--queue` only for the queued
+GPU measurement. The exact command templates are in `docs/COMMANDS.md`.
+
+The result supports the chosen attack for a stencil batch: pack the minimal
+halo needed for independent edge semantics, include that storage in admission
+limits, and reuse the tested kernel rather than writing a batch-only shader.
+It also shows why one-dispatch counts are insufficient: report full-call
+throughput with packing, readback, splitting, and materialization in scope.
+The benchmark's `Image.frombytes` inputs are made inside the timed window, so
+this number is deliberately end-to-end and should not be compared with a
+kernel-only rate. Keep this capability within `ImageBatch`; do not make normal
+`Image.filter` take the packing path. No coverage ran.

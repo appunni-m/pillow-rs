@@ -16,6 +16,11 @@ batch.submit(image_a, ImageFilter.MedianFilter(3))
 batch.submit(image_b, ImageFilter.MedianFilter(3))
 result_a, result_b = batch.join()
 
+maxima = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+maxima.submit(image_a, ImageFilter.MaxFilter(3))
+maxima.submit(image_b, ImageFilter.MaxFilter(3))
+max_a, max_b = maxima.join()
+
 channels = ImageBatch.BatchExecutor(queue=True, backend="gpu")
 channels.submit(rgba_a, ImageBatch.ExtractBand(3))
 channels.submit(rgba_b, ImageBatch.ExtractBand(3))
@@ -54,7 +59,8 @@ color_a, color_b = colors.join()
 With `queue=False` (the default), `submit` executes each operation immediately
 through its ordinary single-image pipeline. With `queue=True`, submissions wait
 until `join`, which returns results in submission order. A batch accepts
-`ImageFilter.MedianFilter(3)`, `ImageBatch.ExtractBand(channel)`,
+`ImageFilter.MedianFilter(3)` and `ImageFilter.MaxFilter(3)`,
+`ImageBatch.ExtractBand(channel)`,
 `ImageBatch.Invert()`, `ImageBatch.Brightness(factor)`,
 `ImageBatch.Multiply(other_image)`, full-frame
 `ImageBatch.Paste(source, mask)`, and a shared same-mode RGBA
@@ -69,13 +75,14 @@ The native-mode group layouts are `L`, `LA`, `RGB`, and `RGBA`; no image is
 converted to RGBA. A queued job that has no compatible peer runs through the
 regular single-image operation at `join`.
 
-The GPU group is a native-mode vertical stack. For `MedianFilter(3)`, one
-replicated top and bottom row surrounds each image, so the filter cannot read
-pixels from a neighbor at a group boundary. For `ExtractBand`, `Invert`,
-`Brightness`, `Multiply`, `Paste`, and `Color3DLUT`, images are stacked directly because each
-output pixel depends only on corresponding input pixels. Brightness groups
-same-factor L, LA, and RGB images with the existing native-byte kernel; LA
-alpha is preserved. RGBA and factors the GPU cannot represent exactly continue
+The GPU group is a native-mode vertical stack. For `MedianFilter(3)` and
+`MaxFilter(3)`, one replicated top and bottom row surrounds each image, so the
+filter cannot read pixels from a neighbor at a group boundary. For
+`ExtractBand`, `Invert`, `Brightness`, `Multiply`, `Paste`, and `Color3DLUT`,
+images are stacked directly because each output pixel depends only on
+corresponding input pixels. Brightness groups same-factor L, LA, and RGB images
+with the existing native-byte kernel; LA alpha is preserved. RGBA and factors
+the GPU cannot represent exactly continue
 through the existing per-image route. `ImageOps.invert` groups only L and RGB
 images, using its existing mode-specific pipeline; unsupported modes retain
 the ordinary ImageOps validation behavior. For `Multiply`, primary and secondary
@@ -125,6 +132,51 @@ submission and readback overhead by issuing one grouped operation. The parity
 and backend checks cover exact Pillow bytes, per-image `info` values, eager and
 queued execution, and one actual GPU dispatch for compatible groups in each
 listed mode and size.
+
+### `ImageFilter.MaxFilter(3)` batch probe
+
+`BatchExecutor.submit(image, ImageFilter.MaxFilter(3))` reuses the existing
+MaxFilter operation. With `queue=False`, each image follows the ordinary
+single-image path immediately. With `queue=True`, equal-size native `L`, `LA`,
+`RGB`, and `RGBA` images are stacked with one replicated top and bottom row per
+input, processed by the existing MaxFilter pipeline, and split back in
+submission order. Those halo rows preserve each image's edge behavior. Other
+filter sizes and incompatible jobs retain the per-image path; the batch does
+not convert inputs to RGBA.
+
+The isolated parity run compared exact Pillow bytes, mode, size, metadata,
+submission order, small incompatible-size fallbacks, and eager `queue=False`
+results. CPU, SIMD, and GPU passed in all four modes for 64×64 × 64 and
+256×256 × 16 images. GPU receipts confirmed one real MaxFilter dispatch per
+compatible group, zero mode conversions, and no fallback.
+
+The table reports full-call throughput on the same Apple M-series host. Each
+window includes image creation, submission, operation execution, GPU transfer
+and synchronization, result splitting, and `tobytes()` for every returned
+image. Pillow runs sequentially; CPU and SIMD use `BatchExecutor(queue=False)`;
+GPU eager uses `queue=False`; GPU queued uses `queue=True`. Every profile used
+3 warmups and 12 measured windows.
+
+| Mode | Cohort | Pillow (images/s) | CPU (images/s) | SIMD (images/s) | GPU eager (images/s) | GPU queued (images/s) | Queued GPU / SIMD | Queued GPU / Pillow |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| L | 64 images @ 64×64 | 8,696 | 15,339 | 34,755 | 4,825 | 74,017 | 2.13× | 8.51× |
+| LA | 64 images @ 64×64 | 4,505 | 13,945 | 19,058 | 5,013 | 65,330 | 3.43× | 14.50× |
+| RGB | 64 images @ 64×64 | 1,777 | 6,658 | 12,468 | 2,904 | 57,605 | 4.62× | 32.41× |
+| RGBA | 64 images @ 64×64 | 2,267 | 9,255 | 9,653 | 1,089 | 47,542 | 4.93× | 20.97× |
+| L | 16 images @ 256×256 | 634 | 1,093 | 2,268 | 3,972 | 11,991 | 5.29× | 18.91× |
+| LA | 16 images @ 256×256 | 351 | 973 | 1,333 | 3,780 | 9,164 | 6.87× | 26.11× |
+| RGB | 16 images @ 256×256 | 236 | 736 | 869 | 2,998 | 6,761 | 7.78× | 28.65× |
+| RGBA | 16 images @ 256×256 | 172 | 612 | 651 | 3,015 | 4,889 | 7.51× | 28.42× |
+
+Grouped GPU throughput beats SIMD in every measured cohort and size; it also
+beats Pillow by 8.5–32.4× at 64×64 and 18.9–28.7× at 256×256. The ordinary
+serial CPU cohort beats Pillow in each case. SIMD is 2.1–7.0× faster than
+Pillow at 64×64 and 3.6–3.8× at 256×256, so the 5× SIMD target is not proven
+for most of these workloads. This is explicit batch throughput evidence only;
+it does not change ordinary `ImageFilter.MaxFilter` routing.
+
+See the [command reference](COMMANDS.md) for isolated Pillow parity and
+reproducible batch benchmark commands.
 
 ### Brightness batch probe
 
