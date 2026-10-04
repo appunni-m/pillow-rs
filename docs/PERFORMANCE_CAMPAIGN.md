@@ -18299,3 +18299,33 @@ Checkpoint after four measured optimization attempts: retain the exact serial
 ring and two-span SIMD loads, record SIMD's 2.85× as an open blocker, and move
 on to the next operation rather than weakening parity or continuing
 speculative kernel rewrites. No coverage ran.
+
+### Whole-workflow replay after landing the kernel
+
+After commit `4256e34f`, the existing seeded nonuniform
+`pipeline-chain.convolution-i.5x5-noise-1024x768` workflow passed its Pillow
+parity gate for serial CPU, SIMD, and GPU (3/3); the separately built Parallel
+CPU profile passed 1/1. Each run used five warmups and 100 measured calls at
+concurrency one. The median latencies were 6.478 ms for Pillow, 3.963 ms for
+serial CPU (1.63× faster), 1.795 ms for Parallel CPU (3.61×), 2.387 ms for
+SIMD (2.71×), and 2.313 ms for GPU (2.80×). Each target receipt showed its
+requested backend completed with no fallback. This confirms the row and ring
+changes through the full public materialization workflow; SIMD remains below
+the 5× target. The GPU result is single-request latency and reciprocal
+throughput only, not evidence of higher queued or sustained throughput.
+
+Reproduce the post-commit workflow measurements with:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-chain.convolution-i.5x5-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/i-filter-chain-noise-post-4256e34.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/i-filter-chain-noise-post-4256e34-parity.json \
+make migration-parity-benchmark
+
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-chain.convolution-i.5x5-noise-1024x768' \
+make migration-parity-benchmark-parallel-cpu \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/i-filter-chain-noise-parallel-post-4256e34.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/i-filter-chain-noise-parallel-post-4256e34-parity.json
+```
