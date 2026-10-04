@@ -75,6 +75,16 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
             self.assertEqual(read_and_remove_backend_parity(path), expected)
             self.assertFalse(path.exists())
 
+    def test_compressed_backend_parity_receipt_is_removed_after_loading(self) -> None:
+        expected = {"status": "completed", "comparisons": [{"case_id": "case"}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "cpu.json.gz"
+            with gzip.open(path, "wt", encoding="utf-8") as stream:
+                json.dump(expected, stream)
+
+            self.assertEqual(read_and_remove_backend_parity(path), expected)
+            self.assertFalse(path.exists())
+
     def test_parity_writer_streams_gzip_artifacts(self) -> None:
         expected = {
             "schema": "migration-parity/parity-result@1",

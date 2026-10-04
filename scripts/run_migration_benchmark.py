@@ -358,6 +358,9 @@ def write_parity_artifact(output: Path, result: dict[str, Any]) -> None:
 def read_and_remove_backend_parity(path: Path) -> dict[str, Any]:
     """Load one completed backend receipt and free its temporary disk copy."""
     try:
+        if path.name.endswith(".gz"):
+            with gzip.open(path, "rt", encoding="utf-8") as stream:
+                return json.load(stream)
         return json.loads(path.read_text(encoding="utf-8"))
     finally:
         path.unlink(missing_ok=True)
@@ -387,11 +390,15 @@ def run_parity(
             ]
             if not backend_cases:
                 continue
-            backend_output = temporary / f"{backend}.json"
+            # Full parity receipts include image outputs and can exceed the
+            # available disk space as plain JSON. The parity runner streams
+            # gzip receipts, so keep its temporary backend artifact compressed
+            # too; only the decoded result remains in memory for aggregation.
+            backend_output = temporary / f"{backend}.json.gz"
             backend_timeout = (
                 min(timeout, 300) if backend == "gpu" else timeout
             )
-            returncode, _stdout, stderr = run_process(
+            returncode, stdout, stderr = run_process(
                 [
                     sys.executable,
                     str(script),
@@ -423,7 +430,18 @@ def run_parity(
                 raise RuntimeError(
                     f"{backend} parity preflight did not emit a result: {detail}"
                 )
-            result = read_and_remove_backend_parity(backend_output)
+            try:
+                result = read_and_remove_backend_parity(backend_output)
+            except (EOFError, OSError, json.JSONDecodeError) as exc:
+                detail = " ".join(
+                    part.strip().replace("\n", " ")[-800:]
+                    for part in (stdout, stderr)
+                    if part.strip()
+                )
+                raise RuntimeError(
+                    f"{backend} parity preflight emitted an invalid receipt "
+                    f"(exit {returncode}): {exc}; {detail}"
+                ) from exc
             if result.get("status") != "completed":
                 details = result.get("infrastructure_errors", [])
                 detail = json.dumps(details, sort_keys=True)
