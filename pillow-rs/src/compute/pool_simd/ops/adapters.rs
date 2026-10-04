@@ -29679,6 +29679,17 @@ fn native_fill_row(row: &mut [u8], fill: (u8, u8, u8, u8), channels: usize) -> O
     if !(1..=4).contains(&channels) {
         return None;
     }
+    if channels == 1 {
+        let pattern = u8x16::splat(fill.0).to_array();
+        let vector_len = row.len() / pattern.len() * pattern.len();
+        for chunk in row[..vector_len].chunks_exact_mut(pattern.len()) {
+            chunk.copy_from_slice(&pattern);
+        }
+        let scalar_tail = row.len() - vector_len;
+        row[vector_len..].copy_from_slice(&pattern[..scalar_tail]);
+        let vector_blocks = (vector_len / pattern.len()) as u64 + u64::from(scalar_tail != 0);
+        return Some((vector_blocks, scalar_tail as u64));
+    }
     let vector_len = row.len() / 16 * 16;
     let mut vector_blocks = 0u64;
     for start in (0..vector_len).step_by(16) {
@@ -29745,6 +29756,47 @@ fn native_expand_bytes(
         let result =
             crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
         return Ok(Some((result, vector_blocks, scalar_tail)));
+    }
+
+    // Single-byte L/P expansion used to zero-initialize the complete output,
+    // then overwrite every byte with either the fill value or a copied sample.
+    // Build the frame by appending precomputed vector-filled rows instead, so
+    // each output byte is written once and palette indices remain untouched.
+    if channels == 1 {
+        let border_bytes = border as usize;
+        let mut fill_row = vec![0u8; output_stride];
+        let (row_blocks, row_tail) = native_fill_row(&mut fill_row, fill, channels)
+            .ok_or_else(|| PilError::InternalError("SIMD expand fill row mismatch".into()))?;
+        let mut fill_sides = vec![0u8; border_bytes];
+        let (side_blocks, side_tail) = native_fill_row(&mut fill_sides, fill, channels)
+            .ok_or_else(|| PilError::InternalError("SIMD expand fill sides mismatch".into()))?;
+        let source_end_y = (border as usize)
+            .checked_add(source_height)
+            .ok_or_else(|| PilError::ValueError("SIMD expand source rows overflow".into()))?;
+        let mut output = Vec::with_capacity(output_len);
+        for y in 0..output_height_usize {
+            if y < border as usize || y >= source_end_y {
+                output.extend_from_slice(&fill_row);
+            } else {
+                output.extend_from_slice(&fill_sides);
+                let source_y = y - border as usize;
+                let source_start = source_y * source_stride;
+                output.extend_from_slice(&source[source_start..source_start + source_stride]);
+                output.extend_from_slice(&fill_sides);
+            }
+        }
+        if output.len() != output_len {
+            return Err(PilError::InternalError(
+                "SIMD expand L output shape mismatch".into(),
+            ));
+        }
+        let result =
+            crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
+        return Ok(Some((
+            result,
+            row_blocks.saturating_add(side_blocks),
+            row_tail.saturating_add(side_tail),
+        )));
     }
 
     // Three- and four-byte samples need only row construction and byte copies.
@@ -33715,6 +33767,37 @@ mod tests {
         expected_bytes.extend_from_slice(&fill_pixel);
         expected_bytes.extend_from_slice(&fill_pixel.repeat(4));
         assert_eq!(actual.as_bytes(), expected_bytes);
+    }
+
+    #[test]
+    fn expand_single_byte_modes_append_vector_filled_rows_without_zeroing() {
+        use crate::pipeline::PipelineOp;
+        use crate::raster::{DynamicImage, GrayImage};
+
+        for (width, height, border) in [(1u32, 1u32, 1u32), (17, 3, 2), (33, 32, 1), (16, 16, 0)] {
+            let pixels = (0..width * height)
+                .map(|index| (index.wrapping_mul(67).wrapping_add(19)) as u8)
+                .collect::<Vec<_>>();
+            let source = DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width, height, pixels).expect("L source shape must be valid"),
+            );
+            let operation = PipelineOp::Expand {
+                border,
+                fill: (7, 11, 13, 17),
+            };
+            for mode in [Some("L"), Some("P")] {
+                let actual = super::simd_expand(&source, &operation, mode)
+                    .expect("SIMD single-byte expansion must succeed");
+                let expected = crate::compute::registry::execute_cpu(&operation, &source, mode)
+                    .expect("CPU single-byte expansion must succeed");
+
+                assert_eq!(
+                    (actual.width(), actual.height()),
+                    (expected.width(), expected.height())
+                );
+                assert_eq!(actual.as_bytes(), expected.as_bytes());
+            }
+        }
     }
 
     #[test]
