@@ -23,6 +23,40 @@ FALLBACK = (
     ("L", (7, 5), 67, 3, 0),
     ("L", (7, 5), 149, 5, 24),
 )
+FAULT_CONTRACT_REQUIREMENTS = {
+    "imagebatch.rank-filter.group-fallback": (
+        "A compatible queued L RankFilter group recovers exact ordered outputs "
+        "after a dimension or allocation failure, and the executor remains usable."
+    ),
+}
+FAULT_CONTRACT_CASES = (
+    {
+        "case_id": "imagebatch.rank-filter.group-dimension-failure.fallback",
+        "verification": "fault-contract",
+        "operation": "ImageBatch.RankFilter",
+        "target_profile": "python-gpu",
+        "oracle": "not_applicable",
+        "requirements": ("imagebatch.rank-filter.group-fallback",),
+        "fault": {
+            "point": "image_batch.rank_filter.group_dimension_failure",
+            "contract": "grouped-rank-filter-error-falls-back-and-recovers",
+        },
+        "input_seeds": (9, 241),
+    },
+    {
+        "case_id": "imagebatch.rank-filter.group-memory-failure.fallback",
+        "verification": "fault-contract",
+        "operation": "ImageBatch.RankFilter",
+        "target_profile": "python-gpu",
+        "oracle": "not_applicable",
+        "requirements": ("imagebatch.rank-filter.group-fallback",),
+        "fault": {
+            "point": "image_batch.rank_filter.group_memory_failure",
+            "contract": "grouped-rank-filter-error-falls-back-and-recovers",
+        },
+        "input_seeds": (9, 241),
+    },
+)
 
 
 def pixels(size: tuple[int, int], seed: int) -> bytes:
@@ -77,11 +111,13 @@ def run_oracle(output: Path) -> None:
         )
 
     eager_image = Image.frombytes("L", (33, 35), pixels((33, 35), 73))
+    eager_image.info["batch-seed"] = 73
     eager_result = eager_image.filter(ImageFilter.RankFilter(3, rank=1))
     expected["eager"] = {
         "bytes": eager_result.tobytes().hex(),
         "mode": eager_result.mode,
         "size": list(eager_result.size),
+        "info": eager_result.info.get("batch-seed"),
     }
 
     expected["large"] = [
@@ -219,6 +255,102 @@ def run_target(expected_path: Path) -> None:
     print("CPU non-groupable RankFilter settings: Pillow parity PASS")
 
 
+def assert_grouped_rank_filter_failure_fallback(case: dict, expected: dict) -> None:
+    """Check the public fallback result after one injected grouped failure."""
+
+    from PIL import Image, ImageBatch, ImageFilter
+    import pillow_rs._core as core
+
+    fault_point = case["fault"]["point"]
+    if os.environ.get("PILLOW_RS_MIGRATION_FAULT_POINT") != fault_point:
+        raise RuntimeError(f"fault point was not selected: {fault_point}")
+
+    for backend in ("cpu", "simd", "gpu"):
+        core.disable_backend(backend)
+    if not core.enable_backend("gpu"):
+        raise RuntimeError("GPU backend unavailable for grouped-failure fault contract")
+    core.set_pipeline_telemetry(True)
+    core.set_gpu_shader_coverage(True)
+    core.take_gpu_shader_coverage()
+
+    batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+    for seed in case["input_seeds"]:
+        width, height, _ = next(item for item in SMALL if item[2] == seed)
+        image = Image.frombytes("L", (width, height), pixels((width, height), seed))
+        image.info["batch-seed"] = seed
+        batch.submit(image, ImageFilter.RankFilter(3, rank=1))
+
+    recovered = batch.join()
+    expected_by_seed = {item["info"]: item for item in expected["small"]}
+    require_exact(
+        recovered,
+        [expected_by_seed[seed] for seed in case["input_seeds"]],
+        "fault-contract grouped RankFilter fallback",
+        check_info=True,
+    )
+
+    records = core.take_gpu_shader_coverage()
+    dispatches = sum(
+        record["dispatches"]
+        for record in records
+        if "rank_filter_3x3_luma_packed" in record["shader_file"]
+    )
+    if dispatches != len(case["input_seeds"]):
+        raise AssertionError(
+            "fault injection did not produce one exact single-image fallback per "
+            f"submitted image: {records}"
+        )
+
+    image = Image.frombytes("L", (33, 35), pixels((33, 35), 73))
+    image.info["batch-seed"] = 73
+    if batch.submit(image, ImageFilter.RankFilter(3, rank=1)) != 0:
+        raise AssertionError("a drained batch did not reset its submission index")
+    followup = batch.join()
+    require_exact(
+        followup,
+        [expected["eager"]],
+        "fault-contract follow-up join",
+        check_info=True,
+    )
+
+
+def run_fault_contracts(expected_path: Path) -> None:
+    expected = json.loads(expected_path.read_text())
+    if expected.get("pillow_version") != "12.2.0":
+        raise RuntimeError("oracle artifact version mismatch")
+    contracts = {
+        "grouped-rank-filter-error-falls-back-and-recovers":
+            assert_grouped_rank_filter_failure_fallback,
+    }
+    case_id = os.environ.get("RANKFILTER_FAULT_CONTRACT_CASE_ID")
+    case = next(
+        (item for item in FAULT_CONTRACT_CASES if item["case_id"] == case_id),
+        None,
+    )
+    if case is None:
+        raise ValueError(f"unknown fault-contract case: {case_id!r}")
+    if (
+        case["verification"] != "fault-contract"
+        or case["operation"] != "ImageBatch.RankFilter"
+        or case["target_profile"] != "python-gpu"
+        or case["oracle"] != "not_applicable"
+        or not case["requirements"]
+        or any(
+            requirement not in FAULT_CONTRACT_REQUIREMENTS
+            for requirement in case["requirements"]
+        )
+    ):
+        raise ValueError(f"invalid fault-contract case declaration: {case_id}")
+    assertion = contracts.get(case["fault"]["contract"])
+    if assertion is None:
+        raise ValueError(f"unknown fault contract: {case['fault']['contract']}")
+    assertion(case, expected)
+    print(
+        f"fault-contract case={case_id} selected=1 executed=1 passed=1 failed=0 "
+        f"requirements={','.join(case['requirements'])} oracle=not_applicable"
+    )
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="pillow-rs-rank-filter-batch-") as directory:
         expected = Path(directory) / "pillow-expected.json"
@@ -239,12 +371,28 @@ def main() -> int:
         )
         target_env["RANKFILTER_BATCH_PARITY_MODE"] = "target"
         target_env["RANKFILTER_BATCH_PARITY_EXPECTED"] = str(expected)
+        target_env.pop("PILLOW_RS_MIGRATION_FAULT_POINT", None)
+        target_env.pop("RANKFILTER_FAULT_CONTRACT_CASE_ID", None)
         subprocess.run(
             [sys.executable, str(Path(__file__).resolve())],
             cwd=ROOT,
             env=target_env,
             check=True,
         )
+        if os.environ.get("RANKFILTER_INCLUDE_FAULT_CONTRACT") == "1":
+            for case in FAULT_CONTRACT_CASES:
+                fault_env = target_env.copy()
+                fault_env["RANKFILTER_BATCH_PARITY_MODE"] = "fault-contract"
+                fault_env["PILLOW_RS_MIGRATION_FAULT_POINT"] = case["fault"][
+                    "point"
+                ]
+                fault_env["RANKFILTER_FAULT_CONTRACT_CASE_ID"] = case["case_id"]
+                subprocess.run(
+                    [sys.executable, str(Path(__file__).resolve())],
+                    cwd=ROOT,
+                    env=fault_env,
+                    check=True,
+                )
     return 0
 
 
@@ -255,5 +403,8 @@ if __name__ == "__main__":
         raise SystemExit(0)
     if mode == "target":
         run_target(Path(os.environ["RANKFILTER_BATCH_PARITY_EXPECTED"]))
+        raise SystemExit(0)
+    if mode == "fault-contract":
+        run_fault_contracts(Path(os.environ["RANKFILTER_BATCH_PARITY_EXPECTED"]))
         raise SystemExit(0)
     raise SystemExit(main())

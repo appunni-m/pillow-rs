@@ -199,6 +199,15 @@ images, an odd-width/height group, a single-column fallback, a material
 dimensions, per-image metadata, eager execution, zero mode conversions, and
 one packed-L shader dispatch for each compatible GPU group.
 
+Two target-only fault-contract cases inject a grouped dimension failure and a
+grouped memory failure. Each verifies that `join()` transparently falls back,
+returns exact Pillow-equivalent bytes in submission order, and accepts a later
+batch on the same executor. The faulted call cannot be sent to Pillow, so these
+results are counted separately with `oracle=not_applicable`; the adjacent
+normal-path cases remain the live Pillow parity checks. See the contributor
+[command reference](COMMANDS.md) for the focused fault-contract gate and its
+test-only build behavior.
+
 On this Apple-silicon host, the following cohort processed 16 L images at
 256×256 per call. Each value is the median of 12 full-call windows after 3
 warmups; the window includes image construction, submission, execution,

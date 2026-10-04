@@ -206,6 +206,7 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-test-gpu-strict$(NC) Audit GPU-only capability coverage (not the normal fallback lane)\n"
 	@printf "  $(CYAN)make migration-parity-test-simd-strict$(NC) Audit SIMD-only capability coverage (not the automatic CPU fallback lane)\n"
 	@printf "  $(CYAN)make migration-parity-case CASE_ID=...$(NC) Run one public parity case for fast iteration\n"
+	@printf "  $(CYAN)make imagebatch-rank-filter-fault-contract$(NC) Run ImageBatch RankFilter's isolated target-only fallback fault contracts\n"
 	@printf "  $(CYAN)make migration-parity-oracle-identity$(NC) Verify the pinned Pillow oracle identity\n"
 	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
 	@printf "  $(CYAN)make migration-parity-coverage$(NC) Run target coverage from indexed coverage plans\n"
@@ -456,7 +457,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
-.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: migration-parity-test migration-parity-case imagebatch-rank-filter-fault-contract migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -518,6 +519,22 @@ migration-parity-case: ## Run one public parity case without replacing the full-
 	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
+
+imagebatch-rank-filter-fault-contract: ## Run target-only ImageBatch RankFilter fallback fault contracts
+	@set +e; \
+	$(MATURIN) develop --skip-install --manifest-path $(PY_SRC)/Cargo.toml --locked --features migration-fault-injection; \
+	build_status=$$?; \
+	if [ $$build_status -eq 0 ]; then \
+		RANKFILTER_INCLUDE_FAULT_CONTRACT=1 $(PYTHON) scripts/test_imagebatch_rank_filter_parity.py; \
+		test_status=$$?; \
+	else \
+		test_status=0; \
+	fi; \
+	$(MAKE) build-parity; \
+	restore_status=$$?; \
+	if [ $$restore_status -ne 0 ]; then exit $$restore_status; fi; \
+	if [ $$build_status -ne 0 ]; then exit $$build_status; fi; \
+	exit $$test_status
 
 migration-parity-oracle-identity: ## Verify the pinned Pillow oracle identity
 	$(PYTHON) scripts/run_migration_parity.py --identity source

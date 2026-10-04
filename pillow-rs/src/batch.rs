@@ -17,6 +17,40 @@ use crate::image::Image;
 use crate::pipeline::{PipelineOp, PixelMode};
 use std::sync::Arc;
 
+#[cfg(feature = "migration-fault-injection")]
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[cfg(feature = "migration-fault-injection")]
+static RANK_FILTER_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(feature = "migration-fault-injection")]
+fn injected_rank_filter_group_failure(job: &BatchJob, backend: Backend) -> Option<PilError> {
+    if backend != Backend::Gpu
+        || !matches!(
+            &job.operation,
+            BatchOperation::RankFilter { size: 3, rank: 1 }
+        )
+        || RANK_FILTER_GROUP_FAILURE_INJECTED.load(Ordering::Relaxed)
+    {
+        return None;
+    }
+
+    let error = match std::env::var("PILLOW_RS_MIGRATION_FAULT_POINT").as_deref() {
+        Ok("image_batch.rank_filter.group_dimension_failure") => {
+            PilError::DimensionError("injected grouped RankFilter dimension failure".into())
+        }
+        Ok("image_batch.rank_filter.group_memory_failure") => {
+            PilError::MemoryError("injected grouped RankFilter memory failure".into())
+        }
+        _ => return None,
+    };
+
+    RANK_FILTER_GROUP_FAILURE_INJECTED
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .ok()?;
+    Some(error)
+}
+
 /// One explicitly submitted Pillow operation.
 #[derive(Debug, Clone)]
 pub enum BatchOperation {
@@ -465,6 +499,12 @@ impl BatchExecutor {
         let first = jobs[indices[0]]
             .as_ref()
             .ok_or_else(|| PilError::InternalError("batch job was already consumed".into()))?;
+
+        #[cfg(feature = "migration-fault-injection")]
+        if let Some(error) = injected_rank_filter_group_failure(first, backend) {
+            return Err(error);
+        }
+
         let mode = first.mode.as_str();
         let channels = mode_channels(mode).ok_or_else(|| {
             PilError::ValueError(format!(
