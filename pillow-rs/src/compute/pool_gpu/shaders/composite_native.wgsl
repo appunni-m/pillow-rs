@@ -8,7 +8,7 @@ struct Params {
     mask_channel: u32,
     byte_length: u32,
     word_count: u32,
-    _pad0: u32,
+    groups_x: u32,
     _pad1: u32,
     _pad2: u32,
 }
@@ -36,7 +36,9 @@ fn read_mask(byte_index: u32) -> u32 {
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    let word_index = gid.x;
+    // The host tiles packed-word groups in a 2D grid when one dimension is
+    // insufficient. Each row contains groups_x workgroups of 64 invocations.
+    let word_index = gid.x + gid.y * params.groups_x * 64u;
     if word_index >= params.word_count { return; }
 
     var packed = 0u;

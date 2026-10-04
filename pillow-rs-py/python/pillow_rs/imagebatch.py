@@ -88,6 +88,30 @@ class Paste:
         self.mask = mask
 
 
+class Composite:
+    """Request ``Image.composite(foreground, background, mask)`` in a batch.
+
+    Equal-size L, LA, RGB, or RGBA foreground/background pairs with an
+    equal-size L mask can share one queued GPU schedule. Every image remains
+    in its native mode. Other combinations keep the ordinary single-image
+    Composite behavior.
+
+    Example::
+
+        batch.submit(foreground, ImageBatch.Composite(background, mask))
+    """
+
+    __slots__ = ("background", "mask")
+
+    def __init__(self, background, mask):
+        if not isinstance(background, Image):
+            raise TypeError("composite background must be a PIL.Image.Image instance")
+        if not isinstance(mask, Image):
+            raise TypeError("composite mask must be a PIL.Image.Image instance")
+        self.background = background
+        self.mask = mask
+
+
 class Expand:
     """Request ``ImageOps.expand(image, border, fill)`` in an explicit batch.
 
@@ -138,7 +162,8 @@ class BatchExecutor:
     ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Invert()``,
     ``ImageBatch.Brightness(factor)``,
     ``ImageBatch.Multiply(image2)``, or
-    full-frame ``ImageBatch.Paste(source, mask)``, or native-mode
+    full-frame ``ImageBatch.Paste(source, mask)``, same-mode
+    ``ImageBatch.Composite(background, mask)``, or native-mode
     ``ImageBatch.Expand(border, fill)`` jobs, plus jobs using one shared
     RGBA-to-RGBA ``ImageBatch.Color3DLUT``, on the GPU when possible.
     Grouped operands use native ``L``, ``LA``, ``RGB``, or ``RGBA`` storage
@@ -178,6 +203,11 @@ class BatchExecutor:
         pastes.submit(destination_b, ImageBatch.Paste(source_b, mask_b))
         pasted_a, pasted_b = pastes.join()
 
+        composites = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        composites.submit(foreground_a, ImageBatch.Composite(background_a, mask_a))
+        composites.submit(foreground_b, ImageBatch.Composite(background_b, mask_b))
+        composite_a, composite_b = composites.join()
+
         expanded = ImageBatch.BatchExecutor(queue=True, backend="gpu")
         expanded.submit(image_a, ImageBatch.Expand(4, fill=(9, 17, 23, 31)))
         expanded.submit(image_b, ImageBatch.Expand(4, fill=(9, 17, 23, 31)))
@@ -204,7 +234,8 @@ class BatchExecutor:
     each primary and secondary operand separately, then reuses the existing
     ``ImageChops.multiply`` pipeline. Batched Paste stacks full-frame
     destinations, sources, and L masks, then reuses ``Image.paste`` at the
-    origin. A Color3DLUT batch snapshots one shared LUT and applies the
+    origin. Batched Composite stacks foregrounds, backgrounds, and L masks,
+    then reuses ``Image.composite`` over that stack. A Color3DLUT batch snapshots one shared LUT and applies the
     existing RGBA pipeline to a vertical stack. Invert groups L and RGB images
     through the existing ``ImageOps.invert`` pipeline. Expand inserts native
     fill rows between vertically stacked inputs, then uses one existing
@@ -237,6 +268,7 @@ class BatchExecutor:
             "Brightness",
             "Multiply",
             "Paste",
+            "Composite",
             "Expand",
             "BatchColor3DLUT",
         ):
@@ -245,9 +277,12 @@ class BatchExecutor:
                 "ImageFilter.MaxFilter or ImageFilter.RankFilter, "
                 "ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Multiply, "
                 "ImageBatch.Brightness, "
-                "ImageBatch.Paste, ImageBatch.Expand, or "
+                "ImageBatch.Paste, ImageBatch.Composite, ImageBatch.Expand, or "
                 "ImageBatch.Color3DLUT instance"
             )
+        metadata_source = (
+            operation.background if isinstance(operation, Composite) else image
+        )
         if isinstance(operation, (Brightness, Expand)):
             # Pillow's Brightness and ImageOps.expand create fresh outputs,
             # whose public info mapping does not inherit the source mapping.
@@ -261,10 +296,10 @@ class BatchExecutor:
             )
         else:
             metadata = (
-                image._info.copy(),
-                deepcopy(image._native_info),
-                image._native_info_rebaseline,
-                image._native_info_omitted,
+                metadata_source._info.copy(),
+                deepcopy(metadata_source._native_info),
+                metadata_source._native_info_rebaseline,
+                metadata_source._native_info_omitted,
             )
         index = self._executor.submit(image._rust_image, operation)
         if index != len(self._metadata):

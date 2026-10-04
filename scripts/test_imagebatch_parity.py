@@ -7,6 +7,7 @@ processes so the replacement ``PIL`` namespace cannot shadow the Pillow oracle.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -29,6 +30,12 @@ PASTE_BATCH_SEEDS = (11, 73)
 PASTE_LARGE_SIZE = (256, 256)
 PASTE_LARGE_IMAGE_COUNT = 16
 PASTE_PARALLEL_SIZE = (512, 512)
+COMPOSITE_BATCH_SEEDS = (11, 73)
+COMPOSITE_LARGE_SIZE = (256, 256)
+COMPOSITE_LARGE_IMAGE_COUNT = 16
+COMPOSITE_PARALLEL_SIZE = (512, 512)
+COMPOSITE_DISPATCH_BOUNDARY_SIZE = (1024, 768)
+COMPOSITE_DISPATCH_BOUNDARY_IMAGE_COUNT = 6
 INVERT_LARGE_SIZE = (1024, 768)
 INVERT_LARGE_IMAGE_COUNT = 4
 PASTE_FAULT_CONTRACT_REQUIREMENTS = {
@@ -68,6 +75,43 @@ PASTE_FAULT_CONTRACT_CASES = (
         "input_seeds": PASTE_BATCH_SEEDS,
     },
 )
+COMPOSITE_FAULT_CONTRACT_REQUIREMENTS = {
+    "imagebatch.composite.group-fallback": (
+        "A compatible queued native-mode Composite group recovers exact ordered "
+        "outputs after a dimension or allocation failure, preserves submitted "
+        "inputs, and keeps the executor usable."
+    ),
+}
+COMPOSITE_FAULT_CONTRACT_CASES = (
+    {
+        "case_id": "imagebatch.composite.group-dimension-failure.fallback",
+        "verification": "fault-contract",
+        "operation": "ImageBatch.Composite",
+        "target_profile": "python-gpu",
+        "oracle": "not_applicable",
+        "requirements": ("imagebatch.composite.group-fallback",),
+        "fault": {
+            "point": "image_batch.composite.group_dimension_failure",
+            "contract": "grouped-composite-error-falls-back-and-recovers",
+        },
+        "mode": "RGBA",
+        "input_seeds": COMPOSITE_BATCH_SEEDS,
+    },
+    {
+        "case_id": "imagebatch.composite.group-memory-failure.fallback",
+        "verification": "fault-contract",
+        "operation": "ImageBatch.Composite",
+        "target_profile": "python-gpu",
+        "oracle": "not_applicable",
+        "requirements": ("imagebatch.composite.group-fallback",),
+        "fault": {
+            "point": "image_batch.composite.group_memory_failure",
+            "contract": "grouped-composite-error-falls-back-and-recovers",
+        },
+        "mode": "RGBA",
+        "input_seeds": COMPOSITE_BATCH_SEEDS,
+    },
+)
 
 
 def pixels(mode: str, size: tuple[int, int], seed: int) -> bytes:
@@ -93,6 +137,11 @@ def multiply_benchmark_other_pixels(
     mode: str, seed: int, size: tuple[int, int] = (64, 64)
 ) -> bytes:
     return benchmark_pixels(mode, seed + 137, size)
+
+
+def composite_mask_pixels(seed: int, size: tuple[int, int] = (64, 64)) -> bytes:
+    raw = benchmark_pixels("L", seed, size)
+    return bytes((0, 255, 128, value)[index % 4] for index, value in enumerate(raw))
 
 
 def boundary_rgba_pixels(seed: int) -> bytes:
@@ -127,13 +176,15 @@ def require_gpu_execution(
     label: str,
     expected_shader: str = "median_filter_3x3",
     expected_shader_dispatches: int = 1,
+    expected_operation_count: int = 1,
+    expected_dispatch_count: int = 1,
 ) -> None:
     if (
         receipt is None
         or receipt.get("actual_backend") != "gpu"
         or receipt.get("fallback_reason")
-        or receipt.get("operation_count") != 1
-        or receipt.get("dispatch_count") != 1
+        or receipt.get("operation_count") != expected_operation_count
+        or receipt.get("dispatch_count") != expected_dispatch_count
     ):
         raise AssertionError(f"invalid GPU receipt for {label}: {receipt}")
     resource = receipt.get("resource")
@@ -180,6 +231,13 @@ def run_oracle(output: Path) -> None:
     paste_benchmark_outputs: dict[str, list[str]] = {}
     paste_large_outputs: dict[str, list[str]] = {}
     paste_parallel_outputs: dict[str, list[str]] = {}
+    composite_batch_outputs: dict[str, list[str]] = {}
+    composite_batch_metadata: dict[str, list[int | None]] = {}
+    composite_benchmark_outputs: dict[str, list[str]] = {}
+    composite_large_outputs: dict[str, list[str]] = {}
+    composite_parallel_outputs: dict[str, dict[str, str | int | None]] = {}
+    composite_dispatch_boundary_outputs: list[str] = []
+    composite_fallback_outputs: dict[str, dict[str, str | list[int] | int]] = {}
     invert_outputs: dict[str, list[str]] = {}
     invert_metadata: dict[str, list[int | None]] = {}
     invert_large_rgb_outputs: list[str] = []
@@ -359,6 +417,110 @@ def run_oracle(output: Path) -> None:
             result = destination.copy()
             result.paste(source, (0, 0), mask)
             paste_parallel_outputs[mode].append(result.tobytes().hex())
+    for mode in MODES:
+        composite_batch_outputs[mode] = []
+        composite_batch_metadata[mode] = []
+        for seed in COMPOSITE_BATCH_SEEDS:
+            foreground = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
+            background = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed + 101)
+            )
+            background.info["composite-seed"] = seed + 201
+            mask = Image.frombytes("L", (64, 64), composite_mask_pixels(seed + 211))
+            result = Image.composite(foreground, background, mask)
+            composite_batch_outputs[mode].append(result.tobytes().hex())
+            composite_batch_metadata[mode].append(
+                result.info.get("composite-seed")
+            )
+
+        composite_benchmark_outputs[mode] = []
+        for seed in range(64):
+            foreground = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
+            background = Image.frombytes(
+                mode, (64, 64), multiply_benchmark_other_pixels(mode, seed)
+            )
+            mask = Image.frombytes("L", (64, 64), composite_mask_pixels(seed))
+            composite_benchmark_outputs[mode].append(
+                Image.composite(foreground, background, mask).tobytes().hex()
+            )
+
+        composite_large_outputs[mode] = []
+        for seed in range(COMPOSITE_LARGE_IMAGE_COUNT):
+            foreground = Image.frombytes(
+                mode,
+                COMPOSITE_LARGE_SIZE,
+                benchmark_pixels(mode, seed, COMPOSITE_LARGE_SIZE),
+            )
+            background = Image.frombytes(
+                mode,
+                COMPOSITE_LARGE_SIZE,
+                multiply_benchmark_other_pixels(mode, seed, COMPOSITE_LARGE_SIZE),
+            )
+            mask = Image.frombytes(
+                "L", COMPOSITE_LARGE_SIZE, composite_mask_pixels(seed, COMPOSITE_LARGE_SIZE)
+            )
+            composite_large_outputs[mode].append(
+                Image.composite(foreground, background, mask).tobytes().hex()
+            )
+        seed = COMPOSITE_BATCH_SEEDS[0]
+        foreground = Image.frombytes(
+            mode,
+            COMPOSITE_PARALLEL_SIZE,
+            benchmark_pixels(mode, seed, COMPOSITE_PARALLEL_SIZE),
+        )
+        background = Image.frombytes(
+            mode,
+            COMPOSITE_PARALLEL_SIZE,
+            multiply_benchmark_other_pixels(mode, seed, COMPOSITE_PARALLEL_SIZE),
+        )
+        background.info["composite-seed"] = seed + 201
+        mask = Image.frombytes(
+            "L",
+            COMPOSITE_PARALLEL_SIZE,
+            composite_mask_pixels(seed + 211, COMPOSITE_PARALLEL_SIZE),
+        )
+        result = Image.composite(foreground, background, mask)
+        composite_parallel_outputs[mode] = {
+            "sha256": hashlib.sha256(result.tobytes()).hexdigest(),
+            "metadata": result.info.get("composite-seed"),
+        }
+    foreground = Image.frombytes("RGB", (7, 5), pixels("RGB", (7, 5), 271))
+    background = Image.frombytes("RGB", (9, 7), pixels("RGB", (9, 7), 373))
+    background.info["composite-seed"] = 991
+    mask = Image.frombytes("L", (7, 5), composite_mask_pixels(419, (7, 5)))
+    result = Image.composite(foreground, background, mask)
+    composite_fallback_outputs["larger-background"] = {
+        "mode": result.mode,
+        "size": list(result.size),
+        "bytes": result.tobytes().hex(),
+        "metadata": result.info.get("composite-seed"),
+    }
+    foreground = Image.frombytes("RGBA", (7, 5), pixels("RGBA", (7, 5), 521))
+    background = Image.frombytes("RGBA", (7, 5), pixels("RGBA", (7, 5), 613))
+    background.info["composite-seed"] = 991
+    mask_data = bytearray(benchmark_pixels("RGBA", 719, (7, 5)))
+    for index in range(3, len(mask_data), 4):
+        mask_data[index] = (0, 128, 255)[(index // 4) % 3]
+    alpha_mask = Image.frombytes("RGBA", (7, 5), bytes(mask_data))
+    result = Image.composite(foreground, background, alpha_mask)
+    composite_fallback_outputs["rgba-mask"] = {
+        "mode": result.mode,
+        "size": list(result.size),
+        "bytes": result.tobytes().hex(),
+        "metadata": result.info.get("composite-seed"),
+    }
+    for seed in range(COMPOSITE_DISPATCH_BOUNDARY_IMAGE_COUNT):
+        size = COMPOSITE_DISPATCH_BOUNDARY_SIZE
+        foreground = Image.frombytes(
+            "RGBA", size, benchmark_pixels("RGBA", seed, size)
+        )
+        background = Image.frombytes(
+            "RGBA", size, multiply_benchmark_other_pixels("RGBA", seed, size)
+        )
+        mask = Image.frombytes("L", size, composite_mask_pixels(seed, size))
+        composite_dispatch_boundary_outputs.append(
+            Image.composite(foreground, background, mask).tobytes().hex()
+        )
     color3dlut = make_batch_color3dlut(ImageFilter)
     for size, seed in zip(SIZES, SEEDS, strict=True):
         image = Image.frombytes("RGBA", size, pixels("RGBA", size, seed))
@@ -410,6 +572,13 @@ def run_oracle(output: Path) -> None:
                 "paste_benchmark_outputs": paste_benchmark_outputs,
                 "paste_large_outputs": paste_large_outputs,
                 "paste_parallel_outputs": paste_parallel_outputs,
+                "composite_batch_outputs": composite_batch_outputs,
+                "composite_batch_metadata": composite_batch_metadata,
+                "composite_benchmark_outputs": composite_benchmark_outputs,
+                "composite_large_outputs": composite_large_outputs,
+                "composite_parallel_outputs": composite_parallel_outputs,
+                "composite_fallback_outputs": composite_fallback_outputs,
+                "composite_dispatch_boundary_outputs": composite_dispatch_boundary_outputs,
                 "invert_outputs": invert_outputs,
                 "invert_metadata": invert_metadata,
                 "invert_large_rgb_outputs": invert_large_rgb_outputs,
@@ -1141,6 +1310,340 @@ def run_target(expected_path: Path) -> None:
             )
         print(f"{mode} queue=False × 3: sequential submission order and Pillow parity PASS")
 
+    for backend in ("cpu", "simd", "gpu"):
+        for selected in ("cpu", "simd", "gpu"):
+            core.disable_backend(selected)
+        if not core.enable_backend(backend):
+            raise AssertionError(f"{backend} backend unavailable for Composite parity")
+        for mode in MODES:
+            seed = COMPOSITE_BATCH_SEEDS[0]
+            foreground = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed)
+            )
+            background = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed + 101)
+            )
+            background.info["composite-seed"] = seed + 201
+            mask = Image.frombytes("L", (64, 64), composite_mask_pixels(seed + 211))
+            eager = ImageBatch.BatchExecutor(queue=False, backend=backend)
+            eager.submit(foreground, ImageBatch.Composite(background, mask))
+            result = eager.join()[0]
+            if (
+                result.mode != mode
+                or result.size != (64, 64)
+                or result.tobytes().hex()
+                != expected["composite_batch_outputs"][mode][0]
+                or result.info.get("composite-seed")
+                != expected["composite_batch_metadata"][mode][0]
+            ):
+                raise AssertionError(f"queue=False {backend}/{mode} Composite differs from Pillow")
+            receipt = core.take_pipeline_telemetry()
+            if (
+                receipt is None
+                or receipt.get("actual_backend") != backend
+                or receipt.get("fallback_reason")
+            ):
+                raise AssertionError(
+                    f"queue=False {backend}/{mode} Composite missed requested backend: {receipt}"
+                )
+            resource = receipt.get("resource")
+            if isinstance(resource, dict) and resource.get("mode_conversion_count") != 0:
+                raise AssertionError(f"{backend}/{mode} Composite converted modes: {receipt}")
+            if backend == "gpu":
+                require_gpu_execution(
+                    core,
+                    receipt,
+                    f"queue=False {mode} Composite",
+                    expected_shader="composite_native.wgsl",
+                )
+        print(f"{backend} queue=False Composite L/LA/RGB/RGBA: Pillow parity PASS")
+
+    for selected in ("cpu", "simd", "gpu"):
+        core.disable_backend(selected)
+    if not core.enable_backend("cpu"):
+        raise AssertionError("CPU backend unavailable for Composite threshold parity")
+    for mode in MODES:
+        seed = COMPOSITE_BATCH_SEEDS[0]
+        foreground = Image.frombytes(
+            mode,
+            COMPOSITE_PARALLEL_SIZE,
+            benchmark_pixels(mode, seed, COMPOSITE_PARALLEL_SIZE),
+        )
+        background = Image.frombytes(
+            mode,
+            COMPOSITE_PARALLEL_SIZE,
+            multiply_benchmark_other_pixels(mode, seed, COMPOSITE_PARALLEL_SIZE),
+        )
+        background.info["composite-seed"] = seed + 201
+        mask = Image.frombytes(
+            "L",
+            COMPOSITE_PARALLEL_SIZE,
+            composite_mask_pixels(seed + 211, COMPOSITE_PARALLEL_SIZE),
+        )
+        threshold = ImageBatch.BatchExecutor(queue=False, backend="cpu")
+        threshold.submit(foreground, ImageBatch.Composite(background, mask))
+        result = threshold.join()[0]
+        expected_result = expected["composite_parallel_outputs"][mode]
+        if (
+            result.mode != mode
+            or result.size != COMPOSITE_PARALLEL_SIZE
+            or hashlib.sha256(result.tobytes()).hexdigest()
+            != expected_result["sha256"]
+            or result.info.get("composite-seed") != expected_result["metadata"]
+        ):
+            raise AssertionError(f"512x512 {mode} CPU Composite differs from Pillow")
+        receipt = core.take_pipeline_telemetry()
+        if (
+            receipt is None
+            or receipt.get("actual_backend") != "cpu"
+            or receipt.get("fallback_reason")
+        ):
+            raise AssertionError(
+                f"512x512 {mode} CPU Composite missed CPU execution: {receipt}"
+            )
+        resource = receipt.get("resource")
+        if isinstance(resource, dict) and resource.get("mode_conversion_count") != 0:
+            raise AssertionError(f"512x512 {mode} CPU Composite converted modes: {receipt}")
+        profile = "Parallel CPU" if core.parallel_feature_enabled() else "CPU"
+        print(
+            f"{profile} 512x512 {mode} Composite threshold: "
+            "Pillow bytes/mode/size/info parity PASS; no fallback"
+        )
+
+    for backend in ("cpu", "simd"):
+        for selected in ("cpu", "simd", "gpu"):
+            core.disable_backend(selected)
+        if not core.enable_backend(backend):
+            raise AssertionError(f"{backend} backend unavailable for queued Composite parity")
+        for mode in MODES:
+            queued = ImageBatch.BatchExecutor(queue=True, backend=backend)
+            for seed in COMPOSITE_BATCH_SEEDS:
+                foreground = Image.frombytes(
+                    mode, (64, 64), benchmark_pixels(mode, seed)
+                )
+                background = Image.frombytes(
+                    mode, (64, 64), benchmark_pixels(mode, seed + 101)
+                )
+                background.info["composite-seed"] = seed + 201
+                mask = Image.frombytes(
+                    "L", (64, 64), composite_mask_pixels(seed + 211)
+                )
+                queued.submit(foreground, ImageBatch.Composite(background, mask))
+            results = queued.join()
+            if [image.tobytes().hex() for image in results] != [
+                expected["composite_batch_outputs"][mode][index]
+                for index in range(len(COMPOSITE_BATCH_SEEDS))
+            ]:
+                raise AssertionError(f"queued {backend}/{mode} Composite differs from Pillow")
+            if [image.info.get("composite-seed") for image in results] != [
+                expected["composite_batch_metadata"][mode][index]
+                for index in range(len(COMPOSITE_BATCH_SEEDS))
+            ]:
+                raise AssertionError(f"queued {backend}/{mode} Composite changed background info")
+        print(f"{backend} queue=True Composite L/LA/RGB/RGBA: Pillow parity PASS")
+
+    for mode in MODES:
+        order = (1, 0)
+        core.take_gpu_shader_coverage()
+        core.take_pipeline_telemetry()
+        batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        submitted_inputs = []
+        for input_index in order:
+            seed = COMPOSITE_BATCH_SEEDS[input_index]
+            foreground = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed)
+            )
+            background = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed + 101)
+            )
+            background.info["composite-seed"] = seed + 201
+            mask = Image.frombytes("L", (64, 64), composite_mask_pixels(seed + 211))
+            submitted_inputs.append(
+                (foreground, foreground.tobytes(), background, background.tobytes(), mask, mask.tobytes())
+            )
+            batch.submit(foreground, ImageBatch.Composite(background, mask))
+
+        actual = batch.join()
+        if any(
+            foreground.tobytes() != foreground_bytes
+            or background.tobytes() != background_bytes
+            or mask.tobytes() != mask_bytes
+            for foreground, foreground_bytes, background, background_bytes, mask, mask_bytes
+            in submitted_inputs
+        ):
+            raise AssertionError(f"queued {mode} Composite mutated a submitted input")
+        if [image.mode for image in actual] != [mode, mode]:
+            raise AssertionError(f"{mode} Composite batch changed output modes")
+        if [image.size for image in actual] != [(64, 64), (64, 64)]:
+            raise AssertionError(f"{mode} Composite batch changed output sizes")
+        if [image.tobytes().hex() for image in actual] != [
+            expected["composite_batch_outputs"][mode][index] for index in order
+        ]:
+            raise AssertionError(f"{mode} Composite batch differs from Pillow")
+        if [image.info.get("composite-seed") for image in actual] != [
+            expected["composite_batch_metadata"][mode][index] for index in order
+        ]:
+            raise AssertionError(f"{mode} Composite batch lost background metadata")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} compatible Composite pair",
+            expected_shader="composite_native.wgsl",
+        )
+        print(
+            f"{mode} queued Composite pair: Pillow bytes/mode/size/info/order PASS; "
+            "one actual GPU dispatch"
+        )
+
+        benchmark = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for seed in range(64):
+            foreground = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed)
+            )
+            background = Image.frombytes(
+                mode, (64, 64), multiply_benchmark_other_pixels(mode, seed)
+            )
+            mask = Image.frombytes("L", (64, 64), composite_mask_pixels(seed))
+            benchmark.submit(foreground, ImageBatch.Composite(background, mask))
+        actual = benchmark.join()
+        if [image.tobytes().hex() for image in actual] != expected[
+            "composite_benchmark_outputs"
+        ][mode]:
+            raise AssertionError(f"{mode} 64x64 × 64 Composite differs from Pillow")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} 64x64 × 64 Composite",
+            expected_shader="composite_native.wgsl",
+        )
+        print(f"{mode} 64x64 × 64 Composite: Pillow parity PASS; one GPU dispatch")
+
+        large = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        for seed in range(COMPOSITE_LARGE_IMAGE_COUNT):
+            foreground = Image.frombytes(
+                mode,
+                COMPOSITE_LARGE_SIZE,
+                benchmark_pixels(mode, seed, COMPOSITE_LARGE_SIZE),
+            )
+            background = Image.frombytes(
+                mode,
+                COMPOSITE_LARGE_SIZE,
+                multiply_benchmark_other_pixels(mode, seed, COMPOSITE_LARGE_SIZE),
+            )
+            mask = Image.frombytes(
+                "L",
+                COMPOSITE_LARGE_SIZE,
+                composite_mask_pixels(seed, COMPOSITE_LARGE_SIZE),
+            )
+            large.submit(foreground, ImageBatch.Composite(background, mask))
+        actual = large.join()
+        if [image.tobytes().hex() for image in actual] != expected[
+            "composite_large_outputs"
+        ][mode]:
+            raise AssertionError(
+                f"{mode} 256x256 × {COMPOSITE_LARGE_IMAGE_COUNT} Composite differs from Pillow"
+            )
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} 256x256 × {COMPOSITE_LARGE_IMAGE_COUNT} Composite",
+            expected_shader="composite_native.wgsl",
+        )
+        print(f"{mode} 256x256 × 16 Composite: Pillow parity PASS; one GPU dispatch")
+
+    fallback_cases = (
+        ("larger-background", "RGB", (7, 5), (9, 7), "L"),
+        ("rgba-mask", "RGBA", (7, 5), (7, 5), "RGBA"),
+    )
+    for case_name, mode, foreground_size, background_size, mask_mode in fallback_cases:
+        if case_name == "larger-background":
+            foreground_data = pixels(mode, foreground_size, 271)
+            background_data = pixels(mode, background_size, 373)
+            mask_data = composite_mask_pixels(419, foreground_size)
+        else:
+            foreground_data = pixels(mode, foreground_size, 521)
+            background_data = pixels(mode, background_size, 613)
+            rgba_mask = bytearray(benchmark_pixels("RGBA", 719, foreground_size))
+            for offset in range(3, len(rgba_mask), 4):
+                rgba_mask[offset] = (0, 128, 255)[(offset // 4) % 3]
+            mask_data = bytes(rgba_mask)
+        foreground = Image.frombytes(mode, foreground_size, foreground_data)
+        background = Image.frombytes(mode, background_size, background_data)
+        background.info["composite-seed"] = 991
+        mask = Image.frombytes(mask_mode, foreground_size, mask_data)
+        fallback = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        fallback.submit(foreground, ImageBatch.Composite(background, mask))
+        result = fallback.join()[0]
+        oracle = expected["composite_fallback_outputs"][case_name]
+        if (
+            result.mode != oracle["mode"]
+            or list(result.size) != oracle["size"]
+            or result.tobytes().hex() != oracle["bytes"]
+            or result.info.get("composite-seed") != oracle["metadata"]
+        ):
+            raise AssertionError(f"{case_name} Composite fallback differs from Pillow")
+        if case_name == "larger-background":
+            receipt = core.take_pipeline_telemetry()
+            if (
+                receipt is None
+                or receipt.get("actual_backend") != "gpu"
+                or receipt.get("fallback_reason")
+                or receipt.get("operation_count") != 1
+                or receipt.get("dispatch_count") != 1
+            ):
+                raise AssertionError(
+                    f"larger-background Composite did not execute on GPU: {receipt}"
+                )
+            shader_records = core.take_gpu_shader_coverage()
+            dispatches = sum(
+                record["dispatches"]
+                for record in shader_records
+                if "composite_module.wgsl" in record["shader_file"]
+            )
+            if dispatches != 1:
+                raise AssertionError(
+                    "larger-background Composite used the wrong GPU shader: "
+                    f"{shader_records}"
+                )
+        else:
+            require_gpu_execution(
+                core,
+                core.take_pipeline_telemetry(),
+                f"{case_name} Composite single-image fallback",
+                expected_shader="composite_native.wgsl",
+            )
+        print(f"{case_name} Composite fallback: Pillow parity PASS; no incompatible grouping")
+
+    boundary_size = COMPOSITE_DISPATCH_BOUNDARY_SIZE
+    boundary = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+    for seed in range(COMPOSITE_DISPATCH_BOUNDARY_IMAGE_COUNT):
+        foreground = Image.frombytes(
+            "RGBA", boundary_size, benchmark_pixels("RGBA", seed, boundary_size)
+        )
+        background = Image.frombytes(
+            "RGBA",
+            boundary_size,
+            multiply_benchmark_other_pixels("RGBA", seed, boundary_size),
+        )
+        mask = Image.frombytes("L", boundary_size, composite_mask_pixels(seed, boundary_size))
+        boundary.submit(foreground, ImageBatch.Composite(background, mask))
+    boundary_results = boundary.join()
+    if [image.tobytes().hex() for image in boundary_results] != expected[
+        "composite_dispatch_boundary_outputs"
+    ]:
+        raise AssertionError("RGBA 1024x768 Composite dispatch-boundary batch differs from Pillow")
+    require_gpu_execution(
+        core,
+        core.take_pipeline_telemetry(),
+        "RGBA 1024x768 × 6 Composite dispatch boundary",
+        expected_shader="composite_native.wgsl",
+        expected_shader_dispatches=1,
+    )
+    print(
+        "RGBA 1024x768 × 6 Composite: Pillow parity PASS; bounded 2D planner "
+        "covered the group in one actual dispatch"
+    )
+
     paste_order = (1, 0)
     for mode in MODES:
         core.take_gpu_shader_coverage()
@@ -1500,6 +2003,151 @@ def run_paste_fault_contracts(expected_path: Path) -> None:
     )
 
 
+def assert_grouped_composite_failure_fallback(case: dict, expected: dict) -> None:
+    """Check exact public recovery after one injected grouped Composite failure."""
+
+    from PIL import Image, ImageBatch
+    import pillow_rs._core as core
+
+    fault_point = case["fault"]["point"]
+    if os.environ.get("PILLOW_RS_MIGRATION_FAULT_POINT") != fault_point:
+        raise RuntimeError(f"fault point was not selected: {fault_point}")
+    if case["mode"] not in MODES or case["input_seeds"] != COMPOSITE_BATCH_SEEDS:
+        raise ValueError(f"invalid Composite fault input declaration: {case['case_id']}")
+
+    for backend in ("cpu", "simd", "gpu"):
+        core.disable_backend(backend)
+    if not core.enable_backend("gpu"):
+        raise RuntimeError("GPU backend unavailable for Composite fallback fault contract")
+    core.set_pipeline_telemetry(True)
+    core.set_gpu_shader_coverage(True)
+    core.take_pipeline_telemetry()
+    core.take_gpu_shader_coverage()
+
+    mode = case["mode"]
+    batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+    submitted = []
+    expected_by_seed = {
+        seed: index for index, seed in enumerate(COMPOSITE_BATCH_SEEDS)
+    }
+    for seed in case["input_seeds"]:
+        foreground = Image.frombytes(
+            mode, (64, 64), benchmark_pixels(mode, seed)
+        )
+        background = Image.frombytes(
+            mode, (64, 64), benchmark_pixels(mode, seed + 101)
+        )
+        background.info["composite-seed"] = seed + 201
+        mask = Image.frombytes("L", (64, 64), composite_mask_pixels(seed + 211))
+        submitted.append(
+            (foreground, foreground.tobytes(), background, background.tobytes(), mask, mask.tobytes())
+        )
+        batch.submit(foreground, ImageBatch.Composite(background, mask))
+
+    recovered = batch.join()
+    if any(
+        foreground.tobytes() != foreground_bytes
+        or background.tobytes() != background_bytes
+        or mask.tobytes() != mask_bytes
+        for foreground, foreground_bytes, background, background_bytes, mask, mask_bytes
+        in submitted
+    ):
+        raise AssertionError("Composite fallback mutated a submitted input")
+    for image, seed in zip(recovered, case["input_seeds"], strict=True):
+        index = expected_by_seed[seed]
+        if (
+            image.mode != mode
+            or image.size != (64, 64)
+            or image.tobytes().hex()
+            != expected["composite_batch_outputs"][mode][index]
+            or image.info.get("composite-seed")
+            != expected["composite_batch_metadata"][mode][index]
+        ):
+            raise AssertionError(
+                f"fault-contract Composite fallback differs from Pillow for seed {seed}"
+            )
+
+    shader = "composite_native.wgsl"
+    records = core.take_gpu_shader_coverage()
+    dispatches = sum(
+        record["dispatches"]
+        for record in records
+        if shader in record["shader_file"]
+    )
+    if dispatches != len(case["input_seeds"]):
+        raise AssertionError(
+            "Composite group failure did not run one GPU fallback per input: "
+            f"{records}"
+        )
+
+    seed = COMPOSITE_BATCH_SEEDS[0]
+    foreground = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
+    background = Image.frombytes(
+        mode, (64, 64), benchmark_pixels(mode, seed + 101)
+    )
+    background.info["composite-seed"] = seed + 201
+    mask = Image.frombytes("L", (64, 64), composite_mask_pixels(seed + 211))
+    core.take_pipeline_telemetry()
+    core.take_gpu_shader_coverage()
+    if batch.submit(foreground, ImageBatch.Composite(background, mask)) != 0:
+        raise AssertionError("a drained Composite batch did not reset its submission index")
+    followup = batch.join()
+    index = expected_by_seed[seed]
+    if (
+        len(followup) != 1
+        or followup[0].mode != mode
+        or followup[0].size != (64, 64)
+        or followup[0].tobytes().hex()
+        != expected["composite_batch_outputs"][mode][index]
+        or followup[0].info.get("composite-seed")
+        != expected["composite_batch_metadata"][mode][index]
+    ):
+        raise AssertionError("Composite executor follow-up result differs from Pillow")
+    require_gpu_execution(
+        core,
+        core.take_pipeline_telemetry(),
+        "fault-contract follow-up Composite join",
+        expected_shader=shader,
+    )
+
+
+def run_composite_fault_contracts(expected_path: Path) -> None:
+    expected = json.loads(expected_path.read_text())
+    if expected.get("pillow_version") != "12.2.0":
+        raise RuntimeError("oracle artifact version mismatch")
+    contracts = {
+        "grouped-composite-error-falls-back-and-recovers":
+            assert_grouped_composite_failure_fallback,
+    }
+    case_id = os.environ.get("COMPOSITE_BATCH_FAULT_CONTRACT_CASE_ID")
+    case = next(
+        (item for item in COMPOSITE_FAULT_CONTRACT_CASES if item["case_id"] == case_id),
+        None,
+    )
+    if case is None:
+        raise ValueError(f"unknown Composite fault-contract case: {case_id!r}")
+    if (
+        case["verification"] != "fault-contract"
+        or case["operation"] != "ImageBatch.Composite"
+        or case["target_profile"] != "python-gpu"
+        or case["oracle"] != "not_applicable"
+        or not case["requirements"]
+        or any(
+            requirement not in COMPOSITE_FAULT_CONTRACT_REQUIREMENTS
+            for requirement in case["requirements"]
+        )
+    ):
+        raise ValueError(f"invalid Composite fault-contract declaration: {case_id}")
+    assertion = contracts.get(case["fault"]["contract"])
+    if assertion is None:
+        raise ValueError(f"unknown Composite fault contract: {case['fault']['contract']}")
+    assertion(case, expected)
+    print(
+        f"fault-contract case={case_id} selected=1 executed=1 passed=1 failed=0 "
+        f"requirements={','.join(case['requirements'])} oracle=not_applicable"
+    )
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="pillow-rs-imagebatch-") as directory:
         expected = Path(directory) / "pillow-expected.json"
@@ -1523,6 +2171,7 @@ def main() -> int:
         target_env["IMAGEBATCH_PARITY_EXPECTED"] = str(expected)
         target_env.pop("PILLOW_RS_MIGRATION_FAULT_POINT", None)
         target_env.pop("PASTE_BATCH_FAULT_CONTRACT_CASE_ID", None)
+        target_env.pop("COMPOSITE_BATCH_FAULT_CONTRACT_CASE_ID", None)
         subprocess.run(
             [sys.executable, str(Path(__file__).resolve())],
             cwd=ROOT,
@@ -1535,6 +2184,18 @@ def main() -> int:
                 fault_env["IMAGEBATCH_PARITY_MODE"] = "paste-fault-contract"
                 fault_env["PILLOW_RS_MIGRATION_FAULT_POINT"] = case["fault"]["point"]
                 fault_env["PASTE_BATCH_FAULT_CONTRACT_CASE_ID"] = case["case_id"]
+                subprocess.run(
+                    [sys.executable, str(Path(__file__).resolve())],
+                    cwd=ROOT,
+                    env=fault_env,
+                    check=True,
+                )
+        if os.environ.get("COMPOSITE_BATCH_INCLUDE_FAULT_CONTRACT") == "1":
+            for case in COMPOSITE_FAULT_CONTRACT_CASES:
+                fault_env = target_env.copy()
+                fault_env["IMAGEBATCH_PARITY_MODE"] = "composite-fault-contract"
+                fault_env["PILLOW_RS_MIGRATION_FAULT_POINT"] = case["fault"]["point"]
+                fault_env["COMPOSITE_BATCH_FAULT_CONTRACT_CASE_ID"] = case["case_id"]
                 subprocess.run(
                     [sys.executable, str(Path(__file__).resolve())],
                     cwd=ROOT,
@@ -1554,5 +2215,8 @@ if __name__ == "__main__":
         raise SystemExit(0)
     if mode == "paste-fault-contract":
         run_paste_fault_contracts(Path(os.environ["IMAGEBATCH_PARITY_EXPECTED"]))
+        raise SystemExit(0)
+    if mode == "composite-fault-contract":
+        run_composite_fault_contracts(Path(os.environ["IMAGEBATCH_PARITY_EXPECTED"]))
         raise SystemExit(0)
     raise SystemExit(main())

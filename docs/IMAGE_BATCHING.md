@@ -8,6 +8,11 @@
 independent image jobs to process together. It does not alter `Image` methods,
 automatic backend routing, or ordinary CPU/SIMD/GPU execution.
 
+`ImageBatch` is a pillow-rs addition; upstream Pillow does not provide this
+queued executor or combine independent calls into one GPU dispatch. It keeps
+the familiar operation semantics while exposing batching as a separate,
+explicit scheduling API.
+
 ```python
 from PIL import ImageBatch, ImageFilter
 
@@ -51,6 +56,11 @@ pastes.submit(destination_a, ImageBatch.Paste(source_a, mask_a))
 pastes.submit(destination_b, ImageBatch.Paste(source_b, mask_b))
 pasted_a, pasted_b = pastes.join()
 
+composites = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+composites.submit(foreground_a, ImageBatch.Composite(background_a, mask_a))
+composites.submit(foreground_b, ImageBatch.Composite(background_b, mask_b))
+composite_a, composite_b = composites.join()
+
 expanded = ImageBatch.BatchExecutor(queue=True, backend="gpu")
 expanded.submit(rgba_a, ImageBatch.Expand(4, fill=(9, 17, 23, 31)))
 expanded.submit(rgba_b, ImageBatch.Expand(4, fill=(9, 17, 23, 31)))
@@ -74,8 +84,9 @@ until `join`, which returns results in submission order. A batch accepts
 `ImageBatch.ExtractBand(channel)`,
 `ImageBatch.Invert()`, `ImageBatch.Brightness(factor)`,
 `ImageBatch.Multiply(other_image)`, full-frame
-`ImageBatch.Paste(source, mask)`, native-mode `ImageBatch.Expand(border, fill)`,
-and a shared same-mode RGBA
+`ImageBatch.Paste(source, mask)`, same-mode
+`ImageBatch.Composite(background, mask)`, native-mode
+`ImageBatch.Expand(border, fill)`, and a shared same-mode RGBA
 `ImageBatch.Color3DLUT(filter)` operation. Jobs with the same operation and
 compatible mode and dimensions are grouped when GPU is the selected backend;
 Brightness also requires an exact GPU factor and L, LA, or RGB mode. LUT jobs
@@ -83,6 +94,12 @@ must share the same wrapper instance.
 Multiply requires each secondary image to match its primary image's mode and
 size. Batched Paste requires same-sized destination and source images in the
 same native mode, plus a same-sized `L` mask; it pastes the source at `(0, 0)`.
+Composite grouping requires same-sized foreground and background images in
+one of `L`, `LA`, `RGB`, or `RGBA`, plus a same-sized `L` mask. The output
+keeps the background's mode and metadata, matching Pillow's
+`Image.composite(foreground, background, mask)` result. Other valid Pillow
+mask modes or a larger background remain supported through the ordinary
+per-image operation, without joining an incompatible GPU group.
 The native-mode group layouts are `L`, `LA`, `RGB`, and `RGBA`; no image is
 converted to RGBA. A queued job that has no compatible peer runs through the
 regular single-image operation at `join`.
@@ -93,8 +110,8 @@ bottom row surrounds each image, so the filter cannot read pixels from a
 neighbor at a group boundary. RankFilter batching is currently limited to the
 packed-L second-minimum kernel; other modes, sizes, and ranks retain the
 ordinary per-image path. For
-`ExtractBand`, `Invert`, `Brightness`, `Multiply`, `Paste`, `Expand`, and
-`Color3DLUT`,
+`ExtractBand`, `Invert`, `Brightness`, `Multiply`, `Paste`, `Composite`,
+`Expand`, and `Color3DLUT`,
 images are stacked directly because each output pixel depends only on
 corresponding input pixels. Brightness groups same-factor L, LA, and RGB images
 with the existing native-byte kernel; LA alpha is preserved. RGBA and factors
@@ -105,6 +122,15 @@ the ordinary ImageOps validation behavior. For `Multiply`, primary and secondary
 operands are each stacked in their native mode. For `Paste`,
 destinations, sources, and L masks are stacked separately; the existing
 full-frame masked paste runs at the origin and keeps each image independent.
+For `Composite`, foregrounds, backgrounds, and L masks are stacked separately;
+the existing `Image.composite` pipeline runs once over the stack, after which
+the output is split into independent images in submission order. Queueing is
+explicit; ordinary `Image.composite` continues to use its existing route.
+The native-byte Composite kernel tiles packed output words over a two-dimensional
+workgroup grid bounded by the selected adapter's per-dimension limit. Its shader
+maps each grid coordinate to one linear output word, and the planner rejects a
+group when the grid or storage bindings cannot represent it. Pure planner tests
+cover the 65,535-workgroup edge without allocating a large image.
 For `Expand`, the batch requires equal borders and fill inputs. It inserts two
 native fill rows between adjacent source images. The existing Expand operation
 adds the outer border around the full stack, which gives every input its own
@@ -122,6 +148,13 @@ split back into ordinary per-image results. Split results use the same
 operation result and metadata path as single-image calls. Other filter sizes,
 incompatible LUT objects, and unsupported modes continue through the existing
 single-image path.
+
+Two target-only Composite fault-contract cases inject grouped dimension and
+allocation errors. Each verifies exact Pillow-equivalent output in submission
+order, input preservation, one GPU fallback per submitted image, and a
+successful follow-up join on the same executor. Pillow cannot receive these
+target-internal injections, so the fault cases report `oracle=not_applicable`;
+the neighboring ordinary Composite cases remain the live Pillow parity checks.
 
 If `backend` is omitted, automatic routing remains in effect; grouping is
 attempted only when GPU is the preferred active backend. A backend can be
@@ -660,3 +693,53 @@ grouped allocation error. For both, it verifies one exact GPU fallback per
 image, preserved result order and metadata behavior, and a successful follow-up
 join. These injected internal faults have no Pillow oracle case; the ordinary
 parity cases establish their returned image values.
+
+### Native-mode `Image.composite` batch
+
+`ImageBatch.Composite(background, mask)` keeps the existing
+`Image.composite(foreground, background, mask)` semantics in a separate queued
+API. Compatible jobs require matching-size foreground and background images
+in native `L`, `LA`, `RGB`, or `RGBA` mode, plus a matching-size `L` mask. The
+executor stacks those three byte streams, runs the existing native-mode
+Composite pipeline, and returns independent images in submission order. It
+preserves the background's metadata and does not change ordinary
+`Image.composite` routing.
+
+Live Pillow parity covers CPU, SIMD, and eager GPU in all four modes; queued
+CPU and SIMD fallback; and grouped queued GPU cohorts at 64×64 × 64 and
+256×256 × 16. It also checks larger-background and non-L-mask fallbacks. A
+1024×768 × 6 RGBA boundary case now uses one bounded 2D shader dispatch, with
+exact Pillow bytes and zero mode conversions. Pure planner tests exercise the
+65,535-workgroup boundary and smaller synthetic adapter limits without large
+allocations. The target-only fault contracts inject dimension and allocation
+failures, then check one GPU fallback per image, exact ordered results,
+unchanged inputs, and executor reuse. Their oracle status is
+`not_applicable`; the normal-path cases provide the adjacent Pillow comparison.
+
+The following 1024×768 × 8 RGBA full-call measurements are medians of 12
+windows after 3 warmups on the same Apple M-series host. Each timed window
+includes image construction, submission, execution, transfer, synchronization,
+result splitting, and `tobytes()` for every output. Pillow is ordinary
+sequential Pillow. Serial CPU, SIMD, and Parallel CPU use eager
+`BatchExecutor(queue=False)` calls; Parallel CPU is the default-off Rayon
+feature. GPU uses `BatchExecutor(queue=True)` and the parity receipt confirmed
+one native Composite dispatch, no fallback, and zero mode conversions. The
+Parallel CPU build reported backend `cpu` with the opt-in feature enabled; it
+is listed separately from SIMD and GPU.
+
+| Profile | Full-call p50 (ms) | Images/s | Throughput vs Pillow |
+| --- | ---: | ---: | ---: |
+| Pillow sequential | 11.098 | 720.8 | 1.00× |
+| Serial CPU | 16.345 | 489.5 | 0.68× |
+| Parallel CPU | 10.881 | 735.2 | 1.02× |
+| SIMD | 8.982 | 890.6 | 1.24× |
+| GPU queued | 31.217 | 256.3 | 0.36× |
+
+The 2D grid fixes the device-limit failure, but one dispatch is not enough for
+high throughput on this transfer-heavy cohort: queued GPU is 3.47× slower than SIMD and
+2.81× slower than Pillow. Serial CPU is also slower than Pillow, Parallel CPU
+only narrowly wins, and SIMD is well below the 5× target. This batch operation
+does not meet the repository's overall latency and throughput goals. Keep it
+explicitly queued and separate from ordinary `Image.composite`; the next
+optimization should profile and reduce host-side packing, upload, readback, and
+result-copy costs before changing the blend arithmetic.
