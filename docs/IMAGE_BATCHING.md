@@ -508,37 +508,46 @@ executed without fallback. Every queued cohort used one native-mode GPU
 dispatch. The pure planner tests cover both the default 65,535-workgroup edge
 and lower adapter workgroup limits without allocating boundary-sized images.
 
-These full-call medians were measured on one Apple M-series host with 3 warmups
-and 12 timed windows. The window includes image construction, submission,
-execution, GPU upload/readback and synchronization, result splitting, and
-`tobytes()` on each result. Pillow processes the same number of image jobs
-sequentially. The eager columns use `BatchExecutor(queue=False)`; the queued
-column uses `BatchExecutor(queue=True)`. All selected CPU, SIMD, and GPU
-profiles executed their requested backend without fallback. Times are
-milliseconds per complete window.
+Target-only fault-contract cases exercise injected grouped dimension and
+allocation failures. They check Pillow-exact GPU fallback outputs in submission
+order, that submitted destinations remain unchanged, and that the same executor
+accepts a successful follow-up job. These cases have no oracle execution
+because Pillow cannot receive the internal fault injection; they remain
+separate from the normal parity result count. The focused command is listed in
+the [command reference](COMMANDS.md).
+
+These corrected full-call medians were measured on one Apple M-series host at
+256×256 × 16, with 3 warmups and 12 timed windows. The window includes image
+construction, submission, execution, GPU upload/readback and synchronization,
+result splitting, and `tobytes()` on each result. Pillow runs sequentially and
+copies each destination before mutating it, matching ImageBatch's independent
+result and input-preservation contract. The eager columns use
+`BatchExecutor(queue=False)`; the queued column uses `BatchExecutor(queue=True)`.
+All selected pillow-rs profiles executed their requested backend without
+fallback. Times are milliseconds per complete window.
 
 | Mode | Cohort | Pillow | Serial CPU | SIMD | GPU, eager | GPU, queued |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| L | 64 images @ 64×64 | 0.699 | 0.593 | 0.566 | 13.431 | 0.898 |
-| LA | 64 images @ 64×64 | 1.088 | 0.706 | 0.739 | 13.526 | 1.240 |
-| RGB | 64 images @ 64×64 | 1.141 | 0.729 | 0.906 | 14.586 | 1.626 |
-| RGBA | 64 images @ 64×64 | 0.995 | 0.905 | 0.983 | 15.858 | 2.061 |
-| L | 16 images @ 256×256 | 0.960 | 0.951 | 0.629 | 6.467 | 2.145 |
-| LA | 16 images @ 256×256 | 3.190 | 1.928 | 2.163 | 6.931 | 5.380 |
-| RGB | 16 images @ 256×256 | 2.572 | 1.478 | 3.571 | 7.900 | 4.010 |
-| RGBA | 16 images @ 256×256 | 1.838 | 2.576 | 1.935 | 7.154 | 6.287 |
+| L | 16 images @ 256×256 | 0.903 | 0.773 | 0.564 | 6.265 | 3.858 |
+| LA | 16 images @ 256×256 | 2.573 | 0.933 | 1.098 | 6.169 | 3.543 |
+| RGB | 16 images @ 256×256 | 3.068 | 1.515 | 2.401 | 6.994 | 3.645 |
+| RGBA | 16 images @ 256×256 | 2.006 | 2.816 | 2.162 | 6.907 | 5.762 |
 
-At 64×64, queueing reduced full-call GPU time by 7.7–15.0× compared with
-submitting the same jobs eagerly. At 256×256, the reduction was only 1.1–3.0×.
-Queued GPU remained slower than SIMD and sequential Pillow in every listed
-mode and cohort. Eager CPU was faster than Pillow in all four small-image rows
-and in the L, LA, and RGB medium rows; SIMD was faster than Pillow in all four
-small rows and in the L and LA medium rows. The medium timings varied
-materially between runs, so treat these as observations for this exact run,
-not stable performance guarantees. These CPU measurements use the normal
-default build with Rayon disabled; neither cohort reaches the 512×512-pixel
-threshold used by the feature-gated masked-Paste row scheduler. This batch
-feature does not meet the GPU latency or throughput target.
+Serial CPU was slower than Pillow for RGBA (2.816 vs 2.006 ms). SIMD reached
+1.60× Pillow for L, 2.34× for LA, 1.28× for RGB, and was slower for RGBA; no
+mode approaches the 5× target. Queued GPU remained slower than both SIMD and
+sequential Pillow in all four modes. These medians are observations for this
+run, not stable performance guarantees. CPU measurements use the default build
+with Rayon disabled; this cohort is below the 512×512-pixel threshold used by
+the feature-gated masked-Paste row scheduler. ImageBatch Paste does not meet the
+GPU latency or throughput target.
+
+A mode-specific GPU arithmetic attempt replaced constant `/255` with an exact
+integer reciprocal identity. Although the identity was exhaustive over the
+rounded-byte numerator range, repeated full-call measurements were noisy and
+did not show a reliable gain across modes, so the shader change was reverted.
+This leaves host packing and transfer costs as the next measured target; do not
+spend more time changing blend arithmetic until profiling shows it is dominant.
 
 The next optimization should remove the input-atlas copies before touching
 the shader. For N images of W×H pixels with C native bytes per pixel, masked

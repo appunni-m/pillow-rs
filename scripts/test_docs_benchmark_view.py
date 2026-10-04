@@ -105,10 +105,11 @@ class BenchmarkViewTests(unittest.TestCase):
         categories = [facets(row(workload=workload["workload_id"], context=workload.get("context", {})), "pillow")[0]
                      for workload in workloads]
         # Pin the complete generated catalog so additions and removals must
-        # keep both public benchmark tables current.
-        self.assertEqual(len(workloads), 652)
-        self.assertEqual(categories.count("operations"), 192)
-        self.assertEqual(categories.count("pipelines"), 460)
+        # keep both public benchmark tables current. These counts match the
+        # checked-in generated input catalog.
+        self.assertEqual(len(workloads), 655)
+        self.assertEqual(categories.count("operations"), 193)
+        self.assertEqual(categories.count("pipelines"), 462)
 
     def test_all_observations_retained_without_mutating_snapshot(self):
         snapshot=dict(rows=[row('FreeType',20),row(),row('unknown',None)],environment={'os':'Test'},measured_at='2026-09-16')

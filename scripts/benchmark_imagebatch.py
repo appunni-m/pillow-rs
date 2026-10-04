@@ -189,8 +189,12 @@ def main() -> int:
                         (args.width, args.height),
                         mask_inputs[start + image_index],
                     )
-                    image.paste(source, (0, 0), mask)
-                    image.tobytes()
+                    # ImageBatch operations return an independent result and
+                    # leave submitted inputs intact. Copy Pillow's mutable
+                    # destination so this baseline performs equivalent work.
+                    result = image.copy()
+                    result.paste(source, (0, 0), mask)
+                    result.tobytes()
                 elif args.operation == "expand":
                     ImageOps.expand(image, args.border, args.fill).tobytes()
                 else:

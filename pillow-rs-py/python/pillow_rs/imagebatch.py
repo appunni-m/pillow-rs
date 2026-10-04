@@ -73,7 +73,8 @@ class Paste:
 
     Grouped GPU execution currently requires equal-sized native-mode source
     and destination images and an equal-sized L mask. The operation pastes at
-    the origin; other combinations keep their ordinary single-image semantics.
+    the origin and returns a new result without mutating the submitted
+    destination. Other combinations keep their ordinary single-image path.
     """
 
     __slots__ = ("source", "mask")
