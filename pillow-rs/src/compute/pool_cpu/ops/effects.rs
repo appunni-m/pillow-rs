@@ -752,14 +752,9 @@ fn paste_native_masked_cmyk_row(source: &[u8], destination: &mut [u8], mask: &[u
         .zip(destination.chunks_exact_mut(4))
         .zip(mask.iter().copied())
     {
-        if mask_value == 0 {
-            continue;
-        }
-        if mask_value == 255 {
-            destination_pixel.copy_from_slice(source_pixel);
-            continue;
-        }
-
+        // The exact blend formula already preserves both endpoints, so keep
+        // noisy masks on one branch-free arithmetic path through all C/M/Y/K
+        // samples rather than testing 0 and 255 for every pixel.
         let weight = u16::from(mask_value);
         #[expect(
             clippy::arithmetic_side_effects,
