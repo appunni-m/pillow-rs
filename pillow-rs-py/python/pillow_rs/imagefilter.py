@@ -207,11 +207,28 @@ class Color3DLUT:
         table, ch_out = _core.color3dlut_transform(
             self.table, self.size, self.channels, channels, with_normals, callback
         )
+        result_mode = self.mode if target_mode is None else target_mode
+
+        # The core has already converted callback results to floats. For the
+        # built-in class, a correctly sized result also satisfies the table
+        # constructor's remaining checks. Keep that returned list directly
+        # instead of copying it through color3dlut_new a second time. Preserve
+        # subclass construction and malformed callback-length errors below.
+        if type(self) is Color3DLUT and len(table) == (
+            self.size[0] * self.size[1] * self.size[2] * ch_out
+        ):
+            result = object.__new__(Color3DLUT)
+            result.size = self.size
+            result.channels = ch_out
+            result.mode = result_mode
+            result.table = table
+            return result
+
         return type(self)(
             self.size,
             table,
             channels=ch_out,
-            target_mode=self.mode if target_mode is None else target_mode,
+            target_mode=result_mode,
         )
 
     def _apply(self, rust_image):
