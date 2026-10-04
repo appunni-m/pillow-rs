@@ -18565,3 +18565,59 @@ The baseline and probe receipts are `image-mode-main-5dee7bf4d-20261004.json`
 and `image-mode-cached-5dee7bf4d-20261004.json` under
 `build/migration-parity/`. Move to the next ranked operation without carrying
 this cache forward.
+
+## `ImageStat.Stat` RGB construction — checkpoint 2026-10-04
+
+The standard `pil-imagestat.stat.standard` workload constructs a 16 × 16 RGB
+image and a `Stat` object, then observes all nine public result fields. The
+baseline is already close to Pillow, but CPU is about 1.15× slower. Two result
+transfer changes tested whether Python field assignment was responsible:
+first `self.__dict__.update(result)`, then an ordered Rust-to-Python tuple and
+Python tuple unpacking. The first was slower; the second matched baseline.
+Both code changes were reverted. Neither changes the public `Stat` fields, and
+subclass `__setattr__` hooks continued to run during the checks.
+
+| Run | Pillow latency | pillow-rs CPU latency | CPU pipeline phase | CPU / Pillow |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline at `28a32c659` | 8.875 µs | 10.166 µs | 5.791 µs | 1.15× |
+| Dict-update probe | 9.083 µs | 10.625 µs | 6.167 µs | 1.17× |
+| Tuple-return probe | 8.875 µs | 10.167 µs | 5.791 µs | 1.15× |
+
+The tuple result shape did not reduce end-to-end latency, so keyed Python
+assignment is not the dominant removable cost. The remaining difference likely
+lies in the Rust histogram/result conversion boundary, but these runs did not
+separate those costs; that cause is an inference, not a measured profile. The
+target profiles reported no actual image backend, so SIMD and GPU acceleration
+are not demonstrated. Parallel CPU is not applicable.
+
+The focused live-Pillow parity cohort passed 8/8 cases: default RGB, L and RGBA
+modes, histogram-list input, empty and zero histograms, invalid input, and a
+nonzero mask. `make build-parity` succeeded, and both benchmark attempts passed
+their embedded parity gate across all four subjects. Direct checks confirmed
+field ordering and preservation of subclass `__setattr__` hooks. No coverage
+ran.
+
+Reproduce the focused parity and tuple-probe benchmark with:
+
+```sh
+RUSTC_WRAPPER= make build-parity
+
+RUSTC_WRAPPER= \
+MIGRATION_PARITY_CASE_IDS='PIL.ImageStat.Stat.behavior.default,PIL.ImageStat.Stat.mode.l,PIL.ImageStat.Stat.mode.rgba,PIL.ImageStat.Stat.nuanced.empty-list,PIL.ImageStat.Stat.nuanced.from-histogram-list,PIL.ImageStat.Stat.nuanced.invalid-first-argument,PIL.ImageStat.Stat.nuanced.nonzero-mask,PIL.ImageStat.Stat.nuanced.zero-histogram-list' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/imagestat-tuple-cases-20261004.json \
+make migration-parity-test
+
+RUSTC_WRAPPER= \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imagestat.stat.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/imagestat-tuple-20261004.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/imagestat-tuple-parity-20261004.json \
+make migration-parity-benchmark
+```
+
+Baseline, dict-update, and tuple probe receipts are
+`imagestat-main-28a32c659-20261004.json`,
+`imagestat-fast-28a32c659-20261004.json`, and
+`imagestat-tuple-20261004.json` under `build/migration-parity/`. Move to the
+next ranked operation; the CPU latency target for `ImageStat.Stat` remains
+open.
