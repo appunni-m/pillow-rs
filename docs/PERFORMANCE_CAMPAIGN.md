@@ -17290,35 +17290,47 @@ working-tree change. For the extended factors, build safely with
 `MIGRATION_TARGET_BACKEND=cpu`, `simd`, or `gpu` and the two case IDs above.
 No coverage was run.
 
-## `PIL.Image.eval` standard timing boundary — checkpoint 2026-10-04
+## RGB `PIL.Image.eval` affine lookup — checkpoint after three code attempts 2026-10-04
 
-Do not optimize from `pil-image.eval.standard`'s current latency comparison.
-Its input case, `PIL.Image.eval.nuanced.rgb-expanded-lut`, creates a 16 × 16 RGB
-image and calls `Image.eval` with a 768-entry lookup table, but observes only
-the returned image. It has no timed `tobytes` step. The benchmark harness stops
-the `whole_workflow` timer after the call steps and serializes observations
-after that timer. Pillow applies the lookup eagerly inside `Image.eval`; this
-repository's `Image.point` queues a lazy Rust operation, and its pixels are
-materialized only while serializing the observation. The timed work is
-therefore asymmetric even though the post-timing parity check is exact.
+The original 16 × 16 expanded-LUT case was invalid for ranking: it timed the
+call, while Pillow evaluated eagerly and pillow-rs deferred the point operation
+until output observation. The performance case now uses deterministic,
+nonuniform RGB noise at 1024 × 768 and a distinct 768-entry LUT for the three
+channels. Its timed steps are `eval` plus `Image.load`, which forces the lazy
+result to compute. Exact `tobytes` observation remains in the parity case but
+outside the timed interval, so output serialization is checked without
+charging its cost to only one implementation.
 
-On `d5c76f740`, the parity-gated standard run measured Pillow at 95.333 µs and
-the target profiles at 126.813 µs CPU, 126.750 µs SIMD, and 127.042 µs GPU.
-Target execution receipts had `actual_backend: null` and no operation samples,
-confirming that no target pixel backend ran in the timed interval. The parity
-gate passed because output serialization materialized the lazy target after
-timing. These measurements do not show that the complete eval operation is
-slower than Pillow, nor do the SIMD/GPU labels establish accelerator work.
+Three implementation attempts attacked the per-pixel work. First, an AArch64
+NEON arbitrary-LUT kernel replaced scalar channel extraction and repeated table
+selection with interleaved RGB loads/stores and NEON table lookup. Second, the
+serial CPU path specialized native channel loops and removed temporary
+per-channel LUT copies. Third, inspection showed that this workload's channel
+tables are affine modulo 256 (`3*x+5`, `5*x+13`, and `255*x+255`); a full-table
+detector now selects wrapping multiply-add on CPU and a dedicated NEON affine
+kernel, with the arbitrary-LUT path retained for every table that does not
+match all 256 values. Focused tests cover affine detection, non-affine
+fallback, channel order, exact table math, and vector tails.
 
-Keep the parity input intact. Correct future performance evidence needs a
-benchmark workflow that explicitly times output materialization on both sides
-(for example, a `tobytes` step) and then reruns the exact-output gate. Until
-that exists, mark this workload invalid for operation-latency ranking and move
-to a different candidate. This is a benchmark-boundary defect, not a parity
-failure or a runtime fix. The receipt is
-`build/migration-parity/eval-rgb-lut-baseline-d5c76f7.json` with parity sidecar
-`eval-rgb-lut-baseline-d5c76f7-parity.json`. No implementation attempt or
-coverage run was made.
+With the corrected materialization boundary, the standard run used 5 warmups,
+20 iterations × 5 samples (100 timed samples per profile). Pillow 12.2.0 had a
+0.796 ms median (0.877 ms p95); serial CPU was 1.207 ms (1.310 ms p95), so it
+still takes 1.52× Pillow's time. SIMD was 0.244 ms (0.314 ms p95), or 3.27×
+Pillow, short of the 5× target. GPU was 1.722 ms (1.927 ms p95), slower than
+both. Receipts show the requested backend ran for all 100 target samples with
+no fallback; GPU performed one dispatch, one mode conversion, and one full-frame
+copy per call. The exact materialized output passed the CPU, SIMD, and GPU
+parity lanes (3/3).
+
+Checkpoint this visit after three code attempts. The next work should move to a
+different operation; retain this case and receipt as a ranked CPU/SIMD/GPU
+blocker, and return only after higher-ranked work or a materially different
+kernel/transport design is ready. The benchmark receipt is
+`build/migration-parity/eval-rgb-materialize-boundary-20261004.json`; its exact
+parity sidecar is `build/migration-parity/eval-rgb-materialize-boundary-parity-20261004.json`.
+Strict focused CPU, SIMD, and GPU parity receipts are under
+`build/migration-parity/eval-materialize-*-strict-20261004.json`. No coverage
+was run.
 
 ## CMYK `ImageOps.cover` SIMD i32 accumulators — checkpoint 2026-10-04
 

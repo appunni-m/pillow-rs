@@ -9274,12 +9274,25 @@ fn native_lut_map_rows(
     width: usize,
     height: usize,
     channels: usize,
+    lut: &[u8],
     tables: &[[u8x16; 16]; 4],
 ) -> Option<u64> {
     let row_stride = width.checked_mul(channels)?;
     let expected_len = row_stride.checked_mul(height)?;
-    if row_stride == 0 || source.len() != expected_len || destination.len() != expected_len {
+    if row_stride == 0
+        || source.len() != expected_len
+        || destination.len() != expected_len
+        || lut.len() != channels.checked_mul(256)?
+    {
         return None;
+    }
+    #[cfg(all(
+        target_arch = "aarch64",
+        target_feature = "neon",
+        target_endian = "little"
+    ))]
+    if channels == 3 {
+        return native_rgb_lut_map_rows_neon(source, destination, width, height, lut);
     }
     #[cfg(feature = "parallel")]
     if source.len() >= 256 * 1024 {
@@ -9314,6 +9327,206 @@ fn native_lut_map_rows(
         .saturating_mul(width.div_ceil(16))
         .saturating_mul(height);
     Some(u64::try_from(vector_blocks).unwrap_or(u64::MAX))
+}
+
+/// Apply three independent byte LUTs to native RGB using NEON's four-register
+/// table lookup. Splitting each 256-byte LUT into four 64-entry banks reduces
+/// the portable kernel's sixteen table lookups and fifteen selects per
+/// channel to four `TBL` operations and three selects. `vld3q_u8`/`vst3q_u8`
+/// keep RGB interleaved at the memory boundary without scalar lane gathers.
+#[cfg(all(
+    target_arch = "aarch64",
+    target_feature = "neon",
+    target_endian = "little"
+))]
+#[allow(unsafe_code)]
+fn native_rgb_lut_map_rows_neon(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    lut: &[u8],
+) -> Option<u64> {
+    use core::arch::aarch64 as neon;
+
+    const CHANNELS: usize = 3;
+    const LANES: usize = 16;
+    if lut.len() != CHANNELS * 256 {
+        return None;
+    }
+    let row_stride = width.checked_mul(CHANNELS)?;
+    let expected_len = row_stride.checked_mul(height)?;
+    if row_stride == 0 || source.len() != expected_len || destination.len() != expected_len {
+        return None;
+    }
+
+    // Each TBL4 table bank is one contiguous 64-byte slice. The validated
+    // 768-byte LUT makes every four-vector load in-bounds and initialized.
+    let tables: [[neon::uint8x16x4_t; 4]; CHANNELS] = unsafe {
+        std::array::from_fn(|channel| {
+            std::array::from_fn(|bank| {
+                let offset = channel * 256 + bank * 64;
+                neon::vld1q_u8_x4(lut.as_ptr().add(offset))
+            })
+        })
+    };
+
+    #[inline(always)]
+    fn lookup(
+        input: core::arch::aarch64::uint8x16_t,
+        tables: &[core::arch::aarch64::uint8x16x4_t; 4],
+    ) -> core::arch::aarch64::uint8x16_t {
+        use core::arch::aarch64 as neon;
+
+        // SAFETY: this helper and its only caller are compiled only for
+        // little-endian AArch64 targets with NEON enabled.
+        unsafe {
+            // Masked low six bits always index the 64 bytes in one TBL4 bank;
+            // the upper two bits choose which bank's value survives.
+            let indices = neon::vandq_u8(input, neon::vdupq_n_u8(0x3f));
+            let high = neon::vshrq_n_u8(input, 6);
+            let low_bank = neon::vceqq_u8(
+                neon::vandq_u8(high, neon::vdupq_n_u8(1)),
+                neon::vdupq_n_u8(0),
+            );
+            let high_bank = neon::vceqq_u8(
+                neon::vandq_u8(high, neon::vdupq_n_u8(2)),
+                neon::vdupq_n_u8(0),
+            );
+            let bank0 = neon::vqtbl4q_u8(tables[0], indices);
+            let bank1 = neon::vqtbl4q_u8(tables[1], indices);
+            let bank2 = neon::vqtbl4q_u8(tables[2], indices);
+            let bank3 = neon::vqtbl4q_u8(tables[3], indices);
+            let low_pair = neon::vbslq_u8(low_bank, bank0, bank1);
+            let high_pair = neon::vbslq_u8(low_bank, bank2, bank3);
+            neon::vbslq_u8(high_bank, low_pair, high_pair)
+        }
+    }
+
+    let vector_width = width / LANES * LANES;
+    for row in 0..height {
+        let row_start = row * row_stride;
+        let source_row = &source[row_start..row_start + row_stride];
+        let destination_row = &mut destination[row_start..row_start + row_stride];
+        for pixel in (0..vector_width).step_by(LANES) {
+            let byte_offset = pixel * CHANNELS;
+            // SAFETY: each vector block covers exactly sixteen complete RGB
+            // pixels (48 bytes); `pixel < vector_width <= width` proves the
+            // source load and destination store remain within their row
+            // slices. The immutable source and mutable destination are
+            // separate safe borrows. NEON is enabled by this function's cfg.
+            unsafe {
+                let rgb = neon::vld3q_u8(source_row.as_ptr().add(byte_offset));
+                let mapped = neon::uint8x16x3_t(
+                    lookup(rgb.0, &tables[0]),
+                    lookup(rgb.1, &tables[1]),
+                    lookup(rgb.2, &tables[2]),
+                );
+                neon::vst3q_u8(destination_row.as_mut_ptr().add(byte_offset), mapped);
+            }
+        }
+        for pixel in vector_width..width {
+            let byte_offset = pixel * CHANNELS;
+            for channel in 0..CHANNELS {
+                let sample = usize::from(source_row[byte_offset + channel]);
+                destination_row[byte_offset + channel] = lut[channel * 256 + sample];
+            }
+        }
+    }
+    Some((vector_width / LANES * height) as u64)
+}
+
+#[cfg(all(
+    target_arch = "aarch64",
+    target_feature = "neon",
+    target_endian = "little"
+))]
+fn native_rgb_affine_lut_coefficients(lut: &[u8]) -> Option<[(u8, u8); 3]> {
+    if lut.len() != 3 * 256 {
+        return None;
+    }
+    Some([
+        crate::compute::byte_lut_affine_coefficients(&lut[0..256])?,
+        crate::compute::byte_lut_affine_coefficients(&lut[256..512])?,
+        crate::compute::byte_lut_affine_coefficients(&lut[512..768])?,
+    ])
+}
+
+#[cfg(all(
+    target_arch = "aarch64",
+    target_feature = "neon",
+    target_endian = "little"
+))]
+#[allow(unsafe_code)]
+fn native_rgb_affine_lut_map_rows_neon(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    coefficients: [(u8, u8); 3],
+) -> Option<u64> {
+    use core::arch::aarch64 as neon;
+
+    const CHANNELS: usize = 3;
+    const LANES: usize = 16;
+    let row_stride = width.checked_mul(CHANNELS)?;
+    let expected_len = row_stride.checked_mul(height)?;
+    if row_stride == 0 || source.len() != expected_len || destination.len() != expected_len {
+        return None;
+    }
+
+    // Each channel's exact affine LUT becomes one wrapping byte multiply and
+    // add. These six vectors are reused for every pixel block.
+    // SAFETY: these duplicate intrinsics only construct vector constants and
+    // have no pointer or memory preconditions.
+    let multipliers = unsafe {
+        [
+            neon::vdupq_n_u8(coefficients[0].0),
+            neon::vdupq_n_u8(coefficients[1].0),
+            neon::vdupq_n_u8(coefficients[2].0),
+        ]
+    };
+    // SAFETY: these duplicate intrinsics only construct vector constants and
+    // have no pointer or memory preconditions.
+    let offsets = unsafe {
+        [
+            neon::vdupq_n_u8(coefficients[0].1),
+            neon::vdupq_n_u8(coefficients[1].1),
+            neon::vdupq_n_u8(coefficients[2].1),
+        ]
+    };
+    let vector_width = width / LANES * LANES;
+    for row in 0..height {
+        let row_start = row * row_stride;
+        let source_row = &source[row_start..row_start + row_stride];
+        let destination_row = &mut destination[row_start..row_start + row_stride];
+        for pixel in (0..vector_width).step_by(LANES) {
+            let byte_offset = pixel * CHANNELS;
+            // SAFETY: every block is sixteen complete RGB pixels (48 bytes);
+            // pixel < vector_width <= width proves both interleaved accesses
+            // remain in their row slices. NEON is enabled by this function's
+            // compile-time target gate, and the borrows do not overlap.
+            unsafe {
+                let rgb = neon::vld3q_u8(source_row.as_ptr().add(byte_offset));
+                let mapped = neon::uint8x16x3_t(
+                    neon::vaddq_u8(neon::vmulq_u8(rgb.0, multipliers[0]), offsets[0]),
+                    neon::vaddq_u8(neon::vmulq_u8(rgb.1, multipliers[1]), offsets[1]),
+                    neon::vaddq_u8(neon::vmulq_u8(rgb.2, multipliers[2]), offsets[2]),
+                );
+                neon::vst3q_u8(destination_row.as_mut_ptr().add(byte_offset), mapped);
+            }
+        }
+        for pixel in vector_width..width {
+            let byte_offset = pixel * CHANNELS;
+            for channel in 0..CHANNELS {
+                let (multiplier, offset) = coefficients[channel];
+                destination_row[byte_offset + channel] = source_row[byte_offset + channel]
+                    .wrapping_mul(multiplier)
+                    .wrapping_add(offset);
+            }
+        }
+    }
+    Some((vector_width / LANES * height) as u64)
 }
 
 #[inline]
@@ -9675,15 +9888,45 @@ pub(crate) fn native_point_lut(
         crate::compute::record_pipeline_operation_path("native-copy");
         return Some(img.clone());
     }
-    let tables = native_lut_tables_for_channels(lut, channels)?;
     let source = img.as_bytes();
     let mut output = vec![0u8; source.len()];
+    #[cfg(all(
+        target_arch = "aarch64",
+        target_feature = "neon",
+        target_endian = "little"
+    ))]
+    if channels == 3 {
+        let vector_blocks = if let Some(coefficients) = native_rgb_affine_lut_coefficients(lut) {
+            native_rgb_affine_lut_map_rows_neon(
+                source,
+                &mut output,
+                img.width() as usize,
+                img.height() as usize,
+                coefficients,
+            )?
+        } else {
+            native_rgb_lut_map_rows_neon(
+                source,
+                &mut output,
+                img.width() as usize,
+                img.height() as usize,
+                lut,
+            )?
+        };
+        let result =
+            DynamicImage::ImageRgb8(RgbImage::from_raw(img.width(), img.height(), output)?);
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_path("vector");
+        return Some(result);
+    }
+    let tables = native_lut_tables_for_channels(lut, channels)?;
     let vector_blocks = native_lut_map_rows(
         source,
         &mut output,
         img.width() as usize,
         img.height() as usize,
         channels,
+        lut,
         &tables,
     )?;
     let result = match img {
@@ -34303,8 +34546,16 @@ mod tests {
                     let tables = native_lut_tables_for_channels(&lut, channels)
                         .expect("valid native byte lookup tables");
                     let mut mapped = vec![0u8; bytes.len()];
-                    native_lut_map_rows(&bytes, &mut mapped, width, height, channels, &tables)
-                        .expect("valid out-of-place native byte lookup");
+                    native_lut_map_rows(
+                        &bytes,
+                        &mut mapped,
+                        width,
+                        height,
+                        channels,
+                        &lut,
+                        &tables,
+                    )
+                    .expect("valid out-of-place native byte lookup");
                     assert_eq!(
                         mapped, expected,
                         "out of place {width}x{height}, {channels}"
@@ -34320,6 +34571,45 @@ mod tests {
                     assert_eq!(scalar_tail, 0);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn native_rgb_affine_point_lut_matches_table_math_across_tails() {
+        use crate::raster::{DynamicImage, RgbImage};
+
+        let coefficients = [(3u8, 5u8), (5, 13), (255, 255)];
+        let lut = coefficients
+            .iter()
+            .flat_map(|&(multiplier, offset)| {
+                (0..=u8::MAX)
+                    .map(move |sample| sample.wrapping_mul(multiplier).wrapping_add(offset))
+            })
+            .collect::<Vec<_>>();
+
+        for width in [1u32, 15, 16, 17, 31, 32, 33, 257] {
+            let height = 3u32;
+            let source = (0..width * height * 3)
+                .map(|index| index.wrapping_mul(73).wrapping_add(index / 7) as u8)
+                .collect::<Vec<_>>();
+            let expected = source
+                .chunks_exact(3)
+                .flat_map(|pixel| {
+                    [
+                        lut[usize::from(pixel[0])],
+                        lut[256 + usize::from(pixel[1])],
+                        lut[512 + usize::from(pixel[2])],
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let image = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, source.clone()).expect("valid RGB source"),
+            );
+            let result =
+                super::native_point_lut(&image, Some("RGB"), &lut).expect("affine RGB point LUT");
+
+            assert_eq!(result.as_bytes(), expected, "{width}x{height}");
+            assert_eq!(image.as_bytes(), source, "source remains unchanged");
         }
     }
 

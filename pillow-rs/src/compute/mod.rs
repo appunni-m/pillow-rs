@@ -32,6 +32,27 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Instant;
 
+/// Return `(multiplier, offset)` when a 256-entry byte LUT is exactly the
+/// modulo-256 affine mapping `sample * multiplier + offset`.
+///
+/// Point operations still use their full lookup tables for arbitrary maps.
+/// This recognition lets the execution backends replace common linear LUTs
+/// with integer multiply/add while preserving every table entry exactly.
+pub(crate) fn byte_lut_affine_coefficients(lut: &[u8]) -> Option<(u8, u8)> {
+    if lut.len() != 256 {
+        return None;
+    }
+    let offset = lut[0];
+    let multiplier = lut[1].wrapping_sub(offset);
+    for (sample_index, &expected) in lut.iter().enumerate() {
+        let sample = u8::try_from(sample_index).ok()?;
+        if sample.wrapping_mul(multiplier).wrapping_add(offset) != expected {
+            return None;
+        }
+    }
+    Some((multiplier, offset))
+}
+
 // ── Backend ─────────────────────────────────────────────────────────────────
 
 /// Compute backend used to execute a materialized image pipeline.
