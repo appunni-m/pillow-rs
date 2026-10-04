@@ -200,6 +200,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- put_pixel.wgsl
 |   |   |   |       |-- rank_filter.wgsl
 |   |   |   |       |-- rank_filter_3x3_la_packed.wgsl
+|   |   |   |       |-- rank_filter_3x3_luma_packed.wgsl
 |   |   |   |       |-- rank_filter_9x9_luma_packed.wgsl
 |   |   |   |       |-- rank_filter_9x9_luma_row_packed.wgsl
 |   |   |   |       |-- reduce.wgsl
@@ -420,6 +421,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_grayscale_rgb_domain.py
     |-- test_imagebatch_max_filter_parity.py
     |-- test_imagebatch_parity.py
+    |-- test_imagebatch_rank_filter_parity.py
     |-- test_migration_benchmark_selection.py
     |-- test_migration_parity_icc_timestamp.py
     |-- test_migration_parity_serialization.py

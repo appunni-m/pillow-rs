@@ -111,7 +111,8 @@ class BatchExecutor:
     ``queue=False`` (the default) executes each submitted operation
     immediately through its usual single-image path. With ``queue=True``,
     ``join()`` groups compatible ``ImageFilter.MedianFilter(3)`` and
-    ``ImageFilter.MaxFilter(3)``,
+    ``ImageFilter.MaxFilter(3)``, and native-L
+    ``ImageFilter.RankFilter(3, rank=1)``,
     ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Invert()``,
     ``ImageBatch.Brightness(factor)``,
     ``ImageBatch.Multiply(image2)``, or
@@ -165,7 +166,11 @@ class BatchExecutor:
 
     Batched ``MaxFilter(3)`` reuses the ordinary max-filter pipeline over a
     native-mode stack with one replicated edge row on each side of every
-    image, so neighboring jobs cannot affect one another. Batched extraction
+    image, so neighboring jobs cannot affect one another. The native-L
+    ``RankFilter(3, rank=1)`` batch follows the same halo layout and reuses its
+    packed-L rank pipeline. It is groupable only for L images with that exact
+    size and rank; other RankFilter jobs retain the ordinary per-image path.
+    Batched extraction
     reuses ``Image.getchannel`` over a same-mode vertical
     stack and returns one ``L`` image per input. Batched multiplication stacks
     each primary and secondary operand separately, then reuses the existing
@@ -195,6 +200,7 @@ class BatchExecutor:
         if type(operation).__name__ not in (
             "MedianFilter",
             "MaxFilter",
+            "RankFilter",
             "ExtractBand",
             "Invert",
             "Brightness",
@@ -204,7 +210,7 @@ class BatchExecutor:
         ):
             raise TypeError(
                 "batch operation must be an ImageFilter.MedianFilter or "
-                "ImageFilter.MaxFilter, "
+                "ImageFilter.MaxFilter or ImageFilter.RankFilter, "
                 "ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Multiply, "
                 "ImageBatch.Brightness, "
                 "ImageBatch.Paste, or "
