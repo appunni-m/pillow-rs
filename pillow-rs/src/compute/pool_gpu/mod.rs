@@ -37631,7 +37631,7 @@ mod tests {
         assert!(gpu_f_resize_box_copy_is_exact(
             &[
                 PipelineOp::PutData {
-                    data: Arc::from(vec![0u8; 24].into_boxed_slice()),
+                    data: bytes::Bytes::from(vec![0u8; 24]),
                     mode: PixelMode::F,
                 },
                 box_resize(6, 4),
@@ -37642,7 +37642,7 @@ mod tests {
         assert!(!gpu_f_resize_box_copy_is_exact(
             &[
                 PipelineOp::PutData {
-                    data: Arc::from(vec![0u8; 4].into_boxed_slice()),
+                    data: bytes::Bytes::from(vec![0u8; 4]),
                     mode: PixelMode::F,
                 },
                 box_resize(6, 4),
@@ -37856,7 +37856,7 @@ mod tests {
         assert!(gpu_f_resize_dyadic_is_exact(
             &[
                 PipelineOp::PutData {
-                    data: Arc::from(image.as_bytes().to_vec().into_boxed_slice()),
+                    data: bytes::Bytes::copy_from_slice(image.as_bytes()),
                     mode: PixelMode::F,
                 },
                 box_resize(1, 2),
@@ -37887,12 +37887,11 @@ mod tests {
             &[
                 box_resize(3, 2),
                 PipelineOp::PutData {
-                    data: Arc::from(
+                    data: bytes::Bytes::from(
                         [1.0f32, 2.0, 4.0, 8.0, 16.0, 32.0]
                             .into_iter()
                             .flat_map(f32::to_le_bytes)
-                            .collect::<Vec<_>>()
-                            .into_boxed_slice(),
+                            .collect::<Vec<_>>(),
                     ),
                     mode: PixelMode::F,
                 },
@@ -38157,12 +38156,11 @@ mod tests {
         // PutData(F) replaces the deferred source words before the resize;
         // the marker-9 proof must validate and consume that replacement rather
         // than conservatively routing an otherwise exact non-dyadic resize.
-        let putdata: Arc<[u8]> = Arc::from(
+        let putdata = bytes::Bytes::from(
             [0.1f32, -0.3, 1.7, 2.9]
                 .into_iter()
                 .flat_map(f32::to_le_bytes)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+                .collect::<Vec<_>>(),
         );
         assert!(gpu_f_resize_f64_is_exact(
             &[
@@ -38182,7 +38180,7 @@ mod tests {
         assert!(!gpu_f_resize_f64_is_exact(
             &[
                 PipelineOp::PutData {
-                    data: Arc::from(vec![0u8; 4].into_boxed_slice()),
+                    data: bytes::Bytes::from(vec![0u8; 4]),
                     mode: PixelMode::F,
                 },
                 PipelineOp::Resize {
@@ -38327,13 +38325,12 @@ mod tests {
             .unwrap(),
         );
         let rank = PipelineOp::RankFilter { size: 3, rank: 4 };
-        let words = |values: [f32; 4]| -> Arc<[u8]> {
-            Arc::from(
+        let words = |values: [f32; 4]| -> bytes::Bytes {
+            bytes::Bytes::from(
                 values
                     .into_iter()
                     .flat_map(f32::to_le_bytes)
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice(),
+                    .collect::<Vec<_>>(),
             )
         };
 
@@ -38362,7 +38359,7 @@ mod tests {
         assert!(!gpu_float_filter_is_supported(
             &[
                 PipelineOp::PutData {
-                    data: Arc::from(vec![0u8; 4].into_boxed_slice()),
+                    data: bytes::Bytes::from(vec![0u8; 4]),
                     mode: PixelMode::F,
                 },
                 rank.clone(),
@@ -41033,7 +41030,7 @@ mod tests {
             .collect::<Vec<_>>();
         let source = Image::new(4, 3, "F", (0, 0, 0, 0)).expect("initial F source");
         let source_dynamic = source.materialize().expect("materialize initial F source");
-        let putdata: Arc<[u8]> = Arc::from(source_bytes.clone().into_boxed_slice());
+        let putdata = bytes::Bytes::from(source_bytes.clone());
         let filters = [
             (ResampleFilter::Bilinear, 2i64),
             (ResampleFilter::Bicubic, 3),
@@ -41727,7 +41724,7 @@ mod tests {
         assert!(gpu_f_resize_identity_is_exact(
             &[
                 PipelineOp::PutData {
-                    data: Arc::from(vec![0xde, 0xad, 0xbe, 0xef].repeat(16).into_boxed_slice()),
+                    data: bytes::Bytes::from([0xde, 0xad, 0xbe, 0xef].repeat(16)),
                     mode: PixelMode::F,
                 },
                 same_size.clone(),

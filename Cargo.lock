@@ -110,6 +110,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytes"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
+
+[[package]]
 name = "bzip2-rs"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -745,6 +751,7 @@ name = "pillow-rs"
 version = "12.2.0-alpha.5"
 dependencies = [
  "bytemuck",
+ "bytes",
  "csscolorparser",
  "fontdone",
  "image-slash-star",
@@ -773,6 +780,7 @@ dependencies = [
 name = "pillow-rs-py"
 version = "12.2.0-alpha.5"
 dependencies = [
+ "bytes",
  "pillow-rs",
  "pyo3",
  "pyo3-log",
@@ -829,6 +837,7 @@ version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4688ddedf473e32662b9b067670129a8afb8c18e351482c70d62ba4a88171e8b"
 dependencies = [
+ "bytes",
  "libc",
  "once_cell",
  "portable-atomic",

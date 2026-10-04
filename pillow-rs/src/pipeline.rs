@@ -34,6 +34,7 @@
 //!   operation needs more than the pipeline source image.
 
 use crate::image::Image;
+use bytes::Bytes;
 use std::sync::Arc;
 
 /// Every image-producing operation maps to one variant.
@@ -563,8 +564,8 @@ pub enum PipelineOp {
     },
     /// Replace image data from raw bytes.
     PutData {
-        /// Raw pixel data.
-        data: Arc<[u8]>,
+        /// Immutable, reference-counted raw pixel data.
+        data: Bytes,
         /// Logical Pillow mode whose sample layout `data` follows.
         mode: PixelMode,
     },

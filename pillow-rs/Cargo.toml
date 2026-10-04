@@ -53,6 +53,7 @@ name = "font_native_coverage"
 required-features = ["test-api"]
 
 [dependencies]
+bytes = "1.10"
 image-slash-star = { version = "=0.1.2", git = "https://github.com/appunni-m/image-slash-star.git", rev = "70190214a0711223302c76ab58e76c097288d80b", default-features = false }
 fontdone = { version = "=2.14.3-alpha.12", git = "https://github.com/appunni-m/fontdone.git", rev = "e2ff6ede3246b1568a087ef3bcf3dd848692d4bb" }
 log = "0.4"
