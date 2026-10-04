@@ -390,6 +390,15 @@ BENCHMARK_PIPELINE_WORKLOADS: dict[str, dict[str, Any]] = {
         ),
         "step_ids": ["call", "observe-result"],
     },
+    "pil-imagechops.duplicate.standard": {
+        "case_id": (
+            "PIL.ImageChops.duplicate.nuanced."
+            "performance-material-l-noise-1024x768"
+        ),
+        # Construction is outside timing. Pillow copies eagerly; pillow-rs
+        # may defer Duplicate, so include the byte observation for equal work.
+        "step_ids": ["call", "observe-result"],
+    },
     "pil-imagechops.multiply.standard": {
         "case_id": "PIL.ImageChops.multiply.benchmark.materialized-pipeline-1024",
         "step_ids": [],
@@ -27988,6 +27997,19 @@ def build_nuanced_cases(
                 ("RGBA", [180, 120, 60, 128]),
             )
         ),
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "duplicate",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-l-noise-1024x768",
+            "mode": "L",
+            "size": [1024, 768],
+            "edge": "noise-ref-fill",
+            # Reuse the existing native-L RankFilter performance asset.
+            "seed": 20261126,
+            "observe_result": "tobytes",
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },
         {
             "surface": "PIL.ImageChops",
             "operation": "blend",

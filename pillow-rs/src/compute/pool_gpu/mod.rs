@@ -13101,7 +13101,8 @@ impl GpuInner {
             || other.is_none()
                 != matches!(
                     op,
-                    PipelineOp::Invert
+                    PipelineOp::Duplicate
+                        | PipelineOp::Invert
                         | PipelineOp::InvertChops
                         | PipelineOp::Solarize { .. }
                         | PipelineOp::Posterize { .. }
@@ -13154,6 +13155,11 @@ impl GpuInner {
                 | PipelineOp::BlendModule { .. }
         );
         let (variant, shader_file, shader_source) = match op {
+            PipelineOp::Duplicate => (
+                "DuplicateNativeBytes",
+                "duplicate.wgsl",
+                include_str!("shaders/duplicate.wgsl"),
+            ),
             PipelineOp::Brightness { .. } => (
                 "BrightnessNativeBytes",
                 "brightness_native.wgsl",
@@ -16199,6 +16205,22 @@ fn gpu_native_byte_op_channels(
     mode: Option<&str>,
 ) -> Option<u8> {
     match op {
+        PipelineOp::Duplicate if image.width() > 0 && image.height() > 0 => match image {
+            DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
+            DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
+            DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
+                Some(3)
+            }
+            DynamicImage::ImageRgba8(_)
+                if matches!(
+                    mode,
+                    None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")
+                ) =>
+            {
+                Some(4)
+            }
+            _ => None,
+        },
         PipelineOp::Brightness { factor }
             if registry::gpu_brightness_factor_int(*factor).is_some() =>
         {
@@ -33758,6 +33780,70 @@ mod tests {
                 Some("RGB")
             ),
             None
+        );
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_duplicate_uses_native_storage_bytes_for_matching_modes() {
+        use crate::pipeline::PipelineOp;
+        use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+
+        let duplicate = PipelineOp::Duplicate;
+        let luma = DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![17, 239]).unwrap());
+        for mode in [None, Some("1"), Some("L"), Some("P")] {
+            assert_eq!(
+                super::gpu_native_byte_op_channels(&duplicate, &luma, mode),
+                Some(1),
+                "native L samples for mode {mode:?}"
+            );
+        }
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&duplicate, &luma, Some("RGB")),
+            None
+        );
+
+        let la = DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(1, 1, vec![29, 203]).unwrap());
+        for mode in [None, Some("LA"), Some("PA")] {
+            assert_eq!(
+                super::gpu_native_byte_op_channels(&duplicate, &la, mode),
+                Some(2),
+                "native LA samples for mode {mode:?}"
+            );
+        }
+
+        let rgb = DynamicImage::ImageRgb8(RgbImage::from_raw(1, 1, vec![3, 127, 251]).unwrap());
+        for mode in [None, Some("RGB"), Some("HSV"), Some("YCbCr")] {
+            assert_eq!(
+                super::gpu_native_byte_op_channels(&duplicate, &rgb, mode),
+                Some(3),
+                "native RGB samples for mode {mode:?}"
+            );
+        }
+
+        let rgba =
+            DynamicImage::ImageRgba8(RgbaImage::from_raw(1, 1, vec![11, 77, 149, 221]).unwrap());
+        for mode in [
+            None,
+            Some("RGBA"),
+            Some("CMYK"),
+            Some("RGBa"),
+            Some("RGBX"),
+            Some("I"),
+            Some("F"),
+        ] {
+            assert_eq!(
+                super::gpu_native_byte_op_channels(&duplicate, &rgba, mode),
+                Some(4),
+                "native four-byte samples for mode {mode:?}"
+            );
+        }
+
+        let empty = DynamicImage::ImageLuma8(GrayImage::new(0, 1));
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&duplicate, &empty, Some("L")),
+            None,
+            "empty storage cannot produce a zero-width workgroup grid"
         );
     }
 
