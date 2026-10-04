@@ -2186,8 +2186,23 @@ fn rank_filter_bytes_3x3_row(
                 raw[bottom + center + channel],
                 raw[bottom + right + channel],
             ];
-            let (_, selected, _) = values.select_nth_unstable(rank);
-            row[output + channel] = *selected;
+            row[output + channel] = if channels == 2 && rank == 1 {
+                // Native LA rank 1 only needs the two smallest samples, not a
+                // complete introselect partition. This min/max reduction keeps
+                // duplicate minima exact and avoids data-dependent selection.
+                let mut smallest = values[0].min(values[1]);
+                let mut second = values[0].max(values[1]);
+                for value in values.into_iter().skip(2) {
+                    let lower = smallest.min(value);
+                    let upper = smallest.max(value);
+                    second = second.min(upper);
+                    smallest = lower;
+                }
+                second
+            } else {
+                let (_, selected, _) = values.select_nth_unstable(rank);
+                *selected
+            };
         }
     }
 }

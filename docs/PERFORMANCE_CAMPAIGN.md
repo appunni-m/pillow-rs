@@ -18801,3 +18801,53 @@ Focused verification passed:
 The standard and feature-enabled benchmark gates both passed exact Pillow
 parity. Their temporary benchmark and parity files were deleted after the
 measurements were extracted.
+
+## Native LA `RankFilter(3, rank=1)` — checkpoint 2026-10-04
+
+The material workload is `pipeline-chain.rank-filter.material.la-noise-1024x768-size3-rank1`: a deterministic 1024 × 768 LA image, one `RankFilter(3, rank=1)`, and byte materialization. Before the change, serial CPU took 74.466 ms versus Pillow's 71.696 ms, SIMD took 15.980 ms (4.49× faster than Pillow), and GPU took 27.144 ms. GPU was 1.70× slower than SIMD. The GPU admission fell through to the generic four-channel rank shader, widening LA and sorting values for channels the image does not have.
+
+The native-LA CPU rank-1 path now keeps the two smallest byte values per channel with a fixed min/max reduction instead of running `select_nth_unstable` for all nine samples. SIMD uses the corresponding `u8x16` lane-wise reduction, retaining its architecture-specific path. GPU now packs two native `[L, A]` pixels into one word, computes L and alpha order statistics independently, and uses the second-smallest reduction for rank 1. Other ranks 0–8 remain exact through min/max reductions or the full sorting network. The shader handles odd widths by deriving each pixel's own row and column from its flat index; native input and output remain LA with no mode conversion.
+
+| Profile | Before p50 | Current p50 | Current single-request throughput | Current vs Pillow latency |
+| --- | ---: | ---: | ---: | ---: |
+| Pillow | 71.696 ms | 72.271 ms | 13.84 ops/s | — |
+| CPU | 74.466 ms | 8.997 ms | 111.15 ops/s | 8.03× faster |
+| SIMD | 15.980 ms | 11.714 ms | 85.36 ops/s | 6.17× faster |
+| GPU | 27.144 ms | 0.943 ms | 1,060.77 ops/s | 76.66× faster |
+| Parallel CPU | — | 1.419 ms | 704.75 ops/s | 50.93× faster* |
+
+The standard benchmark used the same correctness-gated boundary for all
+profiles: apply the filter and materialize its bytes, with five warmups, 20
+iterations, five samples, and 100 measured calls per subject. Pillow, CPU,
+SIMD, and GPU all ran in one standard-profile comparison. The exact-output gate
+passed; telemetry recorded 100 calls on each requested backend with no
+fallback. GPU's p50 latency is 12.43× lower than SIMD's, with 12.43× its
+single-request reciprocal throughput. Pillow's p95 reached 252.428 ms while
+its p50 was 72.271 ms, indicating a substantial scheduling outlier; the table
+uses medians and should be treated as a diagnostic snapshot. This
+concurrency-one comparison does not claim saturated multi-request throughput.
+
+The opt-in Parallel CPU build also passed its exact Pillow gate and recorded
+100 executions with no fallback. Its benchmark subject is separate from the
+standard profile. The 50.93× comparison marked with `*` uses the standard
+run's Pillow median above, so it is indicative rather than a paired timing.
+Parallel CPU remains a Rayon-backed profile and does not count as SIMD.
+
+Four seeded LA cases covering ranks 0, 1, 4, and 8, odd-row tails, and the
+material image passed exact parity on each of CPU, SIMD, and GPU (12/12 runs).
+The focused GPU test also matched every CPU byte on odd-width input and checked
+that upload/readback remain two bytes per pixel with zero mode conversions.
+Rust verification passed `cargo test -p pillow-rs --lib --features gpu
+packed_la_rank_filter -- --nocapture` (2/2 tests) and
+`cargo test -p pillow-rs --lib --features gpu
+gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons
+-- --nocapture` (1/1 test). The isolated facade rebuilt with `make
+build-parity`. The standard and Parallel CPU benchmark targets and all parity
+result files used temporary paths and were removed after extracting these
+metrics. No coverage was run.
+
+This material LA rank-1 case now meets the serial CPU, SIMD 5×, and GPU-versus-
+SIMD latency goals on this machine. It does not close RankFilter across every
+mode, filter size, rank, or image shape. Keep those rows in the operation
+matrix; proceed to the next ranked operation and revisit this one only if
+broader measurements expose a regression.

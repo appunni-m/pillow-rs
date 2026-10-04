@@ -3098,10 +3098,10 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
-        if self.edge in {"noise-fill", "paste-noise-fill"}:
+        if self.edge in {"noise-fill", "noise-ref-fill", "paste-noise-fill"}:
             # Deterministic diverse images are built through the public
-            # frombytes endpoint with inline bytes so the oracle and target
-            # decode the exact same samples.
+            # frombytes endpoint from the same fixed bytes. Small cases can
+            # inline the samples; larger cases share a content-addressed ref.
             size = self.scenario_size or [16, 16]
             seed = self.scenario_noise_seed or 0
             if self.edge == "paste-noise-fill" and label == "im":
@@ -3130,11 +3130,14 @@ class WorkflowBuilder:
                 )
             else:
                 raise ValueError(f"noise-fill edge unsupported for mode {requested_mode}")
-            data_desc = self.inline_bytes(
-                f"{label}-noise",
-                data,
-                "application/octet-stream",
-            )
+            if self.edge == "noise-ref-fill":
+                data_desc = self.ref_bytes(f"{label}-noise", data)
+            else:
+                data_desc = self.inline_bytes(
+                    f"{label}-noise",
+                    data,
+                    "application/octet-stream",
+                )
             step_id = self.add_step(
                 "PIL.Image",
                 "frombytes",
@@ -42463,6 +42466,61 @@ def build_nuanced_cases(
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
+        # LA's 3x3 rank filter is supported by Pillow and uses independent
+        # order statistics for L and alpha. Keep endpoint, center, odd-tail,
+        # and material cases on a shared content-addressed byte asset so the
+        # added benchmark does not duplicate megabytes of inline base64 JSON.
+        for name, size, rank, seed, requirement_suffix, extra_requirements in (
+            (
+                "backend-native-la-rank3-min-tail-33x35",
+                [33, 35],
+                0,
+                20261120,
+                "mode.la",
+                ("performance.standard",),
+            ),
+            (
+                "backend-native-la-rank3-middle-tail-33x35",
+                [33, 35],
+                4,
+                20261121,
+                "mode.la",
+                ("performance.standard",),
+            ),
+            (
+                "backend-native-la-rank3-max-tail-33x35",
+                [33, 35],
+                8,
+                20261122,
+                "mode.la",
+                ("performance.standard",),
+            ),
+            (
+                "performance-material-la-rank3-noise-1024x768",
+                [1024, 768],
+                1,
+                20261123,
+                "performance.standard",
+                (),
+            ),
+        ):
+            spec = {
+                "surface": "PIL.ImageFilter",
+                "operation": "RankFilter",
+                "requirement_suffix": requirement_suffix,
+                "name": name,
+                "mode": "LA",
+                "size": size,
+                "edge": "noise-ref-fill",
+                "seed": seed,
+                "observe_result": "tobytes",
+                "values": {"size": literal(3), "rank": literal(rank)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            if extra_requirements:
+                spec["additional_requirement_suffixes"] = list(extra_requirements)
+            specs += (spec,)
+
         # Keep channel and alpha behavior in the strict backend cohort without
         # multiplying the large material benchmark cost.
         for mode, requirement_suffix, seed in (
@@ -50660,6 +50718,45 @@ def build_pipeline_benchmark_document(
                 variant="rank-filter-material-noise-256x256",
                 surface=rank_material_case["surface"],
                 operation=rank_material_case["operation"],
+            ),
+        }
+    )
+
+    rank_la_material_case_id = (
+        "PIL.ImageFilter.RankFilter.nuanced."
+        "performance-material-la-rank3-noise-1024x768"
+    )
+    rank_la_material_case = cases_by_id.get(rank_la_material_case_id)
+    if rank_la_material_case is None:
+        raise ValueError(
+            f"LA rank-filter benchmark references missing case: {rank_la_material_case_id}"
+        )
+    rank_la_material_measurement = copy.deepcopy(chain_policy)
+    rank_la_material_measurement.update(
+        {
+            "boundary": "observed_steps",
+            "step_ids": ["apply-filter", "observe-filter-result"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        }
+    )
+    rank_filter_workloads.append(
+        {
+            "workload_id": "pipeline-chain.rank-filter.material.la-noise-1024x768-size3-rank1",
+            "covers": [rank_requirement],
+            "subjects": benchmark_subjects(),
+            "input": {
+                "kind": "parity_case",
+                "case_id": rank_la_material_case_id,
+            },
+            "measurement": rank_la_material_measurement,
+            "context": _workflow_benchmark_context(
+                rank_la_material_case,
+                variant="rank-filter-material-noise-1024x768-size3-rank1",
+                surface=rank_la_material_case["surface"],
+                operation=rank_la_material_case["operation"],
             ),
         }
     )

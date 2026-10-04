@@ -18917,6 +18917,25 @@ fn select_order_statistic_vectors(values: &[u8x16], rank: u8) -> u8x16 {
     lower
 }
 
+/// Select the second-smallest value independently in each byte lane.
+///
+/// The pairwise min/max reduction is exact even when the minimum occurs more
+/// than once. It uses a fixed amount of vector work and avoids sorting all nine
+/// samples for the common 3x3 RankFilter(rank=1) path.
+#[inline]
+fn select_second_order_statistic_vector(values: &[u8x16]) -> u8x16 {
+    debug_assert!(values.len() >= 2);
+    let mut smallest = values[0].min(values[1]);
+    let mut second = values[0].max(values[1]);
+    for &value in &values[2..] {
+        let lower = smallest.min(value);
+        let upper = smallest.max(value);
+        second = second.min(upper);
+        smallest = lower;
+    }
+    second
+}
+
 /// Native SIMD MedianFilter/RankFilter for 8-bit interleaved layouts.
 ///
 /// The window gather and border handling are scalar control. The actual
@@ -18972,7 +18991,9 @@ fn rank_filter_order_statistic_row(
                     value_index += 1;
                 }
             }
-            let selected = if size <= SIMD_ORDER_STATISTIC_SORT_MAX_SIZE as usize {
+            let selected = if channels == 2 && size == 3 && rank == 1 {
+                select_second_order_statistic_vector(&values[..area])
+            } else if size <= SIMD_ORDER_STATISTIC_SORT_MAX_SIZE as usize {
                 sort_order_statistic_vectors(&mut values[..area]);
                 values[rank]
             } else {
