@@ -16,6 +16,7 @@ for Node.js and browsers. This alpha supports common image operations;
 
 [Documentation](https://appunni-m.github.io/pillow-rs/) ·
 [Supported APIs](https://appunni-m.github.io/pillow-rs/compatibility/) ·
+[What pillow-rs adds beyond Pillow](https://appunni-m.github.io/pillow-rs/compatibility/#pillow-rs-additions-beyond-pillow) ·
 [Benchmark results](https://appunni-m.github.io/pillow-rs/benchmarks/)
 
 ## Install
