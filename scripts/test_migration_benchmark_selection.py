@@ -1,9 +1,13 @@
 """Regression tests for composing migration benchmark workload filters."""
 from __future__ import annotations
 
+import gzip
+import json
 import unittest
 
 import os
+from pathlib import Path
+import tempfile
 
 from run_migration_benchmark import (
     PARALLEL_CPU_PROFILE,
@@ -13,7 +17,9 @@ from run_migration_benchmark import (
     benchmark_subjects,
     profile_applies_to_case,
     runtime_backend_for_profile,
+    read_and_remove_backend_parity,
     select_workloads,
+    write_parity_artifact,
 )
 from run_migration_parity import TARGET_FEATURES, target_profile_for_backend
 
@@ -59,6 +65,29 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 workload_ids=["missing.workload"],
                 limit=None,
             )
+
+    def test_backend_parity_receipt_is_removed_after_loading(self) -> None:
+        expected = {"status": "completed", "comparisons": [{"case_id": "case"}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "cpu.json"
+            path.write_text(json.dumps(expected), encoding="utf-8")
+
+            self.assertEqual(read_and_remove_backend_parity(path), expected)
+            self.assertFalse(path.exists())
+
+    def test_parity_writer_streams_gzip_artifacts(self) -> None:
+        expected = {
+            "schema": "migration-parity/parity-result@1",
+            "comparisons": [{"case_id": "case", "actual": "x" * 200_000}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "parity.json.gz"
+            write_parity_artifact(path, expected)
+
+            with gzip.open(path, "rt", encoding="utf-8") as stream:
+                actual = json.load(stream)
+
+        self.assertEqual(actual, expected)
 
     def test_parallel_cpu_uses_cpu_applicability_without_becoming_simd(self) -> None:
         cpu_case = {"target_profiles": ["python-cpu"]}
