@@ -4,6 +4,7 @@ from functools import lru_cache
 from . import _core
 
 
+@lru_cache
 def getrgb(color: str) -> tuple:
     """Parse a color string and return an RGB tuple."""
     return _core.getrgb(color)
