@@ -18621,3 +18621,37 @@ Baseline, dict-update, and tuple probe receipts are
 `imagestat-tuple-20261004.json` under `build/migration-parity/`. Move to the
 next ranked operation; the CPU latency target for `ImageStat.Stat` remains
 open.
+
+## `ImageDraw.point` exact-tuple fast path — rejected 2026-10-04
+
+The standard `pil-imagedraw-imagedraw.point.standard` workload draws one point
+on a 16 × 16 RGB image. Its Python binding normally converts the coordinate
+sequence to `DrawPointsInput`, normalizes that input to a point vector, and
+queues the lazy pipeline operation. An exact tuple of two exact integers was
+given a narrow binding fast path to bypass sequence conversion; booleans,
+subclasses, non-tuples, and out-of-range values retained the existing parser.
+
+| Run | Pillow latency | pillow-rs CPU latency | CPU pipeline phase | CPU / Pillow |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline at `94907c371` | 8.125 µs | 9.500 µs | 2.583 µs | 1.17× |
+| Exact-tuple probe 1 | 8.084 µs | 9.792 µs | 2.542 µs | 1.21× |
+| Exact-tuple probe 2 | 7.708 µs | 9.666 µs | 2.541 µs | 1.25× |
+
+The small pipeline-phase reduction did not produce an end-to-end win: setup
+variation erased it and both probe medians remained slower than the baseline.
+The shortcut was reverted. The 43 selected point parity cases passed with the
+probe enabled. Benchmark parity passed each time. SIMD and GPU subjects reported
+no actual backend execution, so their timings do not demonstrate accelerated
+draw kernels; Parallel CPU is not applicable to this single-point submission.
+
+The next code-level opportunity is removing the heap allocation for one point
+in the deferred pipeline representation. That requires an inline single-point
+form and checking its behavior in each supported backend; this probe did not
+implement or measure that change. Keep the CPU latency target open and
+continue to the next ranked operation.
+
+The final probe receipts are `draw-point-main-94907c371-20261004.json`,
+`draw-point-after-parity.json`, `draw-point-benchmark.json`, and
+`draw-point-benchmark-parity.json` under `build/migration-parity/`. Reuse the
+last two output paths for subsequent iterations instead of retaining one
+benchmark JSON pair per attempt.
