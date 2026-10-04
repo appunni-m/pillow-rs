@@ -542,62 +542,28 @@ fn filter_5x5_i32_row(
     if y < 2 || y >= height - 2 || width < 5 {
         return;
     }
+    let width = width as usize;
+    let y = y as usize;
+    let source_row_starts = [
+        (y + 2) * width,
+        (y + 1) * width,
+        y * width,
+        (y - 1) * width,
+        (y - 2) * width,
+    ];
+    let mut windows = [[0.0f32; 5]; 5];
+    for (window, source_row) in windows.iter_mut().zip(source_row_starts) {
+        for (tap, sample) in window.iter_mut().enumerate() {
+            *sample = read_i32_pixel_le(raw, source_row + tap) as f32;
+        }
+    }
+
     for x in 2..width - 2 {
-        let base = |dx: i32, dy: i32| -> usize { ((y + dy) * width + (x + dx)) as usize * 4 };
-        let read_pixel = |dx: i32, dy: i32| -> i32 {
-            let index = base(dx, dy);
-            i32::from_le_bytes([raw[index], raw[index + 1], raw[index + 2], raw[index + 3]])
-        };
-        let bottom0 = pillow_kernel_row_5(
-            [
-                read_pixel(-2, 2) as f32,
-                read_pixel(-1, 2) as f32,
-                read_pixel(0, 2) as f32,
-                read_pixel(1, 2) as f32,
-                read_pixel(2, 2) as f32,
-            ],
-            &kernel[0..5],
-        );
-        let bottom1 = pillow_kernel_row_5(
-            [
-                read_pixel(-2, 1) as f32,
-                read_pixel(-1, 1) as f32,
-                read_pixel(0, 1) as f32,
-                read_pixel(1, 1) as f32,
-                read_pixel(2, 1) as f32,
-            ],
-            &kernel[5..10],
-        );
-        let middle = pillow_kernel_row_5(
-            [
-                read_pixel(-2, 0) as f32,
-                read_pixel(-1, 0) as f32,
-                read_pixel(0, 0) as f32,
-                read_pixel(1, 0) as f32,
-                read_pixel(2, 0) as f32,
-            ],
-            &kernel[10..15],
-        );
-        let top1 = pillow_kernel_row_5(
-            [
-                read_pixel(-2, -1) as f32,
-                read_pixel(-1, -1) as f32,
-                read_pixel(0, -1) as f32,
-                read_pixel(1, -1) as f32,
-                read_pixel(2, -1) as f32,
-            ],
-            &kernel[15..20],
-        );
-        let top0 = pillow_kernel_row_5(
-            [
-                read_pixel(-2, -2) as f32,
-                read_pixel(-1, -2) as f32,
-                read_pixel(0, -2) as f32,
-                read_pixel(1, -2) as f32,
-                read_pixel(2, -2) as f32,
-            ],
-            &kernel[20..25],
-        );
+        let bottom0 = pillow_kernel_row_5(windows[0], &kernel[0..5]);
+        let bottom1 = pillow_kernel_row_5(windows[1], &kernel[5..10]);
+        let middle = pillow_kernel_row_5(windows[2], &kernel[10..15]);
+        let top1 = pillow_kernel_row_5(windows[3], &kernel[15..20]);
+        let top0 = pillow_kernel_row_5(windows[4], &kernel[20..25]);
         let mut value = offset + 0.5;
         value += bottom0;
         value += bottom1;
@@ -605,8 +571,19 @@ fn filter_5x5_i32_row(
         value += top1;
         value += top0;
         let result = if value >= 0.0 { value as i32 } else { 0 };
-        let output = x as usize * 4;
+        let output = x * 4;
         row[output..output + 4].copy_from_slice(&result.to_le_bytes());
+
+        if x + 1 < width - 2 {
+            let entering_x = x + 3;
+            for (window, source_row) in windows.iter_mut().zip(source_row_starts) {
+                window[0] = window[1];
+                window[1] = window[2];
+                window[2] = window[3];
+                window[3] = window[4];
+                window[4] = read_i32_pixel_le(raw, source_row + entering_x) as f32;
+            }
+        }
     }
 }
 
@@ -726,6 +703,79 @@ fn read_i32_pixel_le(raw: &[u8], pixel_index: usize) -> i32 {
     i32::from_le_bytes([raw[byte], raw[byte + 1], raw[byte + 2], raw[byte + 3]])
 }
 
+/// Convert each I-mode sample to f32 once, then reuse five source rows while
+/// evaluating the scalar convolution in Pillow's original FMA order.
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_i32_f32_ring(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    offset: f32,
+) -> Option<Vec<u8>> {
+    let pixel_count = width.checked_mul(height)?;
+    if raw.len() != pixel_count.checked_mul(4)? {
+        return None;
+    }
+    let ring_len = width.checked_mul(5)?;
+    let mut source_rows = vec![0.0f32; ring_len];
+    let mut output = raw.to_vec();
+    let row_stride = width.checked_mul(4)?;
+
+    for source_y in 0..height {
+        let slot_start = source_y % 5 * width;
+        let input_row_start = source_y * width;
+        for x in 0..width {
+            source_rows[slot_start + x] = read_i32_pixel_le(raw, input_row_start + x) as f32;
+        }
+        if source_y < 4 || width < 5 {
+            continue;
+        }
+
+        let source_row_slots = [
+            source_y % 5 * width,
+            (source_y - 1) % 5 * width,
+            (source_y - 2) % 5 * width,
+            (source_y - 3) % 5 * width,
+            (source_y - 4) % 5 * width,
+        ];
+        let output_row_start = (source_y - 2) * row_stride;
+        let mut windows = [[0.0f32; 5]; 5];
+        for (window, row_start) in windows.iter_mut().zip(source_row_slots) {
+            window.copy_from_slice(&source_rows[row_start..row_start + 5]);
+        }
+
+        for x in 2..width - 2 {
+            let bottom0 = pillow_kernel_row_5(windows[0], &kernel[0..5]);
+            let bottom1 = pillow_kernel_row_5(windows[1], &kernel[5..10]);
+            let middle = pillow_kernel_row_5(windows[2], &kernel[10..15]);
+            let top1 = pillow_kernel_row_5(windows[3], &kernel[15..20]);
+            let top0 = pillow_kernel_row_5(windows[4], &kernel[20..25]);
+            let mut value = offset + 0.5;
+            value += bottom0;
+            value += bottom1;
+            value += middle;
+            value += top1;
+            value += top0;
+            let result = if value >= 0.0 { value as i32 } else { 0 };
+            let output_pixel = output_row_start + x * 4;
+            output[output_pixel..output_pixel + 4].copy_from_slice(&result.to_le_bytes());
+
+            if x + 1 < width - 2 {
+                let entering_x = x + 3;
+                for (window, row_start) in windows.iter_mut().zip(source_row_slots) {
+                    window[0] = window[1];
+                    window[1] = window[2];
+                    window[2] = window[3];
+                    window[3] = window[4];
+                    window[4] = source_rows[row_start + entering_x];
+                }
+            }
+        }
+    }
+    Some(output)
+}
+
 /// Prove that a uniform I image is unchanged by this exact normalized 5x5
 /// convolution. The sample and the five row sums use the same f32 conversion,
 /// FMA order, vertical accumulation, bias, and truncation as
@@ -814,6 +864,15 @@ fn filter_5x5_i32(
     ) {
         let output = filter_5x5_i32_bounded_binomial(raw, w_u32 as usize, h_u32 as usize)
             .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?;
+        return Ok(DynamicImage::ImageRgba8(
+            crate::raster::RgbaImage::from_raw(w_u32, h_u32, output)
+                .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
+        ));
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    if let Some(output) = filter_5x5_i32_f32_ring(raw, w_u32 as usize, h_u32 as usize, &kd, offset)
+    {
         return Ok(DynamicImage::ImageRgba8(
             crate::raster::RgbaImage::from_raw(w_u32, h_u32, output)
                 .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
@@ -2685,6 +2744,90 @@ mod i32_filter5x5_uniform_tests {
             &identity_kernel,
             0.5,
         ));
+    }
+}
+
+#[cfg(all(test, not(feature = "parallel")))]
+mod i32_filter5x5_sliding_window_tests {
+    use super::{filter_5x5_i32_f32_ring, pillow_kernel_row_5};
+
+    fn scalar_reference_row(
+        raw: &[u8],
+        row: &mut [u8],
+        y: i32,
+        width: i32,
+        height: i32,
+        kernel: &[f32; 25],
+        offset: f32,
+    ) {
+        if y < 2 || y >= height - 2 || width < 5 {
+            return;
+        }
+        for x in 2..width - 2 {
+            let mut value = offset + 0.5;
+            for (row_index, dy) in [2, 1, 0, -1, -2].into_iter().enumerate() {
+                let samples = std::array::from_fn(|tap| {
+                    let pixel = ((y + dy) * width + x + tap as i32 - 2) as usize;
+                    i32::from_le_bytes([
+                        raw[pixel * 4],
+                        raw[pixel * 4 + 1],
+                        raw[pixel * 4 + 2],
+                        raw[pixel * 4 + 3],
+                    ]) as f32
+                });
+                value += pillow_kernel_row_5(samples, &kernel[row_index * 5..row_index * 5 + 5]);
+            }
+            let result = if value >= 0.0 { value as i32 } else { 0 };
+            let output = x as usize * 4;
+            row[output..output + 4].copy_from_slice(&result.to_le_bytes());
+        }
+    }
+
+    #[test]
+    fn sliding_windows_preserve_scalar_fma_results_for_signed_i32_samples() {
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        let mut values = vec![i32::MIN, i32::MAX, -16_777_217, 16_777_217, -1, 0, 1];
+        for _ in values.len()..19 * 13 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            values.push(state as u32 as i32);
+        }
+
+        let kernel = std::array::from_fn(|index| ((index as i32 * 17 % 23) - 11) as f32 / 16.0);
+        for (width, height) in [(5usize, 5usize), (6, 7), (19, 13)] {
+            let mut raw = Vec::with_capacity(width * height * 4);
+            for index in 0..width * height {
+                raw.extend_from_slice(&values[index].to_le_bytes());
+            }
+            for offset in [0.0f32, 0.5, -17.25, 93.125] {
+                let row_stride = width * 4;
+                let mut expected = raw.clone();
+                for y in 0..height {
+                    let row_start = y * row_stride;
+                    scalar_reference_row(
+                        &raw,
+                        &mut expected[row_start..row_start + row_stride],
+                        y as i32,
+                        width as i32,
+                        height as i32,
+                        &kernel,
+                        offset,
+                    );
+                }
+                let actual = filter_5x5_i32_f32_ring(&raw, width, height, &kernel, offset).unwrap();
+                for pixel in 0..width * height {
+                    let start = pixel * 4;
+                    assert_eq!(
+                        &actual[start..start + 4],
+                        &expected[start..start + 4],
+                        "sample mismatch at ({}, {}) for offset {offset}",
+                        pixel % width,
+                        pixel / width,
+                    );
+                }
+            }
+        }
     }
 }
 

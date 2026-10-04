@@ -18220,3 +18220,82 @@ MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/getfont-standard-repeat-202610
 MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/getfont-standard-repeat-parity-20261004.json \
 make migration-parity-benchmark
 ```
+
+## Arbitrary-range I-mode 5×5 filter checkpoint — 2026-10-04
+
+The material workload is a seeded 1024 × 768 I image filtered with Pillow's
+normalized 5×5 binomial kernel and fully materialized. The benchmark measures
+the `filter` call and `tobytes`, uses five warmups and 100 measured executions
+per subject, and requires live Pillow parity before timing. On the final
+attempt, strict parity passed 3/3 with actual CPU, SIMD, and GPU execution and
+no fallback. The serial CPU and SIMD changes below preserve the full signed
+I32 range; they do not rely on the bounded ±65,535 shortcut.
+
+| Profile | Pillow median | pillow-rs median | Result |
+| --- | ---: | ---: | --- |
+| Serial CPU | 5.979 ms | 3.801 ms | 1.57× faster |
+| Parallel CPU | 5.979 ms | 1.604 ms | 3.73× faster |
+| SIMD | 5.979 ms | 2.103 ms | 2.85× faster; below the 5× goal |
+| GPU | 5.979 ms | 1.745 ms | 3.43× faster; lower latency than SIMD |
+
+The ordinary CPU/SIMD/GPU run records the Pillow measurement once. The
+Parallel CPU row is a separately built opt-in Rayon profile, compared against
+that same ordinary Pillow result; it is not part of the default CPU profile.
+All target receipts report completed execution on their named backend. The
+standard workload's throughput is reciprocal latency at concurrency one, so
+it does not establish sustained or queued GPU throughput.
+
+The CPU regression came from repeatedly decoding the same four-byte signed
+samples for each overlapping 5×5 neighborhood. A horizontal sliding window
+first reduced those conversions, taking serial CPU from 29.549 ms to 6.055 ms
+but leaving it slightly slower than Pillow. The retained serial path keeps a
+five-row f32 ring: each I32 sample is converted once, then its f32 value is
+reused for each vertical window. Each row still uses Pillow's original
+middle-first FMA sequence, reversed vertical tap order, `offset + 0.5`,
+nonnegative truncation, and copied two-pixel border. A deterministic full-I32
+unit comparison covers extrema, values around f32's exact-integer boundary,
+random signed samples, small widths, borders, arbitrary coefficients, and
+offsets. Strict material parity covers the actual 1024 × 768 public path.
+
+The SIMD path still misses 5× Pillow after four focused attempts. Sharing
+scalar-gathered values across lanes regressed to 6.703 ms because lane gathers
+and vector reconstruction outweighed fewer memory reads; that version was
+discarded. The retained change keeps wide unaligned loads, loading two
+overlapping eight-pixel spans for each source row and deriving the five tap
+vectors from those spans. It lowers latency from the 2.365 ms attempt-2 result
+to 2.103 ms while preserving 3/3 backend parity, but the target is at most
+1.196 ms. Do not claim the SIMD goal is met. The GPU result is 1.745 ms and
+beats the current SIMD latency, but the concurrency-one row does not prove
+higher multi-image throughput.
+
+The attempted separable f32 shortcut that scaled horizontal FMA results after
+the row sum was rejected: valid signed samples and offsets produced different
+integer outputs. Keep the existing integer-separable CPU path restricted to
+its proven bounded domain. For the SIMD blocker, the next useful direction is
+to remove repeated horizontal FMA work across adjacent vertical outputs while
+retaining direct per-row FMA results; do not trade away exactness by moving
+the 3/8 center-row scale across the FMA sequence.
+
+The final serial/SIMD/GPU result is
+`build/migration-parity/i-filter-arbitrary-simd-attempt4-20261004.json`, with
+parity in `build/migration-parity/i-filter-arbitrary-simd-attempt4-parity-20261004.json`.
+Parallel CPU results are in the documented Make target outputs
+`build/migration-parity/benchmark-result-parallel-cpu.json` and
+`build/migration-parity/benchmark-parity-result-parallel-cpu.json`. Commands:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.filter.material-i-noise-5x5-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/i-filter-arbitrary-simd-attempt4-20261004.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/i-filter-arbitrary-simd-attempt4-parity-20261004.json \
+make migration-parity-benchmark
+
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.filter.material-i-noise-5x5-1024x768' \
+make migration-parity-benchmark-parallel-cpu
+```
+
+Checkpoint after four measured optimization attempts: retain the exact serial
+ring and two-span SIMD loads, record SIMD's 2.85× as an open blocker, and move
+on to the next operation rather than weakening parity or continuing
+speculative kernel rewrites. No coverage ran.

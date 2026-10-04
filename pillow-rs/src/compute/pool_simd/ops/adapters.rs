@@ -17647,21 +17647,29 @@ fn native_filter_5x5_i32_vector(
         let row = |dy: isize, kernel_start: usize| -> f32x8 {
             let source_y = (y as isize + dy) as usize;
             let first_pixel = source_y * width + x_start - 2;
-            let load = |tap: usize| {
-                let start = (first_pixel + tap) * 4;
-                let pixels: [i32; 8] = bytemuck::pod_read_unaligned(&raw[start..start + 8 * 4]);
-                f32x8::new(pixels.map(|pixel| i32::from_le(pixel) as f32))
-            };
-            let pixel0 = load(0);
-            let pixel1 = load(1);
-            let pixel2 = load(2);
-            let pixel3 = load(3);
-            let pixel4 = load(4);
-            let sum = pixel1 * f32x8::splat(kernel[kernel_start + 1]);
-            let sum = pixel0.mul_add(f32x8::splat(kernel[kernel_start]), sum);
-            let sum = pixel2.mul_add(f32x8::splat(kernel[kernel_start + 2]), sum);
-            let sum = pixel3.mul_add(f32x8::splat(kernel[kernel_start + 3]), sum);
-            pixel4.mul_add(f32x8::splat(kernel[kernel_start + 4]), sum)
+            let first_start = first_pixel * 4;
+            let second_start = (first_pixel + 4) * 4;
+            let first_pixels: [i32; 8] =
+                bytemuck::pod_read_unaligned(&raw[first_start..first_start + 8 * 4]);
+            let second_pixels: [i32; 8] =
+                bytemuck::pod_read_unaligned(&raw[second_start..second_start + 8 * 4]);
+            let first = first_pixels.map(|pixel| i32::from_le(pixel) as f32);
+            let second = second_pixels.map(|pixel| i32::from_le(pixel) as f32);
+            let taps: [f32x8; 5] = std::array::from_fn(|tap| {
+                f32x8::from(std::array::from_fn(|lane| {
+                    let sample_index = tap + lane;
+                    if sample_index < 8 {
+                        first[sample_index]
+                    } else {
+                        second[sample_index - 4]
+                    }
+                }))
+            });
+            let sum = taps[1] * f32x8::splat(kernel[kernel_start + 1]);
+            let sum = taps[0].mul_add(f32x8::splat(kernel[kernel_start]), sum);
+            let sum = taps[2].mul_add(f32x8::splat(kernel[kernel_start + 2]), sum);
+            let sum = taps[3].mul_add(f32x8::splat(kernel[kernel_start + 3]), sum);
+            taps[4].mul_add(f32x8::splat(kernel[kernel_start + 4]), sum)
         };
 
         let mut total = f32x8::splat(rounding_bias);
