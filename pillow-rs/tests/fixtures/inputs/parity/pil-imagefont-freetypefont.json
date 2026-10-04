@@ -7206,11 +7206,22 @@
               "value": "AV"
             }
           }
+        },
+        {
+          "step_id": "observe-style",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getname",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {}
         }
       ],
       "observations": [
         "call",
-        "observe-receiver"
+        "observe-receiver",
+        "observe-style"
       ]
     },
     {
@@ -7334,11 +7345,71 @@
               "value": "AV"
             }
           }
+        },
+        {
+          "step_id": "observe-thin-style",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getname",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "switch-to-bold",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "set_variation_by_name",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "name": {
+              "kind": "literal",
+              "value": "Bold"
+            }
+          }
+        },
+        {
+          "step_id": "observe-bold-style",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getname",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "make-variant",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "font_variant",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-variant-style",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getname",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "make-variant"
+          },
+          "arguments": {}
         }
       ],
       "observations": [
         "call",
-        "observe-receiver"
+        "observe-receiver",
+        "observe-thin-style",
+        "switch-to-bold",
+        "observe-bold-style",
+        "make-variant",
+        "observe-variant-style"
       ]
     },
     {

@@ -17116,6 +17116,55 @@ count. The next visit needs to reconcile the current workload and dependency
 behavior with the historical warm receipt before any fifth optimization is
 considered.
 
+## FreeTypeFont.set_variation_by_name bounded revisit — attempt 5 — 2026-10-04
+
+The earlier four-attempt checkpoint was reopened once after the current-main
+benchmark confirmed a 333.500 µs CPU median against Pillow at 7.750 µs. This is
+attempt five overall, not a reset of the limit. The pinned fontdone revision
+`e2ff6ede` reconstructs the variable face in `Face::set_named_instance`, while
+its SFNT design-coordinate setter can reuse parsed tables. pillow-rs now caches
+each public named instance's fvar coordinates and style-name metadata, applies
+the coordinates to the existing face, and restores the encoded named-instance
+face index needed by `font_variant()`. Macintosh-only fallback names remain
+available in `get_variation_names()` while the face's style name stays empty,
+matching Pillow for that fixture.
+
+The focused parity input now checks the style name after a Macintosh-only
+fallback selection, after Thin→Bold switching, and on the resulting
+`font_variant()`. `make migration-parity-test` selected the four named-setter
+cases and passed 4/4. A separate-process Pillow comparison also passed for all
+12 named styles in each of `variable-name-platform1-fallback.ttf`,
+`variable-name-windows-fallback.ttf`, and `variable-named-instances.ttf`,
+comparing face names, metrics, text length and bounds, glyph-mask bytes, and
+variant names.
+
+Two correctness-gated standard benchmark runs measured CPU medians of 7.312 µs
+and 6.979 µs, against Pillow medians of 7.708 µs and 7.792 µs. CPU throughput
+medians were 136,763 and 143,288 operations/second; Pillow measured 129,735 and
+128,337. Compared with the fresh 333.500 µs main baseline, this is roughly a
+46–48× CPU latency reduction and a small median win over Pillow. The first run's
+CPU p95 was slower than Pillow; the confirmation run's CPU p95 was 8.208 µs
+against Pillow at 8.833 µs, so retain both receipts when interpreting the tail.
+SIMD and GPU rows are not applicable: this host-side font setter emits no
+image-backend work receipts. This checkpoint uses the receipts
+`variation-by-name-final-20261004.json` and
+`variation-by-name-confirm-20261004.json` in `build/migration-parity/`.
+
+After the portable `FT_Long` face-index arithmetic was finalized, the exact
+tree passed the focused 4/4 parity lane and one final correctness-gated standard
+benchmark. In `variation-by-name-final-verified-20261004.json`, Pillow measured
+7.750 µs median / 8.583 µs p95 and 129,032 operations/second median; the target
+Python CPU profile measured 7.000 µs / 9.875 µs and 142,857 operations/second.
+The median remained faster than Pillow, while this final run's p95 was slower.
+The runner also emitted requested SIMD/GPU timing rows, but neither row proved
+image-backend execution, so they are not SIMD or GPU results. `make fmt clippy`
+and `make docs-lint` passed on this tree; clippy reported the repository's
+existing warnings.
+
+The reopened attempt closes this current-main regression at the measured
+median target. Do not spend another setter attempt in this campaign; continue
+with the next unresolved operation from the current ranking.
+
 ## ImageDraw.polygon point-storage probe — checkpoint 2026-10-04
 
 The standard polygon row is not an execution benchmark: it measures a 16 × 16
