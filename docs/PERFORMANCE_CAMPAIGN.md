@@ -18145,3 +18145,29 @@ The benchmark's `Image.frombytes` inputs are made inside the timed window, so
 this number is deliberately end-to-end and should not be compared with a
 kernel-only rate. Keep this capability within `ImageBatch`; do not make normal
 `Image.filter` take the packing path. No coverage ran.
+
+## `ImageChops.duplicate` materialization benchmark blocker — 2026-10-04
+
+The current `pil-imagechops.duplicate.standard` row measures only the public
+call on a 16 × 16 RGB image. Pillow's `ImageChops.duplicate` calls `image.copy()`
+and performs the copy during that call. pillow-rs returns a deferred
+`PipelineOp::Duplicate`, so the parity runner's later image-byte observation
+is outside the timed boundary. The standard row therefore does not compare
+equal work for full duplicate latency.
+
+A fresh run on source `735f03c80` measured Pillow at 0.005917 ms median and
+pillow-rs at 0.006750 ms for CPU, SIMD-requested, and GPU-requested profiles.
+The target receipts all had `terminal_complete=false` and
+`actual_backend=null`; these figures measure pipeline construction and do not
+prove CPU pixel-copy latency, SIMD execution, or GPU execution. The historical
+4.46× CPU/Pillow ratio in the generated operation matrix is not an accepted
+duplicate-performance result for the same reason. The separate strict CPU
+parity cohort passed 11/11 cases, including large L, LA, RGB, and RGBA images;
+that confirms returned bytes but does not repair the benchmark boundary.
+
+Do not optimize or report this row against the parity goal until a maintained
+materialized workload times both `ImageChops.duplicate(image)` and
+`tobytes()` on the result. Keep setup outside the timed steps, use a
+nonuniform material-size input, and require completed actual-backend receipts
+before labeling a CPU, SIMD, or GPU result. No runtime change was made for this
+checkpoint; no coverage ran.
