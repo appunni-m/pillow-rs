@@ -128,6 +128,21 @@ class ImagingCore:
         return len(self._values)
 
     def __getitem__(self, index):
+        if isinstance(index, slice):
+            raise TypeError("sequence index must be integer, not 'slice'")
+        try:
+            index = _index(index)
+        except TypeError:
+            raise TypeError(
+                f"sequence index must be integer, not '{type(index).__name__}'"
+            ) from None
+        if index > _MAX_INDEX or index < -_MAX_INDEX - 1:
+            raise IndexError("cannot fit 'int' into an index-sized integer")
+        length = len(self)
+        if index < 0:
+            index += length
+        if index < 0 or index >= length:
+            raise IndexError("image index out of range")
         return self._values[index]
 
     def __bytes__(self):

@@ -7789,6 +7789,49 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "observations": ["pipeline-primary", "materialize"],
         },
     ]
+    if surface_id == "PIL.Image.Image":
+        # Keep the large banded terminal read parity-backed. This is the same
+        # public workflow used by the performance row below, so backend timing
+        # cannot be credited without comparing every returned sample to
+        # Pillow first.
+        cases.append(
+            {
+                "case_id": "PIL.Image.Image.getdata.performance.material-rgb-band0-512x512",
+                "surface": surface_id,
+                "operation": "getdata",
+                "covers": ["PIL.Image.Image.getdata.performance.standard"],
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "setup-image",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("RGB"),
+                            "size": literal([512, 512]),
+                            "color": literal([31, 109, 197]),
+                        },
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("setup-image")},
+                    },
+                    {
+                        "step_id": "band-data",
+                        "surface": surface_id,
+                        "operation": "getdata",
+                        "receiver": binding("inverted"),
+                        "arguments": {"band": literal(0)},
+                    },
+                ],
+                "observations": ["band-data"],
+            }
+        )
     return [case for case in cases if case["surface"] == surface_id]
 
 
@@ -42638,6 +42681,49 @@ def build_nuanced_cases(
                 "observations": ["call", "call-after-mutation"],
             }
         )
+        # A banded getdata result is a detached one-band core in Pillow. Keep
+        # that snapshot contract covered before optimizing its representation.
+        cases.append(
+            {
+                "case_id": "PIL.Image.Image.getdata.nuanced.banded-snapshot-after-source-mutation",
+                "surface": surface_id,
+                "operation": "getdata",
+                "covers": ["PIL.Image.Image.getdata.parameter.band"],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "setup-image",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("RGB"),
+                            "size": literal([2, 1]),
+                            "color": literal([1, 2, 3]),
+                        },
+                    },
+                    {
+                        "step_id": "call",
+                        "surface": surface_id,
+                        "operation": "getdata",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"band": literal(0)},
+                    },
+                    {
+                        "step_id": "mutate-source",
+                        "surface": surface_id,
+                        "operation": "putpixel",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "xy": literal([0, 0]),
+                            "value": literal([7, 8, 9]),
+                        },
+                    },
+                ],
+                "observations": ["call"],
+            }
+        )
     cases.extend(append_at_end)
     return cases
 
@@ -49341,51 +49427,23 @@ def build_pipeline_benchmark_document(
             }
         )
 
-    # Keep a banded terminal read in the performance lane. This is a valid
-    # public workflow rather than an internal probe: the lazy point operation
-    # is built first, then Image.getdata(band=0) observes one native channel.
-    # The workflow is benchmark-only so it does not add a parity-case
-    # denominator entry or hand-authored expected bytes.
-    terminal_read_workflow = {
-        "assets": [],
-        "steps": [
-            {
-                "step_id": "setup-image",
-                "surface": "PIL.Image",
-                "operation": "new",
-                "receiver": None,
-                "arguments": {
-                    "mode": literal("RGB"),
-                    "size": literal([512, 512]),
-                    "color": literal([31, 109, 197]),
-                },
-            },
-            {
-                "step_id": "inverted",
-                "surface": "PIL.ImageOps",
-                "operation": "invert",
-                "receiver": None,
-                "arguments": {"image": binding("setup-image")},
-            },
-            {
-                "step_id": "band-data",
-                "surface": "PIL.Image.Image",
-                "operation": "getdata",
-                "receiver": binding("inverted"),
-                "arguments": {"band": literal(0)},
-            },
-        ],
-        "observations": ["band-data"],
-    }
+    # The material band read shares one exact-input case between performance
+    # timing and source/target output comparison on CPU, SIMD, and GPU.
+    terminal_read_case_id = (
+        "PIL.Image.Image.getdata.performance.material-rgb-band0-512x512"
+    )
+    terminal_read_case = cases_by_id[terminal_read_case_id]
+    terminal_read_measurement = copy.deepcopy(chain_policy)
+    terminal_read_measurement["correctness_gate"] = "parity_pass"
     terminal_read_workloads = [
         {
             "workload_id": "pipeline-chain.terminal-read.rgb-band0",
             "covers": [_performance_requirement(operations, "PIL.Image.Image", "getdata")],
             "subjects": benchmark_subjects(),
-            "input": {"kind": "workflow", **copy.deepcopy(terminal_read_workflow)},
-            "measurement": copy.deepcopy(chain_policy),
+            "input": {"kind": "parity_case", "case_id": terminal_read_case_id},
+            "measurement": terminal_read_measurement,
             "context": _workflow_benchmark_context(
-                terminal_read_workflow,
+                terminal_read_case,
                 variant="getdata-band",
                 surface="PIL.Image.Image",
                 operation="getdata",

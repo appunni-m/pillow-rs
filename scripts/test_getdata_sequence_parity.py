@@ -20,12 +20,16 @@ from PIL import Image
 image = Image.new("RGB", (2, 1))
 image.putdata([(10, 20, 30), (40, 50, 60)])
 data = image.getdata()
+banded = image.getdata(0)
 
-def observe(index):
+def observe_from(sequence, index):
     try:
-        return {"value": data[index]}
+        return {"value": sequence[index]}
     except Exception as error:
         return {"error": type(error).__name__, "message": str(error)}
+
+def observe(index):
+    return observe_from(data, index)
 
 print(json.dumps({
     "first": observe(0),
@@ -33,6 +37,9 @@ print(json.dumps({
     "past_end": observe(2),
     "float": observe(1.5),
     "slice": observe(slice(None)),
+    "banded_first": observe_from(banded, 0),
+    "banded_past_end": observe_from(banded, 2),
+    "banded_slice": observe_from(banded, slice(None)),
 }))
 '''
 
@@ -68,6 +75,18 @@ class GetdataSequenceParityTests(unittest.TestCase):
         self.assertEqual(
             pillow["past_end"],
             {"error": "IndexError", "message": "image index out of range"},
+        )
+        self.assertEqual(pillow["banded_first"], {"value": 10})
+        self.assertEqual(
+            pillow["banded_past_end"],
+            {"error": "IndexError", "message": "image index out of range"},
+        )
+        self.assertEqual(
+            pillow["banded_slice"],
+            {
+                "error": "TypeError",
+                "message": "sequence index must be integer, not 'slice'",
+            },
         )
 
 
