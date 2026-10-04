@@ -1495,6 +1495,39 @@ pub fn op_alpha_composite(
 
 // ── Merge ──
 
+#[allow(unsafe_code)]
+#[cfg(not(feature = "parallel"))]
+fn interleave_rgb_luma_bands(red: &[u8], green: &[u8], blue: &[u8]) -> Result<Vec<u8>, PilError> {
+    if red.len() != green.len() || red.len() != blue.len() {
+        return Err(PilError::InternalError(
+            "RGB merge band lengths do not match".into(),
+        ));
+    }
+    let output_len = red
+        .len()
+        .checked_mul(3)
+        .ok_or_else(|| PilError::ValueError("merge: output length overflow".into()))?;
+    let mut output: Vec<u8> = Vec::with_capacity(output_len);
+
+    // SAFETY: the new Vec has capacity for `output_len`; each input length is
+    // equal, and the loop writes exactly three initialized bytes for each
+    // input sample. `index * 3 + 2` is below `output_len` because the
+    // multiplication above succeeded and `index < red.len()`. The output
+    // allocation cannot overlap any borrowed input. The Vec length remains
+    // zero until the entire buffer is initialized.
+    unsafe {
+        let destination = output.as_mut_ptr();
+        for index in 0..red.len() {
+            let offset = index * 3;
+            destination.add(offset).write(red[index]);
+            destination.add(offset + 1).write(green[index]);
+            destination.add(offset + 2).write(blue[index]);
+        }
+        output.set_len(output_len);
+    }
+    Ok(output)
+}
+
 pub fn op_merge(
     img: &DynamicImage,
     mode: &ColorMode,
@@ -1531,15 +1564,15 @@ pub fn op_merge(
                     && green.as_raw().len() == pixels
                     && blue.as_raw().len() == pixels
                 {
-                    let output_len = pixels.checked_mul(3).ok_or_else(|| {
-                        PilError::ValueError("merge: output length overflow".into())
-                    })?;
                     let red = red.as_raw();
                     let green = green.as_raw();
                     let blue = blue.as_raw();
 
                     #[cfg(feature = "parallel")]
                     let rgb = {
+                        let output_len = pixels.checked_mul(3).ok_or_else(|| {
+                            PilError::ValueError("merge: output length overflow".into())
+                        })?;
                         let mut rgb = vec![0u8; output_len];
                         apply_effect_rows(&mut rgb, w as usize, h as usize, 3, |row_index, row| {
                             let source_start = row_index * w as usize;
@@ -1553,15 +1586,7 @@ pub fn op_merge(
                         rgb
                     };
                     #[cfg(not(feature = "parallel"))]
-                    let rgb = {
-                        // Avoid clearing bytes that the interleave immediately
-                        // overwrites; append the native RGB samples once.
-                        let mut rgb = Vec::with_capacity(output_len);
-                        for pixel in 0..pixels {
-                            rgb.extend([red[pixel], green[pixel], blue[pixel]]);
-                        }
-                        rgb
-                    };
+                    let rgb = interleave_rgb_luma_bands(red, green, blue)?;
                     let image = RgbImage::from_raw(w, h, rgb)
                         .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
                     return Ok(DynamicImage::ImageRgb8(image));
@@ -4659,6 +4684,8 @@ fn cubic_sample(samples: [f64; 4], distance: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "parallel"))]
+    use super::interleave_rgb_luma_bands;
     use super::{
         DarwinRand, cubic_sample, op_paste, op_transform, transform_mesh,
         transform_projective_generic,
@@ -4668,6 +4695,23 @@ mod tests {
         DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
     };
     use std::sync::Arc;
+
+    #[cfg(not(feature = "parallel"))]
+    #[test]
+    fn native_rgb_luma_merge_interleave_writes_exact_samples() {
+        for length in [0usize, 1, 2, 15, 16, 17, 31, 32, 33] {
+            let red = (0..length).map(|i| (i * 7 + 1) as u8).collect::<Vec<_>>();
+            let green = (0..length).map(|i| (i * 11 + 3) as u8).collect::<Vec<_>>();
+            let blue = (0..length).map(|i| (i * 13 + 5) as u8).collect::<Vec<_>>();
+            let expected = (0..length)
+                .flat_map(|i| [red[i], green[i], blue[i]])
+                .collect::<Vec<_>>();
+
+            let actual = interleave_rgb_luma_bands(&red, &green, &blue)
+                .expect("equal L bands interleave as native RGB bytes");
+            assert_eq!(actual, expected, "pixel count {length}");
+        }
+    }
 
     #[test]
     fn darwin_rand_jump_ahead_matches_sequential_draws() {
