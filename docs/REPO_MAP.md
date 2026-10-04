@@ -140,6 +140,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- extract_band.wgsl
 |   |   |   |       |-- filter_3x3.wgsl
 |   |   |   |       |-- filter_5x5.wgsl
+|   |   |   |       |-- filter_5x5_luma_packed.wgsl
 |   |   |   |       |-- fit.wgsl
 |   |   |   |       |-- flip.wgsl
 |   |   |   |       |-- flip_native_byte_rows.wgsl
@@ -198,6 +199,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- put_data_luma_packed.wgsl
 |   |   |   |       |-- put_pixel.wgsl
 |   |   |   |       |-- rank_filter.wgsl
+|   |   |   |       |-- rank_filter_3x3_la_packed.wgsl
 |   |   |   |       |-- rank_filter_9x9_luma_packed.wgsl
 |   |   |   |       |-- rank_filter_9x9_luma_row_packed.wgsl
 |   |   |   |       |-- reduce.wgsl

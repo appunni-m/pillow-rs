@@ -7088,6 +7088,19 @@ impl GpuInner {
             }
             if packed_native_byte_filter
                 && matches!(logical_mode, Some("LA"))
+                && matches!(op, PipelineOp::RankFilter { size: 3, rank } if *rank < 9)
+            {
+                let rank_filter = self.resolve_pipeline(
+                    "__internal_rank_filter_3x3_la_packed",
+                    "rank_filter_3x3_la_packed.wgsl",
+                    include_str!("shaders/rank_filter_3x3_la_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(rank_filter));
+                index += 1;
+                continue;
+            }
+            if packed_native_byte_filter
+                && matches!(logical_mode, Some("LA"))
                 && matches!(op, PipelineOp::MaxFilter { size: 3 })
             {
                 let max_filter = self.resolve_pipeline(
@@ -8649,6 +8662,15 @@ impl GpuInner {
                 )?
             } else if packed_native_byte_filter
                 && matches!(logical_mode, Some("LA"))
+                && matches!(op, PipelineOp::RankFilter { size: 3, rank } if *rank < 9)
+            {
+                self.resolve_pipeline(
+                    "__internal_rank_filter_3x3_la_packed",
+                    "rank_filter_3x3_la_packed.wgsl",
+                    include_str!("shaders/rank_filter_3x3_la_packed.wgsl"),
+                )?
+            } else if packed_native_byte_filter
+                && matches!(logical_mode, Some("LA"))
                 && matches!(op, PipelineOp::MaxFilter { size: 3 })
             {
                 self.resolve_pipeline(
@@ -9989,6 +10011,11 @@ impl GpuInner {
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
             "__internal_median_filter_3x3_la_packed" => plan_packed_la_dispatch(
+                input_dims.0,
+                input_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
+            "__internal_rank_filter_3x3_la_packed" => plan_packed_la_dispatch(
                 input_dims.0,
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
@@ -14619,9 +14646,9 @@ fn gpu_packed_luma_order_statistic_input(
 }
 
 /// Keep supported singleton native-L and LA byte filters in compact storage.
-/// LA MedianFilter(3), MaxFilter(3), and MinFilter(3) use two adjacent pixels
-/// per word, while the existing blur paths preserve their exact channel-wise
-/// fixed-point arithmetic.
+/// LA MedianFilter(3), RankFilter(3), MaxFilter(3), and MinFilter(3) use two
+/// adjacent pixels per word, while the existing blur paths preserve their
+/// exact channel-wise fixed-point arithmetic.
 #[cfg(target_endian = "little")]
 fn gpu_packed_native_byte_filter_input(
     ops: &[PipelineOp],
@@ -14671,6 +14698,7 @@ fn gpu_packed_native_byte_filter_input(
                 | [PipelineOp::MedianFilter { size: 3 }]
                 | [PipelineOp::MaxFilter { size: 3 }]
                 | [PipelineOp::MinFilter { size: 3 }] => true,
+                [PipelineOp::RankFilter { size: 3, rank }] if *rank < 9 => true,
                 _ => false,
             };
             if !supported {
@@ -14684,6 +14712,16 @@ fn gpu_packed_native_byte_filter_input(
         }
         _ => false,
     }
+}
+
+fn gpu_packed_la_rank_filter_3_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    matches!(ops, [PipelineOp::RankFilter { size: 3, rank }] if *rank < 9)
+        && matches!(logical_mode, Some("LA"))
+        && gpu_packed_native_byte_filter_input(ops, image, logical_mode)
 }
 
 /// Admit compact L transport for Pad. Real resizes are limited to contained
@@ -14919,6 +14957,20 @@ fn gpu_packed_luma_rank_filter_9_work_items(output_dimensions: (u32, u32)) -> u6
     // if the image has a partial word, so the watchdog estimate stays conservative.
     let pixels = u64::from(output_dimensions.0).saturating_mul(u64::from(output_dimensions.1));
     pixels.div_ceil(4).saturating_mul(4).saturating_mul(8 * 81)
+}
+
+fn gpu_packed_la_rank_filter_3_work_items(output_dimensions: (u32, u32), rank: u32) -> u64 {
+    // Rank 0/8 reduce directly to a per-channel min/max; rank 1 maintains the
+    // two smallest channel values; other ranks use the exact 9-element sorting
+    // network. Count scalar lane operations conservatively per output pixel.
+    let per_pixel = match rank {
+        0 | 8 => 18,
+        1 => 46,
+        _ => 162,
+    };
+    u64::from(output_dimensions.0)
+        .saturating_mul(u64::from(output_dimensions.1))
+        .saturating_mul(per_pixel)
 }
 
 #[cfg(not(target_endian = "little"))]
@@ -18447,6 +18499,7 @@ fn gpu_dimensions_require_cpu(
     // conservative estimate reject the exact native-L specialization before
     // the order-statistic admission below can select it.
     let packed_luma_rank_filter_9 = gpu_packed_luma_rank_filter_9_input(ops, image, logical_mode);
+    let packed_la_rank_filter_3 = gpu_packed_la_rank_filter_3_input(ops, image, logical_mode);
     let dimensions_fit = |w: u32, h: u32| {
         CheckedDims::new(w, h, 1)
             .map(|dims| dims.total_pixels() <= GPU_BUFFER_CAPACITY as usize)
@@ -18560,6 +18613,13 @@ fn gpu_dimensions_require_cpu(
         }
         if packed_luma_rank_filter_9 && matches!(op, PipelineOp::RankFilter { size: 9, .. }) {
             if gpu_packed_luma_rank_filter_9_work_items(next) > MAX_GPU_SHADER_WORK_ITEMS {
+                return true;
+            }
+        } else if packed_la_rank_filter_3 {
+            let PipelineOp::RankFilter { rank, .. } = op else {
+                return true;
+            };
+            if gpu_packed_la_rank_filter_3_work_items(next, *rank) > MAX_GPU_SHADER_WORK_ITEMS {
                 return true;
             }
         } else if gpu_shader_work_requires_cpu(op, (cur_w, cur_h), next, None) {
@@ -31550,6 +31610,7 @@ mod tests {
         let median = PipelineOp::MedianFilter { size: 3 };
         let max_filter = PipelineOp::MaxFilter { size: 3 };
         let min_filter = PipelineOp::MinFilter { size: 3 };
+        let rank_filter = PipelineOp::RankFilter { size: 3, rank: 1 };
         let weights = [1.0, 4.0, 6.0, 4.0, 1.0];
         let kernel = std::array::from_fn(|index| weights[index / 5] * weights[index % 5]);
         let filter_5x5 = PipelineOp::Filter5x5 {
@@ -31648,6 +31709,11 @@ mod tests {
             &la,
             Some("LA")
         ));
+        assert!(super::gpu_packed_native_byte_filter_input(
+            std::slice::from_ref(&rank_filter),
+            &la,
+            Some("LA")
+        ));
         assert!(!super::gpu_packed_native_byte_filter_input(
             std::slice::from_ref(&median),
             &la,
@@ -31665,6 +31731,16 @@ mod tests {
         ));
         assert!(!super::gpu_packed_native_byte_filter_input(
             &[PipelineOp::MinFilter { size: 5 }],
+            &la,
+            Some("LA")
+        ));
+        assert!(!super::gpu_packed_native_byte_filter_input(
+            &[PipelineOp::RankFilter { size: 5, rank: 1 }],
+            &la,
+            Some("LA")
+        ));
+        assert!(!super::gpu_packed_native_byte_filter_input(
+            &[PipelineOp::RankFilter { size: 3, rank: 9 }],
             &la,
             Some("LA")
         ));
@@ -31749,6 +31825,35 @@ mod tests {
     }
 
     #[test]
+    fn packed_la_rank_filter_work_estimate_respects_selection_cost() {
+        assert_eq!(super::gpu_packed_la_rank_filter_3_work_items((1, 1), 0), 18);
+        assert_eq!(super::gpu_packed_la_rank_filter_3_work_items((1, 1), 1), 46);
+        assert_eq!(
+            super::gpu_packed_la_rank_filter_3_work_items((1, 1), 4),
+            162
+        );
+        assert_eq!(super::gpu_packed_la_rank_filter_3_work_items((1, 1), 8), 18);
+        assert!(
+            super::gpu_packed_la_rank_filter_3_work_items((4096, 4096), 1)
+                <= super::MAX_GPU_SHADER_WORK_ITEMS
+        );
+        assert!(
+            super::gpu_packed_la_rank_filter_3_work_items((4096, 4096), 4)
+                > super::MAX_GPU_SHADER_WORK_ITEMS
+        );
+
+        let max_rank_one_pixels = super::MAX_GPU_SHADER_WORK_ITEMS / 46;
+        assert!(
+            super::gpu_packed_la_rank_filter_3_work_items((max_rank_one_pixels as u32, 1), 1)
+                <= super::MAX_GPU_SHADER_WORK_ITEMS
+        );
+        assert!(
+            super::gpu_packed_la_rank_filter_3_work_items(((max_rank_one_pixels + 1) as u32, 1), 1)
+                > super::MAX_GPU_SHADER_WORK_ITEMS
+        );
+    }
+
+    #[test]
     #[cfg(target_endian = "little")]
     fn gpu_packed_la_median_filter_preserves_odd_width_rows_and_alpha() {
         use crate::compute::{execute_prepared, prepare_execution};
@@ -31792,6 +31897,63 @@ mod tests {
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
         assert_eq!(resources.mode_conversion_count, 0);
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_packed_la_rank_filter_preserves_rank_edges_and_compact_transfers() {
+        use crate::compute::{execute_prepared, prepare_execution};
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+        let (width, height) = (65u32, 47u32);
+        let bytes = (0..width as usize * height as usize * 2)
+            .map(|index| ((index * 71 + index / 11 * 29 + 17) % 256) as u8)
+            .collect::<Vec<_>>();
+        let source = DynamicImage::ImageLumaA8(
+            GrayAlphaImage::from_raw(width, height, bytes).expect("odd-width LA source"),
+        );
+
+        for rank in [0, 1, 4, 8] {
+            let op = [PipelineOp::RankFilter { size: 3, rank }];
+            let expected = crate::compute::registry::execute_cpu(&op[0], &source, Some("LA"))
+                .expect("CPU LA RankFilter reference");
+            let prepared =
+                prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA RankFilter routing");
+            let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    return;
+                }
+                Err(error) => panic!("native GPU LA RankFilter(rank={rank}) failed: {error}"),
+            };
+            assert!(matches!(&actual, DynamicImage::ImageLumaA8(_)));
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "rank={rank}");
+
+            let receipt =
+                Backend::take_pipeline_telemetry().expect("native LA RankFilter execution receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native LA RankFilter resources");
+            let transfer_bytes = (width as usize * height as usize * 2).div_ceil(4) * 4;
+            assert_eq!(resources.upload_bytes, transfer_bytes as u64);
+            assert_eq!(resources.readback_bytes, transfer_bytes as u64);
+            assert_eq!(resources.mode_conversion_count, 0);
+        }
     }
 
     #[test]
