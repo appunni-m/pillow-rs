@@ -19256,3 +19256,88 @@ checkpoint. They do not count as composite parity. Coverage MCP again
 returned an invalidated shared DuckDB error; no coverage result or claim was
 produced. The next composite work is the separate queued GPU workload; do not
 route ordinary single-image calls through that batch path.
+
+## Native-RGBA `Image.resize` — bounded accumulators checkpoint — 2026-10-05
+
+The selected material operation is a 1024 × 768 RGBA image resized to 768 ×
+512 with Lanczos, followed by `tobytes()`. The input is nonuniform in every
+color channel: for pixel index `i`, R/G/B are `(73*i+31)`, `(29*i+19)`, and
+`(97*i+11)` modulo 256; alpha cycles through
+`[0, 1, 32, 64, 127, 128, 191, 223, 254, 255]`. Image construction and input
+generation are outside the timer. Each backend ran in its own process with
+three warmups and eleven samples; the timed call is `resize()` plus
+`tobytes()`, and hashing the returned bytes is outside the timer. These are
+single-request latency and reciprocal-rate measurements, not saturated
+throughput. The input and per-run benchmark data were temporary and removed.
+
+RGBA resize had a wide fixed-point accumulation path in both CPU and SIMD even
+when the filter coefficients proved a byte-domain i32 bound. For every output
+coefficient, the proof uses `sum(abs(weight)) * 255 + (1 << 21)` and rejects
+the narrow route if any ordered accumulator could exceed `i32::MAX`. Both
+horizontal and vertical tables must pass. The CPU specialization premultiplies
+native RGBA once per source row, preserves the rounded byte intermediate
+between passes, and unpremultiplies after the vertical pass. The SIMD route
+uses the existing precomputed horizontal tap plan and the same coefficient
+proof; its horizontal gather now obtains one checked four-byte pixel slice per
+active lane/tap and assigns R, G, B, and A explicitly. The dispatch keeps
+RGBA's alpha path explicit; the four-channel dot product is shared only after
+the required premultiplication. CMYK's K byte remains an independent sample.
+No mode conversion was introduced. The serial CPU specialization stays out of
+the opt-in `parallel` build.
+
+The explicit RGBA-vector-kernel trial did not establish a repeatable win over
+the existing four-channel accumulator, so it was removed. The retained gather
+change was measured against the prior load shape with the same varied input
+and timer. Medians in milliseconds were:
+
+| Load path | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Prior four checked byte loads | 7.810 | 9.253 | 10.600 | 1.876 |
+| One checked four-byte slice, run A | 7.888 | 9.599 | 10.175 | 4.819 |
+| One checked four-byte slice, run B | 7.867 | 9.513 | 10.258 | 4.809 |
+| One checked four-byte slice, final source run C | 8.471 | 9.553 | 9.976 | 1.864 |
+
+SIMD's Pillow-relative latency ratio moved from 1.357× in the prior-load run
+to 1.290×, 1.304×, and 1.178× in the three candidate runs. Every candidate
+run improves the ratio, though run-to-run timing moved enough that the gain is
+modest rather than a 5× result. In final run C, CPU is 1.13× slower than
+Pillow and SIMD is 1.18× slower; SIMD remains far below the 5× target. GPU was
+faster than SIMD in all candidate runs; run C measured 1.864 ms versus 9.976
+ms SIMD (about 5.35× lower latency and 5.35× the concurrency-one reciprocal
+rate). GPU latency varied substantially between runs, and these single-image
+measurements do not establish queued or saturated GPU throughput.
+
+The separate opt-in Parallel CPU run used `make build-parity-parallel-cpu`,
+verified `parallel_feature=true`, and recorded the CPU executor. It produced
+the same output hash as ordinary Pillow. One short pair measured 6.071 ms for
+Parallel CPU and 10.962 ms for ordinary Pillow; the Pillow process varied from
+7.87–10.96 ms across the nearby runs, so that comparison is indicative only.
+It is not a serial CPU or SIMD result. The normal default-off extension was
+restored with `make build-parity` afterward.
+
+The output SHA-256 was
+`f6a9c8f02303e8c310ccdd494e9fee708fc9dd4ba7e974636d1abf22236f65e5` for
+Pillow, CPU, SIMD, GPU, and Parallel CPU. Actual-backend telemetry confirmed
+each requested CPU/SIMD/GPU route without fallback. The canonical transparent
+RGBA convolution case passed 1/1 on serial CPU and 1/1 on Parallel CPU; the
+larger varied-image comparison passed exact bytes on all four target profiles.
+The focused Rust tests
+`rgba_narrow_cpu_resize_matches_wide_premultiplied_reference` and
+`rgba_i32_resize_matches_widened_for_filters_and_alpha_patterns` passed,
+covering five filters, varied alpha patterns, upsample/downsample shapes, and
+vector tails.
+
+Four resize attempts are checkpointed: (1) bound CPU RGBA accumulation to
+i32; (2) admit coefficient-bounded RGBA through the SIMD i32 route; (3) trial
+and remove a standalone RGBA vector kernel without a reliable gain; and (4)
+reduce four per-channel checked source reads to one checked pixel-slice read.
+Keep the i32 paths and the measured gather change, record the CPU and SIMD
+latency gaps, and move on to the next ranked operation. Revisit RGBA resize
+only after a new profile or lower-bound analysis identifies a different hot
+stage; do not spend another iteration on accumulator-width changes alone.
+
+The requested `make imagebatch-composite-fault-contract` lane also passed two
+target-only cases: injected group-dimension failure and injected group-memory
+failure each selected=1, executed=1, passed=1, failed=0, with
+`oracle=not_applicable`. These fault-contract cases validate fallback behavior
+and do not count as Pillow parity comparisons. No coverage was run.
