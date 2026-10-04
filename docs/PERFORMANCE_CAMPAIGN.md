@@ -18466,3 +18466,60 @@ Baseline and attempt receipts are `color3dlut-transform-main-7d619266e-20261004.
 `color3dlut-final-parity-20261004.json`. Checkpoint after three bounded
 attempts and move to the next ranked operation; CPU whole-workflow latency
 remains an open blocker.
+
+## `Image.info` for a fresh in-memory image — checkpoint 2026-10-04
+
+The standard `pil-image-image.info.standard` workload constructs a fresh
+16 × 16 RGB image and reads its `info` mapping. Before this change, the getter
+crossed into Rust to rebuild native metadata and then reconciled it with the
+mutable Python mapping, even though `Image.new` cannot carry decoder-format
+metadata. The fast path marks only `Image.new` results as known-empty and
+returns their existing mapping directly. Opening or deriving images keeps the
+normal metadata path. In-place operations that can mutate image state clear
+the known-empty mark before calling the Rust core; user edits still mutate and
+observe the same public dictionary.
+
+| Run | Pillow latency | pillow-rs CPU latency | CPU pipeline phase | CPU / Pillow |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline at `6a2a07942` | 4.458 µs | 5.875 µs | 1.666 µs | 1.32× |
+| Guarded known-empty fast path | 4.417 µs | 5.292 µs | 1.083 µs | 1.20× |
+| Repeat | 4.333 µs | 5.458 µs | 1.125 µs | 1.26× |
+
+The optimization removes 0.42–0.58 µs from the measured target latency, but CPU
+remains slower than Pillow. The remaining cost includes constructing the
+Rust-backed image and the Python property access; a broader metadata-state
+rewrite is not justified by this small workload. SIMD and GPU profile labels
+showed the same host-side getter with no actual backend execution, so they do
+not establish accelerated performance. Parallel CPU does not apply.
+
+The isolated benchmark passed its embedded Pillow gate on all four benchmark
+subjects. The focused `Image.info` parity selection passed 6/6 cases, covering
+fresh-image metadata, palette transparency, and opened JPEG, BMP, GIF, and WebP
+metadata. `make build-parity` succeeded. A focused Python check confirmed
+mapping identity and caller mutations survive repeated access and in-place
+`paste`/`putdata`, and that assigning `info` replaces the mapping. No coverage
+ran.
+
+Reproduce the focused parity and post-change benchmark with:
+
+```sh
+RUSTC_WRAPPER= make build-parity
+
+RUSTC_WRAPPER= \
+MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.info.behavior.default,PIL.Image.Image.info.nuanced.p-transparency-table,PIL.Image.Image.info.nuanced.opened-jpeg-format-info,PIL.Image.Image.info.nuanced.opened-bmp-format-info,PIL.Image.Image.info.nuanced.opened-gif-format-info,PIL.Image.Image.info.nuanced.opened-webp-format-info' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/image-info-cases-6a2a079-20261004.json \
+make migration-parity-test
+
+RUSTC_WRAPPER= \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.info.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/image-info-fast-repeat-6a2a079-20261004.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/image-info-fast-repeat-parity-20261004.json \
+make migration-parity-benchmark
+```
+
+Baseline and attempt receipts are `image-info-main-6a2a079-20261004.json`,
+`image-info-fast-6a2a079-20261004.json`, and
+`image-info-fast-repeat-6a2a079-20261004.json` under
+`build/migration-parity/`. Continue to the next ranked operation; the CPU
+latency target for `Image.info` remains open.

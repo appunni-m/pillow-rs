@@ -224,6 +224,8 @@ class Image:
         # Pillow (DPI, compression, animation defaults, and similar values).
         self._info = {}
         self._native_info = None
+        # Set only for Image.new results, whose Rust metadata is known empty.
+        self._native_info_known_empty = False
         self._native_info_rebaseline = False
         self._native_info_omitted = frozenset()
         self._transpose_loads_info = False
@@ -240,6 +242,7 @@ class Image:
     def _ensure_materialized(self):
         """Ensure the underlying Rust image is materialized (not Paletted/Path)."""
         if hasattr(self._rust_image, 'materialize'):
+            self._native_info_known_empty = False
             self._rust_image = self._rust_image.materialize()
 
     @classmethod
@@ -278,7 +281,10 @@ class Image:
     ) -> "Image":
         # Preserve omission across the Python facade so the Rust core owns
         # Pillow's mode-specific default-color path.
-        return cls(RustImage.new(mode, size, color))
+        result = cls(RustImage.new(mode, size, color))
+        # Image.new has no source format, decoder fields, or pending metadata.
+        result._native_info_known_empty = True
+        return result
 
     @classmethod
     def effect_noise(cls, size: Tuple[int, int], sigma: float) -> "Image":
@@ -356,6 +362,7 @@ class Image:
         ] = None,
         mask: Optional["Image"] = None,
     ) -> None:
+        self._native_info_known_empty = False
         self._rust_image.paste(im, box, mask)
 
     def split(self) -> Tuple["Image", ...]:
@@ -378,6 +385,7 @@ class Image:
     ) -> None:
         """Scale image to fit within size. Aspect ratio handled in Rust."""
         del reducing_gap
+        self._native_info_known_empty = False
         if self._has_getdata_views:
             # Pillow replaces its core during thumbnail; previously returned
             # getdata sequences keep the old core alive. Detach this wrapper
@@ -405,6 +413,7 @@ class Image:
         accepted for palette colors; ordinary component values use tuples.
         Negative coordinates count from the right or bottom edge.
         """
+        self._native_info_known_empty = False
         try:
             self._rust_image.putpixel_mode(xy, value, self._info)
         finally:
@@ -440,6 +449,7 @@ class Image:
 
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""
+        self._native_info_known_empty = False
         self._sync_observed_info()
         self._rust_image.putalpha_input(alpha)
         self._sync_observed_info()
@@ -450,6 +460,7 @@ class Image:
 
     def load(self):
         """Load pixel data and return a mutable Pillow-style pixel view."""
+        self._native_info_known_empty = False
         self._sync_observed_info()
         self._rust_image.load()
         self._sync_observed_info()
@@ -457,6 +468,7 @@ class Image:
 
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
         """Alpha composite im over self in-place through the Rust core."""
+        self._native_info_known_empty = False
         self._rust_image.alpha_composite(im._rust_image, dest, source)
 
     def getcolors(self, maxcolors=256):
@@ -478,6 +490,7 @@ class Image:
 
     def putdata(self, data, scale=1.0, offset=0.0):
         """Replace pixels from scalar samples or multiband color tuples."""
+        self._native_info_known_empty = False
         self._rust_image.putdata_formatted(data, scale, offset)
 
     def getprojection(self):
@@ -490,6 +503,7 @@ class Image:
 
     def seek(self, frame):
         """Seek to frame in multi-frame image."""
+        self._native_info_known_empty = False
         self._rust_image.seek(frame)
 
     def tell(self):
@@ -500,6 +514,7 @@ class Image:
         """Close the image file and release resources."""
         if isinstance(self._rust_image, _ClosedImage):
             return None
+        self._native_info_known_empty = False
         self._rust_image.close()
         self._rust_image = _ClosedImage()
 
@@ -513,6 +528,7 @@ class Image:
 
     def apply_transparency(self):
         """Commit P-mode transparency to its palette without changing pixels."""
+        self._native_info_known_empty = False
         self._sync_observed_info()
         result = self._rust_image.apply_transparency()
         self._sync_observed_info()
@@ -564,6 +580,7 @@ class Image:
 
     def putpalette(self, data, rawmode="RGB"):
         """Attach a palette to the image."""
+        self._native_info_known_empty = False
         self._sync_observed_info()
         result = self._rust_image.putpalette(data, rawmode)
         self._sync_observed_info()
@@ -692,6 +709,7 @@ class Image:
             mode = self.mode
             size = self.size
             pixel_data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
+            self._native_info_known_empty = False
             self._rust_image = RustImage.frombytes(
                 mode, size, pixel_data, decoder_name
             )
@@ -818,6 +836,8 @@ class Image:
 
     @property
     def info(self) -> dict:
+        if self._native_info_known_empty:
+            return self._info
         native = self._rust_image.compatibility_info()
         previous = self._native_info
         if previous is not None:
@@ -862,6 +882,7 @@ class Image:
     @info.setter
     def info(self, value: dict) -> None:
         self._info = value
+        self._native_info_known_empty = False
         self._native_info = self._rust_image.compatibility_info()
         self._native_info_rebaseline = False
         self._native_info_omitted = frozenset()
