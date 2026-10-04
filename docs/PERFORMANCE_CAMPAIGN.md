@@ -18737,3 +18737,67 @@ The broader `make migration-parity-inputs-check` reaches its final regeneration
 check and reports drift only in the untouched
 `inputs/parity/pil-imagefont-freetypefont.json`; the focused checkpoint does not
 rewrite that unrelated font fixture.
+
+## Native L `ImageFilter.Kernel` 5x5 — checkpoint 2026-10-04
+
+The material workload `pipeline-op.filter.material-l-noise-5x5-1024x768`
+constructs a deterministic 1024 × 768 L image, applies the 5x5 binomial
+`ImageFilter.Kernel` with scale 256 and offset 0, then materializes its bytes.
+The original GPU path widened L to RGBA for upload, computed all four channels,
+and narrowed the result. Its p50 moved 3,145,728 bytes in each direction for a
+786,432-byte image. The native L shader now computes only the required byte,
+packs four adjacent pixels per word, and preserves the general filter's
+bottom-to-top row and FMA order. Its narrow admission requires L storage, an
+exact-safe kernel, and width divisible by four; other layouts keep the existing
+path. The accepted GPU route uses one dispatch, transfers 786,432 bytes each
+way, and records zero mode conversions.
+
+For the exact 2D outer-product binomial kernel, the CPU path checks the full
+25-coefficient matrix plus scale and offset before using five reusable
+horizontal `u16` rows. The maximum unnormalized 2D sum is 65,280, every
+intermediate is exactly representable, and the final Pillow rounding is
+`(sum + 128) / 256`. SIMD uses eight L samples per vector block, contiguous
+window loads with fixed lane shuffles, and scalar tails. The serial CPU and SIMD
+paths are mode-specific; the opt-in `parallel` feature retains its distinct
+Rayon implementation instead of being folded into either profile.
+
+| Profile | Baseline p50 | Current p50 | Current vs Pillow |
+| --- | ---: | ---: | ---: |
+| Pillow | 3.866 ms | 3.871 ms | — |
+| CPU | 11.553 ms | 1.219 ms | 3.18× faster |
+| SIMD | 6.648 ms | 1.165 ms | 3.32× faster |
+| GPU | 3.266 ms | 0.781 ms | 4.95× faster |
+| Parallel CPU | — | 2.743 ms | about 1.41× faster, using Pillow from a separate standard run |
+
+The CPU, SIMD, and GPU current numbers come from one correctness-gated run:
+Pillow was 3.871 ms, CPU 1.219 ms, SIMD 1.165 ms, and GPU 0.781 ms. CPU,
+SIMD, and GPU each executed 100 times with no fallback, and the exact-output
+gate passed against Pillow. GPU had 100 real executions and one dispatch per
+sample. Its reciprocal latency was 1,279.7 operations/s versus SIMD's 858.5
+operations/s at concurrency one; this does not establish saturated or
+multi-image throughput.
+The separately compiled Parallel CPU profile executed 100 times and passed its
+own parity gate at 2.743 ms. Its temporary result was removed after capture;
+the 1.41× Pillow comparison uses the standard run's 3.871 ms Pillow median,
+so it is indicative rather than paired evidence. Parallel CPU is slower than
+the serial CPU result here.
+
+CPU now meets the per-operation latency target for this mode. GPU is faster
+than SIMD in this single-image workload and meets the latency comparison, but
+SIMD remains only 3.32× faster than Pillow, below the 5× goal. Stop this visit
+after the three bounded code candidates, retain the parity-correct changes,
+record SIMD's remaining gap, and move to another ranked operation. Temporary
+benchmark result pairs from each run were deleted after measurement; no
+benchmark output JSON was retained.
+
+Focused verification passed:
+
+- `cargo test -p pillow-rs --lib binomial5x5_luma_tests --features gpu`
+- `cargo test -p pillow-rs --lib simd_binomial_5x5_luma_matches_cpu_across_vector_tails_and_borders --features gpu`
+- `cargo test -p pillow-rs --lib gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons --features gpu`
+- `MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.filter.material-l-noise-5x5-1024x768' make migration-parity-benchmark`
+- `MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.filter.material-l-noise-5x5-1024x768' make migration-parity-benchmark-parallel-cpu`
+
+The standard and feature-enabled benchmark gates both passed exact Pillow
+parity. Their temporary benchmark and parity files were deleted after the
+measurements were extracted.

@@ -42612,6 +42612,7 @@ def build_nuanced_cases(
     cases.extend(f_boxed_resize_materialized_parity_cases(surface_id))
     cases.extend(f_resize_materialized_parity_cases(surface_id))
     cases.extend(i_resize_materialized_parity_cases(surface_id))
+    cases.extend(l_filter_materialized_parity_cases(surface_id, assets_root))
     cases.extend(i_filter_materialized_parity_cases(surface_id))
     cases.extend(rotate_mode_parity_cases(surface_id))
     cases.extend(transform_mode_parity_cases(surface_id))
@@ -44513,6 +44514,96 @@ def i_filter_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     )
     bounded_case["assets"][0]["sha256"] = hashlib.sha256(bounded_raw).hexdigest()
     return [case, pipeline_case, bounded_case]
+
+
+def l_filter_materialized_parity_cases(
+    surface_id: str, assets_root: Path
+) -> list[dict[str, Any]]:
+    """Compare material L-mode 5x5 convolution on deterministic noise."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    width, height = 1024, 768
+    rng = random.Random(20261004)
+    raw = bytes(rng.randrange(256) for _ in range(width * height))
+    digest = hashlib.sha256(raw).hexdigest()
+    relative = Path("generated") / f"{digest}.bin"
+    asset_path = assets_root / relative
+    asset_path.parent.mkdir(parents=True, exist_ok=True)
+    if asset_path.exists():
+        if asset_path.read_bytes() != raw:
+            raise ValueError(f"content-addressed asset mismatch: {relative}")
+    else:
+        asset_path.write_bytes(raw)
+
+    kernel = [
+        1.0, 4.0, 6.0, 4.0, 1.0,
+        4.0, 16.0, 24.0, 16.0, 4.0,
+        6.0, 24.0, 36.0, 24.0, 6.0,
+        4.0, 16.0, 24.0, 16.0, 4.0,
+        1.0, 4.0, 6.0, 4.0, 1.0,
+    ]
+    return [
+        {
+            "case_id": (
+                f"{surface_id}.filter.nuanced.l-mode-kernel-5x5-noise-"
+                f"{width}x{height}"
+            ),
+            "surface": surface_id,
+            "operation": "filter",
+            "covers": [f"{surface_id}.filter.behavior.default"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                {
+                    "id": "pixels",
+                    "kind": "ref_bytes",
+                    "path": relative.as_posix(),
+                    "sha256": digest,
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("L"),
+                        "size": literal([width, height]),
+                        "data": asset_value("pixels"),
+                    },
+                },
+                {
+                    "step_id": "setup-filter",
+                    "surface": "PIL.ImageFilter",
+                    "operation": "Kernel",
+                    "receiver": None,
+                    "arguments": {
+                        "size": literal([5, 5]),
+                        "kernel": literal(kernel),
+                        "scale": literal(256.0),
+                        "offset": literal(0),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "filter",
+                    "receiver": binding("image"),
+                    "arguments": {"filter": binding("setup-filter")},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+    ]
 
 
 def grayscale_premultiplied_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -50677,6 +50768,39 @@ def build_pipeline_benchmark_document(
     ):
         add_convolution_workload(name, case_id, 1024, 768, "native")
 
+    l_filter_case_id = (
+        "PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-noise-1024x768"
+    )
+    l_filter_case = cases_by_id.get(l_filter_case_id)
+    if l_filter_case is None:
+        raise ValueError(f"L-mode convolution benchmark references missing case: {l_filter_case_id}")
+    l_filter_measurement = copy.deepcopy(chain_policy)
+    l_filter_measurement.update(
+        {
+            "boundary": "observed_steps",
+            "step_ids": ["call", "materialize"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        }
+    )
+    l_filter_workload = {
+        "workload_id": "pipeline-op.filter.material-l-noise-5x5-1024x768",
+        "covers": [_performance_requirement(operations, "PIL.Image.Image", "filter")],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": l_filter_case_id},
+        "measurement": l_filter_measurement,
+        "context": _workflow_benchmark_context(
+            l_filter_case,
+            variant="filter-material-l-noise-5x5-1024x768",
+            surface="PIL.Image.Image",
+            operation="filter",
+        ),
+    }
+    l_filter_workload["context"]["operation_class"] = "neighborhood"
+    l_filter_workloads = [l_filter_workload]
+
     i_convolution_workloads: list[dict[str, Any]] = []
     i_filter_requirement = _performance_requirement(
         operations, "PIL.Image.Image", "filter"
@@ -51663,6 +51787,7 @@ def build_pipeline_benchmark_document(
             *metadata_workloads,
             *rank_filter_workloads,
             *convolution_workloads,
+            *l_filter_workloads,
             *i_convolution_workloads,
             *reviewed_workloads,
             *alpha_resize_workloads,
@@ -51788,7 +51913,11 @@ def build_pipeline_benchmark_document(
                 ),
                 "members": [
                     {"workload_id": item["workload_id"], "weight": 1}
-                    for item in [*convolution_workloads, *i_convolution_workloads]
+                    for item in [
+                        *convolution_workloads,
+                        *l_filter_workloads,
+                        *i_convolution_workloads,
+                    ]
                 ],
             },
             {
