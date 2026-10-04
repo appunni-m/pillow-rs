@@ -1781,6 +1781,15 @@ fn composite_blend(source: u8, destination: u8, mask: u8) -> u8 {
     ((u16::from(source) * mask + u16::from(destination) * inverse + 127) / 255) as u8
 }
 
+#[inline]
+fn composite_l_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len(), mask.len());
+    for index in 0..source.len() {
+        destination[index] = composite_blend(source[index], destination[index], mask[index]);
+    }
+}
+
 /// Blend the native byte layouts used by the common L/LA/RGB/RGBA composite
 /// path. Pillow keeps image2's canvas and changes only the source/mask
 /// intersection, so starting with its bytes also handles clipping and empty
@@ -1847,6 +1856,10 @@ fn composite_native_byte_fast_path(
             let mask_start = row_index * mask_stride;
             let source_row = &source[source_start..source_start + overlap_bytes];
             let mask_row = &mask[mask_start..mask_start + overlap_mask_bytes];
+            if channels == 1 && mask_channels == 1 && mask_channel == 0 {
+                composite_l_row(source_row, &mut output_row[..overlap_bytes], mask_row);
+                return;
+            }
             for ((output_pixel, source_pixel), mask_pixel) in output_row[..overlap_bytes]
                 .chunks_exact_mut(channels)
                 .zip(source_row.chunks_exact(channels))
@@ -4687,7 +4700,7 @@ mod tests {
     #[cfg(not(feature = "parallel"))]
     use super::interleave_rgb_luma_bands;
     use super::{
-        DarwinRand, cubic_sample, op_paste, op_transform, transform_mesh,
+        DarwinRand, composite_l_row, cubic_sample, op_paste, op_transform, transform_mesh,
         transform_projective_generic,
     };
     use crate::pipeline::{ResampleFilter, TransformMethod};
@@ -4695,6 +4708,39 @@ mod tests {
         DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
     };
     use std::sync::Arc;
+
+    #[test]
+    fn native_l_composite_rows_keep_exact_blend_rounding_and_tails() {
+        for length in [0usize, 1, 15, 16, 17, 31, 32, 33, 257] {
+            let source = (0..length)
+                .map(|index| (index.wrapping_mul(73).wrapping_add(19)) as u8)
+                .collect::<Vec<_>>();
+            let mut destination = (0..length)
+                .map(|index| (index.wrapping_mul(151).wrapping_add(211)) as u8)
+                .collect::<Vec<_>>();
+            let mask = (0..length)
+                .map(|index| match index % 7 {
+                    0 => 0,
+                    1 => 255,
+                    _ => (index.wrapping_mul(97).wrapping_add(43)) as u8,
+                })
+                .collect::<Vec<_>>();
+            let expected = source
+                .iter()
+                .zip(destination.iter())
+                .zip(mask.iter())
+                .map(|((&source, &destination), &mask)| {
+                    ((u32::from(source) * u32::from(mask)
+                        + u32::from(destination) * u32::from(255 - mask)
+                        + 127)
+                        / 255) as u8
+                })
+                .collect::<Vec<_>>();
+
+            composite_l_row(&source, &mut destination, &mask);
+            assert_eq!(destination, expected, "row length {length}");
+        }
+    }
 
     #[cfg(not(feature = "parallel"))]
     #[test]
