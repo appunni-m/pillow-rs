@@ -11927,6 +11927,72 @@ PYTHON=build/parity-venv/bin/python \
 
 No coverage, GitHub CI, or release action was run.
 
+## RGB ImageOps.cover tiled-transpose attempt 4 — 2026-10-04
+
+The clean-main recheck on `3f4f7b29ec0c646e74d30c743fd07c13b16299c1`
+measured Pillow / CPU / SIMD / GPU medians of 9.648 / 18.191 / 17.025 /
+2.404 ms. A CPU sample profile concentrated in `pil_resize`, including the
+horizontal row pass and the vertical pass; 323 of 3,828 observed stack samples
+were in the intermediate transpose's `memmove`. The fourth and final attempt
+for this visit tiles the RGB transpose 32 × 32: source pixels are read in
+row-major tile order, while the destination keeps the column-major layout used
+by the vertical pass. The default non-Rayon build uses this path only for
+three-channel buffers; the Parallel CPU Rayon transpose is unchanged. No
+filter coefficients, arithmetic, output order, or GPU/SIMD kernels changed.
+
+`cargo test -p pillow-rs --lib tiled_rgb_transpose_matches_reference_across_partial_tiles --locked`
+passed for 1 × 1 and dimensions crossing both tile boundaries (31 × 33,
+33 × 31, and 65 × 67). The isolated standard benchmark passed exact Pillow
+parity on CPU, SIMD, and GPU (3/3) in both the first run
+`migration-parity-benchmark-gate-87a8f3413beb4359ba852c7cc8a10653` and repeat
+`migration-parity-benchmark-gate-b5a8822271834399a937431a16efac00`. Every
+target used its requested backend without fallback; GPU recorded two real
+dispatches. Each run used five warmups, 100 measured calls, and concurrency 1.
+
+| Profile | Clean-main baseline (ms) | Attempt run (ms) | Repeat (ms) |
+| --- | ---: | ---: | ---: |
+| Pillow | 9.648 | 10.045 | 9.963 |
+| Serial CPU | 18.191 | 15.870 | 16.066 |
+| SIMD | 17.025 | 17.492 | 17.803 |
+| GPU | 2.404 | 5.612 | 5.507 |
+
+The CPU reduction repeated at about 12% versus the clean-main baseline, but
+CPU remains 1.58–1.61× slower than Pillow. SIMD uses its own resize kernel and
+still misses the 5× goal by a wide margin. The GPU timings rose relative to
+the earlier baseline even though this edit does not touch GPU code; treat that
+single-image latency movement as unresolved run/device variation, not an
+optimization result. A concurrency-one sample does not measure GPU throughput.
+
+The separate `migration-parity-benchmark-parallel-cpu` target passed parity
+1/1 and measured 8.228 ms on its opt-in Rayon build. Compared with the ordinary
+Pillow median of 9.963 ms from the matching standard repeat, Parallel CPU was
+1.21× faster. The run recorded the `pillow-rs/parallel` and
+`pillow-rs-py/parallel` feature flags; this result is separate from serial CPU,
+SIMD, and GPU.
+
+Keep the tiled transpose as a measured serial-CPU improvement and checkpoint
+RGB Cover as unresolved. This visit has used four attempts; move to another
+operation before reopening the CPU arithmetic, the separate SIMD kernel, or
+queued GPU throughput. Reproduce the two standard runs with:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.rgb-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-rgb-tiled-transpose-attempt4-20261004.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-rgb-tiled-transpose-attempt4-parity-20261004.json \
+  make migration-parity-benchmark
+
+MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.rgb-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-rgb-tiled-transpose-attempt4-repeat1-20261004.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-rgb-tiled-transpose-attempt4-repeat1-parity-20261004.json \
+  make migration-parity-benchmark
+
+MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.rgb-noise-1024x768' \
+  make migration-parity-benchmark-parallel-cpu
+```
+
 ## HSV ImageOps.cover CPU/SIMD checkpoint — 2026-10-01
 
 Workload `pil-imageops.cover.materialized.hsv-noise-1024x768` resizes a native

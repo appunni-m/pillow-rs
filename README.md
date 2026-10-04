@@ -87,7 +87,8 @@ upstream Pillow does not bundle as equivalents.
   build composition; the codecs and image formats are not unique to pillow-rs.
 - Deferred image-operation pipelines in the Rust core, so supported chained
   operations can execute when pixels are requested rather than after every
-  individual call.
+  individual call; compatible sibling chains can reuse an already materialized
+  shared prefix.
 - Selectable CPU, architecture-specific SIMD, and GPU execution routes, with
   controls to inspect and enable or disable compiled routes. A compiled route
   does not guarantee that every operation or device uses it.
