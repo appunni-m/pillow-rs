@@ -8976,6 +8976,238 @@
       ]
     },
     {
+      "case_id": "PIL.Image.effect_mandelbrot.nuanced.performance-materialized-1024x768-quality-100",
+      "surface": "PIL.Image",
+      "operation": "effect_mandelbrot",
+      "covers": [
+        "PIL.Image.effect_mandelbrot.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "effect_mandelbrot",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "extent": {
+              "kind": "literal",
+              "value": [
+                -2.5,
+                -1.5,
+                2.5,
+                1.5
+              ]
+            },
+            "quality": {
+              "kind": "literal",
+              "value": 100
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-boundaries",
+      "surface": "PIL.Image",
+      "operation": "effect_mandelbrot",
+      "covers": [
+        "PIL.Image.effect_mandelbrot.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "effect_mandelbrot",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                9,
+                9
+              ]
+            },
+            "extent": {
+              "kind": "literal",
+              "value": [
+                -1.0,
+                -0.5,
+                1.0,
+                0.5
+              ]
+            },
+            "quality": {
+              "kind": "literal",
+              "value": 200
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-near-cardioid-cusp",
+      "surface": "PIL.Image",
+      "operation": "effect_mandelbrot",
+      "covers": [
+        "PIL.Image.effect_mandelbrot.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "effect_mandelbrot",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                9,
+                9
+              ]
+            },
+            "extent": {
+              "kind": "literal",
+              "value": [
+                0.24,
+                -0.01,
+                0.26,
+                0.01
+              ]
+            },
+            "quality": {
+              "kind": "literal",
+              "value": 1000
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.effect_mandelbrot.nuanced.analytic-pruning-near-period-two-bulb",
+      "surface": "PIL.Image",
+      "operation": "effect_mandelbrot",
+      "covers": [
+        "PIL.Image.effect_mandelbrot.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "effect_mandelbrot",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                9,
+                9
+              ]
+            },
+            "extent": {
+              "kind": "literal",
+              "value": [
+                -0.76,
+                -0.01,
+                -0.74,
+                0.01
+              ]
+            },
+            "quality": {
+              "kind": "literal",
+              "value": 1000
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.Image.effect_mandelbrot.nuanced.height-one",
       "surface": "PIL.Image",
       "operation": "effect_mandelbrot",
@@ -102113,22 +102345,22 @@
             "size": {
               "kind": "literal",
               "value": [
-                1,
-                4
+                1024,
+                768
               ]
             },
             "extent": {
               "kind": "literal",
               "value": [
-                -1.0,
-                -1.0,
-                1.0,
-                1.0
+                -2.5,
+                -1.5,
+                2.5,
+                1.5
               ]
             },
             "quality": {
               "kind": "literal",
-              "value": 10
+              "value": 100
             }
           }
         },

@@ -185,7 +185,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.effect_mandelbrot.nuanced.width-one"
+        "case_id": "PIL.Image.effect_mandelbrot.nuanced.performance-materialized-1024x768-quality-100"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -203,8 +203,8 @@
       },
       "context": {
         "size": [
-          1,
-          4
+          1024,
+          768
         ],
         "mode": "L",
         "chain_length": 1,

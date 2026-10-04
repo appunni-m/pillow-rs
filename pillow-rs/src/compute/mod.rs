@@ -1109,6 +1109,180 @@ pub(crate) fn try_simd_radial_gradient(mode: &str) -> Result<Option<DynamicImage
     result.map(Some)
 }
 
+/// Execute the eager Mandelbrot generator on the SIMD backend when its native
+/// byte kernel can process a full vector per row. Smaller widths retain the
+/// exact scalar implementation instead of reporting a SIMD execution that
+/// only ran scalar tail pixels.
+pub(crate) fn try_simd_mandelbrot(
+    size: (u32, u32),
+    extent: (f64, f64, f64, f64),
+    quality: i32,
+) -> Result<Option<DynamicImage>, PilError> {
+    let (width, height) = size;
+    if width < 8 || height == 0 {
+        return Ok(None);
+    }
+
+    let timed = pipeline_telemetry_enabled();
+    let route_start = timed.then(pipeline_timestamp).flatten();
+    let active_set = active_lock()?.clone();
+    let route_ns = elapsed_ns(route_start);
+    if !active_set.contains(&Backend::Simd) {
+        return Ok(None);
+    }
+
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+    let validation_start = timed.then(pipeline_timestamp).flatten();
+    let requested_backend = (active_set.len() == 1).then_some(Backend::Simd);
+    let validation_ns = elapsed_ns(validation_start);
+    if timed {
+        begin_pipeline_operation_telemetry("EffectMandelbrot");
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let result = pool_simd::ops::adapters::simd_mandelbrot_generate(size, extent, quality);
+    let backend_ns = elapsed_ns(backend_start);
+
+    if timed {
+        if result.is_err() {
+            record_pipeline_operation_path("unsupported");
+        }
+        finish_pipeline_operation_telemetry();
+
+        let resource = result.as_ref().ok().map(|image| {
+            let bytes = image.as_bytes().len() as u64;
+            let allocation = take_pipeline_allocation_telemetry();
+            PipelineResourceTelemetry {
+                host_buffer_count: u64::from(bytes != 0),
+                host_buffer_bytes: bytes,
+                peak_live_host_bytes: bytes,
+                host_allocation_count: allocation.allocation_count,
+                host_allocated_bytes: allocation.allocated_bytes,
+                ..PipelineResourceTelemetry::default()
+            }
+        });
+        if let Some(resource) = resource {
+            record_pipeline_resource_telemetry(resource);
+        }
+        let resource = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let dispatch_count = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend,
+            actual_backend: Backend::Simd,
+            operation_count: 1,
+            route_ns,
+            validation_ns,
+            backend_ns,
+            dispatch_count,
+            fallback_reason: None,
+            resource,
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+
+    result.map(Some)
+}
+
+/// Timer and backend request captured for the scalar eager Mandelbrot path.
+///
+/// Eager constructors bypass the pipeline router, so their direct CPU work
+/// needs an explicit receipt instead of leaving benchmark execution unproven.
+pub(crate) struct EagerCpuMandelbrotTelemetry {
+    timed: bool,
+    backend_start: Option<Instant>,
+    requested_backend: Option<Backend>,
+    fallback_reason: Option<String>,
+}
+
+pub(crate) fn begin_eager_cpu_mandelbrot_telemetry() -> EagerCpuMandelbrotTelemetry {
+    let timed = pipeline_telemetry_enabled();
+    if !timed {
+        return EagerCpuMandelbrotTelemetry {
+            timed,
+            backend_start: None,
+            requested_backend: None,
+            fallback_reason: None,
+        };
+    }
+
+    reset_pipeline_allocation_telemetry();
+    reset_pipeline_operation_telemetry();
+    let _ = take_pipeline_resource_telemetry();
+    let _ = take_pipeline_backend_override();
+    let _ = take_pipeline_dispatch_count();
+    let _ = take_pipeline_resize_coeff_cache_stats();
+
+    let active_set = active_lock()
+        .map(|active| active.clone())
+        .unwrap_or_default();
+    let requested_backend = if active_set.len() == 1 {
+        active_set.iter().next().copied()
+    } else {
+        None
+    };
+    let fallback_reason = active_set
+        .iter()
+        .any(|backend| *backend != Backend::Cpu)
+        .then(|| "eager EffectMandelbrot has no active non-CPU implementation".to_string());
+    begin_pipeline_operation_telemetry("EffectMandelbrot");
+
+    EagerCpuMandelbrotTelemetry {
+        timed,
+        backend_start: pipeline_timestamp(),
+        requested_backend,
+        fallback_reason,
+    }
+}
+
+pub(crate) fn finish_eager_cpu_mandelbrot_telemetry(
+    telemetry: EagerCpuMandelbrotTelemetry,
+    size: (u32, u32),
+) {
+    if !telemetry.timed {
+        return;
+    }
+
+    record_pipeline_operation_path("cpu");
+    finish_pipeline_operation_telemetry();
+
+    let bytes = u64::from(size.0) * u64::from(size.1);
+    let allocation = take_pipeline_allocation_telemetry();
+    record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+        host_buffer_count: u64::from(bytes != 0),
+        host_buffer_bytes: bytes,
+        peak_live_host_bytes: bytes,
+        host_allocation_count: allocation.allocation_count,
+        host_allocated_bytes: allocation.allocated_bytes,
+        ..PipelineResourceTelemetry::default()
+    });
+    let resource = take_pipeline_resource_telemetry();
+    let _ = take_pipeline_backend_override();
+    let dispatch_count = take_pipeline_dispatch_count();
+    let _ = take_pipeline_resize_coeff_cache_stats();
+    record_pipeline_telemetry(PipelineTelemetry {
+        requested_backend: telemetry.requested_backend,
+        actual_backend: Backend::Cpu,
+        operation_count: 1,
+        route_ns: 0,
+        validation_ns: 0,
+        backend_ns: elapsed_ns(telemetry.backend_start),
+        dispatch_count,
+        fallback_reason: telemetry.fallback_reason,
+        resource,
+        resize_coeff_cache_hits: 0,
+        resize_coeff_cache_misses: 0,
+    });
+}
+
 // ── Router ─────────────────────────────────────────────────────────────────
 
 fn route_decision(

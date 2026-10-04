@@ -124,7 +124,9 @@ BENCHMARK_DEFAULT_EXCLUSIONS: dict[str, dict[str, str]] = {
 BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-image.alpha-composite.standard": "PIL.Image.alpha_composite.mode.rgba",
     "pil-image.composite.standard": "PIL.Image.composite.mode.l",
-    "pil-image.effect-mandelbrot.standard": "PIL.Image.effect_mandelbrot.nuanced.width-one",
+    "pil-image.effect-mandelbrot.standard": (
+        "PIL.Image.effect_mandelbrot.nuanced.performance-materialized-1024x768-quality-100"
+    ),
     "pil-image.eval.standard": (
         "PIL.Image.eval.nuanced.performance-materialized-rgb-noise-1024x768"
     ),
@@ -507,7 +509,11 @@ PIPELINE_OP_BENCHMARK_SPECS: dict[str, PipelineBenchmarkSpec] = {
     "ExtractBand": PipelineBenchmarkSpec("PIL.Image.Image", "getchannel", "PIL.Image.Image.getchannel.behavior.default"),
     "LinearGradient": PipelineBenchmarkSpec("PIL.Image", "linear_gradient", "PIL.Image.linear_gradient.mode.l"),
     "RadialGradient": PipelineBenchmarkSpec("PIL.Image", "radial_gradient", "PIL.Image.radial_gradient.mode.l"),
-    "EffectMandelbrot": PipelineBenchmarkSpec("PIL.Image", "effect_mandelbrot", "PIL.Image.effect_mandelbrot.nuanced.width-one"),
+    "EffectMandelbrot": PipelineBenchmarkSpec(
+        "PIL.Image",
+        "effect_mandelbrot",
+        "PIL.Image.effect_mandelbrot.nuanced.performance-materialized-1024x768-quality-100",
+    ),
     "DrawLine": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "line", "PIL.ImageDraw.ImageDraw.line.parameter-combination.legacy-001", "draw_receiver"),
     "DrawRectangle": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "rectangle", "PIL.ImageDraw.ImageDraw.rectangle.parameter-combination.legacy-001", "draw_receiver"),
     "DrawRoundedRect": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "rounded_rectangle", "PIL.ImageDraw.ImageDraw.rounded_rectangle.parameter-combination.legacy-001", "draw_receiver"),
@@ -24526,6 +24532,58 @@ def build_nuanced_cases(
                 "extent": literal([-1.0, -1.0, 1.0, 1.0]),
                 "quality": literal(10),
             },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-materialized-1024x768-quality-100",
+            "values": {
+                "size": literal([1024, 768]),
+                "extent": literal([-2.5, -1.5, 2.5, 1.5]),
+                "quality": literal(100),
+            },
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "analytic-pruning-boundaries",
+            "values": {
+                "size": literal([9, 9]),
+                "extent": literal([-1.0, -0.5, 1.0, 0.5]),
+                "quality": literal(200),
+            },
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "analytic-pruning-near-cardioid-cusp",
+            "values": {
+                "size": literal([9, 9]),
+                "extent": literal([0.24, -0.01, 0.26, 0.01]),
+                "quality": literal(1000),
+            },
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "analytic-pruning-near-period-two-bulb",
+            "values": {
+                "size": literal([9, 9]),
+                "extent": literal([-0.76, -0.01, -0.74, 0.01]),
+                "quality": literal(1000),
+            },
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image",

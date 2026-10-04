@@ -11002,22 +11002,22 @@
               "size": {
                 "kind": "literal",
                 "value": [
-                  1,
-                  4
+                  1024,
+                  768
                 ]
               },
               "extent": {
                 "kind": "literal",
                 "value": [
-                  -1.0,
-                  -1.0,
-                  1.0,
-                  1.0
+                  -2.5,
+                  -1.5,
+                  2.5,
+                  1.5
                 ]
               },
               "quality": {
                 "kind": "literal",
-                "value": 10
+                "value": 100
               }
             }
           },
@@ -11053,8 +11053,8 @@
       },
       "context": {
         "size": [
-          1,
-          4
+          1024,
+          768
         ],
         "mode": "L",
         "chain_length": 1,
