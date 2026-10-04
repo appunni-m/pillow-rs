@@ -50,6 +50,7 @@ def parse_args() -> argparse.Namespace:
             "brightness",
             "multiply",
             "paste",
+            "expand",
             "color3dlut",
         ),
         default="median-filter",
@@ -57,6 +58,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mode", choices=("L", "LA", "RGB", "RGBA"), default="L")
     parser.add_argument("--channel", type=int, default=0)
     parser.add_argument("--factor", type=float, default=0.5)
+    parser.add_argument("--border", type=int, default=7)
+    parser.add_argument("--fill", type=int, default=37)
     parser.add_argument("--width", type=int, default=64)
     parser.add_argument("--height", type=int, default=64)
     parser.add_argument("--images", type=int, default=64)
@@ -188,6 +191,8 @@ def main() -> int:
                     )
                     image.paste(source, (0, 0), mask)
                     image.tobytes()
+                elif args.operation == "expand":
+                    ImageOps.expand(image, args.border, args.fill).tobytes()
                 else:
                     other = Image.frombytes(
                         args.mode,
@@ -238,6 +243,8 @@ def main() -> int:
                     mask_inputs[start + image_index],
                 )
                 operation = ImageBatch.Paste(source, mask)
+            elif args.operation == "expand":
+                operation = ImageBatch.Expand(args.border, args.fill)
             else:
                 operation = ImageBatch.Multiply(
                     Image.frombytes(
@@ -294,6 +301,8 @@ def main() -> int:
                 "operation": args.operation,
                 "channel": args.channel if args.operation == "extract-band" else None,
                 "factor": args.factor if args.operation == "brightness" else None,
+                "border": args.border if args.operation == "expand" else None,
+                "fill": args.fill if args.operation == "expand" else None,
                 "size": [args.width, args.height],
                 "images_per_window": args.images,
                 "backend": args.backend,

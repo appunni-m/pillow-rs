@@ -7,9 +7,9 @@
 //! `MedianFilter(3)`, `MaxFilter(3)`, native-L `RankFilter(3, 1)`,
 //! `ExtractBand`, `ImageOps.invert`, native-mode `Brightness`,
 //! `ImageChops.multiply`, and same-mode RGBA `Color3DLUT` pipelines. Full-frame
-//! native-mode masked Paste jobs with L masks also reuse the existing Paste
-//! pipeline. Images that cannot be grouped use their ordinary single-image
-//! pipeline.
+//! native-mode masked Paste jobs with L masks and native-mode `ImageOps.expand`
+//! jobs also reuse their existing pipelines. Images that cannot be grouped use
+//! their ordinary single-image pipeline.
 
 use crate::compute::Backend;
 use crate::error::PilError;
@@ -22,6 +22,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(feature = "migration-fault-injection")]
 static RANK_FILTER_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "migration-fault-injection")]
+static EXPAND_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(feature = "migration-fault-injection")]
 fn injected_rank_filter_group_failure(job: &BatchJob, backend: Backend) -> Option<PilError> {
@@ -46,6 +48,31 @@ fn injected_rank_filter_group_failure(job: &BatchJob, backend: Backend) -> Optio
     };
 
     RANK_FILTER_GROUP_FAILURE_INJECTED
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .ok()?;
+    Some(error)
+}
+
+#[cfg(feature = "migration-fault-injection")]
+fn injected_expand_group_failure(job: &BatchJob, backend: Backend) -> Option<PilError> {
+    if backend != Backend::Gpu
+        || !matches!(&job.operation, BatchOperation::Expand { .. })
+        || EXPAND_GROUP_FAILURE_INJECTED.load(Ordering::Relaxed)
+    {
+        return None;
+    }
+
+    let error = match std::env::var("PILLOW_RS_MIGRATION_FAULT_POINT").as_deref() {
+        Ok("image_batch.expand.group_dimension_failure") => {
+            PilError::DimensionError("injected grouped Expand dimension failure".into())
+        }
+        Ok("image_batch.expand.group_memory_failure") => {
+            PilError::MemoryError("injected grouped Expand memory failure".into())
+        }
+        _ => return None,
+    };
+
+    EXPAND_GROUP_FAILURE_INJECTED
         .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
         .ok()?;
     Some(error)
@@ -96,6 +123,13 @@ pub enum BatchOperation {
         /// L-mode mask with the same dimensions as the destination.
         mask: Box<Image>,
     },
+    /// Add a native-mode border using Pillow's `ImageOps.expand` semantics.
+    Expand {
+        /// Symmetric border width in pixels.
+        border: u32,
+        /// Pillow ImageOps fill input, resolved separately for each image mode.
+        fill: crate::ImageOpsColor,
+    },
     /// Apply a shared same-mode RGBA 3D color lookup table.
     Color3DLut {
         /// LUT dimensions.
@@ -127,6 +161,9 @@ impl BatchOperation {
                     Some(mask),
                 )?;
                 Ok(output)
+            }
+            Self::Expand { border, fill } => {
+                crate::ops::imageops::expand_with_input(image, *border, fill.clone())
             }
             Self::Color3DLut {
                 size,
@@ -191,6 +228,18 @@ impl BatchOperation {
                     && mask.mode().is_ok_and(|mask_mode| mask_mode == "L")
                     && mask.size().is_ok_and(|mask_size| mask_size == size)
             }
+            Self::Expand { border, fill } => {
+                let Some(border_twice) = border.checked_mul(2) else {
+                    return false;
+                };
+                if !matches!(mode, "L" | "LA" | "RGB" | "RGBA")
+                    || size.0.checked_add(border_twice).is_none()
+                    || size.1.checked_add(border_twice).is_none()
+                {
+                    return false;
+                }
+                crate::ops::imageops::resolve_imageops_color(fill.clone(), mode).is_ok()
+            }
             Self::Color3DLut {
                 channels,
                 target_mode,
@@ -228,6 +277,16 @@ impl BatchOperation {
             }
             (Self::Multiply { .. }, Self::Multiply { .. }) => true,
             (Self::Paste { .. }, Self::Paste { .. }) => true,
+            (
+                Self::Expand {
+                    border: left_border,
+                    fill: left_fill,
+                },
+                Self::Expand {
+                    border: right_border,
+                    fill: right_fill,
+                },
+            ) => left_border == right_border && left_fill == right_fill,
             (
                 Self::Color3DLut {
                     size: left_size,
@@ -279,6 +338,7 @@ impl BatchOperation {
                     mask_alpha: false,
                 })
             }
+            Self::Expand { .. } => None,
             Self::Color3DLut {
                 size,
                 table,
@@ -292,6 +352,19 @@ impl BatchOperation {
                 target_mode: PixelMode::RGBA,
             }),
         }
+    }
+
+    fn pipeline_op_for_mode(&self, mode: &str) -> Option<PipelineOp> {
+        if let Self::Expand { border, fill } = self {
+            let fill = crate::ops::imageops::resolve_imageops_color(fill.clone(), mode)
+                .ok()?
+                .unwrap_or((0, 0, 0, 0));
+            return Some(PipelineOp::Expand {
+                border: *border,
+                fill,
+            });
+        }
+        self.pipeline_op()
     }
 }
 
@@ -309,7 +382,8 @@ struct BatchJob {
 /// compatible `MedianFilter(3)`, `MaxFilter(3)`, and native-L
 /// `RankFilter(3, rank=1)`, `ExtractBand`, L/RGB `ImageOps.invert`, exact-factor native-mode
 /// `Brightness`, `ImageChops.multiply`, full-frame masked Paste, and same-mode
-/// RGBA `Color3DLUT` jobs when GPU is the selected backend. Grouping currently
+/// RGBA `Color3DLUT` and native-mode `ImageOps.expand` jobs when GPU is the
+/// selected backend. Grouping currently
 /// requires equal-size native byte modes `L`, `LA`, `RGB`, and `RGBA`; batched
 /// Brightness additionally requires an exact GPU factor and one of `L`, `LA`,
 /// or `RGB`. Masked Paste additionally requires same-mode sources and
@@ -423,7 +497,7 @@ impl BatchExecutor {
             if group.len() >= 2 {
                 let operation = job
                     .operation
-                    .pipeline_op()
+                    .pipeline_op_for_mode(&job.mode)
                     .expect("groupable batch operation has a pipeline operation");
                 let safe_group_len = crate::compute::gpu_batch_group_limit(
                     &operation,
@@ -504,6 +578,10 @@ impl BatchExecutor {
         if let Some(error) = injected_rank_filter_group_failure(first, backend) {
             return Err(error);
         }
+        #[cfg(feature = "migration-fault-injection")]
+        if let Some(error) = injected_expand_group_failure(first, backend) {
+            return Err(error);
+        }
 
         let mode = first.mode.as_str();
         let channels = mode_channels(mode).ok_or_else(|| {
@@ -581,6 +659,23 @@ impl BatchExecutor {
                     .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
                 (0usize, stacked_height, mode, channels)
             }
+            BatchOperation::Expand { border, .. } => {
+                let group_len = u32::try_from(indices.len())
+                    .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
+                let border_rows = border
+                    .checked_mul(2)
+                    .ok_or_else(|| PilError::DimensionError("Expand border overflow".into()))?;
+                let output_height = height
+                    .checked_add(border_rows)
+                    .and_then(|height| height.checked_mul(group_len))
+                    .ok_or_else(|| {
+                        PilError::DimensionError("Expand batch height overflow".into())
+                    })?;
+                let stacked_height = output_height.checked_sub(border_rows).ok_or_else(|| {
+                    PilError::DimensionError("Expand batch height underflow".into())
+                })?;
+                (0usize, stacked_height, mode, channels)
+            }
             _ => {
                 return Err(PilError::ValueError(
                     "this operation has no compatible batch layout".into(),
@@ -635,7 +730,41 @@ impl BatchExecutor {
             None
         };
 
-        for index in indices {
+        let expand_fill_row = if let BatchOperation::Expand { fill, .. } = &first.operation {
+            let fill = crate::ops::imageops::resolve_imageops_color(fill.clone(), mode)?
+                .unwrap_or((0, 0, 0, 0));
+            let pixel = native_expand_fill_pixel(mode, fill).ok_or_else(|| {
+                PilError::InternalError("Expand batch has no native fill layout".into())
+            })?;
+            let row_width = usize::try_from(width)
+                .map_err(|_| PilError::DimensionError("Expand row width overflow".into()))?;
+            let row_bytes = row_width
+                .checked_mul(channels)
+                .ok_or_else(|| PilError::DimensionError("Expand fill row size overflow".into()))?;
+            let mut row = Vec::new();
+            row.try_reserve_exact(row_bytes).map_err(|error| {
+                PilError::MemoryError(format!(
+                    "unable to allocate {row_bytes} Expand fill-row bytes: {error}"
+                ))
+            })?;
+            for _ in 0..row_width {
+                row.extend_from_slice(&pixel[..channels]);
+            }
+            Some(row)
+        } else {
+            None
+        };
+        let expand_separator_rows = match &first.operation {
+            BatchOperation::Expand { border, .. } => usize::try_from(
+                border
+                    .checked_mul(2)
+                    .ok_or_else(|| PilError::DimensionError("Expand border overflow".into()))?,
+            )
+            .map_err(|_| PilError::DimensionError("Expand separator rows overflow".into()))?,
+            _ => 0,
+        };
+
+        for (group_index, index) in indices.iter().enumerate() {
             let job = jobs[*index]
                 .as_ref()
                 .ok_or_else(|| PilError::InternalError("batch job was already consumed".into()))?;
@@ -661,6 +790,14 @@ impl BatchExecutor {
                 .ok_or_else(|| PilError::DimensionError("batch row offset underflow".into()))?;
             for _ in 0..halo {
                 packed.extend_from_slice(&pixel_bytes[last_row_start..expected]);
+            }
+
+            if group_index < indices.len().saturating_sub(1)
+                && let Some(fill_row) = expand_fill_row.as_deref()
+            {
+                for _ in 0..expand_separator_rows {
+                    packed.extend_from_slice(fill_row);
+                }
             }
 
             match &job.operation {
@@ -771,6 +908,23 @@ impl BatchExecutor {
             ));
         }
 
+        let (output_width, output_height) = match &first.operation {
+            BatchOperation::Expand { border, .. } => {
+                let border_twice = border.checked_mul(2).ok_or_else(|| {
+                    PilError::DimensionError("Expand output border overflow".into())
+                })?;
+                (
+                    width.checked_add(border_twice).ok_or_else(|| {
+                        PilError::DimensionError("Expand output width overflow".into())
+                    })?,
+                    height.checked_add(border_twice).ok_or_else(|| {
+                        PilError::DimensionError("Expand output height overflow".into())
+                    })?,
+                )
+            }
+            _ => (width, height),
+        };
+
         // Keep each source mode's physical pixel layout. Existing Image
         // constructors and operation dispatch own validation and routing.
         let stacked = Image::frombytes_owned(mode, (width, stacked_height), packed)?;
@@ -822,24 +976,37 @@ impl BatchExecutor {
         let operated_pixels = operated.materialized_shared()?;
         let operated_bytes = operated_pixels.as_bytes();
 
-        let output_row_bytes = usize::try_from(width)
+        let output_row_bytes = usize::try_from(output_width)
             .ok()
             .and_then(|width| width.checked_mul(output_channels))
             .ok_or_else(|| PilError::DimensionError("batch output row size overflow".into()))?;
-        let halo_bytes = output_row_bytes
-            .checked_mul(halo)
-            .ok_or_else(|| PilError::DimensionError("batch halo size overflow".into()))?;
-        let image_rows =
-            height_usize
-                .checked_add(halo.checked_mul(2).ok_or_else(|| {
-                    PilError::DimensionError("batch halo row count overflow".into())
-                })?)
-                .ok_or_else(|| PilError::DimensionError("batch row count overflow".into()))?;
+        let (image_rows, row_offset) = if matches!(first.operation, BatchOperation::Expand { .. }) {
+            (
+                usize::try_from(output_height).map_err(|_| {
+                    PilError::DimensionError("Expand output height overflow".into())
+                })?,
+                0usize,
+            )
+        } else {
+            (
+                height_usize
+                    .checked_add(halo.checked_mul(2).ok_or_else(|| {
+                        PilError::DimensionError("batch halo row count overflow".into())
+                    })?)
+                    .ok_or_else(|| PilError::DimensionError("batch row count overflow".into()))?,
+                halo,
+            )
+        };
+        let row_offset_bytes = output_row_bytes
+            .checked_mul(row_offset)
+            .ok_or_else(|| PilError::DimensionError("batch output row offset overflow".into()))?;
         let image_stride = output_row_bytes
             .checked_mul(image_rows)
             .ok_or_else(|| PilError::DimensionError("batch output stride overflow".into()))?;
         let image_bytes = output_row_bytes
-            .checked_mul(height_usize)
+            .checked_mul(image_rows.checked_sub(row_offset).ok_or_else(|| {
+                PilError::DimensionError("batch output row count underflow".into())
+            })?)
             .ok_or_else(|| PilError::DimensionError("batch output size overflow".into()))?;
         let mut grouped_results = Vec::new();
         grouped_results
@@ -853,7 +1020,7 @@ impl BatchExecutor {
         for (group_index, job_index) in indices.iter().enumerate() {
             let start = group_index
                 .checked_mul(image_stride)
-                .and_then(|start| start.checked_add(halo_bytes))
+                .and_then(|start| start.checked_add(row_offset_bytes))
                 .ok_or_else(|| PilError::DimensionError("batch output offset overflow".into()))?;
             let end = start
                 .checked_add(image_bytes)
@@ -864,7 +1031,19 @@ impl BatchExecutor {
             let job = jobs[*job_index]
                 .as_ref()
                 .ok_or_else(|| PilError::InternalError("batch job was already consumed".into()))?;
-            let pixels = Image::frombytes(output_mode, (width, height), output)?.materialize()?;
+            let mut output_copy = Vec::new();
+            output_copy
+                .try_reserve_exact(output.len())
+                .map_err(|error| {
+                    PilError::MemoryError(format!(
+                        "unable to allocate {} batch output bytes: {error}",
+                        output.len()
+                    ))
+                })?;
+            output_copy.extend_from_slice(output);
+            let pixels =
+                Image::frombytes_owned(output_mode, (output_width, output_height), output_copy)?
+                    .materialized_shared()?;
             let mut image = job.operation.apply(&job.source)?;
             image.cache_batched_materialization(pixels)?;
             grouped_results.push((*job_index, image));
@@ -886,6 +1065,18 @@ fn mode_channels(mode: &str) -> Option<usize> {
     }
 }
 
+fn native_expand_fill_pixel(mode: &str, fill: (u8, u8, u8, u8)) -> Option<[u8; 4]> {
+    match mode {
+        "L" => Some([fill.0, 0, 0, 0]),
+        // ImageOps' LA color resolver stores the luminance in the first byte
+        // and alpha in the fourth byte of the shared fill tuple.
+        "LA" => Some([fill.0, fill.3, 0, 0]),
+        "RGB" => Some([fill.0, fill.1, fill.2, 0]),
+        "RGBA" => Some([fill.0, fill.1, fill.2, fill.3]),
+        _ => None,
+    }
+}
+
 fn mode_storage(mode: &str) -> Option<crate::raster::ColorType> {
     match mode {
         "L" => Some(crate::raster::ColorType::L8),
@@ -898,7 +1089,7 @@ fn mode_storage(mode: &str) -> Option<crate::raster::ColorType> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BatchExecutor, BatchOperation};
+    use super::{BatchExecutor, BatchOperation, native_expand_fill_pixel};
     use crate::compute::Backend;
     use crate::error::PilError;
     use crate::image::Image;
@@ -1125,6 +1316,91 @@ mod tests {
             operation.pipeline_op(),
             Some(PipelineOp::RankFilter { size: 3, rank: 1 })
         ));
+    }
+
+    #[test]
+    fn expand_batches_only_native_byte_modes_with_matching_fill() {
+        for (mode, color) in [
+            ("L", vec![11]),
+            ("LA", vec![11, 49]),
+            ("RGB", vec![11, 23, 37]),
+            ("RGBA", vec![11, 23, 37, 49]),
+        ] {
+            let expand = BatchOperation::Expand {
+                border: 2,
+                fill: crate::ImageOpsColor::Components(color.clone()),
+            };
+            assert!(expand.can_group(mode, (7, 5)), "{mode} should group");
+            assert!(expand.matches_group(&BatchOperation::Expand {
+                border: 2,
+                fill: crate::ImageOpsColor::Components(color),
+            }));
+        }
+        let expand = BatchOperation::Expand {
+            border: 2,
+            fill: crate::ImageOpsColor::Components(vec![11, 23, 37, 49]),
+        };
+        for mode in ["1", "P", "CMYK", "RGBX"] {
+            assert!(!expand.can_group(mode, (7, 5)), "{mode} should fall back");
+        }
+        assert!(!expand.matches_group(&BatchOperation::Expand {
+            border: 1,
+            fill: crate::ImageOpsColor::Components(vec![11, 23, 37, 49]),
+        }));
+        assert!(!expand.matches_group(&BatchOperation::Expand {
+            border: 2,
+            fill: crate::ImageOpsColor::Scalar(11),
+        }));
+        assert_eq!(
+            native_expand_fill_pixel("LA", (11, 11, 11, 49)),
+            Some([11, 49, 0, 0])
+        );
+    }
+
+    #[test]
+    fn queued_expand_keeps_native_modes_and_separates_each_image() {
+        let modes = [("L", 1usize), ("LA", 2), ("RGB", 3), ("RGBA", 4)];
+        for (mode, channels) in modes {
+            let sources = [
+                fixture(mode, 7, 5, channels, 17),
+                fixture(mode, 7, 5, channels, 203),
+            ];
+            let fill = crate::ImageOpsColor::Components(match mode {
+                "L" => vec![11],
+                "LA" => vec![11, 49],
+                "RGB" => vec![11, 23, 37],
+                "RGBA" => vec![11, 23, 37, 49],
+                _ => unreachable!(),
+            });
+            let expected = sources
+                .iter()
+                .map(|source| {
+                    crate::ops::imageops::expand_with_input(source, 2, fill.clone())
+                        .unwrap()
+                        .tobytes()
+                        .unwrap()
+                })
+                .collect::<Vec<_>>();
+            let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+            for source in sources {
+                batch
+                    .submit(
+                        source,
+                        BatchOperation::Expand {
+                            border: 2,
+                            fill: fill.clone(),
+                        },
+                    )
+                    .unwrap();
+            }
+            let actual = batch
+                .join()
+                .unwrap()
+                .iter()
+                .map(|image| image.tobytes().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "queued {mode} Expand differs");
+        }
     }
 
     #[test]

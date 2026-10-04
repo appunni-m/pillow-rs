@@ -87,6 +87,27 @@ class Paste:
         self.mask = mask
 
 
+class Expand:
+    """Request ``ImageOps.expand(image, border, fill)`` in an explicit batch.
+
+    Equal-size native L, LA, RGB, or RGBA images with matching borders and
+    fills can share one GPU Expand dispatch. The fill is resolved against each
+    image's native mode, including LA alpha selection.
+    """
+
+    __slots__ = ("border", "fill")
+
+    def __init__(self, border=0, fill=0):
+        try:
+            border = operator.index(border)
+        except TypeError as error:
+            raise TypeError("border must be an integer") from error
+        if border < 0:
+            raise ValueError("border must be non-negative")
+        self.border = border
+        self.fill = fill
+
+
 class Color3DLUT:
     """Snapshot a Pillow ``ImageFilter.Color3DLUT`` for shared batch use.
 
@@ -116,8 +137,9 @@ class BatchExecutor:
     ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Invert()``,
     ``ImageBatch.Brightness(factor)``,
     ``ImageBatch.Multiply(image2)``, or
-    full-frame ``ImageBatch.Paste(source, mask)`` jobs, plus jobs using one
-    shared RGBA-to-RGBA ``ImageBatch.Color3DLUT``, on the GPU when possible.
+    full-frame ``ImageBatch.Paste(source, mask)``, or native-mode
+    ``ImageBatch.Expand(border, fill)`` jobs, plus jobs using one shared
+    RGBA-to-RGBA ``ImageBatch.Color3DLUT``, on the GPU when possible.
     Grouped operands use native ``L``, ``LA``, ``RGB``, or ``RGBA`` storage
     with equal dimensions; batched Paste requires an L mask. Incompatible jobs
     use the ordinary per-image operation.
@@ -155,6 +177,11 @@ class BatchExecutor:
         pastes.submit(destination_b, ImageBatch.Paste(source_b, mask_b))
         pasted_a, pasted_b = pastes.join()
 
+        expanded = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        expanded.submit(image_a, ImageBatch.Expand(4, fill=(9, 17, 23, 31)))
+        expanded.submit(image_b, ImageBatch.Expand(4, fill=(9, 17, 23, 31)))
+        expanded_a, expanded_b = expanded.join()
+
         lut = ImageFilter.Color3DLUT.generate(
             17, callback, channels=4, target_mode="RGBA"
         )
@@ -178,8 +205,11 @@ class BatchExecutor:
     destinations, sources, and L masks, then reuses ``Image.paste`` at the
     origin. A Color3DLUT batch snapshots one shared LUT and applies the
     existing RGBA pipeline to a vertical stack. Invert groups L and RGB images
-    through the existing ``ImageOps.invert`` pipeline. Inputs retain their
-    mode; the executor does not convert them to RGBA.
+    through the existing ``ImageOps.invert`` pipeline. Expand inserts native
+    fill rows between vertically stacked inputs, then uses one existing
+    ``ImageOps.expand`` pipeline; slicing the expanded stack returns one
+    independently bordered result per input. Inputs retain their mode; the
+    executor does not convert them to RGBA.
     """
 
     def __init__(self, queue=False, backend=None):
@@ -206,6 +236,7 @@ class BatchExecutor:
             "Brightness",
             "Multiply",
             "Paste",
+            "Expand",
             "BatchColor3DLUT",
         ):
             raise TypeError(
@@ -213,14 +244,13 @@ class BatchExecutor:
                 "ImageFilter.MaxFilter or ImageFilter.RankFilter, "
                 "ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Multiply, "
                 "ImageBatch.Brightness, "
-                "ImageBatch.Paste, or "
+                "ImageBatch.Paste, ImageBatch.Expand, or "
                 "ImageBatch.Color3DLUT instance"
             )
-        if isinstance(operation, Brightness):
-            # Pillow's ImageEnhance.Brightness creates a fresh result through
-            # Image.blend, whose metadata comes from its generated black base
-            # image. Keep the public info mapping empty while retaining the
-            # result's native snapshot so lazy compatibility fields do not
+        if isinstance(operation, (Brightness, Expand)):
+            # Pillow's Brightness and ImageOps.expand create fresh outputs,
+            # whose public info mapping does not inherit the source mapping.
+            # Retain the native snapshot so lazy compatibility fields do not
             # reappear when Image.info is first read.
             metadata = (
                 {},

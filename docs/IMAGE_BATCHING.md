@@ -51,6 +51,11 @@ pastes.submit(destination_a, ImageBatch.Paste(source_a, mask_a))
 pastes.submit(destination_b, ImageBatch.Paste(source_b, mask_b))
 pasted_a, pasted_b = pastes.join()
 
+expanded = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+expanded.submit(rgba_a, ImageBatch.Expand(4, fill=(9, 17, 23, 31)))
+expanded.submit(rgba_b, ImageBatch.Expand(4, fill=(9, 17, 23, 31)))
+expanded_a, expanded_b = expanded.join()
+
 lut = ImageFilter.Color3DLUT.generate(
     17, callback, channels=4, target_mode="RGBA"
 )
@@ -69,7 +74,8 @@ until `join`, which returns results in submission order. A batch accepts
 `ImageBatch.ExtractBand(channel)`,
 `ImageBatch.Invert()`, `ImageBatch.Brightness(factor)`,
 `ImageBatch.Multiply(other_image)`, full-frame
-`ImageBatch.Paste(source, mask)`, and a shared same-mode RGBA
+`ImageBatch.Paste(source, mask)`, native-mode `ImageBatch.Expand(border, fill)`,
+and a shared same-mode RGBA
 `ImageBatch.Color3DLUT(filter)` operation. Jobs with the same operation and
 compatible mode and dimensions are grouped when GPU is the selected backend;
 Brightness also requires an exact GPU factor and L, LA, or RGB mode. LUT jobs
@@ -87,7 +93,8 @@ bottom row surrounds each image, so the filter cannot read pixels from a
 neighbor at a group boundary. RankFilter batching is currently limited to the
 packed-L second-minimum kernel; other modes, sizes, and ranks retain the
 ordinary per-image path. For
-`ExtractBand`, `Invert`, `Brightness`, `Multiply`, `Paste`, and `Color3DLUT`,
+`ExtractBand`, `Invert`, `Brightness`, `Multiply`, `Paste`, `Expand`, and
+`Color3DLUT`,
 images are stacked directly because each output pixel depends only on
 corresponding input pixels. Brightness groups same-factor L, LA, and RGB images
 with the existing native-byte kernel; LA alpha is preserved. RGBA and factors
@@ -98,6 +105,15 @@ the ordinary ImageOps validation behavior. For `Multiply`, primary and secondary
 operands are each stacked in their native mode. For `Paste`,
 destinations, sources, and L masks are stacked separately; the existing
 full-frame masked paste runs at the origin and keeps each image independent.
+For `Expand`, the batch requires equal borders and fill inputs. It inserts two
+native fill rows between adjacent source images. The existing Expand operation
+adds the outer border around the full stack, which gives every input its own
+top/bottom border when the output is split into equal expanded-image slices.
+LA fill keeps Pillow's two-component `(luma, alpha)` meaning; no mode is
+converted. The GPU group planner checks both stacked input and expanded output
+against pixel, native-byte storage, dispatch, shader-work, and current adapter
+limits before allocating the combined images. An unsafe or incompatible group
+uses ordinary single-image expansion.
 For `Color3DLUT`, the batch
 captures one immutable LUT and applies the existing RGBA-to-RGBA pipeline to
 the stack; each job must reuse the same `ImageBatch.Color3DLUT` instance.
@@ -576,3 +592,62 @@ parallel feature. Use the default pillow-rs installation when measuring ordinary
 CPU, SIMD, or GPU profiles, as described in the command reference.
 
 The command reference contains the exact Parallel CPU invocation.
+
+### Native-mode `ImageOps.expand` batch
+
+`ImageBatch.Expand(border, fill)` groups equal-size L, LA, RGB, and RGBA inputs
+when their border and fill inputs match. It builds a vertical source stack with
+native fill rows between images, then runs the existing Expand pipeline once.
+The fill resolver preserves Pillow's mode rules, including `(luma, alpha)` for
+LA. Outputs retain native mode and per-input ordering. Other modes and unsafe
+group sizes use ordinary single-image Expand. The standard `ImageOps.expand`
+route is unchanged.
+
+The isolated parity lane compares bytes, mode, dimensions, and `info` with
+Pillow 12.2.0 for queued groups and eager calls on CPU, SIMD, and GPU. It
+covers all four modes at 7×5, 256×256 × 16, and 1024×768 × 4. Every queued GPU
+cohort uses one `expand.wgsl` dispatch, reports zero mode conversions, and
+executes on GPU without fallback. Larger output checks use SHA-256 digests of
+the exact Pillow and pillow-rs byte buffers to keep the temporary oracle file
+small.
+
+Full-call measurements below were collected on one Apple M-series host with 3
+warmups and 12 samples. Each window constructs inputs, submits the operations,
+executes and materializes outputs, and reads every result's bytes. Pillow, CPU,
+and SIMD use sequential per-image calls; GPU uses one queued batch. CPU and SIMD
+were measured with the default non-Rayon build. Times are median milliseconds
+per complete window. The RGBA 256×256 Pillow and serial-CPU values are medians
+across three paired process runs because that comparison varied between runs;
+the other cells show one process run each.
+
+| Mode | Cohort | Pillow | Serial CPU | SIMD | Queued GPU |
+| --- | --- | ---: | ---: | ---: | ---: |
+| L | 16 images @ 256×256, border 7, fill 37 | 0.267 | 0.256 | 0.256 | 1.205 |
+| LA | 16 images @ 256×256, border 7, fill 37 | 1.311 | 0.484 | 0.506 | 2.835 |
+| RGB | 16 images @ 256×256, border 7, fill 37 | 1.561 | 0.664 | 0.664 | 2.388 |
+| RGBA | 16 images @ 256×256, border 7, fill 37 | 1.196 | 0.999 | 1.010 | 3.212 |
+| RGBA | 4 images @ 1024×768, border 7, fill 37 | 4.671 | 2.469 | 2.336 | 7.386 |
+
+Serial CPU beat Pillow in each listed mode and cohort; the repeated medium RGBA
+pair measured 1.20×. SIMD ranged from 1.0× to 2.6× Pillow on the medium cohort
+and was 2.0× faster on the large RGBA cohort; it did not reach the overall 5×
+target. Queued GPU was slower than SIMD in every row, so this Expand workload
+does not meet the GPU latency or throughput target. There is no separate
+Parallel CPU result: Expand's current CPU kernel does not use Rayon.
+
+The queued RGBA 256×256 × 16 receipt measured 4,409,344 uploaded bytes,
+4,665,600 readback bytes, one Expand dispatch, and zero mode conversions. This
+is a native byte copy/pad operation, so the remaining GPU cost is data movement
+and host ownership of independent output images rather than shader arithmetic.
+The batch splitter now shares each owned output raster with its lazy result
+instead of cloning the entire materialized image again. Further GPU gains need
+to remove the contiguous host input-stack copy or let per-image outputs share
+storage safely; changing the shader's pixel math would not address the measured
+transfer volume. Treat this as a documented performance blocker for this
+operation and keep the queued API separate from ordinary image routing.
+
+The target-only fault-contract lane injects a grouped dimension error and a
+grouped allocation error. For both, it verifies one exact GPU fallback per
+image, preserved result order and metadata behavior, and a successful follow-up
+join. These injected internal faults have no Pillow oracle case; the ordinary
+parity cases establish their returned image values.

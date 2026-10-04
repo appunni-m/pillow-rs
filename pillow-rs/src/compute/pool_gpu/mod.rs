@@ -19079,6 +19079,7 @@ fn gpu_batch_group_limit_for_limits(
     let multiply = matches!(op, PipelineOp::Multiply { .. });
     let native_brightness = matches!(op, PipelineOp::Brightness { .. });
     let native_invert = matches!(op, PipelineOp::Invert);
+    let native_expand = matches!(op, PipelineOp::Expand { .. });
     let masked_paste = matches!(
         op,
         PipelineOp::Paste {
@@ -19087,17 +19088,18 @@ fn gpu_batch_group_limit_for_limits(
             ..
         }
     );
-    let channels = if multiply || masked_paste || native_brightness || native_invert {
-        match logical_mode {
-            "L" => Some(1u64),
-            "LA" => Some(2),
-            "RGB" => Some(3),
-            "RGBA" => Some(4),
-            _ => None,
-        }
-    } else {
-        Some(1)
-    };
+    let channels =
+        if multiply || masked_paste || native_brightness || native_invert || native_expand {
+            match logical_mode {
+                "L" => Some(1u64),
+                "LA" => Some(2),
+                "RGB" => Some(3),
+                "RGBA" => Some(4),
+                _ => None,
+            }
+        } else {
+            Some(1)
+        };
     let Some(channels) = channels else {
         return 0;
     };
@@ -19114,9 +19116,13 @@ fn gpu_batch_group_limit_for_limits(
             mask_alpha: false,
             ..
         }
-        | PipelineOp::Color3DLut { .. } => 0,
+        | PipelineOp::Color3DLut { .. }
+        | PipelineOp::Expand { .. } => 0,
         _ => return 0,
     };
+    if native_expand && !cfg!(target_endian = "little") {
+        return 0;
+    }
     let Some(per_image_height) = height.checked_add(halo) else {
         return 0;
     };
@@ -19125,36 +19131,86 @@ fn gpu_batch_group_limit_for_limits(
         let Ok(count) = u32::try_from(count) else {
             return false;
         };
-        let Some(stacked_height) = per_image_height.checked_mul(count) else {
-            return false;
+        let (stacked_dimensions, output_dimensions) = if let PipelineOp::Expand { border, .. } = op
+        {
+            let Some(border_twice) = border.checked_mul(2) else {
+                return false;
+            };
+            let Some(output_width) = width.checked_add(border_twice) else {
+                return false;
+            };
+            let Some(output_height) = height
+                .checked_add(border_twice)
+                .and_then(|image_height| image_height.checked_mul(count))
+            else {
+                return false;
+            };
+            let Some(stacked_height) = output_height.checked_sub(border_twice) else {
+                return false;
+            };
+            ((width, stacked_height), (output_width, output_height))
+        } else {
+            let Some(stacked_height) = per_image_height.checked_mul(count) else {
+                return false;
+            };
+            let dimensions = (width, stacked_height);
+            (dimensions, dimensions)
         };
-        let stacked_dimensions = (width, stacked_height);
-        let pixels = u64::from(width) * u64::from(stacked_height);
+        let input_pixels = u64::from(stacked_dimensions.0) * u64::from(stacked_dimensions.1);
+        let output_pixels = u64::from(output_dimensions.0) * u64::from(output_dimensions.1);
         // The ordinary filter/extract layouts address one packed u32 per
         // pixel. Native-byte Multiply and Brightness address four stored
         // samples per word, so their device-buffer bounds use the source
         // mode's actual byte width.
-        let buffer_words = if masked_paste {
-            let Some(source_bytes) = pixels.checked_mul(channels) else {
+        let buffer_words = if native_expand {
+            let Some(source_bytes) = input_pixels.checked_mul(channels) else {
                 return false;
             };
-            let Some(words) = source_bytes.div_ceil(4).checked_add(pixels.div_ceil(4)) else {
+            let Some(output_bytes) = output_pixels.checked_mul(channels) else {
+                return false;
+            };
+            if source_bytes == 0
+                || source_bytes > u64::from(u32::MAX)
+                || output_bytes == 0
+                || output_bytes > u64::from(u32::MAX)
+                || plan_native_expand_output_dispatch(output_bytes, max_workgroups_per_dimension)
+                    .is_none()
+            {
+                return false;
+            }
+            // The ordinary pipeline's BufferPool is sized in pixels even
+            // though native Expand transfers compact bytes. Keep its static
+            // capacity and device binding bound here; the separate compact
+            // readback planner above proves the native output word grid.
+            input_pixels.max(output_pixels)
+        } else if masked_paste {
+            let Some(source_bytes) = input_pixels.checked_mul(channels) else {
+                return false;
+            };
+            let Some(words) = source_bytes
+                .div_ceil(4)
+                .checked_add(input_pixels.div_ceil(4))
+            else {
                 return false;
             };
             words
         } else if multiply || native_brightness || native_invert {
-            let Some(sample_bytes) = pixels.checked_mul(channels) else {
+            let Some(sample_bytes) = input_pixels.checked_mul(channels) else {
                 return false;
             };
             sample_bytes.div_ceil(4)
         } else {
-            pixels
+            input_pixels
         };
         let Ok(buffer_capacity) = u32::try_from(buffer_words) else {
             return false;
         };
-        if pixels == 0
-            || (masked_paste && pixels > u64::from(GPU_BUFFER_CAPACITY))
+        if input_pixels == 0
+            || output_pixels == 0
+            || (native_expand
+                && (input_pixels > u64::from(GPU_BUFFER_CAPACITY)
+                    || output_pixels > u64::from(GPU_BUFFER_CAPACITY)))
+            || (masked_paste && input_pixels > u64::from(GPU_BUFFER_CAPACITY))
             || buffer_words > u64::from(GPU_BUFFER_CAPACITY)
             || gpu_buffer_capacity_exceeds_limits(
                 buffer_capacity,
@@ -19175,11 +19231,11 @@ fn gpu_batch_group_limit_for_limits(
             };
             if plan_gpu_native_masked_byte_paste(
                 width,
-                stacked_height,
+                stacked_dimensions.1,
                 width,
-                stacked_height,
+                stacked_dimensions.1,
                 width,
-                stacked_height,
+                stacked_dimensions.1,
                 bytes_per_pixel,
                 max_workgroups_per_dimension,
                 max_storage_buffer_binding_size,
@@ -19212,7 +19268,7 @@ fn gpu_batch_group_limit_for_limits(
         ) && !gpu_shader_work_requires_cpu(
             op,
             stacked_dimensions,
-            stacked_dimensions,
+            output_dimensions,
             Some(logical_mode),
         )
     };
@@ -34152,6 +34208,52 @@ mod tests {
     fn explicit_gpu_batch_planner_caps_static_device_and_dispatch_boundaries() {
         let extract_band = PipelineOp::ExtractBand { index: 3 };
         let default_limits = (u32::MAX, u64::MAX, 65_535);
+
+        // Expand adds its border to both axes, keeps mode-native byte
+        // channels, and packs fill rows between source images. Bound input
+        // and output storage plus the adapter's actual dispatch grid.
+        let expand = PipelineOp::Expand {
+            border: 1,
+            fill: (11, 23, 37, 49),
+        };
+        for mode in ["L", "LA", "RGB", "RGBA"] {
+            let cap =
+                gpu_batch_group_limit_for_limits(&expand, mode, (4, 3), 100, 600, 600, 65_535);
+            assert_eq!(cap, 5, "wrong bounded native Expand cap for {mode}");
+            // BufferPool capacities are pixel-sized u32 storage even when
+            // Expand's actual upload/readback remains a compact 1–4 byte
+            // native image. The planner must respect that allocation size.
+            let buffer_bytes = 6u64 * 5 * cap as u64 * 4;
+            assert!(buffer_bytes <= 600);
+            assert!(
+                6u64 * 5 * (cap as u64 + 1) * 4 > 600,
+                "next {mode} group must exceed the device buffer limit"
+            );
+        }
+        // The border participates in output dispatch dimensions. One 14×14
+        // source fits a one-workgroup device after expansion, while two do
+        // not; the planner must cap the group before allocation.
+        assert_eq!(
+            gpu_batch_group_limit_for_limits(&expand, "L", (14, 14), 2, u32::MAX, u64::MAX, 1,),
+            1
+        );
+        let overflowing_expand = PipelineOp::Expand {
+            border: u32::MAX,
+            fill: (0, 0, 0, 0),
+        };
+        assert_eq!(
+            gpu_batch_group_limit_for_limits(
+                &overflowing_expand,
+                "RGBA",
+                (4, 3),
+                2,
+                u32::MAX,
+                u64::MAX,
+                65_535,
+            ),
+            0
+        );
+
         let cap = gpu_batch_group_limit_for_limits(
             &extract_band,
             "RGBA",
