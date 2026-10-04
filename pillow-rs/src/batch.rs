@@ -4,7 +4,8 @@
 //! image routing. Grouped workloads reuse the existing operation pipelines
 //! over compatible native-mode images packed into one image, then split the
 //! results back into ordinary per-image results. Grouped operations reuse
-//! `MedianFilter(3)`, `MaxFilter(3)`, `ExtractBand`, `ImageOps.invert`, native-mode `Brightness`,
+//! `MedianFilter(3)`, `MaxFilter(3)`, native-L `RankFilter(3, 1)`,
+//! `ExtractBand`, `ImageOps.invert`, native-mode `Brightness`,
 //! `ImageChops.multiply`, and same-mode RGBA `Color3DLUT` pipelines. Full-frame
 //! native-mode masked Paste jobs with L masks also reuse the existing Paste
 //! pipeline. Images that cannot be grouped use their ordinary single-image
@@ -28,6 +29,13 @@ pub enum BatchOperation {
     MaxFilter {
         /// Odd square filter size.
         size: u32,
+    },
+    /// Apply Pillow's native-L `ImageFilter.RankFilter(3, rank=1)` operation.
+    RankFilter {
+        /// Odd square filter size.
+        size: u32,
+        /// Zero-based order-statistic rank.
+        rank: u32,
     },
     /// Extract one byte channel using Pillow's `Image.getchannel` operation.
     ExtractBand {
@@ -72,6 +80,7 @@ impl BatchOperation {
         match self {
             Self::MedianFilter { size } => image.median_filter(*size),
             Self::MaxFilter { size } => image.max_filter(*size),
+            Self::RankFilter { size, rank } => image.rank_filter(*size, *rank),
             Self::ExtractBand { channel } => image.getchannel(*channel),
             Self::Invert => crate::ops::imageops::invert_ops(image),
             Self::Brightness { factor } => image.enhance_brightness(*factor),
@@ -121,6 +130,7 @@ impl BatchOperation {
         };
         match self {
             Self::MedianFilter { size } | Self::MaxFilter { size } => *size == 3,
+            Self::RankFilter { size, rank } => mode == "L" && *size == 3 && *rank == 1,
             Self::ExtractBand { channel } => {
                 usize::try_from(*channel).is_ok_and(|channel| channel < channels)
             }
@@ -165,6 +175,16 @@ impl BatchOperation {
                 left == right
             }
             (Self::MaxFilter { size: left }, Self::MaxFilter { size: right }) => left == right,
+            (
+                Self::RankFilter {
+                    size: left_size,
+                    rank: left_rank,
+                },
+                Self::RankFilter {
+                    size: right_size,
+                    rank: right_rank,
+                },
+            ) => left_size == right_size && left_rank == right_rank,
             (Self::ExtractBand { channel: left }, Self::ExtractBand { channel: right }) => {
                 left == right
             }
@@ -201,6 +221,10 @@ impl BatchOperation {
         match self {
             Self::MedianFilter { size } => Some(PipelineOp::MedianFilter { size: *size }),
             Self::MaxFilter { size } => Some(PipelineOp::MaxFilter { size: *size }),
+            Self::RankFilter { size, rank } => Some(PipelineOp::RankFilter {
+                size: *size,
+                rank: *rank,
+            }),
             Self::ExtractBand { channel } => Some(PipelineOp::ExtractBand {
                 index: u8::try_from(*channel).ok()?,
             }),
@@ -248,7 +272,8 @@ struct BatchJob {
 ///
 /// `queue = false` applies each operation immediately using the ordinary
 /// single-image route. With `queue = true`, [`join`](Self::join) groups
-/// compatible `MedianFilter(3)` and `MaxFilter(3)`, `ExtractBand`, L/RGB `ImageOps.invert`, exact-factor native-mode
+/// compatible `MedianFilter(3)`, `MaxFilter(3)`, and native-L
+/// `RankFilter(3, rank=1)`, `ExtractBand`, L/RGB `ImageOps.invert`, exact-factor native-mode
 /// `Brightness`, `ImageChops.multiply`, full-frame masked Paste, and same-mode
 /// RGBA `Color3DLUT` jobs when GPU is the selected backend. Grouping currently
 /// requires equal-size native byte modes `L`, `LA`, `RGB`, and `RGBA`; batched
@@ -457,7 +482,9 @@ impl BatchExecutor {
             .and_then(|width| width.checked_mul(channels))
             .ok_or_else(|| PilError::DimensionError("batch row size overflow".into()))?;
         let (halo, stacked_height, output_mode, output_channels) = match &first.operation {
-            BatchOperation::MedianFilter { size: 3 } | BatchOperation::MaxFilter { size: 3 } => {
+            BatchOperation::MedianFilter { size: 3 }
+            | BatchOperation::MaxFilter { size: 3 }
+            | BatchOperation::RankFilter { size: 3, rank: 1 } => {
                 let group_len = u32::try_from(indices.len())
                     .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
                 let guarded_height = height
@@ -1041,6 +1068,45 @@ mod tests {
                 .collect::<Vec<_>>();
             assert_eq!(actual, expected, "queued {mode} MaxFilter outputs differ");
         }
+    }
+
+    #[test]
+    fn rank_filter_batches_only_native_l_second_minimum() {
+        let operation = BatchOperation::RankFilter { size: 3, rank: 1 };
+        assert!(operation.can_group("L", (17, 9)));
+        assert!(!operation.can_group("LA", (17, 9)));
+        assert!(!operation.can_group("RGB", (17, 9)));
+        assert!(!BatchOperation::RankFilter { size: 3, rank: 0 }.can_group("L", (17, 9)));
+        assert!(!BatchOperation::RankFilter { size: 3, rank: 8 }.can_group("L", (17, 9)));
+        assert!(!BatchOperation::RankFilter { size: 5, rank: 1 }.can_group("L", (17, 9)));
+        assert!(operation.matches_group(&BatchOperation::RankFilter { size: 3, rank: 1 }));
+        assert!(!operation.matches_group(&BatchOperation::RankFilter { size: 3, rank: 0 }));
+        assert!(matches!(
+            operation.pipeline_op(),
+            Some(PipelineOp::RankFilter { size: 3, rank: 1 })
+        ));
+    }
+
+    #[test]
+    fn queued_rank_filter_uses_exact_existing_native_mode_operation() {
+        let sources = [fixture("L", 17, 9, 1, 23), fixture("L", 17, 9, 1, 89)];
+        let expected = sources
+            .iter()
+            .map(|source| source.rank_filter(3, 1).unwrap().tobytes().unwrap())
+            .collect::<Vec<_>>();
+        let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+        for source in sources {
+            batch
+                .submit(source, BatchOperation::RankFilter { size: 3, rank: 1 })
+                .unwrap();
+        }
+        let actual = batch
+            .join()
+            .unwrap()
+            .iter()
+            .map(|image| image.tobytes().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
     }
 
     #[test]

@@ -21,6 +21,11 @@ maxima.submit(image_a, ImageFilter.MaxFilter(3))
 maxima.submit(image_b, ImageFilter.MaxFilter(3))
 max_a, max_b = maxima.join()
 
+ranked = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+ranked.submit(gray_a, ImageFilter.RankFilter(3, rank=1))
+ranked.submit(gray_b, ImageFilter.RankFilter(3, rank=1))
+rank_a, rank_b = ranked.join()
+
 channels = ImageBatch.BatchExecutor(queue=True, backend="gpu")
 channels.submit(rgba_a, ImageBatch.ExtractBand(3))
 channels.submit(rgba_b, ImageBatch.ExtractBand(3))
@@ -59,7 +64,8 @@ color_a, color_b = colors.join()
 With `queue=False` (the default), `submit` executes each operation immediately
 through its ordinary single-image pipeline. With `queue=True`, submissions wait
 until `join`, which returns results in submission order. A batch accepts
-`ImageFilter.MedianFilter(3)` and `ImageFilter.MaxFilter(3)`,
+`ImageFilter.MedianFilter(3)`, `ImageFilter.MaxFilter(3)`, and native-L
+`ImageFilter.RankFilter(3, rank=1)`,
 `ImageBatch.ExtractBand(channel)`,
 `ImageBatch.Invert()`, `ImageBatch.Brightness(factor)`,
 `ImageBatch.Multiply(other_image)`, full-frame
@@ -76,8 +82,11 @@ converted to RGBA. A queued job that has no compatible peer runs through the
 regular single-image operation at `join`.
 
 The GPU group is a native-mode vertical stack. For `MedianFilter(3)` and
-`MaxFilter(3)`, one replicated top and bottom row surrounds each image, so the
-filter cannot read pixels from a neighbor at a group boundary. For
+`MaxFilter(3)`, and native-L `RankFilter(3, rank=1)`, one replicated top and
+bottom row surrounds each image, so the filter cannot read pixels from a
+neighbor at a group boundary. RankFilter batching is currently limited to the
+packed-L second-minimum kernel; other modes, sizes, and ranks retain the
+ordinary per-image path. For
 `ExtractBand`, `Invert`, `Brightness`, `Multiply`, `Paste`, and `Color3DLUT`,
 images are stacked directly because each output pixel depends only on
 corresponding input pixels. Brightness groups same-factor L, LA, and RGB images
@@ -174,6 +183,51 @@ serial CPU cohort beats Pillow in each case. SIMD is 2.1–7.0× faster than
 Pillow at 64×64 and 3.6–3.8× at 256×256, so the 5× SIMD target is not proven
 for most of these workloads. This is explicit batch throughput evidence only;
 it does not change ordinary `ImageFilter.MaxFilter` routing.
+
+### Native-L `ImageFilter.RankFilter(3, rank=1)` batch probe
+
+Queued native-L rank-one jobs use the existing packed-L second-minimum
+pipeline. Equal-size images share a vertical stack with one replicated row at
+each image edge; `join()` issues one GPU dispatch for a compatible group and
+returns independent L images. `queue=False`, other modes, other sizes, and
+other ranks follow their normal per-image operation. This extends only the
+explicit `ImageBatch` API and does not change ordinary `Image.filter` routing.
+
+The isolated parity lane checks exact Pillow bytes for tie-heavy constant
+images, an odd-width/height group, a single-column fallback, a material
+256×256 group, and non-groupable L/LA ranks. It also verifies output mode,
+dimensions, per-image metadata, eager execution, zero mode conversions, and
+one packed-L shader dispatch for each compatible GPU group.
+
+On this Apple-silicon host, the following cohort processed 16 L images at
+256×256 per call. Each value is the median of 12 full-call windows after 3
+warmups; the window includes image construction, submission, execution,
+transfer and synchronization, splitting, and `tobytes()` for every output.
+Pillow is ordinary sequential Pillow. The CPU and SIMD columns use
+`BatchExecutor(queue=False)`; the GPU columns use the same API with
+`queue=False` and `queue=True` respectively.
+
+| Profile | Full-call p50 (ms) | Images/s | Speedup over Pillow |
+| --- | ---: | ---: | ---: |
+| Pillow sequential | 26.050 | 614 | 1.00× |
+| CPU | 7.263 | 2,203 | 3.59× |
+| SIMD | 7.511 | 2,130 | 3.47× |
+| GPU eager | 4.183 | 3,825 | 6.23× |
+| GPU queued | 1.513 | 10,577 | 17.22× |
+
+Queued GPU reached 4.97× the SIMD throughput and 2.77× eager-GPU throughput;
+the parity run confirmed one real packed-L shader dispatch for the 16-image
+group, with zero mode conversions. CPU was 3.59× faster than Pillow; SIMD was
+3.47× faster, below the campaign's 5× SIMD target for this batch-driver
+cohort. These values do not replace the ordinary per-image operation
+benchmark.
+
+A 1024×768 × 4 probe measured queued GPU at 1,238 images/s, above SIMD at
+177 images/s and Pillow at 52 images/s. In that smaller large-image cohort,
+eager GPU reached 1,586 images/s, so stack preparation and result splitting
+outweighed the saved submissions. The queued path is intended for enough
+compatible jobs to amortize that work; queueing does not guarantee a win over
+eager GPU for every cohort size.
 
 See the [command reference](COMMANDS.md) for isolated Pillow parity and
 reproducible batch benchmark commands.

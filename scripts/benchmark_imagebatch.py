@@ -44,6 +44,7 @@ def parse_args() -> argparse.Namespace:
         choices=(
             "median-filter",
             "max-filter",
+            "rank-filter",
             "extract-band",
             "invert",
             "brightness",
@@ -75,6 +76,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("ImageOps.invert supports only L and RGB modes")
     if args.operation == "color3dlut" and args.mode != "RGBA":
         parser.error("the explicit Color3DLUT batch currently requires mode RGBA")
+    if args.operation == "rank-filter" and args.mode != "L":
+        parser.error("the explicit RankFilter batch currently requires native L mode")
     if args.backend == "pillow" and args.queue:
         parser.error("Pillow baseline is ordinary sequential execution; omit --queue")
     return args
@@ -162,6 +165,8 @@ def main() -> int:
                     image.filter(ImageFilter.MedianFilter(3)).tobytes()
                 elif args.operation == "max-filter":
                     image.filter(ImageFilter.MaxFilter(3)).tobytes()
+                elif args.operation == "rank-filter":
+                    image.filter(ImageFilter.RankFilter(3, rank=1)).tobytes()
                 elif args.operation == "extract-band":
                     image.getchannel(args.channel).tobytes()
                 elif args.operation == "invert":
@@ -203,6 +208,8 @@ def main() -> int:
                 operation = ImageFilter.MedianFilter(3)
             elif args.operation == "max-filter":
                 operation = ImageFilter.MaxFilter(3)
+            elif args.operation == "rank-filter":
+                operation = ImageFilter.RankFilter(3, rank=1)
             elif args.operation == "extract-band":
                 operation = ImageBatch.ExtractBand(args.channel)
             elif args.operation == "invert":

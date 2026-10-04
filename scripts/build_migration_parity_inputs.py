@@ -42466,6 +42466,43 @@ def build_nuanced_cases(
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
+        # Keep L RankFilter(3, rank=1) boundary and material inputs in the
+        # indexed mode-L coverage plan as well as the performance cohort. This
+        # lets incremental coverage measure the native L specialization itself
+        # instead of rejecting these parity-only cases as unindexed.
+        for name, size, seed in (
+            (
+                "backend-native-l-rank3-middle-tail-33x35",
+                [33, 35],
+                20261124,
+            ),
+            (
+                "backend-native-l-rank3-single-column-1x11",
+                [1, 11],
+                20261125,
+            ),
+            (
+                "performance-material-l-rank3-noise-1024x768",
+                [1024, 768],
+                20261126,
+            ),
+        ):
+            spec = {
+                "surface": "PIL.ImageFilter",
+                "operation": "RankFilter",
+                "requirement_suffix": "mode.l",
+                "additional_requirement_suffixes": ["performance.standard"],
+                "name": name,
+                "mode": "L",
+                "size": size,
+                "edge": "noise-ref-fill",
+                "seed": seed,
+                "observe_result": "tobytes",
+                "values": {"size": literal(3), "rank": literal(1)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            specs += (spec,)
+
         # LA's 3x3 rank filter is supported by Pillow and uses independent
         # order statistics for L and alpha. Keep endpoint, center, odd-tail,
         # and material cases on a shared content-addressed byte asset so the
@@ -50718,6 +50755,45 @@ def build_pipeline_benchmark_document(
                 variant="rank-filter-material-noise-256x256",
                 surface=rank_material_case["surface"],
                 operation=rank_material_case["operation"],
+            ),
+        }
+    )
+
+    rank_l_material_case_id = (
+        "PIL.ImageFilter.RankFilter.nuanced."
+        "performance-material-l-rank3-noise-1024x768"
+    )
+    rank_l_material_case = cases_by_id.get(rank_l_material_case_id)
+    if rank_l_material_case is None:
+        raise ValueError(
+            f"L rank-filter benchmark references missing case: {rank_l_material_case_id}"
+        )
+    rank_l_material_measurement = copy.deepcopy(chain_policy)
+    rank_l_material_measurement.update(
+        {
+            "boundary": "observed_steps",
+            "step_ids": ["apply-filter", "observe-filter-result"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        }
+    )
+    rank_filter_workloads.append(
+        {
+            "workload_id": "pipeline-chain.rank-filter.material.l-noise-1024x768-size3-rank1",
+            "covers": [rank_requirement],
+            "subjects": benchmark_subjects(),
+            "input": {
+                "kind": "parity_case",
+                "case_id": rank_l_material_case_id,
+            },
+            "measurement": rank_l_material_measurement,
+            "context": _workflow_benchmark_context(
+                rank_l_material_case,
+                variant="rank-filter-material-noise-1024x768-size3-rank1",
+                surface=rank_l_material_case["surface"],
+                operation=rank_l_material_case["operation"],
             ),
         }
     )
