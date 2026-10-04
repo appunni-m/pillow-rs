@@ -24016,7 +24016,7 @@ fn resize_horizontal_convolution_row(
 ) -> Option<(u64, u64)> {
     let precompute_la_luma = premultiplied_alpha && cover_byte_i32 && channels == 2;
     let (source_row, premultiply_in_kernel) =
-        if premultiplied_alpha && (!cover_byte_i32 || channels == 2) {
+        if premultiplied_alpha && (!cover_byte_i32 || channels == 2 || channels == 4) {
             resize_premultiply_alpha_row(source_row, channels, premultiplied_row)?;
             (&*premultiplied_row, false)
         } else {
@@ -24627,11 +24627,11 @@ fn resize_vertical_hsv_i32_vector_row(
     Some((vector_blocks, scalar_tail))
 }
 
-/// CMYK's four stored bytes are independent samples, including K in the fourth
-/// lane. Once both coefficient tables pass the byte-domain bound, accumulate
-/// each native channel in i32 instead of widening every product to i64.
+/// Accumulate four interleaved byte channels with bounded i32 sums. CMYK uses
+/// four independent samples; RGBA reaches this kernel only after the caller
+/// has premultiplied its native RGB channels by alpha.
 #[allow(clippy::arithmetic_side_effects)] // The coefficient bound guarantees SIMD sums cannot wrap.
-fn resize_horizontal_cmyk_i32_vector_row(
+fn resize_horizontal_four_channel_i32_vector_row(
     source_row: &[u8],
     coeffs: &FilterCoeffs,
     plan: &ResizeHorizontalPlan,
@@ -24664,11 +24664,13 @@ fn resize_horizontal_cmyk_i32_vector_row(
             let mut samples = [[0i32; SIMD_RESIZE_LANES]; 4];
             for lane in 0..SIMD_RESIZE_LANES {
                 if tap.weights[lane] != 0 {
-                    let source_base = tap.source_bases[lane];
-                    for (channel, channel_samples) in samples.iter_mut().enumerate() {
-                        channel_samples[lane] =
-                            i32::from(*source_row.get(source_base.checked_add(channel)?)?);
-                    }
+                    let source_start = tap.source_bases[lane];
+                    let source_pixel =
+                        source_row.get(source_start..source_start.checked_add(4)?)?;
+                    samples[0][lane] = i32::from(source_pixel[0]);
+                    samples[1][lane] = i32::from(source_pixel[1]);
+                    samples[2][lane] = i32::from(source_pixel[2]);
+                    samples[3][lane] = i32::from(source_pixel[3]);
                 }
             }
             let weights = i32x8::new(tap.weights);
@@ -24705,17 +24707,18 @@ fn resize_horizontal_cmyk_i32_vector_row(
     Some((vector_blocks, scalar_tail))
 }
 
-/// Vertical counterpart to the native CMYK i32 horizontal pass. Each of C,
-/// M, Y, and K is filtered independently; the fourth byte is not treated as
-/// alpha and is never premultiplied.
+/// Vertical counterpart to the four-channel i32 horizontal pass. For RGBA,
+/// `premultiplied_alpha` means RGB is restored after filtering; CMYK keeps all
+/// four stored samples independent.
 #[allow(clippy::arithmetic_side_effects)] // The coefficient bound guarantees SIMD sums cannot wrap.
-fn resize_vertical_cmyk_i32_vector_row(
+fn resize_vertical_four_channel_i32_vector_row(
     intermediate: &[u8],
     output_width: usize,
     source_height: usize,
     coeffs: &FilterCoeffs,
     output_y: usize,
     output_row: &mut [u8],
+    premultiplied_alpha: bool,
 ) -> Option<(u64, u64)> {
     let weights = resize_coeff_slice(coeffs, output_y)?;
     let y0 = usize::try_from(*coeffs.xmin.get(output_y)?).ok()?;
@@ -24751,7 +24754,15 @@ fn resize_vertical_cmyk_i32_vector_row(
                 *sum += i32x8::new(channel_samples) * weight;
             }
         }
-        let result = sums.map(|sum| sum.to_array().map(resize_fixed_point_i32_to_u8));
+        let mut result = sums.map(|sum| sum.to_array().map(resize_fixed_point_i32_to_u8));
+        if premultiplied_alpha {
+            for lane in 0..SIMD_RESIZE_LANES {
+                let alpha = result[3][lane];
+                for channel in &mut result[..3] {
+                    channel[lane] = resize_unpremultiply_u8(channel[lane], alpha);
+                }
+            }
+        }
         for lane in 0..count {
             let output_start = (output_x + lane).checked_mul(4)?;
             for (channel, channel_result) in result.iter().enumerate() {
@@ -24768,7 +24779,8 @@ fn resize_vertical_cmyk_i32_vector_row(
     };
     for output_x in scalar_start..output_width {
         let output_start = output_x.checked_mul(4)?;
-        for channel in 0..4 {
+        let mut pixel = [0u8; 4];
+        for (channel, output) in pixel.iter_mut().enumerate() {
             let mut sum = 0i32;
             for (tap, &weight) in weights.iter().enumerate() {
                 let source_y = y0.checked_add(tap)?;
@@ -24782,9 +24794,17 @@ fn resize_vertical_cmyk_i32_vector_row(
                     .checked_add(channel)?;
                 sum += i32::from(*intermediate.get(source_index)?) * i32::try_from(weight).ok()?;
             }
-            *output_row.get_mut(output_start.checked_add(channel)?)? =
-                resize_fixed_point_i32_to_u8(sum);
+            *output = resize_fixed_point_i32_to_u8(sum);
         }
+        if premultiplied_alpha {
+            let alpha = pixel[3];
+            for channel in &mut pixel[..3] {
+                *channel = resize_unpremultiply_u8(*channel, alpha);
+            }
+        }
+        output_row
+            .get_mut(output_start..output_start.checked_add(4)?)?
+            .copy_from_slice(&pixel);
         scalar_tail = scalar_tail.saturating_add(1);
     }
     Some((vector_blocks, scalar_tail))
@@ -24819,7 +24839,14 @@ fn resize_horizontal_cover_i32_vector_row(
         (3, false) => {
             resize_horizontal_hsv_i32_vector_row(source_row, coeffs, plan, output_width, output_row)
         }
-        (4, false) => resize_horizontal_cmyk_i32_vector_row(
+        (4, false) => resize_horizontal_four_channel_i32_vector_row(
+            source_row,
+            coeffs,
+            plan,
+            output_width,
+            output_row,
+        ),
+        (4, true) => resize_horizontal_four_channel_i32_vector_row(
             source_row,
             coeffs,
             plan,
@@ -24865,13 +24892,23 @@ fn resize_vertical_cover_i32_vector_row(
             output_y,
             output_row,
         ),
-        (4, false) => resize_vertical_cmyk_i32_vector_row(
+        (4, false) => resize_vertical_four_channel_i32_vector_row(
             intermediate,
             output_width,
             source_height,
             coeffs,
             output_y,
             output_row,
+            false,
+        ),
+        (4, true) => resize_vertical_four_channel_i32_vector_row(
+            intermediate,
+            output_width,
+            source_height,
+            coeffs,
+            output_y,
+            output_row,
+            true,
         ),
         _ => None,
     }
@@ -25614,10 +25651,9 @@ fn simd_resize_convolution_into(
     let horizontal = precompute_coeffs(output_width as u32, source_width as u32, filter);
     let vertical = precompute_coeffs(output_height as u32, source_height as u32, filter);
     let cover_byte_i32 = cover_byte_i32
-        && matches!(filter, ResampleFilter::Bicubic)
         && matches!(
             (channels, premultiplied_alpha),
-            (1, false) | (2, true) | (3, false) | (4, false)
+            (1, false) | (2, true) | (3, false) | (4, false) | (4, true)
         )
         && resize_u8_coefficients_fit_i32(&horizontal)
         && resize_u8_coefficients_fit_i32(&vertical);
@@ -25642,8 +25678,7 @@ fn simd_resize_convolution_into(
         .checked_mul(channels)
         .ok_or_else(|| simd_unsupported("Resize"))?;
     let source = img.as_bytes();
-    let mut premultiplied_source_row = if premultiplied_alpha && (!cover_byte_i32 || channels == 2)
-    {
+    let mut premultiplied_source_row = if premultiplied_alpha {
         vec![0u8; source_stride]
     } else {
         Vec::new()
@@ -28404,7 +28439,7 @@ pub fn simd_resize(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    simd_resize_impl(img, op, mode, false, 0, false)
+    simd_resize_impl(img, op, mode, true, 0, false)
 }
 
 fn simd_resize_impl(
@@ -34881,6 +34916,72 @@ mod tests {
                     narrow, widened,
                     "sample pattern {pattern}, {width}x{height} -> {output_width}x{output_height}"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn rgba_i32_resize_matches_widened_for_filters_and_alpha_patterns() {
+        for (width, height, output_width, output_height) in
+            [(5u32, 3u32, 7u32, 5u32), (37, 17, 53, 23), (73, 41, 13, 9)]
+        {
+            for filter in [
+                ResampleFilter::Bilinear,
+                ResampleFilter::Bicubic,
+                ResampleFilter::Lanczos,
+                ResampleFilter::Hamming,
+                ResampleFilter::Box,
+            ] {
+                let horizontal = super::precompute_coeffs(output_width, width, filter);
+                let vertical = super::precompute_coeffs(output_height, height, filter);
+                assert!(super::resize_u8_coefficients_fit_i32(&horizontal));
+                assert!(super::resize_u8_coefficients_fit_i32(&vertical));
+                let operation = PipelineOp::Resize {
+                    w: output_width,
+                    h: output_height,
+                    filter,
+                };
+
+                for pattern in 0..4u32 {
+                    let source = (0..width * height)
+                        .flat_map(|index| {
+                            let alpha = match pattern {
+                                0 => 0,
+                                1 => 255,
+                                2 if (index + index / width) % 2 == 0 => 0,
+                                2 => 255,
+                                _ => index.wrapping_mul(47).wrapping_add(index / width * 61) as u8,
+                            };
+                            [
+                                index.wrapping_mul(73).wrapping_add(31) as u8,
+                                index.wrapping_mul(29).wrapping_add(19) as u8,
+                                index.wrapping_mul(97).wrapping_add(11) as u8,
+                                alpha,
+                            ]
+                        })
+                        .collect::<Vec<_>>();
+                    let image = DynamicImage::ImageRgba8(
+                        RgbaImage::from_raw(width, height, source).expect("test RGBA image shape"),
+                    );
+                    let widened = super::simd_resize_convolution(
+                        &image,
+                        output_width,
+                        output_height,
+                        filter,
+                        4,
+                        true,
+                        false,
+                    )
+                    .expect("wide SIMD RGBA resize");
+                    let narrow = super::simd_resize(&image, &operation, Some("RGBA"))
+                        .expect("bounded i32 SIMD RGBA resize");
+                    assert!(matches!(narrow, DynamicImage::ImageRgba8(_)));
+                    assert_eq!(
+                        narrow.as_bytes(),
+                        widened.as_bytes(),
+                        "{width}x{height}->{output_width}x{output_height} {filter:?} pattern {pattern}"
+                    );
+                }
             }
         }
     }

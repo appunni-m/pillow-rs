@@ -2523,6 +2523,122 @@ fn pil_resize_la_i32(
 }
 
 #[cfg(not(feature = "parallel"))]
+fn horizontal_pass_rgba_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row: &mut [u8]) {
+    for (output_x, output_pixel) in output_row.chunks_exact_mut(4).enumerate() {
+        let weights = coeffs.weights_for(output_x);
+        if weights.is_empty() {
+            continue;
+        }
+        let mut sums = [0i32; 4];
+        let mut source_start = coeffs.xmin[output_x] as usize * 4;
+        for &weight in weights {
+            let weight = weight as i32;
+            for (channel, sum) in sums.iter_mut().enumerate() {
+                *sum += i32::from(source_row[source_start + channel]) * weight;
+            }
+            source_start += 4;
+        }
+        for (output, sum) in output_pixel.iter_mut().zip(sums) {
+            *output = fixed_point_to_u8_i32(sum);
+        }
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn vertical_pass_rgba_i32(
+    intermediate: &[u8],
+    output_width: usize,
+    coeffs: &FilterCoeffs,
+    output: &mut [u8],
+) {
+    let output_stride = output_width * 4;
+    for (output_y, output_row) in output.chunks_exact_mut(output_stride).enumerate() {
+        let weights = coeffs.weights_for(output_y);
+        if weights.is_empty() {
+            continue;
+        }
+        let first_source_row = coeffs.xmin[output_y] as usize * output_stride;
+        for (output_x, output_pixel) in output_row.chunks_exact_mut(4).enumerate() {
+            let source_start = first_source_row + output_x * 4;
+            let mut sums = [0i32; 4];
+            for (tap, &weight) in weights.iter().enumerate() {
+                let pixel_start = source_start + tap * output_stride;
+                let weight = weight as i32;
+                for (channel, sum) in sums.iter_mut().enumerate() {
+                    *sum += i32::from(intermediate[pixel_start + channel]) * weight;
+                }
+            }
+            let alpha = fixed_point_to_u8_i32(sums[3]);
+            output_pixel[0] = unpremultiply_channel(fixed_point_to_u8_i32(sums[0]), alpha);
+            output_pixel[1] = unpremultiply_channel(fixed_point_to_u8_i32(sums[1]), alpha);
+            output_pixel[2] = unpremultiply_channel(fixed_point_to_u8_i32(sums[2]), alpha);
+            output_pixel[3] = alpha;
+        }
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn pil_resize_rgba_i32(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    horizontal: &FilterCoeffs,
+    vertical: &FilterCoeffs,
+) -> Option<Vec<u8>> {
+    let DynamicImage::ImageRgba8(source) = img else {
+        return None;
+    };
+    let source_width = usize::try_from(source.width()).ok()?;
+    let source_height = usize::try_from(source.height()).ok()?;
+    let output_width = usize::try_from(output_width).ok()?;
+    let output_height = usize::try_from(output_height).ok()?;
+    if horizontal.xmin.len() != output_width
+        || vertical.xmin.len() != output_height
+        || !resize_coefficients_fit_source(horizontal, source_width)
+        || !resize_coefficients_fit_source(vertical, source_height)
+        || !resize_u8_coefficients_fit_i32(horizontal)
+        || !resize_u8_coefficients_fit_i32(vertical)
+    {
+        return None;
+    }
+
+    let source_stride = source_width.checked_mul(4)?;
+    let output_stride = output_width.checked_mul(4)?;
+    let intermediate_len = source_height.checked_mul(output_stride)?;
+    let output_len = output_height.checked_mul(output_stride)?;
+    if source.as_raw().len() != source_height.checked_mul(source_stride)? {
+        return None;
+    }
+
+    let mut intermediate = vec![0; intermediate_len];
+    let mut premultiplied_row = vec![0; source_stride];
+    for source_y in 0..source_height {
+        let source_start = source_y.checked_mul(source_stride)?;
+        let output_start = source_y.checked_mul(output_stride)?;
+        for (source_pixel, output_pixel) in source.as_raw()
+            [source_start..source_start + source_stride]
+            .chunks_exact(4)
+            .zip(premultiplied_row.chunks_exact_mut(4))
+        {
+            let alpha = source_pixel[3];
+            output_pixel[0] = premultiply_channel(source_pixel[0], alpha);
+            output_pixel[1] = premultiply_channel(source_pixel[1], alpha);
+            output_pixel[2] = premultiply_channel(source_pixel[2], alpha);
+            output_pixel[3] = alpha;
+        }
+        horizontal_pass_rgba_i32(
+            &premultiplied_row,
+            horizontal,
+            &mut intermediate[output_start..output_start + output_stride],
+        );
+    }
+
+    let mut output = vec![0; output_len];
+    vertical_pass_rgba_i32(&intermediate, output_width, vertical, &mut output);
+    Some(output)
+}
+
+#[cfg(not(feature = "parallel"))]
 fn pil_resize_hsv_i32(
     img: &DynamicImage,
     output_width: u32,
@@ -3538,6 +3654,13 @@ pub fn pil_resize(
     if matches!(explicit_mode, None | Some("LA")) && matches!(img, DynamicImage::ImageLumaA8(_)) {
         if let Some(output) = pil_resize_la_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
             return pil_preserve_mode(orig_img, raw_to_dynamic_owned(output, dw, dh, 2));
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    if needs_alpha && matches!(img, DynamicImage::ImageRgba8(_)) {
+        if let Some(output) = pil_resize_rgba_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
+            return pil_preserve_mode(orig_img, raw_to_dynamic_owned(output, dw, dh, 4));
         }
     }
 
@@ -4754,6 +4877,115 @@ mod narrow_u8_resize_tests {
                 .expect("safe LA coefficients select the narrow path");
         let wide = pil_resize(&image, output_width, output_height, filter, Some("RGB"));
         assert_eq!(specialized, wide.as_bytes());
+    }
+}
+
+#[cfg(all(test, not(feature = "parallel")))]
+mod rgba_i32_resize_tests {
+    use super::{
+        horizontal_pass_rows_alpha, pil_resize, pil_resize_rgba_i32, precompute_coeffs,
+        resize_u8_coefficients_fit_i32, vertical_pass_rows_alpha,
+    };
+    use crate::pipeline::ResampleFilter;
+    use crate::raster::{DynamicImage, RgbaImage};
+
+    fn wide_rgba_reference(
+        image: &DynamicImage,
+        output_width: u32,
+        output_height: u32,
+        horizontal: &super::FilterCoeffs,
+        vertical: &super::FilterCoeffs,
+    ) -> Vec<u8> {
+        let source_height = image.height() as usize;
+        let intermediate_stride = output_width as usize * 4;
+        let mut intermediate = vec![0; source_height * intermediate_stride];
+        horizontal_pass_rows_alpha(
+            image.as_bytes(),
+            image.width(),
+            image.height(),
+            4,
+            horizontal,
+            output_width,
+            &mut intermediate,
+        );
+        let mut output = vec![0; output_height as usize * intermediate_stride];
+        vertical_pass_rows_alpha(
+            &intermediate,
+            image.height(),
+            output_width,
+            output_height,
+            4,
+            vertical,
+            &mut output,
+            0,
+        );
+        output
+    }
+
+    #[test]
+    fn rgba_narrow_cpu_resize_matches_wide_premultiplied_reference() {
+        for (width, height, output_width, output_height) in
+            [(5, 3, 7, 5), (37, 17, 53, 23), (73, 41, 13, 9)]
+        {
+            for filter in [
+                ResampleFilter::Bilinear,
+                ResampleFilter::Bicubic,
+                ResampleFilter::Lanczos,
+                ResampleFilter::Hamming,
+                ResampleFilter::Box,
+            ] {
+                let horizontal = precompute_coeffs(output_width, width, filter);
+                let vertical = precompute_coeffs(output_height, height, filter);
+                assert!(resize_u8_coefficients_fit_i32(&horizontal));
+                assert!(resize_u8_coefficients_fit_i32(&vertical));
+
+                for pattern in 0..4u32 {
+                    let bytes = (0..width * height)
+                        .flat_map(|index| {
+                            let alpha = match pattern {
+                                0 => 0,
+                                1 => 255,
+                                2 if (index + index / width) % 2 == 0 => 0,
+                                2 => 255,
+                                _ => index
+                                    .wrapping_mul(47)
+                                    .wrapping_add(index / width * 61)
+                                    .wrapping_add(7) as u8,
+                            };
+                            [
+                                index.wrapping_mul(73).wrapping_add(31) as u8,
+                                index.wrapping_mul(29).wrapping_add(19) as u8,
+                                index.wrapping_mul(97).wrapping_add(11) as u8,
+                                alpha,
+                            ]
+                        })
+                        .collect::<Vec<_>>();
+                    let image = DynamicImage::ImageRgba8(
+                        RgbaImage::from_raw(width, height, bytes).expect("RGBA test image shape"),
+                    );
+                    let specialized = pil_resize_rgba_i32(
+                        &image,
+                        output_width,
+                        output_height,
+                        &horizontal,
+                        &vertical,
+                    )
+                    .expect("safe RGBA coefficients select the narrow path");
+                    let reference = wide_rgba_reference(
+                        &image,
+                        output_width,
+                        output_height,
+                        &horizontal,
+                        &vertical,
+                    );
+                    assert_eq!(specialized, reference);
+
+                    let public = pil_resize(&image, output_width, output_height, filter, None);
+                    assert_eq!(public.as_bytes(), reference);
+                    assert!(matches!(public, DynamicImage::ImageRgba8(_)));
+                }
+            }
+        }
     }
 }
 
