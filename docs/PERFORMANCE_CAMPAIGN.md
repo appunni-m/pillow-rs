@@ -18523,3 +18523,45 @@ Baseline and attempt receipts are `image-info-main-6a2a079-20261004.json`,
 `image-info-fast-repeat-6a2a079-20261004.json` under
 `build/migration-parity/`. Continue to the next ranked operation; the CPU
 latency target for `Image.info` remains open.
+
+## `Image.mode` cache probe — rejected 2026-10-04
+
+The standard `pil-image-image.mode.standard` workload creates a 16 × 16 RGB
+image and reads the public `mode` property. The binding getter crosses PyO3 and
+returns an owned Rust `String`; a probe cached the exact input spelling from
+`Image.new`, lazily cached other reads, and invalidated on `putalpha`, frame
+`seek`, and `close`. Direct checks covered all 20 currently supported
+`Image.new` modes, the RGB-to-RGBA transition, and the closed-image error.
+
+| Run | Pillow latency | pillow-rs CPU latency | CPU pipeline phase | CPU / Pillow |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline at `5dee7bf4d` | 4.375 µs | 5.208 µs | 1.062 µs | 1.19× |
+| Mode-cache probe | 4.500 µs | 5.375 µs | 1.083 µs | 1.19× |
+
+The relative gap did not change; the target call and pipeline phase were
+slightly slower in the probe run, while the extra cached field added setup
+work. Revert the cache and retain the existing Rust getter. The CPU goal remains
+open. SIMD and GPU labels had no actual backend execution, and Parallel CPU
+does not apply to this scalar metadata query. The selected mode parity case
+passed 1/1, and the parity-gated benchmark passed for all four subjects.
+
+Reproduce with:
+
+```sh
+RUSTC_WRAPPER= \
+MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.mode.behavior.default' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/image-mode-cases-5dee7bf4d-20261004.json \
+make migration-parity-test
+
+RUSTC_WRAPPER= \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.mode.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/image-mode-cached-5dee7bf4d-20261004.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/image-mode-cached-parity-5dee7bf4d-20261004.json \
+make migration-parity-benchmark
+```
+
+The baseline and probe receipts are `image-mode-main-5dee7bf4d-20261004.json`
+and `image-mode-cached-5dee7bf4d-20261004.json` under
+`build/migration-parity/`. Move to the next ranked operation without carrying
+this cache forward.
