@@ -17492,3 +17492,40 @@ Final strict lanes used
 `make migration-parity-test-gpu-strict`; CPU used `make migration-parity-test`
 with `MIGRATION_TARGET_BACKEND=cpu` and strict routing. `cargo fmt --all --
 --check` and `git diff --check` passed. No coverage ran.
+
+## `ImageColor.getcolor` bounded cache checkpoint — 2026-10-04
+
+Pillow 12.2.0 decorates `ImageColor.getcolor` with `functools.lru_cache` at its
+default 128-entry capacity. The target wrapper previously reparsed the same
+color/mode pair on every call. Matching Pillow's bounded cache is safe here:
+the public arguments are hashable strings, successful results are immutable
+integers or tuples, and exceptions remain uncached. The implementation keeps
+the uncached Rust path for misses and adds only a Python wrapper cache hit for
+repeated inputs.
+
+The focused parity lane passed all 46 `PIL.ImageColor` cases on CPU after
+`RUSTC_WRAPPER= make build-parity`. In a direct warm-call measurement, seven
+samples of one million calls each measured the target median at 25.118 ns and
+Pillow at 34.617 ns (target 1.38× faster); the timed loop cost is common to both
+sides. The target cache was warmed with one miss and 9,999 hits before timing.
+The uncached target core call median was 264.690 ns. This direct API timing
+isolates the operation and is the evidence for retaining the cache.
+
+The existing whole-workflow benchmark still reports target CPU at 2.375 µs
+versus Pillow at 2.041 µs after the cache. That row includes parity-adapter
+work inside the timer: operation lookup, descriptor resolution, argument
+packing, target strict-backend lock probes, and telemetry. For this scalar-only
+function, those adapter operations dominate the ~25–35 ns public call, and no
+pixel backend executes. The input currently lists CPU, SIMD, and GPU subjects
+despite the parity case declaring CPU only; its SIMD/GPU numbers are not
+backend evidence. Keep this workflow result visible as unresolved harness data,
+do not relabel it as a CPU win, and fix/document profile applicability and
+timing boundaries before using such tiny host APIs in a cross-backend ranking.
+`ImageColor.getcolor` uses no image storage, so SIMD and GPU are inapplicable.
+
+Receipts: `imagecolor-current-cpu-parity-20261004.json`,
+`imagecolor-getcolor-cached-cpu-parity-20261004.json`,
+`imagecolor-getcolor-current-baseline-20261004.json`, and
+`imagecolor-getcolor-cached-attempt1-20261004.json` under
+`build/migration-parity/`; direct measurements used isolated CPython 3.12
+processes. No coverage ran.
