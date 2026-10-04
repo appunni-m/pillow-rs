@@ -16,7 +16,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 import yaml
 
@@ -39,6 +39,214 @@ def read_json(path: Path) -> dict[str, Any]:
     opener = gzip.open if compressed else open
     with opener(path, "rt", encoding="utf-8") as stream:
         return json.load(stream)
+
+
+class _JsonStreamReader:
+    """Read selected fields from a large JSON document without retaining it."""
+
+    def __init__(self, stream: TextIO, chunk_size: int = 64 * 1024):
+        self.stream = stream
+        self.chunk_size = chunk_size
+        self.buffer = ""
+        self.position = 0
+        self.eof = False
+        self.decoder = json.JSONDecoder()
+
+    def _fill(self) -> bool:
+        if self.position:
+            self.buffer = self.buffer[self.position:]
+            self.position = 0
+        if self.eof:
+            return False
+        chunk = self.stream.read(self.chunk_size)
+        self.buffer += chunk
+        if not chunk:
+            self.eof = True
+            return False
+        return True
+
+    def _skip_whitespace(self) -> None:
+        while True:
+            while self.position < len(self.buffer) and self.buffer[self.position].isspace():
+                self.position += 1
+            if self.position < len(self.buffer) or not self._fill():
+                return
+
+    def peek(self) -> str | None:
+        self._skip_whitespace()
+        if self.position == len(self.buffer):
+            return None
+        return self.buffer[self.position]
+
+    def take(self) -> str | None:
+        if self.position == len(self.buffer) and not self._fill():
+            return None
+        value = self.buffer[self.position]
+        self.position += 1
+        return value
+
+    def expect(self, expected: str) -> None:
+        actual = self.peek()
+        if actual != expected:
+            raise ValueError(f"expected {expected!r} in JSON stream, found {actual!r}")
+        self.take()
+
+    def value(self) -> Any:
+        self._skip_whitespace()
+        while True:
+            try:
+                decoded, end = self.decoder.raw_decode(self.buffer, self.position)
+            except json.JSONDecodeError:
+                if not self._fill():
+                    raise
+            else:
+                self.position = end
+                return decoded
+
+    def _skip_string(self) -> None:
+        if self.take() != '"':
+            raise ValueError("expected a JSON string")
+        escaped = False
+        while True:
+            char = self.take()
+            if char is None:
+                raise ValueError("unterminated JSON string")
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                return
+
+    def skip_value(self) -> None:
+        """Skip one JSON value, including large nested outputs, in bounded memory."""
+        first = self.peek()
+        if first is None:
+            raise ValueError("expected a JSON value")
+        if first == '"':
+            self._skip_string()
+            return
+        if first not in "[{":
+            while (char := self.peek()) is not None and char not in ",]}":
+                self.take()
+            return
+
+        depth = 0
+        in_string = False
+        escaped = False
+        while True:
+            char = self.take()
+            if char is None:
+                raise ValueError("unterminated JSON container")
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+            elif char == '"':
+                in_string = True
+            elif char in "[{":
+                depth += 1
+            elif char in "]}":
+                depth -= 1
+                if depth == 0:
+                    return
+
+    def comparison(self) -> dict[str, str]:
+        fields = {"case_id", "target_profile", "outcome"}
+        row: dict[str, str] = {}
+        self.expect("{")
+        while True:
+            if self.peek() == "}":
+                self.take()
+                break
+            key = self.value()
+            if not isinstance(key, str):
+                raise ValueError("comparison object keys must be strings")
+            self.expect(":")
+            if key in fields:
+                value = self.value()
+                if not isinstance(value, str):
+                    raise ValueError(f"comparison field {key!r} must be a string")
+                row[key] = value
+            else:
+                self.skip_value()
+            delimiter = self.peek()
+            if delimiter == ",":
+                self.take()
+            elif delimiter == "}":
+                self.take()
+                break
+            else:
+                raise ValueError("invalid comparison object delimiter")
+        missing = fields - row.keys()
+        if missing:
+            raise ValueError(f"comparison lacks required fields: {sorted(missing)}")
+        return row
+
+    def comparisons(self):
+        self.expect("[")
+        if self.peek() == "]":
+            self.take()
+            return
+        while True:
+            yield self.comparison()
+            delimiter = self.peek()
+            if delimiter == ",":
+                self.take()
+            elif delimiter == "]":
+                self.take()
+                return
+            else:
+                raise ValueError("invalid comparisons array delimiter")
+
+
+def read_parity_artifact(path: Path) -> tuple[str, dict[str, Any], dict[tuple[str, str], str]]:
+    """Index parity outcomes while streaming past potentially huge pixel payloads."""
+    with path.open("rb") as stream:
+        compressed = stream.read(2) == b"\x1f\x8b"
+    opener = gzip.open if compressed else open
+    with opener(path, "rt", encoding="utf-8") as stream:
+        reader = _JsonStreamReader(stream)
+        reader.expect("{")
+        schema = None
+        identity = None
+        outcomes: dict[tuple[str, str], str] = {}
+        while True:
+            if reader.peek() == "}":
+                reader.take()
+                break
+            key = reader.value()
+            if not isinstance(key, str):
+                raise ValueError("parity artifact keys must be strings")
+            reader.expect(":")
+            if key == "schema":
+                schema = reader.value()
+            elif key == "identity":
+                identity = reader.value()
+            elif key == "comparisons":
+                for row in reader.comparisons():
+                    index = (row["case_id"], row["target_profile"])
+                    if index in outcomes:
+                        raise ValueError(f"duplicate parity comparison: {index}")
+                    outcomes[index] = row["outcome"]
+            else:
+                reader.skip_value()
+            delimiter = reader.peek()
+            if delimiter == ",":
+                reader.take()
+            elif delimiter == "}":
+                reader.take()
+                break
+            else:
+                raise ValueError("invalid parity artifact object delimiter")
+        if reader.peek() is not None:
+            raise ValueError("trailing content after parity artifact")
+    if not isinstance(schema, str) or not isinstance(identity, dict):
+        raise ValueError("parity artifact is missing schema or identity")
+    return schema, identity, outcomes
 
 
 def digest(path: Path) -> str:
@@ -192,17 +400,13 @@ def build_report(manifest_path: Path, result_path: Path | None, parity_path: Pat
     parity = {}
     parity_identity = {}
     if parity_path:
-        parity_document = read_json(parity_path)
-        if parity_document.get("schema") != "migration-parity/parity-result@1":
+        parity_schema, parity_identity, parity = read_parity_artifact(parity_path)
+        if parity_schema != "migration-parity/parity-result@1":
             raise ValueError("unexpected parity schema")
-        parity_identity = parity_document["identity"]
         issues.extend(input_issues(parity_identity, manifest_path))
         for item in parity_identity.get("targets", []):
             if item != target_identities.get(item["target_profile"]):
                 issues.append(f"parity_target_identity_mismatch:{item['target_profile']}")
-        parity = {(row["case_id"], row["target_profile"]): row["outcome"]
-                  for row in parity_document["comparisons"]}
-        del parity_document
     recorded_inputs = {item["path"] for item in identity.get("inputs", [])}
     rows = {key: assess_workload(spec, by_id.get(key), parity, parity_identity.get("run_id"),
                                 issues + ([] if spec_paths[key] in recorded_inputs else ["missing_benchmark_input_digest"]))
