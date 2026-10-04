@@ -1762,12 +1762,12 @@ impl PyImage {
             .detach(|| self.inner.getdata_formatted(band))
             .map_err(map_error)?;
         Python::attach(|py| match formatted {
+            // A selected band is already a one-byte-per-pixel snapshot.
+            // Keep it packed for ImagingCore: its sequence interface yields
+            // the same integer samples from bytes without allocating a Python
+            // integer object for every pixel at getdata() call time.
             pillow_rs::FormattedImageData::Scalars(values) if band.is_some() => {
-                let out = pyo3::types::PyList::empty(py);
-                for value in values {
-                    out.append(value)?;
-                }
-                Ok(out.into_py_any(py)?)
+                Ok(PyBytes::new(py, &values).into())
             }
             // Keep Pillow's byte-sample result as a Python list.  PyO3 0.29
             // specializes `Vec<u8>` conversion to `bytes`, while the former

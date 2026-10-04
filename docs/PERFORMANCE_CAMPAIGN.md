@@ -18655,3 +18655,85 @@ The final probe receipts are `draw-point-main-94907c371-20261004.json`,
 `draw-point-benchmark-parity.json` under `build/migration-parity/`. Reuse the
 last two output paths for subsequent iterations instead of retaining one
 benchmark JSON pair per attempt.
+
+## `Image.getdata(band=0)` packed snapshot — checkpoint 2026-10-04
+
+The large material workload creates a 512 × 512 RGB image, inverts it, then
+observes `getdata(0)`. The core already extracts RGB channel zero directly into
+one byte per pixel; it does not need to widen the image to RGBA on this path.
+The avoidable cost was at the Python binding boundary: it expanded that
+`Vec<u8>` into a Python list and allocated one Python integer per pixel before
+returning `ImagingCore`. Returning packed `bytes` lets the scalar sequence yield
+integers only when callers consume them. Keep this optimization limited to an
+explicit band; the no-band `getdata()` result is a live view and follows a
+different Pillow contract.
+
+The same Pillow probes exposed a real parity defect in banded `ImagingCore`
+indexing. The list-backed implementation accepted slices and raised a
+different out-of-range error from Pillow. The wrapper now uses Pillow's
+sequence-index validation for banded results too. The focused Python
+source-versus-target test checks the scalar value, slice rejection, and exact
+out-of-range error; the parity fixture also verifies that a band result is a
+snapshot after its source image is mutated.
+
+| Profile | Prior focused latency | Current median | Current / Pillow |
+| --- | ---: | ---: | ---: |
+| Pillow | 0.465 ms | 0.420 ms | — |
+| CPU | 1.392 ms | 0.234 ms | 0.56× |
+| SIMD | 1.351 ms | 0.314 ms | 0.75× |
+| GPU | 2.076 ms | 0.837 ms | 1.99× |
+
+The prior focused run reported about 1.39 ms for CPU; the current run used six
+samples and reports medians. CPU now beats Pillow and is about 5.9× faster than
+the earlier target measurement. SIMD is about 4.3× faster than that earlier
+measurement, but misses the 5× campaign target. The GPU subject executed natively
+six times, but this is a poor GPU workload: each sample uploads and reads back
+786,432 bytes around one invert dispatch, while `getdata` itself is a host-side
+materialization. The measured GPU workflow remains about 2× slower than Pillow.
+Do not count this composite workload as proof that `getdata` has a GPU kernel or
+claim GPU parity with SIMD. Keep the packed-band change and move on; further
+work on GPU routing belongs to a separately measured pipeline decision.
+
+The canonical 512 × 512 workload is now linked to an exact-output parity case,
+so its benchmark gate is `parity_pass`, not merely successful execution. CPU
+passed both the material case and snapshot case (2/2); SIMD passed the material
+case (1/1); GPU passed the material case with native GPU execution (1/1). The
+focused Python sequence test passed. No coverage ran.
+
+Reproduce the focused test and current checks with:
+
+```sh
+.venv/bin/python scripts/test_getdata_sequence_parity.py
+
+MIGRATION_TARGET_BACKEND=cpu \
+MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.getdata.performance.material-rgb-band0-512x512,PIL.Image.Image.getdata.nuanced.banded-snapshot-after-source-mutation' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/current-getdata-parity.json.gz \
+make migration-parity-test PYTHON=.venv/bin/python
+
+MIGRATION_TARGET_BACKEND=simd \
+MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.getdata.performance.material-rgb-band0-512x512' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/current-getdata-parity.json.gz \
+make migration-parity-test PYTHON=.venv/bin/python
+
+MIGRATION_TARGET_BACKEND=gpu \
+MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.getdata.performance.material-rgb-band0-512x512' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/current-getdata-parity.json.gz \
+make migration-parity-test PYTHON=.venv/bin/python
+
+RUSTC_WRAPPER= MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-chain.terminal-read.rgb-band0' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/getdata-band-current.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/getdata-band-current-parity.json.gz \
+make migration-parity-benchmark PYTHON=.venv/bin/python
+```
+
+Reuse `getdata-band-current.json` and its parity receipt for later attempts.
+The current benchmark result selected and measured exactly one workload; its
+embedded exact parity gate passed and its linked parity receipt passed 3/3
+profiles. The CPU path is accepted for this checkpoint. The SIMD 5× target and
+the composite GPU latency target remain open campaign gaps. The input contract
+validator passes for the generated benchmark, coverage, and parity documents.
+The broader `make migration-parity-inputs-check` reaches its final regeneration
+check and reports drift only in the untouched
+`inputs/parity/pil-imagefont-freetypefont.json`; the focused checkpoint does not
+rewrite that unrelated font fixture.

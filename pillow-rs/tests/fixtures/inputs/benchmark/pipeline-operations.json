@@ -57452,67 +57452,8 @@
         }
       ],
       "input": {
-        "kind": "workflow",
-        "assets": [],
-        "steps": [
-          {
-            "step_id": "setup-image",
-            "surface": "PIL.Image",
-            "operation": "new",
-            "receiver": null,
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "RGB"
-              },
-              "size": {
-                "kind": "literal",
-                "value": [
-                  512,
-                  512
-                ]
-              },
-              "color": {
-                "kind": "literal",
-                "value": [
-                  31,
-                  109,
-                  197
-                ]
-              }
-            }
-          },
-          {
-            "step_id": "inverted",
-            "surface": "PIL.ImageOps",
-            "operation": "invert",
-            "receiver": null,
-            "arguments": {
-              "image": {
-                "kind": "binding",
-                "step_id": "setup-image"
-              }
-            }
-          },
-          {
-            "step_id": "band-data",
-            "surface": "PIL.Image.Image",
-            "operation": "getdata",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "inverted"
-            },
-            "arguments": {
-              "band": {
-                "kind": "literal",
-                "value": 0
-              }
-            }
-          }
-        ],
-        "observations": [
-          "band-data"
-        ]
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getdata.performance.material-rgb-band0-512x512"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -57526,7 +57467,7 @@
         "samples": 2,
         "concurrency": 1,
         "cache_state": "warm",
-        "correctness_gate": "successful_execution"
+        "correctness_gate": "parity_pass"
       },
       "context": {
         "size": [
