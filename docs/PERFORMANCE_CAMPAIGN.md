@@ -11142,6 +11142,7 @@ MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.flip.materialized-rgb-noise
 MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/flip-commit-5formats.json \
 MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/flip-commit-5formats-parity.json \
 make migration-parity-benchmark
+```
 
 ## Recovered feature-branch measurements (historical)
 
@@ -17561,3 +17562,76 @@ Receipts: `imagecolor-getrgb-current-cpu-parity-20261004.json`,
 `imagecolor-getrgb-current-baseline-20261004.json`, and
 `imagecolor-getrgb-cached-attempt1-20261004.json` under
 `build/migration-parity/`. No coverage ran.
+
+## `Image.Image.rotate` nearest-neighbor SIMD checkpoint — 2026-10-04
+
+The selected workload is an expanded 1024 × 768 RGBA image rotated by 37° with
+nearest-neighbor sampling. The original flattened SIMD loop recovered `(x, y)`
+with division and remainder for every destination pixel, then rebuilt source
+coordinates with two per-pixel multiplies. Attempt 1 changed it to row-major
+fixed-point coordinate increments, matching the CPU affine sampler's
+16.16 progression. Attempt 2 retained an output-row slice so packed stores
+compute row-local offsets instead of full-frame offsets. Both changes preserve
+the native byte layout and do not convert through RGBA.
+
+Attempt 3 precomputed the native fill samples once and copied that pattern for
+out-of-bounds pixels. It passed parity, but two measurements of that unchanged
+candidate did not beat the earlier row-slice run, so the fill precomputation was
+reverted. The retained source is the row-major, row-sliced version from attempt
+2. Three code attempts are checkpointed; continue with another operation.
+
+The correctness gate is separate from the timing result. Strict SIMD parity
+passed 45/45 declared nearest-rotation cases across the 15 supported native
+modes represented in the fixture matrix, covering arbitrary angle, expanded
+canvas, and custom center/translation cases. Strict CPU and GPU parity each
+passed both selected RGBA arbitrary/expanded cases. The final retained-tree
+parity receipts are `rotate-nearest-simd-retained-20261004.json` (45/45),
+`rotate-rgba-cpu-strict-retained-20261004.json` (2/2), and
+`rotate-rgba-gpu-strict-retained-20261004.json` (2/2). Intermediate strict SIMD
+receipts for attempts 2 and 3 are `rotate-nearest-simd-attempt2-20261004.json`
+and `rotate-nearest-simd-attempt3-20261004.json`, all under
+`build/migration-parity/`.
+
+The matching pipeline benchmark workload passed its `successful_execution`
+gate; that gate is not byte-for-byte Pillow parity. Each target profile reported
+the requested backend for all six samples without fallback. GPU reported one
+dispatch per image, 3,145,728 upload bytes, and 6,297,600 readback bytes. These
+are concurrency-one latency observations, not sustained GPU throughput.
+
+| Run | Pillow p50 | Serial CPU p50 | SIMD p50 | GPU p50 |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 2.408 ms | 4.915 ms | 7.868 ms | 2.288 ms |
+| Attempt 1: row-major coordinates | 2.370 ms | 4.701 ms | 7.368 ms | 2.205 ms |
+| Attempt 2: row-local output | 2.348 ms | 4.840 ms | 7.062 ms | 2.123 ms |
+| Attempt 3: precomputed fill | 2.241 ms | 6.072 ms | 8.197 ms | 2.038 ms |
+| Attempt 3 unchanged repeat | 2.250 ms | 6.248 ms | 8.174 ms | 2.027 ms |
+| Retained attempt 2 repeat | 3.031 ms | 5.639 ms | 8.190 ms | 3.754 ms |
+
+The retained attempt's first run is the best absolute SIMD median, but the
+repeat of the same code shifted all four subjects substantially. Treat the
+cross-run speedup as unproven. Regardless of that measurement noise, serial CPU
+remains slower than Pillow, and SIMD remains multiple times slower than Pillow
+instead of reaching the 5× goal. The source still gathers each pixel using
+scalar fixed-point coordinates and bounds checks; the `wide` value packs
+samples for stores but does not vectorize the irregular source gather. This is
+a source-level bottleneck hypothesis, not an instruction-level profile. A
+future revisit should inspect generated AArch64 code or implement and measure
+row clipping/vectorized coordinate work before tuning the same loop further.
+The GPU result also needs a changing-input concurrent batch benchmark before
+any throughput claim. No coverage ran.
+
+Receipts: `rotate-rgba-baseline-73247eaac-20261004.json`,
+`rotate-rgba-attempt1-73247eaac-20261004.json`,
+`rotate-rgba-attempt2-73247eaac-20261004.json`,
+`rotate-rgba-attempt3-73247eaac-20261004.json`,
+`rotate-rgba-attempt3-repeat-73247eaac-20261004.json`, and
+`rotate-rgba-row-slice-repeat-73247eaac-20261004.json` under
+`build/migration-parity/`, each with a parity sidecar. The timing command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-chain.geometry-material.rotate-rgba-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/rotate-rgba-attemptN-73247eaac-20261004.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/rotate-rgba-attemptN-73247eaac-20261004-parity.json \
+make migration-parity-benchmark
+```
