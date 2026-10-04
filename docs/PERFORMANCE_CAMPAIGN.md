@@ -18937,3 +18937,25 @@ deleted it after reading the medians. The exact parity cases
 `make migration-parity-test` with `MIGRATION_STRICT_TARGET_BACKEND=1` for each
 of CPU, SIMD, and GPU. The build-parity target was used; `make build` was not
 run. No coverage, release, or CI campaign was run.
+
+## Native CMYK masked `Image.paste` — branchless CPU blend and NEON blocks — 2026-10-04
+
+The material workload is `pil-image-image.paste.masked.materialized.masked-cmyk-noise-1024x768`: a noisy 1024 × 768 CMYK destination and source, an L mask, paste at `(2, 2)`, then return the receiver bytes. The clipped blend covers 1022 × 766 pixels. Every stored C/M/Y/K byte uses Pillow's exact `(source * mask + destination * (255 - mask) + 127) / 255` rule; the K sample is not alpha and the route keeps native CMYK bytes.
+
+The serial CPU row kernel previously checked every pixel for mask values 0 and 255 before blending. The formula already gives the unchanged destination at 0 and the source at 255, so the CMYK loop now uses one branch-free arithmetic path across all four samples. SIMD previously expanded four L-mask samples into sixteen scalar-written lanes for each four-pixel vector block. On AArch64, a new NEON path loads sixteen L-mask pixels and sixteen interleaved CMYK pixels with `vld4q_u8`, blends each C/M/Y/K vector with exact DIV255 rounding, and writes the native interleave with `vst4q_u8`. It handles complete 64-byte blocks, retains the portable vector and scalar tails, and records a distinct `neon-cmyk-l-blend` path. Runtime length checks bound the unsafe prefix to equal image rows, four-byte pixels, and one mask byte per pixel.
+
+The correctness-gated standard workload passed on all three requested target backends, with 100 timed calls per backend and no fallback. The separately built opt-in Parallel CPU workload also passed its Pillow gate and recorded 100 CPU-backend calls. Medians below are milliseconds; before and after were separate runs, so target-to-Pillow comparisons within each run are more reliable than absolute before/after differences.
+
+| Profile | Baseline p50 | Final p50 | Final vs ordinary Pillow | Final single-request reciprocal throughput |
+| --- | ---: | ---: | ---: | ---: |
+| Pillow | 0.981 | 0.883 | — | 1,133 ops/s |
+| Serial CPU | 0.994 | 0.563 | 1.57× faster | 1,777 ops/s |
+| SIMD | 0.684 | 0.472 | 1.87× faster | 2,117 ops/s |
+| GPU | 3.523 | 2.969 | 3.36× slower | 337 ops/s |
+| Parallel CPU | — | 0.534 | 1.65× faster* | 1,872 ops/s |
+
+`*` Parallel CPU is an opt-in Rayon build and was measured separately; the comparison uses the ordinary Pillow median from the final standard run and is indicative, not paired. No worker-count or saturated-throughput claim is made. The GPU path still uploads and reads back 3,145,728 bytes each, with one dispatch. It is 6.28× slower than SIMD at concurrency one; this result points to transfer/readback and the single-image execution boundary, so further kernel arithmetic changes are not the next attack. The SIMD result remains below the 5× target.
+
+The focused `native_cmyk` Rust filter passed all three matching tests, including mask endpoints, four-channel byte semantics, vector tails, unrolled NEON blocks, and confirmation that complete blocks select the AArch64 path. The standard benchmark's parity preflight passed 3/3 CPU/SIMD/GPU comparisons; the Parallel CPU target passed 1/1 comparison against ordinary Pillow. Its Make target writes fixed default output paths, so those two generated result files were parsed and deleted immediately after measurement. The standard run used temporary output paths and removed them automatically. No coverage was run.
+
+The exact verification targets were `cargo test --locked -p pillow-rs --lib native_cmyk -- --nocapture`, `make migration-parity-benchmark` filtered to the workload above, and `make migration-parity-benchmark-parallel-cpu` filtered to that workload. Keep both the endpoint-exact CPU change and the native NEON SIMD block: the measured CPU and SIMD improvements repeat in candidate runs, while the remaining GPU and SIMD gaps need a different measured attack. Do not fold the Parallel CPU result into serial CPU or SIMD.

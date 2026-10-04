@@ -2660,7 +2660,7 @@ fn native_paste_cmyk_l_masked_row(
     destination: &mut [u8],
     mask: &[u8],
     allow_short_masked_tail: bool,
-) -> (u64, u64) {
+) -> (u64, u64, bool) {
     debug_assert_eq!(source.len(), destination.len());
     debug_assert_eq!(source.len() % 4, 0);
     debug_assert_eq!(source.len() / 4, mask.len());
@@ -2668,7 +2668,35 @@ fn native_paste_cmyk_l_masked_row(
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
     let vector_len16 = source.len() / 16 * 16;
-    for start in (0..vector_len16).step_by(16) {
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    let neon_prefix = if source.len() == destination.len()
+        && source.len() % 4 == 0
+        && source.len() / 4 == mask.len()
+    {
+        source.len() / 64 * 64
+    } else {
+        0
+    };
+    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+    let neon_prefix = 0usize;
+    let used_neon = neon_prefix != 0;
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    {
+        let unrolled_len = neon_prefix / 256 * 256;
+        for start in (0..unrolled_len).step_by(256) {
+            native_paste_cmyk_l_masked_neon_block(source, destination, mask, start);
+            native_paste_cmyk_l_masked_neon_block(source, destination, mask, start + 64);
+            native_paste_cmyk_l_masked_neon_block(source, destination, mask, start + 128);
+            native_paste_cmyk_l_masked_neon_block(source, destination, mask, start + 192);
+        }
+        for start in (unrolled_len..neon_prefix).step_by(64) {
+            native_paste_cmyk_l_masked_neon_block(source, destination, mask, start);
+        }
+        // Each structure block performs four sixteen-lane channel blends.
+        vector_blocks = vector_blocks.saturating_add((neon_prefix / 16) as u64);
+    }
+
+    for start in (neon_prefix..vector_len16).step_by(16) {
         let source_block = <[u8; 16]>::try_from(&source[start..start + 16])
             .expect("validated CMYK Paste row has a complete 16-byte block");
         let destination_block = <[u8; 16]>::try_from(&destination[start..start + 16])
@@ -2725,7 +2753,7 @@ fn native_paste_cmyk_l_masked_row(
 
     let tail = source.len() - vector_len8;
     if tail == 0 {
-        return (vector_blocks, scalar_tail);
+        return (vector_blocks, scalar_tail, used_neon);
     }
     if allow_short_masked_tail {
         let mut source_block = [0u8; 8];
@@ -2768,7 +2796,78 @@ fn native_paste_cmyk_l_masked_row(
         }
     }
 
-    (vector_blocks, scalar_tail)
+    (vector_blocks, scalar_tail, used_neon)
+}
+
+/// Blend sixteen native CMYK pixels from one L mask block with NEON.
+///
+/// The mask stays one byte per pixel while `vld4q_u8` deinterleaves each
+/// C/M/Y/K channel into sixteen lanes; K is processed like the other stored
+/// samples and is never treated as alpha.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn native_paste_cmyk_l_masked_neon_block(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    start: usize,
+) {
+    use core::arch::aarch64 as neon;
+
+    macro_rules! blend_half {
+        ($source:expr, $destination:expr, $mask:expr, $inverse:expr) => {{
+            let weighted = neon::vmlal_u8(neon::vmull_u8($source, $mask), $destination, $inverse);
+            // +127 is Pillow's blend rounding; +1 folds in the exact DIV255
+            // correction used by the corresponding byte-vector path.
+            let incremented = neon::vaddq_u16(weighted, neon::vdupq_n_u16(128));
+            let quotient = neon::vshrq_n_u16(
+                neon::vaddq_u16(incremented, neon::vshrq_n_u16(incremented, 8)),
+                8,
+            );
+            neon::vmovn_u16(quotient)
+        }};
+    }
+    macro_rules! blend_channel {
+        ($source:expr, $destination:expr, $mask:expr, $inverse:expr) => {{
+            neon::vcombine_u8(
+                blend_half!(
+                    neon::vget_low_u8($source),
+                    neon::vget_low_u8($destination),
+                    neon::vget_low_u8($mask),
+                    neon::vget_low_u8($inverse)
+                ),
+                blend_half!(
+                    neon::vget_high_u8($source),
+                    neon::vget_high_u8($destination),
+                    neon::vget_high_u8($mask),
+                    neon::vget_high_u8($inverse)
+                ),
+            )
+        }};
+    }
+
+    // SAFETY: `native_paste_cmyk_l_masked_row` enables this loop only after
+    // checking equal source/destination lengths, four-byte pixels, and one
+    // mask byte per pixel. Its `neon_prefix` is the largest complete 64-byte
+    // prefix, and every call advances by 64 bytes within that prefix, so this
+    // block accesses exactly 64 bytes from each image and sixteen mask bytes.
+    // NEON permits unaligned byte loads and stores. Safe slice borrows keep
+    // the mutable destination disjoint from both immutable inputs.
+    unsafe {
+        let source_pixels = neon::vld4q_u8(source.as_ptr().add(start));
+        let destination_ptr = destination.as_mut_ptr().add(start);
+        let destination_pixels = neon::vld4q_u8(destination_ptr);
+        let mask = neon::vld1q_u8(mask.as_ptr().add(start / 4));
+        let inverse = neon::vsubq_u8(neon::vdupq_n_u8(255), mask);
+        let output = neon::uint8x16x4_t(
+            blend_channel!(source_pixels.0, destination_pixels.0, mask, inverse),
+            blend_channel!(source_pixels.1, destination_pixels.1, mask, inverse),
+            blend_channel!(source_pixels.2, destination_pixels.2, mask, inverse),
+            blend_channel!(source_pixels.3, destination_pixels.3, mask, inverse),
+        );
+        neon::vst4q_u8(destination_ptr, output);
+    }
 }
 
 #[cfg(feature = "parallel")]
@@ -2871,6 +2970,7 @@ fn native_paste_apply(
         };
         let mut vector_blocks = 0u64;
         let mut scalar_tail = 0u64;
+        let mut used_neon = false;
 
         for (row_index, destination_row) in destination_rows
             .chunks_exact_mut(destination_row_stride)
@@ -2908,7 +3008,7 @@ fn native_paste_apply(
             else {
                 return false;
             };
-            let (blocks, tail) = native_paste_cmyk_l_masked_row(
+            let (blocks, tail, row_used_neon) = native_paste_cmyk_l_masked_row(
                 source_row,
                 destination_slice,
                 &mask[mask_start..mask_end],
@@ -2916,6 +3016,7 @@ fn native_paste_apply(
             );
             vector_blocks = vector_blocks.saturating_add(blocks);
             scalar_tail = scalar_tail.saturating_add(tail);
+            used_neon |= row_used_neon;
         }
 
         if vector_blocks != 0 {
@@ -2924,7 +3025,11 @@ fn native_paste_apply(
         if scalar_tail != 0 {
             crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
         }
-        crate::compute::record_pipeline_operation_path("vector");
+        crate::compute::record_pipeline_operation_path(if used_neon {
+            "neon-cmyk-l-blend"
+        } else {
+            "vector"
+        });
         return true;
     }
 
@@ -33583,7 +33688,7 @@ mod tests {
     #[test]
     fn native_cmyk_l_masked_paste_row_expands_mask_across_vector_tails() {
         let masks = [0u8, 1, 127, 128, 254, 255];
-        for width in 1..=24 {
+        for width in 1..=131 {
             let source = (0..width * 4)
                 .map(|index| (index * 37 + 11) as u8)
                 .collect::<Vec<_>>();
@@ -33608,11 +33713,16 @@ mod tests {
 
             for allow_short_masked_tail in [false, true] {
                 let mut actual = destination.clone();
-                super::native_paste_cmyk_l_masked_row(
+                let (_, _, used_neon) = super::native_paste_cmyk_l_masked_row(
                     &source,
                     &mut actual,
                     &mask,
                     allow_short_masked_tail,
+                );
+                assert_eq!(
+                    used_neon,
+                    cfg!(all(target_arch = "aarch64", target_feature = "neon")) && width >= 16,
+                    "width {width}, neon dispatch"
                 );
                 assert_eq!(
                     actual, expected,
