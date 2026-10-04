@@ -96,7 +96,12 @@ relying on a source-only feature in a released package.
 
 The repository also adds contributor tooling around the migration. It runs
 alongside Pillow as a reference implementation; it is not a Pillow runtime
-feature and does not imply complete API or mode coverage.
+feature and does not imply complete API or mode coverage. Pillow maintains its
+own [test suite](https://github.com/python-pillow/Pillow/tree/12.3.0/Tests) and
+documents its own performance work in the
+[12.3.0 release notes](https://pillow.readthedocs.io/en/12.3.0/releasenotes/12.3.0.html).
+The addition here is the migration-specific comparison against a pinned Pillow
+oracle, with results separated by operation, mode, and execution backend.
 
 | Tooling | What it does | Scope |
 | --- | --- | --- |
