@@ -18171,3 +18171,52 @@ materialized workload times both `ImageChops.duplicate(image)` and
 nonuniform material-size input, and require completed actual-backend receipts
 before labeling a CPU, SIMD, or GPU result. No runtime change was made for this
 checkpoint; no coverage ran.
+
+## `ImageDraw.getfont` CPU result — 2026-10-04
+
+The focused `PIL.ImageDraw.ImageDraw.getfont.behavior.default` strict CPU
+parity case passed 1/1. Two standard benchmark runs also passed their Pillow
+parity gate, each with 100 measured executions per subject. The workload
+creates a fresh 16 × 16 RGB image and drawing context before calling
+`getfont`; Pillow and pillow-rs both resolve the embedded default font during
+the call. The call-phase median was 29.812 µs for Pillow and 9.229 µs for
+pillow-rs CPU in the first run, then 30.500 µs and 9.250 µs in the repeat
+(3.23× and 3.30× faster on CPU). Including setup, median whole-workflow times
+were 36.667 µs vs 16.979 µs and 37.750 µs vs 17.000 µs (2.16× and 2.22×
+faster on CPU).
+
+The current Rust path copies the 12,676-byte embedded font payload, then uses
+the existing thread-local one-entry source-face cache to reuse parsed
+immutable tables by exact font bytes while creating a separate FreeType face
+for each font object. This cache is the key existing optimization; sharing a
+mutable font object would change identity and state behavior, so there is no
+safe global-object-cache shortcut justified by these results. The CPU result
+already beats Pillow, so no runtime change is warranted for this operation.
+
+Although the generic benchmark row also runs SIMD-requested and GPU-requested
+subjects, neither reports an actual image backend (`actual_backend=null`),
+which is expected for this host-side font-construction API. Their times are
+not evidence of SIMD or GPU execution and must not be used to assess those
+targets. Only CPU is declared applicable for this operation in the frozen
+performance requirement. No coverage ran.
+
+Commands used:
+
+```sh
+MIGRATION_TARGET_BACKEND=cpu MIGRATION_STRICT_TARGET_BACKEND=1 \
+MIGRATION_PARITY_CASE_IDS=PIL.ImageDraw.ImageDraw.getfont.behavior.default \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/getfont-current-cpu-parity.json \
+make migration-parity-test
+
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imagedraw-imagedraw.getfont.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/getfont-standard-20261004.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/getfont-standard-parity-20261004.json \
+make migration-parity-benchmark
+
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imagedraw-imagedraw.getfont.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/getfont-standard-repeat-20261004.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/getfont-standard-repeat-parity-20261004.json \
+make migration-parity-benchmark
+```
