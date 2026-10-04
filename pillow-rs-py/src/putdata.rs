@@ -6,6 +6,7 @@
 //! and the callback-visible order of per-item coercion.
 
 use super::{PyImage, map_error};
+use bytes::Bytes;
 use pillow_rs::{PutDataInput, PutDataValue, PutDataValueKind};
 use pyo3::exceptions::{PySystemError, PyTypeError};
 use pyo3::prelude::{Bound, PyAny, PyResult};
@@ -96,13 +97,31 @@ fn putdata_bulk(
     // two-byte sample buffer. It does not coerce each byte into a separate
     // numeric sample as the generic sequence path does.
     if let Ok(bytes) = data.cast::<PyBytes>() {
-        let consumed = slf
-            .try_borrow_mut()?
-            .inner
-            .putdata_bytes_fast_path(bytes.as_bytes(), entry_count, scale, offset)
-            .map_err(map_error)?;
-        if consumed {
-            return Ok(true);
+        if let Some(retained) = retained_python_bytes(data) {
+            let mut image = slf.try_borrow_mut()?;
+            if image
+                .inner
+                .putdata_shared_bytes_fast_path(retained, entry_count, scale, offset)
+                .map_err(map_error)?
+            {
+                return Ok(true);
+            }
+            let consumed = image
+                .inner
+                .putdata_bytes_fast_path(bytes.as_bytes(), entry_count, scale, offset)
+                .map_err(map_error)?;
+            if consumed {
+                return Ok(true);
+            }
+        } else {
+            let consumed = slf
+                .try_borrow_mut()?
+                .inner
+                .putdata_bytes_fast_path(bytes.as_bytes(), entry_count, scale, offset)
+                .map_err(map_error)?;
+            if consumed {
+                return Ok(true);
+            }
         }
     }
 
@@ -139,6 +158,10 @@ fn putdata_bulk(
     }
 
     Ok(false)
+}
+
+fn retained_python_bytes(data: &Bound<'_, PyAny>) -> Option<Bytes> {
+    data.extract::<Bytes>().ok()
 }
 
 fn is_exact_builtin_numeric_sequence(data: &Bound<'_, PyAny>, kind: PutDataValueKind) -> bool {

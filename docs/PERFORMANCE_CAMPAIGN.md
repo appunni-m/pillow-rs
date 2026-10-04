@@ -6977,6 +6977,74 @@ source. The compact resource estimate unit test and strict execution receipts
 are from the same source snapshot. Attempt 4 is checkpointed after four bounded
 optimization attempts. `putdata` remains incomplete: later work must target
 SIMD lookup/copy behavior and remove GPU per-call device round-trip cost.
+
+### Immutable byte ownership follow-up — 2026-10-05
+
+The binding's exact `bytes` fast path copied the Python payload into a Rust
+allocation before the deferred operation could run. PyO3 0.29's `bytes`
+conversion wraps immutable Python `bytes` in `PyBackedBytes`; storing that
+owner in `bytes::Bytes` lets the queued `PutData` operation retain the input
+allocation without copying it. The change is deliberately limited to
+unscaled byte payloads in modes `1`, `L`, and `P` whose byte length matches
+the Python sequence length; a matching prefix shorter than the image remains
+eligible. Scaled data, payload/sequence-length mismatches, and packed color
+modes still use their established normalization paths. A core regression
+asserts that the queued operation has the same data pointer and materializes
+the expected native-L pixels.
+
+The exact standard workload
+`pil-image-image.putdata.standard` still measures `putdata` plus receiver
+`tobytes` on varied 1,024 × 768 mode-L bytes, with setup outside the timed
+boundary. Before this change, run
+`migration-benchmark-7ee1d8b7706546d3af67ba36c2a20e69` measured medians of
+0.306854 ms for Pillow, 0.3142295 ms for CPU, 0.3152505 ms for SIMD, and
+2.8240415 ms for GPU. The follow-up run
+`migration-benchmark-c916443702cf434d9d9a489efbdde6d1` measured 100 samples
+per subject and passed its exact-output gate
+`migration-parity-benchmark-gate-09115a03d470445d996567701fc17b86`:
+
+| Subject | Median latency | Median throughput | Actual executions |
+| --- | ---: | ---: | ---: |
+| Pillow | 0.139438 ms | 7,172 ops/s | 100 oracle samples |
+| CPU | 0.126625 ms | 7,897 ops/s | 100 CPU, no fallback |
+| SIMD | 0.127896 ms | 7,819 ops/s | 100 SIMD, no fallback |
+| GPU | 1.288750 ms | 776 ops/s | 100 GPU, no fallback |
+
+All three target backend parity checks passed. The paired CPU and SIMD medians
+are now 9.2% and 8.3% lower than Pillow on this workload. Pillow and all
+target absolute timings also shifted substantially from the earlier run, so
+the paired ratios are the useful comparison; do not attribute the entire
+absolute timing change to byte retention. CPU and SIMD each report zero
+full-frame copies in the operation receipt. GPU remains about 9.2× slower than
+Pillow and 10.1× slower than SIMD; its receipt still reports one dispatch,
+786,432 readback bytes, 786,432 auxiliary bytes, and one full-frame copy. This
+isolates the remaining GPU gap to the device round-trip and output handling,
+not input upload. The full-payload SIMD adapter takes its generic copy branch
+with zero vector blocks, so this result is not a 5× SIMD achievement.
+
+The reproducible target builds through `make build-parity` and keeps its two
+result files temporary:
+
+```sh
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.putdata.standard' \
+MIGRATION_BENCHMARK_OUTPUT="$tmpdir/benchmark.json" \
+MIGRATION_BENCHMARK_PARITY_OUTPUT="$tmpdir/parity.json" \
+make migration-parity-benchmark
+```
+
+The regression passed with
+`cargo test -p pillow-rs --lib image::putdata_shared_bytes_tests::native_l_putdata_keeps_the_shared_allocation_and_materializes_exactly -- --exact`.
+The binding and test code passed `cargo check --locked -p pillow-rs-py --tests`,
+and the Python parity gate passed all three requested backends. Benchmark output
+and parity receipts were written under a temporary directory and removed after
+the values above were extracted. No coverage was collected. The operation is
+checkpointed after this bounded copy-removal attempt: serial CPU is faster than
+Pillow for this mode, while the SIMD target and GPU latency/throughput targets
+remain open.
+
 ## PIL.ImageOps.mirror checkpoint — 2026-09-28
 
 The measured workload is

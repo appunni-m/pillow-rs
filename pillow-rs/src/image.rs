@@ -28,6 +28,7 @@
 //! may be deferred. Calling [`Image::materialize`], [`Image::encode`], or
 //! [`Image::tobytes`] forces decoding and pipeline execution.
 
+use bytes::Bytes;
 use image_slash_star::{
     Decoded, DecodedImage, EncodedImage, ImageFormat, ImageInfo, ImageMode, ImagePalette,
 };
@@ -5828,12 +5829,44 @@ impl Image {
         let new_self = Image::push_op(
             self,
             PipelineOp::PutData {
-                data: data.to_vec().into(),
+                data: Bytes::copy_from_slice(data),
                 mode,
             },
         );
         *self = new_self;
         Ok(())
+    }
+
+    /// Queues immutable byte data without copying its backing allocation when
+    /// the input already matches a complete native sample layout.
+    ///
+    /// This binding-oriented fast path accepts only mode 1, L, or P and only
+    /// unscaled byte data with one byte per sequence entry. It preserves
+    /// partial-image `putdata` semantics when the payload is shorter than the
+    /// image, while retaining the immutable owner until deferred execution.
+    /// Other layouts must continue through [`Image::putdata_bytes_fast_path`]
+    /// so Pillow's per-entry coercion and packed-color rules remain intact.
+    pub fn putdata_shared_bytes_fast_path(
+        &mut self,
+        data: Bytes,
+        entry_count: usize,
+        scale: f64,
+        offset: f64,
+    ) -> Result<bool, PilError> {
+        if scale != 1.0 || offset != 0.0 || data.len() != entry_count {
+            return Ok(false);
+        }
+        let mode_name = self.mode()?;
+        if !matches!(mode_name.as_str(), "1" | "L" | "P") {
+            return Ok(false);
+        }
+        self.validate_putdata_length(entry_count)?;
+        let mode = PixelMode::from_name(&mode_name).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
+        })?;
+        let new_self = Image::push_op(self, PipelineOp::PutData { data, mode });
+        *self = new_self;
+        Ok(true)
     }
 
     /// Normalizes one value per pixel and queues exact Pillow `putdata` bytes.
@@ -7725,6 +7758,41 @@ mod byte_export_tests {
                 "{mode} export must stay immutable"
             );
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod putdata_shared_bytes_tests {
+    use super::{Image, PilError};
+    use crate::compute::Backend;
+    use crate::pipeline::{PipelineOp, PixelMode};
+    use bytes::Bytes;
+
+    #[test]
+    fn native_l_putdata_keeps_the_shared_allocation_and_materializes_exactly()
+    -> Result<(), PilError> {
+        let payload = Bytes::from_static(&[13, 71, 209, 255]);
+        let payload_ptr = payload.as_ptr();
+        let mut image = Image::new(4, 1, "L", (0, 0, 0, 255))?;
+
+        assert!(image.putdata_shared_bytes_fast_path(payload, 4, 1.0, 0.0)?);
+        let queued_ptr = match &image {
+            Image::Pipeline { ops, .. } => match &ops.as_slice()[0] {
+                PipelineOp::PutData {
+                    data,
+                    mode: PixelMode::L,
+                } => data.as_ptr(),
+                other => panic!("unexpected queued operation: {other:?}"),
+            },
+            other => panic!("putdata did not queue a pipeline: {other:?}"),
+        };
+        assert_eq!(queued_ptr, payload_ptr);
+
+        assert_eq!(
+            image.use_backend(Backend::Cpu).tobytes()?,
+            [13, 71, 209, 255]
+        );
         Ok(())
     }
 }
