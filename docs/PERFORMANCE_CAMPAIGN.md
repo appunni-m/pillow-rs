@@ -18851,3 +18851,89 @@ SIMD latency goals on this machine. It does not close RankFilter across every
 mode, filter size, rank, or image shape. Keep those rows in the operation
 matrix; proceed to the next ranked operation and revisit this one only if
 broader measurements expose a regression.
+
+## Native L `ImageOps.expand` — single-pass SIMD checkpoint — 2026-10-04
+
+The material workload `pil-imageops.expand.materialized.l-noise-1024x768`
+expands a varied 1024 × 768 L image with border 7 and fill 37, then observes
+all bytes of the 1038 × 782 result. The existing SIMD route zero-initialized
+that entire output and then replaced every byte with either the border fill or
+a copied source sample. The single-byte L/P path now constructs one vector-
+filled output-row template and one side-fill template, then appends each native
+source row between those spans. It keeps palette indices as bytes and avoids a
+second full-frame initialization pass.
+
+The new `expand_single_byte_modes_append_vector_filled_rows_without_zeroing`
+unit test compares SIMD and CPU bytes across vector boundaries, odd shapes,
+zero border, L, and P. The material workload's exact Pillow gate passed for
+CPU, strict SIMD, and GPU in both candidate runs (one material case per
+backend); separate strict public L and P cases passed 2/2 on each of CPU,
+SIMD, and GPU. The standard benchmark used five warmups and 100 measured calls
+per subject at concurrency one. Its temporary receipts were removed after
+extracting the results.
+
+| Run | Pillow p50 | Serial CPU p50 | SIMD p50 | GPU p50 | SIMD / CPU latency | GPU / SIMD latency |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 118.479 µs | 70.188 µs | 94.334 µs | 624.188 µs | 1.34× slower | 6.62× slower |
+| Candidate | 145.646 µs | 94.521 µs | 97.334 µs | 655.584 µs | 1.03× slower | 6.74× slower |
+| Candidate repeat | 144.500 µs | 88.354 µs | 91.667 µs | 658.771 µs | 1.04× slower | 7.19× slower |
+
+Pillow and CPU p50 both shifted substantially between the baseline and
+candidates, so those separate-run absolute values do not establish a stable
+latency reduction. The SIMD/CPU relationship improved from 1.34× slower at
+baseline to 1.03–1.04× slower in both candidate runs, and the candidate SIMD
+median repeated within 6%. This is consistent with removing redundant output
+work, but the full-call measurement does not isolate the gain from the
+materialization and scheduling noise. Serial CPU is faster than Pillow in
+each run (1.54–1.69×); SIMD is only 1.26–1.58× faster, below the 5× target.
+GPU uses one actual dispatch but is 6.62–7.19× slower than SIMD because this
+single-image call uploads the source and synchronously materializes the full
+expanded result. Its reciprocal single-request throughput is correspondingly
+lower; no concurrent-throughput claim is made.
+
+The separate opt-in Parallel CPU run used `pillow-rs/parallel` and
+`pillow-rs-py/parallel`, passed its Pillow gate, and measured 70.959 µs against
+the ordinary Pillow median of 144.500 µs from the standard repeat (about 2.04×
+faster in these separate runs). The actual backend was CPU. Native L/P Expand
+returns through its serial native-byte route before the generic Rayon row path,
+so this is a feature-build comparison, not evidence that Expand uses Rayon.
+
+Keep the one-pass native L/P candidate, record the unmet SIMD and GPU goals,
+and move on. The remaining single-image GPU gap is dominated by the required
+host/device transfer and byte materialization; revisit GPU only with a
+different measured execution boundary, such as explicit queued batching, not
+by routing ordinary CPU work through Rayon. No coverage was run.
+
+The source test and checks were:
+
+```sh
+cargo test --locked -p pillow-rs --lib expand_single_byte_modes_append_vector_filled_rows_without_zeroing -- --nocapture
+tmp_expand_dir=$(mktemp -d build/.tmp-expand-l.XXXXXX)
+trap 'rm -rf "$tmp_expand_dir"' EXIT
+RUSTC_WRAPPER= make build-parity PYTHON=.venv/bin/python
+PYTHON=.venv/bin/python MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.expand.materialized.l-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT="$tmp_expand_dir/standard.json" \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT="$tmp_expand_dir/standard-parity.json" \
+  make migration-parity-benchmark
+RUSTC_WRAPPER= PYTHON=.venv/bin/python MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.expand.materialized.l-noise-1024x768' \
+  make MIGRATION_BENCHMARK_OUTPUT="$tmp_expand_dir/parallel.json" \
+    MIGRATION_BENCHMARK_PARITY_OUTPUT="$tmp_expand_dir/parallel-parity.json" \
+    migration-parity-benchmark-parallel-cpu
+for backend in cpu simd gpu; do
+  PYTHON=.venv/bin/python MIGRATION_TARGET_BACKEND="$backend" \
+    MIGRATION_STRICT_TARGET_BACKEND=1 \
+    MIGRATION_PARITY_CASE_IDS='PIL.ImageOps.expand.mode.l,PIL.ImageOps.expand.nuanced.p-mode-materialized' \
+    MIGRATION_PARITY_OUTPUT="$tmp_expand_dir/parity-$backend.json" \
+    make migration-parity-test
+done
+```
+
+Both benchmark targets used a temporary directory for their JSON receipts and
+deleted it after reading the medians. The exact parity cases
+`PIL.ImageOps.expand.mode.l` and
+`PIL.ImageOps.expand.nuanced.p-mode-materialized` also passed via
+`make migration-parity-test` with `MIGRATION_STRICT_TARGET_BACKEND=1` for each
+of CPU, SIMD, and GPU. The build-parity target was used; `make build` was not
+run. No coverage, release, or CI campaign was run.
