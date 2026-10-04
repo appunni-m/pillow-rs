@@ -17730,26 +17730,35 @@ similar kernels is to compare operation and terminal phases, then inspect
 whether fixed-size outputs are staged in a collection and flattened. If the
 terminal phase moves while the operation phase does not, remove the avoidable
 buffer transition before tuning arithmetic or unrolling the vector loop.
+The clean-commit repeat measured 0.469 ms in the pipeline phase and 0.463 ms
+in the terminal phase, indicating substantial host/run variation; the code
+inspection still identifies the removed full-frame flatten copy as the
+specific mechanism, while the clean run sets the more conservative speed
+expectation.
 
 The standard benchmark command selected only this workload and used
 `make build-parity` through the documented benchmark target. The baseline ran
-on clean commit `6f3603564`; the candidate ran on the same source revision with
-this change dirty. The table's latency and throughput are the workload's
-reported medians across its declared `call` and `materialize` observations.
-Pillow's baseline and candidate medians varied substantially across runs, so
-the candidate's same-run ratio is the fair comparison to use.
+on clean commit `6f3603564`; the first candidate ran on that same source
+revision with the change dirty. A final focused run then measured clean commit
+`ab96494bb` with no dirty files. The table's latency and throughput are the
+workload's reported medians across its declared `call` and `materialize`
+observations. Pillow and target medians varied substantially across runs, so
+use only same-run Pillow ratios and treat the best candidate run as an observed
+sample, not a stable speed claim.
 
 | Run | Pillow p50 | Serial CPU p50 | SIMD p50 | GPU p50 | Pillow ÷ SIMD latency | GPU throughput |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Clean baseline | 0.534 ms | 0.287 ms | 0.951 ms | 1.089 ms | 0.56× | 918 ops/s |
-| Direct-write candidate | 0.823 ms | 0.313 ms | 0.286 ms | 1.104 ms | 2.87× | 906 ops/s |
+| Direct-write candidate, dirty run | 0.823 ms | 0.313 ms | 0.286 ms | 1.104 ms | 2.87× | 906 ops/s |
+| Exact commit `ab96494bb`, clean repeat | 0.904 ms | 0.417 ms | 0.475 ms | 1.334 ms | 1.90× | 750 ops/s |
 
-Candidate SIMD latency fell from 0.951 ms to 0.286 ms (3.32× speedup, 70%
-lower), and throughput rose from 1,051 to 3,492 operations/s. CPU remains faster than
-Pillow in the candidate run at 0.313 ms versus 0.823 ms. The SIMD profile now
-matches CPU-scale latency, but reaches only 2.87× Pillow in the same run, short
-of the 5× goal. Do not infer a stable Pillow speedup from comparing the two
-different-run Pillow rows.
+The best candidate sample recorded 0.286 ms and 3,492 operations/s, but the
+clean-commit repeat measured 0.475 ms and 2,105 operations/s. Its in-process
+backend timing was 0.257 ms, compared with 0.817 ms for the original SIMD
+implementation. The exact commit remains faster than Pillow in its same-run
+reported median at 1.90×, and CPU is 2.17× faster at 0.417 ms versus 0.904 ms.
+SIMD still misses the 5× goal, and the variation between candidate samples
+means the first result is not a stable speedup claim.
 
 The single-image GPU profile remains blocked on the transfer boundary: each
 execution uploads 2,359,296 RGB bytes, submits one dispatch, and reads back
@@ -17763,9 +17772,10 @@ terminal output-sink API can remove a full host copy without changing
 `Image.convert`'s materialized-image contract; avoid speculative changes to the
 established GPU kernel in the meantime.
 
-The candidate's exact-output benchmark gate passed 3/3 comparisons. CPU, SIMD,
+Both candidate exact-output benchmark gates passed 3/3 comparisons. CPU, SIMD,
 and GPU each reported 100/100 executions on the requested backend with no
-fallback; GPU reported one dispatch per execution. The focused Rust test
+fallback; GPU reported one dispatch per execution. Both benchmark results
+recorded all three profiles at their intended backend. The focused Rust test
 `native_rgb_to_rgba_matches_exact_conversion_across_vector_tails` passed. No
 coverage ran. This is a checkpoint, not a completed performance target.
 
@@ -17773,8 +17783,10 @@ Receipts under `build/migration-parity/` are
 `rgb-to-rgba-baseline-main-6f3603564.json` and
 `rgb-to-rgba-baseline-main-6f3603564-parity.json.gz` for baseline, plus
 `rgb-to-rgba-candidate-neon-direct-main.json` and
-`rgb-to-rgba-candidate-neon-direct-main-parity.json.gz` for the candidate.
-Both benchmark results pass schema validation; both parity receipts report
+`rgb-to-rgba-candidate-neon-direct-main-parity.json.gz` for the first
+candidate, plus `rgb-to-rgba-main-ab96494bb.json` and
+`rgb-to-rgba-main-ab96494bb-parity.json.gz` for the clean commit run. All three
+benchmark results pass schema validation; all three parity receipts report
 selected/executed/passed = 3/3/3, failed = 0.
 
 The candidate command was:
