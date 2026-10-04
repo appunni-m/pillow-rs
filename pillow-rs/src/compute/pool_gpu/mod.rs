@@ -18975,7 +18975,7 @@ fn gpu_batch_group_limit_for_limits(
         return 0;
     };
     let halo = match op {
-        PipelineOp::MedianFilter { size: 3 } => 2u32,
+        PipelineOp::MedianFilter { size: 3 } | PipelineOp::MaxFilter { size: 3 } => 2u32,
         PipelineOp::ExtractBand { .. }
         | PipelineOp::Invert
         | PipelineOp::Brightness { .. }
@@ -33827,6 +33827,21 @@ mod tests {
         assert_eq!(cap, 21);
         assert!(1024u64 * 768 * cap as u64 <= u64::from(GPU_BUFFER_CAPACITY));
         assert!(1024u64 * 768 * (cap as u64 + 1) > u64::from(GPU_BUFFER_CAPACITY));
+
+        // 3x3 MaxFilter batches carry one clamped top and bottom row per
+        // image. The group limit includes those halo rows in buffer sizing.
+        let max_filter_cap = gpu_batch_group_limit_for_limits(
+            &PipelineOp::MaxFilter { size: 3 },
+            "RGB",
+            (1024, 768),
+            22,
+            default_limits.0,
+            default_limits.1,
+            default_limits.2,
+        );
+        assert_eq!(max_filter_cap, 21);
+        assert!(1024u64 * 770 * max_filter_cap as u64 <= u64::from(GPU_BUFFER_CAPACITY));
+        assert!(1024u64 * 770 * (max_filter_cap as u64 + 1) > u64::from(GPU_BUFFER_CAPACITY));
 
         let storage_limited_cap = gpu_batch_group_limit_for_limits(
             &extract_band,

@@ -4,7 +4,7 @@
 //! image routing. Grouped workloads reuse the existing operation pipelines
 //! over compatible native-mode images packed into one image, then split the
 //! results back into ordinary per-image results. Grouped operations reuse
-//! `MedianFilter(3)`, `ExtractBand`, `ImageOps.invert`, native-mode `Brightness`,
+//! `MedianFilter(3)`, `MaxFilter(3)`, `ExtractBand`, `ImageOps.invert`, native-mode `Brightness`,
 //! `ImageChops.multiply`, and same-mode RGBA `Color3DLUT` pipelines. Full-frame
 //! native-mode masked Paste jobs with L masks also reuse the existing Paste
 //! pipeline. Images that cannot be grouped use their ordinary single-image
@@ -21,6 +21,11 @@ use std::sync::Arc;
 pub enum BatchOperation {
     /// Apply Pillow's `ImageFilter.MedianFilter(size)` operation.
     MedianFilter {
+        /// Odd square filter size.
+        size: u32,
+    },
+    /// Apply Pillow's `ImageFilter.MaxFilter(size)` operation.
+    MaxFilter {
         /// Odd square filter size.
         size: u32,
     },
@@ -66,6 +71,7 @@ impl BatchOperation {
     fn apply(&self, image: &Image) -> Result<Image, PilError> {
         match self {
             Self::MedianFilter { size } => image.median_filter(*size),
+            Self::MaxFilter { size } => image.max_filter(*size),
             Self::ExtractBand { channel } => image.getchannel(*channel),
             Self::Invert => crate::ops::imageops::invert_ops(image),
             Self::Brightness { factor } => image.enhance_brightness(*factor),
@@ -114,7 +120,7 @@ impl BatchOperation {
             return false;
         };
         match self {
-            Self::MedianFilter { size } => *size == 3,
+            Self::MedianFilter { size } | Self::MaxFilter { size } => *size == 3,
             Self::ExtractBand { channel } => {
                 usize::try_from(*channel).is_ok_and(|channel| channel < channels)
             }
@@ -158,6 +164,7 @@ impl BatchOperation {
             (Self::MedianFilter { size: left }, Self::MedianFilter { size: right }) => {
                 left == right
             }
+            (Self::MaxFilter { size: left }, Self::MaxFilter { size: right }) => left == right,
             (Self::ExtractBand { channel: left }, Self::ExtractBand { channel: right }) => {
                 left == right
             }
@@ -193,6 +200,7 @@ impl BatchOperation {
     fn pipeline_op(&self) -> Option<PipelineOp> {
         match self {
             Self::MedianFilter { size } => Some(PipelineOp::MedianFilter { size: *size }),
+            Self::MaxFilter { size } => Some(PipelineOp::MaxFilter { size: *size }),
             Self::ExtractBand { channel } => Some(PipelineOp::ExtractBand {
                 index: u8::try_from(*channel).ok()?,
             }),
@@ -240,7 +248,7 @@ struct BatchJob {
 ///
 /// `queue = false` applies each operation immediately using the ordinary
 /// single-image route. With `queue = true`, [`join`](Self::join) groups
-/// compatible `MedianFilter(3)`, `ExtractBand`, L/RGB `ImageOps.invert`, exact-factor native-mode
+/// compatible `MedianFilter(3)` and `MaxFilter(3)`, `ExtractBand`, L/RGB `ImageOps.invert`, exact-factor native-mode
 /// `Brightness`, `ImageChops.multiply`, full-frame masked Paste, and same-mode
 /// RGBA `Color3DLUT` jobs when GPU is the selected backend. Grouping currently
 /// requires equal-size native byte modes `L`, `LA`, `RGB`, and `RGBA`; batched
@@ -449,7 +457,7 @@ impl BatchExecutor {
             .and_then(|width| width.checked_mul(channels))
             .ok_or_else(|| PilError::DimensionError("batch row size overflow".into()))?;
         let (halo, stacked_height, output_mode, output_channels) = match &first.operation {
-            BatchOperation::MedianFilter { size: 3 } => {
+            BatchOperation::MedianFilter { size: 3 } | BatchOperation::MaxFilter { size: 3 } => {
                 let group_len = u32::try_from(indices.len())
                     .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
                 let guarded_height = height
@@ -1003,6 +1011,35 @@ mod tests {
                 .map(|image| image.tobytes().unwrap())
                 .collect::<Vec<_>>();
             assert_eq!(actual, expected, "queued {mode} outputs differ");
+        }
+    }
+
+    #[test]
+    fn queued_max_filter_matches_single_images_without_cross_image_edges() {
+        let modes = [("L", 1), ("LA", 2), ("RGB", 3), ("RGBA", 4)];
+        for (mode, channels) in modes {
+            let sources = [
+                fixture(mode, 7, 5, channels, 17),
+                fixture(mode, 7, 5, channels, 203),
+                fixture(mode, 7, 5, channels, 73),
+            ];
+            let expected = sources
+                .iter()
+                .map(|source| source.max_filter(3).unwrap().tobytes().unwrap())
+                .collect::<Vec<_>>();
+            let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+            for source in sources {
+                batch
+                    .submit(source, BatchOperation::MaxFilter { size: 3 })
+                    .unwrap();
+            }
+            let actual = batch
+                .join()
+                .unwrap()
+                .iter()
+                .map(|image| image.tobytes().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "queued {mode} MaxFilter outputs differ");
         }
     }
 

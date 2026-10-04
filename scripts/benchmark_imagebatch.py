@@ -43,6 +43,7 @@ def parse_args() -> argparse.Namespace:
         "--operation",
         choices=(
             "median-filter",
+            "max-filter",
             "extract-band",
             "invert",
             "brightness",
@@ -159,6 +160,8 @@ def main() -> int:
                 )
                 if args.operation == "median-filter":
                     image.filter(ImageFilter.MedianFilter(3)).tobytes()
+                elif args.operation == "max-filter":
+                    image.filter(ImageFilter.MaxFilter(3)).tobytes()
                 elif args.operation == "extract-band":
                     image.getchannel(args.channel).tobytes()
                 elif args.operation == "invert":
@@ -198,6 +201,8 @@ def main() -> int:
             )
             if args.operation == "median-filter":
                 operation = ImageFilter.MedianFilter(3)
+            elif args.operation == "max-filter":
+                operation = ImageFilter.MaxFilter(3)
             elif args.operation == "extract-band":
                 operation = ImageBatch.ExtractBand(args.channel)
             elif args.operation == "invert":

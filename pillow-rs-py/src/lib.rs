@@ -123,6 +123,11 @@ impl PyBatchExecutor {
                 let size = filter_size_from_python(size, false)?;
                 pillow_rs::BatchOperation::MedianFilter { size }
             }
+            "MaxFilter" => {
+                let size = operation.getattr("size")?.extract::<i64>()?;
+                let size = filter_size_from_python(size, false)?;
+                pillow_rs::BatchOperation::MaxFilter { size }
+            }
             "ExtractBand" => pillow_rs::BatchOperation::ExtractBand {
                 channel: operation.getattr("channel")?.extract::<i32>()?,
             },
@@ -164,7 +169,7 @@ impl PyBatchExecutor {
             }
             _ => {
                 return Err(PyTypeError::new_err(
-                    "batch operation must be an ImageFilter.MedianFilter, ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Brightness, ImageBatch.Multiply, ImageBatch.Paste, or ImageBatch.Color3DLUT instance",
+                    "batch operation must be an ImageFilter.MedianFilter or ImageFilter.MaxFilter, ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Brightness, ImageBatch.Multiply, ImageBatch.Paste, or ImageBatch.Color3DLUT instance",
                 ));
             }
         };
