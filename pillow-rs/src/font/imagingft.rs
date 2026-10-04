@@ -55,6 +55,8 @@ struct CachedSourceFace {
 struct VariationMetadata {
     names: Vec<Vec<u8>>,
     axes: Vec<ImageFontVariationAxis>,
+    named_instance_coordinates: Vec<Vec<ffi::FT_Fixed>>,
+    named_instance_style_names: Vec<String>,
 }
 
 struct CachedVariationMetadata {
@@ -813,7 +815,35 @@ fn build_variation_metadata(font: &FreeTypeFont) -> Result<VariationMetadata, Pi
             names.push(name);
         }
     }
-    Ok(VariationMetadata { names, axes })
+    // `set_variation_by_name` maps the deduplicated public name position to
+    // FreeType's one-based named-instance index. Cache coordinates in that
+    // same order so it can use the cheaper design-coordinate setter without
+    // reparsing the variable face for every selection.
+    let named_instance_coordinates = fvar
+        .instances
+        .iter()
+        .take(names.len())
+        .map(|instance| {
+            instance
+                .coords
+                .iter()
+                .copied()
+                .map(ffi::FT_Fixed::from)
+                .collect()
+        })
+        .collect();
+    let named_instance_style_names = fvar
+        .instances
+        .iter()
+        .take(names.len())
+        .map(|instance| freetype_named_instance_style_name(&name_table, instance.subfamily_name_id))
+        .collect();
+    Ok(VariationMetadata {
+        names,
+        axes,
+        named_instance_coordinates,
+        named_instance_style_names,
+    })
 }
 
 fn variation_instance_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
@@ -836,7 +866,7 @@ fn variation_instance_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilErro
 
 pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Result<(), PilError> {
     ensure_variation_metadata(font)?;
-    let (index, selected_name) = {
+    let (index, coordinates, style_name) = {
         let metadata = font.engine.variation_metadata.borrow();
         let names = metadata
             .as_ref()
@@ -848,7 +878,17 @@ pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Res
                 String::from_utf8_lossy(name)
             )));
         };
-        (index, names[index].clone())
+        let coordinates = metadata
+            .as_ref()
+            .and_then(|metadata| metadata.named_instance_coordinates.get(index))
+            .cloned()
+            .ok_or_else(|| PilError::OsError("invalid argument".into()))?;
+        let style_name = metadata
+            .as_ref()
+            .and_then(|metadata| metadata.named_instance_style_names.get(index))
+            .cloned()
+            .ok_or_else(|| PilError::OsError("invalid argument".into()))?;
+        (index, coordinates, style_name)
     };
     let instance_index = index + 1;
     if font.engine.last_variation_index == Some(instance_index) {
@@ -862,11 +902,47 @@ pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Res
         .basic_layout_cache
         .borrow_mut()
         .clear_variable_metrics();
-    let status =
-        ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), instance_index as ffi::FT_UInt);
-    check_ft_error(status)?;
+
+    let base_face_index = font.engine.source_face_index & 0xFFFF;
+    let instance_index_long = ffi::FT_Long::try_from(instance_index)
+        .map_err(|_| PilError::OsError("invalid argument".into()))?;
+    let instance_multiplier = ffi::FT_Long::try_from(1_i8)
+        .map_err(|_| PilError::OsError("invalid argument".into()))?
+        .checked_shl(16)
+        .ok_or_else(|| PilError::OsError("invalid argument".into()))?;
+    let encoded_instance = instance_index_long
+        .checked_mul(instance_multiplier)
+        .ok_or_else(|| PilError::OsError("invalid argument".into()))?;
+    let selected_face_index = base_face_index | encoded_instance;
+    let coordinates_count = ffi::FT_UInt::try_from(coordinates.len())
+        .map_err(|_| PilError::OsError("invalid argument".into()))?;
+
+    // fontdone's FT_Set_Named_Instance currently reconstructs the complete
+    // variable face. The fvar coordinates are already cached above, and
+    // FT_Set_Var_Design_Coordinates reuses the parsed SFNT tables when it can.
+    // Temporarily expose the collection face index so that refresh keeps the
+    // existing face and size handles; restore FreeType's encoded instance
+    // index after the coordinate update for font_variant() and public state.
+    let previous_face_index = font.engine.face.face_index;
+    font.engine.face.face_index = base_face_index;
+    let coordinate_status = ffi::FT_Set_Var_Design_Coordinates(
+        Some(&mut font.engine.face),
+        coordinates_count,
+        Some(&coordinates),
+    );
+    if coordinate_status == ffi::FT_Err_Ok {
+        font.engine.face.face_index = selected_face_index;
+    } else {
+        font.engine.face.face_index = previous_face_index;
+        let status = ffi::FT_Set_Named_Instance(
+            Some(&mut font.engine.face),
+            ffi::FT_UInt::try_from(instance_index)
+                .map_err(|_| PilError::OsError("invalid argument".into()))?,
+        );
+        check_ft_error(status)?;
+    }
     refresh_engine_metadata(font);
-    font.engine.style_name = Some(String::from_utf8_lossy(&selected_name).into_owned());
+    font.engine.style_name = Some(style_name);
     Ok(())
 }
 
@@ -2402,6 +2478,33 @@ fn preferred_name_record(
                 .position(|record| record.name_id == name_id && record.platform_id == 1)
         })?;
     Some(&table.records[preferred])
+}
+
+fn freetype_named_instance_style_name(table: &tt::name::NameTable, name_id: u16) -> String {
+    // FreeType's named-instance setter resolves style names from Windows SFNT
+    // records; its face style remains empty when an instance name exists only
+    // in the Macintosh records used as a fallback by Pillow's variation-name
+    // list. Cache that distinction so coordinate updates match the setter's
+    // public metadata without rebuilding the face.
+    let preferred = table
+        .records
+        .iter()
+        .position(|record| {
+            record.name_id == name_id
+                && record.platform_id == 3
+                && matches!(record.encoding_id, 0 | 1 | 10)
+                && (record.language_id & 0x03ff) == 0x0009
+        })
+        .or_else(|| {
+            table.records.iter().position(|record| {
+                record.name_id == name_id
+                    && record.platform_id == 3
+                    && matches!(record.encoding_id, 0 | 1 | 10)
+            })
+        });
+    preferred
+        .map(|index| decode_utf16be_to_utf8(&table.records[index].string))
+        .unwrap_or_default()
 }
 
 fn decode_utf16be_to_utf8(bytes: &[u8]) -> String {
