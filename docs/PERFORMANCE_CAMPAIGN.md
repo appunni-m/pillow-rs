@@ -17529,3 +17529,35 @@ Receipts: `imagecolor-current-cpu-parity-20261004.json`,
 `imagecolor-getcolor-cached-attempt1-20261004.json` under
 `build/migration-parity/`; direct measurements used isolated CPython 3.12
 processes. No coverage ran.
+
+## `ImageColor.getrgb` bounded cache checkpoint — 2026-10-04
+
+`getrgb` had the same missing warm-path optimization: Pillow caches parsed
+strings with the default 128-entry `lru_cache`, while the target called Rust
+for every request. Adding the same decorator preserves the parser for misses
+and lets repeated identical color strings return the immutable tuple directly.
+The CPU parity lane passed all 46 ImageColor cases after the change.
+
+An in-process comparison alternated target and Pillow calls for nine samples
+of five million calls each. Warm medians were 38.929 ns for the target and
+38.828 ns for Pillow, with overlapping sample ranges; both caches had one miss
+and 45,009,999 hits. The uncached target measured about 292 ns per call in the
+pre-change tight-loop run. This removes the parsing work and brings the target
+callable to Pillow's warm-call latency within measurement noise.
+
+The official whole-workflow benchmark gate passed. Its recorded medians moved
+from Pillow 1.625 µs / target CPU 2.208 µs before the cache to Pillow 1.667 µs
+/ target CPU 1.958 µs after it. The target remains slower in this adapter-level
+measurement, but this case has no image buffer: `actual_backend` is absent for
+all target profiles and no CPU, SIMD, or GPU execution is proven. The benchmark
+input incorrectly lists SIMD and GPU subjects even though the parity contract
+declares only CPU. Keep the workflow row as unresolved measurement evidence;
+use the direct paired callable result for this optimization, and fix the
+shared tiny-host-operation timer/profile applicability before ranking these
+rows as backend performance.
+
+Receipts: `imagecolor-getrgb-current-cpu-parity-20261004.json`,
+`imagecolor-getrgb-cached-cpu-parity-20261004.json`,
+`imagecolor-getrgb-current-baseline-20261004.json`, and
+`imagecolor-getrgb-cached-attempt1-20261004.json` under
+`build/migration-parity/`. No coverage ran.
