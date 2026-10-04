@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import gzip
 import hashlib
 import json
 import math
@@ -345,6 +346,23 @@ def merge_parity_results(results: list[dict[str, Any]], timeout: int) -> dict[st
     }
 
 
+def write_parity_artifact(output: Path, result: dict[str, Any]) -> None:
+    """Stream a merged parity receipt; use gzip when the path ends in `.gz`."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    opener = gzip.open if output.suffix == ".gz" else open
+    with opener(output, "wt", encoding="utf-8") as stream:
+        json.dump(result, stream, indent=2)
+        stream.write("\n")
+
+
+def read_and_remove_backend_parity(path: Path) -> dict[str, Any]:
+    """Load one completed backend receipt and free its temporary disk copy."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def run_parity(
     manifest: Path,
     output: Path,
@@ -405,7 +423,7 @@ def run_parity(
                 raise RuntimeError(
                     f"{backend} parity preflight did not emit a result: {detail}"
                 )
-            result = json.loads(backend_output.read_text(encoding="utf-8"))
+            result = read_and_remove_backend_parity(backend_output)
             if result.get("status") != "completed":
                 details = result.get("infrastructure_errors", [])
                 detail = json.dumps(details, sort_keys=True)
@@ -419,7 +437,7 @@ def run_parity(
                 )
             backend_results.append(result)
     merged = merge_parity_results(backend_results, timeout)
-    output.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+    write_parity_artifact(output, merged)
     return merged
 
 
@@ -1190,8 +1208,7 @@ def run(args: argparse.Namespace) -> int:
             "comparisons": [],
             "infrastructure_errors": [],
         }
-        parity_output.parent.mkdir(parents=True, exist_ok=True)
-        parity_output.write_text(json.dumps(parity, indent=2) + "\n", encoding="utf-8")
+        write_parity_artifact(parity_output, parity)
     parity_by_case = {
         (item["case_id"], item["target_profile"]): item
         for item in parity["comparisons"]
