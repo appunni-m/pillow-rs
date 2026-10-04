@@ -71,7 +71,8 @@ complete Pillow compatibility or stable alpha APIs.
 ## What pillow-rs adds beyond Pillow
 
 Pillow is the behavior reference for the selected compatibility surface.
-pillow-rs adds these system capabilities around that surface:
+The items below are first-party runtime and contributor-tooling additions that
+upstream Pillow does not bundle as equivalents.
 
 **For applications**
 
