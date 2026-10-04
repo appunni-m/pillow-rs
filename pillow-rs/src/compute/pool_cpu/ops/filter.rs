@@ -1225,6 +1225,79 @@ fn filter_5x5_constant_bytes(
     }
 }
 
+pub(crate) fn binomial5x5_luma_parameters_match(
+    kernel: &[f32; 25],
+    scale: f32,
+    offset: f32,
+) -> bool {
+    const WEIGHTS: [f32; 5] = [1.0, 4.0, 6.0, 4.0, 1.0];
+    scale == 256.0
+        && offset == 0.0
+        && kernel
+            .iter()
+            .enumerate()
+            .all(|(index, coefficient)| *coefficient == WEIGHTS[index / 5] * WEIGHTS[index % 5])
+}
+
+/// Apply Pillow's 5x5 binomial blur to native L bytes using exact integer
+/// arithmetic and five reusable horizontal rows. For this kernel, every
+/// normalized coefficient is an exact multiple of 1/256 and the largest
+/// weighted sum is 65,280, so the ordered f32 accumulation is exactly
+/// representable and Pillow's final `+0.5` truncation equals `(sum + 128) / 256`.
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_binomial_luma_rows(raw: &[u8], out: &mut [u8], width: usize, height: usize) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    if raw.len() != pixel_count || out.len() != pixel_count {
+        return false;
+    }
+    if width < 5 || height < 5 {
+        return true;
+    }
+
+    const WEIGHTS: [u32; 5] = [1, 4, 6, 4, 1];
+    let mut horizontal_rows: [Vec<u16>; 5] = std::array::from_fn(|_| vec![0; width]);
+    let fill_horizontal_row = |source_y: usize, destination: &mut [u16]| {
+        let row_start = source_y * width;
+        for x in 2..width - 2 {
+            destination[x] = u16::from(raw[row_start + x - 2])
+                + u16::from(raw[row_start + x - 1]) * 4
+                + u16::from(raw[row_start + x]) * 6
+                + u16::from(raw[row_start + x + 1]) * 4
+                + u16::from(raw[row_start + x + 2]);
+        }
+    };
+
+    for source_y in 0..5 {
+        fill_horizontal_row(source_y, &mut horizontal_rows[source_y]);
+    }
+    for y in 2..height - 2 {
+        let rows = [
+            &horizontal_rows[(y - 2) % 5],
+            &horizontal_rows[(y - 1) % 5],
+            &horizontal_rows[y % 5],
+            &horizontal_rows[(y + 1) % 5],
+            &horizontal_rows[(y + 2) % 5],
+        ];
+        let output_row = y * width;
+        for x in 2..width - 2 {
+            let sum = rows[0][x] as u32 * WEIGHTS[0]
+                + rows[1][x] as u32 * WEIGHTS[1]
+                + rows[2][x] as u32 * WEIGHTS[2]
+                + rows[3][x] as u32 * WEIGHTS[3]
+                + rows[4][x] as u32 * WEIGHTS[4];
+            out[output_row + x] = ((sum + 128) / 256) as u8;
+        }
+
+        let next_source_y = y + 3;
+        if next_source_y < height {
+            fill_horizontal_row(next_source_y, &mut horizontal_rows[next_source_y % 5]);
+        }
+    }
+    true
+}
+
 // ── PIL-style box blur ──
 
 const BOX_BLUR_SCALE: u32 = 1 << 24;
@@ -2539,6 +2612,15 @@ pub fn execute_filter5x5(
         let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
         return Ok(preserve_mode(img, result));
     }
+    #[cfg(not(feature = "parallel"))]
+    if matches!(explicit_mode, None | Some("L"))
+        && matches!(img, DynamicImage::ImageLuma8(_))
+        && binomial5x5_luma_parameters_match(kernel, scale, offset)
+        && filter_5x5_binomial_luma_rows(raw, &mut out, w_u32 as usize, h_u32 as usize)
+    {
+        let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
     filter_5x5_byte_rows(
         raw,
         &mut out,
@@ -2974,5 +3056,42 @@ mod f_mode_rank_filter_uniform_tests {
         assert!(!rank_filter_f_requires_legacy_sort(&raw_f32(&[
             -0.0, -0.0, 1.0
         ])));
+    }
+}
+
+#[cfg(all(test, not(feature = "parallel")))]
+mod binomial5x5_luma_tests {
+    use super::{filter_5x5_binomial_luma_rows, filter_5x5_byte_rows};
+
+    #[test]
+    fn integer_separable_path_matches_ordered_float_kernel_and_copied_borders() {
+        let weights = [1.0, 4.0, 6.0, 4.0, 1.0];
+        let kernel: [f32; 25] =
+            std::array::from_fn(|index| weights[index / 5] * weights[index % 5]);
+        let normalized = std::array::from_fn(|index| kernel[index] / 256.0);
+        for (width, height) in [(8, 6), (9, 7), (5, 5), (4, 8), (8, 4)] {
+            let raw: Vec<u8> = (0..width * height)
+                .map(|index| ((index * 73 + index / width * 29 + 17) % 256) as u8)
+                .collect();
+            let mut expected = raw.clone();
+            filter_5x5_byte_rows(
+                &raw,
+                &mut expected,
+                width as i32,
+                height as i32,
+                1,
+                &normalized,
+                0.5,
+            );
+
+            let mut actual = raw.clone();
+            assert!(filter_5x5_binomial_luma_rows(
+                &raw,
+                &mut actual,
+                width,
+                height,
+            ));
+            assert_eq!(actual, expected, "dimension {width}x{height}");
+        }
     }
 }

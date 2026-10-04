@@ -222,6 +222,18 @@ Some mode-specific packed kernels exist, but admission is narrow: GPU has packed
 
 **Assessment:** the general kernels still express extra channel work, and measurements now confirm a material cost for LA MedianFilter(3) on this adapter. Other convolution, resize, and thumbnail paths remain unmeasured; profile each format-specific workload before generalizing. Preserve each operation's rounding, edge behavior, and alpha semantics.
 
+The material native-L 5x5 binomial `ImageFilter.Kernel` case is now a measured
+exception: a packed-L shader avoids the general shader's unused G/B/A
+convolutions and cuts GPU transfer from 3,145,728 to 786,432 bytes in each
+direction, with zero mode conversions. The serial CPU and SIMD routes use a
+separable integer kernel only after proving the exact 25 coefficients, scale,
+offset, and L storage. CPU is now 3.18× faster than Pillow; SIMD is 3.32×,
+still below the 5× target. GPU is 0.781 ms versus SIMD at 1.165 ms and has
+higher single-image reciprocal throughput, but the concurrency-one benchmark
+does not establish sustained throughput. This closes neither P1 nor P9 for the
+general operation set. See `PERFORMANCE_CAMPAIGN.md` for the bounded attempts,
+parity receipts, and next-operation checkpoint.
+
 ### P10. JavaScript formatted multiband data creates per-pixel arrays
 
 `formatted_image_data_to_js` (`pillow-rs-js/src/lib.rs:76–102`) walks the formatted component vectors and creates a new JavaScript array for the whole result plus another JavaScript array for each pixel, pushing channel values one at a time. This matches the nested-array result shape, but it creates O(pixel count) JS arrays for multiband data. The byte-oriented `getdata` method at :1673–1675 provides a flat path when callers can consume storage bytes instead of formatted pixel tuples.
@@ -449,15 +461,17 @@ SIMD, GPU, or Rayon execution evidence. P4 is closed for the CPU target.
 M1 and M2 are closed for the current public surface by the follow-up checks
 above. The split fix has mode and byte parity; the typed filtered-resize
 variants are unreachable through current public constructors and decoders.
-P2 and P5–P10 remain audit candidates without measured follow-up in this
-checkpoint. P4's serial CPU target is closed; it has no applicable SIMD, GPU,
-or Parallel CPU route.
+P9 now has one measured L Filter5x5 specialization, but remains open for other
+operations and modes. P2, P5–P8, and P10 remain audit candidates without
+measured follow-up in this checkpoint. P4's serial CPU target is closed; it
+has no applicable SIMD, GPU, or Parallel CPU route.
 
 ## Suggested order for follow-up
 
 1. Continue P1 after the RGB Transform, RGB AutoContrast, RGB/L/LA
-   MaxFilter(3), L MinFilter(3), and Cover checkpoints by selecting the next
-   uncheckpointed operation/mode with measurable RGBA staging cost; preserve
+   MaxFilter(3), L MinFilter(3), L Filter5x5, and Cover checkpoints by
+   selecting the next uncheckpointed operation/mode with measurable RGBA
+   staging cost; preserve
    each kernel's rounding and channel contract. RGB AutoContrast's native GPU
    transfers are implemented, but queued throughput and the SIMD speedup target remain
    open. L and LA Cover serial CPU targets are closed on their material cases;

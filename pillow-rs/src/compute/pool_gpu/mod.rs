@@ -7061,6 +7061,19 @@ impl GpuInner {
                 continue;
             }
             if packed_native_byte_filter
+                && matches!(logical_mode, None | Some("L"))
+                && matches!(op, PipelineOp::Filter5x5 { .. })
+            {
+                let filter = self.resolve_pipeline(
+                    "__internal_filter_5x5_luma_packed",
+                    "filter_5x5_luma_packed.wgsl",
+                    include_str!("shaders/filter_5x5_luma_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(filter));
+                index += 1;
+                continue;
+            }
+            if packed_native_byte_filter
                 && matches!(logical_mode, Some("LA"))
                 && matches!(op, PipelineOp::MedianFilter { size: 3 })
             {
@@ -8617,6 +8630,15 @@ impl GpuInner {
                     include_str!("shaders/histogram_clear.wgsl"),
                 )?
             } else if packed_native_byte_filter
+                && matches!(logical_mode, None | Some("L"))
+                && matches!(op, PipelineOp::Filter5x5 { .. })
+            {
+                self.resolve_pipeline(
+                    "__internal_filter_5x5_luma_packed",
+                    "filter_5x5_luma_packed.wgsl",
+                    include_str!("shaders/filter_5x5_luma_packed.wgsl"),
+                )?
+            } else if packed_native_byte_filter
                 && matches!(logical_mode, Some("LA"))
                 && matches!(op, PipelineOp::MedianFilter { size: 3 })
             {
@@ -9957,6 +9979,11 @@ impl GpuInner {
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
             "__internal_min_filter_3x3_luma_packed" => plan_packed_luma_dispatch(
+                input_dims.0,
+                input_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
+            "__internal_filter_5x5_luma_packed" => plan_packed_luma_dispatch(
                 input_dims.0,
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
@@ -14609,6 +14636,20 @@ fn gpu_packed_native_byte_filter_input(
                         .is_some_and(|radius| radius <= MAX_GPU_BLUR_RADIUS)
                 }
                 [PipelineOp::BoxBlur { radius: 1 }] => true,
+                [
+                    PipelineOp::Filter5x5 {
+                        kernel,
+                        scale,
+                        offset,
+                    },
+                ] => {
+                    // The packed shader emits four adjacent samples per word;
+                    // row starts must therefore remain word-aligned. It uses
+                    // the same ordered f32/FMA contract as the general 5x5
+                    // shader, but only when that contract is proven safe.
+                    image.width() % 4 == 0
+                        && registry::gpu_filter_kernel_is_exact(kernel, *scale, *offset)
+                }
                 _ => false,
             };
             if !supported {
@@ -31509,8 +31550,17 @@ mod tests {
         let median = PipelineOp::MedianFilter { size: 3 };
         let max_filter = PipelineOp::MaxFilter { size: 3 };
         let min_filter = PipelineOp::MinFilter { size: 3 };
+        let weights = [1.0, 4.0, 6.0, 4.0, 1.0];
+        let kernel = std::array::from_fn(|index| weights[index / 5] * weights[index % 5]);
+        let filter_5x5 = PipelineOp::Filter5x5 {
+            kernel,
+            scale: 256.0,
+            offset: 0.0,
+        };
         let luma =
             DynamicImage::ImageLuma8(GrayImage::from_raw(65, 47, vec![37; 65 * 47]).unwrap());
+        let aligned_luma =
+            DynamicImage::ImageLuma8(GrayImage::from_raw(8, 6, vec![37; 8 * 6]).unwrap());
         let la = DynamicImage::ImageLumaA8(
             GrayAlphaImage::from_raw(65, 47, vec![37; 65 * 47 * 2]).unwrap(),
         );
@@ -31542,6 +31592,35 @@ mod tests {
         assert!(super::gpu_packed_native_byte_filter_input(
             std::slice::from_ref(&box_blur),
             &luma,
+            Some("L")
+        ));
+        assert!(super::gpu_packed_native_byte_filter_input(
+            std::slice::from_ref(&filter_5x5),
+            &aligned_luma,
+            None
+        ));
+        assert!(super::gpu_packed_native_byte_filter_input(
+            std::slice::from_ref(&filter_5x5),
+            &aligned_luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_native_byte_filter_input(
+            std::slice::from_ref(&filter_5x5),
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_native_byte_filter_input(
+            std::slice::from_ref(&filter_5x5),
+            &aligned_luma,
+            Some("P")
+        ));
+        assert!(!super::gpu_packed_native_byte_filter_input(
+            &[PipelineOp::Filter5x5 {
+                kernel: [1.0; 25],
+                scale: 0.0,
+                offset: 0.0,
+            }],
+            &aligned_luma,
             Some("L")
         ));
         assert!(super::gpu_packed_native_byte_filter_input(
