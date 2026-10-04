@@ -1727,6 +1727,10 @@ impl PyImage {
                         pillow_rs::FormattedPixelValue::Components(values) => {
                             PyTuple::new(py, values)?.into_py_any(py)?
                         }
+                        pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => {
+                            PyTuple::new(py, bytes.into_iter().take(usize::from(bands)))?
+                                .into_py_any(py)?
+                        }
                     };
                     let entry = PyTuple::new(py, [count.into_py_any(py)?, color_value])?;
                     out.append(entry)?;
@@ -2033,6 +2037,11 @@ impl PyImage {
             pillow_rs::FormattedPixelValue::Components(values) => {
                 Ok(PyTuple::new(py, values)?.into_py_any(py)?)
             }
+            pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => Ok(PyTuple::new(
+                py,
+                bytes.into_iter().take(usize::from(bands)),
+            )?
+            .into_py_any(py)?),
         })
     }
 

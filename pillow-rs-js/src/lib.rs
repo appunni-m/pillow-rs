@@ -70,6 +70,15 @@ fn formatted_pixel_to_js(value: pillow_rs::FormattedPixelValue) -> JsValue {
         pillow_rs::FormattedPixelValue::Components(values) => {
             js_sys::Array::from_iter(values.into_iter().map(JsValue::from)).into()
         }
+        pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => {
+            js_sys::Array::from_iter(
+                bytes
+                    .into_iter()
+                    .take(usize::from(bands))
+                    .map(JsValue::from),
+            )
+            .into()
+        }
     }
 }
 
@@ -1659,6 +1668,13 @@ impl Image {
                             let color_arr = js_sys::Array::new();
                             for value in values {
                                 color_arr.push(&JsValue::from(*value));
+                            }
+                            entry.push(&color_arr);
+                        }
+                        pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => {
+                            let color_arr = js_sys::Array::new();
+                            for value in bytes.iter().copied().take(usize::from(*bands)) {
+                                color_arr.push(&JsValue::from(value));
                             }
                             entry.push(&color_arr);
                         }

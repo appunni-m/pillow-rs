@@ -106,8 +106,8 @@ class BenchmarkViewTests(unittest.TestCase):
                      for workload in workloads]
         # Pin the complete generated catalog so additions and removals must
         # keep both public benchmark tables current.
-        self.assertEqual(len(workloads), 651)
-        self.assertEqual(categories.count("operations"), 191)
+        self.assertEqual(len(workloads), 652)
+        self.assertEqual(categories.count("operations"), 192)
         self.assertEqual(categories.count("pipelines"), 460)
 
     def test_all_observations_retained_without_mutating_snapshot(self):

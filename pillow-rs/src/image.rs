@@ -731,6 +731,13 @@ pub enum FormattedPixelValue {
     Float(f64),
     /// A multiband pixel value in Pillow band order.
     Components(Vec<u8>),
+    /// A small multiband pixel value stored inline to avoid a per-pixel heap allocation.
+    InlineComponents {
+        /// Pixel bytes in Pillow band order; unused trailing bytes are zero.
+        bytes: [u8; 4],
+        /// Number of active entries in `bytes`.
+        bands: u8,
+    },
 }
 
 /// Pillow's `ImagingGetColors` hash-table sizes and associated probing
@@ -774,21 +781,53 @@ fn pillow_color_table_parameters(maxcolors: u32) -> Option<(u32, u32)> {
         .map(|(size, polynomial)| (size - 1, *polynomial))
 }
 
+const PILLOW_COLOR_DIRECT_TABLE_MAX_BYTES: usize = 8 * 1024 * 1024;
+
+fn pillow_color_direct_table_slots(code_mask: u32, pixel_count: usize) -> Option<usize> {
+    let slots = usize::try_from(code_mask).ok()?.checked_add(1)?;
+    if code_mask <= 1023 {
+        return Some(slots);
+    }
+
+    let bytes = slots.checked_mul(std::mem::size_of::<u64>())?;
+    (bytes <= PILLOW_COLOR_DIRECT_TABLE_MAX_BYTES && slots <= pixel_count.saturating_mul(2))
+        .then_some(slots)
+}
+
+fn pillow_image_pixel_count(image: &DynamicImage) -> usize {
+    let (width, height) = image.dimensions();
+    usize::try_from(width)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(height)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .unwrap_or(0)
+}
+
 enum PillowColorCounts {
     Direct(Vec<u64>),
     Sparse(std::collections::HashMap<u32, (u32, u32)>),
 }
 
 impl PillowColorCounts {
-    fn new(code_mask: u32, sparse_capacity: usize) -> Self {
-        // Small Pillow tables are cheap to address directly. Keeping the
-        // count and pixel key in one word removes HashMap's second hash/probe
-        // after the Pillow-compatible slot probe.
-        if code_mask <= 1023 {
-            Self::Direct(vec![0; code_mask as usize + 1])
-        } else {
-            Self::Sparse(std::collections::HashMap::with_capacity(sparse_capacity))
+    fn new(code_mask: u32, sparse_capacity: usize, pixel_count: usize) -> Self {
+        // Keep large tables sparse for small images or memory-heavy limits.
+        // Dense slots avoid a second randomized hash probe per input pixel
+        // when a bounded table is well amortized by the scan.
+        if let Some(slot_count) = pillow_color_direct_table_slots(code_mask, pixel_count) {
+            if slot_count <= 1024 {
+                return Self::Direct(vec![0; slot_count]);
+            }
+
+            let mut slots = Vec::new();
+            if slots.try_reserve_exact(slot_count).is_ok() {
+                slots.resize(slot_count, 0);
+                return Self::Direct(slots);
+            }
         }
+        Self::Sparse(std::collections::HashMap::with_capacity(sparse_capacity))
     }
 
     fn count(
@@ -933,13 +972,19 @@ fn count_pillow_color_sparse(
     }
 }
 
-fn pillow_color_components(pixel: u32, bands: usize) -> Vec<u8> {
+fn pillow_color_components(pixel: u32, bands: usize) -> FormattedPixelValue {
     let bytes = pixel.to_ne_bytes();
     match bands {
         // Pillow's four-byte LA storage places alpha in the final byte.
-        2 => vec![bytes[0], bytes[3]],
-        3 => vec![bytes[0], bytes[1], bytes[2]],
-        4 => bytes.to_vec(),
+        2 => FormattedPixelValue::InlineComponents {
+            bytes: [bytes[0], bytes[3], 0, 0],
+            bands: 2,
+        },
+        3 => FormattedPixelValue::InlineComponents {
+            bytes: [bytes[0], bytes[1], bytes[2], 0],
+            bands: 3,
+        },
+        4 => FormattedPixelValue::InlineComponents { bytes, bands: 4 },
         _ => unreachable!("getcolors only supports one through four bands"),
     }
 }
@@ -962,6 +1007,201 @@ fn pillow_color_pixel(components: &[u8]) -> u32 {
         _ => unreachable!("getcolors only supports one through four bands"),
     }
     u32::from_ne_bytes(bytes)
+}
+
+enum RgbGrayscaleColorCounts {
+    NotGrayscale,
+    TooManyColors,
+    Colors(Vec<(u32, FormattedPixelValue)>),
+}
+
+fn getcolors_rgb8_grayscale(
+    image: &crate::raster::RgbImage,
+    maxcolors: usize,
+    code_mask: u32,
+    code_polynomial: u32,
+) -> RgbGrayscaleColorCounts {
+    let mut histogram = [0u32; 256];
+    let mut distinct_colors = 0usize;
+    for pixel in image.as_raw().chunks_exact(3) {
+        let [red, green, blue] = [pixel[0], pixel[1], pixel[2]];
+        if red != green || green != blue {
+            return RgbGrayscaleColorCounts::NotGrayscale;
+        }
+        let count = &mut histogram[usize::from(red)];
+        if *count == 0 {
+            distinct_colors += 1;
+            if distinct_colors > maxcolors {
+                return RgbGrayscaleColorCounts::TooManyColors;
+            }
+        }
+        *count += 1;
+    }
+
+    // At most 256 grayscale keys are occupied. Preserve Pillow's slot order
+    // with its same probe recurrence, without allocating or zeroing its large
+    // `maxcolors`-sized table for every scanned pixel.
+    let mut occupied = Vec::<(u32, u32, u32)>::with_capacity(distinct_colors);
+    for (gray, count) in histogram.into_iter().enumerate() {
+        if count == 0 {
+            continue;
+        }
+        let Ok(gray) = u8::try_from(gray) else {
+            continue;
+        };
+        let pixel = pillow_color_pixel(&[gray, gray, gray]);
+        let mut slot = (!pixel) & code_mask;
+        let mut increment = 0u32;
+        let mut first_conflict = true;
+
+        loop {
+            if !occupied
+                .iter()
+                .any(|(occupied_slot, _, _)| *occupied_slot == slot)
+            {
+                occupied.push((slot, pixel, count));
+                break;
+            }
+
+            if first_conflict {
+                increment = (pixel ^ (pixel >> 3)) & code_mask;
+                if increment == 0 {
+                    increment = code_mask;
+                }
+                first_conflict = false;
+            } else {
+                increment <<= 1;
+                if increment > code_mask {
+                    increment ^= code_polynomial;
+                }
+            }
+            slot = (slot + increment) & code_mask;
+        }
+    }
+
+    occupied.sort_unstable_by_key(|(slot, _, _)| *slot);
+    RgbGrayscaleColorCounts::Colors(
+        occupied
+            .into_iter()
+            .map(|(_, pixel, count)| (count, pillow_color_components(pixel, 3)))
+            .collect(),
+    )
+}
+
+#[cfg(test)]
+mod pillow_color_counts_tests {
+    use super::{
+        Image, PILLOW_COLOR_DIRECT_TABLE_MAX_BYTES, PillowColorCounts, RgbGrayscaleColorCounts,
+        getcolors_rgb8_grayscale, pillow_color_components, pillow_color_direct_table_slots,
+        pillow_color_pixel, pillow_color_table_parameters,
+    };
+    use crate::raster::{DynamicImage, RgbImage};
+
+    #[test]
+    fn dense_table_admission_is_bounded_by_memory_and_scan_size() {
+        assert_eq!(pillow_color_direct_table_slots(1023, 0), Some(1024));
+        assert_eq!(pillow_color_direct_table_slots(2047, 1023), None);
+        assert_eq!(pillow_color_direct_table_slots(2047, 1024), Some(2048));
+        assert_eq!(
+            pillow_color_direct_table_slots(1_048_575, 524_288),
+            Some(PILLOW_COLOR_DIRECT_TABLE_MAX_BYTES / 8)
+        );
+        assert_eq!(
+            pillow_color_direct_table_slots(2_097_151, usize::MAX),
+            None,
+            "the dense table must stay below its byte cap even for large images"
+        );
+    }
+
+    #[test]
+    fn dense_and_sparse_tables_keep_pillow_slot_order_and_limits() {
+        let code_mask = 2047;
+        let code_polynomial = 5;
+        let pixels = [0, 2048, 1, 2049, 4096, 0, 2048, 8192];
+        let mut dense = PillowColorCounts::new(code_mask, 0, 1024);
+        assert!(matches!(&dense, PillowColorCounts::Direct(_)));
+        let mut sparse = PillowColorCounts::Sparse(std::collections::HashMap::new());
+        let mut dense_colors = 0;
+        let mut sparse_colors = 0;
+
+        for pixel in pixels {
+            let dense_ok = dense.count(&mut dense_colors, pixel, 5, code_mask, code_polynomial);
+            let sparse_ok = sparse.count(&mut sparse_colors, pixel, 5, code_mask, code_polynomial);
+            assert_eq!(dense_ok, sparse_ok);
+        }
+
+        assert_eq!(dense_colors, 5);
+        assert_eq!(dense_colors, sparse_colors);
+        assert_eq!(
+            dense.into_slot_order(dense_colors),
+            sparse.into_slot_order(sparse_colors)
+        );
+        assert!(matches!(
+            PillowColorCounts::new(code_mask, 0, 1023),
+            PillowColorCounts::Sparse(_)
+        ));
+    }
+
+    #[test]
+    fn large_rgb_grayscale_getcolors_matches_pillow_slot_order() {
+        let mut raw = Vec::with_capacity(256 * 256 * 3);
+        for _ in 0..256 {
+            for gray in 0..=u8::MAX {
+                raw.extend_from_slice(&[gray, gray, gray]);
+            }
+        }
+        let rgb = RgbImage::from_raw(256, 256, raw)
+            .expect("RGB test data must contain exactly three bytes per pixel");
+        let image = Image::from_dynamic(DynamicImage::ImageRgb8(rgb.clone()), Some("RGB".into()));
+        let maxcolors = 1_000_000;
+        let (code_mask, code_polynomial) =
+            pillow_color_table_parameters(maxcolors).expect("test limit has a Pillow table");
+
+        let mut reference = PillowColorCounts::Sparse(std::collections::HashMap::new());
+        let mut reference_colors = 0;
+        for pixel in rgb.pixels() {
+            assert!(reference.count(
+                &mut reference_colors,
+                pillow_color_pixel(&pixel.0),
+                maxcolors as usize,
+                code_mask,
+                code_polynomial,
+            ));
+        }
+        let expected = reference
+            .into_slot_order(reference_colors)
+            .into_iter()
+            .map(|(_, (pixel, count))| (count, pillow_color_components(pixel, 3)))
+            .collect::<Vec<_>>();
+
+        assert!(matches!(
+            getcolors_rgb8_grayscale(&rgb, maxcolors as usize, code_mask, code_polynomial),
+            RgbGrayscaleColorCounts::Colors(_)
+        ));
+        assert_eq!(
+            image.getcolors(maxcolors).expect("count should succeed"),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn large_rgb_grayscale_shortcut_rejects_mismatched_or_excess_colors() {
+        let non_gray = RgbImage::from_raw(1, 1, vec![1, 2, 1])
+            .expect("RGB test data must contain exactly three bytes per pixel");
+        let (code_mask, code_polynomial) =
+            pillow_color_table_parameters(1_000_000).expect("test limit has a Pillow table");
+        assert!(matches!(
+            getcolors_rgb8_grayscale(&non_gray, 1_000_000, code_mask, code_polynomial),
+            RgbGrayscaleColorCounts::NotGrayscale
+        ));
+
+        let gray = RgbImage::from_raw(3, 1, vec![0, 0, 0, 127, 127, 127, 255, 255, 255])
+            .expect("RGB test data must contain exactly three bytes per pixel");
+        assert!(matches!(
+            getcolors_rgb8_grayscale(&gray, 2, code_mask, code_polynomial),
+            RgbGrayscaleColorCounts::TooManyColors
+        ));
+    }
 }
 
 /// Pillow's flat versus multiband `getdata` result after core formatting.
@@ -6131,7 +6371,18 @@ impl Image {
         } else {
             0
         };
-        let mut counts = PillowColorCounts::new(code_mask, initial_capacity);
+        let pixel_count = pillow_image_pixel_count(img.as_ref());
+        if maxcolors > 1023 && pixel_count >= 64 * 1024 {
+            if let DynamicImage::ImageRgb8(rgb) = img.as_ref() {
+                match getcolors_rgb8_grayscale(rgb, max_distinct_colors, code_mask, code_polynomial)
+                {
+                    RgbGrayscaleColorCounts::NotGrayscale => {}
+                    RgbGrayscaleColorCounts::TooManyColors => return Ok(None),
+                    RgbGrayscaleColorCounts::Colors(result) => return Ok(Some(result)),
+                }
+            }
+        }
+        let mut counts = PillowColorCounts::new(code_mask, initial_capacity, pixel_count);
         let mut distinct_colors = 0usize;
         let mut count_pixel = |pixel: u32| {
             counts.count(
@@ -6194,12 +6445,7 @@ impl Image {
         Ok(Some(
             result
                 .into_iter()
-                .map(|(_, (pixel, count))| {
-                    (
-                        count,
-                        FormattedPixelValue::Components(pillow_color_components(pixel, n_bands)),
-                    )
-                })
+                .map(|(_, (pixel, count))| (count, pillow_color_components(pixel, n_bands)))
                 .collect(),
         ))
     }
@@ -6367,7 +6613,8 @@ impl Image {
         } else {
             0
         };
-        let mut counts = PillowColorCounts::new(code_mask, initial_capacity);
+        let mut counts =
+            PillowColorCounts::new(code_mask, initial_capacity, pillow_image_pixel_count(img));
         let mut distinct_colors = 0usize;
         for sample in img.as_bytes().chunks_exact(4) {
             let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
