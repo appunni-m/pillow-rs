@@ -83,6 +83,8 @@ upstream Pillow does not bundle as equivalents.
 - A Rust-owned image, font, and codec runtime, available as a Rust crate and
   through the Python `PIL` facade. Runtime processing does not call back into
   Pillow, FreeType, or native codec libraries.
+- Rust consumers can select image codecs with Cargo features. This changes
+  build composition; the codecs and image formats are not unique to pillow-rs.
 - Deferred image-operation pipelines in the Rust core, so supported chained
   operations can execute when pixels are requested rather than after every
   individual call.
@@ -111,6 +113,8 @@ upstream Pillow does not bundle as equivalents.
   parity inputs.
 - Separate individual-operation and composed-pipeline benchmark reports,
   with backend and mode details and a separately labeled Parallel CPU profile.
+  Parallel CPU reuses the ordinary Pillow measurement as its comparison
+  baseline; it does not time a separate threaded Pillow run.
 - GPU shader-dispatch evidence for distinguishing an actual kernel run from a
   requested route that fell back.
 
