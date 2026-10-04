@@ -29473,56 +29473,63 @@ fn simd_nearest_rotate_native(
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
 
-    let destination_pixels = destination_width * destination_height;
-    let mut destination_index = 0usize;
-    while destination_index + pixels_per_vector <= destination_pixels {
-        let mut block = [0u8; SIMD_RANK_FILTER_LANES];
-        for pixel in 0..pixels_per_vector {
-            let index = destination_index + pixel;
-            let destination_y = index / destination_width;
-            let destination_x = index % destination_width;
-            let source_x =
-                origin_x + destination_x as i64 * step_x_x + destination_y as i64 * step_y_x;
-            let source_y =
-                origin_y + destination_x as i64 * step_x_y + destination_y as i64 * step_y_y;
+    // Walk rows and advance the 16.16 source coordinate just like the CPU
+    // affine sampler. Flattening the output forced a divide and remainder for
+    // every pixel to recover (x, y), and recomputed the affine coordinates
+    // instead of advancing them across each row.
+    let output_row_bytes = destination_width * channels;
+    for (destination_y, output_row) in output
+        .chunks_exact_mut(output_row_bytes)
+        .take(destination_height)
+        .enumerate()
+    {
+        let mut source_x = origin_x + destination_y as i64 * step_y_x;
+        let mut source_y = origin_y + destination_y as i64 * step_y_y;
+        let mut destination_x = 0usize;
+        while destination_x + pixels_per_vector <= destination_width {
+            let mut block = [0u8; SIMD_RANK_FILTER_LANES];
+            for pixel in 0..pixels_per_vector {
+                let input_x = source_x >> 16;
+                let input_y = source_y >> 16;
+                let block_start = pixel * channels;
+                if input_x >= 0 && input_x < width as i64 && input_y >= 0 && input_y < height as i64
+                {
+                    let source_start = (input_y as usize * width + input_x as usize) * channels;
+                    block[block_start..block_start + channels]
+                        .copy_from_slice(&source[source_start..source_start + channels]);
+                } else {
+                    for channel in 0..channels {
+                        block[block_start + channel] = rotate_fill_sample(fill, channels, channel);
+                    }
+                }
+                source_x += step_x_x;
+                source_y += step_x_y;
+            }
+            let output_start = destination_x * channels;
+            output_row[output_start..output_start + block_bytes]
+                .copy_from_slice(&u8x16::new(block).to_array()[..block_bytes]);
+            vector_blocks = vector_blocks.saturating_add(1);
+            destination_x += pixels_per_vector;
+        }
+        while destination_x < destination_width {
             let input_x = source_x >> 16;
             let input_y = source_y >> 16;
-            let block_start = pixel * channels;
+            let output_start = destination_x * channels;
             if input_x >= 0 && input_x < width as i64 && input_y >= 0 && input_y < height as i64 {
                 let source_start = (input_y as usize * width + input_x as usize) * channels;
-                block[block_start..block_start + channels]
+                output_row[output_start..output_start + channels]
                     .copy_from_slice(&source[source_start..source_start + channels]);
             } else {
                 for channel in 0..channels {
-                    block[block_start + channel] = rotate_fill_sample(fill, channels, channel);
+                    output_row[output_start + channel] =
+                        rotate_fill_sample(fill, channels, channel);
                 }
             }
+            source_x += step_x_x;
+            source_y += step_x_y;
+            destination_x += 1;
+            scalar_tail = scalar_tail.saturating_add(1);
         }
-        let output_start = destination_index * channels;
-        output[output_start..output_start + block_bytes]
-            .copy_from_slice(&u8x16::new(block).to_array()[..block_bytes]);
-        vector_blocks = vector_blocks.saturating_add(1);
-        destination_index += pixels_per_vector;
-    }
-    while destination_index < destination_pixels {
-        let destination_y = destination_index / destination_width;
-        let destination_x = destination_index % destination_width;
-        let source_x = origin_x + destination_x as i64 * step_x_x + destination_y as i64 * step_y_x;
-        let source_y = origin_y + destination_x as i64 * step_x_y + destination_y as i64 * step_y_y;
-        let input_x = source_x >> 16;
-        let input_y = source_y >> 16;
-        let output_start = destination_index * channels;
-        if input_x >= 0 && input_x < width as i64 && input_y >= 0 && input_y < height as i64 {
-            let source_start = (input_y as usize * width + input_x as usize) * channels;
-            output[output_start..output_start + channels]
-                .copy_from_slice(&source[source_start..source_start + channels]);
-        } else {
-            for channel in 0..channels {
-                output[output_start + channel] = rotate_fill_sample(fill, channels, channel);
-            }
-        }
-        destination_index += 1;
-        scalar_tail = scalar_tail.saturating_add(1);
     }
 
     crate::compute::record_pipeline_operation_path("vector");
