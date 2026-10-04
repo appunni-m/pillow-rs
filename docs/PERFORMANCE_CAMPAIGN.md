@@ -17696,3 +17696,93 @@ MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/rotate-rgba-attemptN-73247eaac
 MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/rotate-rgba-attemptN-73247eaac-20261004-parity.json \
 make migration-parity-benchmark
 ```
+
+## RGB to RGBA material conversion checkpoint — 2026-10-04
+
+The selected workload explicitly asks `Image.convert("RGBA")` for an RGBA
+result from a varied 1024 × 768 RGB image, then exports its bytes. This is a
+required mode conversion, so the optimization keeps three-byte RGB input until
+the conversion writes its four-byte destination; it does not normalize other
+operations or source modes to RGBA.
+
+The AArch64 SIMD converter used a four-pixel byte shuffle to build one
+`[u8; 16]` output block per iteration. It collected those blocks in one vector,
+flattened them into a second vector, and truncated the second allocation to the
+image length. The final image can own the destination bytes directly, so this
+flattening copied the complete expanded frame without doing useful work. The
+retained change uses `vld3q_u8` / `vst4q_u8` to deinterleave and reinterleave
+sixteen RGB pixels with an opaque alpha vector, writing straight into the final
+output allocation. It handles the incomplete vector suffix with a scalar tail.
+The portable SIMD fallback likewise appends each completed four-pixel vector
+directly to its final allocation, then writes its scalar tail. Checked byte
+counts bound both allocations and pointer ranges. The focused test compares the
+entire output against the existing conversion for empty, aligned, and
+non-aligned dimensions. The old `parallel`-gated collector was serial too: it
+used the row-serial collection macro and added temporary blocks, not Rayon
+scheduling. Removing it leaves the SIMD implementation independent of the
+default-off Parallel CPU feature.
+
+The phase timings identify why this worked: the SIMD pipeline phase stayed
+near 0.26–0.28 ms, while its terminal/materialization phase fell from 0.947 ms
+to 0.282 ms. This is an allocation-and-copy win, not evidence that the
+per-pixel shuffle itself became three times faster. A useful decision rule for
+similar kernels is to compare operation and terminal phases, then inspect
+whether fixed-size outputs are staged in a collection and flattened. If the
+terminal phase moves while the operation phase does not, remove the avoidable
+buffer transition before tuning arithmetic or unrolling the vector loop.
+
+The standard benchmark command selected only this workload and used
+`make build-parity` through the documented benchmark target. The baseline ran
+on clean commit `6f3603564`; the candidate ran on the same source revision with
+this change dirty. The table's latency and throughput are the workload's
+reported medians across its declared `call` and `materialize` observations.
+Pillow's baseline and candidate medians varied substantially across runs, so
+the candidate's same-run ratio is the fair comparison to use.
+
+| Run | Pillow p50 | Serial CPU p50 | SIMD p50 | GPU p50 | Pillow ÷ SIMD latency | GPU throughput |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Clean baseline | 0.534 ms | 0.287 ms | 0.951 ms | 1.089 ms | 0.56× | 918 ops/s |
+| Direct-write candidate | 0.823 ms | 0.313 ms | 0.286 ms | 1.104 ms | 2.87× | 906 ops/s |
+
+Candidate SIMD latency fell from 0.951 ms to 0.286 ms (3.32× speedup, 70%
+lower), and throughput rose from 1,051 to 3,492 operations/s. CPU remains faster than
+Pillow in the candidate run at 0.313 ms versus 0.823 ms. The SIMD profile now
+matches CPU-scale latency, but reaches only 2.87× Pillow in the same run, short
+of the 5× goal. Do not infer a stable Pillow speedup from comparing the two
+different-run Pillow rows.
+
+The single-image GPU profile remains blocked on the transfer boundary: each
+execution uploads 2,359,296 RGB bytes, submits one dispatch, and reads back
+3,145,728 RGBA bytes. Its candidate median is 1.104 ms and 906 operations/s,
+far behind SIMD's 0.286 ms and 3,492 operations/s. The shader is already
+admitted for native packed RGB input and writes packed RGBA output; changing
+the eager single-image route to CPU would misreport GPU behavior. A concurrent
+GPU throughput design belongs in the separate explicit queue/batch API. Revisit
+this operation if that API supplies a like-for-like queued benchmark or if a
+terminal output-sink API can remove a full host copy without changing
+`Image.convert`'s materialized-image contract; avoid speculative changes to the
+established GPU kernel in the meantime.
+
+The candidate's exact-output benchmark gate passed 3/3 comparisons. CPU, SIMD,
+and GPU each reported 100/100 executions on the requested backend with no
+fallback; GPU reported one dispatch per execution. The focused Rust test
+`native_rgb_to_rgba_matches_exact_conversion_across_vector_tails` passed. No
+coverage ran. This is a checkpoint, not a completed performance target.
+
+Receipts under `build/migration-parity/` are
+`rgb-to-rgba-baseline-main-6f3603564.json` and
+`rgb-to-rgba-baseline-main-6f3603564-parity.json.gz` for baseline, plus
+`rgb-to-rgba-candidate-neon-direct-main.json` and
+`rgb-to-rgba-candidate-neon-direct-main-parity.json.gz` for the candidate.
+Both benchmark results pass schema validation; both parity receipts report
+selected/executed/passed = 3/3/3, failed = 0.
+
+The candidate command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.convert.rgb-to-rgba-material' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/rgb-to-rgba-candidate-neon-direct-main.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/rgb-to-rgba-candidate-neon-direct-main-parity.json.gz \
+make migration-parity-benchmark
+```

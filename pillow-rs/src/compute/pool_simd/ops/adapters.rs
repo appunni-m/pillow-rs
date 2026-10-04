@@ -10659,6 +10659,7 @@ const NATIVE_LA_ALPHA_LANES: u8x16 = u8x16::new([
     0,
     u8::MAX,
 ]);
+#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 const NATIVE_RGB_TO_RGBA_BYTES: u8x16 =
     u8x16::new([0, 1, 2, 15, 3, 4, 5, 15, 6, 7, 8, 15, 9, 10, 11, 15]);
 
@@ -10896,6 +10897,7 @@ fn native_rgba_color_degenerate(img: &DynamicImage) -> Option<(DynamicImage, u64
 }
 
 #[inline]
+#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 fn native_rgb_to_rgba_block(source: &[u8], start_pixel: usize, active_pixels: usize) -> [u8; 16] {
     debug_assert!((1..=4).contains(&active_pixels));
     let source_start = start_pixel * 3;
@@ -10908,10 +10910,11 @@ fn native_rgb_to_rgba_block(source: &[u8], start_pixel: usize, active_pixels: us
         .to_array()
 }
 
-/// Expand native RGB pixels with one fixed shuffle per four-pixel vector.
-/// The generic layout converter rebuilds the same 3-to-4 channel indices for
-/// every block; this path keeps RGB packed until it writes the required RGBA
-/// output and supplies opaque alpha from a sentinel input lane.
+/// Expand native RGB pixels with one NEON structure load/store per sixteen
+/// pixels, or one portable vector shuffle per four pixels. The conversion
+/// writes directly into its final allocation: collecting fixed-size blocks and
+/// flattening them afterward copied the entire expanded image a second time.
+#[allow(unsafe_code)]
 fn native_rgb_to_rgba_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
     let DynamicImage::ImageRgb8(rgb) = img else {
         return None;
@@ -10924,34 +10927,85 @@ fn native_rgb_to_rgba_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
     if source.len() != source_bytes {
         return None;
     }
-
-    #[cfg(feature = "parallel")]
-    if pixels >= SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD {
-        let block_count = pixels.div_ceil(4);
-        let min_blocks = usize::try_from(img.width()).ok()?.div_ceil(4).max(1);
-        let blocks: Vec<[u8; 16]> = simd_row_blocks_collect_serial!(
-            block_count,
-            min_blocks,
-            || (),
-            |_state, block_index| {
-                let start_pixel = block_index * 4;
-                let active_pixels = (pixels - start_pixel).min(4);
-                native_rgb_to_rgba_block(source, start_pixel, active_pixels)
-            }
-        );
-        let mut output = blocks.into_flattened();
-        output.truncate(output_bytes);
-        return Some((output, u64::try_from(block_count).ok()?, 0));
+    if output_bytes > isize::MAX as usize {
+        return None;
     }
 
-    let mut blocks = Vec::<[u8; 16]>::with_capacity(pixels.div_ceil(4));
-    for start in (0..pixels).step_by(4) {
-        let active_pixels = (pixels - start).min(4);
-        blocks.push(native_rgb_to_rgba_block(source, start, active_pixels));
+    let mut output = Vec::new();
+    output.try_reserve_exact(output_bytes).ok()?;
+
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    {
+        let vector_pixels = pixels / 16 * 16;
+        let vectors = unsafe { native_rgb_to_rgba_neon(source, &mut output, vector_pixels) };
+        for pixel in vector_pixels..pixels {
+            let source_offset = pixel * 3;
+            output.extend_from_slice(&source[source_offset..source_offset + 3]);
+            output.push(u8::MAX);
+        }
+        return Some((
+            output,
+            u64::try_from(vectors).ok()?,
+            u64::try_from(pixels - vector_pixels).ok()?,
+        ));
     }
-    let mut output = blocks.into_flattened();
-    output.truncate(output_bytes);
-    Some((output, pixels.div_ceil(4) as u64, 0))
+
+    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+    {
+        let vector_pixels = pixels / 4 * 4;
+        for start_pixel in (0..vector_pixels).step_by(4) {
+            let block = native_rgb_to_rgba_block(source, start_pixel, 4);
+            output.extend_from_slice(&block);
+        }
+        for pixel in vector_pixels..pixels {
+            let source_offset = pixel * 3;
+            output.extend_from_slice(&source[source_offset..source_offset + 3]);
+            output.push(u8::MAX);
+        }
+        Some((
+            output,
+            u64::try_from(vector_pixels / 4).ok()?,
+            u64::try_from(pixels - vector_pixels).ok()?,
+        ))
+    }
+}
+
+/// Interleave sixteen packed RGB pixels with an opaque alpha vector directly
+/// into the spare capacity of `output`.
+///
+/// # Safety
+/// The caller passes a multiple of sixteen no larger than the validated source
+/// pixel count, and `source` contains at least `pixels * 3` initialized bytes.
+/// `output` must be empty and have capacity for at least `pixels * 4` bytes. The
+/// source and destination allocations must be distinct. Every iteration reads
+/// exactly 48 source bytes and writes exactly 64 bytes in the reserved output;
+/// this function sets the output length only after it initializes the complete
+/// vector prefix.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+unsafe fn native_rgb_to_rgba_neon(source: &[u8], output: &mut Vec<u8>, pixels: usize) -> usize {
+    use core::arch::aarch64 as neon;
+
+    debug_assert!(pixels.is_multiple_of(16));
+    let alpha;
+    // SAFETY: the function contract proves each RGB structure load and RGBA
+    // structure store is within the validated source and reserved destination
+    // allocations. Each loop iteration covers sixteen pixels.
+    unsafe {
+        alpha = neon::vdupq_n_u8(u8::MAX);
+        for pixel in (0..pixels).step_by(16) {
+            let rgb = neon::vld3q_u8(source.as_ptr().add(pixel * 3));
+            let rgba = neon::uint8x16x4_t(rgb.0, rgb.1, rgb.2, alpha);
+            neon::vst4q_u8(output.as_mut_ptr().add(pixel * 4), rgba);
+        }
+    }
+
+    let initialized_bytes = pixels * 4;
+    // SAFETY: every byte in the vector prefix was written by the complete
+    // sixteen-pixel stores above; the caller appends the scalar tail afterward.
+    unsafe { output.set_len(initialized_bytes) };
+    pixels / 16
 }
 
 #[cfg(feature = "parallel")]
@@ -34519,8 +34573,20 @@ mod tests {
                 expected.as_raw().as_slice(),
                 "{width}x{height}"
             );
-            assert_eq!(vector_blocks, pixels.div_ceil(4) as u64);
-            assert_eq!(scalar_tail, 0);
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            let pixels_per_vector = 16;
+            #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+            let pixels_per_vector = 4;
+            assert_eq!(
+                vector_blocks,
+                (pixels / pixels_per_vector) as u64,
+                "vector blocks for {width}x{height}"
+            );
+            assert_eq!(
+                scalar_tail,
+                (pixels % pixels_per_vector) as u64,
+                "scalar tail for {width}x{height}"
+            );
         }
     }
 
