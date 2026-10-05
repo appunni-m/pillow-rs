@@ -5,7 +5,7 @@
 //! over compatible native-mode images packed into one image, then split the
 //! results back into ordinary per-image results. Grouped operations reuse
 //! `MedianFilter(3)`, `MaxFilter(3)`, native-L `RankFilter(3, 1)`,
-//! `ExtractBand`, `ImageOps.invert`, native-mode `Brightness`,
+//! `ExtractBand`, `ImageOps.grayscale`, `ImageOps.invert`, native-mode `Brightness`,
 //! `ImageChops.multiply`, and same-mode RGBA `Color3DLUT` pipelines. Full-frame
 //! native-mode masked Paste and Composite jobs with L masks, plus native-mode
 //! `ImageOps.expand` jobs, also reuse their existing pipelines. Images that
@@ -28,6 +28,8 @@ static EXPAND_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
 static PASTE_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
 #[cfg(feature = "migration-fault-injection")]
 static COMPOSITE_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "migration-fault-injection")]
+static GRAYSCALE_GROUP_FAILURE_INJECTED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(feature = "migration-fault-injection")]
 fn injected_rank_filter_group_failure(job: &BatchJob, backend: Backend) -> Option<PilError> {
@@ -132,9 +134,37 @@ fn injected_composite_group_failure(job: &BatchJob, backend: Backend) -> Option<
     Some(error)
 }
 
+#[cfg(feature = "migration-fault-injection")]
+fn injected_grayscale_group_failure(job: &BatchJob, backend: Backend) -> Option<PilError> {
+    if backend != Backend::Gpu
+        || !matches!(&job.operation, BatchOperation::Grayscale)
+        || GRAYSCALE_GROUP_FAILURE_INJECTED.load(Ordering::Relaxed)
+    {
+        return None;
+    }
+
+    let error = match std::env::var("PILLOW_RS_MIGRATION_FAULT_POINT").as_deref() {
+        Ok("image_batch.grayscale.group_dimension_failure") => {
+            PilError::DimensionError("injected grouped Grayscale dimension failure".into())
+        }
+        Ok("image_batch.grayscale.group_memory_failure") => {
+            PilError::MemoryError("injected grouped Grayscale memory failure".into())
+        }
+        _ => return None,
+    };
+
+    GRAYSCALE_GROUP_FAILURE_INJECTED
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .ok()?;
+    Some(error)
+}
+
 /// One explicitly submitted Pillow operation.
 #[derive(Debug, Clone)]
 pub enum BatchOperation {
+    /// Execute an already-built lazy GPU pipeline. Prefer
+    /// [`BatchExecutor::submit`] to submit normalized operations.
+    Pipeline,
     /// Apply Pillow's `ImageFilter.MedianFilter(size)` operation.
     MedianFilter {
         /// Odd square filter size.
@@ -157,6 +187,8 @@ pub enum BatchOperation {
         /// Zero-based source channel index.
         channel: i32,
     },
+    /// Apply Pillow's `ImageOps.grayscale(image)` operation.
+    Grayscale,
     /// Apply Pillow's `ImageOps.invert(image)` operation.
     Invert,
     /// Apply Pillow's `ImageEnhance.Brightness(image).enhance(factor)` operation.
@@ -205,12 +237,52 @@ pub enum BatchOperation {
 }
 
 impl BatchOperation {
+    fn use_gpu_inputs(self) -> Self {
+        match self {
+            Self::Multiply { other } => Self::Multiply {
+                other: Box::new((*other).use_backend(Backend::Gpu)),
+            },
+            Self::Paste { source, mask } => Self::Paste {
+                source: Box::new((*source).use_backend(Backend::Gpu)),
+                mask: Box::new((*mask).use_backend(Backend::Gpu)),
+            },
+            Self::Composite { background, mask } => Self::Composite {
+                background: Box::new((*background).use_backend(Backend::Gpu)),
+                mask: Box::new((*mask).use_backend(Backend::Gpu)),
+            },
+            operation => operation,
+        }
+    }
+
+    fn from_pipeline_op(operation: &PipelineOp) -> Option<Self> {
+        Some(match operation {
+            PipelineOp::MedianFilter { size } => Self::MedianFilter { size: *size },
+            PipelineOp::MaxFilter { size } => Self::MaxFilter { size: *size },
+            PipelineOp::RankFilter { size, rank } => Self::RankFilter {
+                size: *size,
+                rank: *rank,
+            },
+            PipelineOp::ExtractBand { index } => Self::ExtractBand {
+                channel: i32::from(*index),
+            },
+            PipelineOp::Grayscale => Self::Grayscale,
+            PipelineOp::Invert => Self::Invert,
+            PipelineOp::Brightness { factor } => Self::Brightness { factor: *factor },
+            PipelineOp::Multiply { other } => Self::Multiply {
+                other: Box::new((**other).clone()),
+            },
+            _ => return None,
+        })
+    }
+
     fn apply(&self, image: &Image) -> Result<Image, PilError> {
         match self {
+            Self::Pipeline => Ok(image.clone()),
             Self::MedianFilter { size } => image.median_filter(*size),
             Self::MaxFilter { size } => image.max_filter(*size),
             Self::RankFilter { size, rank } => image.rank_filter(*size, *rank),
             Self::ExtractBand { channel } => image.getchannel(*channel),
+            Self::Grayscale => crate::ops::imageops::grayscale(image),
             Self::Invert => crate::ops::imageops::invert_ops(image),
             Self::Brightness { factor } => image.enhance_brightness(*factor),
             Self::Multiply { other } => crate::ops::chops::multiply(image, other),
@@ -260,15 +332,19 @@ impl BatchOperation {
     }
 
     fn can_group(&self, mode: &str, size: (u32, u32)) -> bool {
-        let Some(channels) = mode_channels(mode) else {
+        let Some(channels) = mode_channels(mode)
+            .or_else(|| matches!((self, mode), (Self::Grayscale, "YCbCr")).then_some(3))
+        else {
             return false;
         };
         match self {
+            Self::Pipeline => false,
             Self::MedianFilter { size } | Self::MaxFilter { size } => *size == 3,
             Self::RankFilter { size, rank } => mode == "L" && *size == 3 && *rank == 1,
             Self::ExtractBand { channel } => {
                 usize::try_from(*channel).is_ok_and(|channel| channel < channels)
             }
+            Self::Grayscale => matches!(mode, "L" | "LA" | "RGB" | "RGBA" | "YCbCr"),
             Self::Invert => matches!(mode, "L" | "RGB"),
             Self::Brightness { factor } => {
                 #[cfg(feature = "gpu")]
@@ -346,6 +422,7 @@ impl BatchOperation {
             (Self::ExtractBand { channel: left }, Self::ExtractBand { channel: right }) => {
                 left == right
             }
+            (Self::Grayscale, Self::Grayscale) => true,
             (Self::Invert, Self::Invert) => true,
             (Self::Brightness { factor: left }, Self::Brightness { factor: right }) => {
                 left == right
@@ -388,6 +465,7 @@ impl BatchOperation {
 
     fn pipeline_op(&self) -> Option<PipelineOp> {
         match self {
+            Self::Pipeline => None,
             Self::MedianFilter { size } => Some(PipelineOp::MedianFilter { size: *size }),
             Self::MaxFilter { size } => Some(PipelineOp::MaxFilter { size: *size }),
             Self::RankFilter { size, rank } => Some(PipelineOp::RankFilter {
@@ -397,6 +475,7 @@ impl BatchOperation {
             Self::ExtractBand { channel } => Some(PipelineOp::ExtractBand {
                 index: u8::try_from(*channel).ok()?,
             }),
+            Self::Grayscale => Some(PipelineOp::Grayscale),
             Self::Invert => Some(PipelineOp::Invert),
             Self::Brightness { factor } => Some(PipelineOp::Brightness { factor: *factor }),
             Self::Multiply { other } => Some(PipelineOp::Multiply {
@@ -456,12 +535,121 @@ struct BatchJob {
     size: (u32, u32),
 }
 
+fn validate_gpu_pipeline(image: &Image) -> Result<(), PilError> {
+    let Image::Pipeline { source, ops, .. } = image else {
+        return Err(PilError::ValueError(
+            "pipeline submission requires an image with pending operations".into(),
+        ));
+    };
+    if ops.as_slice().is_empty() {
+        return Err(PilError::ValueError(
+            "pipeline submission requires at least one operation".into(),
+        ));
+    }
+    #[cfg(feature = "gpu")]
+    for operation in ops.as_slice() {
+        validate_gpu_operation(operation)?;
+        validate_gpu_pipeline_inputs(operation)?;
+    }
+    #[cfg(not(feature = "gpu"))]
+    {
+        let _ = source;
+        Err(PilError::NotImplementedError(
+            "pipeline submission requires the gpu feature".into(),
+        ))
+    }
+
+    #[cfg(feature = "gpu")]
+    {
+        if matches!(source.as_ref(), Image::Pipeline { .. }) {
+            validate_gpu_pipeline(source)?;
+        }
+        if let Image::Loaded(data) = source.as_ref() {
+            crate::compute::GpuPool::validate_submission_mode(
+                ops.as_slice(),
+                &data.image,
+                &source.mode()?,
+            )?;
+        } else if let Some(mut mode) = source.known_mode() {
+            for operation in ops.as_slice() {
+                crate::compute::GpuPool::validate_submission_known_mode(operation, &mode)?;
+                let Some(next) = crate::image::known_pipeline_op_mode(operation, &mode) else {
+                    break;
+                };
+                mode = next;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "gpu")]
+fn validate_gpu_operation(operation: &PipelineOp) -> Result<(), PilError> {
+    if !crate::compute::GpuPool::descriptor_supports(operation)?
+        || crate::compute::pool_gpu_operation_uses_host_pixels(operation)
+    {
+        return Err(PilError::NotImplementedError(format!(
+            "GPU does not natively support pipeline operation {}",
+            crate::compute::registry::variant_key(operation)
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(feature = "gpu")]
+fn validate_gpu_pipeline_inputs(operation: &PipelineOp) -> Result<(), PilError> {
+    let validate = |image: &Image| {
+        if matches!(image, Image::Pipeline { .. }) {
+            validate_gpu_pipeline(image)
+        } else {
+            Ok(())
+        }
+    };
+    match operation {
+        PipelineOp::Add { other, .. }
+        | PipelineOp::Subtract { other, .. }
+        | PipelineOp::Multiply { other }
+        | PipelineOp::Screen { other }
+        | PipelineOp::Darker { other }
+        | PipelineOp::Lighter { other }
+        | PipelineOp::Difference { other }
+        | PipelineOp::Overlay { other }
+        | PipelineOp::HardLight { other }
+        | PipelineOp::SoftLight { other }
+        | PipelineOp::AddModulo { other }
+        | PipelineOp::SubtractModulo { other }
+        | PipelineOp::LogicalAnd { other }
+        | PipelineOp::LogicalOr { other }
+        | PipelineOp::LogicalXor { other }
+        | PipelineOp::BlendModule { other, .. } => validate(other),
+        PipelineOp::CompositeModule { other, mask, .. } => {
+            validate(other)?;
+            validate(mask)
+        }
+        PipelineOp::Paste { source, mask, .. } => {
+            validate(source)?;
+            if let Some(mask) = mask {
+                validate(mask)?;
+            }
+            Ok(())
+        }
+        PipelineOp::AlphaComposite { source, .. } => validate(source),
+        PipelineOp::Merge { bands, .. } => bands.iter().try_for_each(validate),
+        PipelineOp::Autocontrast {
+            mask: Some(mask), ..
+        }
+        | PipelineOp::EqualizeMasked { mask } => validate(mask),
+        _ => Ok(()),
+    }
+}
+
 /// Queues explicit image operations and joins compatible GPU jobs together.
 ///
 /// `queue = false` applies each operation immediately using the ordinary
 /// single-image route. With `queue = true`, [`join`](Self::join) groups
 /// compatible `MedianFilter(3)`, `MaxFilter(3)`, and native-L
-/// `RankFilter(3, rank=1)`, `ExtractBand`, L/RGB `ImageOps.invert`, exact-factor native-mode
+/// `RankFilter(3, rank=1)`, `ExtractBand`, native-mode `ImageOps.grayscale`,
+/// L/RGB `ImageOps.invert`, exact-factor native-mode
 /// `Brightness`, `ImageChops.multiply`, full-frame masked Paste, same-mode
 /// `Image.composite` through an L mask, same-mode RGBA `Color3DLUT`, and
 /// native-mode `ImageOps.expand` jobs when GPU is the selected backend.
@@ -485,6 +673,25 @@ pub struct BatchExecutor {
     completed: Vec<Image>,
 }
 
+/// An input image bound to a normalized operation for batch submission.
+///
+/// Binding retains the image and descriptor without evaluating pixels or
+/// selecting a backend. [`BatchExecutor::submit`] checks native GPU support
+/// before accepting the instance.
+#[derive(Clone, Debug)]
+pub struct PipelineOpInstance {
+    source: Image,
+    operation: PipelineOp,
+}
+
+impl PipelineOpInstance {
+    /// Binds an image and operation without evaluating either input.
+    #[must_use]
+    pub fn new(source: Image, operation: PipelineOp) -> Self {
+        Self { source, operation }
+    }
+}
+
 impl BatchExecutor {
     /// Creates an explicit image batch executor.
     #[must_use]
@@ -506,9 +713,73 @@ impl BatchExecutor {
     /// Returns the same validation or execution error as the selected
     /// single-image operation when `queue` is false. Queued operation
     /// validation and execution errors are returned from [`Self::join`].
-    pub fn submit(&mut self, image: Image, operation: BatchOperation) -> Result<usize, PilError> {
-        let mode = image.mode()?;
-        let size = image.size()?;
+    #[doc(hidden)]
+    pub fn submit_grouped(
+        &mut self,
+        image: Image,
+        operation: BatchOperation,
+    ) -> Result<usize, PilError> {
+        if matches!(operation, BatchOperation::Pipeline) {
+            return self.submit_prepared_pipeline(image);
+        }
+        if self.batch_backend() == Some(Backend::Gpu) {
+            if matches!(image, Image::Pipeline { .. }) {
+                validate_gpu_pipeline(&image)?;
+            }
+            let image = image.use_backend(Backend::Gpu);
+            let operation = operation.use_gpu_inputs();
+            return crate::compute::with_native_gpu_execution(|| {
+                self.submit_grouped_inner(image, operation)
+            });
+        }
+        self.submit_grouped_inner(image, operation)
+    }
+
+    fn submit_grouped_inner(
+        &mut self,
+        image: Image,
+        operation: BatchOperation,
+    ) -> Result<usize, PilError> {
+        // Unknown metadata prevents grouping; it must not force a queued
+        // source pipeline to execute just to choose a packing layout.
+        let mode = image.known_mode().unwrap_or_default();
+        let size = image.known_size().unwrap_or_default();
+        #[cfg(feature = "gpu")]
+        if self.batch_backend() == Some(Backend::Gpu) {
+            let descriptor = match &operation {
+                BatchOperation::Paste { source, .. } if source.known_size().is_none() => None,
+                BatchOperation::Expand { .. } if mode.is_empty() => None,
+                _ => operation.pipeline_op_for_mode(&mode),
+            };
+            if let Some(descriptor) = descriptor {
+                validate_gpu_operation(&descriptor)?;
+                validate_gpu_pipeline_inputs(&descriptor)?;
+                if let Image::Loaded(data) = &image {
+                    crate::compute::GpuPool::validate_submission_mode(
+                        std::slice::from_ref(&descriptor),
+                        &data.image,
+                        &mode,
+                    )?;
+                } else if !mode.is_empty() {
+                    crate::compute::GpuPool::validate_submission_known_mode(&descriptor, &mode)?;
+                }
+            } else {
+                // Input-dependent normalization (for example a Paste box
+                // on a lazy source) stays at join. Inspect its auxiliary
+                // descriptors now without resolving their pixels.
+                let inputs: &[&Image] = match &operation {
+                    BatchOperation::Paste { source, mask } => &[source, mask],
+                    BatchOperation::Composite { background, mask } => &[background, mask],
+                    BatchOperation::Multiply { other } => &[other],
+                    _ => &[],
+                };
+                for input in inputs {
+                    if matches!(input, Image::Pipeline { .. }) {
+                        validate_gpu_pipeline(input)?;
+                    }
+                }
+            }
+        }
         let index = if self.queue {
             self.pending.len()
         } else {
@@ -530,6 +801,80 @@ impl BatchExecutor {
         Ok(index)
     }
 
+    /// Schedules a bound operation instance through its existing GPU pipeline.
+    ///
+    /// Unlike the built-in grouping wrappers, this accepts every descriptor
+    /// supported by the GPU registry. High-level [`Image`] methods remain the
+    /// preferred way to validate and build operation arguments.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NotImplementedError` when GPU is not selected, a descriptor
+    /// lacks GPU support, or a known input mode is incompatible. Content and
+    /// device limits are checked at execution and return an error instead of
+    /// substituting CPU work. With `queue = false`, execution errors are
+    /// returned here; otherwise they are returned by [`Self::join`].
+    pub fn submit(&mut self, instance: PipelineOpInstance) -> Result<usize, PilError> {
+        let PipelineOpInstance { source, operation } = instance;
+        #[cfg(feature = "gpu")]
+        {
+            validate_gpu_operation(&operation)?;
+            validate_gpu_pipeline_inputs(&operation)?;
+        }
+        self.submit_prepared_pipeline(Image::push_op(&source, operation))
+    }
+
+    /// Schedules an already-built lazy pipeline for native GPU execution.
+    ///
+    /// The executor must select GPU. In queued mode submission inspects only
+    /// operation descriptors; pixels are materialized at [`Self::join`].
+    /// Each pipeline keeps its own image boundaries, intermediates and auxiliary
+    /// operands. Compatible single operations form image groups internally;
+    /// other pipelines use their existing per-image dispatch plans.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ValueError` for an image with no pipeline operations, or
+    /// `NotImplementedError` when GPU is not selected or a descriptor lacks GPU
+    /// support or a known loaded-source mode is incompatible. Image-dependent
+    /// GPU limits and exactness checks run at execution
+    /// and return an error instead of substituting CPU work. With `queue = false`
+    /// execution errors are returned here; otherwise they are returned by `join`.
+    #[doc(hidden)]
+    pub fn submit_prepared_pipeline(&mut self, image: Image) -> Result<usize, PilError> {
+        if self.batch_backend() != Some(Backend::Gpu) {
+            return Err(PilError::NotImplementedError(
+                "pipeline submission requires a GPU batch executor".into(),
+            ));
+        }
+        validate_gpu_pipeline(&image)?;
+        if let Image::Pipeline { source, ops, .. } = &image
+            && matches!(source.as_ref(), Image::Loaded(_))
+            && let [operation] = ops.as_slice()
+            && let Some(grouped) = BatchOperation::from_pipeline_op(operation)
+        {
+            return self.submit_grouped((**source).clone(), grouped);
+        }
+        let index = if self.queue {
+            self.pending.len()
+        } else {
+            self.completed.len()
+        };
+        if self.queue {
+            // Do not query mode or size: a property lookup can materialize a
+            // lazy result. General pipelines cannot use the stacked layout.
+            self.pending.push(BatchJob {
+                source: Box::new(image),
+                operation: BatchOperation::Pipeline,
+                mode: String::new(),
+                size: (0, 0),
+            });
+        } else {
+            self.completed.push(Self::execute_pipeline(image)?);
+        }
+        Ok(index)
+    }
+
     /// Executes all queued jobs and returns results in submission order.
     ///
     /// Calling `join` drains the current batch, so the executor can accept a
@@ -545,7 +890,16 @@ impl BatchExecutor {
         if !self.queue {
             return Ok(std::mem::take(&mut self.completed));
         }
+        if self.batch_backend() == Some(Backend::Gpu) {
+            // The policy covers auxiliary-image probes and packing as well
+            // as the final dispatch. A grouped job must never obtain its
+            // pixels through a CPU fallback before the GPU kernel runs.
+            return crate::compute::with_native_gpu_execution(|| self.join_queued());
+        }
+        self.join_queued()
+    }
 
+    fn join_queued(&mut self) -> Result<Vec<Image>, PilError> {
         let mut jobs = std::mem::take(&mut self.pending)
             .into_iter()
             .map(Some)
@@ -614,7 +968,11 @@ impl BatchExecutor {
             let job = jobs[index]
                 .take()
                 .expect("the current batch job was checked above");
-            results[index] = Some(self.execute_single(job.operation.apply(&job.source)?)?);
+            results[index] = Some(if matches!(job.operation, BatchOperation::Pipeline) {
+                Self::execute_pipeline(*job.source)?
+            } else {
+                self.execute_single(job.operation.apply(&job.source)?)?
+            });
             index = index.saturating_add(1);
         }
 
@@ -643,7 +1001,18 @@ impl BatchExecutor {
             Some(backend) => image.use_backend(backend),
             None => image,
         };
-        image.materialize()?;
+        if self.batch_backend() == Some(Backend::Gpu) {
+            let image = image.use_backend(Backend::Gpu);
+            crate::compute::with_native_gpu_execution(|| image.materialized_shared())?;
+            return Ok(image);
+        }
+        image.materialized_shared()?;
+        Ok(image)
+    }
+
+    fn execute_pipeline(image: Image) -> Result<Image, PilError> {
+        let image = image.use_backend(Backend::Gpu);
+        crate::compute::with_native_gpu_execution(|| image.materialized_shared())?;
         Ok(image)
     }
 
@@ -674,18 +1043,38 @@ impl BatchExecutor {
         if let Some(error) = injected_composite_group_failure(first, backend) {
             return Err(error);
         }
+        #[cfg(feature = "migration-fault-injection")]
+        if let Some(error) = injected_grayscale_group_failure(first, backend) {
+            return Err(error);
+        }
 
         let mode = first.mode.as_str();
-        let channels = mode_channels(mode).ok_or_else(|| {
-            PilError::ValueError(format!(
-                "mode {mode} cannot be grouped by this batch operation"
-            ))
-        })?;
-        let native_storage = mode_storage(mode).ok_or_else(|| {
-            PilError::ValueError(format!(
-                "mode {mode} cannot be grouped by this batch operation"
-            ))
-        })?;
+        let channels = mode_channels(mode)
+            .or_else(|| {
+                matches!(
+                    (&first.operation, mode),
+                    (BatchOperation::Grayscale, "YCbCr")
+                )
+                .then_some(3)
+            })
+            .ok_or_else(|| {
+                PilError::ValueError(format!(
+                    "mode {mode} cannot be grouped by this batch operation"
+                ))
+            })?;
+        let native_storage = mode_storage(mode)
+            .or_else(|| {
+                matches!(
+                    (&first.operation, mode),
+                    (BatchOperation::Grayscale, "YCbCr")
+                )
+                .then_some(crate::raster::ColorType::Rgb8)
+            })
+            .ok_or_else(|| {
+                PilError::ValueError(format!(
+                    "mode {mode} cannot be grouped by this batch operation"
+                ))
+            })?;
         let (width, height) = first.size;
         let row_bytes = usize::try_from(width)
             .ok()
@@ -712,6 +1101,14 @@ impl BatchExecutor {
                 (0usize, stacked_height, mode, channels)
             }
             BatchOperation::ExtractBand { .. } => {
+                let group_len = u32::try_from(indices.len())
+                    .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
+                let stacked_height = height
+                    .checked_mul(group_len)
+                    .ok_or_else(|| PilError::DimensionError("batch height overflow".into()))?;
+                (0usize, stacked_height, "L", 1usize)
+            }
+            BatchOperation::Grayscale => {
                 let group_len = u32::try_from(indices.len())
                     .map_err(|_| PilError::DimensionError("batch count overflow".into()))?;
                 let stacked_height = height
@@ -1266,7 +1663,7 @@ fn mode_storage(mode: &str) -> Option<crate::raster::ColorType> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BatchExecutor, BatchOperation, native_expand_fill_pixel};
+    use super::{BatchExecutor, BatchOperation, PipelineOpInstance, native_expand_fill_pixel};
     use crate::compute::Backend;
     use crate::error::PilError;
     use crate::image::Image;
@@ -1286,6 +1683,180 @@ mod tests {
             pixels.push(value);
         }
         Image::frombytes(mode, (width, height), &pixels).unwrap()
+    }
+
+    #[cfg(feature = "gpu")]
+    #[test]
+    fn pipeline_submission_defers_pixels_and_rejects_unsupported_descriptors() {
+        let source = fixture("L", 7, 5, 1, 23);
+        let pipeline = Image::push_op(&source, PipelineOp::Equalize);
+        let instance = PipelineOpInstance::new(pipeline.clone(), PipelineOp::Mirror);
+        let mut batch = BatchExecutor::new(true, Some(Backend::Gpu));
+        assert!(!pipeline.is_materialized());
+        assert_eq!(batch.submit(instance).unwrap(), 0);
+        assert!(!pipeline.is_materialized());
+        assert!(!batch.pending[0].source.is_materialized());
+        let unsupported = Image::push_op(&source, PipelineOp::Brightness { factor: 1.23456789 });
+        assert!(matches!(
+            batch.submit_prepared_pipeline(unsupported),
+            Err(PilError::NotImplementedError(_))
+        ));
+        for operation in [
+            PipelineOp::BoxBlur { radius: 65 },
+            PipelineOp::EffectNoise { sigma: 5.0 },
+        ] {
+            assert!(matches!(
+                batch.submit(PipelineOpInstance::new(source.clone(), operation)),
+                Err(PilError::NotImplementedError(_))
+            ));
+        }
+        assert!(matches!(
+            batch.submit(PipelineOpInstance::new(
+                fixture("YCbCr", 7, 5, 3, 41),
+                PipelineOp::GaussianBlur { sigma: 1.0 }
+            )),
+            Err(PilError::NotImplementedError(_))
+        ));
+        let unsupported_mask =
+            Image::push_op(&source, PipelineOp::Brightness { factor: 1.23456789 });
+        assert!(matches!(
+            batch.submit(PipelineOpInstance::new(
+                source.clone(),
+                PipelineOp::EqualizeMasked {
+                    mask: Arc::new(unsupported_mask)
+                }
+            )),
+            Err(PilError::NotImplementedError(_))
+        ));
+        assert!(matches!(
+            batch.submit_prepared_pipeline(source.clone()),
+            Err(PilError::ValueError(_))
+        ));
+        assert_eq!(batch.pending.len(), 1);
+        assert_eq!(
+            batch
+                .submit(PipelineOpInstance::new(source, PipelineOp::Grayscale))
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn pipeline_submission_requires_gpu_executor() {
+        for backend in [Backend::Cpu, Backend::Simd] {
+            let mut batch = BatchExecutor::new(true, Some(backend));
+            assert!(matches!(
+                batch.submit(PipelineOpInstance::new(
+                    fixture("L", 7, 5, 1, 23),
+                    PipelineOp::Equalize
+                )),
+                Err(PilError::NotImplementedError(_))
+            ));
+            assert!(batch.pending.is_empty());
+        }
+    }
+
+    #[cfg(feature = "gpu")]
+    #[test]
+    fn pipeline_submission_locks_lazy_equalize_mask_to_gpu() {
+        let source = fixture("L", 7, 5, 1, 23);
+        let mask = Image::push_op(&source, PipelineOp::Mirror).use_backend(Backend::Cpu);
+        let output = Image::push_op(
+            &source,
+            PipelineOp::EqualizeMasked {
+                mask: Arc::new(mask),
+            },
+        )
+        .use_backend(Backend::Gpu);
+        let Image::Pipeline { ops, .. } = output else {
+            panic!("expected a lazy pipeline")
+        };
+        let [PipelineOp::EqualizeMasked { mask }] = ops.as_slice() else {
+            panic!("expected masked equalize")
+        };
+        assert_eq!(mask.backend(), Some(Backend::Gpu));
+        assert!(!mask.is_materialized());
+    }
+
+    #[cfg(feature = "gpu")]
+    #[test]
+    fn pipeline_submission_locks_grouped_multiply_operand_to_gpu() {
+        let source = fixture("L", 7, 5, 1, 23);
+        let other = Image::push_op(&source, PipelineOp::Mirror).use_backend(Backend::Cpu);
+        let mut batch = BatchExecutor::new(true, Some(Backend::Gpu));
+        batch
+            .submit(PipelineOpInstance::new(
+                source,
+                PipelineOp::Multiply {
+                    other: Arc::new(other),
+                },
+            ))
+            .unwrap();
+        let BatchOperation::Multiply { other } = &batch.pending[0].operation else {
+            panic!("expected a grouped multiply job")
+        };
+        assert_eq!(other.backend(), Some(Backend::Gpu));
+        assert!(!other.is_materialized());
+    }
+
+    #[cfg(feature = "gpu")]
+    #[test]
+    fn pipeline_submission_checks_lowered_native_geometry() {
+        let mut batch = BatchExecutor::new(true, Some(Backend::Gpu));
+        let source = Image::new(7, 5, "1", (0, 0, 0, 255)).unwrap();
+        assert_eq!(
+            batch
+                .submit(PipelineOpInstance::new(
+                    source,
+                    PipelineOp::Thumbnail {
+                        w: 3,
+                        h: 2,
+                        filter: crate::ResampleFilter::Nearest,
+                    }
+                ))
+                .unwrap(),
+            0
+        );
+        assert!(!batch.pending[0].source.is_materialized());
+    }
+
+    #[cfg(feature = "gpu")]
+    #[test]
+    fn pipeline_submission_rejects_known_palette_modes_without_materializing() {
+        let source = Image::new(7, 5, "P", (0, 0, 0, 255)).unwrap();
+        let mirrored = Image::push_op(&source, PipelineOp::Mirror);
+        let mut batch = BatchExecutor::new(true, Some(Backend::Gpu));
+        for input in [source, mirrored.clone()] {
+            assert!(matches!(
+                batch.submit(PipelineOpInstance::new(
+                    input,
+                    PipelineOp::GaussianBlur { sigma: 1.0 }
+                )),
+                Err(PilError::NotImplementedError(_))
+            ));
+        }
+        assert!(!mirrored.is_materialized());
+        assert!(batch.pending.is_empty());
+    }
+
+    #[cfg(feature = "gpu")]
+    #[test]
+    fn pipeline_submission_grouped_wrapper_defers_unknown_source_shape() {
+        let source = fixture("L", 7, 5, 1, 23);
+        let pipeline = Image::push_op(
+            &source,
+            PipelineOp::Multiply {
+                other: Arc::new(source.clone()),
+            },
+        );
+        assert!(pipeline.known_size().is_none());
+        let mut batch = BatchExecutor::new(true, Some(Backend::Gpu));
+        batch
+            .submit_grouped(pipeline.clone(), BatchOperation::MedianFilter { size: 3 })
+            .unwrap();
+        assert!(!pipeline.is_materialized());
+        assert!(!batch.pending[0].source.is_materialized());
+        assert_eq!(batch.pending[0].size, (0, 0));
     }
 
     #[test]
@@ -1383,7 +1954,9 @@ mod tests {
                 .collect::<Vec<_>>();
             let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
             for source in sources {
-                batch.submit(source, BatchOperation::Invert).unwrap();
+                batch
+                    .submit_grouped(source, BatchOperation::Invert)
+                    .unwrap();
             }
             let actual = batch
                 .join()
@@ -1409,7 +1982,7 @@ mod tests {
         let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
         for source in sources {
             batch
-                .submit(source, BatchOperation::Brightness { factor: 0.5 })
+                .submit_grouped(source, BatchOperation::Brightness { factor: 0.5 })
                 .unwrap();
         }
         let actual = batch
@@ -1436,7 +2009,7 @@ mod tests {
             let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
             for source in sources {
                 batch
-                    .submit(source, BatchOperation::MedianFilter { size: 3 })
+                    .submit_grouped(source, BatchOperation::MedianFilter { size: 3 })
                     .unwrap();
             }
             let actual = batch
@@ -1465,7 +2038,7 @@ mod tests {
             let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
             for source in sources {
                 batch
-                    .submit(source, BatchOperation::MaxFilter { size: 3 })
+                    .submit_grouped(source, BatchOperation::MaxFilter { size: 3 })
                     .unwrap();
             }
             let actual = batch
@@ -1561,7 +2134,7 @@ mod tests {
             let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
             for source in sources {
                 batch
-                    .submit(
+                    .submit_grouped(
                         source,
                         BatchOperation::Expand {
                             border: 2,
@@ -1590,7 +2163,7 @@ mod tests {
         let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
         for source in sources {
             batch
-                .submit(source, BatchOperation::RankFilter { size: 3, rank: 1 })
+                .submit_grouped(source, BatchOperation::RankFilter { size: 3, rank: 1 })
                 .unwrap();
         }
         let actual = batch
@@ -1616,7 +2189,7 @@ mod tests {
         let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
         for source in sources {
             batch
-                .submit(source, BatchOperation::MedianFilter { size: 3 })
+                .submit_grouped(source, BatchOperation::MedianFilter { size: 3 })
                 .unwrap();
         }
         let actual = batch
@@ -1650,7 +2223,7 @@ mod tests {
                 let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
                 for source in sources {
                     batch
-                        .submit(
+                        .submit_grouped(
                             source,
                             BatchOperation::ExtractBand {
                                 channel: i32::try_from(channel).unwrap(),
@@ -1698,7 +2271,7 @@ mod tests {
             let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
             for (image, other) in operands {
                 batch
-                    .submit(
+                    .submit_grouped(
                         image,
                         BatchOperation::Multiply {
                             other: Box::new(other),
@@ -1739,6 +2312,66 @@ mod tests {
         }
         assert!(!BatchOperation::ExtractBand { channel: -1 }.can_group("RGB", (1, 1)));
         assert!(!BatchOperation::ExtractBand { channel: 0 }.can_group("P", (1, 1)));
+    }
+
+    #[test]
+    fn grayscale_groups_only_supported_native_byte_modes() {
+        let operation = BatchOperation::Grayscale;
+        for mode in ["L", "LA", "RGB", "RGBA", "YCbCr"] {
+            assert!(operation.can_group(mode, (3, 2)), "{mode} should group");
+            assert!(operation.matches_group(&BatchOperation::Grayscale));
+        }
+        for mode in ["P", "PA", "CMYK", "RGBX", "I", "F"] {
+            assert!(
+                !operation.can_group(mode, (3, 2)),
+                "{mode} should fall back"
+            );
+        }
+        assert!(matches!(
+            operation.pipeline_op(),
+            Some(PipelineOp::Grayscale)
+        ));
+    }
+
+    #[test]
+    fn queued_grayscale_returns_native_mode_pipeline_outputs() {
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2),
+            ("RGB", 3),
+            ("RGBA", 4),
+            ("YCbCr", 3),
+        ] {
+            let sources = [
+                fixture(mode, 7, 5, channels, 17),
+                fixture(mode, 7, 5, channels, 203),
+            ];
+            let expected = sources
+                .iter()
+                .map(|source| {
+                    crate::ops::imageops::grayscale(source)
+                        .unwrap()
+                        .tobytes()
+                        .unwrap()
+                })
+                .collect::<Vec<_>>();
+            let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
+            for source in sources {
+                batch
+                    .submit_grouped(source, BatchOperation::Grayscale)
+                    .unwrap();
+            }
+            let actual = batch
+                .join()
+                .unwrap()
+                .iter()
+                .map(|image| {
+                    assert_eq!(image.mode().unwrap(), "L");
+                    image.tobytes().unwrap()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "queued {mode} grayscale differs");
+        }
     }
 
     #[test]
@@ -1819,7 +2452,7 @@ mod tests {
             let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
             for (destination, source, mask) in inputs {
                 batch
-                    .submit(
+                    .submit_grouped(
                         destination,
                         BatchOperation::Paste {
                             source: Box::new(source),
@@ -1906,7 +2539,7 @@ mod tests {
             let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
             for (foreground, background, mask) in inputs {
                 batch
-                    .submit(
+                    .submit_grouped(
                         foreground,
                         BatchOperation::Composite {
                             background: Box::new(background),
@@ -1932,7 +2565,7 @@ mod tests {
     fn queued_extract_band_keeps_single_image_channel_errors() {
         let mut batch = BatchExecutor::new(true, Some(Backend::Cpu));
         batch
-            .submit(
+            .submit_grouped(
                 fixture("RGB", 3, 2, 3, 59),
                 BatchOperation::ExtractBand { channel: 3 },
             )
@@ -1944,7 +2577,7 @@ mod tests {
     fn nonqueued_batch_materializes_each_job_immediately() {
         let mut batch = BatchExecutor::new(false, Some(Backend::Cpu));
         let submitted = batch
-            .submit(
+            .submit_grouped(
                 fixture("L", 5, 3, 1, 23),
                 BatchOperation::MedianFilter { size: 3 },
             )

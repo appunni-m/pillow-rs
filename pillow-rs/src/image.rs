@@ -254,7 +254,7 @@ fn known_putalpha_mode(mode: PixelMode) -> Option<&'static str> {
 /// materialization fallback and therefore cannot change public behavior. The
 /// mode cache is separate from the pixel cache because metadata reads must not
 /// publish or expose a partially executed image.
-fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
+pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
     if op_preserves_mode(op) {
         return Some(current.to_owned());
     }
@@ -656,6 +656,28 @@ pub struct LoadedData {
     pub info: Option<ImageInfo>,
     /// Raw EXIF payload retained from the encoded source.
     pub exif: Option<Vec<u8>>,
+}
+
+/// GPU result provenance without retaining the input graph or its pixel owners.
+#[cfg(feature = "gpu")]
+#[derive(Clone)]
+pub(crate) struct GpuResultMetadata {
+    info: Option<ImageInfo>,
+    exif: Option<Vec<u8>>,
+    format: Option<ImageFormat>,
+}
+
+#[cfg(feature = "gpu")]
+impl GpuResultMetadata {
+    pub(crate) fn materialize(&self, image: DynamicImage, mode: &str) -> Image {
+        let mut result = Image::from_dynamic(image, Some(mode.to_owned()));
+        if let Image::Loaded(data) = &mut result {
+            data.info = self.info.clone();
+            data.exif = self.exif.clone();
+            data.source_format = self.format;
+        }
+        result
+    }
 }
 
 /// Owns either an immutable materialized image or bytes produced by a packer.
@@ -1838,7 +1860,199 @@ pub(crate) fn pipeline_mode_cache() -> PipelineModeCache {
     Arc::new(OnceLock::new())
 }
 
+#[cfg(feature = "gpu")]
+pub(crate) struct GpuPendingGraph<'a> {
+    pub(crate) source: &'a Image,
+    pub(crate) cached: Option<Arc<DynamicImage>>,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) mode: String,
+    pub(crate) encoded_bytes: u64,
+    pub(crate) ops: Vec<&'a PipelineOp>,
+}
+
+#[cfg(feature = "gpu")]
+fn gpu_info_bytes(info: &ImageInfo) -> u64 {
+    let profile_bytes = |profile: &image_slash_star::RawIccProfile| {
+        (profile.keyword.len() + profile.data.len()) as u64
+    };
+    4096 + info
+        .palette
+        .as_ref()
+        .map_or(0, |p| (p.rgb.len() + p.alpha.len()) as u64)
+        + info.source_color.icc_profile().map_or(0, profile_bytes)
+        + info
+            .source
+            .avif_item_icc_profiles()
+            .iter()
+            .map(|p| profile_bytes(p.profile()))
+            .sum::<u64>()
+        + std::mem::size_of_val(info.source.avif_item_locations()) as u64
+        + std::mem::size_of_val(info.source.avif_item_properties()) as u64
+        + std::mem::size_of_val(info.source.avif_item_plane_properties()) as u64
+        + std::mem::size_of_val(info.source.avif_item_codec_properties()) as u64
+        + std::mem::size_of_val(info.source.avif_item_relationships()) as u64
+        + std::mem::size_of_val(info.source.avif_auxiliary_relationships()) as u64
+        + std::mem::size_of_val(info.source.avif_premultiplied_relationships()) as u64
+        + std::mem::size_of_val(info.source.avif_item_color_properties()) as u64
+        + std::mem::size_of_val(info.source.avif_grid_item_ids()) as u64
+}
+
 impl Image {
+    /// Inspect the primary graph without decoding or executing an image operation.
+    #[cfg(feature = "gpu")]
+    pub(crate) fn gpu_pending_graph(&self) -> Result<GpuPendingGraph<'_>, PilError> {
+        self.gpu_pending_graph_depth(0)
+    }
+
+    #[cfg(feature = "gpu")]
+    fn gpu_pending_graph_depth(&self, depth: usize) -> Result<GpuPendingGraph<'_>, PilError> {
+        if depth > 64 {
+            return Err(PilError::ValueError(
+                "GPU graph exceeds 64 source levels".into(),
+            ));
+        }
+        match self {
+            Self::Pipeline {
+                source,
+                ops,
+                materialized,
+                backend,
+                explicit_mode,
+                palette,
+                mode,
+                ..
+            } => {
+                if backend.is_some_and(|backend| backend != crate::Backend::Gpu) {
+                    return Err(PilError::ValueError(
+                        "GPU batch graph is locked to another backend".into(),
+                    ));
+                }
+                if palette.is_some() || matches!(explicit_mode.as_deref(), Some("P" | "PA")) {
+                    return Err(PilError::ValueError(
+                        "GPU graph palette boundary is not yet represented by a native plan".into(),
+                    ));
+                }
+                if let Some(pixels) = materialized.get() {
+                    let pixels = pixels.clone()?;
+                    let pixel_mode = explicit_mode
+                        .clone()
+                        .or_else(|| {
+                            mode.get()
+                                .and_then(|m| m.as_ref().ok().and_then(|m| m.clone()))
+                        })
+                        .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
+                    return Ok(GpuPendingGraph {
+                        source: self,
+                        width: pixels.width(),
+                        height: pixels.height(),
+                        mode: pixel_mode,
+                        cached: Some(pixels),
+                        encoded_bytes: 0,
+                        ops: Vec::new(),
+                    });
+                }
+                let (mut graph, skip) = if let Some(prefix) = ops.prefix_cache()
+                    && let Some(pixels) = prefix.materialized.get()
+                {
+                    let pixels = pixels.clone()?;
+                    let pixel_mode = explicit_mode
+                        .clone()
+                        .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
+                    (
+                        GpuPendingGraph {
+                            source: self,
+                            width: pixels.width(),
+                            height: pixels.height(),
+                            mode: pixel_mode,
+                            cached: Some(pixels),
+                            encoded_bytes: 0,
+                            ops: Vec::new(),
+                        },
+                        prefix.ops_len,
+                    )
+                } else {
+                    (source.gpu_pending_graph_depth(depth + 1)?, 0)
+                };
+                if graph
+                    .ops
+                    .len()
+                    .saturating_add(ops.len().saturating_sub(skip))
+                    > 256
+                {
+                    return Err(PilError::ValueError(
+                        "GPU batch graph exceeds 256 pending operations".into(),
+                    ));
+                }
+                graph.ops.extend(ops.as_slice()[skip..].iter());
+                Ok(graph)
+            }
+            Self::Loaded(data) => Ok(GpuPendingGraph {
+                source: self,
+                cached: Some(data.image.clone()),
+                width: data.image.width(),
+                height: data.image.height(),
+                mode: data
+                    .explicit_mode
+                    .clone()
+                    .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()),
+                encoded_bytes: 0,
+                ops: Vec::new(),
+            }),
+            Self::Bytes {
+                source,
+                info: Some(info),
+                materialized,
+                ..
+            } => Ok(GpuPendingGraph {
+                source: self,
+                cached: materialized.get().map(|image| image.clone()).transpose()?,
+                width: info.width,
+                height: info.height,
+                mode: image_mode_name(info.mode).to_owned(),
+                encoded_bytes: source.bytes().len() as u64,
+                ops: Vec::new(),
+            }),
+            _ => Err(PilError::ValueError(
+                "GPU source has no proven native byte header/layout".into(),
+            )),
+        }
+    }
+
+    /// Conservative metadata ownership reservation, without cloning payloads.
+    #[cfg(feature = "gpu")]
+    pub(crate) fn gpu_metadata_bytes(&self) -> u64 {
+        let mut leaf = self;
+        while let Self::Pipeline { source, .. } = leaf {
+            leaf = source;
+        }
+        let (info, exif) = match leaf {
+            Self::Pipeline { .. } => unreachable!(),
+            Self::Loaded(data) => (data.info.as_ref(), data.exif.as_ref()),
+            Self::Paletted(data) => (data.info.as_ref(), data.exif.as_ref()),
+            Self::Bytes { source, info, .. } => {
+                return (source.bytes().len() as u64)
+                    .saturating_mul(16)
+                    .saturating_add(info.as_ref().map_or(0, gpu_info_bytes));
+            }
+        };
+        4096 + exif.map_or(0, |bytes| bytes.len() as u64) + info.map_or(0, gpu_info_bytes)
+    }
+
+    /// Publish pixels produced externally, retaining the normal pipeline metadata.
+    #[cfg(feature = "gpu")]
+    pub(crate) fn gpu_result_metadata(&self) -> GpuResultMetadata {
+        GpuResultMetadata {
+            info: self.image_info(),
+            exif: self.exif_metadata(),
+            format: match self {
+                Self::Pipeline { format, .. } | Self::Bytes { format, .. } => *format,
+                Self::Loaded(source) => source.source_format,
+                Self::Paletted(source) => source.source_format,
+            },
+        }
+    }
+
     /// Return whether two cloned handles refer to the same immutable source
     /// node for execution-resource reuse.
     ///
@@ -2736,23 +2950,6 @@ impl Image {
     pub fn materialize(&self) -> Result<DynamicImage, PilError> {
         let image = self.materialized_shared_for_ops()?;
         Ok(image.as_ref().clone())
-    }
-
-    /// Seeds an ordinary operation result with pixels produced by the
-    /// explicit batch executor. The lazy result still owns the same source,
-    /// mode, palette, and metadata path as its single-image equivalent.
-    pub(crate) fn cache_batched_materialization(
-        &mut self,
-        image: Arc<DynamicImage>,
-    ) -> Result<(), PilError> {
-        let Image::Pipeline { materialized, .. } = self else {
-            return Err(PilError::InternalError(
-                "batched pixels require an operation pipeline result".into(),
-            ));
-        };
-        materialized
-            .set(Ok(image))
-            .map_err(|_| PilError::InternalError("batch result was already materialized".into()))
     }
 
     /// Returns operation-ready shared pixels after validating the logical
@@ -4603,7 +4800,8 @@ impl Image {
             }
             PipelineOp::Autocontrast {
                 mask: Some(mask), ..
-            } => {
+            }
+            | PipelineOp::EqualizeMasked { mask } => {
                 Arc::make_mut(mask).lock_backend_recursive(b);
             }
             _ => {}
@@ -5114,7 +5312,7 @@ impl Image {
     /// Pillow's `Image.apply_transparency` keeps a `P` image indexed: it moves
     /// the `info["transparency"]` value into the palette's alpha table. The
     /// codec layer used here canonicalizes indexed transparency into
-    /// [`PalettedData::palette_alpha`] while decoding. This method retains that
+    /// its indexed palette alpha storage while decoding. This method retains that
     /// table, removes the pending `ImageInfo` alpha marker, and materializes a
     /// lazy or deferred P image as indexed storage. It never expands pixels to
     /// `RGBA`.

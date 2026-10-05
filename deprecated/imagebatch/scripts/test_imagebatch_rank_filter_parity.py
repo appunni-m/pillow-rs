@@ -202,7 +202,7 @@ def run_target(expected_path: Path) -> None:
         for width, height, seed in SMALL:
             image = Image.frombytes("L", (width, height), pixels((width, height), seed))
             image.info["batch-seed"] = seed
-            queued.submit(image, ImageFilter.RankFilter(3, rank=1))
+            queued.submit(ImageBatch.PipelineOp(image, ImageFilter.RankFilter(3, rank=1)))
         small_result = queued.join()
         require_exact(small_result, expected["small"], f"queued {backend}/L", check_info=True)
         require_backend(core, backend, f"queued {backend}/L mixed shapes", 2 if backend == "gpu" else 0)
@@ -210,17 +210,14 @@ def run_target(expected_path: Path) -> None:
 
         eager = ImageBatch.BatchExecutor(queue=False, backend=backend)
         image = Image.frombytes("L", (33, 35), pixels((33, 35), 73))
-        eager.submit(image, ImageFilter.RankFilter(3, rank=1))
+        eager.submit(ImageBatch.PipelineOp(image, ImageFilter.RankFilter(3, rank=1)))
         eager_result = eager.join()
         require_exact(eager_result, [expected["eager"]], f"eager {backend}/L")
         require_backend(core, backend, f"eager {backend}/L", 1 if backend == "gpu" else 0)
 
         large = ImageBatch.BatchExecutor(queue=True, backend=backend)
         for seed in range(LARGE_IMAGE_COUNT):
-            large.submit(
-                Image.frombytes("L", LARGE_SIZE, material_pixels(seed)),
-                ImageFilter.RankFilter(3, rank=1),
-            )
+            large.submit(ImageBatch.PipelineOp(Image.frombytes("L", LARGE_SIZE, material_pixels(seed)), ImageFilter.RankFilter(3, rank=1)))
         large_result = large.join()
         require_exact(
             large_result,
@@ -242,10 +239,7 @@ def run_target(expected_path: Path) -> None:
     core.enable_backend("cpu")
     fallback = ImageBatch.BatchExecutor(queue=True, backend="cpu")
     for mode, size, seed, filter_size, rank in FALLBACK:
-        fallback.submit(
-            Image.frombytes(mode, size, fallback_pixels(mode, size, seed)),
-            ImageFilter.RankFilter(filter_size, rank=rank),
-        )
+        fallback.submit(ImageBatch.PipelineOp(Image.frombytes(mode, size, fallback_pixels(mode, size, seed)), ImageFilter.RankFilter(filter_size, rank=rank)))
     fallback_result = fallback.join()
     require_exact(fallback_result, expected["fallback"], "queued CPU non-groupable RankFilter")
     receipt = core.take_pipeline_telemetry()
@@ -278,7 +272,7 @@ def assert_grouped_rank_filter_failure_fallback(case: dict, expected: dict) -> N
         width, height, _ = next(item for item in SMALL if item[2] == seed)
         image = Image.frombytes("L", (width, height), pixels((width, height), seed))
         image.info["batch-seed"] = seed
-        batch.submit(image, ImageFilter.RankFilter(3, rank=1))
+        batch.submit(ImageBatch.PipelineOp(image, ImageFilter.RankFilter(3, rank=1)))
 
     recovered = batch.join()
     expected_by_seed = {item["info"]: item for item in expected["small"]}
@@ -303,7 +297,7 @@ def assert_grouped_rank_filter_failure_fallback(case: dict, expected: dict) -> N
 
     image = Image.frombytes("L", (33, 35), pixels((33, 35), 73))
     image.info["batch-seed"] = 73
-    if batch.submit(image, ImageFilter.RankFilter(3, rank=1)) != 0:
+    if batch.submit(ImageBatch.PipelineOp(image, ImageFilter.RankFilter(3, rank=1))) != 0:
         raise AssertionError("a drained batch did not reset its submission index")
     followup = batch.join()
     require_exact(

@@ -70,7 +70,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |-- pillow-rs/
 |   |-- Cargo.toml
 |   |-- src/
-|   |   |-- batch.rs
 |   |   |-- checked_dims.rs
 |   |   |-- color.rs
 |   |   |-- compute/
@@ -89,149 +88,152 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       `-- mod.rs
 |   |   |   |-- pool_gpu/
 |   |   |   |   |-- mod.rs
-|   |   |   |   `-- shaders/
-|   |   |   |       |-- add.wgsl
-|   |   |   |       |-- add_modulo.wgsl
-|   |   |   |       |-- alpha_composite.wgsl
-|   |   |   |       |-- alpha_composite_mirror.wgsl
-|   |   |   |       |-- autocontrast.wgsl
-|   |   |   |       |-- autocontrast_cutoff.wgsl
-|   |   |   |       |-- autocontrast_remap.wgsl
-|   |   |   |       |-- blend_module.wgsl
-|   |   |   |       |-- box_blur.wgsl
-|   |   |   |       |-- box_blur_h.wgsl
-|   |   |   |       |-- box_blur_h_la_packed.wgsl
-|   |   |   |       |-- box_blur_h_luma_packed.wgsl
-|   |   |   |       |-- box_blur_h_rgb_packed.wgsl
-|   |   |   |       |-- box_blur_v.wgsl
-|   |   |   |       |-- box_blur_v_la_packed.wgsl
-|   |   |   |       |-- box_blur_v_luma_packed.wgsl
-|   |   |   |       |-- box_blur_v_rgb_packed.wgsl
-|   |   |   |       |-- brightness.wgsl
-|   |   |   |       |-- brightness_native.wgsl
-|   |   |   |       |-- color_3dlut.wgsl
-|   |   |   |       |-- color_saturation.wgsl
-|   |   |   |       |-- colorize.wgsl
-|   |   |   |       |-- composite_module.wgsl
-|   |   |   |       |-- composite_native.wgsl
-|   |   |   |       |-- constant.wgsl
-|   |   |   |       |-- contain.wgsl
-|   |   |   |       |-- contrast.wgsl
-|   |   |   |       |-- convert.wgsl
-|   |   |   |       |-- cover.wgsl
-|   |   |   |       |-- crop.wgsl
-|   |   |   |       |-- crop_border.wgsl
-|   |   |   |       |-- crop_native_rgb.wgsl
-|   |   |   |       |-- darker.wgsl
-|   |   |   |       |-- difference.wgsl
-|   |   |   |       |-- draw.wgsl
-|   |   |   |       |-- duplicate.wgsl
-|   |   |   |       |-- effect_noise.wgsl
-|   |   |   |       |-- effect_spread.wgsl
-|   |   |   |       |-- equalize.wgsl
-|   |   |   |       |-- equalize_cdf.wgsl
-|   |   |   |       |-- equalize_histogram.wgsl
-|   |   |   |       |-- equalize_histogram_l_packed.wgsl
-|   |   |   |       |-- equalize_histogram_rgb_packed.wgsl
-|   |   |   |       |-- equalize_remap.wgsl
-|   |   |   |       |-- equalize_remap_l_packed.wgsl
-|   |   |   |       |-- eval.wgsl
-|   |   |   |       |-- expand.wgsl
-|   |   |   |       |-- extract_band.wgsl
-|   |   |   |       |-- filter_3x3.wgsl
-|   |   |   |       |-- filter_5x5.wgsl
-|   |   |   |       |-- filter_5x5_la_packed.wgsl
-|   |   |   |       |-- filter_5x5_luma_packed.wgsl
-|   |   |   |       |-- fit.wgsl
-|   |   |   |       |-- flip.wgsl
-|   |   |   |       |-- flip_native_byte_rows.wgsl
-|   |   |   |       |-- gaussian_blur.wgsl
-|   |   |   |       |-- grayscale.wgsl
-|   |   |   |       |-- hard_light.wgsl
-|   |   |   |       |-- histogram_clear.wgsl
-|   |   |   |       |-- invert.wgsl
-|   |   |   |       |-- invert_chops.wgsl
-|   |   |   |       |-- lighter.wgsl
-|   |   |   |       |-- logical_and.wgsl
-|   |   |   |       |-- logical_or.wgsl
-|   |   |   |       |-- logical_xor.wgsl
-|   |   |   |       |-- max_filter.wgsl
-|   |   |   |       |-- max_filter_3x3_la_packed.wgsl
-|   |   |   |       |-- max_filter_3x3_luma_packed.wgsl
-|   |   |   |       |-- max_filter_3x3_rgb_packed.wgsl
-|   |   |   |       |-- median_filter.wgsl
-|   |   |   |       |-- median_filter_3x3.wgsl
-|   |   |   |       |-- median_filter_3x3_la_packed.wgsl
-|   |   |   |       |-- median_filter_3x3_luma_packed.wgsl
-|   |   |   |       |-- median_filter_3x3_rgb_packed.wgsl
-|   |   |   |       |-- merge.wgsl
-|   |   |   |       |-- min_filter.wgsl
-|   |   |   |       |-- min_filter_3x3_la_packed.wgsl
-|   |   |   |       |-- min_filter_3x3_luma_packed.wgsl
-|   |   |   |       |-- min_filter_3x3_rgb_packed.wgsl
-|   |   |   |       |-- mirror.wgsl
-|   |   |   |       |-- multiply.wgsl
-|   |   |   |       |-- multiply_screen.wgsl
-|   |   |   |       |-- offset.wgsl
-|   |   |   |       |-- overlay.wgsl
-|   |   |   |       |-- pad.wgsl
-|   |   |   |       |-- pad_hsv_native_rgb.wgsl
-|   |   |   |       |-- pad_la_packed.wgsl
-|   |   |   |       |-- pad_luma_packed.wgsl
-|   |   |   |       |-- paste.wgsl
-|   |   |   |       |-- paste_native_bytes.wgsl
-|   |   |   |       |-- paste_native_masked_l.wgsl
-|   |   |   |       |-- paste_native_masked_la.wgsl
-|   |   |   |       |-- paste_native_masked_pa.wgsl
-|   |   |   |       |-- paste_native_masked_rgb.wgsl
-|   |   |   |       |-- paste_native_masked_rgba.wgsl
-|   |   |   |       |-- paste_native_rgb_to_rgba.wgsl
-|   |   |   |       |-- point_luma_packed.wgsl
-|   |   |   |       |-- point_op.wgsl
-|   |   |   |       |-- point_rgb_packed.wgsl
-|   |   |   |       |-- posterize.wgsl
-|   |   |   |       |-- put_alpha.wgsl
-|   |   |   |       |-- put_alpha_data.wgsl
-|   |   |   |       |-- put_alpha_data_native_rgb.wgsl
-|   |   |   |       |-- put_alpha_data_native_rgba.wgsl
-|   |   |   |       |-- put_alpha_native_la.wgsl
-|   |   |   |       |-- put_alpha_native_rgb.wgsl
-|   |   |   |       |-- put_data.wgsl
-|   |   |   |       |-- put_data_luma_packed.wgsl
-|   |   |   |       |-- put_pixel.wgsl
-|   |   |   |       |-- rank_filter.wgsl
-|   |   |   |       |-- rank_filter_3x3_la_packed.wgsl
-|   |   |   |       |-- rank_filter_3x3_luma_packed.wgsl
-|   |   |   |       |-- rank_filter_9x9_luma_packed.wgsl
-|   |   |   |       |-- rank_filter_9x9_luma_row_packed.wgsl
-|   |   |   |       |-- reduce.wgsl
-|   |   |   |       |-- remap_palette.wgsl
-|   |   |   |       |-- resize_bilinear.wgsl
-|   |   |   |       |-- resize_convolution_h.wgsl
-|   |   |   |       |-- resize_convolution_v.wgsl
-|   |   |   |       |-- resize_convolution_v_pad_rgbx.wgsl
-|   |   |   |       |-- resize_nearest.wgsl
-|   |   |   |       |-- rgb_to_lab.wgsl
-|   |   |   |       |-- rotate.wgsl
-|   |   |   |       |-- scale.wgsl
-|   |   |   |       |-- screen.wgsl
-|   |   |   |       |-- sharpness.wgsl
-|   |   |   |       |-- sharpness_l_native.wgsl
-|   |   |   |       |-- sharpness_la_native.wgsl
-|   |   |   |       |-- sharpness_rgb_native.wgsl
-|   |   |   |       |-- soft_light.wgsl
-|   |   |   |       |-- solarize.wgsl
-|   |   |   |       |-- subtract.wgsl
-|   |   |   |       |-- subtract_modulo.wgsl
-|   |   |   |       |-- thumbnail.wgsl
-|   |   |   |       |-- transform.wgsl
-|   |   |   |       |-- transform_geometry.wgsl
-|   |   |   |       |-- transform_l_nearest_packed.wgsl
-|   |   |   |       |-- transform_la_nearest_packed.wgsl
-|   |   |   |       |-- transform_rgb_nearest_packed.wgsl
-|   |   |   |       |-- transpose.wgsl
-|   |   |   |       |-- transpose_rgb.wgsl
-|   |   |   |       `-- transpose_rgb_tiled.wgsl
+|   |   |   |   |-- shaders/
+|   |   |   |   |   |-- add.wgsl
+|   |   |   |   |   |-- add_modulo.wgsl
+|   |   |   |   |   |-- alpha_composite.wgsl
+|   |   |   |   |   |-- alpha_composite_mirror.wgsl
+|   |   |   |   |   |-- autocontrast.wgsl
+|   |   |   |   |   |-- autocontrast_cutoff.wgsl
+|   |   |   |   |   |-- autocontrast_remap.wgsl
+|   |   |   |   |   |-- blend_module.wgsl
+|   |   |   |   |   |-- box_blur.wgsl
+|   |   |   |   |   |-- box_blur_h.wgsl
+|   |   |   |   |   |-- box_blur_h_la_packed.wgsl
+|   |   |   |   |   |-- box_blur_h_luma_packed.wgsl
+|   |   |   |   |   |-- box_blur_h_rgb_packed.wgsl
+|   |   |   |   |   |-- box_blur_v.wgsl
+|   |   |   |   |   |-- box_blur_v_la_packed.wgsl
+|   |   |   |   |   |-- box_blur_v_luma_packed.wgsl
+|   |   |   |   |   |-- box_blur_v_rgb_packed.wgsl
+|   |   |   |   |   |-- brightness.wgsl
+|   |   |   |   |   |-- brightness_native.wgsl
+|   |   |   |   |   |-- color_3dlut.wgsl
+|   |   |   |   |   |-- color_saturation.wgsl
+|   |   |   |   |   |-- colorize.wgsl
+|   |   |   |   |   |-- composite_module.wgsl
+|   |   |   |   |   |-- composite_native.wgsl
+|   |   |   |   |   |-- constant.wgsl
+|   |   |   |   |   |-- contain.wgsl
+|   |   |   |   |   |-- contrast.wgsl
+|   |   |   |   |   |-- convert.wgsl
+|   |   |   |   |   |-- cover.wgsl
+|   |   |   |   |   |-- crop.wgsl
+|   |   |   |   |   |-- crop_border.wgsl
+|   |   |   |   |   |-- crop_native_rgb.wgsl
+|   |   |   |   |   |-- darker.wgsl
+|   |   |   |   |   |-- difference.wgsl
+|   |   |   |   |   |-- draw.wgsl
+|   |   |   |   |   |-- duplicate.wgsl
+|   |   |   |   |   |-- effect_noise.wgsl
+|   |   |   |   |   |-- effect_spread.wgsl
+|   |   |   |   |   |-- equalize.wgsl
+|   |   |   |   |   |-- equalize_cdf.wgsl
+|   |   |   |   |   |-- equalize_histogram.wgsl
+|   |   |   |   |   |-- equalize_histogram_l_packed.wgsl
+|   |   |   |   |   |-- equalize_histogram_rgb_packed.wgsl
+|   |   |   |   |   |-- equalize_remap.wgsl
+|   |   |   |   |   |-- equalize_remap_l_packed.wgsl
+|   |   |   |   |   |-- eval.wgsl
+|   |   |   |   |   |-- expand.wgsl
+|   |   |   |   |   |-- extract_band.wgsl
+|   |   |   |   |   |-- filter_3x3.wgsl
+|   |   |   |   |   |-- filter_3x3_la_binomial_packed.wgsl
+|   |   |   |   |   |-- filter_5x5.wgsl
+|   |   |   |   |   |-- filter_5x5_la_packed.wgsl
+|   |   |   |   |   |-- filter_5x5_luma_packed.wgsl
+|   |   |   |   |   |-- fit.wgsl
+|   |   |   |   |   |-- flip.wgsl
+|   |   |   |   |   |-- flip_native_byte_rows.wgsl
+|   |   |   |   |   |-- gaussian_blur.wgsl
+|   |   |   |   |   |-- grayscale.wgsl
+|   |   |   |   |   |-- hard_light.wgsl
+|   |   |   |   |   |-- histogram_clear.wgsl
+|   |   |   |   |   |-- invert.wgsl
+|   |   |   |   |   |-- invert_chops.wgsl
+|   |   |   |   |   |-- lighter.wgsl
+|   |   |   |   |   |-- logical_and.wgsl
+|   |   |   |   |   |-- logical_or.wgsl
+|   |   |   |   |   |-- logical_xor.wgsl
+|   |   |   |   |   |-- max_filter.wgsl
+|   |   |   |   |   |-- max_filter_3x3_la_packed.wgsl
+|   |   |   |   |   |-- max_filter_3x3_luma_packed.wgsl
+|   |   |   |   |   |-- max_filter_3x3_rgb_packed.wgsl
+|   |   |   |   |   |-- median_filter.wgsl
+|   |   |   |   |   |-- median_filter_3x3.wgsl
+|   |   |   |   |   |-- median_filter_3x3_la_packed.wgsl
+|   |   |   |   |   |-- median_filter_3x3_luma_packed.wgsl
+|   |   |   |   |   |-- median_filter_3x3_rgb_packed.wgsl
+|   |   |   |   |   |-- merge.wgsl
+|   |   |   |   |   |-- min_filter.wgsl
+|   |   |   |   |   |-- min_filter_3x3_la_packed.wgsl
+|   |   |   |   |   |-- min_filter_3x3_luma_packed.wgsl
+|   |   |   |   |   |-- min_filter_3x3_rgb_packed.wgsl
+|   |   |   |   |   |-- mirror.wgsl
+|   |   |   |   |   |-- multiply.wgsl
+|   |   |   |   |   |-- multiply_screen.wgsl
+|   |   |   |   |   |-- offset.wgsl
+|   |   |   |   |   |-- overlay.wgsl
+|   |   |   |   |   |-- pad.wgsl
+|   |   |   |   |   |-- pad_hsv_native_rgb.wgsl
+|   |   |   |   |   |-- pad_la_packed.wgsl
+|   |   |   |   |   |-- pad_luma_packed.wgsl
+|   |   |   |   |   |-- paste.wgsl
+|   |   |   |   |   |-- paste_native_bytes.wgsl
+|   |   |   |   |   |-- paste_native_masked_l.wgsl
+|   |   |   |   |   |-- paste_native_masked_la.wgsl
+|   |   |   |   |   |-- paste_native_masked_pa.wgsl
+|   |   |   |   |   |-- paste_native_masked_rgb.wgsl
+|   |   |   |   |   |-- paste_native_masked_rgba.wgsl
+|   |   |   |   |   |-- paste_native_rgb_to_rgba.wgsl
+|   |   |   |   |   |-- point_luma_packed.wgsl
+|   |   |   |   |   |-- point_op.wgsl
+|   |   |   |   |   |-- point_rgb_packed.wgsl
+|   |   |   |   |   |-- posterize.wgsl
+|   |   |   |   |   |-- put_alpha.wgsl
+|   |   |   |   |   |-- put_alpha_data.wgsl
+|   |   |   |   |   |-- put_alpha_data_native_rgb.wgsl
+|   |   |   |   |   |-- put_alpha_data_native_rgba.wgsl
+|   |   |   |   |   |-- put_alpha_native_la.wgsl
+|   |   |   |   |   |-- put_alpha_native_rgb.wgsl
+|   |   |   |   |   |-- put_data.wgsl
+|   |   |   |   |   |-- put_data_luma_packed.wgsl
+|   |   |   |   |   |-- put_pixel.wgsl
+|   |   |   |   |   |-- rank_filter.wgsl
+|   |   |   |   |   |-- rank_filter_3x3_la_packed.wgsl
+|   |   |   |   |   |-- rank_filter_3x3_luma_packed.wgsl
+|   |   |   |   |   |-- rank_filter_9x9_luma_packed.wgsl
+|   |   |   |   |   |-- rank_filter_9x9_luma_row_packed.wgsl
+|   |   |   |   |   |-- reduce.wgsl
+|   |   |   |   |   |-- relocate_native_bytes.wgsl
+|   |   |   |   |   |-- remap_palette.wgsl
+|   |   |   |   |   |-- resize_bilinear.wgsl
+|   |   |   |   |   |-- resize_convolution_h.wgsl
+|   |   |   |   |   |-- resize_convolution_v.wgsl
+|   |   |   |   |   |-- resize_convolution_v_pad_rgbx.wgsl
+|   |   |   |   |   |-- resize_nearest.wgsl
+|   |   |   |   |   |-- rgb_to_lab.wgsl
+|   |   |   |   |   |-- rotate.wgsl
+|   |   |   |   |   |-- scale.wgsl
+|   |   |   |   |   |-- screen.wgsl
+|   |   |   |   |   |-- sharpness.wgsl
+|   |   |   |   |   |-- sharpness_l_native.wgsl
+|   |   |   |   |   |-- sharpness_la_native.wgsl
+|   |   |   |   |   |-- sharpness_rgb_native.wgsl
+|   |   |   |   |   |-- soft_light.wgsl
+|   |   |   |   |   |-- solarize.wgsl
+|   |   |   |   |   |-- subtract.wgsl
+|   |   |   |   |   |-- subtract_modulo.wgsl
+|   |   |   |   |   |-- thumbnail.wgsl
+|   |   |   |   |   |-- transform.wgsl
+|   |   |   |   |   |-- transform_geometry.wgsl
+|   |   |   |   |   |-- transform_l_nearest_packed.wgsl
+|   |   |   |   |   |-- transform_la_nearest_packed.wgsl
+|   |   |   |   |   |-- transform_rgb_nearest_packed.wgsl
+|   |   |   |   |   |-- transpose.wgsl
+|   |   |   |   |   |-- transpose_rgb.wgsl
+|   |   |   |   |   `-- transpose_rgb_tiled.wgsl
+|   |   |   |   `-- stream.rs
 |   |   |   |-- pool_simd/
 |   |   |   |   |-- mod.rs
 |   |   |   |   `-- ops/
@@ -330,8 +332,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   `-- pillow_rs/
 |   |       |-- __init__.py
 |   |       |-- enums.py
+|   |       |-- gpu_batch.py
 |   |       |-- image.py
-|   |       |-- imagebatch.py
 |   |       |-- imagechops.py
 |   |       |-- imagecolor.py
 |   |       |-- imagedraw.py
@@ -344,6 +346,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |       |-- imagestat.py
 |   |       `-- operations.py
 |   `-- src/
+|       |-- gpu_batch.rs
 |       |-- lib.rs
 |       `-- putdata.rs
 |-- requirements-ci.txt
@@ -354,7 +357,7 @@ It is a navigation aid, not an API-support or coverage claim.
 `-- scripts/
     |-- aggregate_migration_parity.py
     |-- audit_rust_result_methods.py
-    |-- benchmark_imagebatch.py
+    |-- benchmark_gpu_batch.py
     |-- build_migration_parity_inputs.py
     |-- build_migration_parity_manifest.py
     |-- check_bindings.py
@@ -419,11 +422,8 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_font_native_cases.py
     |-- test_font_variant_parity.py
     |-- test_getdata_sequence_parity.py
+    |-- test_gpu_batch.py
     |-- test_grayscale_rgb_domain.py
-    |-- test_imagebatch_expand_parity.py
-    |-- test_imagebatch_max_filter_parity.py
-    |-- test_imagebatch_parity.py
-    |-- test_imagebatch_rank_filter_parity.py
     |-- test_migration_benchmark_selection.py
     |-- test_migration_parity_icc_timestamp.py
     |-- test_migration_parity_serialization.py

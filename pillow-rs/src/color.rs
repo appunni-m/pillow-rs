@@ -632,10 +632,15 @@ pub fn resolve_new_color(
 /// it explicit instead of folding it into a fixed four-tuple.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorValue {
+    /// One grayscale sample, including Pillow's raw integer color semantics.
     Gray(i32),
+    /// Grayscale and alpha samples.
     GrayAlpha(i32, i32),
+    /// Red, green, and blue samples.
     Rgb(i32, i32, i32),
+    /// Red, green, blue, and alpha samples.
     Rgba(i32, i32, i32, i32),
+    /// Hue, saturation, and value samples on Pillow's 0–255 scale.
     Hsv(i32, i32, i32),
 }
 
@@ -716,6 +721,10 @@ fn rgb_to_hsv_i32(r: i32, g: i32, b: i32) -> (i32, i32, i32) {
     ((h * 255.0) as i32, (s * 255.0) as i32, (v * 255.0) as i32)
 }
 
+/// Resolve parsed RGBA components to the requested Pillow color mode.
+///
+/// Components retain their raw integer values; this function does not clamp
+/// them before luma or HSV calculations. Unknown modes return a key error.
 pub fn getcolor(
     r: i32,
     g: i32,

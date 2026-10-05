@@ -576,7 +576,7 @@ pub fn invert(image: &Image) -> Result<Image, PilError> {
 /// # Errors
 ///
 /// Returns [`PilError::NotImplementedError`] for `P` mode, or errors from
-/// [`invert`].
+/// the underlying inversion operation.
 pub fn invert_ops(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode()?;
     if mode == "P" {

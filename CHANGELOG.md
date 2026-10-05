@@ -6,6 +6,28 @@ backend limitations in the documentation remain part of its contract.
 
 ## Unreleased
 
+### 12.2.0-alpha.6 candidate
+
+Prepared on 2026-10-05; publication is blocked by the required SIMD parity gate.
+
+- Add explicit GPU pipeline batching with bounded admission and streaming CPU
+  or resident GPU results, stable job IDs and caller keys, and immediate
+  rejection of unsupported pending contexts. Reuse existing lazy image graphs;
+  document cancellation, ownership, limits, and measured throughput.
+- Archive the experimental ImageBatch API and its implementation under
+  `deprecated/imagebatch`; remove its runtime exports.
+- Add native-mode composed GPU execution and retain derived-image metadata.
+- Read native packed L samples correctly in GPU geometry-table transforms.
+- Restore generator support for existing font variation style and reused-face
+  observations without removing any committed parity input.
+- Optimize native LA/L filters, byte putdata, RGBA transpose, RGB merge,
+  composite, conversions, and terminal reads while preserving the covered
+  Pillow contracts. Per-operation performance gaps remain documented.
+- Prepare the opt-in Parallel CPU companion wheel through `pillow-rs[parallel]`;
+  keep Rayon disabled in the standard wheel.
+- Correct the documentation dashboard's stale workload-count assertions to
+  the existing catalog of 657 workloads: 195 operations and 462 pipelines.
+
 ## 12.2.0-alpha.5 - 2026-10-01
 
 - Preserve zero-valued fourth samples for omitted and scalar CMYK/RGBX

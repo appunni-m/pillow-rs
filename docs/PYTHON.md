@@ -54,11 +54,12 @@ their Pillow contract; do not assume that every method is immutable.
 Importing two aliases in one interpreter does not isolate their shared package
 name. Use one process per environment.
 
-## Batch independent images
+## Explicit GPU scheduling
 
-For applications that already have independent image jobs, the opt-in
-[`PIL.ImageBatch`](IMAGE_BATCHING.md) API can queue compatible GPU operations
-into one image pipeline. Ordinary `Image` methods keep their existing routing.
+The former `PIL.ImageBatch` experiment is deprecated and no longer exported.
+Use [GpuBatchExecutor](IMAGE_BATCHING.md) to submit existing lazy Image results
+or stream keyed inputs with bounded CPU/resident outputs. This separate source
+API leaves normal Image routing unchanged.
 
 ## Fonts and sequences
 

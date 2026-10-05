@@ -30,6 +30,9 @@ use std::num::NonZeroU64;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+/// Explicit bounded GPU scheduling; ordinary image routing stays independent.
+pub(crate) mod stream;
+
 /// Keep command submission bounded for very long lazy pipelines. A batch may
 /// contain more operations; it is split into sequential submissions without
 /// reading the image back between chunks.
@@ -19145,26 +19148,36 @@ fn gpu_dimensions_require_cpu(
 /// particular native mode. Keep this check beside the dimension preflight so
 /// those cases fall back before any device or upload work begins.
 fn gpu_operation_mode_requires_cpu(op: &PipelineOp, image: &DynamicImage) -> bool {
+    let other_is_lab = matches!(op, PipelineOp::BlendModule { other, .. }
+        if other.mode().ok().as_deref() == Some("LAB"));
+    gpu_operation_color_requires_cpu(op, image.color(), other_is_lab)
+}
+
+fn gpu_operation_color_requires_cpu(
+    op: &PipelineOp,
+    color: crate::raster::ColorType,
+    other_is_lab: bool,
+) -> bool {
     match op {
         // AlphaComposite's public implementation is defined for LA/RGBA
         // canvases. On L/RGB, the CPU operation promotes to RGBA while the
         // packed GPU result would otherwise be fed through preserve_mode.
         PipelineOp::AlphaComposite { .. } => !matches!(
-            image,
-            DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+            color,
+            crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
         ),
         // ImageChops.blend intentionally converts through RGB and restores
         // an opaque alpha for an alpha-bearing source. Image.blend (the
         // module operation) blends every stored channel, including alpha, so
         // all packed byte layouts use the same shader path.
-        PipelineOp::BlendModule { other, .. } => {
-            other.mode().ok().as_deref() == Some("LAB")
+        PipelineOp::BlendModule { .. } => {
+            other_is_lab
                 || !matches!(
-                    image,
-                    DynamicImage::ImageLuma8(_)
-                        | DynamicImage::ImageLumaA8(_)
-                        | DynamicImage::ImageRgb8(_)
-                        | DynamicImage::ImageRgba8(_)
+                    color,
+                    crate::raster::ColorType::L8
+                        | crate::raster::ColorType::La8
+                        | crate::raster::ColorType::Rgb8
+                        | crate::raster::ColorType::Rgba8
                 )
         }
         // PutData and alpha promotion carry the logical source/target layout
@@ -19173,19 +19186,19 @@ fn gpu_operation_mode_requires_cpu(op: &PipelineOp, image: &DynamicImage) -> boo
         // would otherwise reinterpret the existing storage in place.
         PipelineOp::PutData { mode, .. }
         | PipelineOp::PutAlpha { mode, .. }
-        | PipelineOp::PutAlphaData { mode, .. } => !pixel_mode_matches_image(*mode, image),
+        | PipelineOp::PutAlphaData { mode, .. } => !pixel_mode_matches_color(*mode, color),
         // The CPU ImageOps implementation runs Posterize/Solarize through
         // an RGB temporary and preserve_mode, which makes alpha opaque for
         // LA/RGBA. The packed shaders currently retain alpha, so keep those
         // native alpha cases on CPU until the public operation is normalized.
         PipelineOp::Posterize { .. } | PipelineOp::Solarize { .. } => matches!(
-            image,
-            DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+            color,
+            crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
         ),
         // ImageOps.colorize accepts only an L image and always produces RGB.
         // The shader reads the luma byte directly; running it on a packed RGB
         // source would silently colorize the wrong sample contract.
-        PipelineOp::Colorize { .. } => !matches!(image, DynamicImage::ImageLuma8(_)),
+        PipelineOp::Colorize { .. } => !matches!(color, crate::raster::ColorType::L8),
         // Autocontrast and Equalize use the packed byte representation only
         // for native L/RGB images.  Their scalar histogram control plane is
         // exact for those layouts; alpha and typed images have different
@@ -19193,39 +19206,39 @@ fn gpu_operation_mode_requires_cpu(op: &PipelineOp, image: &DynamicImage) -> boo
         PipelineOp::Autocontrast { .. }
         | PipelineOp::Equalize
         | PipelineOp::EqualizeMasked { .. } => !matches!(
-            image,
-            DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_)
+            color,
+            crate::raster::ColorType::L8 | crate::raster::ColorType::Rgb8
         ),
         // getchannel raises IndexError for a band that the source mode does
         // not have; a shader would read byte 3 or an unused packed byte.
         PipelineOp::ExtractBand { index } => {
-            usize::from(*index) >= usize::from(image.color().channel_count())
+            usize::from(*index) >= usize::from(color.channel_count())
         }
         _ => false,
     }
 }
 
-fn pixel_mode_matches_image(mode: PixelMode, image: &DynamicImage) -> bool {
+fn pixel_mode_matches_color(mode: PixelMode, color: crate::raster::ColorType) -> bool {
     matches!(
-        (mode, image),
-        (PixelMode::L, DynamicImage::ImageLuma8(_))
-            | (PixelMode::LA, DynamicImage::ImageLumaA8(_))
-            | (PixelMode::RGB, DynamicImage::ImageRgb8(_))
-            | (PixelMode::RGBA, DynamicImage::ImageRgba8(_))
+        (mode, color),
+        (PixelMode::L, crate::raster::ColorType::L8)
+            | (PixelMode::LA, crate::raster::ColorType::La8)
+            | (PixelMode::RGB, crate::raster::ColorType::Rgb8)
+            | (PixelMode::RGBA, crate::raster::ColorType::Rgba8)
             // P/PA retain raw index samples in the same one-/two-byte
             // buffers as L/LA until the binding restores palette metadata.
-            | (PixelMode::P, DynamicImage::ImageLuma8(_))
-            | (PixelMode::PA, DynamicImage::ImageLumaA8(_))
-            | (PixelMode::Mode1, DynamicImage::ImageLuma8(_))
-            | (PixelMode::YCbCr, DynamicImage::ImageRgb8(_))
-            | (PixelMode::HSV, DynamicImage::ImageRgb8(_))
+            | (PixelMode::P, crate::raster::ColorType::L8)
+            | (PixelMode::PA, crate::raster::ColorType::La8)
+            | (PixelMode::Mode1, crate::raster::ColorType::L8)
+            | (PixelMode::YCbCr, crate::raster::ColorType::Rgb8)
+            | (PixelMode::HSV, crate::raster::ColorType::Rgb8)
             // CMYK is represented as C/M/Y/K in the four bytes of Rgba8.
-            | (PixelMode::CMYK, DynamicImage::ImageRgba8(_))
+            | (PixelMode::CMYK, crate::raster::ColorType::Rgba8)
             // I/F are four-byte logical planes stored without conversion in
             // the RGBA transport; putdata replaces their raw little-endian
             // samples rather than interpreting them as color channels.
-            | (PixelMode::I, DynamicImage::ImageRgba8(_))
-            | (PixelMode::F, DynamicImage::ImageRgba8(_))
+            | (PixelMode::I, crate::raster::ColorType::Rgba8)
+            | (PixelMode::F, crate::raster::ColorType::Rgba8)
     )
 }
 
@@ -19542,282 +19555,6 @@ fn gpu_buffer_capacity_exceeds_limits(
         return true;
     };
     bytes > u64::from(max_storage_buffer_binding_size) || bytes > max_buffer_size
-}
-
-/// Find the largest safe vertical stack for one explicitly queued image batch.
-/// The bound includes the median filter's duplicated edge rows and proves the
-/// same byte capacity, workgroup grid, and shader-work limits used by normal
-/// GPU execution before the caller allocates the stacked host image.
-fn gpu_batch_group_limit_for_limits(
-    op: &PipelineOp,
-    logical_mode: &str,
-    (width, height): (u32, u32),
-    requested: usize,
-    max_storage_buffer_binding_size: u32,
-    max_buffer_size: u64,
-    max_workgroups_per_dimension: u32,
-) -> usize {
-    if requested == 0 || width == 0 || height == 0 {
-        return 0;
-    }
-
-    let multiply = matches!(op, PipelineOp::Multiply { .. });
-    let native_brightness = matches!(op, PipelineOp::Brightness { .. });
-    let native_invert = matches!(op, PipelineOp::Invert);
-    let native_expand = matches!(op, PipelineOp::Expand { .. });
-    let native_composite = matches!(
-        op,
-        PipelineOp::CompositeModule {
-            mask_alpha: false,
-            ..
-        }
-    );
-    let masked_paste = matches!(
-        op,
-        PipelineOp::Paste {
-            mask: Some(_),
-            mask_alpha: false,
-            ..
-        }
-    );
-    let channels = if multiply
-        || masked_paste
-        || native_brightness
-        || native_invert
-        || native_expand
-        || native_composite
-    {
-        match logical_mode {
-            "L" => Some(1u64),
-            "LA" => Some(2),
-            "RGB" => Some(3),
-            "RGBA" => Some(4),
-            _ => None,
-        }
-    } else {
-        Some(1)
-    };
-    let Some(channels) = channels else {
-        return 0;
-    };
-    let halo = match op {
-        PipelineOp::MedianFilter { size: 3 }
-        | PipelineOp::MaxFilter { size: 3 }
-        | PipelineOp::RankFilter { size: 3, rank: 1 } => 2u32,
-        PipelineOp::ExtractBand { .. }
-        | PipelineOp::CompositeModule { .. }
-        | PipelineOp::Invert
-        | PipelineOp::Brightness { .. }
-        | PipelineOp::Multiply { .. }
-        | PipelineOp::Paste {
-            mask: Some(_),
-            mask_alpha: false,
-            ..
-        }
-        | PipelineOp::Color3DLut { .. }
-        | PipelineOp::Expand { .. } => 0,
-        _ => return 0,
-    };
-    if native_expand && !cfg!(target_endian = "little") {
-        return 0;
-    }
-    let Some(per_image_height) = height.checked_add(halo) else {
-        return 0;
-    };
-
-    let is_safe = |count: usize| {
-        let Ok(count) = u32::try_from(count) else {
-            return false;
-        };
-        let (stacked_dimensions, output_dimensions) = if let PipelineOp::Expand { border, .. } = op
-        {
-            let Some(border_twice) = border.checked_mul(2) else {
-                return false;
-            };
-            let Some(output_width) = width.checked_add(border_twice) else {
-                return false;
-            };
-            let Some(output_height) = height
-                .checked_add(border_twice)
-                .and_then(|image_height| image_height.checked_mul(count))
-            else {
-                return false;
-            };
-            let Some(stacked_height) = output_height.checked_sub(border_twice) else {
-                return false;
-            };
-            ((width, stacked_height), (output_width, output_height))
-        } else {
-            let Some(stacked_height) = per_image_height.checked_mul(count) else {
-                return false;
-            };
-            let dimensions = (width, stacked_height);
-            (dimensions, dimensions)
-        };
-        let input_pixels = u64::from(stacked_dimensions.0) * u64::from(stacked_dimensions.1);
-        let output_pixels = u64::from(output_dimensions.0) * u64::from(output_dimensions.1);
-        // The ordinary filter/extract layouts address one packed u32 per
-        // pixel. Native-byte Multiply and Brightness address four stored
-        // samples per word, so their device-buffer bounds use the source
-        // mode's actual byte width.
-        let buffer_words = if native_expand {
-            let Some(source_bytes) = input_pixels.checked_mul(channels) else {
-                return false;
-            };
-            let Some(output_bytes) = output_pixels.checked_mul(channels) else {
-                return false;
-            };
-            if source_bytes == 0
-                || source_bytes > u64::from(u32::MAX)
-                || output_bytes == 0
-                || output_bytes > u64::from(u32::MAX)
-                || plan_native_expand_output_dispatch(output_bytes, max_workgroups_per_dimension)
-                    .is_none()
-            {
-                return false;
-            }
-            // The ordinary pipeline's BufferPool is sized in pixels even
-            // though native Expand transfers compact bytes. Keep its static
-            // capacity and device binding bound here; the separate compact
-            // readback planner above proves the native output word grid.
-            input_pixels.max(output_pixels)
-        } else if masked_paste {
-            let Some(source_bytes) = input_pixels.checked_mul(channels) else {
-                return false;
-            };
-            let Some(words) = source_bytes
-                .div_ceil(4)
-                .checked_add(input_pixels.div_ceil(4))
-            else {
-                return false;
-            };
-            words
-        } else if multiply || native_brightness || native_invert || native_composite {
-            let Some(sample_bytes) = input_pixels.checked_mul(channels) else {
-                return false;
-            };
-            sample_bytes.div_ceil(4)
-        } else {
-            input_pixels
-        };
-        let Ok(buffer_capacity) = u32::try_from(buffer_words) else {
-            return false;
-        };
-        if input_pixels == 0
-            || output_pixels == 0
-            || (native_expand
-                && (input_pixels > u64::from(GPU_BUFFER_CAPACITY)
-                    || output_pixels > u64::from(GPU_BUFFER_CAPACITY)))
-            || (masked_paste && input_pixels > u64::from(GPU_BUFFER_CAPACITY))
-            || buffer_words > u64::from(GPU_BUFFER_CAPACITY)
-            || gpu_buffer_capacity_exceeds_limits(
-                buffer_capacity,
-                max_storage_buffer_binding_size,
-                max_buffer_size,
-            )
-        {
-            return false;
-        }
-
-        if masked_paste {
-            // Use the same byte-aligned work-item and 1D/2D dispatch planner
-            // as the native masked-Paste executor. The general batch grid
-            // below is not equivalent for L/LA/RGB: those shaders reject a
-            // flat workgroup count above the device's per-dimension limit.
-            let Ok(bytes_per_pixel) = u8::try_from(channels) else {
-                return false;
-            };
-            if plan_gpu_native_masked_byte_paste(
-                width,
-                stacked_dimensions.1,
-                width,
-                stacked_dimensions.1,
-                width,
-                stacked_dimensions.1,
-                bytes_per_pixel,
-                max_workgroups_per_dimension,
-                max_storage_buffer_binding_size,
-                max_buffer_size,
-            )
-            .is_none()
-            {
-                return false;
-            }
-        }
-
-        if multiply || native_brightness || native_invert {
-            let words = buffer_capacity;
-            let columns = words.min(1024);
-            let rows = words.div_ceil(columns);
-            if columns.div_ceil(16) > max_workgroups_per_dimension
-                || rows.div_ceil(16) > max_workgroups_per_dimension
-            {
-                return false;
-            }
-        }
-
-        if native_composite
-            && plan_native_composite_dispatch(buffer_capacity, max_workgroups_per_dimension)
-                .is_none()
-        {
-            // The compact Composite shader uses its own 2D packed-word grid;
-            // cap the group before allocating a stack the selected adapter
-            // cannot dispatch.
-            return false;
-        }
-
-        let ops = [op.clone()];
-        !gpu_dispatch_dimensions_require_cpu(
-            &ops,
-            stacked_dimensions,
-            max_workgroups_per_dimension,
-            Some(logical_mode),
-            false,
-        ) && !gpu_shader_work_requires_cpu(
-            op,
-            stacked_dimensions,
-            output_dimensions,
-            Some(logical_mode),
-        )
-    };
-
-    let mut low = 0usize;
-    let mut high = requested;
-    while low < high {
-        let middle = low + (high - low).div_ceil(2);
-        if is_safe(middle) {
-            low = middle;
-        } else {
-            high = middle - 1;
-        }
-    }
-    low
-}
-
-/// Return the safe queued-group length for the actual selected GPU adapter.
-/// Adapter initialization or unavailable GPU support simply disables grouping.
-pub(crate) fn gpu_batch_group_limit(
-    op: &PipelineOp,
-    logical_mode: &str,
-    dimensions: (u32, u32),
-    requested: usize,
-) -> usize {
-    let Ok(gpu) = GpuPool::ensure_init() else {
-        return 0;
-    };
-    if gpu.failure_detail().is_some() {
-        return 0;
-    }
-    let limits = gpu.device.limits();
-    gpu_batch_group_limit_for_limits(
-        op,
-        logical_mode,
-        dimensions,
-        requested,
-        limits.max_storage_buffer_binding_size,
-        limits.max_buffer_size,
-        limits.max_compute_workgroups_per_dimension,
-    )
 }
 
 /// Validate the dispatch grid against the adapter limit. Pixel-count limits
@@ -22476,6 +22213,487 @@ impl GpuPool {
     }
 }
 
+/// Shared logical-mode admission for queued submission and device execution.
+/// Inspecting an already-loaded source never executes an image operation.
+fn gpu_logical_mode_is_supported(
+    ops: &[PipelineOp],
+    img: Option<&DynamicImage>,
+    mode: Option<&str>,
+    f_resize_constant_bits: Option<u32>,
+    f_pad_f64_is_exact: bool,
+    inspect_auxiliary_modes: bool,
+) -> bool {
+    mode.is_none_or(|logical_mode| {
+        matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
+                || (logical_mode == "1"
+                    && img.is_none_or(|img| matches!(img, DynamicImage::ImageLuma8(_)))
+                    && matches!(ops, [PipelineOp::Flip]))
+                // YCbCr shares RGB8 transport but grayscale reads only its Y
+                // sample; admit exactly the singleton kernel that carries
+                // this native-mode interpretation in its fourth uniform.
+                || (logical_mode == "YCbCr"
+                    && matches!(ops, [PipelineOp::Grayscale])
+                    && img.is_none_or(|img| gpu_native_grayscale_rgb_input(ops, img, mode)))
+                // On little-endian targets, HSV uses the same packed
+                // three-byte storage as RGB. A singleton transpose only
+                // relocates complete triplets; it does not interpret or
+                // convert H/S/V samples. Keep other targets on the proven
+                // semantic-control path until their native upload is covered.
+                || (cfg!(target_endian = "little")
+                    && logical_mode == "HSV"
+                    && matches!(ops, [PipelineOp::Transpose { .. }])
+                    && img.is_none_or(|img| matches!(img, DynamicImage::ImageRgb8(_))))
+                // LAB shares RGB8 storage. The core has already encoded its
+                // public signed A/B samples into the stored +128 byte domain,
+                // so the raw three-channel PutPixel shader is exact here.
+                || (logical_mode == "LAB"
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::PutPixel {
+                                palette_index: false,
+                                ..
+                            }
+                        )
+                    }))
+                || (cfg!(target_endian = "little")
+                    && matches!(ops, [PipelineOp::Multiply { .. }])
+                    && matches!(logical_mode, "1" | "L" | "P" | "LA" | "La" | "PA" | "RGB" | "HSV" | "YCbCr" | "RGBA" | "RGBa" | "RGBX" | "CMYK")
+                    && img.is_none_or(|img| gpu_native_multiply_channels(img, mode).is_some()))
+                || (logical_mode == "La" && ops.iter().all(gpu_transform_is_projective))
+                // ImageDraw's geometry is scan-converted by the exact host
+                // canvas before the packed draw shader copies the complete
+                // result.  The data-plane therefore preserves raw indexed,
+                // typed-word, and native color bytes just like the ordinary
+                // byte modes; no shader arithmetic interprets those samples.
+                || (matches!(
+                    logical_mode,
+                    "1" | "P" | "PA" | "RGBX" | "RGBa" | "CMYK" | "HSV" | "YCbCr" | "I" | "F"
+                ) && !ops.is_empty()
+                    && ops
+                        .iter()
+                        .all(crate::compute::pool_cpu::ops::draw::is_draw_op))
+                || (matches!(logical_mode, "P" | "PA")
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                                PipelineOp::Add { .. }
+                                | PipelineOp::Subtract { .. }
+                                | PipelineOp::Multiply { .. }
+                                | PipelineOp::Screen { .. }
+                                | PipelineOp::Darker { .. }
+                                | PipelineOp::Lighter { .. }
+                                | PipelineOp::Difference { .. }
+                                | PipelineOp::Overlay { .. }
+                                | PipelineOp::HardLight { .. }
+                                | PipelineOp::SoftLight { .. }
+                                | PipelineOp::AddModulo { .. }
+                                | PipelineOp::SubtractModulo { .. }
+                                | PipelineOp::PutAlpha { .. }
+                                | PipelineOp::PutAlphaData { .. }
+                                | PipelineOp::PutData { .. }
+                                | PipelineOp::ExtractBand { .. }
+                                | PipelineOp::Eval { .. }
+                                | PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
+                                | PipelineOp::CompositeModule { .. }
+                                | PipelineOp::Filter3x3 { .. }
+                                | PipelineOp::Filter5x5 { .. }
+                                | PipelineOp::RemapPalette { .. }
+                                | PipelineOp::InvertChops
+                                | PipelineOp::Offset { .. }
+                                | PipelineOp::Mirror
+                                | PipelineOp::Transpose { .. }
+                                | PipelineOp::Crop { .. }
+                                | PipelineOp::CropBorder { .. }
+                                | PipelineOp::Expand { .. }
+                                | PipelineOp::Duplicate
+                                | PipelineOp::Flip
+                                | PipelineOp::Reduce { .. }
+                                | PipelineOp::Paste { .. }
+                                | PipelineOp::Scale { .. }
+                                | PipelineOp::Contain { .. }
+                                | PipelineOp::Cover { .. }
+                                | PipelineOp::Pad { .. }
+                                | PipelineOp::Fit {
+                                    filter: ResampleFilter::Nearest,
+                                    ..
+                                }
+                                | PipelineOp::Transform { .. }
+                                | PipelineOp::Resize {
+                                    ..
+                                }
+                                | PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
+                        )
+                    }))
+                || (matches!(ops, [PipelineOp::Merge { mode: ColorMode::RGB, .. }])
+                    && logical_mode == "P"
+                    && (!inspect_auxiliary_modes || gpu_palette_first_rgb_merge_is_supported(ops, mode)))
+                || (logical_mode == "1"
+                    && ops
+                        .iter()
+                        .all(|op| {
+                            matches!(
+                                op,
+                                PipelineOp::PutData { .. }
+                                    | PipelineOp::PutPixel { .. }
+                                    | PipelineOp::EffectSpread { .. }
+                                    | PipelineOp::CompositeModule { .. }
+                                    | PipelineOp::Filter3x3 { .. }
+                                | PipelineOp::Filter5x5 { .. }
+                                    | PipelineOp::Eval { .. }
+                                    | PipelineOp::LogicalAnd { .. }
+                                    | PipelineOp::LogicalOr { .. }
+                                    | PipelineOp::LogicalXor { .. }
+                                    | PipelineOp::Offset { .. }
+                                    | PipelineOp::Transpose { .. }
+                                    | PipelineOp::Paste { .. }
+                                    | PipelineOp::Duplicate
+                                    | PipelineOp::Contain {
+                                        filter: crate::pipeline::ResampleFilter::Nearest,
+                                        ..
+                                    }
+                                    | PipelineOp::Cover {
+                                        filter: crate::pipeline::ResampleFilter::Nearest,
+                                        ..
+                                    }
+                                    | PipelineOp::Pad {
+                                        filter: crate::pipeline::ResampleFilter::Nearest,
+                                        ..
+                                    }
+                                    | PipelineOp::Transform { .. }
+                                    | PipelineOp::Resize {
+                                        filter: crate::pipeline::ResampleFilter::Nearest,
+                                        ..
+                                    }
+                            )
+                        }))
+                // RGBX shares RGBA's four-byte storage, but its fourth byte
+                // is padding rather than alpha. Transpose is a pure native
+                // byte relocation, so the RGBA transport can preserve all
+                // four bytes without applying alpha semantics. PutPixel is
+                // likewise a raw four-byte write in this logical mode.
+                // Sharpness has a dedicated mode-6 shader branch that filters
+                // all four stored bytes, matching Pillow's RGBX behavior.
+                || (logical_mode == "RGBX"
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::Sharpness { .. }
+                                | PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
+                                | PipelineOp::Transpose { .. }
+                                | PipelineOp::Paste { mask: None, .. }
+                                | PipelineOp::Scale { .. }
+                                | PipelineOp::Contain { .. }
+                                | PipelineOp::Cover { .. }
+                                | PipelineOp::Pad { .. }
+                                | PipelineOp::Transform { .. }
+                                | PipelineOp::Resize {
+                                    ..
+                                }
+                                | PipelineOp::Convert {
+                                    mode: ColorMode::L
+                                        | ColorMode::LA
+                                        | ColorMode::RGB
+                                        | ColorMode::RGBA
+                                        | ColorMode::CMYK
+                                        | ColorMode::YCbCr
+                                        | ColorMode::HSV
+                                        | ColorMode::I
+                                        | ColorMode::F,
+                                    matrix: None,
+                                    dither: None,
+                                }
+                        )
+                    }))
+                // RGBa uses the same four-byte storage as RGBA. Pillow's
+                // Image.resize leaves RGBa in its already-premultiplied
+                // representation (PIL/Image.py resize mode dispatch), so
+                // boxed Fit can use the same coefficient kernels with
+                // `premultiply = 0`; ImageChops likewise operates on these
+                // stored bytes directly. Keep this whitelist limited to
+                // raw-channel operations and geometry that preserves that
+                // four-byte sample contract.
+                || (logical_mode == "RGBa"
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
+                                | PipelineOp::Add { .. }
+                                | PipelineOp::Subtract { .. }
+                                | PipelineOp::Multiply { .. }
+                                | PipelineOp::Screen { .. }
+                                | PipelineOp::Darker { .. }
+                                | PipelineOp::Lighter { .. }
+                                | PipelineOp::Difference { .. }
+                                | PipelineOp::Overlay { .. }
+                                | PipelineOp::HardLight { .. }
+                                | PipelineOp::SoftLight { .. }
+                                | PipelineOp::AddModulo { .. }
+                                | PipelineOp::SubtractModulo { .. }
+                                | PipelineOp::InvertChops
+                                | PipelineOp::Paste { mask: None, .. }
+                                | PipelineOp::Scale { .. }
+                                | PipelineOp::Contain { .. }
+                                | PipelineOp::Cover { .. }
+                                | PipelineOp::Pad { .. }
+                                | PipelineOp::Transform { .. }
+                                | PipelineOp::Fit { .. }
+                                | PipelineOp::Resize {
+                                    ..
+                                }
+                        )
+                    }))
+                || (matches!(logical_mode, "HSV" | "YCbCr")
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::Add { .. }
+                                | PipelineOp::Subtract { .. }
+                                | PipelineOp::Multiply { .. }
+                                | PipelineOp::Screen { .. }
+                                | PipelineOp::Darker { .. }
+                                | PipelineOp::Lighter { .. }
+                                | PipelineOp::Difference { .. }
+                                | PipelineOp::Overlay { .. }
+                                | PipelineOp::HardLight { .. }
+                                | PipelineOp::SoftLight { .. }
+                                | PipelineOp::AddModulo { .. }
+                                | PipelineOp::SubtractModulo { .. }
+                                | PipelineOp::Brightness { .. }
+                                | PipelineOp::Filter3x3 { .. }
+                                | PipelineOp::Filter5x5 { .. }
+                                    | PipelineOp::Reduce { .. }
+                                    | PipelineOp::PutData { .. }
+                                    | PipelineOp::Eval { .. }
+                                | PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
+                                | PipelineOp::Paste { .. }
+                                | PipelineOp::Crop { .. }
+                                | PipelineOp::Scale { .. }
+                                | PipelineOp::Contain { .. }
+                                | PipelineOp::Cover { .. }
+                                | PipelineOp::Pad { .. }
+                                | PipelineOp::Transform { .. }
+                                | PipelineOp::Resize {
+                                    ..
+                                }
+                        )
+                    }))
+                // Singleton HSV Expand reads the image's three stored
+                // samples as-is. Keep this tied to the native-layout gate so
+                // the shader cannot admit a logical HSV image with a
+                // mismatched physical representation.
+                || (logical_mode == "HSV"
+                    && matches!(ops, [PipelineOp::Expand { .. }])
+                    && img.is_none_or(|img| gpu_native_expand_channels(ops, img, mode).is_some()))
+                // CMYK, HSV, and YCbCr retain their native channel order in
+                // the packed RGBA/RGB transport.  ExtractBand only copies
+                // one requested byte and then publishes an L8 result, so it
+                // does not reinterpret the samples as RGB or alpha.  Keep
+                // PutPixel here as well: the maintained getchannel batches
+                // often write one source pixel before extracting its band.
+                || (matches!(logical_mode, "CMYK" | "HSV" | "YCbCr")
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::ExtractBand { .. }
+                                | PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
+                        )
+                    }))
+                // CMYK putalpha is a terminal promotion through the exact
+                // integer CMYK->RGB conversion in put_alpha.wgsl.  Keep this
+                // whitelist terminal-only: after promotion the public mode
+                // is RGBA, and a following operation needs a segmented batch
+                // with the updated logical layout rather than CMYK metadata.
+                || (logical_mode == "CMYK"
+                    && ops.len() == 1
+                    && matches!(
+                        ops[0],
+                        PipelineOp::PutAlpha {
+                            mode: PixelMode::CMYK,
+                            ..
+                        } | PipelineOp::PutAlphaData {
+                            mode: PixelMode::CMYK,
+                            ..
+                        }
+                    ))
+                // Keep CMYK→RGB as one terminal native conversion. The
+                // convert shader interprets the four bytes as C/M/Y/K and
+                // applies Pillow's exact integer inverse before RGB readback.
+                || (logical_mode == "CMYK"
+                    && matches!(ops, [PipelineOp::Convert {
+                        mode: ColorMode::RGB,
+                        matrix: None,
+                        dither: None,
+                    }])
+                    && img.is_none_or(|img| matches!(img, DynamicImage::ImageRgba8(_))))
+                || (matches!(logical_mode, "RGB" | "RGBA" | "CMYK")
+                    && ops
+                        .iter()
+                        .all(|op| matches!(op, PipelineOp::Color3DLut { .. })))
+                // F stores one finite f32 sample in each four-byte word.
+                // Its order-statistic shaders compare the decoded samples;
+                // the ordinary byte filters would sort IEEE-754 bytes and
+                // produce a numerically unrelated result. Mirror remains in
+                // this clause because it only relocates complete words.
+                || (logical_mode == "F" && img.is_none_or(|img| gpu_float_filter_is_supported(ops, img)))
+                // A constant F Pad uses the exact scalar resize marker for
+                // its contain step and a raw-word placement shader for the
+                // final canvas. The source proof is deliberately limited to
+                // a single non-nearest Pad; mixed batches still need the
+                // host semantic path until their intermediate contract is
+                // proven.
+                || (logical_mode == "F"
+                    && f_resize_constant_bits.is_some()
+                    && ops.len() == 1
+                    && matches!(ops[0], PipelineOp::Pad { .. }))
+                // A heterogeneous F Pad uses marker 9 for its contain
+                // resize and then copies complete words through placement.
+                // The admission proof is limited to one changed-axis Pad
+                // with an optional PutData(F)-only prefix; nearest, same-size,
+                // and unrelated prefixes retain their existing paths.
+                || (logical_mode == "F"
+                    && f_pad_f64_is_exact)
+                // A nearest F Fit is a two-axis one-tap word relocation. Its
+                // boxed coefficients are generated on the host after the
+                // same f32 crop-boundary conversion as Pillow's affine
+                // nearest path; keep it separate from the vertical pass so
+                // Metal cannot observe a stale horizontal intermediate.
+                || (logical_mode == "F"
+                    && ops.len() == 1
+                    && matches!(
+                        ops[0],
+                        PipelineOp::Fit {
+                            filter: ResampleFilter::Nearest,
+                            ..
+                        }
+                    ))
+                // I-mode nearest Pad carries signed int32 words through a
+                // nearest contain resize and a raw-word placement pass. A
+                // filtered Pad would need the typed INT32 accumulator and is
+                // intentionally kept on exact host semantic control.
+                || (logical_mode == "I"
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::Pad {
+                                filter: ResampleFilter::Nearest,
+                                ..
+                            }
+                                | PipelineOp::Resize {
+                                    filter: ResampleFilter::Nearest,
+                                    ..
+                                }
+                        )
+                    }))
+                || (logical_mode == "I"
+                    && img.is_none_or(|img| gpu_int_filter_is_supported(ops, img)
+                        || gpu_int_filter_resize_chain_is_supported(ops, img)))
+                // I/F samples are four raw bytes per pixel at this executor
+                // boundary.  These operations only relocate or duplicate
+                // the complete sample and therefore do not need to decode it
+                // as an integer, float, or color.  Keep arithmetic and fill
+                // operations out of this clause: their shader contracts need
+                // a native typed buffer rather than packed RGBA semantics.
+                || (matches!(logical_mode, "I" | "F")
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::PutData { .. }
+                                | PipelineOp::Offset { .. }
+                                | PipelineOp::EffectSpread { .. }
+                                | PipelineOp::Flip
+                                | PipelineOp::Mirror
+                                | PipelineOp::Transpose { .. }
+                                | PipelineOp::Crop { .. }
+                                | PipelineOp::CropBorder { .. }
+                                | PipelineOp::Duplicate
+                                | PipelineOp::Paste { mask: None, .. }
+                                | PipelineOp::Scale {
+                                    ..
+                                }
+                                | PipelineOp::Contain {
+                                    ..
+                                }
+                                | PipelineOp::Cover {
+                                    ..
+                                }
+                                | PipelineOp::Resize {
+                                    ..
+                                }
+                                | PipelineOp::Transform { .. }
+                        )
+                    }))
+                // Native I;16* images use one typed u16 sample per pixel.
+                // The packed GPU word is only an opaque transport for these
+                // relocation operations; it is never narrowed to an 8-bit
+                // luma value or interpreted as RGBA.
+                || (matches!(logical_mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
+                    && img.is_none_or(|img| gpu_luma16_geometry_is_supported(ops, img, Some(logical_mode))
+                        || gpu_luma16_convert_is_supported(ops, img)
+                        || gpu_luma16_paste_is_supported(ops, img)))
+                || (logical_mode == "CMYK"
+                    && ops
+                        .iter()
+                        .all(|op| {
+                            matches!(
+                                op,
+                                PipelineOp::Grayscale
+                                    | PipelineOp::Brightness { .. }
+                                    | PipelineOp::Contrast { .. }
+                                    | PipelineOp::ColorSaturation { .. }
+                                    | PipelineOp::Sharpness { .. }
+                                    | PipelineOp::InvertChops
+                                    | PipelineOp::Add { .. }
+                                    | PipelineOp::Subtract { .. }
+                                    | PipelineOp::Multiply { .. }
+                                    | PipelineOp::Screen { .. }
+                                    | PipelineOp::Darker { .. }
+                                    | PipelineOp::Lighter { .. }
+                                    | PipelineOp::Difference { .. }
+                                    | PipelineOp::Overlay { .. }
+                                    | PipelineOp::HardLight { .. }
+                                    | PipelineOp::SoftLight { .. }
+                                    | PipelineOp::AddModulo { .. }
+                                    | PipelineOp::SubtractModulo { .. }
+                                    | PipelineOp::LogicalAnd { .. }
+                                    | PipelineOp::LogicalOr { .. }
+                                    | PipelineOp::LogicalXor { .. }
+                                    | PipelineOp::Filter3x3 { .. }
+                                    | PipelineOp::Filter5x5 { .. }
+                                    | PipelineOp::BlendModule { .. }
+                                    | PipelineOp::Offset { .. }
+                                    | PipelineOp::Mirror
+                                    | PipelineOp::Transpose { .. }
+                                    | PipelineOp::Crop { .. }
+                                    | PipelineOp::CropBorder { .. }
+                                    | PipelineOp::Expand { .. }
+                                    | PipelineOp::Duplicate
+                                    | PipelineOp::Flip
+                            | PipelineOp::Reduce { .. }
+                                | PipelineOp::CompositeModule { .. }
+                                | PipelineOp::PutData { .. }
+                                | PipelineOp::Eval { .. }
+                                | PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
+                                | PipelineOp::Paste { .. }
+                                | PipelineOp::Scale { .. }
+                                | PipelineOp::Contain { .. }
+                            | PipelineOp::Cover { .. }
+                            | PipelineOp::Pad { .. }
+                            | PipelineOp::Transform { .. }
+                            | PipelineOp::Resize {
+                                    ..
+                                }
+                            )
+                        }))
+    })
+}
+
 // ─── BackendImpl ───────────────────────────────────────────────────────────
 
 impl BackendImpl for GpuPool {
@@ -22493,9 +22711,7 @@ impl BackendImpl for GpuPool {
             Some(Err(_)) => false,
             None => Self::ensure_init().is_ok(),
         };
-        Ok(healthy
-            && (gpu_operation_is_safe(op) || gpu_operation_requires_image_context(op))
-            && registry::gpu_supports(op)?)
+        Ok(healthy && Self::descriptor_supports(op)?)
     }
 
     fn execute_batch(
@@ -22518,6 +22734,15 @@ impl BackendImpl for GpuPool {
 }
 
 impl GpuPool {
+    /// Check operation parameters without initializing a device or executing
+    /// pixels. Image-dependent proof checks still belong to the dispatch plan.
+    pub(crate) fn descriptor_supports(op: &PipelineOp) -> Result<bool, PilError> {
+        Ok(
+            (gpu_operation_is_safe(op) || gpu_operation_requires_image_context(op))
+                && registry::gpu_supports(op)?,
+        )
+    }
+
     fn execute_exact_host_result(
         &self,
         ops: &[PipelineOp],
@@ -22871,470 +23096,14 @@ impl GpuPool {
         // raw-byte relocation: its host-generated map is gathered as complete
         // packed words, so it is safe for every mode backed by the ordinary
         // byte transport, including the logical modes below.
-        let logical_mode_supported = mode.is_none_or(|logical_mode| {
-            matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
-                || (logical_mode == "1"
-                    && matches!(img, DynamicImage::ImageLuma8(_))
-                    && matches!(ops, [PipelineOp::Flip]))
-                // YCbCr shares RGB8 transport but grayscale reads only its Y
-                // sample; admit exactly the singleton kernel that carries
-                // this native-mode interpretation in its fourth uniform.
-                || (logical_mode == "YCbCr"
-                    && gpu_native_grayscale_rgb_input(ops, img, mode))
-                // On little-endian targets, HSV uses the same packed
-                // three-byte storage as RGB. A singleton transpose only
-                // relocates complete triplets; it does not interpret or
-                // convert H/S/V samples. Keep other targets on the proven
-                // semantic-control path until their native upload is covered.
-                || (cfg!(target_endian = "little")
-                    && logical_mode == "HSV"
-                    && matches!(ops, [PipelineOp::Transpose { .. }])
-                    && matches!(img, DynamicImage::ImageRgb8(_)))
-                // LAB shares RGB8 storage. The core has already encoded its
-                // public signed A/B samples into the stored +128 byte domain,
-                // so the raw three-channel PutPixel shader is exact here.
-                || (logical_mode == "LAB"
-                    && ops.iter().all(|op| {
-                        matches!(
-                            op,
-                            PipelineOp::PutPixel {
-                                palette_index: false,
-                                ..
-                            }
-                        )
-                    }))
-                || (cfg!(target_endian = "little")
-                    && matches!(ops, [PipelineOp::Multiply { .. }])
-                    && gpu_native_multiply_channels(img, mode).is_some())
-                || (logical_mode == "La" && ops.iter().all(gpu_transform_is_projective))
-                // ImageDraw's geometry is scan-converted by the exact host
-                // canvas before the packed draw shader copies the complete
-                // result.  The data-plane therefore preserves raw indexed,
-                // typed-word, and native color bytes just like the ordinary
-                // byte modes; no shader arithmetic interprets those samples.
-                || (matches!(
-                    logical_mode,
-                    "1" | "P" | "PA" | "RGBX" | "RGBa" | "CMYK" | "HSV" | "YCbCr" | "I" | "F"
-                ) && !ops.is_empty()
-                    && ops
-                        .iter()
-                        .all(crate::compute::pool_cpu::ops::draw::is_draw_op))
-                || (matches!(logical_mode, "P" | "PA")
-                    && ops.iter().all(|op| {
-                        matches!(
-                            op,
-                                PipelineOp::Add { .. }
-                                | PipelineOp::Subtract { .. }
-                                | PipelineOp::Multiply { .. }
-                                | PipelineOp::Screen { .. }
-                                | PipelineOp::Darker { .. }
-                                | PipelineOp::Lighter { .. }
-                                | PipelineOp::Difference { .. }
-                                | PipelineOp::Overlay { .. }
-                                | PipelineOp::HardLight { .. }
-                                | PipelineOp::SoftLight { .. }
-                                | PipelineOp::AddModulo { .. }
-                                | PipelineOp::SubtractModulo { .. }
-                                | PipelineOp::PutAlpha { .. }
-                                | PipelineOp::PutAlphaData { .. }
-                                | PipelineOp::PutData { .. }
-                                | PipelineOp::ExtractBand { .. }
-                                | PipelineOp::Eval { .. }
-                                | PipelineOp::PutPixel { .. }
-                                | PipelineOp::EffectSpread { .. }
-                                | PipelineOp::CompositeModule { .. }
-                                | PipelineOp::Filter3x3 { .. }
-                                | PipelineOp::Filter5x5 { .. }
-                                | PipelineOp::RemapPalette { .. }
-                                | PipelineOp::InvertChops
-                                | PipelineOp::Offset { .. }
-                                | PipelineOp::Mirror
-                                | PipelineOp::Transpose { .. }
-                                | PipelineOp::Crop { .. }
-                                | PipelineOp::CropBorder { .. }
-                                | PipelineOp::Expand { .. }
-                                | PipelineOp::Duplicate
-                                | PipelineOp::Flip
-                                | PipelineOp::Reduce { .. }
-                                | PipelineOp::Paste { .. }
-                                | PipelineOp::Scale { .. }
-                                | PipelineOp::Contain { .. }
-                                | PipelineOp::Cover { .. }
-                                | PipelineOp::Pad { .. }
-                                | PipelineOp::Fit {
-                                    filter: ResampleFilter::Nearest,
-                                    ..
-                                }
-                                | PipelineOp::Transform { .. }
-                                | PipelineOp::Resize {
-                                    ..
-                                }
-                                | PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
-                        )
-                    }))
-                || gpu_palette_first_rgb_merge_is_supported(ops, mode)
-                || (logical_mode == "1"
-                    && ops
-                        .iter()
-                        .all(|op| {
-                            matches!(
-                                op,
-                                PipelineOp::PutData { .. }
-                                    | PipelineOp::PutPixel { .. }
-                                    | PipelineOp::EffectSpread { .. }
-                                    | PipelineOp::CompositeModule { .. }
-                                    | PipelineOp::Filter3x3 { .. }
-                                | PipelineOp::Filter5x5 { .. }
-                                    | PipelineOp::Eval { .. }
-                                    | PipelineOp::LogicalAnd { .. }
-                                    | PipelineOp::LogicalOr { .. }
-                                    | PipelineOp::LogicalXor { .. }
-                                    | PipelineOp::Offset { .. }
-                                    | PipelineOp::Transpose { .. }
-                                    | PipelineOp::Paste { .. }
-                                    | PipelineOp::Duplicate
-                                    | PipelineOp::Contain {
-                                        filter: crate::pipeline::ResampleFilter::Nearest,
-                                        ..
-                                    }
-                                    | PipelineOp::Cover {
-                                        filter: crate::pipeline::ResampleFilter::Nearest,
-                                        ..
-                                    }
-                                    | PipelineOp::Pad {
-                                        filter: crate::pipeline::ResampleFilter::Nearest,
-                                        ..
-                                    }
-                                    | PipelineOp::Transform { .. }
-                                    | PipelineOp::Resize {
-                                        filter: crate::pipeline::ResampleFilter::Nearest,
-                                        ..
-                                    }
-                            )
-                        }))
-                // RGBX shares RGBA's four-byte storage, but its fourth byte
-                // is padding rather than alpha. Transpose is a pure native
-                // byte relocation, so the RGBA transport can preserve all
-                // four bytes without applying alpha semantics. PutPixel is
-                // likewise a raw four-byte write in this logical mode.
-                // Sharpness has a dedicated mode-6 shader branch that filters
-                // all four stored bytes, matching Pillow's RGBX behavior.
-                || (logical_mode == "RGBX"
-                    && ops.iter().all(|op| {
-                        matches!(
-                            op,
-                            PipelineOp::Sharpness { .. }
-                                | PipelineOp::PutPixel { .. }
-                                | PipelineOp::EffectSpread { .. }
-                                | PipelineOp::Transpose { .. }
-                                | PipelineOp::Paste { mask: None, .. }
-                                | PipelineOp::Scale { .. }
-                                | PipelineOp::Contain { .. }
-                                | PipelineOp::Cover { .. }
-                                | PipelineOp::Pad { .. }
-                                | PipelineOp::Transform { .. }
-                                | PipelineOp::Resize {
-                                    ..
-                                }
-                                | PipelineOp::Convert {
-                                    mode: ColorMode::L
-                                        | ColorMode::LA
-                                        | ColorMode::RGB
-                                        | ColorMode::RGBA
-                                        | ColorMode::CMYK
-                                        | ColorMode::YCbCr
-                                        | ColorMode::HSV
-                                        | ColorMode::I
-                                        | ColorMode::F,
-                                    matrix: None,
-                                    dither: None,
-                                }
-                        )
-                    }))
-                // RGBa uses the same four-byte storage as RGBA. Pillow's
-                // Image.resize leaves RGBa in its already-premultiplied
-                // representation (PIL/Image.py resize mode dispatch), so
-                // boxed Fit can use the same coefficient kernels with
-                // `premultiply = 0`; ImageChops likewise operates on these
-                // stored bytes directly. Keep this whitelist limited to
-                // raw-channel operations and geometry that preserves that
-                // four-byte sample contract.
-                || (logical_mode == "RGBa"
-                    && ops.iter().all(|op| {
-                        matches!(
-                            op,
-                            PipelineOp::PutPixel { .. }
-                                | PipelineOp::EffectSpread { .. }
-                                | PipelineOp::Add { .. }
-                                | PipelineOp::Subtract { .. }
-                                | PipelineOp::Multiply { .. }
-                                | PipelineOp::Screen { .. }
-                                | PipelineOp::Darker { .. }
-                                | PipelineOp::Lighter { .. }
-                                | PipelineOp::Difference { .. }
-                                | PipelineOp::Overlay { .. }
-                                | PipelineOp::HardLight { .. }
-                                | PipelineOp::SoftLight { .. }
-                                | PipelineOp::AddModulo { .. }
-                                | PipelineOp::SubtractModulo { .. }
-                                | PipelineOp::InvertChops
-                                | PipelineOp::Paste { mask: None, .. }
-                                | PipelineOp::Scale { .. }
-                                | PipelineOp::Contain { .. }
-                                | PipelineOp::Cover { .. }
-                                | PipelineOp::Pad { .. }
-                                | PipelineOp::Transform { .. }
-                                | PipelineOp::Fit { .. }
-                                | PipelineOp::Resize {
-                                    ..
-                                }
-                        )
-                    }))
-                || (matches!(logical_mode, "HSV" | "YCbCr")
-                    && ops.iter().all(|op| {
-                        matches!(
-                            op,
-                            PipelineOp::Add { .. }
-                                | PipelineOp::Subtract { .. }
-                                | PipelineOp::Multiply { .. }
-                                | PipelineOp::Screen { .. }
-                                | PipelineOp::Darker { .. }
-                                | PipelineOp::Lighter { .. }
-                                | PipelineOp::Difference { .. }
-                                | PipelineOp::Overlay { .. }
-                                | PipelineOp::HardLight { .. }
-                                | PipelineOp::SoftLight { .. }
-                                | PipelineOp::AddModulo { .. }
-                                | PipelineOp::SubtractModulo { .. }
-                                | PipelineOp::Brightness { .. }
-                                | PipelineOp::Filter3x3 { .. }
-                                | PipelineOp::Filter5x5 { .. }
-                                    | PipelineOp::Reduce { .. }
-                                    | PipelineOp::PutData { .. }
-                                    | PipelineOp::Eval { .. }
-                                | PipelineOp::PutPixel { .. }
-                                | PipelineOp::EffectSpread { .. }
-                                | PipelineOp::Paste { .. }
-                                | PipelineOp::Crop { .. }
-                                | PipelineOp::Scale { .. }
-                                | PipelineOp::Contain { .. }
-                                | PipelineOp::Cover { .. }
-                                | PipelineOp::Pad { .. }
-                                | PipelineOp::Transform { .. }
-                                | PipelineOp::Resize {
-                                    ..
-                                }
-                        )
-                    }))
-                // Singleton HSV Expand reads the image's three stored
-                // samples as-is. Keep this tied to the native-layout gate so
-                // the shader cannot admit a logical HSV image with a
-                // mismatched physical representation.
-                || (logical_mode == "HSV"
-                    && gpu_native_expand_channels(ops, img, mode).is_some())
-                // CMYK, HSV, and YCbCr retain their native channel order in
-                // the packed RGBA/RGB transport.  ExtractBand only copies
-                // one requested byte and then publishes an L8 result, so it
-                // does not reinterpret the samples as RGB or alpha.  Keep
-                // PutPixel here as well: the maintained getchannel batches
-                // often write one source pixel before extracting its band.
-                || (matches!(logical_mode, "CMYK" | "HSV" | "YCbCr")
-                    && ops.iter().all(|op| {
-                        matches!(
-                            op,
-                            PipelineOp::ExtractBand { .. }
-                                | PipelineOp::PutPixel { .. }
-                                | PipelineOp::EffectSpread { .. }
-                        )
-                    }))
-                // CMYK putalpha is a terminal promotion through the exact
-                // integer CMYK->RGB conversion in put_alpha.wgsl.  Keep this
-                // whitelist terminal-only: after promotion the public mode
-                // is RGBA, and a following operation needs a segmented batch
-                // with the updated logical layout rather than CMYK metadata.
-                || (logical_mode == "CMYK"
-                    && ops.len() == 1
-                    && matches!(
-                        ops[0],
-                        PipelineOp::PutAlpha {
-                            mode: PixelMode::CMYK,
-                            ..
-                        } | PipelineOp::PutAlphaData {
-                            mode: PixelMode::CMYK,
-                            ..
-                        }
-                    ))
-                // Keep CMYK→RGB as one terminal native conversion. The
-                // convert shader interprets the four bytes as C/M/Y/K and
-                // applies Pillow's exact integer inverse before RGB readback.
-                || (logical_mode == "CMYK"
-                    && matches!(ops, [PipelineOp::Convert {
-                        mode: ColorMode::RGB,
-                        matrix: None,
-                        dither: None,
-                    }])
-                    && matches!(img, DynamicImage::ImageRgba8(_)))
-                || (matches!(logical_mode, "RGB" | "RGBA" | "CMYK")
-                    && ops
-                        .iter()
-                        .all(|op| matches!(op, PipelineOp::Color3DLut { .. })))
-                // F stores one finite f32 sample in each four-byte word.
-                // Its order-statistic shaders compare the decoded samples;
-                // the ordinary byte filters would sort IEEE-754 bytes and
-                // produce a numerically unrelated result. Mirror remains in
-                // this clause because it only relocates complete words.
-                || (logical_mode == "F" && gpu_float_filter_is_supported(ops, img))
-                // A constant F Pad uses the exact scalar resize marker for
-                // its contain step and a raw-word placement shader for the
-                // final canvas. The source proof is deliberately limited to
-                // a single non-nearest Pad; mixed batches still need the
-                // host semantic path until their intermediate contract is
-                // proven.
-                || (logical_mode == "F"
-                    && f_resize_constant_bits.is_some()
-                    && ops.len() == 1
-                    && matches!(ops[0], PipelineOp::Pad { .. }))
-                // A heterogeneous F Pad uses marker 9 for its contain
-                // resize and then copies complete words through placement.
-                // The admission proof is limited to one changed-axis Pad
-                // with an optional PutData(F)-only prefix; nearest, same-size,
-                // and unrelated prefixes retain their existing paths.
-                || (logical_mode == "F"
-                    && f_pad_f64_is_exact)
-                // A nearest F Fit is a two-axis one-tap word relocation. Its
-                // boxed coefficients are generated on the host after the
-                // same f32 crop-boundary conversion as Pillow's affine
-                // nearest path; keep it separate from the vertical pass so
-                // Metal cannot observe a stale horizontal intermediate.
-                || (logical_mode == "F"
-                    && ops.len() == 1
-                    && matches!(
-                        ops[0],
-                        PipelineOp::Fit {
-                            filter: ResampleFilter::Nearest,
-                            ..
-                        }
-                    ))
-                // I-mode nearest Pad carries signed int32 words through a
-                // nearest contain resize and a raw-word placement pass. A
-                // filtered Pad would need the typed INT32 accumulator and is
-                // intentionally kept on exact host semantic control.
-                || (logical_mode == "I"
-                    && ops.iter().all(|op| {
-                        matches!(
-                            op,
-                            PipelineOp::Pad {
-                                filter: ResampleFilter::Nearest,
-                                ..
-                            }
-                                | PipelineOp::Resize {
-                                    filter: ResampleFilter::Nearest,
-                                    ..
-                                }
-                        )
-                    }))
-                || (logical_mode == "I"
-                    && (gpu_int_filter_is_supported(ops, img)
-                        || gpu_int_filter_resize_chain_is_supported(ops, img)))
-                // I/F samples are four raw bytes per pixel at this executor
-                // boundary.  These operations only relocate or duplicate
-                // the complete sample and therefore do not need to decode it
-                // as an integer, float, or color.  Keep arithmetic and fill
-                // operations out of this clause: their shader contracts need
-                // a native typed buffer rather than packed RGBA semantics.
-                || (matches!(logical_mode, "I" | "F")
-                    && ops.iter().all(|op| {
-                        matches!(
-                            op,
-                            PipelineOp::PutData { .. }
-                                | PipelineOp::Offset { .. }
-                                | PipelineOp::EffectSpread { .. }
-                                | PipelineOp::Flip
-                                | PipelineOp::Mirror
-                                | PipelineOp::Transpose { .. }
-                                | PipelineOp::Crop { .. }
-                                | PipelineOp::CropBorder { .. }
-                                | PipelineOp::Duplicate
-                                | PipelineOp::Paste { mask: None, .. }
-                                | PipelineOp::Scale {
-                                    ..
-                                }
-                                | PipelineOp::Contain {
-                                    ..
-                                }
-                                | PipelineOp::Cover {
-                                    ..
-                                }
-                                | PipelineOp::Resize {
-                                    ..
-                                }
-                                | PipelineOp::Transform { .. }
-                        )
-                    }))
-                // Native I;16* images use one typed u16 sample per pixel.
-                // The packed GPU word is only an opaque transport for these
-                // relocation operations; it is never narrowed to an 8-bit
-                // luma value or interpreted as RGBA.
-                || (matches!(logical_mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
-                    && (gpu_luma16_geometry_is_supported(ops, img, Some(logical_mode))
-                        || gpu_luma16_convert_is_supported(ops, img)
-                        || gpu_luma16_paste_is_supported(ops, img)))
-                || (logical_mode == "CMYK"
-                    && ops
-                        .iter()
-                        .all(|op| {
-                            matches!(
-                                op,
-                                PipelineOp::Grayscale
-                                    | PipelineOp::Brightness { .. }
-                                    | PipelineOp::Contrast { .. }
-                                    | PipelineOp::ColorSaturation { .. }
-                                    | PipelineOp::Sharpness { .. }
-                                    | PipelineOp::InvertChops
-                                    | PipelineOp::Add { .. }
-                                    | PipelineOp::Subtract { .. }
-                                    | PipelineOp::Multiply { .. }
-                                    | PipelineOp::Screen { .. }
-                                    | PipelineOp::Darker { .. }
-                                    | PipelineOp::Lighter { .. }
-                                    | PipelineOp::Difference { .. }
-                                    | PipelineOp::Overlay { .. }
-                                    | PipelineOp::HardLight { .. }
-                                    | PipelineOp::SoftLight { .. }
-                                    | PipelineOp::AddModulo { .. }
-                                    | PipelineOp::SubtractModulo { .. }
-                                    | PipelineOp::LogicalAnd { .. }
-                                    | PipelineOp::LogicalOr { .. }
-                                    | PipelineOp::LogicalXor { .. }
-                                    | PipelineOp::Filter3x3 { .. }
-                                    | PipelineOp::Filter5x5 { .. }
-                                    | PipelineOp::BlendModule { .. }
-                                    | PipelineOp::Offset { .. }
-                                    | PipelineOp::Mirror
-                                    | PipelineOp::Transpose { .. }
-                                    | PipelineOp::Crop { .. }
-                                    | PipelineOp::CropBorder { .. }
-                                    | PipelineOp::Expand { .. }
-                                    | PipelineOp::Duplicate
-                                    | PipelineOp::Flip
-                            | PipelineOp::Reduce { .. }
-                                | PipelineOp::CompositeModule { .. }
-                                | PipelineOp::PutData { .. }
-                                | PipelineOp::Eval { .. }
-                                | PipelineOp::PutPixel { .. }
-                                | PipelineOp::EffectSpread { .. }
-                                | PipelineOp::Paste { .. }
-                                | PipelineOp::Scale { .. }
-                                | PipelineOp::Contain { .. }
-                            | PipelineOp::Cover { .. }
-                            | PipelineOp::Pad { .. }
-                            | PipelineOp::Transform { .. }
-                            | PipelineOp::Resize {
-                                    ..
-                                }
-                            )
-                        }))
-        });
+        let logical_mode_supported = gpu_logical_mode_is_supported(
+            ops,
+            Some(img),
+            mode,
+            f_resize_constant_bits,
+            f_pad_f64_is_exact,
+            true,
+        );
         if !logical_mode_supported {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to exact host semantic control: logical layout"
@@ -24906,10 +24675,9 @@ mod tests {
         BLUR_WORKGROUP_SIZE, F64OrderedKind, F64OrderedState, F64SignedMagnitude,
         GPU_BUFFER_CAPACITY, GPU_MASKED_RGBA_WORKGROUP_SIZE, GPU_POLL_BACKOFF,
         GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, encode_resize_compact_box_axis,
-        gpu_batch_group_limit_for_limits, gpu_buffer_capacity_exceeds_limits,
-        gpu_buffer_reuse_allowed, gpu_byte_point_mode_allowed, gpu_contrast_mean,
-        gpu_contrast_mean_after_exact_prefix, gpu_dimensions_require_cpu, gpu_dispatch_count,
-        gpu_dispatch_dimensions_require_cpu, gpu_f_pad_f64_is_exact,
+        gpu_buffer_capacity_exceeds_limits, gpu_buffer_reuse_allowed, gpu_byte_point_mode_allowed,
+        gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix, gpu_dimensions_require_cpu,
+        gpu_dispatch_count, gpu_dispatch_dimensions_require_cpu, gpu_f_pad_f64_is_exact,
         gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
         gpu_f_resize_compact_box_axis, gpu_f_resize_compact_box_is_exact,
         gpu_f_resize_compact_box_vertical_only_geometry, gpu_f_resize_constant_bits,
@@ -27227,8 +26995,7 @@ mod tests {
                 Backend::set_pipeline_telemetry_enabled(self.0);
             }
         }
-        // The parent owns the global telemetry flag. Each worker reads only
-        // its own counters; run native receipt tests with --test-threads=1.
+        // Telemetry opt-in is thread-local, just like its result counters.
         let _telemetry = RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
         let start = std::sync::Barrier::new(2);
         let completed = std::thread::scope(|scope| {
@@ -27237,6 +27004,8 @@ mod tests {
                 .map(|(mapped_input, cases)| {
                     let start = &start;
                     scope.spawn(move || {
+                        let _telemetry =
+                            RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
                         let mut buffers = super::BufferPool::new(&gpu.device, 132 * 132, true);
                         let mut retained = Vec::new();
                         start.wait();
@@ -27610,9 +27379,8 @@ mod tests {
             })
             .collect();
 
-        // Like existing receipt tests, run this native test with
-        // --test-threads=1. The parent alone owns the process-global flag;
-        // workers consume their own thread-local receipts without toggling it.
+        // Enable telemetry in every worker: the parent's thread-local setting
+        // is deliberately not inherited by newly spawned threads.
         struct RestoreTelemetry(bool);
         impl Drop for RestoreTelemetry {
             fn drop(&mut self) {
@@ -27628,6 +27396,8 @@ mod tests {
                 .map(|(worker, cases)| {
                     let start = &start;
                     scope.spawn(move || {
+                        let _telemetry =
+                            RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
                         // Only synchronize once: a later assertion failure
                         // cannot strand the peer at another barrier.
                         start.wait();
@@ -27830,29 +27600,46 @@ mod tests {
             assert_eq!(telemetry.6, Some(1));
             assert_eq!(telemetry.7, None);
             let resources = telemetry.8.expect("native transfer counters");
-            let native_three_channel_upload = matches!(
-                op,
-                PipelineOp::PutAlpha {
-                    mode: PixelMode::RGB,
-                    ..
-                }
-            ) || (cfg!(target_endian = "little")
+            let native_rgb_duplicate = cfg!(target_endian = "little")
                 && mode == "RGB"
-                && matches!(
-                    op,
-                    PipelineOp::Convert {
-                        mode: ColorMode::RGBA,
-                        matrix: None,
-                        dither: None,
-                    }
-                ));
+                && matches!(op, PipelineOp::Duplicate);
+            let native_three_channel_upload = native_rgb_duplicate
+                || (cfg!(target_endian = "little")
+                    && matches!(
+                        op,
+                        PipelineOp::PutAlpha {
+                            mode: PixelMode::RGB,
+                            ..
+                        }
+                    ))
+                || (cfg!(target_endian = "little")
+                    && mode == "RGB"
+                    && matches!(
+                        op,
+                        PipelineOp::Convert {
+                            mode: ColorMode::RGBA,
+                            matrix: None,
+                            dither: None,
+                        }
+                    ));
             let expected_upload_bytes = if native_three_channel_upload {
                 (5 * 3 * 3 + 3) & !3
             } else {
                 5 * 3 * 4
             };
-            assert_eq!(resources.upload_bytes, expected_upload_bytes);
-            assert_eq!(resources.readback_bytes, 5 * 3 * 4);
+            assert_eq!(
+                resources.upload_bytes, expected_upload_bytes,
+                "{mode} {op:?}"
+            );
+            let expected_readback_bytes = if native_rgb_duplicate {
+                (5 * 3 * 3 + 3) & !3
+            } else {
+                5 * 3 * 4
+            };
+            assert_eq!(
+                resources.readback_bytes, expected_readback_bytes,
+                "{mode} {op:?}"
+            );
             if actual.color() == crate::raster::ColorType::Rgb8 {
                 assert_eq!(resources.host_allocation_count, 1);
                 assert_eq!(resources.host_allocated_bytes, 5 * 3 * 3);
@@ -35081,486 +34868,6 @@ mod tests {
         assert!(plan_extract_band_dispatch(5 * 256, 1, 0).is_err());
         assert!(plan_extract_band_dispatch(5 * 256, 1, 1).is_err());
         assert!(plan_extract_band_dispatch(u32::MAX, 2, 65_535).is_err());
-    }
-
-    #[test]
-    fn explicit_gpu_batch_planner_caps_static_device_and_dispatch_boundaries() {
-        let extract_band = PipelineOp::ExtractBand { index: 3 };
-        let default_limits = (u32::MAX, u64::MAX, 65_535);
-
-        // Expand adds its border to both axes, keeps mode-native byte
-        // channels, and packs fill rows between source images. Bound input
-        // and output storage plus the adapter's actual dispatch grid.
-        let expand = PipelineOp::Expand {
-            border: 1,
-            fill: (11, 23, 37, 49),
-        };
-        for mode in ["L", "LA", "RGB", "RGBA"] {
-            let cap =
-                gpu_batch_group_limit_for_limits(&expand, mode, (4, 3), 100, 600, 600, 65_535);
-            assert_eq!(cap, 5, "wrong bounded native Expand cap for {mode}");
-            // BufferPool capacities are pixel-sized u32 storage even when
-            // Expand's actual upload/readback remains a compact 1–4 byte
-            // native image. The planner must respect that allocation size.
-            let buffer_bytes = 6u64 * 5 * cap as u64 * 4;
-            assert!(buffer_bytes <= 600);
-            assert!(
-                6u64 * 5 * (cap as u64 + 1) * 4 > 600,
-                "next {mode} group must exceed the device buffer limit"
-            );
-        }
-        // The border participates in output dispatch dimensions. One 14×14
-        // source fits a one-workgroup device after expansion, while two do
-        // not; the planner must cap the group before allocation.
-        assert_eq!(
-            gpu_batch_group_limit_for_limits(&expand, "L", (14, 14), 2, u32::MAX, u64::MAX, 1,),
-            1
-        );
-        let overflowing_expand = PipelineOp::Expand {
-            border: u32::MAX,
-            fill: (0, 0, 0, 0),
-        };
-        assert_eq!(
-            gpu_batch_group_limit_for_limits(
-                &overflowing_expand,
-                "RGBA",
-                (4, 3),
-                2,
-                u32::MAX,
-                u64::MAX,
-                65_535,
-            ),
-            0
-        );
-
-        let cap = gpu_batch_group_limit_for_limits(
-            &extract_band,
-            "RGBA",
-            (1024, 768),
-            22,
-            default_limits.0,
-            default_limits.1,
-            default_limits.2,
-        );
-        assert_eq!(cap, 21);
-        assert!(1024u64 * 768 * cap as u64 <= u64::from(GPU_BUFFER_CAPACITY));
-        assert!(1024u64 * 768 * (cap as u64 + 1) > u64::from(GPU_BUFFER_CAPACITY));
-
-        // 3x3 MaxFilter batches carry one clamped top and bottom row per
-        // image. The group limit includes those halo rows in buffer sizing.
-        let max_filter_cap = gpu_batch_group_limit_for_limits(
-            &PipelineOp::MaxFilter { size: 3 },
-            "RGB",
-            (1024, 768),
-            22,
-            default_limits.0,
-            default_limits.1,
-            default_limits.2,
-        );
-        assert_eq!(max_filter_cap, 21);
-        assert!(1024u64 * 770 * max_filter_cap as u64 <= u64::from(GPU_BUFFER_CAPACITY));
-        assert!(1024u64 * 770 * (max_filter_cap as u64 + 1) > u64::from(GPU_BUFFER_CAPACITY));
-
-        // Native-L RankFilter(3, rank=1) uses the same one-row-per-image
-        // halos, and its L shader addresses one packed word per pixel.
-        let rank_filter_cap = gpu_batch_group_limit_for_limits(
-            &PipelineOp::RankFilter { size: 3, rank: 1 },
-            "L",
-            (1024, 768),
-            22,
-            default_limits.0,
-            default_limits.1,
-            default_limits.2,
-        );
-        assert_eq!(rank_filter_cap, 21);
-        assert!(1024u64 * 770 * rank_filter_cap as u64 <= u64::from(GPU_BUFFER_CAPACITY));
-        assert!(1024u64 * 770 * (rank_filter_cap as u64 + 1) > u64::from(GPU_BUFFER_CAPACITY));
-        assert_eq!(
-            gpu_batch_group_limit_for_limits(
-                &PipelineOp::RankFilter { size: 3, rank: 0 },
-                "L",
-                (1024, 768),
-                22,
-                default_limits.0,
-                default_limits.1,
-                default_limits.2,
-            ),
-            0
-        );
-
-        let storage_limited_cap = gpu_batch_group_limit_for_limits(
-            &extract_band,
-            "RGBA",
-            (1024, 768),
-            8,
-            16 * 1024 * 1024,
-            16 * 1024 * 1024,
-            65_535,
-        );
-        assert_eq!(storage_limited_cap, 5);
-
-        // Multiply transports the stored bytes as independent packed samples:
-        // its safe batch size depends on the native mode's byte width.
-        for (mode, expected_cap) in [("L", 85), ("LA", 42), ("RGB", 28), ("RGBA", 21)] {
-            let image = Image::new(1024, 768, mode, (0, 0, 0, 0)).unwrap();
-            let multiply = PipelineOp::Multiply {
-                other: Arc::new(image),
-            };
-            assert_eq!(
-                gpu_batch_group_limit_for_limits(
-                    &multiply,
-                    mode,
-                    (1024, 768),
-                    100,
-                    default_limits.0,
-                    default_limits.1,
-                    default_limits.2,
-                ),
-                expected_cap,
-                "wrong native-byte Multiply cap for {mode}"
-            );
-        }
-
-        // Brightness batches use the same packed-byte transport sizes as
-        // Multiply, while retaining the brightness shader's own dispatch.
-        for (mode, expected_cap, expected_storage_cap) in
-            [("L", 85, 21), ("LA", 42, 10), ("RGB", 28, 7)]
-        {
-            let brightness = PipelineOp::Brightness { factor: 0.5 };
-            assert_eq!(
-                gpu_batch_group_limit_for_limits(
-                    &brightness,
-                    mode,
-                    (1024, 768),
-                    100,
-                    default_limits.0,
-                    default_limits.1,
-                    default_limits.2,
-                ),
-                expected_cap,
-                "wrong native-byte Brightness cap for {mode}"
-            );
-            assert_eq!(
-                gpu_batch_group_limit_for_limits(
-                    &brightness,
-                    mode,
-                    (1024, 768),
-                    100,
-                    16 * 1024 * 1024,
-                    16 * 1024 * 1024,
-                    default_limits.2,
-                ),
-                expected_storage_cap,
-                "wrong device-storage Brightness cap for {mode}"
-            );
-        }
-
-        // ImageOps.invert shares the packed native-byte shader path, so a
-        // stacked group is bounded by stored bytes and packed-word workgroups,
-        // not by one logical work item per pixel.
-        for (mode, expected_cap, expected_storage_cap) in [("L", 85, 21), ("RGB", 28, 7)] {
-            assert_eq!(
-                gpu_batch_group_limit_for_limits(
-                    &PipelineOp::Invert,
-                    mode,
-                    (1024, 768),
-                    100,
-                    default_limits.0,
-                    default_limits.1,
-                    default_limits.2,
-                ),
-                expected_cap,
-                "wrong native-byte ImageOps.invert cap for {mode}"
-            );
-            assert_eq!(
-                gpu_batch_group_limit_for_limits(
-                    &PipelineOp::Invert,
-                    mode,
-                    (1024, 768),
-                    100,
-                    16 * 1024 * 1024,
-                    16 * 1024 * 1024,
-                    default_limits.2,
-                ),
-                expected_storage_cap,
-                "wrong device-storage ImageOps.invert cap for {mode}"
-            );
-        }
-
-        let multiply_rgba = PipelineOp::Multiply {
-            other: Arc::new(Image::new(1024, 768, "RGBA", (0, 0, 0, 0)).unwrap()),
-        };
-        assert_eq!(
-            gpu_batch_group_limit_for_limits(
-                &multiply_rgba,
-                "RGBA",
-                (1024, 768),
-                8,
-                16 * 1024 * 1024,
-                16 * 1024 * 1024,
-                65_535,
-            ),
-            5,
-            "Multiply cap must respect the selected device storage limit"
-        );
-
-        // Masked Paste's shared source/mask binding contains both native
-        // source samples and one L-mask byte per output pixel. Its group cap
-        // must account for both buffers and use the same dispatch layout as
-        // the native masked-Paste executor.
-        for (mode, expected_unbounded, expected_storage_limited) in [
-            ("L", 21, 10),
-            ("LA", 10, 7),
-            ("RGB", 21, 5),
-            ("RGBA", 17, 4),
-        ] {
-            let source = Arc::new(Image::new(1024, 768, mode, (0, 0, 0, 0)).unwrap());
-            let mask = Arc::new(Image::new(1024, 768, "L", (255, 0, 0, 0)).unwrap());
-            let paste = PipelineOp::Paste {
-                source,
-                x: 0,
-                y: 0,
-                w: 1024,
-                h: 768,
-                mask: Some(mask),
-                mask_alpha: false,
-            };
-            assert_eq!(
-                gpu_batch_group_limit_for_limits(
-                    &paste,
-                    mode,
-                    (1024, 768),
-                    22,
-                    default_limits.0,
-                    default_limits.1,
-                    default_limits.2,
-                ),
-                expected_unbounded,
-                "wrong static masked-Paste cap for {mode}"
-            );
-            assert_eq!(
-                gpu_batch_group_limit_for_limits(
-                    &paste,
-                    mode,
-                    (1024, 768),
-                    22,
-                    16 * 1024 * 1024,
-                    16 * 1024 * 1024,
-                    default_limits.2,
-                ),
-                expected_storage_limited,
-                "wrong device-storage masked-Paste cap for {mode}"
-            );
-        }
-
-        let la_batch_height = 768 * 10;
-        assert!(
-            plan_gpu_native_masked_byte_paste(
-                1024,
-                la_batch_height,
-                1024,
-                la_batch_height,
-                1024,
-                la_batch_height,
-                2,
-                default_limits.2,
-                default_limits.0,
-                default_limits.1,
-            )
-            .is_some()
-        );
-        let over_limit_la_height = 768 * 11;
-        assert!(
-            plan_gpu_native_masked_byte_paste(
-                1024,
-                over_limit_la_height,
-                1024,
-                over_limit_la_height,
-                1024,
-                over_limit_la_height,
-                2,
-                default_limits.2,
-                default_limits.0,
-                default_limits.1,
-            )
-            .is_none()
-        );
-
-        // The batch planner must also honor adapters whose workgroup limit is
-        // below the static default. L uses one flat workgroup per 256 pixels;
-        // LA uses two bytes per pixel and reaches the boundary twice as early.
-        let small_limit_paste = |mode: &str| {
-            let source = Arc::new(Image::new(1000, 4, mode, (0, 0, 0, 0)).unwrap());
-            let mask = Arc::new(Image::new(1000, 4, "L", (255, 0, 0, 0)).unwrap());
-            PipelineOp::Paste {
-                source,
-                x: 0,
-                y: 0,
-                w: 1000,
-                h: 4,
-                mask: Some(mask),
-                mask_alpha: false,
-            }
-        };
-        assert_eq!(
-            gpu_batch_group_limit_for_limits(
-                &small_limit_paste("L"),
-                "L",
-                (1000, 4),
-                5,
-                u32::MAX,
-                u64::MAX,
-                63,
-            ),
-            4,
-            "L Paste batch must cap at the native flat-dispatch boundary"
-        );
-        assert_eq!(
-            gpu_batch_group_limit_for_limits(
-                &small_limit_paste("LA"),
-                "LA",
-                (1000, 4),
-                3,
-                u32::MAX,
-                u64::MAX,
-                63,
-            ),
-            2,
-            "LA Paste batch must cap at the native flat-dispatch boundary"
-        );
-
-        // A 1000×500 L image yields a generic 63×63 grid when two images are
-        // stacked, but the packed-byte Multiply grid needs 64 groups in X.
-        // The planner must reject it for an adapter capped at 63 groups.
-        let multiply_l = PipelineOp::Multiply {
-            other: Arc::new(Image::new(1000, 500, "L", (0, 0, 0, 0)).unwrap()),
-        };
-        assert_eq!(
-            gpu_batch_group_limit_for_limits(
-                &multiply_l,
-                "L",
-                (1000, 500),
-                2,
-                u32::MAX,
-                u64::MAX,
-                63,
-            ),
-            0,
-            "packed-word dispatch must respect each adapter workgroup dimension"
-        );
-        let brightness_l = PipelineOp::Brightness { factor: 0.5 };
-        assert_eq!(
-            gpu_batch_group_limit_for_limits(
-                &brightness_l,
-                "L",
-                (1000, 500),
-                2,
-                u32::MAX,
-                u64::MAX,
-                63,
-            ),
-            0,
-            "Brightness packed-word dispatch must respect each adapter workgroup dimension"
-        );
-        assert_eq!(
-            gpu_batch_group_limit_for_limits(
-                &PipelineOp::Invert,
-                "L",
-                (1000, 500),
-                2,
-                u32::MAX,
-                u64::MAX,
-                63,
-            ),
-            0,
-            "ImageOps.invert packed-word dispatch must respect each adapter workgroup dimension"
-        );
-
-        // Each 1x16384 image needs exactly an 8x8 ExtractBand grid. Two
-        // stacked images would require 8x16 groups and exceed this adapter.
-        assert_eq!(
-            gpu_batch_group_limit_for_limits(
-                &extract_band,
-                "L",
-                (1, 16_384),
-                2,
-                u32::MAX,
-                u64::MAX,
-                8,
-            ),
-            1
-        );
-
-        let median_filter = PipelineOp::MedianFilter { size: 3 };
-        let median_cap = gpu_batch_group_limit_for_limits(
-            &median_filter,
-            "RGBA",
-            (1024, 768),
-            9,
-            default_limits.0,
-            default_limits.1,
-            default_limits.2,
-        );
-        assert_eq!(median_cap, 8);
-        let safe_height = 770u64 * median_cap as u64;
-        let over_height = 770u64 * (median_cap as u64 + 1);
-        assert!(1024 * safe_height * 324 <= super::MAX_GPU_SHADER_WORK_ITEMS);
-        assert!(1024 * over_height * 324 > super::MAX_GPU_SHADER_WORK_ITEMS);
-    }
-
-    #[test]
-    fn composite_batch_planner_respects_each_auxiliary_buffer_limit() {
-        let default_limits = (u32::MAX, u64::MAX, 65_535);
-        for (mode, channels, default_cap, storage_cap) in [
-            ("L", 1u64, 22u32, 21),
-            ("LA", 2, 22, 10),
-            ("RGB", 3, 22, 7),
-            ("RGBA", 4, 21, 5),
-        ] {
-            let composite = PipelineOp::CompositeModule {
-                other: Arc::new(Image::new(1024, 768, mode, (0, 0, 0, 0)).unwrap()),
-                mask: Arc::new(Image::new(1024, 768, "L", (0, 0, 0, 0)).unwrap()),
-                mask_alpha: false,
-            };
-            assert_eq!(
-                gpu_batch_group_limit_for_limits(
-                    &composite,
-                    mode,
-                    (1024, 768),
-                    22,
-                    default_limits.0,
-                    default_limits.1,
-                    default_limits.2,
-                ),
-                usize::try_from(default_cap).expect("small GPU group cap fits usize"),
-                "wrong native Composite workgroup cap for {mode}"
-            );
-            assert_eq!(
-                gpu_batch_group_limit_for_limits(
-                    &composite,
-                    mode,
-                    (1024, 768),
-                    22,
-                    16 * 1024 * 1024,
-                    16 * 1024 * 1024,
-                    default_limits.2,
-                ),
-                usize::try_from(storage_cap).expect("small GPU group cap fits usize"),
-                "Composite must respect the selected device's storage-binding limit for {mode}"
-            );
-
-            let bytes_per_image = 1024u64 * 768 * channels;
-            let word_count = bytes_per_image.div_ceil(4);
-            assert!(
-                super::plan_native_composite_dispatch(
-                    u32::try_from(word_count * u64::from(default_cap))
-                        .expect("default Composite batch fits u32 words"),
-                    default_limits.2,
-                )
-                .is_some(),
-                "safe {mode} Composite group must fit the adapter's 2D dispatch grid"
-            );
-        }
     }
 
     #[test]

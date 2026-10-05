@@ -254,6 +254,18 @@ class Image:
         if self._native_info is not None:
             self.info
 
+    def _new(self, rust_image):
+        """Wrap a derived image with Pillow's shallow metadata-copy semantics."""
+        if self._transpose_loads_info:
+            self.load()
+            self.info
+        result = Image(rust_image)
+        result._info = self._info.copy()
+        result._native_info = self._native_info
+        result._native_info_rebaseline = True
+        result._native_info_omitted = self._native_info_omitted
+        return result
+
     def _ensure_materialized(self):
         """Ensure the underlying Rust image is materialized (not Paletted/Path)."""
         if hasattr(self._rust_image, 'materialize'):
@@ -318,10 +330,10 @@ class Image:
         box=None,
         reducing_gap=None,
     ) -> "Image":
-        return Image(self._rust_image.resize(size, resample, box, reducing_gap))
+        return self._new(self._rust_image.resize(size, resample, box, reducing_gap))
 
     def crop(self, box: Optional[Tuple[float, float, float, float]] = None) -> "Image":
-        return Image(self._rust_image.crop(box))
+        return self._new(self._rust_image.crop(box))
 
     def rotate(
         self,
@@ -335,22 +347,17 @@ class Image:
         rust_image = self._rust_image.rotate(
             float(angle), resample, expand, center, translate, fillcolor
         )
-        return Image(rust_image)
+        return self._new(rust_image)
 
     def transpose(self, method: Union[int, str]) -> "Image":
         if self._transpose_loads_info:
             self.load()
             self.info
         rust_image = self._rust_image.transpose(method)
-        result = Image(rust_image)
         # Pillow's _new copies the mapping, while nested metadata values stay
         # shared. Native metadata remains lazy for images whose info was never
         # observed; the Rust transpose already retains that provenance.
-        result._info = self._info.copy()
-        result._native_info = self._native_info
-        result._native_info_rebaseline = True
-        result._native_info_omitted = self._native_info_omitted
-        return result
+        return self._new(rust_image)
 
     def convert(
         self,
@@ -390,7 +397,7 @@ class Image:
         return Image(self._rust_image.copy())
 
     def filter(self, filter_type) -> "Image":
-        return Image(self._rust_image.filter(filter_type))
+        return self._new(self._rust_image.filter(filter_type))
 
     def thumbnail(
         self,
@@ -460,7 +467,7 @@ class Image:
 
     def getchannel(self, channel):
         """Extract a single channel as an L-mode image."""
-        return Image(self._rust_image.getchannel(channel))
+        return self._new(self._rust_image.getchannel(channel))
 
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""

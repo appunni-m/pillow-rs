@@ -16,8 +16,6 @@ crate-type = ["cdylib"]
 [features]
 default = []
 parallel = ["pillow-rs/parallel"]
-# Enable only for migration fault-contract test builds; never part of defaults.
-migration-fault-injection = ["pillow-rs/migration-fault-injection"]
 # Maturin-only entry point used by the optional PyPI companion wheel. Ordinary
 # source builds and Parallel CPU benchmarks keep the canonical `_core` name.
 parallel-wheel = ["parallel"]

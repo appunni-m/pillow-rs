@@ -10,24 +10,12 @@ enabled.
 | Task | Command | Effect |
 | --- | --- | --- |
 | Python development environment | `make setup-venv PYTHON=python3.12` | Creates this checkout's virtual environment and installs pinned tools |
+| Explicit GPU stream parity/contracts | `make gpu-batch-parity gpu-batch-contracts` after `make build-parity` | Requires a usable GPU; checks live Pillow pixels and bounded streaming ownership |
+| Explicit GPU batch timing | `make gpu-batch-benchmark` | Prints completed-work queued/eager GPU throughput versus sequential Pillow without JSON artifacts |
 | Build for comparison | `make build-parity` | Builds the replacement without installing over the Pillow oracle |
 | Build for application use | `make build` | Installs the replacement into the selected environment |
 | Build npm package | `make build-wasm-release` | Compiles the shared Node/browser WASM artifact |
 | One parity case | `make migration-parity-case CASE_ID=<id>` | Runs the selected input against source and target |
-| Explicit image-batch parity | `make build-parity && .venv/bin/python scripts/test_imagebatch_parity.py && .venv/bin/python scripts/test_imagebatch_max_filter_parity.py && .venv/bin/python scripts/test_imagebatch_rank_filter_parity.py && .venv/bin/python scripts/test_imagebatch_expand_parity.py` | Compares `PIL.ImageBatch` with isolated Pillow; verifies exact outputs and native modes, including queued Composite in L, LA, RGB, and RGBA, one GPU shader dispatch per compatible group, and separate dispatches for fallback jobs |
-| RankFilter batch fault contracts | `make imagebatch-rank-filter-fault-contract` | Runs target-only injected dimension- and memory-failure cases; verifies exact fallback output and executor reuse, then restores the ordinary parity build |
-| Paste batch fault contracts | `make imagebatch-paste-fault-contract` | Runs target-only injected dimension- and memory-failure cases; verifies exact ordered GPU fallback, input preservation, and executor reuse, then restores the ordinary parity build |
-| Composite batch fault contracts | `make imagebatch-composite-fault-contract` | Runs target-only injected dimension- and memory-failure cases; verifies exact ordered GPU fallback, input preservation, and executor reuse, then restores the ordinary parity build |
-| Expand batch fault contracts | `make imagebatch-expand-fault-contract` | Runs target-only injected dimension- and memory-failure cases; verifies exact fallback output and executor reuse, then restores the ordinary parity build |
-| Explicit image-batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --operation color3dlut --mode RGBA --width 256 --height 256 --images 16 --samples 12 --warmups 3` | Run after `make build-parity`; measures full-call queued `ImageBatch.Color3DLUT`. `--operation` also accepts `median-filter`, `max-filter`, `rank-filter`, `extract-band`, `invert`, `brightness`, `multiply`, `paste`, `composite`, and `expand`; compare with `--backend pillow`, `cpu`, `simd`, or `parallel-cpu` without `--queue` |
-| Explicit MaxFilter batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --operation max-filter --mode RGBA --width 256 --height 256 --images 16 --samples 12 --warmups 3` | Run after `make build-parity`; compares queued GPU with Pillow, CPU, SIMD, and eager GPU. Compatible groups preserve per-image edges and use one native-mode GPU dispatch |
-| Explicit native-L RankFilter batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --operation rank-filter --mode L --width 256 --height 256 --images 16 --samples 12 --warmups 3` | Run after `make build-parity`; compares queued GPU with ordinary Pillow, CPU, SIMD, and eager GPU. Grouping is limited to `RankFilter(3, rank=1)` on native L images |
-| Explicit Brightness batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --operation brightness --mode LA --width 256 --height 256 --images 16 --samples 12 --warmups 3` | Run after `make build-parity`; compares queued native-mode GPU scheduling with the serial Pillow, CPU, and SIMD API calls. GPU grouping requires an exact factor and mode `L`, `LA`, or `RGB`; pass `--factor` to select it |
-| Explicit masked-Paste batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --operation paste --mode RGBA --width 256 --height 256 --images 16 --samples 12 --warmups 3` | Run after `make build-parity`; compare Pillow, CPU, SIMD, eager GPU, and queued GPU full-call timings. The operation is limited to compatible full-frame native-mode pastes with same-size L masks |
-| Explicit Composite batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --operation composite --mode RGBA --width 256 --height 256 --images 16 --samples 12 --warmups 3` | Run after `make build-parity`; compare queued GPU with sequential Pillow, CPU, SIMD, and eager GPU. Grouping requires matching L/LA/RGB/RGBA foreground/background images and an L mask; report `parallel-cpu` separately after `make build-parity-parallel-cpu` |
-| Explicit Expand batch throughput | `.venv/bin/python scripts/benchmark_imagebatch.py --backend gpu --queue --operation expand --mode RGBA --width 256 --height 256 --images 16 --border 7 --fill 37 --samples 12 --warmups 3` | Run after `make build-parity`; compares queued GPU with Pillow, CPU, SIMD, and eager GPU. Equal border/fill jobs group in native L, LA, RGB, or RGBA mode |
-| Explicit masked-Paste Parallel CPU comparison | `make build-parity-parallel-cpu && .venv/bin/python scripts/benchmark_imagebatch.py --backend parallel-cpu --operation paste --mode RGBA --width 1024 --height 768 --images 4 --samples 12 --warmups 3` | Builds and labels the opt-in Rayon profile separately; repeat with `--backend pillow` for the ordinary sequential Pillow baseline. Each image exceeds masked Paste's 512×512 row-parallel threshold |
-| Explicit Composite Parallel CPU comparison | `make build-parity-parallel-cpu && .venv/bin/python scripts/benchmark_imagebatch.py --backend parallel-cpu --operation composite --mode RGBA --width 1024 --height 768 --images 4 --samples 12 --warmups 3` | Runs the default-off Rayon build as Parallel CPU; compare directly with `--backend pillow` without a parallel Pillow baseline. The native composite row path parallelizes images at or above 512×512 pixels |
 | Review repetitive cases | `make migration-parity-reduction MIGRATION_REDUCTION_ARGS='--candidates <pairs.json> --output-dir <directory>'` | Measures removal batches and binary restoration against separate CPU/SIMD/GPU baselines; see [coverage](COVERAGE.md#reduce-repetitive-parity-inputs) |
 | Complete runtime campaign | `make test` | Runs backend, Node/browser, and reverse Pillow coverage lanes |
 | Format check / fix | `make fmt` / `make fmt-fix` | Checks / changes Rust formatting |
@@ -45,21 +33,9 @@ enabled.
 | Cache cleanup | `make clean` | Removes Python bytecode and the temporary report |
 | Build cleanup | `make clean-all` | Also removes Cargo build outputs |
 
-For the 64×64 × 64 Multiply comparison, run the listed command with each of
-`--backend pillow`, `cpu`, and `simd`; use `--backend gpu` without `--queue`
-to measure independent GPU calls. To reproduce the 256×256 × 16 cohort, change
-the dimensions and image count to `--width 256 --height 256 --images 16` and
-run the Pillow, SIMD, and queued-GPU profiles. Both profiles default to 12
-samples and 3 warmups.
-
-The Color3DLUT batch workload uses one shared non-identity 17³ RGBA table.
-Run the same command with `--operation color3dlut --mode RGBA` at
-`--width 64 --height 64 --images 64`, `--width 256 --height 256 --images 16`,
-and `--width 1024 --height 768 --images 4`. Use `--backend pillow`, `cpu`, and
-`simd` without `--queue`, plus `--backend gpu` both with and without `--queue`.
-`scripts/test_imagebatch_parity.py` compares every output against the isolated
-Pillow oracle and checks that compatible queued groups execute one actual
-`color_3dlut.wgsl` dispatch with no mode conversion or fallback.
+The previous ImageBatch targets and scripts are archived with their code.
+Use the separate [explicit GPU executor](IMAGE_BATCHING.md); its focused
+[validation lanes](GPU_BATCH_VALIDATION.md) print evidence without JSON files.
 
 Setup installs dependencies; ordinary help and documentation builds do not.
 Documentation builds require `make docs-setup` once. They do not execute

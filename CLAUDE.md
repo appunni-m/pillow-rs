@@ -29,6 +29,11 @@
   named and benchmarked **Parallel CPU** profile, not SIMD. Reserve SIMD for
   operations with actual architecture-specific vector code; do not create a
   Parallel SIMD profile just to label Rayon work.
+- Explicit GPU batching accepts the existing lazy Image/PipelineOp graph,
+  preserves result identity independently of order, rejects unsupported pending
+  contexts during admission, and keeps resource leases through completion.
+  Keep it separate from normal Image routing; do not restore deprecated ImageBatch
+  operation wrappers or use host thread pools as GPU batching.
 - Keep GPU work on the GPU path. GPU dispatch and kernels must not use Rayon;
   never route GPU work through CPU parallel scheduling. Measure GPU separately
   and optimize its own latency and throughput.

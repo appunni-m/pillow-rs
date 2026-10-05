@@ -33,8 +33,10 @@ fn read_source(byte_index: u32) -> u32 {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    let word_index = gid.x;
+fn main(@builtin(workgroup_id) group: vec3<u32>,
+        @builtin(num_workgroups) groups: vec3<u32>,
+        @builtin(local_invocation_index) local: u32) {
+    let word_index = (group.y * groups.x + group.x) * 64u + local;
     if word_index >= params.word_count {
         return;
     }

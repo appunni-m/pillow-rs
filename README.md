@@ -92,11 +92,9 @@ upstream Pillow does not bundle as equivalents.
 - Selectable CPU, architecture-specific SIMD, and GPU execution routes, with
   controls to inspect and enable or disable compiled routes. A compiled route
   does not guarantee that every operation or device uses it.
-- `PIL.ImageBatch`, an explicit queue for independent image jobs. Compatible
-  same-size jobs can share a GPU workload; ordinary `Image` calls keep their
-  existing path. This was added to main after the tagged
-  `12.2.0-alpha.5` GitHub pre-release; see the
-  [feature comparison](https://appunni-m.github.io/pillow-rs/compatibility/#pillow-rs-additions-beyond-pillow).
+- [Explicit GPU batching](docs/IMAGE_BATCHING.md) schedules existing lazy image
+  graphs and streams keyed CPU or resident outputs within resource budgets.
+  It is implemented in source; the earlier ImageBatch experiment is archived.
 - An opt-in Rayon **Parallel CPU** profile, separate from ordinary CPU, SIMD,
   and GPU execution. Its matching companion wheel is not available from the
   package registries yet; check the

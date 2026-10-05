@@ -30,7 +30,6 @@ from pillow_rs import (
     enable_backend,
 )
 from pillow_rs import imagechops as ImageChops
-from pillow_rs import imagebatch as ImageBatch
 from pillow_rs import imagecolor as ImageColor
 from pillow_rs import imagedraw as ImageDraw
 from pillow_rs import imageenhance as ImageEnhance
@@ -41,6 +40,8 @@ from pillow_rs import imagepalette as ImagePalette
 from pillow_rs import imagesequence as ImageSequence
 from pillow_rs import imagestat as ImageStat
 
+from pillow_rs.gpu_batch import GpuBatchExecutor, GpuImage, BatchResult, BatchError, QueueFull, ResultBackpressure, Results
+
 __version__ = _pillow_rs.__version__
 
 # These modules are implemented in the internal binding package, but register
@@ -48,7 +49,6 @@ __version__ = _pillow_rs.__version__
 # ``from PIL import ImageOps`` behave identically.
 for _name, _module in {
     "ImageChops": ImageChops,
-    "ImageBatch": ImageBatch,
     "ImageColor": ImageColor,
     "ImageDraw": ImageDraw,
     "ImageEnhance": ImageEnhance,
@@ -62,12 +62,12 @@ for _name, _module in {
     sys.modules[f"{__name__}.{_name}"] = _module
 
 __all__ = [
+    "GpuBatchExecutor", "GpuImage", "BatchResult", "BatchError", "QueueFull", "ResultBackpressure", "Results",
     "Image",
     "ImageMode",
     "ImageFormat",
     "ImageOps",
     "ImageChops",
-    "ImageBatch",
     "ImageColor",
     "ImageDraw",
     "ImageEnhance",

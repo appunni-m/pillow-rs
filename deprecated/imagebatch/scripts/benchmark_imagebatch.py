@@ -50,6 +50,7 @@ def parse_args() -> argparse.Namespace:
             "max-filter",
             "rank-filter",
             "extract-band",
+            "grayscale",
             "invert",
             "brightness",
             "multiply",
@@ -60,7 +61,9 @@ def parse_args() -> argparse.Namespace:
         ),
         default="median-filter",
     )
-    parser.add_argument("--mode", choices=("L", "LA", "RGB", "RGBA"), default="L")
+    parser.add_argument(
+        "--mode", choices=("L", "LA", "RGB", "RGBA", "YCbCr"), default="L"
+    )
     parser.add_argument("--channel", type=int, default=0)
     parser.add_argument("--factor", type=float, default=0.5)
     parser.add_argument("--border", type=int, default=7)
@@ -78,8 +81,11 @@ def parse_args() -> argparse.Namespace:
         "LA": 2,
         "RGB": 3,
         "RGBA": 4,
+        "YCbCr": 3,
     }[args.mode]:
         parser.error("channel is outside the selected image mode")
+    if args.mode == "YCbCr" and args.operation != "grayscale":
+        parser.error("YCbCr is currently supported only by the Grayscale batch operation")
     if args.operation == "invert" and args.mode not in ("L", "RGB"):
         parser.error("ImageOps.invert supports only L and RGB modes")
     if args.operation == "color3dlut" and args.mode != "RGBA":
@@ -121,7 +127,7 @@ def main() -> int:
         color_lut = make_color3dlut(ImageFilter) if args.operation == "color3dlut" else None
         batch_color_lut = ImageBatch.Color3DLUT(color_lut) if color_lut is not None else None
 
-    channels = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4}[args.mode]
+    channels = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "YCbCr": 3}[args.mode]
     frame_bytes = args.width * args.height * channels
     window_count = args.warmups + args.samples + 1
     inputs = [
@@ -183,6 +189,8 @@ def main() -> int:
                     image.filter(ImageFilter.RankFilter(3, rank=1)).tobytes()
                 elif args.operation == "extract-band":
                     image.getchannel(args.channel).tobytes()
+                elif args.operation == "grayscale":
+                    ImageOps.grayscale(image).tobytes()
                 elif args.operation == "invert":
                     ImageOps.invert(image).tobytes()
                 elif args.operation == "color3dlut":
@@ -245,6 +253,8 @@ def main() -> int:
                 operation = ImageFilter.RankFilter(3, rank=1)
             elif args.operation == "extract-band":
                 operation = ImageBatch.ExtractBand(args.channel)
+            elif args.operation == "grayscale":
+                operation = ImageBatch.Grayscale()
             elif args.operation == "invert":
                 operation = ImageBatch.Invert()
             elif args.operation == "brightness":
@@ -293,7 +303,7 @@ def main() -> int:
                         other_inputs[start + image_index],
                     )
                 )
-            executor.submit(image, operation)
+            executor.submit(ImageBatch.PipelineOp(image, operation))
         result = executor.join()
         if len(result) != args.images:
             raise RuntimeError(f"expected {args.images} outputs, received {len(result)}")
@@ -322,7 +332,10 @@ def main() -> int:
             or receipt.get("fallback_reason")
         ):
             raise RuntimeError(f"requested {args.backend}, but preflight routed differently: {receipt}")
-        if args.backend == "gpu" and args.queue and args.operation == "composite":
+        if args.backend == "gpu" and args.queue and args.operation in (
+            "composite",
+            "grayscale",
+        ):
             if receipt.get("dispatch_count", 0) < 1:
                 raise RuntimeError(
                     "queued Composite benchmark did not execute on the GPU: "

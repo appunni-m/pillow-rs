@@ -147,7 +147,7 @@ def run_target(expected_path: Path) -> None:
                     mode, (width, height), pixels(mode, (width, height), seed)
                 )
                 image.info["batch-seed"] = seed
-                small.submit(image, ImageFilter.MaxFilter(3))
+                small.submit(ImageBatch.PipelineOp(image, ImageFilter.MaxFilter(3)))
             actual = small.join()
             require_exact(actual, expected["small"][mode], f"queued {backend}/{mode}")
             if backend == "gpu":
@@ -163,7 +163,7 @@ def run_target(expected_path: Path) -> None:
             eager = ImageBatch.BatchExecutor(queue=False, backend=backend)
             image = Image.frombytes(mode, (7, 5), pixels(mode, (7, 5), SMALL[0][2]))
             image.info["batch-seed"] = SMALL[0][2]
-            eager.submit(image, ImageFilter.MaxFilter(3))
+            eager.submit(ImageBatch.PipelineOp(image, ImageFilter.MaxFilter(3)))
             eager_result = eager.join()
             require_exact(eager_result, expected["small"][mode][:1], f"eager {backend}/{mode}")
             if backend == "gpu":
@@ -176,10 +176,7 @@ def run_target(expected_path: Path) -> None:
 
             batch = ImageBatch.BatchExecutor(queue=True, backend=backend)
             for seed in range(IMAGE_COUNT):
-                batch.submit(
-                    Image.frombytes(mode, IMAGE_SIZE, benchmark_pixels(mode, seed)),
-                    ImageFilter.MaxFilter(3),
-                )
+                batch.submit(ImageBatch.PipelineOp(Image.frombytes(mode, IMAGE_SIZE, benchmark_pixels(mode, seed)), ImageFilter.MaxFilter(3)))
             result = batch.join()
             if [image.tobytes().hex() for image in result] != expected["benchmark"][mode]:
                 raise AssertionError(f"{backend}/{mode} 64x64x64 MaxFilter differs from Pillow")
@@ -196,14 +193,11 @@ def run_target(expected_path: Path) -> None:
 
             batch = ImageBatch.BatchExecutor(queue=True, backend=backend)
             for seed in range(LARGE_IMAGE_COUNT):
-                batch.submit(
-                    Image.frombytes(
+                batch.submit(ImageBatch.PipelineOp(Image.frombytes(
                         mode,
                         LARGE_IMAGE_SIZE,
                         benchmark_pixels(mode, seed, LARGE_IMAGE_SIZE),
-                    ),
-                    ImageFilter.MaxFilter(3),
-                )
+                    ), ImageFilter.MaxFilter(3)))
             large_result = batch.join()
             if [image.tobytes().hex() for image in large_result] != expected["large"][mode]:
                 raise AssertionError(

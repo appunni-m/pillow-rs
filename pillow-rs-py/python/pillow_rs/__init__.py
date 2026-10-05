@@ -21,7 +21,6 @@ else:
     _sys.modules[f"{__name__}._core"] = _core
 
 from . import imagechops as ImageChops
-from . import imagebatch as ImageBatch
 from . import imagecolor as ImageColor
 from . import imagedraw as ImageDraw
 from . import imageenhance as ImageEnhance
@@ -39,10 +38,13 @@ from .operations import (
     linear_gradient, merge, new, open, radial_gradient, resize, rotate, save,
 )
 
-__version__ = "12.2.0-alpha.5"
+from .gpu_batch import GpuBatchExecutor, GpuImage, BatchResult, BatchError, QueueFull, ResultBackpressure, Results
+
+__version__ = "12.2.0-alpha.6"
 
 __all__ = [
-    "Image", "ImageMode", "ImageFormat", "ImageBatch",
+    "GpuBatchExecutor", "GpuImage", "BatchResult", "BatchError", "QueueFull", "ResultBackpressure", "Results",
+    "Image", "ImageMode", "ImageFormat",
     "ImageOps", "ImageChops", "ImageColor", "ImageDraw",
     "ImageEnhance", "ImageFilter", "ImageFont",
     "ImagePalette", "ImageStat", "ImageSequence",
