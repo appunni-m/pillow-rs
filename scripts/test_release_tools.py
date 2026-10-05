@@ -12,6 +12,7 @@ import unittest
 import zipfile
 import yaml
 from check_release_recovery import REQUIRED_JOBS, validate
+from check_release_parallel_wheel import validate_project_name
 from prepare_pypi_release import distribution_for_archive, missing_files, validate_archive_versions
 from check_release_licenses import verify_archive_license
 from release_versions import check_versions, python_version, validate_parallel_projects
@@ -76,6 +77,13 @@ class ReleaseVersionTests(unittest.TestCase):
         stale_companion["project"]["dependencies"] = ["pillow-rs==12.2.0a4"]
         with self.assertRaises(ValueError):
             validate_parallel_projects("12.2.0-alpha.5", base, stale_companion)
+
+    def test_wheel_project_names_match_pypi_names_with_separator_normalization(self) -> None:
+        validate_project_name({"Name": "pillow-rs"}, "pillow-rs")
+        validate_project_name({"Name": "Pillow_RS_Parallel"}, "pillow-rs-parallel")
+        for metadata in ({}, {"Name": "pillow-rs-wrong"}):
+            with self.subTest(metadata=metadata), self.assertRaises(ValueError):
+                validate_project_name(metadata, "pillow-rs-parallel")
 
     def test_github_creation_and_recovery_mark_only_prereleases(self) -> None:
         workflows = Path(__file__).resolve().parent.parent / ".github/workflows"

@@ -1291,6 +1291,62 @@ fn filter_5x5_constant_bytes(
     }
 }
 
+pub(crate) fn uniform5x5_parameters_match(kernel: &[f32; 25], scale: f32, offset: f32) -> bool {
+    scale == 25.0 && offset == 0.0 && kernel.iter().all(|&coefficient| coefficient == 1.0)
+}
+
+/// Apply the uniform 5x5 kernel to native L bytes without intermediate rounding.
+///
+/// The integer sum is at most 6,375. Its exact mean plus 0.5 is at least
+/// 1/50 away from an integer because the denominator 25 is odd. The normalized
+/// f32 coefficient's error and all 30 ordered multiply/add roundings together
+/// contribute less than 0.001, so Pillow's byte is exactly `(sum + 12) / 25`.
+/// Five horizontal rows retain exact sums; the two-pixel border stays copied
+/// from the source. Each successive horizontal sum needs only two byte loads.
+fn filter_5x5_uniform_luma_rows(raw: &[u8], out: &mut [u8], width: usize, height: usize) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    if raw.len() != pixel_count || out.len() != pixel_count {
+        return false;
+    }
+    if width < 5 || height < 5 {
+        return true;
+    }
+
+    let mut horizontal_rows: [Vec<u16>; 5] = std::array::from_fn(|_| vec![0; width]);
+    let fill_row = |source_y: usize, destination: &mut [u16]| {
+        let row = &raw[source_y * width..(source_y + 1) * width];
+        let mut sum: u16 = row[..5].iter().map(|&sample| u16::from(sample)).sum();
+        destination[2] = sum;
+        for x in 3..width - 2 {
+            sum = sum - u16::from(row[x - 3]) + u16::from(row[x + 2]);
+            destination[x] = sum;
+        }
+    };
+    for source_y in 0..5 {
+        fill_row(source_y, &mut horizontal_rows[source_y]);
+    }
+    for y in 2..height - 2 {
+        let rows = [
+            &horizontal_rows[(y - 2) % 5],
+            &horizontal_rows[(y - 1) % 5],
+            &horizontal_rows[y % 5],
+            &horizontal_rows[(y + 1) % 5],
+            &horizontal_rows[(y + 2) % 5],
+        ];
+        for x in 2..width - 2 {
+            let sum = rows[0][x] + rows[1][x] + rows[2][x] + rows[3][x] + rows[4][x];
+            out[y * width + x] = ((sum + 12) / 25) as u8;
+        }
+        let next_y = y + 3;
+        if next_y < height {
+            fill_row(next_y, &mut horizontal_rows[next_y % 5]);
+        }
+    }
+    true
+}
+
 pub(crate) fn binomial5x5_parameters_match(kernel: &[f32; 25], scale: f32, offset: f32) -> bool {
     const WEIGHTS: [f32; 5] = [1.0, 4.0, 6.0, 4.0, 1.0];
     scale == 256.0
@@ -2766,6 +2822,14 @@ pub fn execute_filter5x5(
         let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
         return Ok(preserve_mode(img, result));
     }
+    if matches!(explicit_mode, None | Some("L"))
+        && matches!(img, DynamicImage::ImageLuma8(_))
+        && uniform5x5_parameters_match(kernel, scale, offset)
+        && filter_5x5_uniform_luma_rows(raw, &mut out, w_u32 as usize, h_u32 as usize)
+    {
+        let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
     #[cfg(not(feature = "parallel"))]
     if matches!(explicit_mode, None | Some("L"))
         && matches!(img, DynamicImage::ImageLuma8(_))
@@ -3343,6 +3407,65 @@ mod binomial5x5_native_byte_tests {
                 height,
             ));
             assert_eq!(actual, expected, "native LA {width}x{height}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod uniform5x5_native_luma_tests {
+    use super::{filter_5x5_byte_rows, filter_5x5_uniform_luma_rows, uniform5x5_parameters_match};
+
+    #[test]
+    fn rolling_integer_rows_match_ordered_float_for_all_sums_and_borders() {
+        let kernel = [1.0f32; 25];
+        let normalized = [1.0f32 / 25.0; 25];
+        assert!(uniform5x5_parameters_match(&kernel, 25.0, 0.0));
+        assert!(!uniform5x5_parameters_match(&kernel, 24.0, 0.0));
+        assert!(!uniform5x5_parameters_match(&kernel, 25.0, 1.0));
+        let mut almost_uniform = kernel;
+        almost_uniform[12] = f32::from_bits(1.0f32.to_bits() + 1);
+        assert!(!uniform5x5_parameters_match(&almost_uniform, 25.0, 0.0));
+
+        // Every integer numerator from 0 through 25*255 is representable by
+        // 25 byte samples. Compare the integer path against Pillow's ordered
+        // multiply/FMA/row-add path at every possible byte-rounding boundary.
+        for sum in 0..=25 * 255 {
+            let mut raw = [0u8; 25];
+            let mut remaining = sum;
+            for sample in &mut raw {
+                let value = remaining.min(255);
+                *sample = value as u8;
+                remaining -= value;
+            }
+            let mut expected = raw;
+            filter_5x5_byte_rows(&raw, &mut expected, 5, 5, 1, &normalized, 0.5);
+            let mut actual = raw;
+            assert!(filter_5x5_uniform_luma_rows(&raw, &mut actual, 5, 5));
+            assert_eq!(actual[12], expected[12], "window sum {sum}");
+        }
+
+        for (width, height) in [(13usize, 7usize), (4, 7), (11, 13), (19, 11)] {
+            let raw = (0..width * height)
+                .map(|index| ((index * 73 + index / width * 29 + 17) % 256) as u8)
+                .collect::<Vec<_>>();
+            let mut expected = raw.clone();
+            filter_5x5_byte_rows(
+                &raw,
+                &mut expected,
+                width as i32,
+                height as i32,
+                1,
+                &normalized,
+                0.5,
+            );
+            let mut actual = raw.clone();
+            assert!(filter_5x5_uniform_luma_rows(
+                &raw,
+                &mut actual,
+                width,
+                height
+            ));
+            assert_eq!(actual, expected, "{width}x{height}");
         }
     }
 }

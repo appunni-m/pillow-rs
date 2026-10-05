@@ -285,8 +285,8 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "fontdone"
-version = "2.14.3-alpha.12"
-source = "git+https://github.com/appunni-m/fontdone.git?rev=e2ff6ede3246b1568a087ef3bcf3dd848692d4bb#e2ff6ede3246b1568a087ef3bcf3dd848692d4bb"
+version = "2.14.3"
+source = "git+https://github.com/appunni-m/fontdone.git?rev=7c48b706482b8800e97b35cccc18671893c34e9f#7c48b706482b8800e97b35cccc18671893c34e9f"
 dependencies = [
  "bzip2-rs",
  "flate2",
@@ -748,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "pillow-rs"
-version = "12.2.0-alpha.6"
+version = "12.2.0"
 dependencies = [
  "bytemuck",
  "bytes",
@@ -766,7 +766,7 @@ dependencies = [
 
 [[package]]
 name = "pillow-rs-js"
-version = "12.2.0-alpha.6"
+version = "12.2.0"
 dependencies = [
  "console_error_panic_hook",
  "console_log",
@@ -778,7 +778,7 @@ dependencies = [
 
 [[package]]
 name = "pillow-rs-py"
-version = "12.2.0-alpha.6"
+version = "12.2.0"
 dependencies = [
  "bytes",
  "pillow-rs",

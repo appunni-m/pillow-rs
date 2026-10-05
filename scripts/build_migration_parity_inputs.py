@@ -44666,7 +44666,7 @@ def i_filter_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
 def l_filter_materialized_parity_cases(
     surface_id: str, assets_root: Path
 ) -> list[dict[str, Any]]:
-    """Compare material L-mode 5x5 convolution on deterministic noise."""
+    """Compare native L-mode 5x5 kernels on noise, odd rows, and borders."""
     if surface_id != "PIL.Image.Image":
         return []
 
@@ -44690,7 +44690,7 @@ def l_filter_materialized_parity_cases(
         4.0, 16.0, 24.0, 16.0, 4.0,
         1.0, 4.0, 6.0, 4.0, 1.0,
     ]
-    return [
+    cases = [
         {
             "case_id": (
                 f"{surface_id}.filter.nuanced.l-mode-kernel-5x5-noise-"
@@ -44751,6 +44751,34 @@ def l_filter_materialized_parity_cases(
             "observations": ["call", "materialize"],
         }
     ]
+    # Reuse the binomial input to isolate the uniform-kernel arithmetic. These
+    # are live-reference cases, including tiny and odd-width backing buffers;
+    # the uniform-image benchmark compositions alone do not prove this path.
+    for flat_width, flat_height in [(width, height), (13, 7), (4, 7)]:
+        flat_raw = raw if (flat_width, flat_height) == (width, height) else bytes(
+            (index * 73 + index // flat_width * 29 + 17) % 256
+            for index in range(flat_width * flat_height)
+        )
+        flat_digest = hashlib.sha256(flat_raw).hexdigest()
+        flat_relative = Path("generated") / f"{flat_digest}.bin"
+        flat_asset = assets_root / flat_relative
+        if flat_asset.exists():
+            if flat_asset.read_bytes() != flat_raw:
+                raise ValueError(f"content-addressed asset mismatch: {flat_relative}")
+        else:
+            flat_asset.write_bytes(flat_raw)
+        case = copy.deepcopy(cases[0])
+        case["case_id"] = (
+            f"{surface_id}.filter.nuanced.l-mode-flat-kernel-5x5-noise-"
+            f"{flat_width}x{flat_height}"
+        )
+        case["assets"][0].update(path=flat_relative.as_posix(), sha256=flat_digest)
+        case["steps"][0]["arguments"]["size"] = literal([flat_width, flat_height])
+        case["steps"][1]["arguments"].update(
+            kernel=literal([1.0] * 25), scale=literal(25.0)
+        )
+        cases.append(case)
+    return cases
 
 
 def la_filter_materialized_parity_cases(
@@ -51261,6 +51289,23 @@ def build_pipeline_benchmark_document(
     }
     l_filter_workload["context"]["operation_class"] = "neighborhood"
     l_filter_workloads = [l_filter_workload]
+    flat_l_case_id = (
+        "PIL.Image.Image.filter.nuanced.l-mode-flat-kernel-5x5-noise-1024x768"
+    )
+    flat_l_case = cases_by_id.get(flat_l_case_id)
+    if flat_l_case is None:
+        raise ValueError(f"uniform L kernel benchmark references missing case: {flat_l_case_id}")
+    flat_l_workload = copy.deepcopy(l_filter_workload)
+    flat_l_workload["workload_id"] = "pipeline-op.filter.material-l-noise-flat-5x5-1024x768"
+    flat_l_workload["input"]["case_id"] = flat_l_case_id
+    flat_l_workload["context"] = _workflow_benchmark_context(
+        flat_l_case,
+        variant="filter-material-l-noise-flat-5x5-1024x768",
+        surface="PIL.Image.Image",
+        operation="filter",
+    )
+    flat_l_workload["context"]["operation_class"] = "neighborhood"
+    l_filter_workloads.append(flat_l_workload)
 
     la_filter_case_id = (
         "PIL.Image.Image.filter.nuanced."

@@ -6,6 +6,7 @@ import argparse
 from email.parser import BytesParser
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import venv
@@ -13,6 +14,17 @@ import zipfile
 
 from check_release_licenses import ROOT, verify_archive_license
 from release_versions import python_version, runtime_version
+
+
+def canonical_project_name(name: str) -> str:
+    """Apply PyPI's case and separator normalization to a metadata name."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def validate_project_name(metadata, expected: str) -> None:
+    actual = metadata.get("Name")
+    if not isinstance(actual, str) or canonical_project_name(actual) != expected:
+        raise ValueError(f"wheel project name {actual!r} does not match {expected!r}")
 
 
 def main() -> None:
@@ -37,6 +49,8 @@ def main() -> None:
     normalized = python_version(expected)
     standard_metadata = metadata(standard[0])
     parallel_metadata = metadata(parallel[0])
+    validate_project_name(standard_metadata, "pillow-rs")
+    validate_project_name(parallel_metadata, "pillow-rs-parallel")
     if standard_metadata.get("Version") != normalized:
         raise SystemExit("standard wheel version does not match the Python package version")
     if standard_metadata.get_all("Provides-Extra") is None or "parallel" not in standard_metadata.get_all("Provides-Extra"):
