@@ -8,7 +8,10 @@ backend limitations in the documentation remain part of its contract.
 
 ### 12.2.0-alpha.6 candidate
 
-Prepared on 2026-10-05; local parity and package gates pass; publication awaits main CI and the registry workflow.
+Prepared on 2026-10-05. Source parity and exact-main CI passed, but the
+release is not accepted: publication was partial, and the published Rust crate
+resolves an older fontdone implementation that fails font-error and thread
+teardown checks. See the [release evidence](docs/REGISTRY_RELEASE_MATRIX.md#alpha6-partial-publication-2026-10-05).
 
 - Add explicit GPU pipeline batching with bounded admission and streaming CPU
   or resident GPU results, stable job IDs and caller keys, and immediate
@@ -29,6 +32,9 @@ Prepared on 2026-10-05; local parity and package gates pass; publication awaits 
   keep Rayon disabled in the standard wheel.
 - Correct the documentation dashboard's stale workload-count assertions to
   the existing catalog of 657 workloads: 195 operations and 462 pipelines.
+- Gate future Rust crate uploads on a public font consumer of the normalized
+  archive, including malformed-font errors and cached-face thread teardown.
+  This guard is a recovery change after the alpha.6 tag, not part of its artifacts.
 
 ## 12.2.0-alpha.5 - 2026-10-01
 

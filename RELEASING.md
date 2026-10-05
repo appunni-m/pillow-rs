@@ -65,6 +65,15 @@ Tags and registry versions are immutable. Changed source or changed artifact
 bytes require a new version. A retry is for the same source and artifacts,
 not a way to replace a published package.
 
+`make release-crate-package` executes a separate public font consumer from the
+normalized `.crate`, in addition to compiling the package and checking its
+license. Cargo removes Git dependency pins when packaging; a declared registry
+version can therefore behave differently from the workspace source. The
+consumer checks malformed-font errors, parsed-face reuse, and thread-local
+cleanup with core defaults disabled. It is a font contract check, not GPU or
+codec parity. Both `make release-check` and the publishing workflow use this
+gate. Do not substitute workspace tests for it.
+
 ## Publication and verification
 
 The workflow checks tag identity, builds artifacts before authentication,
@@ -81,7 +90,10 @@ No long-lived registry token is required. npm stable versions use `latest`;
 prereleases use `next`. The final GitHub release requires all registry jobs.
 
 Verify the downloaded registry artifacts against the GitHub checksum manifest.
-Check registry provenance for the repository, workflow, and source identity.
+Check PyPI/npm attestations for the repository, workflow, and source identity
+where exposed. For crates.io, match the version API checksum to the downloaded
+crate and verify a GitHub artifact attestation if one was emitted for those
+bytes. Embedded crate VCS metadata is a source record, not independent provenance.
 Install a published wheel in a fresh environment outside the checkout. The
 [release matrix](docs/REGISTRY_RELEASE_MATRIX.md) records the accepted versions
 and workflow runs across the three projects.
