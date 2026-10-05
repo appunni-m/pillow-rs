@@ -1,7 +1,7 @@
 # Supported APIs and limitations
 
 <!-- release:summary -->
-**Latest release: [12.2.0-alpha.5](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.5).**
+**Latest release: [12.2.0](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0).**
 <!-- /release:summary -->
 
 pillow-rs implements a subset of Pillow. Use the tables below to decide whether
