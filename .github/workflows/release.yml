@@ -191,7 +191,7 @@ jobs:
           args: --release --locked --out ../dist/python-wheel --interpreter python
       - name: Build parallel manylinux wheel with fixed tools and container
         if: runner.os == 'Linux'
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b1 # v1.51.0
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           maturin-version: v1.14.1
           rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -203,7 +203,7 @@ jobs:
           args: --release --locked --out ../dist/python-wheel --interpreter python3.12
       - name: Build parallel native wheel with fixed tools
         if: runner.os != 'Linux'
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b1 # v1.51.0
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           maturin-version: v1.14.1
           rust-toolchain: ${{ env.RUST_TOOLCHAIN }}

@@ -127,6 +127,25 @@ class LicenseArchiveTests(unittest.TestCase):
 
 
 class WorkflowInputTests(unittest.TestCase):
+    def test_remote_actions_use_full_commit_ids(self) -> None:
+        workflows = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+        checked = 0
+        for path in sorted(workflows.glob("*.yml")):
+            document = yaml.safe_load(path.read_text())
+            for job_name, job in document.get("jobs", {}).items():
+                references = [job["uses"]] if "uses" in job else []
+                references.extend(step["uses"] for step in job.get("steps", []) if "uses" in step)
+                for reference in references:
+                    if reference.startswith(("./", "docker://")):
+                        continue
+                    checked += 1
+                    with self.subTest(workflow=path.name, job=job_name, action=reference):
+                        repository, separator, commit = reference.partition("@")
+                        self.assertTrue(repository)
+                        self.assertEqual(separator, "@")
+                        self.assertRegex(commit, r"\A[0-9a-f]{40}\Z")
+        self.assertGreater(checked, 0, "no remote actions were checked")
+
     def test_setup_node_cache_selects_a_supported_package_manager(self) -> None:
         # setup-node v5's cache input selects npm/yarn/pnpm. Its separate
         # package-manager-cache input disables automatic detection. A boolean
