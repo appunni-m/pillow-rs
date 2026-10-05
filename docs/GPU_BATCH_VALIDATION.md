@@ -124,7 +124,9 @@ and this machine; explicit executor overhead is included.
 
 ## Alpha.6 release preparation gate, 2026-10-05
 
-The source version is `12.2.0-alpha.6`; alpha.5 remains the published release.
+The source version is `12.2.0-alpha.6`; alpha.5 remains the latest accepted
+release. Alpha.6 was partially published and failed a packaged-crate font check;
+see the [release evidence](REGISTRY_RELEASE_MATRIX.md#alpha6-partial-publication-2026-10-05).
 The full Python CPU campaign passed **17,105/17,105**. The first full SIMD
 campaign passed **17,086/17,105**, with **19 failures** and zero infrastructure
 errors. These failures initially blocked push, tagging, and publication. They all concern `Image.convert` from `1`, `L`, `LA`, or `I;16N` into
@@ -166,8 +168,11 @@ simd-cov-f10-c05
 
 The final GPU-batch extension passed the 756 focused comparisons and nine
 contracts above. These results do not substitute for full ordinary GPU,
-Parallel CPU, Node, or browser parity. The completed local gates below now cover those profiles and packaging;
-tag-triggered registry publishing is still pending. No coverage was run.
+Parallel CPU, Node, or browser parity. The completed local gates below now
+cover those profiles and source packaging.
+The tag-triggered workflow later failed after partial publication. The source
+passes below do not establish parity for the normalized registry crate.
+No coverage was run locally.
 
 `RUSTC_WRAPPER= cargo test -p pillow-rs --lib -- --test-threads=1` passed
 507/507 core tests on Metal, including the native packed-L geometry regression.
@@ -181,12 +186,15 @@ and Cargo deny passed. The x86_64 Windows compile check and optimized WASM
 build passed. Clippy passed its existing policy with substantial pre-existing
 warning debt; the core Rustdoc build passed without documentation warnings.
 
-The existing main commit's [CI run](https://github.com/appunni-m/pillow-rs/actions/runs/37249018097)
-failed its documentation/input checks. The candidate restores the omitted
-font-style generator steps without changing committed parity cases, corrects
-the corresponding benchmark chain length from two to three, and fixes the
-stale dashboard counts described above. Local checks pass, but candidate CI
-cannot be claimed green without a push and a new exact-commit run.
+The earlier main commit's [CI run](https://github.com/appunni-m/pillow-rs/actions/runs/37249018097)
+failed its documentation/input checks. The candidate restored the omitted
+font-style generator steps without changing committed parity cases, corrected
+the corresponding benchmark chain length from two to three, and fixed the
+stale dashboard counts described above. The exact candidate commit
+`a0c7ffc45996ddd8a5e287fb78125d2a25fd2630` subsequently passed all nine jobs in
+[main CI](https://github.com/appunni-m/pillow-rs/actions/runs/37297480408).
+The separate release run failed after partial registry publication; the
+packaged Rust font contract also fails, as recorded in the release evidence.
 
 The two native RGBA expansion shortcuts incorrectly also admitted four-byte
 `I`/`F` scalar targets. Excluding typed destinations from those shortcuts

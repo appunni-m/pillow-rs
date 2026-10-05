@@ -1084,7 +1084,7 @@ release-check: build-all ## Build and package every release artifact without pub
 	@test -z "$$(git status --porcelain)" || { \
 		printf "release-check requires a clean worktree.\n" >&2; exit 2; \
 	}
-	$(CARGO) package -p $(CORE_SRC) --locked
+	$(MAKE) release-crate-package
 	# Development imports can leave bytecode caches inside the Python source
 	# tree; never include those generated files in a publishable wheel.
 	find $(PY_SRC)/python -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
@@ -1132,6 +1132,7 @@ release-sdist-test: ## Build and install the source distribution in isolation an
 release-crate-package: ## Compile and package the core crate after dependency publication
 	$(CARGO) package --locked -p $(CORE_SRC)
 	python3 scripts/check_release_licenses.py --crate
+	$(PYTHON) scripts/check_release_crate.py
 
 release-npm-pack: ## Build, test, and pack the single Node/browser npm package
 	cd $(JS_SRC) && npm ci && npm run build:release && npm run test:package
