@@ -166,8 +166,8 @@ simd-cov-f10-c05
 
 The final GPU-batch extension passed the 756 focused comparisons and nine
 contracts above. These results do not substitute for full ordinary GPU,
-Parallel CPU, Node, or browser parity. Those remaining full candidate lanes, clean release packaging checks, and
-tag-triggered registry publishing are still pending. No coverage was run.
+Parallel CPU, Node, or browser parity. The completed local gates below now cover those profiles and packaging;
+tag-triggered registry publishing is still pending. No coverage was run.
 
 `RUSTC_WRAPPER= cargo test -p pillow-rs --lib -- --test-threads=1` passed
 507/507 core tests on Metal, including the native packed-L geometry regression.
@@ -210,3 +210,73 @@ RELEASE_WHEEL_DIR=dist/release-check` passed: a fresh isolated environment built
 the sdist, imported the installed replacement, and executed the README/Python
 examples. Registry preflight confirmed image-slash-star 0.1.2 and fontdone
 2.14.3-alpha.12 on crates.io, and fontdone 2.14.3-alpha.12 on npm.
+
+## Final local release gates
+
+All six full live-oracle profiles passed 17,105/17,105, with zero failures,
+infrastructure errors, or not-run cases. They share the public Pillow corpus;
+these are six comparisons of the same 17,105 cases, not 102,630 unique cases.
+
+| Profile | Result | Configuration |
+| --- | --- | --- |
+| Serial CPU | 17,105/17,105 | Standard build; Rayon disabled |
+| SIMD | 17,105/17,105 | Standard build; typed conversion fixed |
+| GPU | 17,105/17,105 | Standard build; local Metal; normal contextual fallback policy |
+| Parallel CPU | 17,105/17,105 | Cargo `parallel` explicitly enabled; normal Pillow oracle |
+| Node WASM | 17,105/17,105 | Complete shared corpus |
+| Browser WASM | 17,105/17,105 | Complete shared corpus |
+
+The ordinary GPU and SIMD profile totals include their documented contextual
+CPU fallback; they do not prove every operation has an exclusive GPU/SIMD
+implementation. The separate batch comparisons require actual GPU work. The
+four typed conversion cases additionally passed strict-SIMD execution.
+
+```sh
+MIGRATION_PARITY_BATCH_SIZE=256 MIGRATION_PARITY_SERIAL=1 \
+make migration-parity-test PYTHON=.venv/bin/python \
+MIGRATION_TARGET_BACKEND=gpu \
+MIGRATION_PARITY_OUTPUT=/private/tmp/pillow-release-parity-gpu.json.gz
+
+make test-wasm PYTHON=.venv/bin/python \
+MIGRATION_JS_PARITY_OUTPUT=/private/tmp/pillow-release-node-parity.json \
+MIGRATION_BROWSER_PARITY_OUTPUT=/private/tmp/pillow-release-browser-parity.json
+
+MATURIN_DEVELOP_FLAGS=--skip-install \
+make build-parity-parallel-cpu PYTHON=.venv/bin/python
+MIGRATION_PARITY_BATCH_SIZE=256 MIGRATION_PARITY_SERIAL=1 \
+MIGRATION_TARGET_PROFILE=parallel-cpu \
+make migration-parity-test PYTHON=.venv/bin/python \
+MIGRATION_TARGET_BACKEND=cpu \
+MIGRATION_PARITY_OUTPUT=/private/tmp/pillow-release-parity-parallel-cpu.json.gz
+
+make build-parity PYTHON=.venv/bin/python
+```
+
+The final command restores the standard extension. The Pillow 12.2.0 oracle
+remains installed separately in `.venv`; none of these builds installed the
+replacement `PIL` over it. Execution/shader-coverage sidecars were not requested.
+
+These maintained release commands passed from the clean source candidate:
+
+```sh
+MATURIN_DEVELOP_FLAGS=--skip-install \
+make release-check PYTHON=.venv/bin/python
+make release-wheel-test release-parallel-wheel-test PYTHON=.venv/bin/python \
+RELEASE_WHEEL_DIR=dist/release-check
+make release-python-sdist release-sdist-test PYTHON=.venv/bin/python \
+RELEASE_WHEEL_DIR=dist/release-check
+make release-crate-package release-npm-pack PYTHON=.venv/bin/python
+cargo package --list --locked -p pillow-rs
+```
+
+The standard wheel, companion wheel, `pillow-rs[parallel]` installation, sdist
+build/installed examples, Rust package verification against registry dependencies,
+and npm consumer/license checks passed. The core crate contains 234 packaged
+files; the npm artifact contains ten. The retired archive is outside each
+package root/allowlist. Older wheel artifacts were preserved separately.
+
+The Windows x86_64 type check, documentation tests/site build, and fmt/Clippy
+checks were repeated after the typed conversion change and passed. Source
+version declarations agree on alpha.6; published installation blocks remain
+alpha.5 until all registry jobs and the GitHub release succeed. Local checks
+do not substitute for the required exact-main-commit CI success before tagging.

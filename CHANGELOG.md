@@ -8,7 +8,7 @@ backend limitations in the documentation remain part of its contract.
 
 ### 12.2.0-alpha.6 candidate
 
-Prepared on 2026-10-05; publication awaits the remaining parity, package, and CI gates.
+Prepared on 2026-10-05; local parity and package gates pass; publication awaits main CI and the registry workflow.
 
 - Add explicit GPU pipeline batching with bounded admission and streaming CPU
   or resident GPU results, stable job IDs and caller keys, and immediate
