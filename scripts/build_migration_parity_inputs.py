@@ -42731,6 +42731,7 @@ def build_nuanced_cases(
     cases.extend(i_resize_materialized_parity_cases(surface_id))
     cases.extend(l_filter_materialized_parity_cases(surface_id, assets_root))
     cases.extend(la_filter_materialized_parity_cases(surface_id, assets_root))
+    cases.extend(la_filter3x3_materialized_parity_cases(surface_id, assets_root))
     cases.extend(i_filter_materialized_parity_cases(surface_id))
     cases.extend(rotate_mode_parity_cases(surface_id))
     cases.extend(transform_mode_parity_cases(surface_id))
@@ -44836,6 +44837,126 @@ def la_filter_materialized_parity_cases(
             "sha256": hashlib.sha256(edge_raw).hexdigest(),
             "media_type": "application/octet-stream",
         },
+    )
+    return [material, edge]
+
+
+def la_filter3x3_materialized_parity_cases(
+    surface_id: str, assets_root: Path
+) -> list[dict[str, Any]]:
+    """Exercise native-LA 3x3 convolution with smooth and clipping kernels."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    smooth_kernel = [1.0, 2.0, 1.0, 2.0, 4.0, 2.0, 1.0, 2.0, 1.0]
+    sobel_kernel = [-1.0, 0.0, 1.0, -2.0, 0.0, 2.0, -1.0, 0.0, 1.0]
+
+    def make_case(
+        case_name: str,
+        width: int,
+        height: int,
+        asset: dict[str, Any],
+        kernel: list[float],
+        scale: float,
+        offset: int,
+    ) -> dict[str, Any]:
+        return {
+            "case_id": f"{surface_id}.filter.nuanced.{case_name}",
+            "surface": surface_id,
+            "operation": "filter",
+            "covers": [f"{surface_id}.filter.behavior.default"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [asset],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("LA"),
+                        "size": literal([width, height]),
+                        "data": asset_value("pixels"),
+                    },
+                },
+                {
+                    "step_id": "setup-filter",
+                    "surface": "PIL.ImageFilter",
+                    "operation": "Kernel",
+                    "receiver": None,
+                    "arguments": {
+                        "size": literal([3, 3]),
+                        "kernel": literal(kernel),
+                        "scale": literal(scale),
+                        "offset": literal(offset),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "filter",
+                    "receiver": binding("image"),
+                    "arguments": {"filter": binding("setup-filter")},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+
+    width, height = 1024, 768
+    rng = random.Random(20261006)
+    raw = bytes(rng.randrange(256) for _ in range(width * height * 2))
+    digest = hashlib.sha256(raw).hexdigest()
+    relative = Path("generated") / f"{digest}.bin"
+    asset_path = assets_root / relative
+    asset_path.parent.mkdir(parents=True, exist_ok=True)
+    if asset_path.exists():
+        if asset_path.read_bytes() != raw:
+            raise ValueError(f"content-addressed asset mismatch: {relative}")
+    else:
+        asset_path.write_bytes(raw)
+    material = make_case(
+        f"la-mode-kernel-3x3-smooth-noise-{width}x{height}",
+        width,
+        height,
+        {
+            "id": "pixels",
+            "kind": "ref_bytes",
+            "path": relative.as_posix(),
+            "sha256": digest,
+            "media_type": "application/octet-stream",
+        },
+        smooth_kernel,
+        16.0,
+        0,
+    )
+
+    edge_width, edge_height = 7, 5
+    edge_raw = bytes(
+        (index * 73 + index // 5 * 29 + 17) & 0xFF
+        for index in range(edge_width * edge_height * 2)
+    )
+    edge = make_case(
+        f"la-mode-kernel-3x3-sobel-odd-width-{edge_width}x{edge_height}",
+        edge_width,
+        edge_height,
+        {
+            "id": "pixels",
+            "kind": "inline",
+            "encoding": "base64",
+            "data": base64.b64encode(edge_raw).decode("ascii"),
+            "sha256": hashlib.sha256(edge_raw).hexdigest(),
+            "media_type": "application/octet-stream",
+        },
+        sobel_kernel,
+        8.0,
+        128,
     )
     return [material, edge]
 
@@ -51152,6 +51273,45 @@ def build_pipeline_benchmark_document(
     la_filter_workload["context"]["operation_class"] = "neighborhood"
     la_filter_workloads = [la_filter_workload]
 
+    la_filter3x3_case_id = (
+        "PIL.Image.Image.filter.nuanced."
+        "la-mode-kernel-3x3-smooth-noise-1024x768"
+    )
+    la_filter3x3_case = cases_by_id.get(la_filter3x3_case_id)
+    if la_filter3x3_case is None:
+        raise ValueError(
+            f"LA-mode Filter3x3 benchmark references missing case: "
+            f"{la_filter3x3_case_id}"
+        )
+    la_filter3x3_measurement = copy.deepcopy(chain_policy)
+    la_filter3x3_measurement.update(
+        {
+            "boundary": "observed_steps",
+            "step_ids": ["call", "materialize"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        }
+    )
+    la_filter3x3_workload = {
+        "workload_id": "pipeline-op.filter.material-la-noise-3x3-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "filter")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": la_filter3x3_case_id},
+        "measurement": la_filter3x3_measurement,
+        "context": _workflow_benchmark_context(
+            la_filter3x3_case,
+            variant="filter-material-la-noise-3x3-1024x768",
+            surface="PIL.Image.Image",
+            operation="filter",
+        ),
+    }
+    la_filter3x3_workload["context"]["operation_class"] = "neighborhood"
+    la_filter3x3_workloads = [la_filter3x3_workload]
+
     i_convolution_workloads: list[dict[str, Any]] = []
     i_filter_requirement = _performance_requirement(
         operations, "PIL.Image.Image", "filter"
@@ -52140,6 +52300,7 @@ def build_pipeline_benchmark_document(
             *convolution_workloads,
             *l_filter_workloads,
             *la_filter_workloads,
+            *la_filter3x3_workloads,
             *i_convolution_workloads,
             *reviewed_workloads,
             *alpha_resize_workloads,
@@ -52269,6 +52430,7 @@ def build_pipeline_benchmark_document(
                         *convolution_workloads,
                         *l_filter_workloads,
                         *la_filter_workloads,
+                        *la_filter3x3_workloads,
                         *i_convolution_workloads,
                     ]
                 ],

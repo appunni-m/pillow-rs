@@ -140,6 +140,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- extract_band.wgsl
 |   |   |   |       |-- filter_3x3.wgsl
 |   |   |   |       |-- filter_5x5.wgsl
+|   |   |   |       |-- filter_5x5_la_packed.wgsl
 |   |   |   |       |-- filter_5x5_luma_packed.wgsl
 |   |   |   |       |-- fit.wgsl
 |   |   |   |       |-- flip.wgsl

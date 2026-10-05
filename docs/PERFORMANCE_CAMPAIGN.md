@@ -19423,3 +19423,91 @@ checkpoint its remaining 1.26× performance gap to the 5× target and move to
 the next ranked operation after four attempts; revisit LA Filter5x5 when a new
 profile identifies another hot stage. Detailed run receipts were removed
 after extracting these summaries to avoid retaining large generated JSON.
+
+
+## Native-LA `ImageFilter.Kernel(3x3)` checkpoint — 2026-10-05
+
+The measured workload filters seeded 1024 × 768 LA noise with the exact
+binomial outer product `[1, 2, 1] × [1, 2, 1]`, scale 16, offset zero, then
+materializes `tobytes()`. A separate 7 × 5 LA Sobel case covers arbitrary
+ordered-float coefficients, copied borders, and odd rows. The specialization
+is admitted only for the exact binomial kernel on concrete `ImageLumaA8` with
+logical mode LA; other 3 × 3 kernels stay on the established float paths.
+
+The first SIMD attempt used a portable `u16x16` three-row ring and passed exact
+parity, but measured 3.91 ms against 3.10 ms Pillow and 2.46 ms serial CPU.
+The source had replaced per-channel floating gathers with a packed integer
+ring, but still copied and reloaded intermediate vectors for every row. The
+second attempt uses AArch64 NEON `vld2q_u8` structure loads and `vext` lane
+shifts to form horizontal neighbors for eight LA pixels, then performs the
+separable `[1, 2, 1]` accumulation in widened integer lanes. Only the bounded
+right tail uses scalar integer arithmetic. This passed the same tests and
+measured 0.482 ms. The portable vector fallback remains available on other
+architectures.
+
+The serial CPU path uses three reusable rows of `u16` horizontal sums. Integer
+rounding `(sum + 8) >> 4` is byte-identical to Pillow's ordered float
+convolution here because each tap and intermediate is an exact integer within
+the f32 exact range. This path is restricted to the default serial build; the
+opt-in `parallel` profile was not measured in this checkpoint.
+
+The generic GPU route performed one LA-to-RGBA conversion and transferred
+3,145,728 bytes in each direction. A dedicated packed-LA shader now stores two
+LA pixels per `u32`, filters L and alpha independently with the same exact
+integer kernel, and uses the checked packed-LA dispatch planner. The resulting
+GPU transfer is 1,572,864 bytes each way with zero mode conversions and one
+actual dispatch per request. The shader's odd-pixel word tail and small-image
+borders are covered by a focused Rust parity test.
+
+The correctness-gated `pipeline-op.filter.material-la-noise-3x3-1024x768`
+benchmark used five warmups and 100 measured iterations per subject. Final
+medians were:
+
+| Subject | Latency (ms) | Throughput (ops/s, one request) | Compared with Pillow |
+| --- | ---: | ---: | ---: |
+| Pillow | 3.056 | 327 | baseline |
+| Serial CPU | 2.415 | 414 | 1.27× faster |
+| SIMD | 0.474 | 2,110 | 6.45× faster |
+| GPU | 0.942 | 1,061 | 3.25× faster |
+
+All 100 samples recorded the requested backend. The benchmark correctness
+gate passed. Strict Pillow parity passed both LA cases on CPU, SIMD, and GPU
+(2/2 for each backend). GPU latency is still about 1.99× SIMD latency in this
+single-request workload. The explicit `ImageBatch` API currently supports
+MedianFilter, MaxFilter, and RankFilter but not Filter3x3, so queued Filter3x3
+throughput is not available and no batched GPU-throughput claim is made. Keep
+single-image routing unchanged; queued filter support is a separate feature
+checkpoint.
+
+Three bounded attempts are checkpointed: (1) add parity and benchmark inputs,
+then implement the exact CPU and portable-SIMD integer rings; (2) replace the
+slow portable SIMD ring with AArch64 NEON structure loads and lane shifts;
+(3) add the native packed-LA GPU shader. The serial CPU and SIMD targets pass
+on this kernel and workload. GPU single-request latency improved from 2.68 ms
+to 0.94 ms but does not yet match SIMD; move on to the next operation and
+revisit queued Filter3x3 throughput when its explicit batch API is implemented.
+
+The focused commands were:
+
+```sh
+cargo test --locked -p pillow-rs --lib native_la_ring_matches_ordered_float_kernel_and_copied_borders
+cargo test --locked -p pillow-rs --lib --features gpu gpu_packed_la_binomial_filter_3x3_preserves_channels_and_compact_transfers
+cargo test --locked -p pillow-rs --lib --features gpu gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons
+env MIGRATION_TARGET_BACKEND=cpu MIGRATION_STRICT_TARGET_BACKEND=1 MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.filter.nuanced.la-mode-kernel-3x3-smooth-noise-1024x768,PIL.Image.Image.filter.nuanced.la-mode-kernel-3x3-sobel-odd-width-7x5' MIGRATION_PARITY_OUTPUT=build/migration-parity/la-filter3x3-cpu.json make migration-parity-test PYTHON=.venv/bin/python
+env MIGRATION_TARGET_BACKEND=simd MIGRATION_STRICT_TARGET_BACKEND=1 MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.filter.nuanced.la-mode-kernel-3x3-smooth-noise-1024x768,PIL.Image.Image.filter.nuanced.la-mode-kernel-3x3-sobel-odd-width-7x5' MIGRATION_PARITY_OUTPUT=build/migration-parity/la-filter3x3-simd.json make migration-parity-test PYTHON=.venv/bin/python
+env MIGRATION_TARGET_BACKEND=gpu MIGRATION_STRICT_TARGET_BACKEND=1 MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.filter.nuanced.la-mode-kernel-3x3-smooth-noise-1024x768,PIL.Image.Image.filter.nuanced.la-mode-kernel-3x3-sobel-odd-width-7x5' MIGRATION_PARITY_OUTPUT=build/migration-parity/la-filter3x3-gpu.json make migration-parity-test PYTHON=.venv/bin/python
+MIGRATION_BENCHMARK_PROFILE=pipeline MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.filter.material-la-noise-3x3-1024x768' make migration-parity-benchmark PYTHON=.venv/bin/python
+```
+
+The four ImageBatch fault-contract gates were also rerun independently:
+`make imagebatch-rank-filter-fault-contract`,
+`make imagebatch-paste-fault-contract`,
+`make imagebatch-composite-fault-contract`, and
+`make imagebatch-expand-fault-contract`. All four targets exited successfully;
+8/8 injected dimension- and memory-failure cases passed with
+`oracle=not_applicable`. These target-only fallback contracts do not count as
+Pillow parity cases. No Filter3x3-specific fault contract was added: this
+single-image path has no target-only injected failure or fallback contract;
+its CPU, SIMD, and GPU outputs are covered by the live Pillow parity cases
+above. No coverage was run. Temporary parity and benchmark JSON outputs were
+removed after recording the summaries.

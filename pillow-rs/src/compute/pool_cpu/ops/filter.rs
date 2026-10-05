@@ -980,6 +980,67 @@ fn filter_3x3_byte_row(
     }
 }
 
+/// Apply the exact native-LA binomial 3x3 kernel through three reusable
+/// horizontally filtered rows.  The [1, 2, 1] weights and scale 16 keep every
+/// intermediate integral, so `(sum + 8) >> 4` matches Pillow's `f32` result
+/// without changing the copied one-pixel border.
+#[cfg(not(feature = "parallel"))]
+fn filter_3x3_binomial_la_rows(raw: &[u8], out: &mut [u8], width: usize, height: usize) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    let Some(sample_count) = pixel_count.checked_mul(2) else {
+        return false;
+    };
+    if raw.len() != sample_count || out.len() != sample_count {
+        return false;
+    }
+    if width < 3 || height < 3 {
+        return true;
+    }
+
+    let row_samples = width * 2;
+    let mut horizontal_rows: [Vec<u16>; 3] = std::array::from_fn(|_| vec![0; row_samples]);
+    let fill_horizontal_row = |source_y: usize, destination: &mut [u16]| {
+        let row_start = source_y * row_samples;
+        for x in 1..width - 1 {
+            let base = row_start + x * 2;
+            for channel in 0..2 {
+                let sample = base + channel;
+                destination[x * 2 + channel] = u16::from(raw[sample - 2])
+                    + u16::from(raw[sample]) * 2
+                    + u16::from(raw[sample + 2]);
+            }
+        }
+    };
+
+    for source_y in 0..3 {
+        fill_horizontal_row(source_y, &mut horizontal_rows[source_y]);
+    }
+    for y in 1..height - 1 {
+        let above = &horizontal_rows[(y - 1) % 3];
+        let center = &horizontal_rows[y % 3];
+        let below = &horizontal_rows[(y + 1) % 3];
+        let output_row = y * row_samples;
+        for x in 1..width - 1 {
+            let base = x * 2;
+            for channel in 0..2 {
+                let sample = base + channel;
+                let sum = u32::from(above[sample])
+                    + u32::from(center[sample]) * 2
+                    + u32::from(below[sample]);
+                out[output_row + sample] = ((sum + 8) >> 4) as u8;
+            }
+        }
+
+        let next_source_y = y + 2;
+        if next_source_y < height {
+            fill_horizontal_row(next_source_y, &mut horizontal_rows[next_source_y % 3]);
+        }
+    }
+    true
+}
+
 fn filter_3x3_byte_rows(
     raw: &[u8],
     out: &mut [u8],
@@ -1187,6 +1248,11 @@ fn filter_3x3_constant_bytes(
             out[base..base + channels].copy_from_slice(&filtered[..channels]);
         }
     }
+}
+
+pub(crate) fn binomial3x3_parameters_match(kernel: &[f32; 9], scale: f32, offset: f32) -> bool {
+    const WEIGHTS: [f32; 9] = [1.0, 2.0, 1.0, 2.0, 4.0, 2.0, 1.0, 2.0, 1.0];
+    scale == 16.0 && offset == 0.0 && kernel == &WEIGHTS
 }
 
 /// Evaluate a constant native-byte 5x5 convolution with one computed interior
@@ -2607,6 +2673,16 @@ pub fn execute_filter3x3(
     let raw = img.as_bytes();
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
+    #[cfg(not(feature = "parallel"))]
+    if matches!(img, DynamicImage::ImageLumaA8(_))
+        && binomial3x3_parameters_match(kernel, scale, offset)
+    {
+        let mut out = raw.to_vec();
+        if filter_3x3_binomial_la_rows(raw, &mut out, w_u32 as usize, h_u32 as usize) {
+            let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+            return Ok(preserve_mode(img, result));
+        }
+    }
     // Normalize once, outside the pixel loop, with the same raw f32 divisor
     // that Pillow passes to `ImagingFilter`.
     let normalized_kernel: [f32; 9] = std::array::from_fn(|index| kernel[index] / scale);
@@ -3143,6 +3219,54 @@ mod f_mode_rank_filter_uniform_tests {
         assert!(!rank_filter_f_requires_legacy_sort(&raw_f32(&[
             -0.0, -0.0, 1.0
         ])));
+    }
+}
+
+#[cfg(all(test, not(feature = "parallel")))]
+mod binomial3x3_native_la_tests {
+    use super::{binomial3x3_parameters_match, filter_3x3_binomial_la_rows, filter_3x3_byte_rows};
+
+    #[test]
+    fn native_la_ring_matches_ordered_float_kernel_and_copied_borders() {
+        let kernel = [1.0, 2.0, 1.0, 2.0, 4.0, 2.0, 1.0, 2.0, 1.0];
+        assert!(binomial3x3_parameters_match(&kernel, 16.0, 0.0));
+        assert!(!binomial3x3_parameters_match(&kernel, 15.0, 0.0));
+        assert!(!binomial3x3_parameters_match(&kernel, 16.0, 1.0));
+
+        let normalized = std::array::from_fn(|index| kernel[index] / 16.0);
+        for (width, height) in [
+            (1usize, 1usize),
+            (2, 5),
+            (3, 3),
+            (4, 7),
+            (7, 5),
+            (9, 7),
+            (17, 9),
+            (33, 35),
+        ] {
+            let raw: Vec<u8> = (0..width * height * 2)
+                .map(|index| ((index * 73 + index / (width * 2) * 29 + 17) % 256) as u8)
+                .collect();
+            let mut expected = raw.clone();
+            filter_3x3_byte_rows(
+                &raw,
+                &mut expected,
+                width as i32,
+                height as i32,
+                2,
+                &normalized,
+                0.5,
+            );
+
+            let mut actual = raw.clone();
+            assert!(filter_3x3_binomial_la_rows(
+                &raw,
+                &mut actual,
+                width,
+                height,
+            ));
+            assert_eq!(actual, expected, "native LA {width}x{height}");
+        }
     }
 }
 
