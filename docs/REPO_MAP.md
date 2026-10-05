@@ -419,6 +419,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_font_variant_parity.py
     |-- test_getdata_sequence_parity.py
     |-- test_grayscale_rgb_domain.py
+    |-- test_imagebatch_expand_parity.py
     |-- test_imagebatch_max_filter_parity.py
     |-- test_imagebatch_parity.py
     |-- test_imagebatch_rank_filter_parity.py

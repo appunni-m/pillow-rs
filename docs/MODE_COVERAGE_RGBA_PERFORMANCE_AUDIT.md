@@ -465,15 +465,17 @@ SIMD, GPU, or Rayon execution evidence. P4 is closed for the CPU target.
 M1 and M2 are closed for the current public surface by the follow-up checks
 above. The split fix has mode and byte parity; the typed filtered-resize
 variants are unreachable through current public constructors and decoders.
-P9 now has one measured L Filter5x5 specialization, but remains open for other
-operations and modes. P2, P5–P8, and P10 remain audit candidates without
-measured follow-up in this checkpoint. P4's serial CPU target is closed; it
-has no applicable SIMD, GPU, or Parallel CPU route.
+P9 now has measured native-L and native-LA Filter5x5 specializations, but
+remains open: the LA SIMD result is 3.97× faster than Pillow, below the 5×
+target, and other operation/mode combinations remain unmeasured. P2, P5–P8,
+and P10 remain audit candidates without measured follow-up in this checkpoint.
+P4's serial CPU target is closed; it has no applicable SIMD, GPU, or Parallel
+CPU route.
 
 ## Suggested order for follow-up
 
 1. Continue P1 after the RGB Transform, RGB AutoContrast, RGB/L/LA
-   MaxFilter(3), L MinFilter(3), L Filter5x5, and Cover checkpoints by
+   MaxFilter(3), L MinFilter(3), native-L/LA Filter5x5, and Cover checkpoints by
    selecting the next uncheckpointed operation/mode with measurable RGBA
    staging cost; preserve
    each kernel's rounding and channel contract. RGB AutoContrast's native GPU

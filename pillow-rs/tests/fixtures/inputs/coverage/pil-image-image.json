@@ -8878,6 +8878,8 @@
           "PIL.Image.Image.resize.nuanced.f-resize-bicubic-noise-1024x768",
           "PIL.Image.Image.resize.nuanced.i-resize-bicubic-noise-1024x768",
           "PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-noise-1024x768",
+          "PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-noise-1024x768",
+          "PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-odd-width-7x5",
           "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-noise-1024x768",
           "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-noise-1024x768.whole-workflow",
           "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-bounded-noise-1024x768",

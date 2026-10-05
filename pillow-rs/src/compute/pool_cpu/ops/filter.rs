@@ -1225,11 +1225,7 @@ fn filter_5x5_constant_bytes(
     }
 }
 
-pub(crate) fn binomial5x5_luma_parameters_match(
-    kernel: &[f32; 25],
-    scale: f32,
-    offset: f32,
-) -> bool {
+pub(crate) fn binomial5x5_parameters_match(kernel: &[f32; 25], scale: f32, offset: f32) -> bool {
     const WEIGHTS: [f32; 5] = [1.0, 4.0, 6.0, 4.0, 1.0];
     scale == 256.0
         && offset == 0.0
@@ -1288,6 +1284,72 @@ fn filter_5x5_binomial_luma_rows(raw: &[u8], out: &mut [u8], width: usize, heigh
                 + rows[3][x] as u32 * WEIGHTS[3]
                 + rows[4][x] as u32 * WEIGHTS[4];
             out[output_row + x] = ((sum + 128) / 256) as u8;
+        }
+
+        let next_source_y = y + 3;
+        if next_source_y < height {
+            fill_horizontal_row(next_source_y, &mut horizontal_rows[next_source_y % 5]);
+        }
+    }
+    true
+}
+
+/// Apply the exact binomial kernel to native LA samples. Luminance and alpha
+/// are independent Pillow filter bands, so the ring stores both interleaved
+/// samples and never widens or reinterprets the image as RGBA.
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_binomial_la_rows(raw: &[u8], out: &mut [u8], width: usize, height: usize) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    let Some(sample_count) = pixel_count.checked_mul(2) else {
+        return false;
+    };
+    if raw.len() != sample_count || out.len() != sample_count {
+        return false;
+    }
+    if width < 5 || height < 5 {
+        return true;
+    }
+
+    const WEIGHTS: [u32; 5] = [1, 4, 6, 4, 1];
+    let row_samples = width * 2;
+    let mut horizontal_rows: [Vec<u16>; 5] = std::array::from_fn(|_| vec![0; row_samples]);
+    let fill_horizontal_row = |source_y: usize, destination: &mut [u16]| {
+        let row_start = source_y * row_samples;
+        for x in 2..width - 2 {
+            let base = row_start + x * 2;
+            for channel in 0..2 {
+                let sample = base + channel;
+                let outer = u16::from(raw[sample - 4]) + u16::from(raw[sample + 4]);
+                let inner = u16::from(raw[sample - 2]) + u16::from(raw[sample + 2]);
+                destination[x * 2 + channel] = outer + inner * 4 + u16::from(raw[sample]) * 6;
+            }
+        }
+    };
+
+    for source_y in 0..5 {
+        fill_horizontal_row(source_y, &mut horizontal_rows[source_y]);
+    }
+    for y in 2..height - 2 {
+        let rows = [
+            &horizontal_rows[(y - 2) % 5],
+            &horizontal_rows[(y - 1) % 5],
+            &horizontal_rows[y % 5],
+            &horizontal_rows[(y + 1) % 5],
+            &horizontal_rows[(y + 2) % 5],
+        ];
+        let output_row = y * row_samples;
+        for x in 2..width - 2 {
+            let base = x * 2;
+            for channel in 0..2 {
+                let sample = base + channel;
+                let outer = u32::from(rows[0][sample]) + u32::from(rows[4][sample]);
+                let inner = u32::from(rows[1][sample]) + u32::from(rows[3][sample]);
+                let center = u32::from(rows[2][sample]);
+                let sum = outer + inner * WEIGHTS[1] + center * WEIGHTS[2];
+                out[output_row + sample] = ((sum + 128) / 256) as u8;
+            }
         }
 
         let next_source_y = y + 3;
@@ -2631,8 +2693,17 @@ pub fn execute_filter5x5(
     #[cfg(not(feature = "parallel"))]
     if matches!(explicit_mode, None | Some("L"))
         && matches!(img, DynamicImage::ImageLuma8(_))
-        && binomial5x5_luma_parameters_match(kernel, scale, offset)
+        && binomial5x5_parameters_match(kernel, scale, offset)
         && filter_5x5_binomial_luma_rows(raw, &mut out, w_u32 as usize, h_u32 as usize)
+    {
+        let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
+    #[cfg(not(feature = "parallel"))]
+    if matches!(explicit_mode, None | Some("LA"))
+        && matches!(img, DynamicImage::ImageLumaA8(_))
+        && binomial5x5_parameters_match(kernel, scale, offset)
+        && filter_5x5_binomial_la_rows(raw, &mut out, w_u32 as usize, h_u32 as usize)
     {
         let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
         return Ok(preserve_mode(img, result));
@@ -3076,8 +3147,8 @@ mod f_mode_rank_filter_uniform_tests {
 }
 
 #[cfg(all(test, not(feature = "parallel")))]
-mod binomial5x5_luma_tests {
-    use super::{filter_5x5_binomial_luma_rows, filter_5x5_byte_rows};
+mod binomial5x5_native_byte_tests {
+    use super::{filter_5x5_binomial_la_rows, filter_5x5_binomial_luma_rows, filter_5x5_byte_rows};
 
     #[test]
     fn integer_separable_path_matches_ordered_float_kernel_and_copied_borders() {
@@ -3108,6 +3179,46 @@ mod binomial5x5_luma_tests {
                 height,
             ));
             assert_eq!(actual, expected, "dimension {width}x{height}");
+        }
+    }
+
+    #[test]
+    fn native_la_ring_matches_ordered_float_kernel_for_each_interleaved_band() {
+        let weights = [1.0, 4.0, 6.0, 4.0, 1.0];
+        let kernel: [f32; 25] =
+            std::array::from_fn(|index| weights[index / 5] * weights[index % 5]);
+        let normalized = std::array::from_fn(|index| kernel[index] / 256.0);
+        for (width, height) in [
+            (1usize, 1usize),
+            (4, 7),
+            (5, 5),
+            (7, 5),
+            (9, 7),
+            (17, 9),
+            (33, 35),
+        ] {
+            let raw: Vec<u8> = (0..width * height * 2)
+                .map(|index| ((index * 73 + index / (width * 2) * 29 + 17) % 256) as u8)
+                .collect();
+            let mut expected = raw.clone();
+            filter_5x5_byte_rows(
+                &raw,
+                &mut expected,
+                width as i32,
+                height as i32,
+                2,
+                &normalized,
+                0.5,
+            );
+
+            let mut actual = raw.clone();
+            assert!(filter_5x5_binomial_la_rows(
+                &raw,
+                &mut actual,
+                width,
+                height,
+            ));
+            assert_eq!(actual, expected, "native LA {width}x{height}");
         }
     }
 }
