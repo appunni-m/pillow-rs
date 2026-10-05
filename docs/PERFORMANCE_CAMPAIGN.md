@@ -19341,3 +19341,85 @@ target-only cases: injected group-dimension failure and injected group-memory
 failure each selected=1, executed=1, passed=1, failed=0, with
 `oracle=not_applicable`. These fault-contract cases validate fallback behavior
 and do not count as Pillow parity comparisons. No coverage was run.
+
+## Native-LA `ImageFilter.Kernel(5x5)` checkpoint — 2026-10-05
+
+The selected workload is a 1024 × 768 LA image filtered with the exact
+5 × 5 binomial outer product `[1, 4, 6, 4, 1] × [1, 4, 6, 4, 1]`, scale 256,
+offset zero, followed by `tobytes()`. A separate 7 × 5 LA input exercises an
+odd row width and copied borders. L and alpha are independently filtered
+native samples; no RGBA staging is part of the new route.
+
+The CPU route keeps five rows of interleaved `u16` horizontal sums and remains
+serial-only, outside the opt-in `parallel` feature. SIMD processes eight LA
+pixels per `u16x16` vector, packs the narrowed results directly into the
+output, and uses the symmetry of this exact kernel to reduce weighted sums.
+Both paths admit only the proven binomial coefficients, scale, and offset;
+other kernels retain the existing ordered-float implementation. GPU stores
+two LA pixels per word, computes both channels independently, and transfers
+1,572,864 bytes each way for this image instead of 3,145,728 bytes through the
+former RGBA route.
+
+Four bounded attempts are checkpointed: (1) add the native packed-LA GPU
+shader; (2) add exact integer five-row CPU and SIMD rings; (3) pack SIMD output
+lanes directly rather than writing each result byte individually; and (4)
+factor the symmetric integer weights into outer, inner, and center sums. The
+initial route and each retained candidate passed the same material parity
+gate. Final medians in milliseconds were:
+
+| Candidate | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Existing converted/generic path | 6.782 | 16.670 | 15.097 | 3.071 |
+| Native-LA GPU only | 6.770 | 16.275 | 14.974 | 1.419 |
+| Integer CPU/SIMD ring | 6.688 | 3.560 | 2.727 | 0.803 |
+| SIMD packed output | 6.805 | 3.625 | 2.206 | 1.188 |
+| Final symmetric sums | 6.765 | 3.538 | 1.704 | 1.451 |
+
+The benchmark varies by run, especially for GPU, so the table records individual
+correctness-gated samples rather than claiming a stable GPU trend. In the final
+run, serial CPU was 1.91× faster than Pillow and SIMD was 3.97× faster, still
+short of the 5× SIMD target. GPU median latency was 1.45 ms against SIMD's
+1.70 ms, with one-request reciprocal rates of 689 and 587 operations/second;
+this meets the measured single-request latency/throughput comparison but does
+not establish saturated or queued throughput. GPU executed one dispatch per
+image, had no fallback, and recorded zero mode conversions.
+
+`make build-parity PYTHON=.venv/bin/python` passed. Strict
+`make migration-parity-test` runs selected the material and odd-width cases;
+CPU, SIMD, and GPU each passed 2/2 with zero infrastructure errors. The
+correctness-gated `make migration-parity-benchmark` workload selected and
+measured one workload, with `parity_pass=pass`; all 100 samples per profile
+recorded the requested backend. The focused tests
+`cargo test --locked -p pillow-rs --lib native_la_ring_matches_ordered_float_kernel_for_each_interleaved_band`
+and
+`cargo test --locked -p pillow-rs --lib gpu_packed_la_filter_5x5_preserves_channels_and_compact_transfers --features gpu`
+passed. This checkpoint covers the exact binomial kernel, the stated LA sizes,
+and these three backends only; it does not close other Filter5x5 kernels,
+modes, or image sizes.
+
+The strict parity commands used the same two case IDs for each backend:
+
+```sh
+env MIGRATION_TARGET_BACKEND=cpu MIGRATION_STRICT_TARGET_BACKEND=1 make migration-parity-test PYTHON=.venv/bin/python MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-noise-1024x768,PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-odd-width-7x5' MIGRATION_PARITY_OUTPUT=build/migration-parity/la-filter5x5-cpu.json
+env MIGRATION_TARGET_BACKEND=simd MIGRATION_STRICT_TARGET_BACKEND=1 make migration-parity-test PYTHON=.venv/bin/python MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-noise-1024x768,PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-odd-width-7x5' MIGRATION_PARITY_OUTPUT=build/migration-parity/la-filter5x5-simd.json
+env MIGRATION_TARGET_BACKEND=gpu MIGRATION_STRICT_TARGET_BACKEND=1 make migration-parity-test PYTHON=.venv/bin/python MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-noise-1024x768,PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-odd-width-7x5' MIGRATION_PARITY_OUTPUT=build/migration-parity/la-filter5x5-gpu.json
+make migration-parity-benchmark PYTHON=.venv/bin/python MIGRATION_BENCHMARK_PROFILE=standard MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.filter.material-la-noise-5x5-1024x768'
+```
+
+The existing ImageBatch target-only fault contracts were included separately:
+`make imagebatch-rank-filter-fault-contract`,
+`make imagebatch-paste-fault-contract`,
+`make imagebatch-composite-fault-contract`, and
+`make imagebatch-expand-fault-contract` passed 8/8 dimension- and
+memory-failure cases with `oracle=not_applicable`. They do not count as Pillow
+parity. No Filter5x5 fault contract was added: this ordinary image operation
+has no deterministic target-only injected failure point or distinct public
+fallback contract, so its public inputs remain ordinary parity cases. No
+coverage was run.
+
+Record the serial CPU result as passing the no-slower-than-Pillow target and
+GPU as meeting this single-request comparison. Keep the SIMD improvement, but
+checkpoint its remaining 1.26× performance gap to the 5× target and move to
+the next ranked operation after four attempts; revisit LA Filter5x5 when a new
+profile identifies another hot stage. Detailed run receipts were removed
+after extracting these summaries to avoid retaining large generated JSON.

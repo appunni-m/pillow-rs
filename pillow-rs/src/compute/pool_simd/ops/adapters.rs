@@ -17530,6 +17530,120 @@ fn native_filter_5x5_binomial_luma_rows(
     ))
 }
 
+/// Filter native interleaved LA pixels with the exact binomial kernel. One
+/// `u16x16` vector spans eight complete pixels, so the same arithmetic lanes
+/// independently accumulate luminance and alpha without a mode conversion.
+fn native_filter_5x5_binomial_la_rows(
+    raw: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+) -> Option<(u64, u64)> {
+    let pixel_count = width.checked_mul(height)?;
+    let sample_count = pixel_count.checked_mul(2)?;
+    if raw.len() != sample_count || out.len() != sample_count {
+        return None;
+    }
+    if width < 5 || height < 5 {
+        return Some((0, 0));
+    }
+
+    const WEIGHTS: [u16; 5] = [1, 4, 6, 4, 1];
+    let row_samples = width.checked_mul(2)?;
+    let horizontal_blocks = (width - 4) / 8;
+    let vector_end = 2 + horizontal_blocks * 8;
+    let mut horizontal_rows: [Vec<u16>; 5] = std::array::from_fn(|_| vec![0; row_samples]);
+    let fill_horizontal_row = |source_y: usize, destination: &mut [u16]| -> Option<()> {
+        let row_start = source_y.checked_mul(row_samples)?;
+        let mut x = 2usize;
+        while x < vector_end {
+            let load = |tap: usize| -> Option<u16x16> {
+                let source_x = x.checked_add(tap)?.checked_sub(2)?;
+                let start = row_start.checked_add(source_x.checked_mul(2)?)?;
+                let end = start.checked_add(16)?;
+                let bytes: [u8; 16] = raw.get(start..end)?.try_into().ok()?;
+                Some(u16x16::from(u8x16::new(bytes)))
+            };
+            let outer = load(0)? + load(4)?;
+            let inner = load(1)? + load(3)?;
+            let weighted =
+                outer + inner * u16x16::splat(WEIGHTS[1]) + load(2)? * u16x16::splat(WEIGHTS[2]);
+            let start = x.checked_mul(2)?;
+            let samples = weighted.to_array();
+            destination
+                .get_mut(start..start.checked_add(16)?)?
+                .copy_from_slice(&samples);
+            x += 8;
+        }
+        while x < width - 2 {
+            let base = row_start + x * 2;
+            for channel in 0..2 {
+                let sample = base + channel;
+                let outer = u16::from(raw[sample - 4]) + u16::from(raw[sample + 4]);
+                let inner = u16::from(raw[sample - 2]) + u16::from(raw[sample + 2]);
+                destination[x * 2 + channel] =
+                    outer + inner * WEIGHTS[1] + u16::from(raw[sample]) * WEIGHTS[2];
+            }
+            x += 1;
+        }
+        Some(())
+    };
+
+    for source_y in 0..5 {
+        fill_horizontal_row(source_y, &mut horizontal_rows[source_y])?;
+    }
+    for y in 2..height - 2 {
+        let row_ids = [(y - 2) % 5, (y - 1) % 5, y % 5, (y + 1) % 5, (y + 2) % 5];
+        let output_row = y.checked_mul(row_samples)?;
+        let mut x = 2usize;
+        while x < vector_end {
+            let start = x.checked_mul(2)?;
+            let load = |row_id: usize| -> Option<u16x16> {
+                Some(u16x16::new(
+                    horizontal_rows[row_id]
+                        .get(start..start.checked_add(16)?)?
+                        .try_into()
+                        .ok()?,
+                ))
+            };
+            let outer = load(row_ids[0])? + load(row_ids[4])?;
+            let inner = load(row_ids[1])? + load(row_ids[3])?;
+            let weighted = outer
+                + inner * u16x16::splat(WEIGHTS[1])
+                + load(row_ids[2])? * u16x16::splat(WEIGHTS[2]);
+            let packed = simd_pack_u16x16((weighted + u16x16::splat(128)) >> 8u32).to_array();
+            out.get_mut(output_row + start..output_row + start + 16)?
+                .copy_from_slice(&packed);
+            x += 8;
+        }
+        while x < width - 2 {
+            let base = x * 2;
+            for channel in 0..2 {
+                let sample = base + channel;
+                let outer = u32::from(horizontal_rows[row_ids[0]][sample])
+                    + u32::from(horizontal_rows[row_ids[4]][sample]);
+                let inner = u32::from(horizontal_rows[row_ids[1]][sample])
+                    + u32::from(horizontal_rows[row_ids[3]][sample]);
+                let center = u32::from(horizontal_rows[row_ids[2]][sample]);
+                let sum = outer + inner * u32::from(WEIGHTS[1]) + center * u32::from(WEIGHTS[2]);
+                out[output_row + sample] = ((sum + 128) >> 8) as u8;
+            }
+            x += 1;
+        }
+
+        let next_source_y = y + 3;
+        if next_source_y < height {
+            fill_horizontal_row(next_source_y, &mut horizontal_rows[next_source_y % 5])?;
+        }
+    }
+
+    let interior_height = height - 4;
+    Some((
+        (horizontal_blocks * interior_height) as u64,
+        ((width - 4) % 8 * interior_height) as u64,
+    ))
+}
+
 /// Evaluate eight output samples of Pillow's 5x5 byte convolution for one
 /// channel.  This remains the lower-overhead layout for one-channel images
 /// and RGB, where grouping complete interleaved pixels would add padding
@@ -18190,7 +18304,7 @@ pub fn simd_filter_5x5(
     }
     if matches!(mode, None | Some("L"))
         && matches!(img, DynamicImage::ImageLuma8(_))
-        && crate::compute::pool_cpu::ops::filter::binomial5x5_luma_parameters_match(
+        && crate::compute::pool_cpu::ops::filter::binomial5x5_parameters_match(
             kernel, *scale, *offset,
         )
     {
@@ -18210,6 +18324,31 @@ pub fn simd_filter_5x5(
             }
             let result =
                 crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, 1)?;
+            return Ok(preserve_mode(img, result));
+        }
+    }
+    if matches!(mode, None | Some("LA"))
+        && matches!(img, DynamicImage::ImageLumaA8(_))
+        && crate::compute::pool_cpu::ops::filter::binomial5x5_parameters_match(
+            kernel, *scale, *offset,
+        )
+    {
+        let mut output = img.as_bytes().to_vec();
+        if let Some((vector_blocks, scalar_tail)) = native_filter_5x5_binomial_la_rows(
+            img.as_bytes(),
+            &mut output,
+            img.width() as usize,
+            img.height() as usize,
+        ) {
+            crate::compute::record_pipeline_operation_path("vector");
+            if vector_blocks != 0 {
+                crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+            }
+            if scalar_tail != 0 {
+                crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+            }
+            let result =
+                crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, 2)?;
             return Ok(preserve_mode(img, result));
         }
     }

@@ -7104,6 +7104,19 @@ impl GpuInner {
             }
             if packed_native_byte_filter
                 && matches!(logical_mode, Some("LA"))
+                && matches!(op, PipelineOp::Filter5x5 { .. })
+            {
+                let filter = self.resolve_pipeline(
+                    "__internal_filter_5x5_la_packed",
+                    "filter_5x5_la_packed.wgsl",
+                    include_str!("shaders/filter_5x5_la_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(filter));
+                index += 1;
+                continue;
+            }
+            if packed_native_byte_filter
+                && matches!(logical_mode, Some("LA"))
                 && matches!(op, PipelineOp::MedianFilter { size: 3 })
             {
                 let median = self.resolve_pipeline(
@@ -8682,6 +8695,15 @@ impl GpuInner {
                 )?
             } else if packed_native_byte_filter
                 && matches!(logical_mode, Some("LA"))
+                && matches!(op, PipelineOp::Filter5x5 { .. })
+            {
+                self.resolve_pipeline(
+                    "__internal_filter_5x5_la_packed",
+                    "filter_5x5_la_packed.wgsl",
+                    include_str!("shaders/filter_5x5_la_packed.wgsl"),
+                )?
+            } else if packed_native_byte_filter
+                && matches!(logical_mode, Some("LA"))
                 && matches!(op, PipelineOp::MedianFilter { size: 3 })
             {
                 self.resolve_pipeline(
@@ -10048,6 +10070,11 @@ impl GpuInner {
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
             "__internal_filter_5x5_luma_packed" => plan_packed_luma_dispatch(
+                input_dims.0,
+                input_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
+            "__internal_filter_5x5_la_packed" => plan_packed_la_dispatch(
                 input_dims.0,
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
@@ -14982,6 +15009,13 @@ fn gpu_packed_native_byte_filter_input(
                     registry::separable_gaussian_blur_radius(*sigma)
                         .is_some_and(|radius| radius <= MAX_GPU_BLUR_RADIUS)
                 }
+                [
+                    PipelineOp::Filter5x5 {
+                        kernel,
+                        scale,
+                        offset,
+                    },
+                ] => registry::gpu_filter_kernel_is_exact(kernel, *scale, *offset),
                 [PipelineOp::BoxBlur { radius: 1 }]
                 | [PipelineOp::MedianFilter { size: 3 }]
                 | [PipelineOp::MaxFilter { size: 3 }]
@@ -32355,6 +32389,25 @@ mod tests {
             Some("LA")
         ));
         assert!(super::gpu_packed_native_byte_filter_input(
+            std::slice::from_ref(&filter_5x5),
+            &la,
+            Some("LA")
+        ));
+        assert!(!super::gpu_packed_native_byte_filter_input(
+            std::slice::from_ref(&filter_5x5),
+            &la,
+            None
+        ));
+        assert!(!super::gpu_packed_native_byte_filter_input(
+            &[PipelineOp::Filter5x5 {
+                kernel: [1.0; 25],
+                scale: 0.0,
+                offset: 0.0,
+            }],
+            &la,
+            Some("LA")
+        ));
+        assert!(super::gpu_packed_native_byte_filter_input(
             std::slice::from_ref(&box_blur),
             &la,
             Some("LA")
@@ -32516,6 +32569,69 @@ mod tests {
             super::gpu_packed_la_rank_filter_3_work_items(((max_rank_one_pixels + 1) as u32, 1), 1)
                 > super::MAX_GPU_SHADER_WORK_ITEMS
         );
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_packed_la_filter_5x5_preserves_channels_and_compact_transfers() {
+        use crate::compute::{execute_prepared, prepare_execution};
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+        let weights = [1.0, 4.0, 6.0, 4.0, 1.0];
+        let kernel = std::array::from_fn(|index| weights[index / 5] * weights[index % 5]);
+        let op = [PipelineOp::Filter5x5 {
+            kernel,
+            scale: 256.0,
+            offset: 0.0,
+        }];
+
+        for (width, height) in [(1u32, 1u32), (7, 5), (33, 35)] {
+            let pixel_count = width as usize * height as usize;
+            let bytes = (0..pixel_count * 2)
+                .map(|index| ((index * 73 + index / 5 * 29 + 17) & 0xff) as u8)
+                .collect::<Vec<_>>();
+            let source = DynamicImage::ImageLumaA8(
+                GrayAlphaImage::from_raw(width, height, bytes).expect("LA filter source"),
+            );
+            let expected = crate::compute::registry::execute_cpu(&op[0], &source, Some("LA"))
+                .expect("CPU LA Filter5x5 reference");
+            let prepared =
+                prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA Filter5x5 routing");
+            let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    return;
+                }
+                Err(error) => panic!("native GPU LA Filter5x5 failed: {error}"),
+            };
+            assert!(matches!(&actual, DynamicImage::ImageLumaA8(_)));
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
+
+            let receipt =
+                Backend::take_pipeline_telemetry().expect("native LA Filter5x5 execution receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native LA Filter5x5 resources");
+            let transfer_bytes = (pixel_count * 2).div_ceil(4) * 4;
+            assert_eq!(resources.upload_bytes, transfer_bytes as u64);
+            assert_eq!(resources.readback_bytes, transfer_bytes as u64);
+            assert_eq!(resources.mode_conversion_count, 0);
+        }
     }
 
     #[test]
