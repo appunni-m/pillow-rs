@@ -125,10 +125,9 @@ and this machine; explicit executor overhead is included.
 ## Alpha.6 release preparation gate, 2026-10-05
 
 The source version is `12.2.0-alpha.6`; alpha.5 remains the published release.
-The full Python CPU campaign passed **17,105/17,105**. The full SIMD campaign
-passed **17,086/17,105**, with **19 failures** and zero infrastructure errors.
-These failures block push, tagging, and publication under the required parity
-gate. They all concern `Image.convert` from `1`, `L`, `LA`, or `I;16N` into
+The full Python CPU campaign passed **17,105/17,105**. The first full SIMD
+campaign passed **17,086/17,105**, with **19 failures** and zero infrastructure
+errors. These failures initially blocked push, tagging, and publication. They all concern `Image.convert` from `1`, `L`, `LA`, or `I;16N` into
 typed `I`/`F` output. No assertion, threshold, or selected case was removed.
 
 Both campaigns used the isolated extension built by `make build-parity` and
@@ -141,7 +140,7 @@ MIGRATION_TARGET_BACKEND=BACKEND \
 MIGRATION_PARITY_OUTPUT=/private/tmp/pillow-release-parity-BACKEND.json.gz
 ```
 
-Failing case IDs, each prefixed by `PIL.Image.Image.convert.nuanced.`:
+Initially failing case IDs, each prefixed by `PIL.Image.Image.convert.nuanced.`:
 
 ```text
 coverage-batch-convert-pattern-l-f-7
@@ -167,9 +166,8 @@ simd-cov-f10-c05
 
 The final GPU-batch extension passed the 756 focused comparisons and nine
 contracts above. These results do not substitute for full ordinary GPU,
-Parallel CPU, Node, or browser parity. Those full candidate lanes, clean
-release packaging/consumer checks, and tag-triggered registry publishing were
-not run after the required SIMD gate failed. No coverage was run.
+Parallel CPU, Node, or browser parity. Those remaining full candidate lanes, clean release packaging checks, and
+tag-triggered registry publishing are still pending. No coverage was run.
 
 `RUSTC_WRAPPER= cargo test -p pillow-rs --lib -- --test-threads=1` passed
 507/507 core tests on Metal, including the native packed-L geometry regression.
@@ -189,3 +187,26 @@ font-style generator steps without changing committed parity cases, corrects
 the corresponding benchmark chain length from two to three, and fixes the
 stale dashboard counts described above. Local checks pass, but candidate CI
 cannot be claimed green without a push and a new exact-commit run.
+
+The two native RGBA expansion shortcuts incorrectly also admitted four-byte
+`I`/`F` scalar targets. Excluding typed destinations from those shortcuts
+restores their existing integer/float widening path without conversion through
+RGBA color samples. `1` and `I;16N` use the same L conversion step required by
+the reference behavior, so this fixes all 19 cases. The full SIMD rerun passed
+**17,105/17,105**, with zero failures/infrastructure errors. The command above
+used `/private/tmp/pillow-release-parity-simd-fixed.json.gz` for that rerun.
+
+The new `native_luma_to_typed_samples_does_not_use_rgba_expansion` unit regression
+checks L/LA→I/F exact scalar bytes across six vector/tail widths and varied
+alpha. All seven `cargo test -p pillow-rs --lib native_luma_` tests passed. Four
+focused strict-SIMD public parity cases (L/LA→I/F, 17×3) also passed using
+`make migration-parity-test MIGRATION_TARGET_BACKEND=simd
+MIGRATION_STRICT_TARGET_BACKEND=1` with their four `--case-id` arguments.
+The pre-fix 19 comparisons and complete diffs were preserved in a 3,175-byte
+temporary gzip file; both large initial campaign artifacts were removed.
+
+`make release-python-sdist release-sdist-test PYTHON=.venv/bin/python
+RELEASE_WHEEL_DIR=dist/release-check` passed: a fresh isolated environment built
+the sdist, imported the installed replacement, and executed the README/Python
+examples. Registry preflight confirmed image-slash-star 0.1.2 and fontdone
+2.14.3-alpha.12 on crates.io, and fontdone 2.14.3-alpha.12 on npm.

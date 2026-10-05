@@ -8,7 +8,7 @@ backend limitations in the documentation remain part of its contract.
 
 ### 12.2.0-alpha.6 candidate
 
-Prepared on 2026-10-05; publication is blocked by the required SIMD parity gate.
+Prepared on 2026-10-05; publication awaits the remaining parity, package, and CI gates.
 
 - Add explicit GPU pipeline batching with bounded admission and streaming CPU
   or resident GPU results, stable job IDs and caller keys, and immediate
@@ -18,6 +18,8 @@ Prepared on 2026-10-05; publication is blocked by the required SIMD parity gate.
   `deprecated/imagebatch`; remove its runtime exports.
 - Add native-mode composed GPU execution and retain derived-image metadata.
 - Read native packed L samples correctly in GPU geometry-table transforms.
+- Keep SIMD `I`/`F` sample widening separate from L/LA-to-RGBA expansion;
+  restore all 19 typed-conversion parity cases without changing their inputs.
 - Restore generator support for existing font variation style and reused-face
   observations without removing any committed parity input.
 - Optimize native LA/L filters, byte putdata, RGBA transpose, RGB merge,
