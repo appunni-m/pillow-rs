@@ -465,10 +465,15 @@ SIMD, GPU, or Rayon execution evidence. P4 is closed for the CPU target.
 M1 and M2 are closed for the current public surface by the follow-up checks
 above. The split fix has mode and byte parity; the typed filtered-resize
 variants are unreachable through current public constructors and decoders.
-P9 now has measured native-L and native-LA Filter5x5 specializations, but
-remains open: the LA SIMD result is 3.97× faster than Pillow, below the 5×
-target, and other operation/mode combinations remain unmeasured. P2, P5–P8,
-and P10 remain audit candidates without measured follow-up in this checkpoint.
+P9 now has measured native-L and native-LA Filter5x5 specializations plus an
+exact native-LA binomial Filter3x3 path. For the 1024 × 768 LA Filter3x3
+workload, serial CPU is 1.27× faster than Pillow and SIMD is 6.45× faster;
+GPU fell from 2.68 ms to 0.94 ms with zero mode conversions, but remains about
+1.99× slower than SIMD at one request. The explicit ImageBatch API does not
+yet support Filter3x3, so queued GPU throughput is unmeasured. LA Filter5x5
+SIMD remains at 3.97× Pillow, below its 5× target, and other operation/mode
+combinations remain unmeasured. P2, P5–P8, and P10 remain audit candidates
+without measured follow-up in this checkpoint.
 P4's serial CPU target is closed; it has no applicable SIMD, GPU, or Parallel
 CPU route.
 

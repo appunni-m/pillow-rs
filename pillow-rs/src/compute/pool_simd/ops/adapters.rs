@@ -17122,6 +17122,178 @@ fn native_filter_3x3_pixel_block_vector(
     })
 }
 
+/// Evaluate the separable binomial 3x3 convolution directly on packed LA
+/// samples. The row ring keeps the horizontally weighted values as integers;
+/// the 16-wide lanes cover eight adjacent LA pixels without widening the image
+/// or gathering each channel independently.
+#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+fn native_filter_3x3_la_binomial_rows(
+    raw: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+) -> Option<(u64, u64)> {
+    let row_samples = width.checked_mul(2)?;
+    let expected_len = row_samples.checked_mul(height)?;
+    if raw.len() != expected_len || out.len() != expected_len {
+        return None;
+    }
+    if width < 3 || height < 3 {
+        return Some((0, 0));
+    }
+
+    let mut horizontal_rows: [Vec<u16>; 3] = std::array::from_fn(|_| vec![0; row_samples]);
+    let fill_horizontal_row = |source_y: usize, destination: &mut [u16]| {
+        let row_start = source_y * row_samples;
+        let mut x = 1usize;
+        while x < width - 1 {
+            let active_pixels = (width - 1 - x).min(8);
+            let active_bytes = active_pixels * 2;
+            let load = |pixel_x: usize| {
+                let start = row_start + pixel_x * 2;
+                let mut bytes = [0u8; 16];
+                bytes[..active_bytes].copy_from_slice(&raw[start..start + active_bytes]);
+                u16x16::from(u8x16::new(bytes))
+            };
+            let horizontal = load(x - 1) + load(x) * u16x16::splat(2) + load(x + 1);
+            let values = horizontal.to_array();
+            let output_start = x * 2;
+            destination[output_start..output_start + active_bytes]
+                .copy_from_slice(&values[..active_bytes]);
+            x += active_pixels;
+        }
+    };
+
+    for source_y in 0..3 {
+        fill_horizontal_row(source_y, &mut horizontal_rows[source_y]);
+    }
+    for y in 1..height - 1 {
+        let above = &horizontal_rows[(y - 1) % 3];
+        let center = &horizontal_rows[y % 3];
+        let below = &horizontal_rows[(y + 1) % 3];
+        let output_row = y * row_samples;
+        let mut x = 1usize;
+        while x < width - 1 {
+            let active_pixels = (width - 1 - x).min(8);
+            let active_bytes = active_pixels * 2;
+            let sample_start = x * 2;
+            let load = |row: &[u16]| {
+                u16x16::new(std::array::from_fn(|lane| {
+                    if lane < active_bytes {
+                        row[sample_start + lane]
+                    } else {
+                        0
+                    }
+                }))
+            };
+            let weighted = load(above) + load(center) * u16x16::splat(2) + load(below);
+            let rounded = (weighted + u16x16::splat(8)) >> 4u32;
+            let bytes = simd_pack_u16x16(rounded).to_array();
+            out[output_row + sample_start..output_row + sample_start + active_bytes]
+                .copy_from_slice(&bytes[..active_bytes]);
+            x += active_pixels;
+        }
+
+        let next_source_y = y + 2;
+        if next_source_y < height {
+            fill_horizontal_row(next_source_y, &mut horizontal_rows[next_source_y % 3]);
+        }
+    }
+    Some((((width - 2).div_ceil(8) * (height - 2)) as u64, 0))
+}
+
+/// Apply the packed LA binomial kernel with one interleaved NEON load per
+/// source row and eight output pixels. Lane shifts form horizontal neighbors;
+/// integer widening preserves exact rounding and keeps both stored bands.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+fn native_filter_3x3_la_binomial_rows(
+    raw: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+) -> Option<(u64, u64)> {
+    use core::arch::aarch64 as neon;
+
+    let row_samples = width.checked_mul(2)?;
+    let expected_len = row_samples.checked_mul(height)?;
+    if raw.len() != expected_len || out.len() != expected_len {
+        return None;
+    }
+    if width < 3 || height < 3 {
+        return Some((0, 0));
+    }
+
+    let horizontal = |source_y: usize, x: usize| {
+        // SAFETY: `raw.len() == row_samples * height` was checked above,
+        // `source_y` is one of the valid filter rows, and the vector-loop
+        // condition `x + 14 < width` keeps this 16-pixel LA load, starting at
+        // `x - 1`, within that row and therefore within `raw`.
+        let samples =
+            unsafe { neon::vld2q_u8(raw.as_ptr().add(source_y * row_samples + (x - 1) * 2)) };
+        let filter_channel = |samples: neon::uint8x16_t| unsafe {
+            let low = neon::vget_low_u8(samples);
+            let high = neon::vget_high_u8(samples);
+            let left = low;
+            let center = neon::vext_u8(low, high, 1);
+            let right = neon::vext_u8(low, high, 2);
+            neon::vaddq_u16(neon::vaddl_u8(left, right), neon::vaddl_u8(center, center))
+        };
+        (filter_channel(samples.0), filter_channel(samples.1))
+    };
+
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    for y in 1..height - 1 {
+        let output_row = y * row_samples;
+        let mut x = 1usize;
+        while x + 14 < width {
+            let above = horizontal(y - 1, x);
+            let center = horizontal(y, x);
+            let below = horizontal(y + 1, x);
+            let filter_vertical = |above: neon::uint16x8_t,
+                                   center: neon::uint16x8_t,
+                                   below: neon::uint16x8_t| unsafe {
+                let sum = neon::vaddq_u16(
+                    neon::vaddq_u16(above, below),
+                    neon::vaddq_u16(center, center),
+                );
+                let rounded = neon::vshrq_n_u16(neon::vaddq_u16(sum, neon::vdupq_n_u16(8)), 4);
+                neon::vqmovn_u16(rounded)
+            };
+            let output = neon::uint8x8x2_t(
+                filter_vertical(above.0, center.0, below.0),
+                filter_vertical(above.1, center.1, below.1),
+            );
+            // SAFETY: `x + 14 < width` guarantees all eight output pixels
+            // starting at x are interior pixels within this row. The checked
+            // output length covers every row, and `out` is disjoint from `raw`.
+            unsafe {
+                neon::vst2_u8(out.as_mut_ptr().add(output_row + x * 2), output);
+            }
+            x += 8;
+            vector_blocks += 1;
+        }
+
+        for pixel_x in x..width - 1 {
+            for channel in 0..2 {
+                let horizontal_sum = |source_y: usize| {
+                    let center = source_y * row_samples + pixel_x * 2 + channel;
+                    u16::from(raw[center - 2])
+                        + u16::from(raw[center]) * 2
+                        + u16::from(raw[center + 2])
+                };
+                let sum = u32::from(horizontal_sum(y - 1))
+                    + u32::from(horizontal_sum(y)) * 2
+                    + u32::from(horizontal_sum(y + 1));
+                out[output_row + pixel_x * 2 + channel] = ((sum + 8) >> 4) as u8;
+            }
+            scalar_tail += 2;
+        }
+    }
+    Some((vector_blocks, scalar_tail))
+}
+
 /// Apply the exact native-byte 3x3 convolution with eight-wide vector lanes.
 /// Borders retain the source bytes, matching the CPU implementation.
 fn native_filter_3x3_rows(
@@ -18212,6 +18384,31 @@ pub fn simd_filter_3x3(
     }
     let channels =
         native_filter_byte_layout(img, mode).ok_or_else(|| simd_unsupported("Filter3x3"))?;
+    if mode == Some("LA")
+        && matches!(img, DynamicImage::ImageLumaA8(_))
+        && crate::compute::pool_cpu::ops::filter::binomial3x3_parameters_match(
+            kernel, *scale, *offset,
+        )
+    {
+        let mut output = img.as_bytes().to_vec();
+        if let Some((vector_blocks, scalar_tail)) = native_filter_3x3_la_binomial_rows(
+            img.as_bytes(),
+            &mut output,
+            img.width() as usize,
+            img.height() as usize,
+        ) {
+            crate::compute::record_pipeline_operation_path("vector");
+            crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+            crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+            let result = crate::image_utils::raw_bytes_to_image(
+                img.width(),
+                img.height(),
+                output,
+                channels,
+            )?;
+            return Ok(preserve_mode(img, result));
+        }
+    }
     let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
     if let Some(filtered) =
         native_small_uniform_3x3_convolution(img, channels, &normalized_kernel, *offset + 0.5)
