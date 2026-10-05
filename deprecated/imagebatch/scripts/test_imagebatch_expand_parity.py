@@ -216,7 +216,7 @@ def run_target(expected_path: Path) -> None:
             for width, height, seed in SMALL:
                 image = Image.frombytes(mode, (width, height), pixels(mode, (width, height), seed))
                 image.info["batch-seed"] = seed
-                small.submit(image, ImageBatch.Expand(2, fill_for(mode)))
+                small.submit(ImageBatch.PipelineOp(image, ImageBatch.Expand(2, fill_for(mode))))
             small_result = small.join()
             require_exact(small_result, expected["small"][mode], f"queued {backend}/{mode}")
             require_backend(
@@ -230,7 +230,7 @@ def run_target(expected_path: Path) -> None:
             image = Image.frombytes(mode, (width, height), pixels(mode, (width, height), seed))
             image.info["batch-seed"] = seed
             eager = ImageBatch.BatchExecutor(queue=False, backend=backend)
-            eager.submit(image, ImageBatch.Expand(2, fill_for(mode)))
+            eager.submit(ImageBatch.PipelineOp(image, ImageBatch.Expand(2, fill_for(mode))))
             require_exact(eager.join(), [expected["eager"][mode]], f"eager {backend}/{mode}")
             require_backend(
                 core,
@@ -241,10 +241,7 @@ def run_target(expected_path: Path) -> None:
 
             large = ImageBatch.BatchExecutor(queue=True, backend=backend)
             for seed in range(LARGE_IMAGE_COUNT):
-                large.submit(
-                    Image.frombytes(mode, LARGE_SIZE, material_pixels(mode, seed)),
-                    ImageBatch.Expand(LARGE_BORDER, fill_for(mode)),
-                )
+                large.submit(ImageBatch.PipelineOp(Image.frombytes(mode, LARGE_SIZE, material_pixels(mode, seed)), ImageBatch.Expand(LARGE_BORDER, fill_for(mode))))
             large_results = large.join()
             digests = [hashlib.sha256(image.tobytes()).hexdigest() for image in large_results]
             if digests != expected["large"][mode]:
@@ -262,14 +259,11 @@ def run_target(expected_path: Path) -> None:
             )
             xlarge = ImageBatch.BatchExecutor(queue=True, backend=backend)
             for seed in range(XLARGE_IMAGE_COUNT):
-                xlarge.submit(
-                    Image.frombytes(
+                xlarge.submit(ImageBatch.PipelineOp(Image.frombytes(
                         mode,
                         XLARGE_SIZE,
                         material_pixels(mode, seed, XLARGE_SIZE),
-                    ),
-                    ImageBatch.Expand(LARGE_BORDER, fill_for(mode)),
-                )
+                    ), ImageBatch.Expand(LARGE_BORDER, fill_for(mode))))
             xlarge_results = xlarge.join()
             xlarge_digests = [
                 hashlib.sha256(image.tobytes()).hexdigest()
@@ -330,7 +324,7 @@ def assert_grouped_expand_failure_fallback(case: dict, expected: dict) -> None:
             case["mode"], (width, height), pixels(case["mode"], (width, height), seed)
         )
         image.info["batch-seed"] = seed
-        batch.submit(image, ImageBatch.Expand(2, fill_for(case["mode"])))
+        batch.submit(ImageBatch.PipelineOp(image, ImageBatch.Expand(2, fill_for(case["mode"]))))
 
     recovered = batch.join()
     require_exact(
@@ -355,7 +349,7 @@ def assert_grouped_expand_failure_fallback(case: dict, expected: dict) -> None:
         case["mode"], (width, height), pixels(case["mode"], (width, height), seed)
     )
     image.info["batch-seed"] = seed
-    if batch.submit(image, ImageBatch.Expand(2, fill_for(case["mode"]))) != 0:
+    if batch.submit(ImageBatch.PipelineOp(image, ImageBatch.Expand(2, fill_for(case["mode"])))) != 0:
         raise AssertionError("a drained batch did not reset its submission index")
     followup = batch.join()
     require_exact(

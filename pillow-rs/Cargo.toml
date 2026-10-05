@@ -21,8 +21,6 @@ name = "pillow_rs"
 default = ["gpu", "image-codecs-all"]
 gpu = ["wgpu", "pollster"]
 parallel = ["rayon"]
-# Test-only deterministic failures for target-side fault-contract checks.
-migration-fault-injection = []
 image-codecs-all = [
     "image-slash-star/jpeg",
     "image-slash-star/png",

@@ -989,7 +989,15 @@ fn native_ycbcr_luma(img: &DynamicImage) -> Option<crate::raster::GrayImage> {
     if pixels == 0 || source.as_raw().len() != dims.total_bytes() {
         return None;
     }
-    let (output, _, _) = gather_native_channel::<3, 0>(source.as_raw());
+    // This CPU path only needs the first byte of each triple. The portable
+    // SIMD gather used by other channel operations builds three vectors and a
+    // swizzle mask per block; a direct strided copy gives LLVM a much simpler
+    // loop to lower for this one-channel conversion.
+    let output = source
+        .as_raw()
+        .chunks_exact(3)
+        .map(|pixel| pixel[0])
+        .collect();
     crate::raster::GrayImage::from_raw(img.width(), img.height(), output)
 }
 

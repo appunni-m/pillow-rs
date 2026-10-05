@@ -596,7 +596,7 @@
           0
         ],
         "mode": "unknown",
-        "chain_length": 2,
+        "chain_length": 3,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"

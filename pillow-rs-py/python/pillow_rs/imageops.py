@@ -5,15 +5,15 @@ from . import _core
 
 def autocontrast(image: Image, cutoff: float = 0, ignore=None, mask=None,
                  preserve_tone: bool = False) -> Image:
-    return Image(_core.ops_autocontrast(image._rust_image, cutoff, mask))
+    return image._new(_core.ops_autocontrast(image._rust_image, cutoff, mask))
 
 
 def equalize(image: Image, mask=None) -> Image:
-    return Image(_core.ops_equalize(image._rust_image, mask))
+    return image._new(_core.ops_equalize(image._rust_image, mask))
 
 
 def invert(image: Image) -> Image:
-    return Image(_core.ops_invert(image._rust_image))
+    return image._new(_core.ops_invert(image._rust_image))
 
 
 def flip(image: Image) -> Image:
@@ -43,7 +43,7 @@ def solarize(image: Image, threshold: int = 128) -> Image:
 
 
 def grayscale(image: Image) -> Image:
-    return Image(_core.ops_grayscale(image._rust_image))
+    return image._new(_core.ops_grayscale(image._rust_image))
 
 
 def expand(image: Image, border=0, fill=0) -> Image:

@@ -557,6 +557,13 @@ fn channel_sample(word: u32, channel: u32) -> F64OrderedState {
     return number(bitcast<u32>(f32(value)));
 }
 fn read_pixel(index: u32) -> u32 {
+    // Singleton L transforms upload four native samples per storage word.
+    // Match transform.wgsl's source-layout flag for geometry-table sampling.
+    if params.mode == 0u && (params._pad & 4u) != 0u {
+        let packed = input[index >> 2u];
+        let luma = (packed >> ((index & 3u) * 8u)) & 0xffu;
+        return luma | 0xff000000u;
+    }
     if params.mode != 2u || (params._pad & 2u) == 0u {
         return input[index];
     }

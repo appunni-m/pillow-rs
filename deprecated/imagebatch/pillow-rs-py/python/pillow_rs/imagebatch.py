@@ -10,6 +10,7 @@ import operator
 
 from . import _core
 from .image import Image
+from .imagefilter import MaxFilter, MedianFilter, RankFilter
 
 
 class ExtractBand:
@@ -17,7 +18,7 @@ class ExtractBand:
 
     Example::
 
-        batch.submit(image, ImageBatch.ExtractBand(3))  # RGBA alpha
+        batch.submit(ImageBatch.PipelineOp(image, ImageBatch.ExtractBand(3)))  # RGBA alpha
     """
 
     __slots__ = ("channel",)
@@ -27,6 +28,16 @@ class ExtractBand:
             self.channel = operator.index(channel)
         except TypeError as error:
             raise TypeError("channel must be an integer") from error
+
+
+class Grayscale:
+    """Request ``ImageOps.grayscale(image)`` in an explicit image batch.
+
+    Equal-size native L, LA, RGB, RGBA, or YCbCr jobs can share one GPU
+    dispatch. Inputs stay in their native modes and return as L images.
+    """
+
+    __slots__ = ()
 
 
 class Invert:
@@ -57,7 +68,7 @@ class Multiply:
 
     Example::
 
-        batch.submit(image_a, ImageBatch.Multiply(image_b))
+        batch.submit(ImageBatch.PipelineOp(image_a, ImageBatch.Multiply(image_b)))
     """
 
     __slots__ = ("image",)
@@ -98,7 +109,7 @@ class Composite:
 
     Example::
 
-        batch.submit(foreground, ImageBatch.Composite(background, mask))
+        batch.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask)))
     """
 
     __slots__ = ("background", "mask")
@@ -151,15 +162,45 @@ class Color3DLUT:
         self._prepared = _core.BatchColor3DLUT(lut)
 
 
+class PipelineOp:
+    """Bind an input image and its pipeline for explicit submission.
+
+    Supply the input image and a callable that builds a lazy image using
+    normal PIL methods, or an operation parameter object such as
+    ``ImageFilter.MedianFilter(3)``. The callable receives the bound image.
+    Its returned Rust descriptors are checked for GPU support during
+    ``submit(pipeline_op)``, before the executor accepts the job.
+    """
+
+    __slots__ = ("_image", "_operation")
+
+    def __init__(self, image, operation):
+        if not isinstance(image, Image):
+            raise TypeError("pipeline input must be a PIL.Image.Image instance")
+        if not callable(operation) and not isinstance(operation, (
+            MedianFilter, MaxFilter, RankFilter, ExtractBand, Grayscale,
+            Invert, Brightness, Multiply, Paste, Composite, Expand, Color3DLUT,
+        )):
+            raise TypeError("PipelineOp requires a lazy pipeline builder or operation parameters")
+        self._image = image
+        self._operation = operation
+
+
 class BatchExecutor:
-    """Submit built-in image filters and join their results in input order.
+    """Submit image operations or lazy GPU pipelines and join in input order.
+
+    ``submit(PipelineOp(image, ...))`` schedules normalized GPU operations.
+    Unsupported GPU operation descriptors are rejected before enqueueing.
+    General pipelines use independent GPU plans; built-in wrappers can group
+    compatible images into a shared dispatch.
 
     ``queue=False`` (the default) executes each submitted operation
     immediately through its usual single-image path. With ``queue=True``,
     ``join()`` groups compatible ``ImageFilter.MedianFilter(3)`` and
     ``ImageFilter.MaxFilter(3)``, and native-L
     ``ImageFilter.RankFilter(3, rank=1)``,
-    ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Invert()``,
+    ``ImageBatch.ExtractBand(channel)``, ``ImageBatch.Grayscale()``,
+    ``ImageBatch.Invert()``,
     ``ImageBatch.Brightness(factor)``,
     ``ImageBatch.Multiply(image2)``, or
     full-frame ``ImageBatch.Paste(source, mask)``, same-mode
@@ -167,50 +208,57 @@ class BatchExecutor:
     ``ImageBatch.Expand(border, fill)`` jobs, plus jobs using one shared
     RGBA-to-RGBA ``ImageBatch.Color3DLUT``, on the GPU when possible.
     Grouped operands use native ``L``, ``LA``, ``RGB``, or ``RGBA`` storage
-    with equal dimensions; batched Paste requires an L mask. Incompatible jobs
-    use the ordinary per-image operation.
+    with equal dimensions; Grayscale also accepts native ``YCbCr`` triples.
+    Batched Paste requires an L mask. Incompatible groups use the individual
+    operation on the selected backend. GPU-unsupported descriptors raise
+    before enqueueing.
 
     Example::
 
         from PIL import ImageBatch, ImageFilter
 
         batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
-        batch.submit(image_a, ImageFilter.MedianFilter(3))
-        batch.submit(image_b, ImageFilter.MedianFilter(3))
+        batch.submit(ImageBatch.PipelineOp(image_a, ImageFilter.MedianFilter(3)))
+        batch.submit(ImageBatch.PipelineOp(image_b, ImageFilter.MedianFilter(3)))
         results = batch.join()
 
         channels = ImageBatch.BatchExecutor(queue=True, backend="gpu")
-        channels.submit(rgba_image, ImageBatch.ExtractBand(3))
+        channels.submit(ImageBatch.PipelineOp(rgba_image, ImageBatch.ExtractBand(3)))
         alpha = channels.join()[0]
 
+        grayscales = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        grayscales.submit(ImageBatch.PipelineOp(rgb_a, ImageBatch.Grayscale()))
+        grayscales.submit(ImageBatch.PipelineOp(rgb_b, ImageBatch.Grayscale()))
+        gray_a, gray_b = grayscales.join()
+
         inversions = ImageBatch.BatchExecutor(queue=True, backend="gpu")
-        inversions.submit(gray_a, ImageBatch.Invert())
-        inversions.submit(gray_b, ImageBatch.Invert())
+        inversions.submit(ImageBatch.PipelineOp(gray_a, ImageBatch.Invert()))
+        inversions.submit(ImageBatch.PipelineOp(gray_b, ImageBatch.Invert()))
         inverted_a, inverted_b = inversions.join()
 
         brightness = ImageBatch.BatchExecutor(queue=True, backend="gpu")
-        brightness.submit(luma_a, ImageBatch.Brightness(0.5))
-        brightness.submit(luma_b, ImageBatch.Brightness(0.5))
+        brightness.submit(ImageBatch.PipelineOp(luma_a, ImageBatch.Brightness(0.5)))
+        brightness.submit(ImageBatch.PipelineOp(luma_b, ImageBatch.Brightness(0.5)))
         darker_a, darker_b = brightness.join()
 
         products = ImageBatch.BatchExecutor(queue=True, backend="gpu")
-        products.submit(image_a, ImageBatch.Multiply(image_b))
-        products.submit(image_c, ImageBatch.Multiply(image_d))
+        products.submit(ImageBatch.PipelineOp(image_a, ImageBatch.Multiply(image_b)))
+        products.submit(ImageBatch.PipelineOp(image_c, ImageBatch.Multiply(image_d)))
         product_a, product_c = products.join()
 
         pastes = ImageBatch.BatchExecutor(queue=True, backend="gpu")
-        pastes.submit(destination_a, ImageBatch.Paste(source_a, mask_a))
-        pastes.submit(destination_b, ImageBatch.Paste(source_b, mask_b))
+        pastes.submit(ImageBatch.PipelineOp(destination_a, ImageBatch.Paste(source_a, mask_a)))
+        pastes.submit(ImageBatch.PipelineOp(destination_b, ImageBatch.Paste(source_b, mask_b)))
         pasted_a, pasted_b = pastes.join()
 
         composites = ImageBatch.BatchExecutor(queue=True, backend="gpu")
-        composites.submit(foreground_a, ImageBatch.Composite(background_a, mask_a))
-        composites.submit(foreground_b, ImageBatch.Composite(background_b, mask_b))
+        composites.submit(ImageBatch.PipelineOp(foreground_a, ImageBatch.Composite(background_a, mask_a)))
+        composites.submit(ImageBatch.PipelineOp(foreground_b, ImageBatch.Composite(background_b, mask_b)))
         composite_a, composite_b = composites.join()
 
         expanded = ImageBatch.BatchExecutor(queue=True, backend="gpu")
-        expanded.submit(image_a, ImageBatch.Expand(4, fill=(9, 17, 23, 31)))
-        expanded.submit(image_b, ImageBatch.Expand(4, fill=(9, 17, 23, 31)))
+        expanded.submit(ImageBatch.PipelineOp(image_a, ImageBatch.Expand(4, fill=(9, 17, 23, 31))))
+        expanded.submit(ImageBatch.PipelineOp(image_b, ImageBatch.Expand(4, fill=(9, 17, 23, 31))))
         expanded_a, expanded_b = expanded.join()
 
         lut = ImageFilter.Color3DLUT.generate(
@@ -218,8 +266,8 @@ class BatchExecutor:
         )
         shared_lut = ImageBatch.Color3DLUT(lut)
         colors = ImageBatch.BatchExecutor(queue=True, backend="gpu")
-        colors.submit(rgba_a, shared_lut)
-        colors.submit(rgba_b, shared_lut)
+        colors.submit(ImageBatch.PipelineOp(rgba_a, shared_lut))
+        colors.submit(ImageBatch.PipelineOp(rgba_b, shared_lut))
         color_a, color_b = colors.join()
 
     Batched ``MaxFilter(3)`` reuses the ordinary max-filter pipeline over a
@@ -227,7 +275,7 @@ class BatchExecutor:
     image, so neighboring jobs cannot affect one another. The native-L
     ``RankFilter(3, rank=1)`` batch follows the same halo layout and reuses its
     packed-L rank pipeline. It is groupable only for L images with that exact
-    size and rank; other RankFilter jobs retain the ordinary per-image path.
+    size and rank; other GPU-supported RankFilter jobs use individual GPU plans.
     Batched extraction
     reuses ``Image.getchannel`` over a same-mode vertical
     stack and returns one ``L`` image per input. Batched multiplication stacks
@@ -235,7 +283,9 @@ class BatchExecutor:
     ``ImageChops.multiply`` pipeline. Batched Paste stacks full-frame
     destinations, sources, and L masks, then reuses ``Image.paste`` at the
     origin. Batched Composite stacks foregrounds, backgrounds, and L masks,
-    then reuses ``Image.composite`` over that stack. A Color3DLUT batch snapshots one shared LUT and applies the
+    then reuses ``Image.composite`` over that stack. Grayscale applies the
+    existing pipeline to a native-mode stack and returns one ``L`` image per
+    input. A Color3DLUT batch snapshots one shared LUT and applies the
     existing RGBA pipeline to a vertical stack. Invert groups L and RGB images
     through the existing ``ImageOps.invert`` pipeline. Expand inserts native
     fill rows between vertically stacked inputs, then uses one existing
@@ -248,8 +298,22 @@ class BatchExecutor:
         self._executor = _core.BatchExecutor(queue=queue, backend=backend)
         self._metadata = []
 
-    def submit(self, image, operation):
-        """Submit one image and a supported filter or ImageBatch operation.
+    def submit(self, pipeline_op):
+        """Submit one bound PipelineOp; reject unsupported GPU operations.
+
+        The operation's builder runs here to normalize its descriptors. In
+        queued mode the accepted pipeline executes during ``join``.
+        """
+        if not isinstance(pipeline_op, PipelineOp):
+            raise TypeError("batch operation must be an ImageBatch.PipelineOp instance")
+        image = pipeline_op._image
+        specification = pipeline_op._operation
+        if callable(specification):
+            return self._submit_pipeline(specification(image))
+        return self._submit_grouped(image, specification)
+
+    def _submit_grouped(self, image, operation):
+        """Submit normalized parameters through an existing group implementation.
 
         Returns the zero-based submission index. In nonqueued mode the
         operation has completed before ``submit`` returns. In queued mode it
@@ -264,6 +328,7 @@ class BatchExecutor:
             "MaxFilter",
             "RankFilter",
             "ExtractBand",
+            "Grayscale",
             "Invert",
             "Brightness",
             "Multiply",
@@ -275,7 +340,8 @@ class BatchExecutor:
             raise TypeError(
                 "batch operation must be an ImageFilter.MedianFilter or "
                 "ImageFilter.MaxFilter or ImageFilter.RankFilter, "
-                "ImageBatch.ExtractBand, ImageBatch.Invert, ImageBatch.Multiply, "
+                "ImageBatch.ExtractBand, ImageBatch.Grayscale, "
+                "ImageBatch.Invert, ImageBatch.Multiply, "
                 "ImageBatch.Brightness, "
                 "ImageBatch.Paste, ImageBatch.Composite, ImageBatch.Expand, or "
                 "ImageBatch.Color3DLUT instance"
@@ -301,7 +367,30 @@ class BatchExecutor:
                 metadata_source._native_info_rebaseline,
                 metadata_source._native_info_omitted,
             )
-        index = self._executor.submit(image._rust_image, operation)
+        index = self._executor.submit_grouped(image._rust_image, operation)
+        if index != len(self._metadata):
+            raise RuntimeError("batch executor returned an unexpected submission index")
+        self._metadata.append(metadata)
+        return index
+
+    def _submit_pipeline(self, image):
+        """Schedule a lazy image pipeline built with normal PIL methods.
+
+        Requires a GPU executor and GPU-supported operation descriptors.
+        ``queue=True`` defers execution until ``join``; ``queue=False``
+        completes the pipeline here. Image-dependent GPU restrictions raise
+        an error at execution rather than falling back to CPU. Each general
+        pipeline uses its own existing GPU dispatch plan.
+        """
+        if not isinstance(image, Image):
+            raise TypeError("batch input must be a PIL.Image.Image instance")
+        metadata = (
+            image._info.copy(),
+            deepcopy(image._native_info),
+            image._native_info_rebaseline,
+            image._native_info_omitted,
+        )
+        index = self._executor.submit_prepared_pipeline(image._rust_image)
         if index != len(self._metadata):
             raise RuntimeError("batch executor returned an unexpected submission index")
         self._metadata.append(metadata)

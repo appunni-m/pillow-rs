@@ -107,8 +107,8 @@ class BenchmarkViewTests(unittest.TestCase):
         # Pin the complete generated catalog so additions and removals must
         # keep both public benchmark tables current. These counts match the
         # checked-in generated input catalog.
-        self.assertEqual(len(workloads), 655)
-        self.assertEqual(categories.count("operations"), 193)
+        self.assertEqual(len(workloads), 657)
+        self.assertEqual(categories.count("operations"), 195)
         self.assertEqual(categories.count("pipelines"), 462)
 
     def test_all_observations_retained_without_mutating_snapshot(self):

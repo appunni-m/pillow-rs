@@ -17,6 +17,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODES = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4}
+PIXEL_CHANNELS = {**MODES, "YCbCr": 3}
+GRAYSCALE_MODES = ("L", "LA", "RGB", "RGBA", "YCbCr")
+GRAYSCALE_BATCH_SEEDS = (23, 89)
+CALLBACK_OPERATIONS = ("rotate", "median", "extractband", "grayscale", "multiply", "invert")
+PIPELINE_CASES = tuple(
+    (mode, operation, (19 + index, 13 + index), 23 + index * 31)
+    for mode in MODES
+    for index, operation in enumerate(("resize", "transpose", "crop", "chain"))
+) + tuple(
+    (mode, operation, (37, 29), seed)
+    for mode in ("L", "RGB")
+    for operation in ("equalize", "equalize-masked", "autocontrast")
+    for seed in (3, 97)
+) + tuple(
+    (mode, operation, (19, 13), seed)
+    for mode in MODES
+    for operation in CALLBACK_OPERATIONS
+    if operation != "invert" or mode in ("L", "RGB")
+    for seed in (23, 89)
+)
 SIZES = ((7, 5), (7, 5), (1, 1))
 SEEDS = (3, 41, 97)
 LARGE_SIZE = (256, 256)
@@ -112,17 +132,54 @@ COMPOSITE_FAULT_CONTRACT_CASES = (
         "input_seeds": COMPOSITE_BATCH_SEEDS,
     },
 )
+GRAYSCALE_FAULT_CONTRACT_REQUIREMENTS = {
+    "imagebatch.grayscale.group-fallback": (
+        "A compatible queued native-mode grayscale group recovers exact ordered "
+        "outputs after a dimension or allocation failure, preserves submitted "
+        "inputs, and keeps the executor usable."
+    ),
+}
+GRAYSCALE_FAULT_CONTRACT_CASES = (
+    {
+        "case_id": "imagebatch.grayscale.group-dimension-failure.fallback",
+        "verification": "fault-contract",
+        "operation": "ImageBatch.Grayscale",
+        "target_profile": "python-gpu",
+        "oracle": "not_applicable",
+        "requirements": ("imagebatch.grayscale.group-fallback",),
+        "fault": {
+            "point": "image_batch.grayscale.group_dimension_failure",
+            "contract": "grouped-grayscale-error-falls-back-and-recovers",
+        },
+        "mode": "YCbCr",
+        "input_seeds": GRAYSCALE_BATCH_SEEDS,
+    },
+    {
+        "case_id": "imagebatch.grayscale.group-memory-failure.fallback",
+        "verification": "fault-contract",
+        "operation": "ImageBatch.Grayscale",
+        "target_profile": "python-gpu",
+        "oracle": "not_applicable",
+        "requirements": ("imagebatch.grayscale.group-fallback",),
+        "fault": {
+            "point": "image_batch.grayscale.group_memory_failure",
+            "contract": "grouped-grayscale-error-falls-back-and-recovers",
+        },
+        "mode": "YCbCr",
+        "input_seeds": GRAYSCALE_BATCH_SEEDS,
+    },
+)
 
 
 def pixels(mode: str, size: tuple[int, int], seed: int) -> bytes:
-    count = size[0] * size[1] * MODES[mode]
+    count = size[0] * size[1] * PIXEL_CHANNELS[mode]
     return bytes((i * 31 + seed * 47 + (i // 9) * 13) & 255 for i in range(count))
 
 
 def benchmark_pixels(
     mode: str, seed: int, size: tuple[int, int] = (64, 64)
 ) -> bytes:
-    count = size[0] * size[1] * MODES[mode]
+    count = size[0] * size[1] * PIXEL_CHANNELS[mode]
     return bytes(
         (i * 73 + (i // 11) * 19 + seed * 47 + (seed >> 2)) & 255
         for i in range(count)
@@ -178,6 +235,7 @@ def require_gpu_execution(
     expected_shader_dispatches: int = 1,
     expected_operation_count: int = 1,
     expected_dispatch_count: int = 1,
+    expected_mode_conversions: int = 0,
 ) -> None:
     if (
         receipt is None
@@ -188,8 +246,14 @@ def require_gpu_execution(
     ):
         raise AssertionError(f"invalid GPU receipt for {label}: {receipt}")
     resource = receipt.get("resource")
-    if not isinstance(resource, dict) or resource.get("mode_conversion_count") != 0:
-        raise AssertionError(f"{label} changed pixel mode: {receipt}")
+    if (
+        not isinstance(resource, dict)
+        or resource.get("mode_conversion_count") != expected_mode_conversions
+    ):
+        raise AssertionError(
+            f"{label} mode-conversion count did not equal "
+            f"{expected_mode_conversions}: {receipt}"
+        )
     shader_records = core.take_gpu_shader_coverage()
     matching_dispatches = sum(
         record["dispatches"]
@@ -203,12 +267,332 @@ def require_gpu_execution(
         )
 
 
+def build_pipeline_case(image, operation):
+    """Use the same public Pillow inputs in the isolated oracle and target."""
+    from PIL import Image, ImageChops, ImageFilter, ImageOps
+
+    if operation == "resize":
+        return image.resize((17, 11), Image.Resampling.NEAREST)
+    if operation == "transpose":
+        return image.transpose(Image.Transpose.ROTATE_90)
+    if operation == "crop":
+        return image.crop((1, 2, 15, 10))
+    if operation == "rotate":
+        return image.rotate(90, expand=True)
+    if operation == "median":
+        return image.filter(ImageFilter.MedianFilter(3))
+    if operation == "extractband":
+        return image.getchannel(BENCHMARK_CHANNELS[image.mode])
+    if operation == "grayscale":
+        return ImageOps.grayscale(image)
+    if operation == "invert":
+        return ImageOps.invert(image)
+    if operation == "multiply":
+        other = Image.frombytes(image.mode, image.size, pixels(image.mode, image.size, 113))
+        return ImageChops.multiply(image, other.transpose(Image.Transpose.FLIP_LEFT_RIGHT))
+    if operation == "chain":
+        return image.resize((17, 11), Image.Resampling.NEAREST).transpose(
+            Image.Transpose.FLIP_LEFT_RIGHT
+        ).crop((1, 2, 15, 10))
+    if operation == "equalize":
+        return ImageOps.equalize(image)
+    if operation == "autocontrast":
+        return ImageOps.autocontrast(image, cutoff=1)
+    if operation == "equalize-masked":
+        mask = Image.frombytes("L", image.size, bytes(
+            255 if index % 7 < 3 else 0
+            for index in range(image.width * image.height)
+        )).transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+        return ImageOps.equalize(image, mask)
+    raise ValueError(f"unknown pipeline parity operation: {operation}")
+
+
+def pipeline_oracle_outputs():
+    from PIL import Image
+
+    expected = []
+    for mode, operation, size, seed in PIPELINE_CASES:
+        image = Image.frombytes(mode, size, pixels(mode, size, seed))
+        image.info["pipeline-seed"] = seed
+        image.info["nested"] = {"seed": [seed]}
+        result = build_pipeline_case(image, operation)
+        expected.append({
+            "bytes": result.tobytes().hex(),
+            "mode": result.mode,
+            "size": list(result.size),
+            "info": result.info,
+        })
+    return expected
+
+
+def run_pipeline_parity(expected, core):
+    from PIL import Image, ImageBatch, ImageChops, ImageDraw, ImageFilter, ImageOps
+
+    batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+    inputs = []
+    pipelines = []
+    order = tuple(reversed(range(len(PIPELINE_CASES))))
+    for case_index in order:
+        mode, operation, size, seed = PIPELINE_CASES[case_index]
+        original = pixels(mode, size, seed)
+        image = Image.frombytes(mode, size, original)
+        image.info["pipeline-seed"] = seed
+        image.info["nested"] = {"seed": [seed]}
+        inputs.append((image, original))
+        pipeline = build_pipeline_case(image, operation)
+        if pipeline._info.get("nested") is not image._info["nested"]:
+            raise AssertionError("pipeline builder deep-copied Pillow's nested metadata")
+        pipelines.append(pipeline)
+    # Normal PIL builders retain their own property/read behavior. Only
+    # submission belongs to the executor's deferred-execution contract.
+    core.take_gpu_shader_coverage()
+    core.take_pipeline_telemetry()
+    for submitted_index, pipeline in enumerate(pipelines):
+        if batch.submit(ImageBatch.PipelineOp(pipeline, lambda image: image)) != submitted_index:
+            raise AssertionError("pipeline submission changed order")
+        # The batch snapshots the top-level mapping at submission; later
+        # changes to that mapping must not change the submitted result.
+        pipeline._info["pipeline-seed"] = -1
+    if core.take_gpu_shader_coverage() or core.take_pipeline_telemetry() is not None:
+        raise AssertionError("queued pipeline submission executed before join")
+    results = batch.join()
+    receipts = core.take_pipeline_telemetry()
+    shaders = core.take_gpu_shader_coverage()
+    if (
+        receipts is None
+        or receipts.get("actual_backend") != "gpu"
+        or receipts.get("fallback_reason")
+        or not receipts.get("dispatch_count")
+        or not shaders
+    ):
+        raise AssertionError(f"generic pipeline did not use native GPU: {receipts}, {shaders}")
+    for image, original in inputs:
+        if image.tobytes() != original:
+            raise AssertionError("pipeline submission mutated its source")
+    if len(results) != len(order):
+        raise AssertionError("pipeline join omitted results")
+    for result, case_index, (source, _) in zip(results, order, inputs, strict=True):
+        reference = expected[case_index]
+        if (
+            result.tobytes().hex() != reference["bytes"]
+            or result.mode != reference["mode"]
+            or list(result.size) != reference["size"]
+            or dict(result.info) != reference["info"]
+        ):
+            raise AssertionError(f"pipeline differs from Pillow for {PIPELINE_CASES[case_index]}")
+        if result._info["nested"] is not source._info["nested"]:
+            raise AssertionError("pipeline batching deep-copied nested metadata")
+    if batch.join() != []:
+        raise AssertionError("pipeline join did not drain its queue")
+
+    # Submit actual builders from their sources, including compatible singles
+    # that the executor maps into grouped native kernels automatically.
+    callback_cases = [index for index, case in enumerate(PIPELINE_CASES)
+                      if case[1] in CALLBACK_OPERATIONS]
+    callback_sources = []
+    core.take_gpu_shader_coverage()
+    for case_index in callback_cases:
+        mode, operation, size, seed = PIPELINE_CASES[case_index]
+        source = Image.frombytes(mode, size, pixels(mode, size, seed))
+        source.info.update({"pipeline-seed": seed, "nested": {"seed": [seed]}})
+        callback_sources.append(source)
+        batch.submit(ImageBatch.PipelineOp(source, lambda image, operation=operation: build_pipeline_case(image, operation)))
+    if core.take_gpu_shader_coverage():
+        raise AssertionError("queued callback submission dispatched GPU work")
+    callback_results = batch.join()
+    callback_shaders = core.take_gpu_shader_coverage()
+    for result, source, case_index in zip(callback_results, callback_sources, callback_cases, strict=True):
+        reference = expected[case_index]
+        if (result.tobytes().hex() != reference["bytes"] or result.mode != reference["mode"]
+                or list(result.size) != reference["size"] or dict(result.info) != reference["info"]):
+            raise AssertionError(f"submitted callback differs from Pillow for {PIPELINE_CASES[case_index]}")
+        if result._info["nested"] is not source._info["nested"]:
+            raise AssertionError("submitted callback deep-copied nested metadata")
+    # Native L/LA/RGB have packed specializations; count those alongside
+    # the RGBA shader while still requiring exactly one dispatch per mode.
+    median_dispatches = sum(record.get("dispatches", 0) for record in callback_shaders
+                            if "median_filter_3x3" in record.get("shader_file", ""))
+    if median_dispatches != len(MODES):
+        raise AssertionError(f"callback median jobs did not group once per mode: {callback_shaders}")
+
+    # Grouping must recursively replace a pre-existing CPU backend lock on
+    # lazy binary operands, before any eligibility probe or input packing.
+    for mode in MODES:
+        core.take_gpu_shader_coverage()
+        for seed in (23, 89):
+            size = (19, 13)
+            source = Image.frombytes(mode, size, pixels(mode, size, seed))
+            other = Image.frombytes(mode, size, pixels(mode, size, 113)).transpose(0)
+            core.disable_backend("gpu")
+            core.enable_backend("cpu")
+            other._rust_image = other._rust_image.lock_active_backend()
+            core.disable_backend("cpu")
+            core.enable_backend("gpu")
+            batch.submit(ImageBatch.PipelineOp(source, lambda image, other=other: ImageChops.multiply(image, other)))
+        results = batch.join()
+        require_gpu_execution(
+            core, core.take_pipeline_telemetry(), f"CPU-locked grouped {mode} Multiply",
+            expected_shader="multiply", expected_shader_dispatches=1,
+        )
+        cases = [index for index, case in enumerate(PIPELINE_CASES)
+                 if case[0] == mode and case[1] == "multiply"]
+        if [result.tobytes().hex() for result in results] != [expected[index]["bytes"] for index in cases]:
+            raise AssertionError(f"GPU-locking grouped {mode} Multiply operands changed pixels")
+
+    # The executor's GPU lock must reach a lazy auxiliary mask even when the
+    # caller previously locked that mask to CPU.
+    case_index = next(index for index, case in enumerate(PIPELINE_CASES)
+                      if case[0:2] == ("L", "equalize-masked"))
+    mode, _, size, seed = PIPELINE_CASES[case_index]
+    source = Image.frombytes(mode, size, pixels(mode, size, seed))
+    mask = Image.frombytes("L", size, bytes(
+        255 if index % 7 < 3 else 0 for index in range(size[0] * size[1])
+    )).transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    core.disable_backend("gpu")
+    core.enable_backend("cpu")
+    mask._rust_image = mask._rust_image.lock_active_backend()
+    core.disable_backend("cpu")
+    core.enable_backend("gpu")
+    batch.submit(ImageBatch.PipelineOp(ImageOps.equalize(source, mask), lambda image: image))
+    if batch.join()[0].tobytes().hex() != expected[case_index]["bytes"]:
+        raise AssertionError("GPU-locking an auxiliary Equalize mask changed pixels")
+
+    # Reuse the drained executor, and verify the immediate route separately.
+    for executor in (batch, ImageBatch.BatchExecutor(queue=False, backend="gpu")):
+        mode, operation, size, seed = PIPELINE_CASES[0]
+        source = Image.frombytes(mode, size, pixels(mode, size, seed))
+        source.info["pipeline-seed"] = seed
+        core.take_gpu_shader_coverage()
+        executor.submit(ImageBatch.PipelineOp(build_pipeline_case(source, operation), lambda image: image))
+        dispatches = core.take_gpu_shader_coverage()
+        if executor is not batch and not dispatches:
+            raise AssertionError("nonqueued pipeline did not execute immediately")
+        output = executor.join()[0]
+        if output.tobytes().hex() != expected[0]["bytes"]:
+            raise AssertionError("pipeline executor reuse/immediate result differs from Pillow")
+
+    for executor, image, error in (
+        (batch, Image.new("L", (7, 5)), ValueError),
+        (ImageBatch.BatchExecutor(backend="cpu"), Image.new("L", (7, 5)).transpose(0), NotImplementedError),
+    ):
+        try:
+            executor.submit(ImageBatch.PipelineOp(image, lambda image: image))
+        except error:
+            pass
+        else:
+            raise AssertionError("invalid pipeline submission was accepted")
+
+    # YCbCr GaussianBlur is a valid Pillow operation whose current GPU
+    # logical-mode gate requires host control. General submission must reject it.
+    source = Image.frombytes("YCbCr", (7, 5), benchmark_pixels("YCbCr", 41, (7, 5)))
+    unsupported = source.filter(ImageFilter.GaussianBlur(1))
+    try:
+        batch.submit(ImageBatch.PipelineOp(unsupported, lambda image: image))
+    except NotImplementedError:
+        pass
+    else:
+        raise AssertionError("unsupported YCbCr blur was not rejected during submit")
+    if batch.join() != []:
+        raise AssertionError("rejected pipeline left stale jobs")
+    palette = Image.new("P", (7, 5))
+    for image in (palette, palette.transpose(Image.Transpose.FLIP_LEFT_RIGHT)):
+        try:
+            batch.submit(ImageBatch.PipelineOp(image, lambda image: image.filter(ImageFilter.GaussianBlur(1))))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid palette blur was not rejected during submit")
+    if batch.join() != []:
+        raise AssertionError("rejected palette pipeline left stale jobs")
+    drawn = Image.new("RGB", (7, 5))
+    ImageDraw.Draw(drawn).rectangle((1, 1, 5, 3), fill=(9, 27, 81))
+    try:
+        batch.submit(ImageBatch.PipelineOp(drawn, lambda image: image))
+    except NotImplementedError:
+        pass
+    else:
+        raise AssertionError("unsupported drawing was not rejected during submit")
+    if batch.join() != []:
+        raise AssertionError("rejected operation left a phantom queued result")
+
+    valid_source = Image.frombytes("L", (19, 13), pixels("L", (19, 13), 23))
+    builder_calls = []
+
+    def build_bound_resize(image):
+        if image is not valid_source:
+            raise AssertionError("PipelineOp builder received a different input")
+        builder_calls.append(image)
+        return image.resize((17, 11), Image.Resampling.NEAREST)
+
+    valid = ImageBatch.PipelineOp(valid_source, build_bound_resize)
+    if builder_calls:
+        raise AssertionError("binding a PipelineOp executed its builder")
+    if batch.submit(valid) != 0:
+        raise AssertionError("drained executor did not reset submission indexes")
+    if len(builder_calls) != 1:
+        raise AssertionError("submit did not run the bound builder exactly once")
+    for invalid in (valid_source, ImageFilter.MedianFilter(3), lambda image: image):
+        try:
+            batch.submit(invalid)
+        except TypeError:
+            pass
+        else:
+            raise AssertionError("submit accepted something other than PipelineOp")
+    try:
+        batch.submit(valid_source, valid)
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("submit accepted the removed two-argument form")
+    for image, operation in ((object(), build_bound_resize), (valid_source, object())):
+        try:
+            ImageBatch.PipelineOp(image, operation)
+        except TypeError:
+            pass
+        else:
+            raise AssertionError("PipelineOp accepted an invalid image or operation")
+    try:
+        batch.submit(ImageBatch.PipelineOp(valid_source, ImageBatch.Brightness(1.23456789)))
+    except NotImplementedError:
+        pass
+    else:
+        raise AssertionError("unsupported GPU operation was not rejected during submit")
+    try:
+        batch.submit(ImageBatch.PipelineOp(valid_source, lambda image: image.filter(ImageFilter.BoxBlur(65))))
+    except NotImplementedError:
+        pass
+    else:
+        raise AssertionError("unsafe GPU operation parameters were not rejected during submit")
+    if batch.submit(valid) != 1:
+        raise AssertionError("rejected operation changed submission indexes")
+    if len(builder_calls) != 2:
+        raise AssertionError("a reused PipelineOp did not run once per submission")
+    if [image.tobytes().hex() for image in batch.join()] != [expected[0]["bytes"]] * 2:
+        raise AssertionError("submission rejection corrupted valid queued outputs")
+    mode, operation, size, seed = PIPELINE_CASES[0]
+    source = Image.frombytes(mode, size, pixels(mode, size, seed))
+    batch.submit(ImageBatch.PipelineOp(build_pipeline_case(source, operation), lambda image: image))
+    if batch.join()[0].tobytes().hex() != expected[0]["bytes"]:
+        raise AssertionError("native GPU executor was not reusable after an error")
+    # Ordinary CPU work still succeeds after the native-GPU policy unwinds.
+    core.disable_backend("gpu")
+    core.enable_backend("cpu")
+    source.filter(ImageFilter.GaussianBlur(1)).load()
+    core.disable_backend("cpu")
+    core.enable_backend("gpu")
+    print(f"GPU generic pipelines: {len(expected)}/{len(expected)} Pillow bytes/mode/size/info PASS; queue/reuse/error contracts PASS")
+
+
 def run_oracle(output: Path) -> None:
     import PIL
     from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps
 
     if PIL.__version__ != "12.2.0":
         raise RuntimeError(f"unexpected Pillow oracle version: {PIL.__version__}")
+    pipeline_outputs = pipeline_oracle_outputs()
+    if os.environ.get("IMAGEBATCH_PARITY_SCOPE") == "pipeline":
+        output.write_text(json.dumps({"pillow_version": PIL.__version__, "pipeline_outputs": pipeline_outputs}))
+        return
     expected: dict[str, list[str]] = {}
     metadata: dict[str, list[int | None]] = {}
     benchmark_outputs: dict[str, list[str]] = {}
@@ -240,6 +624,8 @@ def run_oracle(output: Path) -> None:
     composite_fallback_outputs: dict[str, dict[str, str | list[int] | int]] = {}
     invert_outputs: dict[str, list[str]] = {}
     invert_metadata: dict[str, list[int | None]] = {}
+    grayscale_batch_outputs: dict[str, list[str]] = {}
+    grayscale_batch_metadata: dict[str, list[int | None]] = {}
     invert_large_rgb_outputs: list[str] = []
     large_outputs: dict[str, list[str]] = {}
     large_metadata: dict[str, list[int | None]] = {}
@@ -326,6 +712,19 @@ def run_oracle(output: Path) -> None:
             result = ImageOps.invert(image)
             invert_outputs[mode].append(result.tobytes().hex())
             invert_metadata[mode].append(result.info.get("batch-seed"))
+    for mode in GRAYSCALE_MODES:
+        grayscale_batch_outputs[mode] = []
+        grayscale_batch_metadata[mode] = []
+        for seed in GRAYSCALE_BATCH_SEEDS:
+            image = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed)
+            )
+            image.info["grayscale-seed"] = seed
+            result = ImageOps.grayscale(image)
+            grayscale_batch_outputs[mode].append(result.tobytes().hex())
+            grayscale_batch_metadata[mode].append(
+                result.info.get("grayscale-seed")
+            )
     for seed in range(INVERT_LARGE_IMAGE_COUNT):
         image = Image.frombytes(
             "RGB",
@@ -548,6 +947,7 @@ def run_oracle(output: Path) -> None:
         json.dumps(
             {
                 "pillow_version": PIL.__version__,
+                "pipeline_outputs": pipeline_outputs,
                 "outputs": expected,
                 "metadata": metadata,
                 "benchmark_outputs": benchmark_outputs,
@@ -581,11 +981,91 @@ def run_oracle(output: Path) -> None:
                 "composite_dispatch_boundary_outputs": composite_dispatch_boundary_outputs,
                 "invert_outputs": invert_outputs,
                 "invert_metadata": invert_metadata,
+                "grayscale_batch_outputs": grayscale_batch_outputs,
+                "grayscale_batch_metadata": grayscale_batch_metadata,
                 "invert_large_rgb_outputs": invert_large_rgb_outputs,
                 "boundary_rgba_extract_alpha": boundary_reference.tobytes().hex(),
             }
         )
     )
+
+
+def run_grayscale_parity(expected: dict, core) -> None:
+    """Check queued grayscale outputs against the isolated Pillow oracle."""
+
+    from PIL import Image, ImageBatch
+
+    seeds = tuple(reversed(GRAYSCALE_BATCH_SEEDS))
+    expected_index = {seed: index for index, seed in enumerate(GRAYSCALE_BATCH_SEEDS)}
+    for backend in ("cpu", "simd"):
+        for selected in ("cpu", "simd", "gpu"):
+            core.disable_backend(selected)
+        if not core.enable_backend(backend):
+            raise AssertionError(f"{backend} backend unavailable for grayscale parity")
+        for mode in GRAYSCALE_MODES:
+            batch = ImageBatch.BatchExecutor(queue=True, backend=backend)
+            submitted = []
+            for seed in seeds:
+                image = Image.frombytes(
+                    mode, (64, 64), benchmark_pixels(mode, seed)
+                )
+                image.info["grayscale-seed"] = seed
+                submitted.append((image, image.tobytes()))
+                batch.submit(ImageBatch.PipelineOp(image, ImageBatch.Grayscale()))
+            results = batch.join()
+            if any(image.tobytes() != original for image, original in submitted):
+                raise AssertionError(f"queued {backend}/{mode} grayscale mutated an input")
+            if [image.mode for image in results] != ["L", "L"] or [
+                image.size for image in results
+            ] != [(64, 64), (64, 64)]:
+                raise AssertionError(f"queued {backend}/{mode} grayscale changed output layout")
+            if [image.tobytes().hex() for image in results] != [
+                expected["grayscale_batch_outputs"][mode][expected_index[seed]]
+                for seed in seeds
+            ]:
+                raise AssertionError(f"queued {backend}/{mode} grayscale differs from Pillow")
+            if [image.info.get("grayscale-seed") for image in results] != list(seeds):
+                raise AssertionError(f"queued {backend}/{mode} grayscale changed info or order")
+        print(f"{backend} queued grayscale {','.join(GRAYSCALE_MODES)}: Pillow parity PASS")
+
+    for selected in ("cpu", "simd", "gpu"):
+        core.disable_backend(selected)
+    if not core.enable_backend("gpu"):
+        raise AssertionError("GPU backend unavailable for grouped grayscale parity")
+    for mode in GRAYSCALE_MODES:
+        core.take_gpu_shader_coverage()
+        core.take_pipeline_telemetry()
+        batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+        submitted = []
+        for seed in seeds:
+            image = Image.frombytes(
+                mode, (64, 64), benchmark_pixels(mode, seed)
+            )
+            image.info["grayscale-seed"] = seed
+            submitted.append((image, image.tobytes()))
+            batch.submit(ImageBatch.PipelineOp(image, ImageBatch.Grayscale()))
+        results = batch.join()
+        if any(image.tobytes() != original for image, original in submitted):
+            raise AssertionError(f"queued GPU/{mode} grayscale mutated an input")
+        if [image.mode for image in results] != ["L", "L"] or [
+            image.size for image in results
+        ] != [(64, 64), (64, 64)]:
+            raise AssertionError(f"queued GPU/{mode} grayscale changed output layout")
+        if [image.tobytes().hex() for image in results] != [
+            expected["grayscale_batch_outputs"][mode][expected_index[seed]]
+            for seed in seeds
+        ]:
+            raise AssertionError(f"queued GPU/{mode} grayscale differs from Pillow")
+        if [image.info.get("grayscale-seed") for image in results] != list(seeds):
+            raise AssertionError(f"queued GPU/{mode} grayscale changed info or order")
+        require_gpu_execution(
+            core,
+            core.take_pipeline_telemetry(),
+            f"{mode} Grayscale queued group",
+            expected_shader="grayscale.wgsl",
+            expected_mode_conversions=int(mode in ("L", "LA")),
+        )
+        print(f"GPU queued grayscale {mode}: Pillow parity PASS; one native-mode dispatch")
 
 
 def run_target(expected_path: Path) -> None:
@@ -601,6 +1081,12 @@ def run_target(expected_path: Path) -> None:
         raise RuntimeError("GPU backend unavailable for the required batch parity lane")
     core.set_pipeline_telemetry(True)
     core.set_gpu_shader_coverage(True)
+
+    run_pipeline_parity(expected["pipeline_outputs"], core)
+    if os.environ.get("IMAGEBATCH_PARITY_SCOPE") == "pipeline":
+        return
+
+    run_grayscale_parity(expected, core)
 
     # ImageBatch.Invert is an explicit wrapper around ImageOps.invert. Its
     # grouping contract is L/RGB only; queue=False and non-GPU queues keep the
@@ -620,7 +1106,7 @@ def run_target(expected_path: Path) -> None:
                     pixels(mode, SIZES[input_index], SEEDS[input_index]),
                 )
                 image.info["batch-seed"] = SEEDS[input_index]
-                queued.submit(image, ImageBatch.Invert())
+                queued.submit(ImageBatch.PipelineOp(image, ImageBatch.Invert()))
             results = queued.join()
             if [image.tobytes().hex() for image in results] != [
                 expected["invert_outputs"][mode][index] for index in order
@@ -650,7 +1136,7 @@ def run_target(expected_path: Path) -> None:
                 pixels(mode, SIZES[input_index], SEEDS[input_index]),
             )
             image.info["batch-seed"] = SEEDS[input_index]
-            eager.submit(image, ImageBatch.Invert())
+            eager.submit(ImageBatch.PipelineOp(image, ImageBatch.Invert()))
         results = eager.join()
         if [image.tobytes().hex() for image in results] != [
             expected["invert_outputs"][mode][index] for index in order
@@ -683,7 +1169,7 @@ def run_target(expected_path: Path) -> None:
                 else benchmark_pixels(mode, seed, size),
             )
             image.info["batch-seed"] = metadata_seeds[seed_index]
-            batch.submit(image, ImageBatch.Invert())
+            batch.submit(ImageBatch.PipelineOp(image, ImageBatch.Invert()))
         results = batch.join()
         actual = [image.tobytes().hex() for image in results]
         wanted = expected_outputs
@@ -720,7 +1206,7 @@ def run_target(expected_path: Path) -> None:
                     pixels(mode, SIZES[input_index], SEEDS[input_index]),
                 )
                 image.info["batch-seed"] = SEEDS[input_index]
-                small.submit(image, ImageBatch.Brightness(0.5))
+                small.submit(ImageBatch.PipelineOp(image, ImageBatch.Brightness(0.5)))
             small_actual = small.join()
             if [image.tobytes().hex() for image in small_actual] != [
                 expected["brightness_outputs"][mode][index]
@@ -741,7 +1227,7 @@ def run_target(expected_path: Path) -> None:
             for seed in range(64):
                 image = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
                 image.info["batch-seed"] = seed
-                batch.submit(image, ImageBatch.Brightness(0.5))
+                batch.submit(ImageBatch.PipelineOp(image, ImageBatch.Brightness(0.5)))
             actual = batch.join()
             if [image.tobytes().hex() for image in actual] != expected[
                 "brightness_benchmark_outputs"
@@ -759,7 +1245,7 @@ def run_target(expected_path: Path) -> None:
             eager_source = Image.frombytes("LA", SIZES[0], pixels("LA", SIZES[0], SEEDS[0]))
             eager_source.info["batch-seed"] = SEEDS[0]
             eager = ImageBatch.BatchExecutor(queue=False, backend="cpu")
-            if eager.submit(eager_source, ImageBatch.Brightness(0.5)) != 0:
+            if eager.submit(ImageBatch.PipelineOp(eager_source, ImageBatch.Brightness(0.5))) != 0:
                 raise AssertionError("queue=False Brightness returned an invalid index")
             eager_result = eager.join()[0]
             if (
@@ -793,7 +1279,7 @@ def run_target(expected_path: Path) -> None:
             size, seed = SIZES[input_index], SEEDS[input_index]
             image = Image.frombytes(mode, size, pixels(mode, size, seed))
             image.info["batch-seed"] = seed
-            batch.submit(image, ImageFilter.MedianFilter(3))
+            batch.submit(ImageBatch.PipelineOp(image, ImageFilter.MedianFilter(3)))
         actual = batch.join()
         outputs = [image.tobytes().hex() for image in actual]
         expected_outputs = [expected["outputs"][mode][index] for index in submission_order]
@@ -819,10 +1305,7 @@ def run_target(expected_path: Path) -> None:
 
         benchmark = ImageBatch.BatchExecutor(queue=True, backend="gpu")
         for seed in range(64):
-            benchmark.submit(
-                Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed)),
-                ImageFilter.MedianFilter(3),
-            )
+            benchmark.submit(ImageBatch.PipelineOp(Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed)), ImageFilter.MedianFilter(3)))
         actual = benchmark.join()
         outputs = [image.tobytes().hex() for image in actual]
         if outputs != expected["benchmark_outputs"][mode]:
@@ -838,7 +1321,7 @@ def run_target(expected_path: Path) -> None:
                 mode, LARGE_SIZE, pixels(mode, LARGE_SIZE, image_seed)
             )
             image.info["batch-seed"] = image_seed
-            batch.submit(image, ImageFilter.MedianFilter(3))
+            batch.submit(ImageBatch.PipelineOp(image, ImageFilter.MedianFilter(3)))
         actual = batch.join()
         output = [image.tobytes().hex() for image in actual]
         if output != expected["large_outputs"][mode]:
@@ -857,7 +1340,7 @@ def run_target(expected_path: Path) -> None:
         size, seed = SIZES[input_index], SEEDS[input_index]
         image = Image.frombytes("RGBA", size, pixels("RGBA", size, seed))
         image.info["batch-seed"] = seed
-        lut_batch.submit(image, shared_lut)
+        lut_batch.submit(ImageBatch.PipelineOp(image, shared_lut))
     lut_actual = lut_batch.join()
     if [image.mode for image in lut_actual] != ["RGBA"] * len(lut_order):
         raise AssertionError("Color3DLUT batch changed the RGBA output mode")
@@ -889,14 +1372,11 @@ def run_target(expected_path: Path) -> None:
         )
         batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
         for seed in range(image_count):
-            batch.submit(
-                Image.frombytes(
+            batch.submit(ImageBatch.PipelineOp(Image.frombytes(
                     "RGBA",
                     (width, height),
                     benchmark_pixels("RGBA", seed, (width, height)),
-                ),
-                shared_lut,
-            )
+                ), shared_lut))
         actual = batch.join()
         if len(actual) != image_count or any(image.mode != "RGBA" for image in actual):
             raise AssertionError(f"{key} Color3DLUT batch returned an invalid mode/count")
@@ -913,10 +1393,7 @@ def run_target(expected_path: Path) -> None:
     other_lut = ImageBatch.Color3DLUT(make_batch_color3dlut(ImageFilter))
     distinct_lut_batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
     for operation in (shared_lut, other_lut):
-        distinct_lut_batch.submit(
-            Image.frombytes("RGBA", (7, 5), pixels("RGBA", (7, 5), 41)),
-            operation,
-        )
+        distinct_lut_batch.submit(ImageBatch.PipelineOp(Image.frombytes("RGBA", (7, 5), pixels("RGBA", (7, 5), 41)), operation))
     distinct_lut_results = distinct_lut_batch.join()
     if [image.tobytes().hex() for image in distinct_lut_results] != [
         expected["color3dlut_outputs"][1],
@@ -944,7 +1421,7 @@ def run_target(expected_path: Path) -> None:
                     pixels(mode, SIZES[input_index], SEEDS[input_index]),
                 )
                 image.info["batch-seed"] = SEEDS[input_index]
-                batch.submit(image, ImageBatch.ExtractBand(channel))
+                batch.submit(ImageBatch.PipelineOp(image, ImageBatch.ExtractBand(channel)))
             actual = batch.join()
             outputs = [image.tobytes().hex() for image in actual]
             expected_outputs = [
@@ -974,10 +1451,7 @@ def run_target(expected_path: Path) -> None:
         key = f"{mode}:{channel}"
         benchmark = ImageBatch.BatchExecutor(queue=True, backend="gpu")
         for seed in range(64):
-            benchmark.submit(
-                Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed)),
-                ImageBatch.ExtractBand(channel),
-            )
+            benchmark.submit(ImageBatch.PipelineOp(Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed)), ImageBatch.ExtractBand(channel)))
         actual = benchmark.join()
         outputs = [image.tobytes().hex() for image in actual]
         if outputs != expected["extract_benchmark_outputs"][key]:
@@ -1003,7 +1477,7 @@ def run_target(expected_path: Path) -> None:
                 pixels(mode, SIZES[input_index], SEEDS[input_index]),
             )
             image.info["batch-seed"] = SEEDS[input_index]
-            small.submit(image, ImageBatch.Brightness(0.5))
+            small.submit(ImageBatch.PipelineOp(image, ImageBatch.Brightness(0.5)))
         small_actual = small.join()
         if [image.tobytes().hex() for image in small_actual] != [
             expected["brightness_outputs"][mode][index]
@@ -1035,7 +1509,7 @@ def run_target(expected_path: Path) -> None:
         for seed in range(64):
             image = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
             image.info["batch-seed"] = seed
-            batch.submit(image, ImageBatch.Brightness(0.5))
+            batch.submit(ImageBatch.PipelineOp(image, ImageBatch.Brightness(0.5)))
         actual = batch.join()
         if [image.tobytes().hex() for image in actual] != expected[
             "brightness_benchmark_outputs"
@@ -1074,7 +1548,7 @@ def run_target(expected_path: Path) -> None:
     # Verify that queue=False executes eagerly on the normal single-image path.
     image = Image.frombytes("L", SIZES[0], pixels("L", SIZES[0], SEEDS[0]))
     eager = ImageBatch.BatchExecutor(queue=False, backend="gpu")
-    eager.submit(image, ImageFilter.MedianFilter(3))
+    eager.submit(ImageBatch.PipelineOp(image, ImageFilter.MedianFilter(3)))
     result = eager.join()[0]
     if result.tobytes().hex() != expected["outputs"]["L"][0]:
         raise AssertionError("eager queue=False output differs from Pillow")
@@ -1084,7 +1558,7 @@ def run_target(expected_path: Path) -> None:
     for mode, channel in BENCHMARK_CHANNELS.items():
         image = Image.frombytes(mode, SIZES[0], pixels(mode, SIZES[0], SEEDS[0]))
         eager = ImageBatch.BatchExecutor(queue=False, backend="gpu")
-        eager.submit(image, ImageBatch.ExtractBand(channel))
+        eager.submit(ImageBatch.PipelineOp(image, ImageBatch.ExtractBand(channel)))
         result = eager.join()[0]
         if result.tobytes().hex() != expected["extract_outputs"][f"{mode}:{channel}"][0]:
             raise AssertionError(f"queue=False ExtractBand mismatch for {mode} channel {channel}")
@@ -1097,10 +1571,7 @@ def run_target(expected_path: Path) -> None:
         print(f"queue=False {mode} ExtractBand({channel}): Pillow parity PASS; single-image path")
 
     eager_lut = ImageBatch.BatchExecutor(queue=False, backend="gpu")
-    eager_lut.submit(
-        Image.frombytes("RGBA", SIZES[0], pixels("RGBA", SIZES[0], SEEDS[0])),
-        shared_lut,
-    )
+    eager_lut.submit(ImageBatch.PipelineOp(Image.frombytes("RGBA", SIZES[0], pixels("RGBA", SIZES[0], SEEDS[0])), shared_lut))
     eager_lut_result = eager_lut.join()[0]
     if eager_lut_result.mode != "RGBA" or eager_lut_result.tobytes().hex() != expected[
         "color3dlut_outputs"
@@ -1129,7 +1600,7 @@ def run_target(expected_path: Path) -> None:
             size, seed = SIZES[input_index], SEEDS[input_index]
             image = Image.frombytes("RGBA", size, pixels("RGBA", size, seed))
             image.info["batch-seed"] = seed
-            sequential.submit(image, shared_lut)
+            sequential.submit(ImageBatch.PipelineOp(image, shared_lut))
         actual = sequential.join()
         if [image.tobytes().hex() for image in actual] != [
             expected["color3dlut_outputs"][index] for index in backend_indices
@@ -1167,7 +1638,7 @@ def run_target(expected_path: Path) -> None:
                 size,
                 multiply_other_pixels(mode, size, seed),
             )
-            batch.submit(image, ImageBatch.Multiply(other))
+            batch.submit(ImageBatch.PipelineOp(image, ImageBatch.Multiply(other)))
         actual = batch.join()
         outputs = [image.tobytes().hex() for image in actual]
         expected_outputs = [
@@ -1199,7 +1670,7 @@ def run_target(expected_path: Path) -> None:
                 (64, 64),
                 multiply_benchmark_other_pixels(mode, seed),
             )
-            benchmark.submit(image, ImageBatch.Multiply(other))
+            benchmark.submit(ImageBatch.PipelineOp(image, ImageBatch.Multiply(other)))
         actual = benchmark.join()
         outputs = [image.tobytes().hex() for image in actual]
         if outputs != expected["multiply_benchmark_outputs"][mode]:
@@ -1222,7 +1693,7 @@ def run_target(expected_path: Path) -> None:
                 LARGE_SIZE,
                 multiply_benchmark_other_pixels(mode, seed, LARGE_SIZE),
             )
-            large.submit(image, ImageBatch.Multiply(other))
+            large.submit(ImageBatch.PipelineOp(image, ImageBatch.Multiply(other)))
         actual = large.join()
         outputs = [image.tobytes().hex() for image in actual]
         if outputs != expected["multiply_large_outputs"][mode]:
@@ -1246,7 +1717,7 @@ def run_target(expected_path: Path) -> None:
             mode, size, multiply_other_pixels(mode, size, seed)
         )
         eager = ImageBatch.BatchExecutor(queue=False, backend="gpu")
-        eager.submit(image, ImageBatch.Multiply(other))
+        eager.submit(ImageBatch.PipelineOp(image, ImageBatch.Multiply(other)))
         result = eager.join()[0]
         if result.tobytes().hex() != expected["multiply_outputs"][mode][0]:
             raise AssertionError(f"queue=False Multiply mismatch for {mode}")
@@ -1268,7 +1739,7 @@ def run_target(expected_path: Path) -> None:
     for seed in boundary_metadata:
         image = Image.frombytes("RGBA", BOUNDARY_SIZE, boundary_rgba_pixels(seed))
         image.info["batch-seed"] = seed
-        boundary_batch.submit(image, ImageBatch.ExtractBand(3))
+        boundary_batch.submit(ImageBatch.PipelineOp(image, ImageBatch.ExtractBand(3)))
     boundary_results = boundary_batch.join()
     if len(boundary_results) != BOUNDARY_IMAGE_COUNT:
         raise AssertionError("resource-boundary batch omitted an output")
@@ -1296,7 +1767,7 @@ def run_target(expected_path: Path) -> None:
             size, seed = SIZES[input_index], SEEDS[input_index]
             image = Image.frombytes(mode, size, pixels(mode, size, seed))
             image.info["batch-seed"] = seed
-            eager.submit(image, ImageFilter.MedianFilter(3))
+            eager.submit(ImageBatch.PipelineOp(image, ImageFilter.MedianFilter(3)))
         actual = eager.join()
         actual_outputs = [image.tobytes().hex() for image in actual]
         expected_outputs = [expected["outputs"][mode][index] for index in submission_order]
@@ -1326,7 +1797,7 @@ def run_target(expected_path: Path) -> None:
             background.info["composite-seed"] = seed + 201
             mask = Image.frombytes("L", (64, 64), composite_mask_pixels(seed + 211))
             eager = ImageBatch.BatchExecutor(queue=False, backend=backend)
-            eager.submit(foreground, ImageBatch.Composite(background, mask))
+            eager.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask)))
             result = eager.join()[0]
             if (
                 result.mode != mode
@@ -1381,7 +1852,7 @@ def run_target(expected_path: Path) -> None:
             composite_mask_pixels(seed + 211, COMPOSITE_PARALLEL_SIZE),
         )
         threshold = ImageBatch.BatchExecutor(queue=False, backend="cpu")
-        threshold.submit(foreground, ImageBatch.Composite(background, mask))
+        threshold.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask)))
         result = threshold.join()[0]
         expected_result = expected["composite_parallel_outputs"][mode]
         if (
@@ -1428,7 +1899,7 @@ def run_target(expected_path: Path) -> None:
                 mask = Image.frombytes(
                     "L", (64, 64), composite_mask_pixels(seed + 211)
                 )
-                queued.submit(foreground, ImageBatch.Composite(background, mask))
+                queued.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask)))
             results = queued.join()
             if [image.tobytes().hex() for image in results] != [
                 expected["composite_batch_outputs"][mode][index]
@@ -1461,7 +1932,7 @@ def run_target(expected_path: Path) -> None:
             submitted_inputs.append(
                 (foreground, foreground.tobytes(), background, background.tobytes(), mask, mask.tobytes())
             )
-            batch.submit(foreground, ImageBatch.Composite(background, mask))
+            batch.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask)))
 
         actual = batch.join()
         if any(
@@ -1504,7 +1975,7 @@ def run_target(expected_path: Path) -> None:
                 mode, (64, 64), multiply_benchmark_other_pixels(mode, seed)
             )
             mask = Image.frombytes("L", (64, 64), composite_mask_pixels(seed))
-            benchmark.submit(foreground, ImageBatch.Composite(background, mask))
+            benchmark.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask)))
         actual = benchmark.join()
         if [image.tobytes().hex() for image in actual] != expected[
             "composite_benchmark_outputs"
@@ -1535,7 +2006,7 @@ def run_target(expected_path: Path) -> None:
                 COMPOSITE_LARGE_SIZE,
                 composite_mask_pixels(seed, COMPOSITE_LARGE_SIZE),
             )
-            large.submit(foreground, ImageBatch.Composite(background, mask))
+            large.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask)))
         actual = large.join()
         if [image.tobytes().hex() for image in actual] != expected[
             "composite_large_outputs"
@@ -1572,7 +2043,7 @@ def run_target(expected_path: Path) -> None:
         background.info["composite-seed"] = 991
         mask = Image.frombytes(mask_mode, foreground_size, mask_data)
         fallback = ImageBatch.BatchExecutor(queue=True, backend="gpu")
-        fallback.submit(foreground, ImageBatch.Composite(background, mask))
+        fallback.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask)))
         result = fallback.join()[0]
         oracle = expected["composite_fallback_outputs"][case_name]
         if (
@@ -1626,7 +2097,7 @@ def run_target(expected_path: Path) -> None:
             multiply_benchmark_other_pixels("RGBA", seed, boundary_size),
         )
         mask = Image.frombytes("L", boundary_size, composite_mask_pixels(seed, boundary_size))
-        boundary.submit(foreground, ImageBatch.Composite(background, mask))
+        boundary.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask)))
     boundary_results = boundary.join()
     if [image.tobytes().hex() for image in boundary_results] != expected[
         "composite_dispatch_boundary_outputs"
@@ -1663,7 +2134,7 @@ def run_target(expected_path: Path) -> None:
             mask = Image.frombytes(
                 "L", (64, 64), benchmark_pixels("L", seed + 211)
             )
-            batch.submit(destination, ImageBatch.Paste(source, mask))
+            batch.submit(ImageBatch.PipelineOp(destination, ImageBatch.Paste(source, mask)))
 
         actual = batch.join()
         if any(destination.tobytes() != original for destination, original in submitted_inputs):
@@ -1705,7 +2176,7 @@ def run_target(expected_path: Path) -> None:
                 multiply_benchmark_other_pixels(mode, seed),
             )
             mask = Image.frombytes("L", (64, 64), benchmark_pixels("L", seed))
-            benchmark.submit(destination, ImageBatch.Paste(source, mask))
+            benchmark.submit(ImageBatch.PipelineOp(destination, ImageBatch.Paste(source, mask)))
         actual = benchmark.join()
         if [image.tobytes().hex() for image in actual] != expected[
             "paste_benchmark_outputs"
@@ -1736,7 +2207,7 @@ def run_target(expected_path: Path) -> None:
                 PASTE_LARGE_SIZE,
                 benchmark_pixels("L", seed, PASTE_LARGE_SIZE),
             )
-            large.submit(destination, ImageBatch.Paste(source, mask))
+            large.submit(ImageBatch.PipelineOp(destination, ImageBatch.Paste(source, mask)))
         actual = large.join()
         if [image.tobytes().hex() for image in actual] != expected[
             "paste_large_outputs"
@@ -1778,7 +2249,7 @@ def run_target(expected_path: Path) -> None:
                 benchmark_pixels("L", PASTE_BATCH_SEEDS[0] + 211),
             )
             eager = ImageBatch.BatchExecutor(queue=False, backend=backend)
-            eager.submit(destination, ImageBatch.Paste(source, mask))
+            eager.submit(ImageBatch.PipelineOp(destination, ImageBatch.Paste(source, mask)))
             result = eager.join()[0]
             if destination.tobytes() != original_destination:
                 raise AssertionError(f"queue=False {mode} Paste mutated its destination")
@@ -1838,7 +2309,7 @@ def run_target(expected_path: Path) -> None:
             benchmark_pixels("L", 0, PASTE_PARALLEL_SIZE),
         )
         threshold = ImageBatch.BatchExecutor(queue=False, backend="cpu")
-        threshold.submit(destination, ImageBatch.Paste(source, mask))
+        threshold.submit(ImageBatch.PipelineOp(destination, ImageBatch.Paste(source, mask)))
         result = threshold.join()[0]
         if (
             result.mode != mode
@@ -1899,7 +2370,7 @@ def assert_grouped_paste_failure_fallback(case: dict, expected: dict) -> None:
         mask = Image.frombytes(
             "L", (64, 64), benchmark_pixels("L", seed + 211)
         )
-        batch.submit(destination, ImageBatch.Paste(source, mask))
+        batch.submit(ImageBatch.PipelineOp(destination, ImageBatch.Paste(source, mask)))
 
     recovered = batch.join()
     if any(
@@ -1944,7 +2415,7 @@ def assert_grouped_paste_failure_fallback(case: dict, expected: dict) -> None:
     mask = Image.frombytes("L", (64, 64), benchmark_pixels("L", seed + 211))
     core.take_pipeline_telemetry()
     core.take_gpu_shader_coverage()
-    if batch.submit(destination, ImageBatch.Paste(source, mask)) != 0:
+    if batch.submit(ImageBatch.PipelineOp(destination, ImageBatch.Paste(source, mask))) != 0:
         raise AssertionError("a drained Paste batch did not reset its submission index")
     followup = batch.join()
     index = expected_by_seed[seed]
@@ -2042,7 +2513,7 @@ def assert_grouped_composite_failure_fallback(case: dict, expected: dict) -> Non
         submitted.append(
             (foreground, foreground.tobytes(), background, background.tobytes(), mask, mask.tobytes())
         )
-        batch.submit(foreground, ImageBatch.Composite(background, mask))
+        batch.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask)))
 
     recovered = batch.join()
     if any(
@@ -2089,7 +2560,7 @@ def assert_grouped_composite_failure_fallback(case: dict, expected: dict) -> Non
     mask = Image.frombytes("L", (64, 64), composite_mask_pixels(seed + 211))
     core.take_pipeline_telemetry()
     core.take_gpu_shader_coverage()
-    if batch.submit(foreground, ImageBatch.Composite(background, mask)) != 0:
+    if batch.submit(ImageBatch.PipelineOp(foreground, ImageBatch.Composite(background, mask))) != 0:
         raise AssertionError("a drained Composite batch did not reset its submission index")
     followup = batch.join()
     index = expected_by_seed[seed]
@@ -2148,6 +2619,136 @@ def run_composite_fault_contracts(expected_path: Path) -> None:
     )
 
 
+def assert_grouped_grayscale_failure_fallback(case: dict, expected: dict) -> None:
+    """Check public recovery after one injected grouped Grayscale failure."""
+
+    from PIL import Image, ImageBatch
+    import pillow_rs._core as core
+
+    fault_point = case["fault"]["point"]
+    if os.environ.get("PILLOW_RS_MIGRATION_FAULT_POINT") != fault_point:
+        raise RuntimeError(f"fault point was not selected: {fault_point}")
+    if (
+        case["mode"] != "YCbCr"
+        or case["input_seeds"] != GRAYSCALE_BATCH_SEEDS
+    ):
+        raise ValueError(f"invalid Grayscale fault input declaration: {case['case_id']}")
+
+    for backend in ("cpu", "simd", "gpu"):
+        core.disable_backend(backend)
+    if not core.enable_backend("gpu"):
+        raise RuntimeError("GPU backend unavailable for Grayscale fallback fault contract")
+    core.set_pipeline_telemetry(True)
+    core.set_gpu_shader_coverage(True)
+    core.take_pipeline_telemetry()
+    core.take_gpu_shader_coverage()
+
+    mode = case["mode"]
+    batch = ImageBatch.BatchExecutor(queue=True, backend="gpu")
+    submitted = []
+    for seed in case["input_seeds"]:
+        image = Image.frombytes(mode, (64, 64), benchmark_pixels(mode, seed))
+        image.info["grayscale-seed"] = seed
+        submitted.append((image, image.tobytes()))
+        batch.submit(ImageBatch.PipelineOp(image, ImageBatch.Grayscale()))
+
+    recovered = batch.join()
+    if any(image.tobytes() != original for image, original in submitted):
+        raise AssertionError("Grayscale fallback mutated a submitted input")
+    expected_index = {seed: index for index, seed in enumerate(GRAYSCALE_BATCH_SEEDS)}
+    for image, seed in zip(recovered, case["input_seeds"], strict=True):
+        index = expected_index[seed]
+        if (
+            image.mode != "L"
+            or image.size != (64, 64)
+            or image.tobytes().hex()
+            != expected["grayscale_batch_outputs"][mode][index]
+            or image.info.get("grayscale-seed")
+            != expected["grayscale_batch_metadata"][mode][index]
+        ):
+            raise AssertionError(
+                f"fault-contract Grayscale fallback differs from Pillow for seed {seed}"
+            )
+
+    records = core.take_gpu_shader_coverage()
+    dispatches = sum(
+        record["dispatches"]
+        for record in records
+        if "grayscale.wgsl" in record["shader_file"]
+    )
+    if dispatches != len(case["input_seeds"]):
+        raise AssertionError(
+            "Grayscale group failure did not run one GPU fallback per input: "
+            f"{records}"
+        )
+
+    seed = case["input_seeds"][0]
+    followup_image = Image.frombytes(
+        mode, (64, 64), benchmark_pixels(mode, seed)
+    )
+    followup_image.info["grayscale-seed"] = seed
+    core.take_pipeline_telemetry()
+    core.take_gpu_shader_coverage()
+    if batch.submit(ImageBatch.PipelineOp(followup_image, ImageBatch.Grayscale())) != 0:
+        raise AssertionError("a drained Grayscale batch did not reset its submission index")
+    followup = batch.join()
+    index = expected_index[seed]
+    if (
+        len(followup) != 1
+        or followup[0].mode != "L"
+        or followup[0].size != (64, 64)
+        or followup[0].tobytes().hex()
+        != expected["grayscale_batch_outputs"][mode][index]
+        or followup[0].info.get("grayscale-seed")
+        != expected["grayscale_batch_metadata"][mode][index]
+    ):
+        raise AssertionError("Grayscale executor follow-up result differs from Pillow")
+    require_gpu_execution(
+        core,
+        core.take_pipeline_telemetry(),
+        "fault-contract follow-up Grayscale join",
+        expected_shader="grayscale.wgsl",
+        expected_mode_conversions=0,
+    )
+
+
+def run_grayscale_fault_contracts(expected_path: Path) -> None:
+    expected = json.loads(expected_path.read_text())
+    if expected.get("pillow_version") != "12.2.0":
+        raise RuntimeError("oracle artifact version mismatch")
+    contracts = {
+        "grouped-grayscale-error-falls-back-and-recovers":
+            assert_grouped_grayscale_failure_fallback,
+    }
+    case_id = os.environ.get("GRAYSCALE_BATCH_FAULT_CONTRACT_CASE_ID")
+    case = next(
+        (item for item in GRAYSCALE_FAULT_CONTRACT_CASES if item["case_id"] == case_id),
+        None,
+    )
+    if case is None:
+        raise ValueError(f"unknown Grayscale fault-contract case: {case_id!r}")
+    if (
+        case["verification"] != "fault-contract"
+        or case["operation"] != "ImageBatch.Grayscale"
+        or case["target_profile"] != "python-gpu"
+        or case["oracle"] != "not_applicable"
+        or not case["requirements"]
+        or any(
+            requirement not in GRAYSCALE_FAULT_CONTRACT_REQUIREMENTS
+            for requirement in case["requirements"]
+        )
+    ):
+        raise ValueError(f"invalid Grayscale fault-contract declaration: {case_id}")
+    assertion = contracts.get(case["fault"]["contract"])
+    if assertion is None:
+        raise ValueError(f"unknown Grayscale fault contract: {case['fault']['contract']}")
+    assertion(case, expected)
+    print(
+        f"fault-contract case={case_id} selected=1 executed=1 passed=1 failed=0 "
+        f"requirements={','.join(case['requirements'])} oracle=not_applicable"
+    )
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="pillow-rs-imagebatch-") as directory:
         expected = Path(directory) / "pillow-expected.json"
@@ -2172,6 +2773,7 @@ def main() -> int:
         target_env.pop("PILLOW_RS_MIGRATION_FAULT_POINT", None)
         target_env.pop("PASTE_BATCH_FAULT_CONTRACT_CASE_ID", None)
         target_env.pop("COMPOSITE_BATCH_FAULT_CONTRACT_CASE_ID", None)
+        target_env.pop("GRAYSCALE_BATCH_FAULT_CONTRACT_CASE_ID", None)
         subprocess.run(
             [sys.executable, str(Path(__file__).resolve())],
             cwd=ROOT,
@@ -2202,6 +2804,18 @@ def main() -> int:
                     env=fault_env,
                     check=True,
                 )
+        if os.environ.get("GRAYSCALE_BATCH_INCLUDE_FAULT_CONTRACT") == "1":
+            for case in GRAYSCALE_FAULT_CONTRACT_CASES:
+                fault_env = target_env.copy()
+                fault_env["IMAGEBATCH_PARITY_MODE"] = "grayscale-fault-contract"
+                fault_env["PILLOW_RS_MIGRATION_FAULT_POINT"] = case["fault"]["point"]
+                fault_env["GRAYSCALE_BATCH_FAULT_CONTRACT_CASE_ID"] = case["case_id"]
+                subprocess.run(
+                    [sys.executable, str(Path(__file__).resolve())],
+                    cwd=ROOT,
+                    env=fault_env,
+                    check=True,
+                )
     return 0
 
 
@@ -2218,5 +2832,8 @@ if __name__ == "__main__":
         raise SystemExit(0)
     if mode == "composite-fault-contract":
         run_composite_fault_contracts(Path(os.environ["IMAGEBATCH_PARITY_EXPECTED"]))
+        raise SystemExit(0)
+    if mode == "grayscale-fault-contract":
+        run_grayscale_fault_contracts(Path(os.environ["IMAGEBATCH_PARITY_EXPECTED"]))
         raise SystemExit(0)
     raise SystemExit(main())

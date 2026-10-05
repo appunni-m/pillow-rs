@@ -4,6 +4,11 @@ Status: active. This report records the operation-wide baseline and focused
 optimization visits. It is a dated performance snapshot, not a support declaration.
 The selected contract lives in the [parity manifest](../pillow-rs/tests/fixtures/manifest.yaml).
 
+ImageBatch commands in dated entries are historical: their scripts and Make
+hooks were retired and preserved under `deprecated/imagebatch`. They are not
+current reproduction commands. The replacement executor has its own
+[validation targets and measurements](GPU_BATCH_VALIDATION.md).
+
 The goals are per operation: CPU latency at or below Pillow, SIMD latency at
 least 5× faster than Pillow, and GPU latency no slower than SIMD with higher
 throughput. Every comparison requires equal output, the same timing boundary,
@@ -19473,9 +19478,10 @@ medians were:
 All 100 samples recorded the requested backend. The benchmark correctness
 gate passed. Strict Pillow parity passed both LA cases on CPU, SIMD, and GPU
 (2/2 for each backend). GPU latency is still about 1.99× SIMD latency in this
-single-request workload. The explicit `ImageBatch` API currently supports
-MedianFilter, MaxFilter, and RankFilter but not Filter3x3, so queued Filter3x3
-throughput is not available and no batched GPU-throughput claim is made. Keep
+single-request workload. At this checkpoint the former `ImageBatch` API supported
+MedianFilter, MaxFilter, and RankFilter but not Filter3x3. That experiment is
+now archived under `deprecated/imagebatch` (2026-10-05); replacement queued
+Filter3x3 throughput is unmeasured and no batched GPU-throughput claim is made. Keep
 single-image routing unchanged; queued filter support is a separate feature
 checkpoint.
 

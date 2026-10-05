@@ -16697,6 +16697,7 @@ def build_nuanced_cases(
             "font": "font/fonts/variable-name-platform1-fallback.ttf",
             "values": {"name": literal("Bold")},
             "observe_receiver": True,
+            "observe_font_style": "observe-style",
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
@@ -16714,6 +16715,9 @@ def build_nuanced_cases(
             "font": "font/fonts/variable-named-instances.ttf",
             "values": {"name": literal("Thin")},
             "observe_receiver": True,
+            "observe_font_style": "observe-thin-style",
+            "followup_variation_name": "Bold",
+            "observe_font_variant_style": True,
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
@@ -42658,6 +42662,30 @@ def build_nuanced_cases(
             scenario_outline_empty=spec.get("outline_empty", False),
             scenario_comparisons=spec.get("comparisons"),
         )
+        if spec.get("observe_font_style"):
+            # These public name/variant observations already belong to the
+            # committed corpus. Keep regeneration from silently dropping them.
+            call = next(step for step in case["steps"] if step["step_id"] == "call")
+            receiver = call["receiver"]
+
+            def observe_font(step_id, operation_id, font_receiver, arguments=None):
+                case["steps"].append({
+                    "step_id": step_id,
+                    "surface": "PIL.ImageFont.FreeTypeFont",
+                    "operation": operation_id,
+                    "receiver": font_receiver,
+                    "arguments": arguments or {},
+                })
+                case["observations"].append(step_id)
+
+            observe_font(spec["observe_font_style"], "getname", receiver)
+            if "followup_variation_name" in spec:
+                observe_font("switch-to-bold", "set_variation_by_name", receiver,
+                             {"name": literal(spec["followup_variation_name"])})
+                observe_font("observe-bold-style", "getname", receiver)
+            if spec.get("observe_font_variant_style"):
+                observe_font("make-variant", "font_variant", receiver)
+                observe_font("observe-variant-style", "getname", binding("make-variant"))
         if spec.get("timed_filter_result"):
             # The benchmark runner always includes the step named `call` in
             # observed-step timing. Put source setup and UnsharpMask

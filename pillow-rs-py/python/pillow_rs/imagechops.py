@@ -15,7 +15,7 @@ def subtract(image1: Image, image2: Image, scale: float = 1.0, offset: int = 0) 
 
 def multiply(image1: Image, image2: Image) -> Image:
     """Multiply two images."""
-    return Image(_core.chops_multiply(image1._rust_image, image2._rust_image))
+    return image1._new(_core.chops_multiply(image1._rust_image, image2._rust_image))
 
 
 def screen(image1: Image, image2: Image) -> Image:

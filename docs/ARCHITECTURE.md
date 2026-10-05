@@ -28,11 +28,11 @@ Execution receipts record requested and actual routing plus terminal completion.
 A registration, shader compilation, or GPU request is not proof of native
 arithmetic or source-line coverage.
 
-Explicit multi-image scheduling lives behind the separate `PIL.ImageBatch`
-API. It reuses existing single-image operations and only groups combinations
-with a proven native-mode layout; normal `Image` calls and backend routing do
-not change. See [image batching](IMAGE_BATCHING.md) for its current GPU group
-and parity limits.
+The former explicit ImageBatch executor is archived outside the active Rust
+workspace and Python packages under `deprecated/imagebatch`. Its
+[explicit GPU executor](IMAGE_BATCHING.md) reuses the existing `PipelineOp` enum
+and lazy image graph. Core owns native encoding and credit-bearing output leases;
+the Python Results iterator drives bounded keyed admission and delivery.
 
 ## Safety and error conventions
 

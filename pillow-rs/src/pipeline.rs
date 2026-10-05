@@ -1,6 +1,6 @@
 //! Streaming image pipeline operation descriptors.
 //!
-//! [`crate::pipeline::PipelineOp`] is an internal-public contract between
+//! [`crate::PipelineOp`] is the normalized contract between
 //! high-level Pillow-style methods, compute backend routing, and backend
 //! implementations. A variant records the operation and all normalized Rust
 //! arguments needed to execute it later. Execution is deferred until an image is
@@ -9,12 +9,13 @@
 //! Coordinates are integer pixel coordinates unless a field explicitly says it
 //! is a normalized factor. Colors are normalized RGBA tuples in byte order.
 //!
-//! # Internal Contract
+//! # Descriptor Contract
 //!
-//! This module is public so integration tests, binding-adjacent code, and
-//! backend registries can describe operations without depending on Python or
-//! JavaScript objects. It is not intended to be the ergonomic end-user API;
-//! users should normally call methods on [`crate::Image`].
+//! Descriptors are re-exported from the crate root for Rust callers
+//! and backend integration without Python or JavaScript objects. Call methods
+//! on [`crate::Image`] for Pillow-style argument validation. The retired batch
+//! executor is archived under `deprecated/imagebatch`; the GPU feature exposes
+//! its replacement through `GpuBatchExecutor`.
 //!
 //! Every new operation must keep these tables aligned:
 //!

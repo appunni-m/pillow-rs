@@ -4,6 +4,13 @@
 **Checkout:** /Users/lazytrot/work/pillow-rs
 **Purpose:** Find places where a logical image mode is not handled directly, where general RGBA staging or redundant copies cost work, and where a generic implementation may be masking missing mode-specific paths.
 
+**Archive note (2026-10-05):** ImageBatch references below describe the former
+experiment, now retained in `deprecated/imagebatch` and no longer exported.
+Single-image measurements remain historical evidence. The
+[replacement GPU executor](IMAGE_BATCHING.md) has separate, scoped
+[throughput and latency measurements](GPU_BATCH_VALIDATION.md); those results
+do not validate the archived experiment or every operation listed below.
+
 ## Scope and method
 
 This is a static review of first-party image code in pillow-rs core, CPU/SIMD/GPU execution, GPU shader assets, and the Python and JavaScript runtime bindings. It excludes node_modules, generated packages, fixtures, and the separate fontdone checkout. Reviews were split across core operations and raster storage, backend execution, language bindings, and WGSL shaders.
@@ -222,7 +229,7 @@ Some mode-specific packed kernels exist, but admission is narrow: GPU has packed
 
 The 2026-10-04 LA `RankFilter(3, rank=1)` checkpoint adds a packed native-LA GPU shader. It stores two `[L, A]` pixels per word and selects the second-smallest L and alpha values independently; other ranks in this 3×3 specialization use exact min/max reductions or the full sorting network. At 1024 × 768, GPU p50 fell from 27.144 ms on the generic converted path to 0.943 ms, with transfers reduced from 3,145,728 to 1,572,864 bytes each way and zero mode conversions. Four seeded rank cases (0, 1, 4, and 8), including odd-width tails and the material workload, passed exact Pillow parity on CPU, SIMD, and GPU. The performance measurement covers material rank 1 only; other sizes, modes, and filter ranks remain open.
 
-The 2026-10-04 native-L `RankFilter(3, rank=1)` checkpoint adds a separate packed-L shader with four adjacent pixels per word. CPU and SIMD now use exact second-minimum reductions for this rank; the GPU path transfers 786,432 bytes each direction at 1024 × 768 with one dispatch and no mode conversion. On the material single-image workload, GPU p50 fell from 26.659 ms to 0.807 ms; strict CPU/SIMD/GPU Pillow parity passed 3/3 for odd-tail, single-column, and material cases. The GPU specialization intentionally rejects other ranks and sizes, which remain on existing routes. Explicit `ImageBatch` grouping reuses this native-L path for compatible size-3/rank-1 jobs and leaves ordinary `Image.filter` dispatch unchanged.
+The 2026-10-04 native-L `RankFilter(3, rank=1)` checkpoint adds a separate packed-L shader with four adjacent pixels per word. CPU and SIMD now use exact second-minimum reductions for this rank; the GPU path transfers 786,432 bytes each direction at 1024 × 768 with one dispatch and no mode conversion. On the material single-image workload, GPU p50 fell from 26.659 ms to 0.807 ms; strict CPU/SIMD/GPU Pillow parity passed 3/3 for odd-tail, single-column, and material cases. The GPU specialization intentionally rejects other ranks and sizes, which remain on existing routes. The archived `ImageBatch` experiment reused this native-L path for compatible size-3/rank-1 jobs and left ordinary `Image.filter` dispatch unchanged.
 
 **Assessment:** the general kernels still express extra channel work, and measurements now confirm material costs for LA MedianFilter(3), LA RankFilter(3), and the former converted L RankFilter(3) path on this adapter. Native-L and native-LA rank-one kernels address only these ranks and material sizes; other convolution, resize, and thumbnail paths remain unmeasured. Profile each format-specific workload before generalizing, and preserve each operation's rounding, edge behavior, and alpha semantics.
 
@@ -469,8 +476,8 @@ P9 now has measured native-L and native-LA Filter5x5 specializations plus an
 exact native-LA binomial Filter3x3 path. For the 1024 × 768 LA Filter3x3
 workload, serial CPU is 1.27× faster than Pillow and SIMD is 6.45× faster;
 GPU fell from 2.68 ms to 0.94 ms with zero mode conversions, but remains about
-1.99× slower than SIMD at one request. The explicit ImageBatch API does not
-yet support Filter3x3, so queued GPU throughput is unmeasured. LA Filter5x5
+1.99× slower than SIMD at one request. The archived ImageBatch experiment did not
+support Filter3x3; replacement queued GPU throughput remains unmeasured. LA Filter5x5
 SIMD remains at 3.97× Pillow, below its 5× target, and other operation/mode
 combinations remain unmeasured. P2, P5–P8, and P10 remain audit candidates
 without measured follow-up in this checkpoint.
