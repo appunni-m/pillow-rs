@@ -11377,10 +11377,22 @@ fn native_convert_bytes(
     if layout.source_is_luma && layout.source_channels == 1 && layout.target_channels == 3 {
         return native_luma_to_rgb_bytes(img);
     }
-    if layout.source_is_luma && layout.source_channels == 1 && layout.target_channels == 4 {
+    // I/F also occupy four bytes, but each pixel is one typed scalar rather
+    // than four color samples. Keep their widening below separate from RGBA.
+    if layout.source_is_luma
+        && layout.source_channels == 1
+        && layout.target_channels == 4
+        && !layout.target_is_integer
+        && !layout.target_is_float
+    {
         return native_luma_to_rgba_bytes(img);
     }
-    if layout.source_is_luma && layout.source_channels == 2 && layout.target_channels == 4 {
+    if layout.source_is_luma
+        && layout.source_channels == 2
+        && layout.target_channels == 4
+        && !layout.target_is_integer
+        && !layout.target_is_float
+    {
         return native_luma_alpha_to_rgba_bytes(img);
     }
     if !layout.source_is_luma
@@ -35503,6 +35515,56 @@ mod tests {
             let expected_vector_blocks = pixels.div_ceil(16) as u64;
             assert_eq!(vector_blocks, expected_vector_blocks);
             assert_eq!(scalar_tail, 0);
+        }
+    }
+
+    #[test]
+    fn native_luma_to_typed_samples_does_not_use_rgba_expansion() {
+        use crate::ColorMode;
+
+        for width in [1u32, 7, 8, 9, 17, 33] {
+            for mode in ["L", "LA"] {
+                let luma: Vec<u8> = (0..width as usize * 3)
+                    .map(|index| [0, 1, 127, 128, 254, 255][index % 6])
+                    .collect();
+                let image = if mode == "L" {
+                    DynamicImage::ImageLuma8(
+                        GrayImage::from_raw(width, 3, luma.clone()).expect("L samples"),
+                    )
+                } else {
+                    let bytes = luma
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(index, &sample)| [sample, index as u8])
+                        .collect();
+                    DynamicImage::ImageLumaA8(
+                        crate::raster::GrayAlphaImage::from_raw(width, 3, bytes)
+                            .expect("LA samples"),
+                    )
+                };
+                for target in [ColorMode::I, ColorMode::F] {
+                    let expected: Vec<u8> = luma
+                        .iter()
+                        .flat_map(|&sample| match target {
+                            ColorMode::I => i32::from(sample).to_le_bytes(),
+                            ColorMode::F => f32::from(sample).to_le_bytes(),
+                            _ => unreachable!(),
+                        })
+                        .collect();
+                    let op = PipelineOp::Convert {
+                        mode: target.clone(),
+                        matrix: None,
+                        dither: None,
+                    };
+                    let actual = super::simd_convert(&image, &op, Some(mode))
+                        .expect("typed native SIMD conversion");
+                    assert_eq!(
+                        actual.as_bytes(),
+                        expected,
+                        "{mode} to {target:?}, width {width}"
+                    );
+                }
+            }
         }
     }
 
