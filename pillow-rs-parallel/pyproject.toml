@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Optional Rayon extension for pillow-rs"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = ["pillow-rs==12.2.0a6"]
+dependencies = ["pillow-rs==12.2.0"]
 license = "MIT-CMU"
 license-files = ["LICENSE"]
 

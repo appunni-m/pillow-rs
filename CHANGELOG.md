@@ -1,10 +1,14 @@
 # Changelog
 
-All notable user-facing changes are recorded here. The first package release
-is intentionally a compatibility-development release; the parity status and
-backend limitations in the documentation remain part of its contract.
+All notable user-facing changes are recorded here. Stable release scope,
+parity status, and backend limitations are described in the documentation.
 
-## Unreleased
+## 12.2.0 - 2026-10-05
+
+- Add exact rolling-row CPU and vectorized SIMD paths for uniform native-L
+  5x5 filtering, with byte-rounding, border, tail, and Pillow-parity checks.
+- Pin stable fontdone 2.14.3, including the fix for charmap metadata on reused
+  faces.
 
 ### 12.2.0-alpha.6 candidate
 
