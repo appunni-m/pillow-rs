@@ -61,6 +61,7 @@ nav:
       - Rust: rust.md
       - Supported APIs and limitations: compatibility.md
   - Benchmark results: benchmarks.md
+  - Pillow-SIMD x86 comparison: pillow-simd-benchmarks.md
   - Contribute:
       - Contributor guide: contributing.md
       - Commands: commands.md

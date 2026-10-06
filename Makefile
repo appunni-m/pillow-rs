@@ -201,6 +201,7 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark$(NC) Run the fixed 11-workload release acceptance cohort\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=pipeline make migration-parity-benchmark$(NC) Run every PipelineOp and public composition workload\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark-parallel-cpu$(NC) Measure opt-in Rayon as Parallel CPU\n"
+	@printf "  $(CYAN)make migration-parity-benchmark-pillow-simd$(NC) Compare matched x86 Pillow-SIMD workloads\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run the all-backend public parity campaign\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
 	@printf "  $(CYAN)make migration-parity-test-gpu-strict$(NC) Audit GPU-only capability coverage (not the normal fallback lane)\n"
@@ -470,7 +471,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
-.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -716,6 +717,12 @@ migration-parity-benchmark-parallel-cpu: build-parity-parallel-cpu ## Benchmark 
 	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
+
+migration-parity-benchmark-pillow-simd: build-parity ## Compare parity-gated Pillow-SIMD material workloads on x86
+	$(PYTHON) -m unittest discover -s scripts -p 'test_pillow_simd_benchmark.py' -v
+	$(PYTHON) scripts/run_pillow_simd_benchmark.py
+	$(PYTHON) scripts/validate_migration_parity_result.py benchmark build/migration-parity/benchmark-result-pillow.json
+	$(PYTHON) scripts/validate_migration_parity_result.py benchmark build/migration-parity/benchmark-result-pillow-simd.json
 
 migration-parity-benchmark-low-load: ## Run a fixed benchmark under a stable low-load task policy when available
 	@if command -v taskpolicy >/dev/null 2>&1 && taskpolicy $(MIGRATION_BENCHMARK_TASKPOLICY_ARGS) true >/dev/null 2>&1; then \

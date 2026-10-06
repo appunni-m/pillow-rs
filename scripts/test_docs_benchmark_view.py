@@ -65,6 +65,20 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn('Actual: cpu',text)
         self.assertIn('actual: cpu',text)
 
+    def test_cpu_and_simd_fallbacks_are_not_compared_as_native_performance(self):
+        baseline = row("pillow", 20)
+        for backend, actual, fallbacks in (
+            ("simd", "cpu", {}),
+            ("simd", "simd", {"unsupported_operation": 1}),
+            ("cpu", "unknown", {}),
+        ):
+            target = row(
+                f"python-{backend}", 10, requested_backend=backend,
+                actual_backend=actual, fallback_reasons=fallbacks,
+            )
+            with self.subTest(backend=backend, actual=actual, fallbacks=fallbacks):
+                self.assertIsNone(compare(target, baseline)[0])
+
     def test_parallel_cpu_uses_ordinary_pillow_baseline(self):
         target = row("python-parallel-cpu", 10, workload="pipeline-op.resize")
         default_pillow = row("pillow", 40, workload="pipeline-op.resize")

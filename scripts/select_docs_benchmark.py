@@ -21,9 +21,13 @@ def read_json(url: str) -> dict:
         return json.load(response)
 
 
-def trusted_run(run: dict, repository: str) -> bool:
+def trusted_run(
+    run: dict,
+    repository: str,
+    workflow_path: str = ".github/workflows/benchmark.yml",
+) -> bool:
     return (
-        run.get("path") == ".github/workflows/benchmark.yml"
+        run.get("path") == workflow_path
         and run.get("event") in {"push", "schedule", "workflow_dispatch"}
         and run.get("status") == "completed"
         and run.get("conclusion") == "success"
@@ -49,7 +53,17 @@ def select_run(repository: str, event_name: str, event: dict, fetch=read_json) -
                 and re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", run.get("head_branch", ""))
                 and run.get("head_repository", {}).get("full_name") == repository):
             raise ValueError("Release event is not a successful tag run from this repository")
-    explicit = event_name == "workflow_run" and not release_event
+    workflow_run_path = event.get("workflow_run", {}).get("path")
+    if event_name == "workflow_run" and not release_event and workflow_run_path not in {
+        ".github/workflows/benchmark.yml",
+        ".github/workflows/pillow-simd-benchmark.yml",
+    }:
+        raise ValueError("Workflow event is not a trusted benchmark source")
+    explicit = (
+        event_name == "workflow_run"
+        and not release_event
+        and workflow_run_path == ".github/workflows/benchmark.yml"
+    )
     if explicit:
         runs = [event["workflow_run"]]
         if not trusted_run(runs[0], repository):
@@ -76,11 +90,44 @@ def select_run(repository: str, event_name: str, event: dict, fetch=read_json) -
     return {"run_id": str(run["id"]), "head_sha": run["head_sha"]}
 
 
+def select_pillow_simd_run(
+    repository: str, event_name: str, fetch=read_json
+) -> dict | None:
+    """Return the latest successful x86 Pillow-SIMD measurement artifact."""
+    if event_name in {"pull_request", "pull_request_target"}:
+        return None
+    workflow_path = ".github/workflows/pillow-simd-benchmark.yml"
+    base = f"https://api.github.com/repos/{repository}/actions"
+    runs = fetch(
+        f"{base}/workflows/pillow-simd-benchmark.yml/runs?branch=main&status=success&per_page=1"
+    )["workflow_runs"]
+    if not runs:
+        return None
+    run = runs[0]
+    if not trusted_run(run, repository, workflow_path):
+        raise ValueError("Latest Pillow-SIMD run is not trusted main-branch evidence")
+    artifacts = fetch(f"{base}/runs/{run['id']}/artifacts?per_page=100")["artifacts"]
+    eligible = [
+        artifact
+        for artifact in artifacts
+        if artifact.get("name") == "public-pillow-simd-benchmark"
+        and not artifact.get("expired", True)
+    ]
+    if len(eligible) > 1:
+        raise ValueError("Pillow-SIMD benchmark run contains duplicate public data artifacts")
+    if not eligible:
+        return None
+    return {"run_id": str(run["id"]), "head_sha": run["head_sha"]}
+
+
 def main() -> None:
     config = json.loads((ROOT / "documentation.json").read_text())
     event_path = os.environ.get("GITHUB_EVENT_PATH")
     event = json.loads(Path(event_path).read_text()) if event_path else {}
     selected = select_run(config["repository"], os.environ.get("GITHUB_EVENT_NAME", ""), event)
+    pillow_simd = select_pillow_simd_run(
+        config["repository"], os.environ.get("GITHUB_EVENT_NAME", "")
+    )
     if selected:
         message = f"Using benchmark run {selected['run_id']} at {selected['head_sha']}"
     else:
@@ -90,10 +137,21 @@ def main() -> None:
         with open(output_path, "a", encoding="utf-8") as output:
             for key, value in selected.items():
                 output.write(f"{key}={value}\n")
+    if output_path and pillow_simd:
+        with open(output_path, "a", encoding="utf-8") as output:
+            output.write(f"pillow_simd_run_id={pillow_simd['run_id']}\n")
+            output.write(f"pillow_simd_head_sha={pillow_simd['head_sha']}\n")
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
         with open(summary_path, "a", encoding="utf-8") as summary:
             summary.write(f"{message}\n")
+            if pillow_simd:
+                summary.write(
+                    f"Using Pillow-SIMD benchmark run {pillow_simd['run_id']} "
+                    f"at {pillow_simd['head_sha']}\n"
+                )
+            else:
+                summary.write("No successful Pillow-SIMD benchmark artifact is available.\n")
     print(message)
 
 
