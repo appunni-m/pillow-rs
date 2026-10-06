@@ -225,7 +225,10 @@ class BenchmarkTests(unittest.TestCase):
             (root / "documentation.json").write_text(json.dumps({"repository": "owner/repo", "benchmark": {}}))
             (root / "snapshot.json").write_text(json.dumps({"revision": "a" * 40}))
             with patch("docs_evidence.validate"), patch.dict("os.environ", {
-                "DOCS_BENCHMARK_SNAPSHOT": "snapshot.json", "DOCS_BENCHMARK_REVISION": "b" * 40,
+                "DOCS_BENCHMARK_SNAPSHOT": "snapshot.json",
+                "DOCS_BENCHMARK_REVISION": "b" * 40,
+                "DOCS_PILLOW_SIMD_BENCHMARK_SNAPSHOT": "",
+                "DOCS_PILLOW_SIMD_BENCHMARK_REVISION": "",
             }):
                 with self.assertRaisesRegex(ValueError, "workflow source revision"):
                     read_config(root)
@@ -240,6 +243,8 @@ class BenchmarkTests(unittest.TestCase):
             }))
             (root / "snapshot.json").write_text(json.dumps({"revision": "a" * 40}))
             env = {
+                "DOCS_BENCHMARK_SNAPSHOT": "",
+                "DOCS_BENCHMARK_REVISION": "",
                 "DOCS_PILLOW_SIMD_BENCHMARK_SNAPSHOT": "snapshot.json",
                 "DOCS_PILLOW_SIMD_BENCHMARK_REVISION": "a" * 40,
             }
