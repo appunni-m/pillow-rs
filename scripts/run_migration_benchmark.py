@@ -31,6 +31,7 @@ from typing import Any
 try:
     from run_migration_parity import (
         ORACLE_ID,
+        ORACLE_NAME,
         ORACLE_VERSION,
         TARGET_ID,
         TARGET_FEATURES,
@@ -43,6 +44,7 @@ try:
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` in tests
     from scripts.run_migration_parity import (
         ORACLE_ID,
+        ORACLE_NAME,
         ORACLE_VERSION,
         TARGET_ID,
         TARGET_FEATURES,
@@ -62,7 +64,27 @@ PARALLEL_CPU_PROFILE = (
     os.environ.get("MIGRATION_TARGET_PROFILE", "").strip().lower()
     == "parallel-cpu"
 )
-TARGET_BACKENDS = ("cpu",) if PARALLEL_CPU_PROFILE else ("cpu", "simd", "gpu")
+_requested_backends = os.environ.get("MIGRATION_BENCHMARK_BACKENDS", "").strip()
+if PARALLEL_CPU_PROFILE and _requested_backends:
+    raise ValueError("Parallel CPU benchmarks cannot override their CPU-only backend")
+if _requested_backends:
+    TARGET_BACKENDS = tuple(
+        item.strip().lower() for item in _requested_backends.split(",") if item.strip()
+    )
+    if not TARGET_BACKENDS or len(set(TARGET_BACKENDS)) != len(TARGET_BACKENDS) or any(
+        backend not in {"cpu", "simd", "gpu"} for backend in TARGET_BACKENDS
+    ):
+        raise ValueError("MIGRATION_BENCHMARK_BACKENDS must list unique cpu,simd,gpu backends")
+elif PARALLEL_CPU_PROFILE:
+    TARGET_BACKENDS = ("cpu",)
+else:
+    TARGET_BACKENDS = ("cpu", "simd", "gpu")
+PILLOW_SIMD_COMPARISON = (
+    os.environ.get("MIGRATION_BENCHMARK_COHORT", "").strip().lower()
+    == "pillow-simd"
+)
+if PILLOW_SIMD_COMPARISON and TARGET_BACKENDS != ("cpu", "simd"):
+    raise ValueError("the Pillow-SIMD comparison cohort requires exactly cpu,simd backends")
 DEFAULT_GPU_BENCHMARK_TIMEOUT_SECONDS = 900
 MAX_GPU_BENCHMARK_TIMEOUT_SECONDS = 1800
 # A suite aggregate is a statistical claim, not merely a record that one
@@ -479,8 +501,13 @@ def run_timed_side(
     script = ROOT / "scripts" / "run_migration_parity.py"
 
     def command_for(child_repeat: int) -> list[str]:
+        adapter_python = (
+            os.environ.get("MIGRATION_ORACLE_PYTHON", sys.executable)
+            if side == "source"
+            else sys.executable
+        )
         command = [
-            sys.executable,
+            adapter_python,
             str(script),
             "--side",
             side,
@@ -544,7 +571,7 @@ def run_timed_side(
             raise RuntimeError(f"{side} benchmark adapter emitted invalid timing envelope")
         identity = payload["identity"]
         if side == "source":
-            if identity.get("side") != "source" or identity.get("implementation") != "Pillow":
+            if identity.get("side") != "source" or identity.get("implementation") != ORACLE_NAME:
                 raise RuntimeError("Pillow benchmark adapter emitted the wrong identity")
         else:
             backend_state = identity.get("backend_state", {})
@@ -954,7 +981,7 @@ def execution_identity() -> dict[str, Any]:
         "oracles": [
             {
                 "oracle_id": ORACLE_ID,
-                "name": "Pillow",
+                "name": ORACLE_NAME,
                 "version": ORACLE_VERSION,
                 "runtime": "CPython 3.12",
             }
@@ -1085,11 +1112,12 @@ def workload_subjects_for_profile(
 
     The manifest's standard cohort contains Pillow, serial CPU, SIMD, and GPU.
     Parallel CPU reuses the same inputs and parity preflight, but times only its
-    own feature-identified CPU profile. The public benchmark joins that timing
-    to the ordinary Pillow measurement from the standard run.
+    own feature-identified CPU profile. The x86 Pillow-SIMD cohort retains the
+    ordinary Pillow baseline and times only serial CPU and architecture-specific
+    SIMD; it is exported separately because it uses a different host/version.
     """
 
-    if not PARALLEL_CPU_PROFILE:
+    if not PARALLEL_CPU_PROFILE and not PILLOW_SIMD_COMPARISON and TARGET_BACKENDS == ("cpu", "simd", "gpu"):
         return subjects
 
     default_subjects = [
@@ -1100,9 +1128,14 @@ def workload_subjects_for_profile(
     ]
     if subjects != default_subjects:
         raise ValueError(
-            "Parallel CPU benchmark input must start from the standard Pillow/"
+            "profiled benchmark input must start from the standard Pillow/"
             "CPU/SIMD/GPU subject contract"
         )
+    if PILLOW_SIMD_COMPARISON:
+        return default_subjects[:1] + [
+            {"kind": "target_profile", "id": target_profile_for_backend(backend)}
+            for backend in TARGET_BACKENDS
+        ]
     return [{"kind": "target_profile", "id": "python-parallel-cpu"}]
 
 
@@ -1111,7 +1144,7 @@ def apply_profile_to_workloads(
 ) -> list[dict[str, Any]]:
     """Build per-run subjects while preserving the frozen input documents."""
 
-    if not PARALLEL_CPU_PROFILE:
+    if not PARALLEL_CPU_PROFILE and not PILLOW_SIMD_COMPARISON and TARGET_BACKENDS == ("cpu", "simd", "gpu"):
         return selected_workloads
 
     profiled: list[dict[str, Any]] = []

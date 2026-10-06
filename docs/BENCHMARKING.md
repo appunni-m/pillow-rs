@@ -2,6 +2,9 @@
 
 This is the contributor guide for collecting and interpreting measurements.
 For comparisons, start with [benchmark results](https://appunni-m.github.io/pillow-rs/benchmarks/).
+The [Pillow-SIMD x86 comparison](PILLOW_SIMD_BENCHMARKS.md) is a separate
+version-matched cohort for the operations where the repository has suitable
+full-size, parity-backed workloads.
 
 This page defines the benchmark contract used by pillow-rs. It separates
 correctness, timing, backend, and resource evidence so a fast but incorrect or

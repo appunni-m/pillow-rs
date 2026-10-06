@@ -5,7 +5,7 @@ import copy
 import unittest
 from unittest.mock import Mock
 
-from select_docs_benchmark import select_run
+from select_docs_benchmark import select_pillow_simd_run, select_run
 
 
 class BenchmarkSelectionTests(unittest.TestCase):
@@ -62,6 +62,21 @@ class BenchmarkSelectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate"):
             select_run("owner/repo", "workflow_run", {"workflow_run": self.run},
                        Mock(return_value={"artifacts": self.artifacts["artifacts"] * 2}))
+
+    def test_pillow_simd_workflow_artifact_is_selected_only_from_trusted_main(self):
+        simd_run = dict(
+            self.run,
+            id=43,
+            path=".github/workflows/pillow-simd-benchmark.yml",
+        )
+        artifacts = {"artifacts": [{"name": "public-pillow-simd-benchmark", "expired": False}]}
+        fetch = Mock(side_effect=[{"workflow_runs": [simd_run]}, artifacts])
+        self.assertEqual(
+            select_pillow_simd_run("owner/repo", "push", fetch),
+            {"run_id": "43", "head_sha": "a" * 40},
+        )
+        self.assertIn("pillow-simd-benchmark.yml/runs", fetch.call_args_list[0].args[0])
+        self.assertIsNone(select_pillow_simd_run("owner/repo", "pull_request", fetch))
 
 
 if __name__ == "__main__":

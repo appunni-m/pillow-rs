@@ -8,6 +8,7 @@ import unittest
 import os
 from pathlib import Path
 import tempfile
+from unittest.mock import patch
 
 from run_migration_benchmark import (
     PARALLEL_CPU_PROFILE,
@@ -150,6 +151,32 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                     ("target_profile", "python-cpu"),
                     ("target_profile", "python-simd"),
                     ("target_profile", "python-gpu"),
+                ],
+            )
+        self.assertEqual(workload["subjects"], standard_subjects)
+
+    def test_pillow_simd_profile_keeps_ordinary_pillow_and_cpu_simd_subjects(self) -> None:
+        standard_subjects = [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+            {"kind": "target_profile", "id": "python-simd"},
+            {"kind": "target_profile", "id": "python-gpu"},
+        ]
+        workload = {"workload_id": "fixture", "subjects": standard_subjects}
+        with patch("run_migration_benchmark.PILLOW_SIMD_COMPARISON", True), patch(
+            "run_migration_benchmark.TARGET_BACKENDS", ("cpu", "simd")
+        ):
+            profiled = apply_profile_to_workloads([workload])
+            self.assertEqual(
+                profiled[0]["subjects"],
+                standard_subjects[:3],
+            )
+            self.assertEqual(
+                benchmark_subjects(),
+                [
+                    ("oracle", "pillow"),
+                    ("target_profile", "python-cpu"),
+                    ("target_profile", "python-simd"),
                 ],
             )
         self.assertEqual(workload["subjects"], standard_subjects)

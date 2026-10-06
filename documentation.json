@@ -56,6 +56,11 @@
       "audience": "contributor"
     },
     {
+      "source": "docs/PILLOW_SIMD_BENCHMARKS.md",
+      "output": "pillow-simd-benchmarks.md",
+      "audience": "contributor"
+    },
+    {
       "source": "docs/PIPELINE_ROADMAP.md",
       "output": "pipeline-roadmap.md",
       "audience": "contributor"
@@ -113,6 +118,9 @@
   "benchmark": {
     "kind": "pillow",
     "source": "docs/evidence/benchmark.json"
+  },
+  "pillow_simd_benchmark": {
+    "snapshot": null
   },
   "rust_example": {
     "source": "docs/RUST.md",

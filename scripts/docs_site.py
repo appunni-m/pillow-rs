@@ -38,6 +38,16 @@ def read_config(root: Path) -> dict:
         if not revision or data["revision"] != revision:
             raise ValueError("downloaded benchmark does not match the trusted workflow source revision")
         config["benchmark"]["source"] = snapshot
+    pillow_simd_snapshot = os.environ.get("DOCS_PILLOW_SIMD_BENCHMARK_SNAPSHOT")
+    if pillow_simd_snapshot:
+        from docs_evidence import validate
+        path = source_path(root, pillow_simd_snapshot)
+        data = json.loads(path.read_text())
+        validate(data, config["repository"])
+        revision = os.environ.get("DOCS_PILLOW_SIMD_BENCHMARK_REVISION")
+        if not revision or data["revision"] != revision:
+            raise ValueError("downloaded Pillow-SIMD benchmark does not match its trusted workflow source revision")
+        config["pillow_simd_benchmark"]["snapshot"] = pillow_simd_snapshot
     return config
 
 
@@ -154,7 +164,7 @@ def prepare_output(root: Path) -> Path:
 
 
 def prepare(root: Path, config: dict) -> None:
-    from docs_evidence import render_benchmarks, render_support
+    from docs_evidence import render_benchmarks, render_pillow_simd_benchmarks, render_support
 
     check_sources(root, config)
     output = prepare_output(root)
@@ -167,6 +177,10 @@ def prepare(root: Path, config: dict) -> None:
         destination.write_text(rewrite_links(source.read_text(), source, root, config))
     shutil.copytree(root / "site-assets", output / "assets")
     (output / "benchmarks.md").write_text(render_benchmarks(root, config, output))
+    simd_snapshot = config.get("pillow_simd_benchmark", {}).get("snapshot")
+    if simd_snapshot:
+        rendered = render_pillow_simd_benchmarks(source_path(root, simd_snapshot), output)
+        (output / "pillow-simd-benchmarks.md").write_text(rendered)
     if config.get("support"):
         (output / "api-support.md").write_text(render_support(root, config, output))
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()

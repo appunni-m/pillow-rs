@@ -18,6 +18,7 @@ BASELINE_FOR = {
     "python-simd": "pillow",
     "python-gpu": "pillow",
     "python-parallel-cpu": "pillow",
+    "pillow-simd": "pillow",
 }
 NAMES = {
     "pillow": "Pillow",
@@ -25,6 +26,7 @@ NAMES = {
     "python-simd": "pillow-rs · SIMD",
     "python-gpu": "pillow-rs · GPU",
     "python-parallel-cpu": "pillow-rs · Parallel CPU",
+    "pillow-simd": "Pillow-SIMD · SSE4",
 }
 
 
@@ -164,6 +166,10 @@ def compare(row: dict, baseline: dict | None) -> tuple[float | None, str, str]:
             return None, "unavailable", "GPU request used a fallback; native GPU performance is not established"
         if item["requested_backend"] == "gpu" and item["terminal_complete"] is not True:
             return None, "unavailable", "GPU completion not established"
+        if item["requested_backend"] in {"cpu", "simd"} and item["actual_backend"] != item["requested_backend"]:
+            return None, "unavailable", "Requested CPU/SIMD backend used a fallback; native performance is not established"
+        if item["requested_backend"] in {"cpu", "simd", "gpu"} and item.get("fallback_reasons"):
+            return None, "unavailable", "Backend fallback was recorded; native performance is not established"
     state = "checked" if all(evidence(item)[0] == "checked" for item in (row, baseline)) else "timing"
     ratio = baseline["median_us"] / row["median_us"]
     if not math.isfinite(ratio) or ratio <= 0:
@@ -199,7 +205,7 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     modes = sorted({facets(rows[0], kind)[2] for rows in grouped.values()})
     all_subjects = {row["subject"] for row in snapshot["rows"]}
     if kind == "pillow":
-        targets = [subject for subject in ("python-cpu", "python-simd", "python-gpu", "python-parallel-cpu")
+        targets = [subject for subject in ("python-cpu", "python-simd", "python-gpu", "python-parallel-cpu", "pillow-simd")
                    if subject in all_subjects or subject.startswith("python-")]
         baseline_ids = ["pillow"]
     else:
@@ -298,7 +304,7 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     pipeline_count = sum(1 for rows in grouped.values() if facets(rows[0], kind)[0] == "pipelines")
     operation_count = len(grouped) - pipeline_count
     return (f'<div class="benchmark-dashboard" data-baseline="{escape(primary_baseline)}">'
-            f'<p class="bench-intro">Compare like-for-like workload results with the recorded Pillow baseline. CPU, SIMD, GPU, and Parallel CPU all use <strong>ordinary Pillow</strong>; Parallel CPU is measured separately with the opt-in Rayon feature. '
+            f'<p class="bench-intro">Compare like-for-like workload results with the recorded Pillow baseline. CPU, SIMD, GPU, and Parallel CPU use <strong>ordinary Pillow</strong>; Parallel CPU is measured separately with the opt-in Rayon feature. Pillow-SIMD appears only in its matched x86 comparison cohort. '
             '<strong>Lower time is better.</strong></p>'
             f'<div class="bench-summary">{"".join(summary)}</div>'
             '<p class="bench-summary-note">Observed median comparisons, not an overall score. Timing-only rows do not establish equal output; small differences may be noise.</p>'

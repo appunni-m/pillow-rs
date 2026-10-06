@@ -10,7 +10,7 @@ on:
   workflow_run:
     # Release metadata is refreshed in a follow-up main commit after registry
     # publication. The docs push runs the version check against that new state.
-    workflows: [Benchmark]
+    workflows: [Benchmark, Pillow-SIMD Benchmark]
     types: [completed]
 
 permissions:
@@ -27,6 +27,10 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_repository.full_name == github.repository &&
        github.event.workflow_run.name == 'Benchmark' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.name == 'Pillow-SIMD Benchmark' &&
        github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -61,10 +65,20 @@ jobs:
           path: target/public-benchmark
           github-token: ${{ github.token }}
           run-id: ${{ steps.benchmark.outputs.run_id }}
+      - name: Download data from the successful Pillow-SIMD benchmark
+        if: steps.benchmark.outputs.pillow_simd_run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: public-pillow-simd-benchmark
+          path: target/public-pillow-simd-benchmark
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.benchmark.outputs.pillow_simd_run_id }}
       - name: Check sources and build the public site
         env:
           DOCS_BENCHMARK_SNAPSHOT: ${{ steps.benchmark.outputs.run_id != '' && 'target/public-benchmark/snapshot.json' || '' }}
           DOCS_BENCHMARK_REVISION: ${{ steps.benchmark.outputs.head_sha }}
+          DOCS_PILLOW_SIMD_BENCHMARK_SNAPSHOT: ${{ steps.benchmark.outputs.pillow_simd_run_id != '' && 'target/public-pillow-simd-benchmark/snapshot.json' || '' }}
+          DOCS_PILLOW_SIMD_BENCHMARK_REVISION: ${{ steps.benchmark.outputs.pillow_simd_head_sha }}
         run: make docs-test docs-lint docs-build PYTHON=.venv-docs/bin/python
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

@@ -230,6 +230,23 @@ class BenchmarkTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "workflow source revision"):
                     read_config(root)
 
+    def test_downloaded_pillow_simd_snapshot_requires_matching_workflow_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "documentation.json").write_text(json.dumps({
+                "repository": "owner/repo",
+                "benchmark": {},
+                "pillow_simd_benchmark": {"snapshot": None},
+            }))
+            (root / "snapshot.json").write_text(json.dumps({"revision": "a" * 40}))
+            env = {
+                "DOCS_PILLOW_SIMD_BENCHMARK_SNAPSHOT": "snapshot.json",
+                "DOCS_PILLOW_SIMD_BENCHMARK_REVISION": "a" * 40,
+            }
+            with patch("docs_evidence.validate"), patch.dict("os.environ", env):
+                config = read_config(root)
+            self.assertEqual(config["pillow_simd_benchmark"]["snapshot"], "snapshot.json")
+
     def test_missing_and_invalid_measurements_never_become_zero(self) -> None:
         self.assertIsNone(number(None))
         self.assertEqual(cell(None), "Not measured")

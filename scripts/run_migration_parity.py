@@ -54,7 +54,8 @@ DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_OUTPUT = ROOT / "build" / "migration-parity" / "parity-result.json"
 TARGET_ID = "pillow-rs-python"
 ORACLE_ID = "pillow"
-ORACLE_VERSION = "12.2.0"
+ORACLE_VERSION = os.environ.get("MIGRATION_ORACLE_VERSION", "12.2.0")
+ORACLE_NAME = os.environ.get("MIGRATION_ORACLE_NAME", "Pillow")
 TARGET_BACKEND = os.environ.get("MIGRATION_TARGET_BACKEND", "cpu").strip().lower()
 TARGET_PROFILE_OVERRIDE = os.environ.get("MIGRATION_TARGET_PROFILE", "").strip().lower()
 TARGET_FEATURES = ["pillow-rs-py/default", "pillow-rs/default"]
@@ -2636,14 +2637,16 @@ def side_identity(side: str) -> dict[str, Any]:
         pil = importlib.import_module("PIL")
         version = str(getattr(pil, "__version__", ""))
         if version != ORACLE_VERSION:
-            raise RuntimeError(f"Pillow oracle version {version!r}, expected {ORACLE_VERSION}")
+            raise RuntimeError(
+                f"{ORACLE_NAME} oracle version {version!r}, expected {ORACLE_VERSION}"
+            )
         oracle_path = Path(pil.__file__).resolve()
         expected_root = (ROOT / "pillow-rs-py" / "python").resolve()
         if expected_root in oracle_path.parents:
             raise RuntimeError(f"Pillow oracle imported from target checkout: {oracle_path}")
         return {
             "side": "source",
-            "implementation": "Pillow",
+            "implementation": ORACLE_NAME,
             "version": version,
             "path": str(oracle_path),
             "public_module": "PIL",
@@ -2686,8 +2689,13 @@ def _run_side_subprocess_batch(
     environment: dict[str, str | None] | None = None,
 ) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     payload = json.dumps(cases, separators=(",", ":"))
+    adapter_python = (
+        os.environ.get("MIGRATION_ORACLE_PYTHON", sys.executable)
+        if side == "source"
+        else sys.executable
+    )
     command = [
-        sys.executable,
+        adapter_python,
         str(Path(__file__).resolve()),
         "--side",
         side,
@@ -3178,7 +3186,7 @@ def build_identity(
             for path in input_paths
         ],
         "assets": assets,
-        "oracles": [{"oracle_id": ORACLE_ID, "name": "Pillow", "version": ORACLE_VERSION, "runtime": "CPython 3.12"}],
+        "oracles": [{"oracle_id": ORACLE_ID, "name": ORACLE_NAME, "version": ORACLE_VERSION, "runtime": "CPython 3.12"}],
         "targets": [{"target_profile": target_profile_for_backend(TARGET_BACKEND), "target_id": TARGET_ID, "revision": git_revision(), "dirty": target_dirty, "runtime": platform.python_version(), "backend": TARGET_BACKEND, "features": TARGET_FEATURES.copy()}],
         "command": command,
     }
@@ -3293,7 +3301,9 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         print(json.dumps(result["summary"], sort_keys=True))
         return 2
     if source_handshake.get("version") != ORACLE_VERSION:
-        raise RuntimeError("oracle identity handshake did not pin Pillow 12.2.0")
+        raise RuntimeError(
+            f"oracle identity handshake did not pin {ORACLE_NAME} {ORACLE_VERSION}"
+        )
     comparisons: list[dict[str, Any]] = []
     passed = failed = not_run = 0
     for case in cases:
@@ -3457,7 +3467,7 @@ def run_orchestrator_batched(
                 target_handshake = batch_target_handshake
                 if source_handshake.get("version") != ORACLE_VERSION:
                     raise RuntimeError(
-                        "oracle identity handshake did not pin Pillow 12.2.0"
+                        f"oracle identity handshake did not pin {ORACLE_NAME} {ORACLE_VERSION}"
                     )
             elif (
                 batch_source_handshake != source_handshake

@@ -408,6 +408,84 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
     return "\n".join(lines)
 
 
+def render_pillow_simd_benchmarks(source: Path, output: Path) -> str:
+    """Render the separately measured x86/Pillow-SIMD operation cohort."""
+    from docs_benchmark_view import render_dashboard
+
+    snapshot = json.loads(source.read_text(encoding="utf-8"))
+    validate(snapshot, "appunni-m/pillow-rs")
+    (output / "assets" / "pillow-simd-benchmark.json").write_text(
+        json.dumps(snapshot, indent=2) + "\n", encoding="utf-8"
+    )
+    source_versions = {
+        cohort["id"]: cohort["version"] for cohort in snapshot.get("cohorts", [])
+    }
+    cohort_rows = [
+        "| Source | Package version | Benchmark run | Parity run |",
+        "| --- | --- | --- | --- |",
+    ]
+    cohort_rows.extend(
+        "| "
+        + " | ".join(
+            cell(cohort.get(key))
+            for key in ("id", "version", "run_id", "parity_run_id")
+        )
+        + " |"
+        for cohort in snapshot.get("cohorts", [])
+    )
+    notes = "\n".join(f"- {cell(note)}" for note in snapshot["notes"])
+    rows = [
+        "| Workload | Mode | Implementation | Median µs | Samples | Output/backend evidence |",
+        "| --- | --- | --- | ---: | ---: | --- |",
+    ]
+    for row in snapshot["rows"]:
+        context = row["context"]
+        mode = context.get("mode", "Not recorded")
+        evidence = f"{row['status']}; {row['correctness']}; {row['requested_backend']} → {row['actual_backend']}"
+        rows.append(
+            "| "
+            + " | ".join(
+                cell(value)
+                for value in (
+                    row["workload"], mode, row["subject"], row["median_us"],
+                    row["sample_count"], evidence,
+                )
+            )
+            + " |"
+        )
+    dashboard = render_dashboard(snapshot, {"benchmark": {"kind": "pillow"}})
+    return "\n".join(
+        [
+            "# Pillow-SIMD x86 operation comparison",
+            "",
+            f"Recorded {cell(snapshot['measured_at'][:10])} on {cell(snapshot['environment'].get('os') or snapshot['environment'].get('platform') or 'an x86 host')}. This page compares only workloads run on that same host: Pillow {source_versions.get('pillow', 'version not recorded')}, Pillow-SIMD {source_versions.get('pillow-simd', 'version not recorded')}, and the pillow-rs CPU/SIMD profiles.",
+            "",
+            "Pillow-SIMD installs the `PIL` namespace, so the two Pillow variants are run in isolated environments. The benchmark admits timings only after each source has independently passed the same exact-output parity cases against pillow-rs. These results are separate from the Apple ARM results on the main [benchmark page](benchmarks.md).",
+            "",
+            *snapshot["notes"],
+            "",
+            dashboard,
+            "",
+            "## Matched source and parity runs",
+            "",
+            *cohort_rows,
+            "",
+            "## Workload-level evidence",
+            "",
+            *rows,
+            "",
+            "## Measurement notes",
+            "",
+            notes,
+            "",
+            f"Source revision: `{snapshot['revision']}` · Run: `{cell(snapshot['run_id'])}` · Policy: {cell(snapshot['policy_status'])}.",
+            "",
+            "Download the [public measurement data](assets/pillow-simd-benchmark.json) or follow the [benchmark protocol](benchmarking.md).",
+            "",
+        ]
+    )
+
+
 def render_support(root: Path, config: dict, output: Path) -> str:
     import yaml
 
