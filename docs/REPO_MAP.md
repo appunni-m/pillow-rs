@@ -412,6 +412,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- run_migration_parity.py
     |-- run_migration_pillow_coverage.py
     |-- run_migration_rust_coverage.py
+    |-- run_pillow_simd_benchmark.py
     |-- run_transpose_throughput.py
     |-- select_docs_benchmark.py
     |-- test_chops_affine_parity.py
@@ -431,6 +432,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_migration_parity_timing.py
     |-- test_optimization_goals.py
     |-- test_parity_reduction.py
+    |-- test_pillow_simd_benchmark.py
     |-- test_receipt_state.py
     |-- test_release_tools.py
     |-- validate_migration_parity_contract.py

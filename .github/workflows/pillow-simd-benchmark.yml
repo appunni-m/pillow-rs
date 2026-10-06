@@ -50,6 +50,13 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12.10'
+      - name: install Pillow-SIMD native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libtiff5-dev libjpeg8-dev libopenjp2-7-dev zlib1g-dev \
+            libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev \
+            python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev
       - name: install project benchmark tools
         run: make setup-venv PYTHON=python
       - name: install version-matched isolated image oracles
