@@ -1,7 +1,7 @@
 # Installation
 
 <!-- release:summary -->
-**Latest release: [12.2.0](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0).**
+**Latest release: [12.2.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.1).**
 <!-- /release:summary -->
 
 Install **pillow-rs** from PyPI, npm, or crates.io. Python imports `PIL`,
@@ -15,7 +15,7 @@ installing both in one environment can overwrite each other's files.
 <!-- release:python -->
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install pillow-rs==12.2.0
+.venv/bin/python -m pip install pillow-rs==12.2.1
 ```
 <!-- /release:python -->
 
@@ -24,21 +24,19 @@ Save the [first-image example](../README.md#make-your-first-image) as `first_ima
 and run it with that environment's Python.
 
 The normal wheel keeps Rayon disabled. Supported operations can still use the
-compiled SIMD or GPU route through automatic backend selection. This checkout
-also configures a separately built Rayon-backed **Parallel CPU** extension
-through the optional `parallel` extra. The published `12.2.0-alpha.5` wheel
-predates that extra, so the PyPI install will work only after matching standard
-and companion wheels are published. For the next alpha candidate, opt into
-pre-releases explicitly:
+compiled SIMD or GPU route through automatic backend selection. To install the
+separately built Rayon-backed **Parallel CPU** extension from the 12.2.1
+release, use the optional `parallel` extra:
 
 ```sh
-.venv/bin/python -m pip install --pre 'pillow-rs[parallel]'
+.venv/bin/python -m pip install 'pillow-rs[parallel]==12.2.1'
 ```
 
 The extra installs `pillow-rs-parallel`, which contains the distinct native
-extension selected by the Python package. It does not change the normal wheel,
-and it does not route work to SIMD or GPU. Source builds can continue to opt in
-with Maturin's `parallel` Cargo feature.
+extension selected by the Python package. The extra pins the companion wheel to
+the same version. It does not change the normal wheel, and it does not route
+work to SIMD or GPU. Source builds can continue to opt in with Maturin's
+`parallel` Cargo feature.
 
 | Platform with a prebuilt wheel | Requirement |
 | --- | --- |
@@ -64,7 +62,7 @@ and a native linker. See [contributor setup](../CONTRIBUTING.md) for source deve
 
 <!-- release:npm -->
 ```sh
-npm install pillow-rs@12.2.0
+npm install pillow-rs@12.2.1
 ```
 <!-- /release:npm -->
 
@@ -80,7 +78,7 @@ Add this dependency to your application's `Cargo.toml`:
 <!-- release:cargo -->
 ```toml
 [dependencies]
-pillow-rs = "=12.2.0"
+pillow-rs = "=12.2.1"
 ```
 <!-- /release:cargo -->
 

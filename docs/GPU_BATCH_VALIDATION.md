@@ -124,9 +124,12 @@ and this machine; explicit executor overhead is included.
 
 ## Alpha.6 release preparation gate, 2026-10-05
 
-The source version is `12.2.0-alpha.6`; alpha.5 remains the latest accepted
-release. Alpha.6 was partially published and failed a packaged-crate font check;
-see the [release evidence](REGISTRY_RELEASE_MATRIX.md#alpha6-partial-publication-2026-10-05).
+As of this evidence date, the source candidate was `12.2.0-alpha.6`, while
+alpha.5 remained the latest accepted release. Alpha.6 was partially published
+and failed a packaged-crate font check; see the
+[release evidence](REGISTRY_RELEASE_MATRIX.md#alpha6-partial-publication-2026-10-05).
+The later stable 12.2.1 release and current registry state are recorded in the
+[current release entry](REGISTRY_RELEASE_MATRIX.md#current-accepted-release-1221-2026-10-07).
 The full Python CPU campaign passed **17,105/17,105**. The first full SIMD
 campaign passed **17,086/17,105**, with **19 failures** and zero infrastructure
 errors. These failures initially blocked push, tagging, and publication. They all concern `Image.convert` from `1`, `L`, `LA`, or `I;16N` into
@@ -284,7 +287,8 @@ files; the npm artifact contains ten. The unshipped ImageBatch prototype was not
 part of these package artifacts. Older wheel artifacts were preserved separately.
 
 The Windows x86_64 type check, documentation tests/site build, and fmt/Clippy
-checks were repeated after the typed conversion change and passed. Source
-version declarations agree on alpha.6; published installation blocks remain
-alpha.5 until all registry jobs and the GitHub release succeed. Local checks
-do not substitute for the required exact-main-commit CI success before tagging.
+checks were repeated after the typed conversion change and passed. At the time,
+source version declarations agreed on alpha.6 and published installation blocks
+remained alpha.5 until the registry jobs and GitHub release succeeded. The
+stable 12.2.1 release subsequently completed; its exact-commit CI and registry
+evidence are listed in the [release matrix](REGISTRY_RELEASE_MATRIX.md).

@@ -1,5 +1,25 @@
 # Historical artifacts and release evidence
 
+## Current accepted release: 12.2.1, 2026-10-07
+
+The stable [`v12.2.1` GitHub release](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.1)
+points to commit `0f804aa4ec15b787e223497c63d954d0227596e6`. Its
+[main CI run](https://github.com/appunni-m/pillow-rs/actions/runs/37601786409)
+passed all jobs. The four live Pillow parity lanes—Python 3.10, Python 3.12,
+Node WebAssembly, and browser WebAssembly—each passed 17,108/17,108 cases.
+The [release workflow](https://github.com/appunni-m/pillow-rs/actions/runs/37605383379)
+completed successfully and published the packages below.
+
+| Registry | Published artifacts observed | Notes |
+| --- | --- | --- |
+| crates.io | `pillow-rs` 12.2.1 | Published by the accepted release workflow; crate source revision matches the tag. |
+| PyPI | `pillow-rs` 12.2.1: 3 platform wheels and 1 source distribution; `pillow-rs-parallel` 12.2.1: 3 platform wheels | Linux x86-64, macOS ARM64, and Windows x86-64. The `parallel` extra selects the matching companion wheel. |
+| npm | `pillow-rs` 12.2.1 | Registry metadata and provenance attestations are present. |
+
+The release preflight and package-consumer checks passed before publishing.
+This records CI and registry evidence; it does not claim parity beyond the
+listed cases or platforms. The sections below are older historical artifacts.
+
 The three projects publish from their own GitHub repositories through OIDC.
 The observations below describe earlier releases verified on 2026-09-16.
 They are retained for audit and do not identify the newest installable versions.

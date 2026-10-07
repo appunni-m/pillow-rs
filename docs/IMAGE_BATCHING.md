@@ -1,11 +1,11 @@
 # Explicit GPU batching and streaming
 
 <!-- release:summary -->
-**Latest release: [12.2.0](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0).**
+**Latest release: [12.2.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.1).**
 <!-- /release:summary -->
 
-`GpuBatchExecutor` is implemented in the source checkout. It schedules existing
-lazy image graphs on the pillow-rs GPU device, separately from normal Image routing.
+`GpuBatchExecutor` is available in pillow-rs 12.2.1. It schedules existing lazy
+image graphs on the pillow-rs GPU device, separately from normal Image routing.
 The earlier ImageBatch prototype was never part of the public API; this executor
 uses the existing `PipelineOp` and image graph directly.
 
