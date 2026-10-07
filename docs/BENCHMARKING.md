@@ -123,14 +123,15 @@ for the runner classes; physical VM instances are ephemeral, so the labels
 identify runner classes rather than a persistent computer.
 
 The results page opens with an “At a glance” summary. It defaults to CPU versus
-Pillow when that comparison is measured. Each runner has its own card, and
-individual operations and complete pipelines have separate results. A result
-states how many parity-verified workloads were faster, slower, or tied, gives
-the median per-workload speed ratio, and names the largest slowdown and gain
-with both measured times. The “Compare” selector chooses one profile and
-baseline; “All comparisons” shows separate cards for each pair. Runner cards
-are never pooled. Each workload counts once, so these counts and the median do
-not represent production-traffic weights, confidence intervals, or guarantees.
+Pillow when that comparison is measured. Each runner has its own row, with
+individual operations and complete pipelines shown side by side. Each result
+starts with a plain count such as “Faster in 8 of 10 matched cases,” followed
+by a thick bar showing faster, tied, and slower cases. “Typical case” is the
+middle per-case speed ratio; the slowest and fastest cases include their
+measured times. The “Compare” selector chooses one profile and baseline; “All
+comparisons” shows separate results for each pair. Runner rows are never
+pooled. Every case counts once, so this is not a production-traffic-weighted
+speedup or a performance guarantee.
 
 An expandable ratio plot shows every parity-verified workload in the selected
 comparison. The ratio is the baseline median latency divided by the pillow-rs

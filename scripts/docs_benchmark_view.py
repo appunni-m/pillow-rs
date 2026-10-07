@@ -336,7 +336,6 @@ def render_reader_summary(observations: list[dict]) -> str:
             slower = sum(ratio < 1 for ratio in ratios)
             equal = sum(ratio == 1 for ratio in ratios)
             total = len(ratios)
-            faster_percent = int(faster / total * 100 + 0.5)
             median_ratio = statistics.median(ratios)
             bar = (
                 f'<div class="bench-outcome-bar" role="img" aria-label="{faster} faster, {equal} same, {slower} slower">'
@@ -348,8 +347,8 @@ def render_reader_summary(observations: list[dict]) -> str:
             slowest = min(scoped, key=lambda item: item["ratio"])
             fastest = max(scoped, key=lambda item: item["ratio"])
             for label, item, active in (
-                ("Largest slowdown", slowest, slowest["ratio"] < 1),
-                ("Largest gain", fastest, fastest["ratio"] > 1),
+                ("Slowest case", slowest, slowest["ratio"] < 1),
+                ("Fastest case", fastest, fastest["ratio"] > 1),
             ):
                 if not active:
                     continue
@@ -360,29 +359,30 @@ def render_reader_summary(observations: list[dict]) -> str:
                     name += f' · {item["context"]}'
                 findings.append(
                     f'<li><span>{label}</span><strong>{escape(name)}</strong>'
-                    f'<small>{escape(NAMES.get(subject, subject))} {duration(item["target_us"])} · '
+                    f'<small>{escape(NAMES.get(subject, subject))} took {duration(item["target_us"])} vs '
                     f'{escape(NAMES.get(baseline, baseline))} {duration(item["baseline_us"])} · '
                     f'{escape(speed_label(item["ratio"]))}</small></li>'
                 )
             findings_html = f'<ul class="bench-reader-findings">{"".join(findings)}</ul>' if findings else ""
             scopes.append(
                 f'<section class="bench-reader-scope"><h4>{escape(scope_names.get(scope, scope.title()))}'
-                f'<small>{total} output-verified workload{"s" if total != 1 else ""}</small></h4>'
-                f'<p class="bench-reader-verdict"><strong>{escape(NAMES.get(subject, subject))} was faster on '
-                f'{faster} of {total} workloads ({faster_percent}%).</strong></p>'
-                f'<p class="bench-reader-typical">Typical workload: {escape(speed_label(median_ratio))} '
-                f'<span>(median of per-workload speed ratios)</span></p>{bar}'
+                f'<small>{total} matched case{"s" if total != 1 else ""}</small></h4>'
+                f'<div class="bench-reader-result">'
+                f'<p class="bench-reader-verdict"><strong>Faster in {faster} of {total} matched cases.</strong></p>'
+                f'<p class="bench-reader-typical">Typical case: {escape(speed_label(median_ratio))}</p>{bar}'
                 f'<p class="bench-reader-outcome-labels"><span class="faster">{faster} faster</span>'
                 f'<span class="tie">{equal} tied</span><span class="slower">{slower} slower</span></p>'
-                f'{findings_html}</section>'
+                f'{findings_html}</div></section>'
             )
         cards.append(
-            f'<article class="bench-reader-group"><h3>{escape(machine_label)}</h3>'
+            f'<article class="bench-reader-group"><div class="bench-reader-heading">'
+            f'<h3>{escape(machine_label)}</h3>'
             f'<p class="bench-reader-profile">{escape(NAMES.get(subject, subject))} vs '
-            f'{escape(NAMES.get(baseline, baseline))}</p>{"".join(scopes)}</article>'
+            f'{escape(NAMES.get(baseline, baseline))}</p></div>'
+            f'<div class="bench-reader-scopes">{"".join(scopes)}</div></article>'
         )
     if not cards:
-        return '<p class="bench-reader-empty">No output-verified workload pairs match this comparison and its filters.</p>'
+        return '<p class="bench-reader-empty">No parity-checked cases match these filters.</p>'
     return "".join(cards)
 
 
@@ -528,15 +528,15 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     return (f'<div class="benchmark-dashboard" data-baseline="{escape(primary_baseline)}" data-kind="{escape(kind)}">'
             f'<p class="bench-intro">{escape(intro)}</p>'
             '<section class="bench-reader" aria-labelledby="bench-reader-title"><h2 id="bench-reader-title">At a glance</h2>'
-            '<p class="bench-reader-note">Choose one comparison to see how often it wins or loses, then inspect its biggest changes. Results stay separate by runner and by individual operations versus complete pipelines; use Type and Mode to narrow further. Each exact-output-verified workload counts once.</p>'
+            '<p class="bench-reader-note">Each line is one runner and one kind of work. “Faster in 8 of 10” counts matched, parity-checked cases; “typical case” is the middle speed ratio. Runners and operation types are kept separate.</p>'
+            f'<div class="bench-reader-summary" id="bench-reader-summary" aria-live="polite">{reader_summary}</div>'
             '<div class="bench-toolbar" hidden>'
             '<label class="bench-search">Find a workload<input id="evidence-filter" type="search" placeholder="Search operations, pipelines, sizes…" autocomplete="off"></label>'
             f'<label>Type<select id="bench-group"><option value="">All types</option>{options}</select></label>'
             f'<label>Mode<select id="bench-mode"><option value="">All modes</option>{mode_options}</select></label>'
             f'<label>Runner<select id="bench-machine"><option value="">All runners</option>{machine_filter_options}</select></label>'
             f'<label>Compare<select id="bench-subject"><option value="">All comparisons</option>{subject_options}</select></label>'
-            '<button type="button" id="bench-reset">Reset</button><output id="bench-count" aria-live="polite"></output></div>'
-            f'<div class="bench-reader-summary" id="bench-reader-summary" aria-live="polite">{reader_summary}</div></section>'
+            '<button type="button" id="bench-reset">Reset</button><output id="bench-count" aria-live="polite"></output></div></section>'
             '<details class="bench-detail-view"><summary>Explore every matched workload on the ratio plot</summary>'
             '<section class="bench-overall"><h2>Per-workload differences</h2>'
             '<p>Each point is one exact-output-verified workload. Pillow median time divided by pillow-rs median time means 1× is equal latency, above 1× is faster, and below 1× is slower. The plot is grouped by runner, profile, baseline, and workload type, with slowest cases first. Hover a point for both measured medians.</p>'
