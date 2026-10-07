@@ -101,12 +101,53 @@ are declared in `pil-imagefilter.json`: BoxBlur on L, GaussianBlur on L, and
 UnsharpMask on RGB. They are active rows in the full benchmark profile, not
 historical-only evidence. The recorded contexts include 12 mode labels,
 including mixed-mode `I+F`. Each row carries its own mode, operation type,
-dimensions, boundary, and repeat policy; the page can filter by type, mode,
-implementation, or workload text, and sort by type, mode, workload name, or
-backend latency. These counts do not claim that every operation/mode
+dimensions, boundary, and repeat policy; the page filters by type, mode,
+runner, implementation, or workload text, and sorts by type, mode, workload
+name, or backend latency. These counts do not claim that every operation/mode
 combination is supported or measured by every backend. The benchmark
 completeness check verifies that every active `PipelineOp` and maintained
 eager operation has a workload specification.
+
+The scheduled and manual GitHub benchmark runs use three separately identified
+runner cohorts: macOS 15 arm64 measures CPU, SIMD, GPU, and Parallel CPU;
+Ubuntu 24.04 x86_64 and Ubuntu 24.04 arm64 each measure CPU, SIMD, and Parallel
+CPU. The Linux jobs do not request GPU, so their missing GPU cells mean “not
+measured,” not zero time or a CPU fallback result. All jobs run the same full
+workload profile from the same source revision. Their artifacts are joined only
+after that revision and runner identities validate. The report records each
+runner's OS, architecture, CPU model, Python version, Rust toolchain, and
+GitHub image version.
+See GitHub's
+[hosted-runner specifications](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+for the runner classes; physical VM instances are ephemeral, so the labels
+identify runner classes rather than a persistent computer.
+
+At the top of the results page, a box-and-whisker plot summarizes
+parity-verified per-workload speed ratios. A ratio is Pillow median latency
+divided by the pillow-rs profile median latency; values above 1× are faster.
+The box is the 25th–75th percentile, its center is the median, and whiskers
+reach the furthest observation within 1.5 interquartile ranges. The geometric
+mean summarizes multiplicative speed ratios, giving each workload one vote.
+Individual operations and complete pipelines have separate distributions and
+geometric means so a larger table cannot dominate the other. This is a
+workload-distribution summary, not a production-traffic-weighted
+score, confidence interval, or guarantee. Execution-only measurements remain
+in the tables but are excluded from the plot. The plot is on a log2 scale and
+clips its displayed axis at 1/16× and 16×; exact timings remain in the tables.
+Runner filters update the plot and both tables. Tables sort by runner, type,
+mode, workload name, or measured latency. Ratios are paired inside one
+runner cohort; absolute timing across macOS and Linux is not compared.
+
+The x86 Pillow-SIMD run remains a narrow, independently parity-gated cohort
+because its workloads are limited to BoxBlur, GaussianBlur, and getchannel.
+The main results plot includes it only when the Pillow-SIMD and full benchmark
+artifacts identify the same source revision and the same Ubuntu runner class,
+OS, architecture, CPU model, Rust toolchain, and image version. Its own run
+measures ordinary Pillow, Pillow-SIMD, and pillow-rs together on one x86
+runner. The identity check matches runner profiles across the two runs; it does
+not claim that GitHub reused the same physical VM. If the source revision or
+runner identity differs, those measurements stay on their separate page and
+are omitted from the overall plot until a matching run is available.
 
 The published page uses the full pipeline profile, not the four-workload quick
 smoke profile. The workflow also runs the opt-in Rayon feature as a separate

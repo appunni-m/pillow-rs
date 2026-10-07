@@ -59,6 +59,14 @@ jobs:
             python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev
       - name: install project benchmark tools
         run: make setup-venv PYTHON=python
+      - name: verify runner architecture and record hardware identity
+        id: runner
+        shell: bash
+        run: |
+          test "$(uname -m)" = x86_64
+          cpu_model="$(awk -F: '/model name/ {sub(/^ /, "", $2); print $2; exit}' /proc/cpuinfo)"
+          printf 'cpu_model=%s\n' "${cpu_model:-not-recorded}" >> "$GITHUB_OUTPUT"
+          printf 'image_version=%s-%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
       - name: install version-matched isolated image oracles
         run: |
           python -m venv .venv-oracle-pillow
@@ -70,6 +78,11 @@ jobs:
         env:
           PILLOW_ORACLE_PYTHON: .venv-oracle-pillow/bin/python
           PILLOW_SIMD_PYTHON: .venv-oracle-pillow-simd/bin/python
+          DOCS_BENCHMARK_RUNNER_ID: ubuntu-24.04-x86_64
+          DOCS_BENCHMARK_RUNNER_LABEL: Ubuntu 24.04 · x86_64
+          DOCS_BENCHMARK_CPU_MODEL: ${{ steps.runner.outputs.cpu_model }}
+          DOCS_BENCHMARK_IMAGE_VERSION: ${{ steps.runner.outputs.image_version }}
+          DOCS_BENCHMARK_RUST_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
         run: make migration-parity-benchmark-pillow-simd PYTHON=.venv/bin/python
       - name: stage the validated public comparison data
         run: |

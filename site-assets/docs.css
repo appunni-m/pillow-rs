@@ -26,6 +26,19 @@
 .benchmark-dashboard [hidden] { display: none !important; }
 body:has(.benchmark-dashboard) .md-sidebar--secondary { display: none; }
 .bench-intro { font-size: .9rem; margin: .6rem 0 1rem; }
+.bench-overall { margin: .8rem 0 1.2rem; padding: .65rem .8rem; border: 1px solid var(--md-default-fg-color--lightest); background: var(--md-code-bg-color); }
+.bench-overall h2 { margin: 0 0 .25rem; font-size: 1rem; }
+.bench-overall > p { margin: .25rem 0 .55rem; font-size: .68rem; color: var(--bench-muted); }
+.bench-boxplot { overflow-x: auto; border-top: 1px solid var(--md-default-fg-color--lightest); border-bottom: 1px solid var(--md-default-fg-color--lightest); }
+.bench-boxplot-svg { display: block; width: 100%; min-width: 840px; height: auto; font: .68rem system-ui, sans-serif; }
+.bench-box-label { fill: var(--md-default-fg-color); font-size: 10px; font-weight: 650; }
+.bench-box-summary, .bench-axis-label { fill: var(--bench-muted); font-size: 9px; }
+.bench-whisker { stroke: var(--md-default-fg-color--light); stroke-width: 2; }
+.bench-box { fill: color-mix(in srgb, var(--bench-positive) 24%, var(--md-default-bg-color)); stroke: var(--bench-positive); stroke-width: 2; }
+.bench-median { stroke: var(--md-default-fg-color); stroke-width: 3; }
+.bench-outlier { fill: var(--bench-negative); stroke: var(--md-default-bg-color); stroke-width: 1; }
+.bench-empty-plot { fill: var(--bench-muted); font-size: 12px; }
+.bench-boxplot-excluded { font-variant-numeric: tabular-nums; }
 .bench-summary { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0 .4rem; }
 .bench-score { flex: 1; min-width: 12rem; padding: .6rem .8rem; border: 1px solid var(--md-default-fg-color--lightest); border-radius: .5rem; background: var(--md-code-bg-color); }
 .bench-score > strong, .bench-score > span, .bench-score small { display: block; }
