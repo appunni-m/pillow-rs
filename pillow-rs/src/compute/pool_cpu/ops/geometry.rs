@@ -147,6 +147,43 @@ fn f_resize_horizontal_sample<F: F64MulAdd>(
     weights: &[f64],
     fma: &F,
 ) -> f32 {
+    if let [
+        weight0,
+        weight1,
+        weight2,
+        weight3,
+        weight4,
+        weight5,
+        weight6,
+        weight7,
+    ] = weights
+        && let Ok(source_x) = usize::try_from(first_source_x)
+        && let Some(source_row) = source.get(source_row_start..)
+        && let Some(source_row) = source_row.get(source_x..)
+        && let Some(
+            [
+                sample0,
+                sample1,
+                sample2,
+                sample3,
+                sample4,
+                sample5,
+                sample6,
+                sample7,
+            ],
+        ) = source_row.get(..8)
+    {
+        let mut accumulator = fma.mul_add(*weight0, f64::from(*sample0), 0.0);
+        accumulator = fma.mul_add(*weight1, f64::from(*sample1), accumulator);
+        accumulator = fma.mul_add(*weight2, f64::from(*sample2), accumulator);
+        accumulator = fma.mul_add(*weight3, f64::from(*sample3), accumulator);
+        accumulator = fma.mul_add(*weight4, f64::from(*sample4), accumulator);
+        accumulator = fma.mul_add(*weight5, f64::from(*sample5), accumulator);
+        accumulator = fma.mul_add(*weight6, f64::from(*sample6), accumulator);
+        accumulator = fma.mul_add(*weight7, f64::from(*sample7), accumulator);
+        return accumulator as f32;
+    }
+
     let vector_product_count = (weights.len() / F_RESIZE_VECTOR_WIDTH) * F_RESIZE_VECTOR_WIDTH;
     let mut accumulator = 0.0f64;
     if vector_product_count == 0 {
@@ -169,6 +206,81 @@ fn f_resize_horizontal_sample<F: F64MulAdd>(
                 fma,
             );
         }
+    }
+    accumulator as f32
+}
+
+#[inline]
+fn f_resize_vertical_sample<F: F64MulAdd>(
+    source: &[f32],
+    source_row_stride: usize,
+    first_source_y: i64,
+    source_x: usize,
+    weights: &[f64],
+    fma: &F,
+) -> f32 {
+    if let [
+        weight0,
+        weight1,
+        weight2,
+        weight3,
+        weight4,
+        weight5,
+        weight6,
+        weight7,
+    ] = weights
+        && let Ok(first_source_y) = usize::try_from(first_source_y)
+    {
+        // `precompute_coeffs_f64` clips every coefficient row to the source
+        // geometry, and callers pass a source x from that same row's width.
+        let first_source_index = first_source_y * source_row_stride + source_x;
+        let mut accumulator = fma.mul_add(*weight0, f64::from(source[first_source_index]), 0.0);
+        accumulator = fma.mul_add(
+            *weight1,
+            f64::from(source[first_source_index + source_row_stride]),
+            accumulator,
+        );
+        accumulator = fma.mul_add(
+            *weight2,
+            f64::from(source[first_source_index + source_row_stride * 2]),
+            accumulator,
+        );
+        accumulator = fma.mul_add(
+            *weight3,
+            f64::from(source[first_source_index + source_row_stride * 3]),
+            accumulator,
+        );
+        accumulator = fma.mul_add(
+            *weight4,
+            f64::from(source[first_source_index + source_row_stride * 4]),
+            accumulator,
+        );
+        accumulator = fma.mul_add(
+            *weight5,
+            f64::from(source[first_source_index + source_row_stride * 5]),
+            accumulator,
+        );
+        accumulator = fma.mul_add(
+            *weight6,
+            f64::from(source[first_source_index + source_row_stride * 6]),
+            accumulator,
+        );
+        accumulator = fma.mul_add(
+            *weight7,
+            f64::from(source[first_source_index + source_row_stride * 7]),
+            accumulator,
+        );
+        return accumulator as f32;
+    }
+
+    let mut accumulator = 0.0f64;
+    for (offset, &weight) in weights.iter().enumerate() {
+        let source_y = (first_source_y + offset as i64) as usize;
+        accumulator = fma.mul_add(
+            weight,
+            f64::from(source[source_y * source_row_stride + source_x]),
+            accumulator,
+        );
     }
     accumulator as f32
 }
@@ -204,35 +316,32 @@ fn resize_f_tall_order<F: F64MulAdd>(
         destination_height_usize,
         |_row_start, _row_end, destination_y, row| {
             let y0 = vertical.xmin[destination_y as usize];
+            let weights = &vertical.weights[destination_y as usize];
             for (source_x, output) in row.iter_mut().enumerate() {
-                let mut accumulator = 0.0f64;
-                for (offset, &weight) in vertical.weights[destination_y as usize].iter().enumerate()
-                {
-                    let source_y = (y0 + offset as i64) as usize;
-                    accumulator = fma.mul_add(
-                        weight,
-                        f64::from(src_floats[source_y * source_width_usize + source_x]),
-                        accumulator,
-                    );
-                }
-                *output = accumulator as f32;
+                *output = f_resize_vertical_sample(
+                    src_floats,
+                    source_width_usize,
+                    y0,
+                    source_x,
+                    weights,
+                    fma,
+                );
             }
         }
     );
     #[cfg(not(feature = "parallel"))]
     for (destination_y, row) in vertical_output.chunks_mut(source_width_usize).enumerate() {
         let y0 = vertical.xmin[destination_y];
+        let weights = &vertical.weights[destination_y];
         for (source_x, output) in row.iter_mut().enumerate() {
-            let mut accumulator = 0.0f64;
-            for (offset, &weight) in vertical.weights[destination_y].iter().enumerate() {
-                let source_y = (y0 + offset as i64) as usize;
-                accumulator = fma.mul_add(
-                    weight,
-                    f64::from(src_floats[source_y * source_width_usize + source_x]),
-                    accumulator,
-                );
-            }
-            *output = accumulator as f32;
+            *output = f_resize_vertical_sample(
+                src_floats,
+                source_width_usize,
+                y0,
+                source_x,
+                weights,
+                fma,
+            );
         }
     }
 
@@ -533,38 +642,30 @@ fn resize_f_with_fma<F: F64MulAdd>(
             dst_h as usize,
             |_row_start, _row_end, dy, row| {
                 let y0 = v_coeffs.xmin[dy as usize];
+                let weights = &v_coeffs.weights[dy as usize];
                 for (dx, output) in row.iter_mut().enumerate() {
-                    let mut acc = 0.0f64;
-                    for (offset, &weight) in v_coeffs.weights[dy as usize].iter().enumerate() {
-                        let sy = (y0 + offset as i64) as usize;
-                        acc = fma.mul_add(
-                            weight,
-                            f64::from(intermediate[sy * dst_w as usize + dx]),
-                            acc,
-                        );
-                    }
                     // Pillow's `libImaging/Resample.c::ImagingResampleVertical_32bpc`
                     // stores the float32 accumulator directly; do not
                     // canonicalize a negative zero produced by the sum.
-                    *output = acc as f32;
+                    *output = f_resize_vertical_sample(
+                        &intermediate,
+                        dst_w as usize,
+                        y0,
+                        dx,
+                        weights,
+                        fma,
+                    );
                 }
             }
         );
         #[cfg(not(feature = "parallel"))]
         for (dy, row) in output.chunks_mut(dst_w as usize).enumerate() {
             let y0 = v_coeffs.xmin[dy];
+            let weights = &v_coeffs.weights[dy];
             for (dx, output) in row.iter_mut().enumerate() {
-                let mut acc = 0.0f64;
-                for (offset, &weight) in v_coeffs.weights[dy].iter().enumerate() {
-                    let sy = (y0 + offset as i64) as usize;
-                    acc = fma.mul_add(
-                        weight,
-                        f64::from(intermediate[sy * dst_w as usize + dx]),
-                        acc,
-                    );
-                }
                 // Keep the sign of zero, matching the scalar C path.
-                *output = acc as f32;
+                *output =
+                    f_resize_vertical_sample(&intermediate, dst_w as usize, y0, dx, weights, fma);
             }
         }
         output
