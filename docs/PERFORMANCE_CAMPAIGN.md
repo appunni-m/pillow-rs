@@ -16,6 +16,12 @@ and a receipt naming the backend that actually ran. Pipeline latency,
 materialized-operation latency, and changing-input throughput are separate
 measures. A pass at one boundary does not substitute for another.
 
+Priority sequencing is stricter than the final CPU floor: first bring each
+verified CPU workload currently slower than Pillow to at least 2× Pillow. Once
+that set reaches the 2× gate, promote workloads slower than Pillow-SIMD using
+the version-matched JSON cohort. The eventual SIMD and GPU goals remain
+independent and do not count fallback as acceleration.
+
 Spend at most three or four optimization attempts on one operation per visit.
 Then commit a checkpoint with the retained changes, parity evidence, measured
 gaps, and concrete remaining investigations, and move to the next ranked
@@ -56,58 +62,62 @@ current local outputs are `build/migration-parity/optimization-goals.json` and
 `build/migration-parity/optimization-goals.md`. See
 [the reporting command](BENCHMARKING.md#correctness-gate-and-budget-gate).
 
-## Published cross-runner inventory — 2026-10-07
+## Published cross-runner inventory — 2026-10-08
 
 The committed [full per-workload matrix](evidence/performance-optimization-matrix.csv),
 [public API census](evidence/performance-optimization-public-api.csv), and
 [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
 were generated from GitHub Pages' raw [full benchmark snapshot](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
 and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json).
-The latest full snapshot, published by [benchmark run 37676436802](https://github.com/appunni-m/pillow-rs/actions/runs/37676436802),
-is clean at revision `7f8965ea0ba3313924665491918e360680a8a95a` and contains
+The latest full snapshot, published by [benchmark run 37681775264](https://github.com/appunni-m/pillow-rs/actions/runs/37681775264),
+is clean at revision `f7d7f6f938910c243ad4945f7e4a1bf447ddffe8` and contains
 8,619 rows across 663 workloads, including 201 `pipeline-op` workload IDs.
-Forty-four operation or composed-pipeline workloads have exact
-parity results in that snapshot: 29 direct operations and 15 composed pipelines.
-The CSV retains every row and source hash. Only exact parity with the expected
-backend, complete terminal observation, no fallback, clean provenance, and
-matching workload policy produces an eligible speed ratio. Sustained GPU
-throughput remains unmeasured in these one-request snapshots. The API census
-contains 330 paths: all 209 selected-manifest paths plus 121 paths outside that
-contract. Those 121 are explicit unmeasured gaps in the per-operation matrix;
-they do not count as benchmark coverage. Across the eligible published
-comparisons, serial CPU is slower than Pillow in 23 of 120 workload-runner pairs;
-SIMD is slower than Pillow in 23 of 120 and below 2× Pillow in 41 of 120.
-GPU latency is slower than SIMD in 22 of its 38 verified pairs. No sustained GPU
-throughput is measured.
+Forty-four operation or composed-pipeline workloads have exact parity results:
+29 direct operations and 15 composed pipelines. The CSV retains every row and
+source hash. Only exact parity with the expected backend, complete terminal
+observation, no fallback, clean provenance, and matching workload policy
+produces an eligible speed ratio. Sustained GPU throughput remains unmeasured
+in these one-request snapshots. The API census contains 330 paths: all 209
+selected-manifest paths plus 121 paths outside that contract. Those 121 are
+explicit unmeasured gaps in the per-operation matrix; they do not count as
+benchmark coverage. Across eligible comparisons, serial CPU is slower than
+Pillow in 22 of 120 workload-runner pairs; SIMD is slower than Pillow in 25 of
+120 and below 2× Pillow in 42 of 120. GPU latency is slower than SIMD in 23 of
+its 38 verified pairs.
+
+The immediate CPU priority is every verified workload currently slower than
+Pillow, with a sequencing gate of at least 2× Pillow before attention shifts to
+workloads that lose to Pillow-SIMD. The eventual per-operation goals remain CPU
+at or below Pillow, SIMD at least 5× faster than Pillow, and GPU latency no
+slower than SIMD with higher sustained throughput. The x86 runner in this
+snapshot is an Intel Xeon Platinum 8573C; the preceding snapshot used AMD EPYC
+9V45, so those x86 runs are not a controlled before/after pair.
 
 The largest verified serial CPU gaps in this snapshot are:
 
 | Workload | Runner | Pillow speedup | Existing checkpoint |
 | --- | --- | ---: | --- |
-| F-mode thumbnail | x86_64 | 0.330× | Three-attempt checkpoint; x86-specific gap remains |
-| RGB material thumbnail | Apple arm64 | 0.387× | RGB thumbnail checkpoints |
-| RGB material thumbnail | Ubuntu ARM64 | 0.456× | RGB thumbnail checkpoints |
-| F-mode bicubic resize composed pipeline | x86_64 | 0.480× | x86 scalar FMA candidate measured; CPU target unmet |
-| CMYK sparse `getprojection` pipeline | Apple arm64 | 0.508× | First focused pass pending |
-| RGB material thumbnail | x86_64 | 0.535× | RGB thumbnail checkpoints |
+| RGB material thumbnail | Apple arm64 | 0.379× | RGB thumbnail checkpoints; profile horizontal gather/plan next |
+| RGB material thumbnail | Ubuntu ARM64 | 0.457× | RGB thumbnail checkpoints |
+| F-mode bicubic resize composed pipeline | x86_64 | 0.477× | x86 scalar FMA candidate measured; CPU target unmet |
+| F-mode thumbnail | x86_64 | 0.496× | Boxed FMA attempt 1; CPU target unmet |
+| RGB material thumbnail | x86_64 | 0.496× | RGB thumbnail checkpoints |
+| I-mode thumbnail | Apple arm64 | 0.510× | Existing I thumbnail checkpoint |
 
-The speedup is Pillow median latency divided by target median latency; every
-listed workload is slower than Pillow on that runner. The x86 rows expose a
-platform gap beyond the earlier arm64 checkpoints. Reopen a checkpoint only
-with a distinct x86-specific profile or lower-bound hypothesis, and retain its
-existing attempts and parity requirements. The I-mode 5 × 5 x86 FMA candidate
-now meets the CPU≤Pillow target in both its materialized filter and composed
-convolution workloads on all three runners; its sub-2× cases remain visible in
-the matrix. The active serial CPU attempt moves to the highest-ranked remaining
-gap, x86 F-mode thumbnail. The x86 YCbCr SIMD revisit remains open for the
-SIMD-priority stage and is recorded at the end of this campaign log.
+The speedup is Pillow median latency divided by target median latency; each
+listed workload is slower than Pillow on that runner. The I-mode 5 × 5 x86 FMA
+candidate meets the CPU≤Pillow target in both its materialized filter and
+composed convolution workloads on all three runners; sub-2× rows remain visible
+in the matrix. The active serial CPU investigation is RGB material thumbnail on
+Apple arm64. The x86 YCbCr SIMD revisit remains open for the later SIMD stage
+and is recorded at the end of this campaign log.
 
 The Pillow-SIMD asset remains dirty and contains only 9 of the 34 declared
 cases, from revision `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`. The
-version-matched [Pillow-SIMD workflow 37676436740](https://github.com/appunni-m/pillow-rs/actions/runs/37676436740)
-for this snapshot is still pending, so the Pillow-SIMD comparison stage is not
-complete. The published stale asset is retained as diagnostic data. The 7 x86
-SIMD rows marked failed have
+version-matched [Pillow-SIMD workflow 37681775010](https://github.com/appunni-m/pillow-rs/actions/runs/37681775010)
+for this snapshot is waiting behind workflow 37666940900, which remains in
+progress. The comparison stage is incomplete and the published stale asset is
+diagnostic only. The 7 x86 SIMD rows marked failed have
 `successful_execution: not_proven` and no actual-backend receipt; they are
 missing-execution evidence, not reported parity mismatches. FastOctree's 8
 remote rows are `not_run` with parity unproven; the focused current-main CPU
@@ -19758,13 +19768,11 @@ current x86 runner. No coverage was run.
 
 ## F-mode thumbnail x86 boxed-resize FMA candidate — 2026-10-08
 
-The active inventory ranks `pipeline-op.thumbnail.native-f32-1024x768` on
-x86_64 first: the clean 7f8965e snapshot measured Pillow at 1.154 ms, serial
-CPU at 3.501 ms (0.330× Pillow), and SIMD at 1.107 ms. The public workload
-includes F-mode reducing-gap thumbnail processing, its fractional boxed
-resize, and output materialization. The requested GPU profile is not eligible:
-its receipt records CPU fallback because typed-F thumbnail semantics are not
-admitted.
+The preceding inventory ranked
+`pipeline-op.thumbnail.native-f32-1024x768` on x86_64 first: the clean 7f8965e
+snapshot measured Pillow at 1.154 ms, serial CPU at 3.501 ms (0.330× Pillow),
+and SIMD at 1.107 ms. The public workload includes F-mode reducing-gap
+thumbnail processing, its fractional boxed resize, and output materialization.
 
 Attempt 1 reuses the runtime-detected x86 scalar FMA token for the filtered
 boxed F resize used after the reducing-gap pass. It preserves the f64
@@ -19776,12 +19784,64 @@ benchmark job runs that test before timing. Cross-target
 `cargo check --tests` passes, and release cross-assembly contains
 `vfmadd231sd` in the boxed F accumulation loop. The strict live Pillow case
 `PIL.Image.Image.thumbnail.nuanced.f-mode-specialized-path` passes 1/1 on both
-CPU and SIMD locally. The Apple arm64 focused benchmark passes its correctness
-gate on CPU, SIMD, and the requested GPU profile; CPU and SIMD
-each recorded 100 actual backend observations with no fallback. Local medians
-were 1.037 ms for Pillow, 1.336 ms for CPU, and 1.014 ms for SIMD. The GPU
-profile actually ran CPU fallback for all 100 observations and is excluded.
-This arm64 run exercises only the portable arithmetic route and does not
-measure the x86 candidate. Hosted x86 parity and latency are pending.
+CPU and SIMD locally. Hosted benchmark 37681775264 passes its exact Pillow
+gates. Each backend row uses the public call plus `tobytes`, five warmups,
+20 iterations × five samples, 100 observations, and concurrency one. Its
+medians (ms) are:
 
+| Runner | Pillow | CPU | SIMD | Parallel CPU | Requested GPU |
+| --- | ---: | ---: | ---: | ---: | --- |
+| macOS arm64 | 1.735 | 2.228 | 1.808 | 1.953 | 4.473, CPU fallback |
+| Ubuntu ARM64 | 1.476 | 2.408 | 1.792 | 2.398 | not measured |
+| Ubuntu x86_64 | 1.614 | 3.256 | 1.632 | 3.279 | not measured |
+
+On every runner CPU remains slower than Pillow; x86 SIMD is approximately equal
+to Pillow and no SIMD row reaches 2×. All CPU and SIMD observations name their
+requested backend with no fallback. The macOS GPU profile fell back to CPU for
+all 100 observations because typed-F thumbnail semantics are not admitted, so
+it is excluded as GPU evidence. The x86 host changed from AMD EPYC 9V45 in the
+previous snapshot to Intel Xeon Platinum 8573C here; these snapshots do not
+establish a controlled before/after gain for the FMA candidate. Keep the
+operation open. The strict ARM run and hosted benchmark prove parity, but not
+that the x86 candidate improves end-to-end latency. No coverage was run.
+
+## RGB material thumbnail scalar 2×2 rounding specialization — 2026-10-08
+
+The clean published inventory ranks the material RGB thumbnail at 0.379× Pillow
+on macOS arm64. The prior RGB thumbnail visits reached their bounded attempt
+limit; this revisit starts from the newly confirmed CPU reduction bottleneck.
+A five-second live `sample` trace over 2,500 full public calls attributed 2,082
+of 3,891 stack samples to `execute_reduce`, 575 to the horizontal resize row,
+and 265 to the vertical resize column. A separate SIMD trace attributed 1,217
+samples to `native_reduce_bytes`, 1,160 to horizontal vector convolution, and
+355 to vertical vector convolution. All profile invocations recorded their
+requested actual backend for all 2,500 repetitions.
+
+Attempt 1 specializes the common even RGB 2×2 reduction's byte average from
+Pillow's reciprocal multiply to its exact equivalent `(sum + 2) >> 2`. The
+existing `rgb_reduce_specialized_rows_match_generic_reference_at_edges` test
+passed on the 2×2 interior and odd edge cases. The official pipeline benchmark
+then passed exact parity before timing, with five warmups, 20 iterations × five
+samples, and concurrency one. The timed public workload includes thumbnail
+processing and output materialization. Same-host medians (ms) were:
+
+| Run | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.907 | 2.372 | 2.206 | 1.873 |
+| Attempt 1 | 0.924 | 2.270 | 2.208 | 1.867 |
+| Attempt 1 repeat | 0.911 | 2.268 | 2.214 | 1.873 |
+
+Each run recorded 100 actual CPU, SIMD, and GPU executions without fallback.
+The two candidate runs repeat a 4.3% serial CPU reduction against the baseline
+(2.372 ms to 2.269 ms average); Pillow shifted between runs, so the per-run
+Pillow ratios are retained instead of attributing the full raw difference to
+the code change. The candidate CPU/Pillow speedups are 0.407× and 0.402×,
+versus 0.382× at baseline. This is a small stable full-call gain, not a closed
+target: CPU still loses to Pillow and remains below the 2× priority gate.
+SIMD is unchanged within run variation and also loses to Pillow. The local Apple
+GPU genuinely ran three dispatches per request; it measured 1.87 ms versus
+2.21 ms SIMD, with 3,145,728 bytes uploaded, 196,608 bytes read back, 12,544
+auxiliary bytes, and 6,310,668 retained-cache bytes. This single-request result
+does not demonstrate sustained throughput. Parallel CPU and hosted x86/ARM
+results remain pending for this source change; keep the profiles separate.
 No coverage was run.

@@ -2523,11 +2523,14 @@ fn execute_reduce_rgb(
                         + u32::from(top_row[top_right + channel])
                         + u32::from(bottom_row[source_x + channel])
                         + u32::from(bottom_row[top_right + channel]);
+                    // For a 2×2 block Pillow's reciprocal is exactly
+                    // `(sum + 2) / 4`; keep the rounding bias and replace the
+                    // general per-channel reciprocal multiply with a shift.
                     #[expect(
                         clippy::arithmetic_side_effects,
-                        reason = "the 2x2 factor proves this reciprocal average fits u32"
+                        reason = "four byte samples plus the Pillow rounding bias fit u32"
                     )]
-                    let average = ((sum + full_amend) * full_multiplier) >> 24;
+                    let average = (sum + 2) >> 2;
                     #[expect(
                         clippy::cast_possible_truncation,
                         reason = "the Pillow 2x2 average is bounded to one byte"
