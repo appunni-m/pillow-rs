@@ -115,8 +115,13 @@ document.addEventListener('DOMContentLoaded', () => {
       for (const group of groups) {
         const card = document.createElement('article');
         card.className = 'bench-reader-group';
-        appendText(card, 'h3', '', group.machine);
-        appendText(card, 'p', 'bench-reader-profile', `${displayName(group.subject)} vs ${displayName(group.baseline)}`);
+        const heading = document.createElement('div');
+        heading.className = 'bench-reader-heading';
+        appendText(heading, 'h3', '', group.machine);
+        appendText(heading, 'p', 'bench-reader-profile', `${displayName(group.subject)} vs ${displayName(group.baseline)}`);
+        card.append(heading);
+        const scopes = document.createElement('div');
+        scopes.className = 'bench-reader-scopes';
         group.scopes.sort((a, b) => a.scope.localeCompare(b.scope));
         for (const scope of group.scopes) {
           const ratios = scope.workloads.map(item => item.ratio);
@@ -125,13 +130,14 @@ document.addEventListener('DOMContentLoaded', () => {
           const faster = ratios.filter(value => value > 1).length;
           const slower = ratios.filter(value => value < 1).length;
           const equal = ratios.filter(value => value === 1).length;
-          const fasterPercent = Math.round(faster / total * 100);
           const section = document.createElement('section');
           section.className = 'bench-reader-scope';
           const heading = appendText(section, 'h4', '', scope.scope === 'operations' ? 'Individual operations' : scope.scope === 'pipelines' ? 'Complete pipelines' : 'Measurements');
-          appendText(heading, 'small', '', `${total} output-verified workload${total === 1 ? '' : 's'}`);
-          appendText(section, 'p', 'bench-reader-verdict', `${displayName(group.subject)} was faster on ${faster} of ${total} workloads (${fasterPercent}%).`);
-          appendText(section, 'p', 'bench-reader-typical', `Typical workload: ${speedLabel(median(ratios))} (median of per-workload speed ratios)`);
+          appendText(heading, 'small', '', `${total} matched case${total === 1 ? '' : 's'}`);
+          const result = document.createElement('div');
+          result.className = 'bench-reader-result';
+          appendText(result, 'p', 'bench-reader-verdict', `Faster in ${faster} of ${total} matched cases.`);
+          appendText(result, 'p', 'bench-reader-typical', `Typical case: ${speedLabel(median(ratios))}`);
           const bar = document.createElement('div');
           bar.className = 'bench-outcome-bar';
           bar.setAttribute('role', 'img');
@@ -142,18 +148,18 @@ document.addEventListener('DOMContentLoaded', () => {
             segment.style.width = `${count / total * 100}%`;
             bar.append(segment);
           }
-          section.append(bar);
+          result.append(bar);
           const labels = document.createElement('p');
           labels.className = 'bench-reader-outcome-labels';
           for (const [name, count, label] of [['faster', faster, 'faster'], ['tie', equal, 'tied'], ['slower', slower, 'slower']]) {
             appendText(labels, 'span', name, `${count} ${label}`);
           }
-          section.append(labels);
+          result.append(labels);
           const findings = [];
           const slowest = scope.workloads.reduce((best, item) => item.ratio < best.ratio ? item : best, scope.workloads[0]);
           const fastest = scope.workloads.reduce((best, item) => item.ratio > best.ratio ? item : best, scope.workloads[0]);
-          if (slowest.ratio < 1) findings.push(['Largest slowdown', slowest]);
-          if (fastest.ratio > 1) findings.push(['Largest gain', fastest]);
+          if (slowest.ratio < 1) findings.push(['Slowest case', slowest]);
+          if (fastest.ratio > 1) findings.push(['Fastest case', fastest]);
           if (findings.length) {
             const list = document.createElement('ul');
             list.className = 'bench-reader-findings';
@@ -161,16 +167,18 @@ document.addEventListener('DOMContentLoaded', () => {
               const entry = document.createElement('li');
               appendText(entry, 'span', '', label);
               appendText(entry, 'strong', '', item.name || item.workload);
-              appendText(entry, 'small', '', `${displayName(group.subject)} ${displayDuration(item.targetTime)} · ${displayName(group.baseline)} ${displayDuration(item.baselineTime)} · ${speedLabel(item.ratio)}`);
+              appendText(entry, 'small', '', `${displayName(group.subject)} took ${displayDuration(item.targetTime)} vs ${displayName(group.baseline)} ${displayDuration(item.baselineTime)} · ${speedLabel(item.ratio)}`);
               list.append(entry);
             }
-            section.append(list);
+            result.append(list);
           }
-          card.append(section);
+          section.append(result);
+          scopes.append(section);
         }
+        card.append(scopes);
         fragment.append(card);
       }
-      if (!groups.length) appendText(fragment, 'p', 'bench-reader-empty', 'No output-verified workload pairs match this comparison and its filters.');
+      if (!groups.length) appendText(fragment, 'p', 'bench-reader-empty', 'No parity-checked cases match these filters.');
       readerSummary.replaceChildren(fragment);
     };
     const renderWorkloadPlot = () => {

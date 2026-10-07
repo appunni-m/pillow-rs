@@ -91,7 +91,7 @@ async function main() {
         });
         if (!initialPlot) throw new Error('Per-workload ratio plot did not render a labeled, faster-than-baseline point');
         const initialSummary = await page.$eval('#bench-reader-summary', element => element.textContent);
-        if (!initialSummary.includes('faster on 1 of 1 workloads') || !initialSummary.includes('Browser fixture invert RGBA')) {
+        if (!initialSummary.includes('Faster in 1 of 1 matched cases') || !initialSummary.includes('Browser fixture invert RGBA')) {
           throw new Error(`Reader summary did not explain the selected workload: ${initialSummary}`);
         }
         await page.type('#evidence-filter', 'no-such-workload');
@@ -100,7 +100,7 @@ async function main() {
         const filteredPlot = await page.$eval('.bench-workload-plot-svg', svg => svg.textContent.includes('No parity-verified workload pairs'));
         if (!filteredPlot) throw new Error('Ratio plot did not respond to the workload search filter');
         const filteredSummary = await page.$eval('#bench-reader-summary', element => element.textContent);
-        if (!filteredSummary.includes('No output-verified workload pairs')) throw new Error('Reader summary did not respond to the workload search filter');
+        if (!filteredSummary.includes('No parity-checked cases match these filters')) throw new Error('Reader summary did not respond to the workload search filter');
         await page.$eval('#evidence-filter', element => {
           element.value = ''; element.dispatchEvent(new Event('input', { bubbles: true }));
         });

@@ -92,6 +92,7 @@ class BenchmarkViewTests(unittest.TestCase):
         text = render_dashboard(snapshot, dict(benchmark={"kind": "pillow"}))
         self.assertIn("Per-workload differences", text)
         self.assertLess(text.index('id="bench-reader-summary"'), text.index('<details class="bench-detail-view">'))
+        self.assertLess(text.index('id="bench-reader-summary"'), text.index('class="bench-toolbar"'))
         self.assertIn('data-machine="linux"', text)
         self.assertIn('data-machine="mac"', text)
         self.assertIn('id="bench-machine"', text)
@@ -102,7 +103,7 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn("geomean 2× faster", text)
         self.assertIn('data-ratio-primary="2.0"', text)
         self.assertIn('data-ratio-primary=""', text)
-        self.assertIn('pillow-rs · SIMD was faster on 2 of 2 workloads (100%).', text)
+        self.assertIn('Faster in 2 of 2 matched cases.', text)
         self.assertIn('class="bench-reader-group"', text)
         self.assertIn('class="bench-ratio-point faster"', text)
         plot = text.split('<div class="bench-ratio-plot"', 1)[1].split('</div>', 1)[0]
@@ -134,9 +135,9 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn("Ubuntu x86_64", summary)
         self.assertIn("Individual operations", summary)
         self.assertIn("Complete pipelines", summary)
-        self.assertIn("Largest slowdown", summary)
-        self.assertIn("Largest gain", summary)
-        self.assertEqual(summary.count("1 output-verified workload</small>"), 3)
+        self.assertIn("Slowest case", summary)
+        self.assertIn("Fastest case", summary)
+        self.assertEqual(summary.count("1 matched case</small>"), 3)
 
     def test_workload_plot_includes_pillow_simd_pair_against_its_matched_host(self):
         machine = "linux-pillow-simd"
@@ -308,7 +309,7 @@ class BenchmarkViewTests(unittest.TestCase):
     def test_unverified_and_missing_pairs_are_unavailable_in_summary(self):
         snapshot=dict(rows=[row('FreeType',20),row(),row('FreeType',30,workload='other')],environment={'os':'Test'},measured_at='2026-09-16')
         text=render_dashboard(snapshot,dict(project='fontdone',benchmark={'kind':'fontdone'}))
-        self.assertIn('No output-verified workload pairs match this comparison', text)
+        self.assertIn('No parity-checked cases match these filters', text)
         self.assertIn('Timing-only results remain in the tables', text)
         self.assertNotIn('class="bench-outcome-bar"', text)
 
