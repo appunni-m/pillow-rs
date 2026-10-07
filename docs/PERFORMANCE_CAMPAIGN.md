@@ -126,11 +126,15 @@ The published Pillow-SIMD asset remains dirty and contains only 9 of the 34
 declared cases, from revision `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`.
 Workflow 37691437080 for revision `90f72b9a8` failed. The new
 [Pillow-SIMD workflow 37695171643](https://github.com/appunni-m/pillow-rs/actions/runs/37695171643)
-for revision `83c2f3907` is in progress; until it publishes a complete clean
-asset, the existing JSON is diagnostic only. The corresponding [full benchmark
-workflow 37695171668](https://github.com/appunni-m/pillow-rs/actions/runs/37695171668)
-has completed the Ubuntu x86_64 and ARM64 jobs while macOS arm64 is still
-running. The 7 x86 SIMD rows marked failed have
+for revision `83c2f3907` also failed, at the parity-gated benchmark step, after
+21m38s with exit code 2. Its public check annotation provides only the generic
+exit code; no failure category or test defect is confirmed. Until a complete
+clean asset is published, the existing JSON is diagnostic only. The
+corresponding [full benchmark workflow
+37695171668](https://github.com/appunni-m/pillow-rs/actions/runs/37695171668)
+has completed all three runner jobs successfully and is still assembling the
+combined snapshot. The public matrix therefore still reflects revision
+`01e0dddd88b7bf5babf8758dd108b3dae350c8ba`. The 7 x86 SIMD rows marked failed have
 `successful_execution: not_proven` and no actual-backend receipt; they are
 missing-execution evidence, not reported parity mismatches. FastOctree's 8
 remote rows are `not_run` with parity unproven; the focused current-main CPU

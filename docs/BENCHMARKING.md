@@ -470,13 +470,17 @@ for 330 public paths and four profiles. Only rows with exact parity and
 completed backend receipts are eligible for speed claims. The published
 Pillow-SIMD snapshot is still dirty at revision
 `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d` and covers 9 of the 34 declared
-cases, so its ratios remain diagnostic. The full benchmark for revision
-`83c2f3907` is running as [workflow
+cases, so its ratios remain diagnostic. The version-matched Pillow-SIMD job
+for revision `83c2f3907` is [workflow
+37695171643](https://github.com/appunni-m/pillow-rs/actions/runs/37695171643); it
+failed in its parity-gated benchmark step with exit code 2, and its public check
+annotation does not expose a specific failure cause. The full benchmark for the
+same revision is running as [workflow
 37695171668](https://github.com/appunni-m/pillow-rs/actions/runs/37695171668):
-Ubuntu x86_64 and ARM64 have completed, and macOS arm64 is still running. Its
-version-matched Pillow-SIMD job is [workflow
-37695171643](https://github.com/appunni-m/pillow-rs/actions/runs/37695171643).
-Refresh both matrices only after the workflows publish their raw JSON assets.
+all three runner jobs completed successfully, and GitHub is assembling the
+combined snapshot. The raw JSON assets still contain the preceding revisions.
+Refresh the full matrix only after the benchmark publishes its asset, and use
+Pillow-SIMD comparisons only after a complete clean matched cohort is available.
 
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with
