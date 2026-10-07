@@ -341,14 +341,22 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
     dims: CheckedDims,
     rounding: u32,
 ) -> Vec<u8> {
-    let mut gray = dims.alloc_buffer();
-    for (pixel, output) in source.chunks_exact(CHANNELS).zip(&mut gray) {
-        *output = ((19595 * u32::from(pixel[0])
-            + 38470 * u32::from(pixel[1])
-            + 7471 * u32::from(pixel[2])
-            + rounding)
-            >> 16) as u8;
-    }
+    let expected_pixels = dims.total_pixels();
+    let mut gray: Vec<u8> = source
+        .chunks_exact(CHANNELS)
+        .take(expected_pixels)
+        .map(|pixel| {
+            ((19595 * u32::from(pixel[0])
+                + 38470 * u32::from(pixel[1])
+                + 7471 * u32::from(pixel[2])
+                + rounding)
+                >> 16) as u8
+        })
+        .collect();
+    // Valid image buffers yield every pixel and avoid zero-initializing the
+    // output before overwriting it. Keep the former zero-fill behavior if an
+    // internal caller supplies a truncated buffer.
+    gray.resize(expected_pixels, 0);
     gray
 }
 
