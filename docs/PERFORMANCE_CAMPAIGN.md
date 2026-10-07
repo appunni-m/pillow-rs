@@ -19857,3 +19857,41 @@ The packed-load implementation is discarded, while the added narrow-row test
 cases remain useful edge checks for the scalar specialization. This hypothesis
 did not identify a genuine test defect or improve the optimization, so retain
 the simpler scalar 2×2 path and move to the next ranked CPU gap.
+
+## Boxed RGB thumbnail i32 accumulator trial — rejected — 2026-10-08
+
+The CPU sample profile attributed 2,082 of 3,891 stack samples to RGB reduce,
+575 to the existing horizontal resize row, and 335 to vertical resize. The
+reduce 2×2 scalar specialization is already checkpointed above. This trial
+isolated the following boxed RGB bicubic resize and reused the established
+coefficient guard that proves every byte-weighted partial sum plus Pillow's
+rounding bias fits in i32. A direct wide-versus-narrow comparison passed for
+the 512×384-to-256×192 thumbnail resize, odd downscale edges, and upscaling.
+
+The public 1024×768 RGB thumbnail pipeline passed exact Pillow parity in both
+100-observation runs. The candidate CPU medians were 2.397 ms and 2.382 ms
+(p95 2.533 ms and 2.507 ms), versus 2.268 ms for the scalar checkpoint repeat;
+Pillow measured 0.923 ms and 0.921 ms. SIMD measured 2.231 ms and 2.210 ms.
+Actual CPU and SIMD receipts covered all 100 samples with no fallback. GPU also
+ran all samples with three dispatches, uploading 3,145,728 bytes and reading
+back 196,608 bytes; its latency moved from 1.873 ms to about 2.20 ms during the
+same host session, so do not infer a GPU code change from these local runs.
+
+The candidate profile confirms it executed: 914 samples were in its horizontal
+i32 row kernel and 218 in its vertical kernel. The target bicubic coefficients
+mostly have eight taps, while the reused narrow kernel unrolled only four and
+used a generic loop for eight. The existing wide RGB kernel already unrolls
+eight taps. Keep the exact arithmetic test evidence, discard this implementation,
+and preserve the original path. No test defect was found; the test established
+arithmetic parity but did not establish performance. No coverage was run.
+
+Attempt 4 added an explicit 8-tap i32 unroll and reused the same kernel for the
+existing three-channel narrow path; the focused comparison covered the actual
+thumbnail stage and boxed RGB route. Exact Pillow parity passed in both public
+benchmark runs. CPU medians were 2.426 ms and 2.438 ms (p95 2.514 ms and
+2.536 ms), further below the scalar checkpoint's 2.268 ms. SIMD remained at
+2.224 ms and 2.225 ms; GPU ran all samples with three dispatches and measured
+1.932 ms and 1.965 ms, with 3,145,728 bytes uploaded and 196,608 read back.
+Drop the unrolled i32 variant and its code changes. The kernel-width idea is
+closed for this visit; preserve the proven scalar reducer gain and continue
+with a different CPU bottleneck.
