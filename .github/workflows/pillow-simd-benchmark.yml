@@ -99,8 +99,7 @@ jobs:
           name: pillow-simd-benchmark-${{ github.run_id }}
           path: |
             build/migration-parity/benchmark-result-pillow.json
-            build/migration-parity/benchmark-parity-result-pillow.json
             build/migration-parity/benchmark-result-pillow-simd.json
-            build/migration-parity/benchmark-parity-result-pillow-simd.json
             build/migration-parity/pillow-simd-public-snapshot.json
           if-no-files-found: ignore
+          retention-days: 3

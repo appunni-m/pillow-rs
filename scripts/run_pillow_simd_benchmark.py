@@ -161,8 +161,22 @@ def validate_run(
         raise ValueError(f"{source_name} result identity/status is invalid")
     if [item.get("workload_id") for item in result.get("workloads", [])] != workload_ids:
         raise ValueError(f"{source_name} result changed the selected workload set")
-    if parity.get("status") != "completed" or parity.get("summary", {}).get("failed") != 0:
-        raise ValueError(f"{source_name} parity preflight did not pass")
+    if parity.get("status") != "completed":
+        raise ValueError(f"{source_name} parity preflight did not complete")
+    failed = [
+        {
+            "case_id": comparison.get("case_id"),
+            "target_profile": comparison.get("target_profile"),
+            "outcome": comparison.get("outcome"),
+        }
+        for comparison in parity.get("comparisons", [])
+        if comparison.get("outcome") != "pass"
+    ]
+    if parity.get("summary", {}).get("failed") != 0:
+        raise ValueError(
+            f"{source_name} parity preflight had "
+            f"{parity.get('summary', {}).get('failed')} failing comparison(s): {failed[:40]}"
+        )
     if parity.get("infrastructure_errors"):
         raise ValueError(f"{source_name} parity preflight has infrastructure errors")
     for workload in result["workloads"]:
@@ -177,6 +191,16 @@ def validate_run(
             raise ValueError(
                 f"{source_name} has an incomplete subject for {workload['workload_id']}"
             )
+
+
+def append_github_failure_summary(source_name: str, detail: object) -> None:
+    """Expose concise benchmark failure context on public Actions run summaries."""
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    text = str(detail).strip()[-5000:].replace("```", "` ` `")
+    with Path(summary_path).open("a", encoding="utf-8") as summary:
+        summary.write(f"### {source_name} benchmark failed\n\n```text\n{text}\n```\n")
 
 
 def combine_results(
@@ -276,14 +300,18 @@ def main() -> int:
     ):
         result_path = root / f"benchmark-result-{suffix}.json"
         parity_path = root / f"benchmark-parity-result-{suffix}.json"
-        result, parity_run_id = run_source_cohort(
-            source_python=python_path,
-            source_name=name,
-            source_version=version,
-            output=result_path,
-            parity_output=parity_path,
-            workload_ids=ids,
-        )
+        try:
+            result, parity_run_id = run_source_cohort(
+                source_python=python_path,
+                source_name=name,
+                source_version=version,
+                output=result_path,
+                parity_output=parity_path,
+                workload_ids=ids,
+            )
+        except Exception as error:
+            append_github_failure_summary(name, error)
+            raise
         results.append(result)
         parity_run_ids.append(parity_run_id)
     source_files = [

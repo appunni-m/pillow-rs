@@ -14,7 +14,9 @@ from run_pillow_simd_benchmark import (
     PILLOW_SIMD_VERSION,
     PILLOW_VERSION,
     WORKLOAD_IDS,
+    append_github_failure_summary,
     combine_results,
+    validate_run,
     workload_contracts,
 )
 from run_migration_benchmark import DEFAULT_MANIFEST, load_benchmarks, load_manifest
@@ -172,6 +174,33 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
         changed["workloads"][0]["context"]["mode"] = "RGBA"
         with self.assertRaisesRegex(ValueError, "conditions differ"):
             combine_results(pillow, changed, "c" * 64)
+
+    def test_parity_failure_names_unmatched_case(self) -> None:
+        result = run("Pillow-SIMD", PILLOW_SIMD_VERSION, "simd")
+        parity = {
+            "status": "completed",
+            "summary": {"failed": 1},
+            "comparisons": [
+                {
+                    "case_id": "case-that-did-not-match",
+                    "target_profile": "python-simd",
+                    "outcome": "mismatch",
+                }
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "case-that-did-not-match"):
+            validate_run(result, parity, "Pillow-SIMD", PILLOW_SIMD_VERSION, list(WORKLOAD_IDS))
+
+    def test_github_failure_summary_is_compact_and_optional(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            summary = Path(directory) / "summary.md"
+            with patch.dict("os.environ", {"GITHUB_STEP_SUMMARY": str(summary)}):
+                append_github_failure_summary("Pillow-SIMD", "parity mismatch: workload-x")
+            self.assertIn("Pillow-SIMD benchmark failed", summary.read_text())
+            self.assertIn("parity mismatch: workload-x", summary.read_text())
+
+        with patch.dict("os.environ", {}, clear=True):
+            append_github_failure_summary("Pillow", "local test failure")
 
     def test_public_page_renders_snapshot_data_and_matched_host_notice(self) -> None:
         snapshot = combine_results(
