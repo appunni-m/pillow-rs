@@ -100,7 +100,7 @@ The largest verified serial CPU gaps in this snapshot are:
 
 | Workload | Runner | Pillow speedup | Existing checkpoint |
 | --- | --- | ---: | --- |
-| RGB material thumbnail | Apple arm64 | 0.363× | RGB 2×2 specialization retained; packed loads and boxed i32 trials rejected |
+| RGB material thumbnail | Apple arm64 | 0.363× | RGB 2×2 specialization retained; packed loads, boxed i32, and row-chunk trials rejected |
 | F-mode bicubic resize composed pipeline | x86_64 | 0.454× | Runtime FMA plus horizontal and vertical eight-tap unrolls; hosted reruns pending |
 | RGB material thumbnail | Ubuntu ARM64 | 0.455× | RGB thumbnail checkpoints |
 | Sparse CMYK getprojection pipeline | x86_64 | 0.480× | No focused optimization yet |
@@ -112,11 +112,12 @@ listed workload is slower than Pillow on that runner. The I-mode 5 × 5 x86 FMA
 candidate meets the CPU≤Pillow target in both its materialized filter and
 composed convolution workloads on all three runners; sub-2× rows remain visible
 in the matrix. The RGB thumbnail remains the top ranked CPU gap; its local visit
-reached the bounded-attempt checkpoint above. The current serial CPU visit is
-the next ranked F-mode resize on x86_64. The branch-hoist candidate improved the
-local arm64 CPU median in two repeats; the hosted x86 result is required to
-confirm the row. The x86 YCbCr SIMD revisit remains open for the later SIMD
-stage and is recorded at the end of this campaign log.
+reached the bounded-attempt checkpoint above. The next ranked F-mode resize
+gained to 2.14× Pillow on local arm64, but its published x86 gap remains open
+until the hosted result verifies that runner. Continue CPU work on the RGB
+thumbnail before moving to workloads that only lose to Pillow-SIMD. The x86
+YCbCr SIMD revisit remains open for the later SIMD stage and is recorded at the
+end of this campaign log.
 
 The published Pillow-SIMD asset remains dirty and contains only 9 of the 34
 declared cases, from revision `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`.
@@ -19900,6 +19901,37 @@ benchmark runs. CPU medians were 2.426 ms and 2.438 ms (p95 2.514 ms and
 Drop the unrolled i32 variant and its code changes. The kernel-width idea is
 closed for this visit; preserve the proven scalar reducer gain and continue
 with a different CPU bottleneck.
+
+## RGB thumbnail paired-row traversal trial — rejected — 2026-10-08
+
+After the exact RGB 2×2 specialization, try walking six-byte source pairs and
+three-byte destination pixels with zipped chunks, spelling out the red, green,
+and blue sums. This keeps Pillow's `(sum + 2) >> 2` result while removing the
+per-channel index loop. The focused
+`rgb_reduce_specialized_rows_match_generic_reference_at_edges` test passed.
+The full public 1024×768 RGB thumbnail workload passed exact Pillow parity in
+both candidate runs. It used five warmups, 20 iterations over five samples,
+concurrency one, and the public `call` plus `observe-receiver` boundary.
+
+| Run | Pillow | CPU | SIMD | GPU | CPU speedup vs Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Current baseline | 0.927 ms | 2.460 ms | 2.304 ms | 2.009 ms | 0.377× |
+| Chunked rows | 0.919 ms | 2.451 ms | 2.243 ms | 1.915 ms | 0.375× |
+| Chunked rows repeat | 0.901 ms | 2.466 ms | 2.260 ms | 1.927 ms | 0.365× |
+
+Every run recorded 100/100 CPU, SIMD, and GPU executions without fallback; GPU
+used three dispatches and measured 3,145,728 uploaded bytes and 196,608
+readback bytes. The candidate changed CPU latency by +0.4% and −0.3% against
+the current baseline, while Pillow shifted by 2.8% across the three runs. This
+is measurement noise, not a repeatable gain. Restore the simpler channel loop
+and continue investigating the reducer and resize stages separately. No test
+defect was found; the focused reference test and public parity gate both
+passed. No coverage was run.
+
+Receipts are `rgb-thumbnail-current-baseline-20261008.json`,
+`rgb-thumbnail-chunked-rows-attempt1-20261008.json`, and
+`rgb-thumbnail-chunked-rows-attempt1-repeat-20261008.json`, with their public
+parity sidecars under `build/migration-parity/`.
 
 ## F-mode resize horizontal tap branch hoist — 2026-10-08
 
