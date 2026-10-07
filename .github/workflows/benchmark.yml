@@ -105,6 +105,7 @@ jobs:
         if: matrix.architecture == 'x86_64'
         run: |
           cargo test --locked -p pillow-rs --lib runtime_x86_fma_matches_portable_fused_operation
+          cargo test --locked -p pillow-rs --lib runtime_x86_fma_boxed_resize_matches_portable_fused_operations
           cargo test --locked -p pillow-rs --lib runtime_x86_f32_fma_matches_portable_fused_operation
       - name: run full correctness-gated CPU, SIMD, and GPU benchmark
         env:
