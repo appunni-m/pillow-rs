@@ -460,15 +460,17 @@ python3 scripts/build_performance_optimization_matrix.py \
 ```
 
 The committed workload matrix records 8,655 rows total: 8,619 full-benchmark
-rows across 663 workloads from the clean 2026-10-07 snapshot and 36
+rows across 663 workloads from the clean 2026-10-08 snapshot and 36
 Pillow-SIMD rows across 9 workloads from an older dirty snapshot. The operation
 matrix has 1,320 rows for 330 public paths
 and four profiles. The full snapshot has 201 `pipeline-op` workload IDs; only
 workload rows with exact parity and completed backend receipts are eligible for
-speed claims. The Pillow-SIMD snapshot holds 9 of the 34 declared cases, so its
-ratios remain diagnostic until a complete clean cohort is published. The latest
-Pillow-SIMD workflow failed with exit code 2; GitHub exposes its diagnostics only
-to signed-in users, so the cause remains unverified.
+speed claims. The full snapshot is revision `f7d7f6f938910c243ad4945f7e4a1bf447ddffe8`,
+published by benchmark run 37681775264. The Pillow-SIMD snapshot holds 9 of the
+34 declared cases, so its ratios remain diagnostic until a complete clean cohort
+is published. The version-matched workflow 37681775010 is waiting behind
+workflow 37666940900, which remains in progress; do not treat the stale JSON as
+a completed comparison.
 
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with
