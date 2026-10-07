@@ -92,7 +92,7 @@ class BenchmarkViewTests(unittest.TestCase):
         text = render_dashboard(snapshot, dict(benchmark={"kind": "pillow"}))
         self.assertIn("Per-workload differences", text)
         self.assertLess(text.index('id="bench-reader-summary"'), text.index('<details class="bench-detail-view">'))
-        self.assertLess(text.index('id="bench-reader-summary"'), text.index('class="bench-toolbar"'))
+        self.assertLess(text.index('class="bench-toolbar"'), text.index('id="bench-reader-summary"'))
         self.assertIn('data-machine="linux"', text)
         self.assertIn('data-machine="mac"', text)
         self.assertIn('id="bench-machine"', text)
@@ -105,6 +105,8 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn('data-ratio-primary=""', text)
         self.assertIn('Faster in 2 of 2 matched cases.', text)
         self.assertIn('class="bench-reader-group"', text)
+        self.assertIn("Average speedup: 2× faster", text)
+        self.assertIn("Typical case: 2× faster", text)
         self.assertIn('class="bench-ratio-point faster"', text)
         plot = text.split('<div class="bench-ratio-plot"', 1)[1].split('</div>', 1)[0]
         self.assertNotIn("timing-only", plot)
@@ -138,6 +140,26 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn("Slowest case", summary)
         self.assertIn("Fastest case", summary)
         self.assertEqual(summary.count("1 matched case</small>"), 3)
+
+    def test_reader_summary_reports_geometric_average_and_median_typical_case(self):
+        def observation(ratio):
+            return {
+                "machine_id": "linux",
+                "machine_label": "Ubuntu x86_64",
+                "subject": "python-cpu",
+                "baseline": "pillow",
+                "scope": "operations",
+                "ratio": ratio,
+                "target_us": 100 / ratio,
+                "baseline_us": 100,
+                "title": f"Workload {ratio}",
+                "mode": "RGB",
+                "context": "",
+            }
+
+        summary = render_reader_summary([observation(4), observation(1)])
+        self.assertIn("Average speedup: 2× faster", summary)
+        self.assertIn("Typical case: 2.5× faster", summary)
 
     def test_workload_plot_includes_pillow_simd_pair_against_its_matched_host(self):
         machine = "linux-pillow-simd"

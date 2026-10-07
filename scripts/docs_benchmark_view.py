@@ -336,6 +336,7 @@ def render_reader_summary(observations: list[dict]) -> str:
             slower = sum(ratio < 1 for ratio in ratios)
             equal = sum(ratio == 1 for ratio in ratios)
             total = len(ratios)
+            average_ratio = math.exp(sum(math.log(ratio) for ratio in ratios) / total)
             median_ratio = statistics.median(ratios)
             bar = (
                 f'<div class="bench-outcome-bar" role="img" aria-label="{faster} faster, {equal} same, {slower} slower">'
@@ -369,6 +370,7 @@ def render_reader_summary(observations: list[dict]) -> str:
                 f'<small>{total} matched case{"s" if total != 1 else ""}</small></h4>'
                 f'<div class="bench-reader-result">'
                 f'<p class="bench-reader-verdict"><strong>Faster in {faster} of {total} matched cases.</strong></p>'
+                f'<p class="bench-reader-average">Average speedup: {escape(speed_label(average_ratio))}</p>'
                 f'<p class="bench-reader-typical">Typical case: {escape(speed_label(median_ratio))}</p>{bar}'
                 f'<p class="bench-reader-outcome-labels"><span class="faster">{faster} faster</span>'
                 f'<span class="tie">{equal} tied</span><span class="slower">{slower} slower</span></p>'
@@ -527,16 +529,17 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     )
     return (f'<div class="benchmark-dashboard" data-baseline="{escape(primary_baseline)}" data-kind="{escape(kind)}">'
             f'<p class="bench-intro">{escape(intro)}</p>'
-            '<section class="bench-reader" aria-labelledby="bench-reader-title"><h2 id="bench-reader-title">At a glance</h2>'
-            '<p class="bench-reader-note">Each line is one runner and one kind of work. “Faster in 8 of 10” counts matched, parity-checked cases; “typical case” is the middle speed ratio. Runners and operation types are kept separate.</p>'
-            f'<div class="bench-reader-summary" id="bench-reader-summary" aria-live="polite">{reader_summary}</div>'
             '<div class="bench-toolbar" hidden>'
             '<label class="bench-search">Find a workload<input id="evidence-filter" type="search" placeholder="Search operations, pipelines, sizes…" autocomplete="off"></label>'
             f'<label>Type<select id="bench-group"><option value="">All types</option>{options}</select></label>'
             f'<label>Mode<select id="bench-mode"><option value="">All modes</option>{mode_options}</select></label>'
             f'<label>Runner<select id="bench-machine"><option value="">All runners</option>{machine_filter_options}</select></label>'
             f'<label>Compare<select id="bench-subject"><option value="">All comparisons</option>{subject_options}</select></label>'
-            '<button type="button" id="bench-reset">Reset</button><output id="bench-count" aria-live="polite"></output></div></section>'
+            '<button type="button" id="bench-reset">Reset</button><output id="bench-count" aria-live="polite"></output></div>'
+            '<section class="bench-reader" aria-labelledby="bench-reader-title"><h2 id="bench-reader-title">At a glance</h2>'
+            '<p class="bench-reader-note">Average speedup is the geometric mean of matched per-case ratios; typical case is the median. Each parity-checked case counts once. Runner and operation types stay separate.</p>'
+            f'<div class="bench-reader-summary" id="bench-reader-summary" aria-live="polite">{reader_summary}</div>'
+            '</section>'
             '<details class="bench-detail-view"><summary>Explore every matched workload on the ratio plot</summary>'
             '<section class="bench-overall"><h2>Per-workload differences</h2>'
             '<p>Each point is one exact-output-verified workload. Pillow median time divided by pillow-rs median time means 1× is equal latency, above 1× is faster, and below 1× is slower. The plot is grouped by runner, profile, baseline, and workload type, with slowest cases first. Hover a point for both measured medians.</p>'

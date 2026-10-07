@@ -137,6 +137,8 @@ document.addEventListener('DOMContentLoaded', () => {
           const result = document.createElement('div');
           result.className = 'bench-reader-result';
           appendText(result, 'p', 'bench-reader-verdict', `Faster in ${faster} of ${total} matched cases.`);
+          const logMean = ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / total;
+          appendText(result, 'p', 'bench-reader-average', `Average speedup: ${speedLabel(Math.exp(logMean))}`);
           appendText(result, 'p', 'bench-reader-typical', `Typical case: ${speedLabel(median(ratios))}`);
           const bar = document.createElement('div');
           bar.className = 'bench-outcome-bar';

@@ -17,6 +17,7 @@ from run_pillow_simd_benchmark import (
     combine_results,
     workload_contracts,
 )
+from run_migration_benchmark import DEFAULT_MANIFEST, load_benchmarks, load_manifest
 
 
 def run(name: str, version: str, suffix: str, offset: float = 0) -> dict:
@@ -118,11 +119,26 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
     def test_selected_workloads_are_material_full_size_and_parity_backed(self) -> None:
         selected = workload_contracts()
         self.assertEqual(tuple(selected), WORKLOAD_IDS)
-        self.assertEqual(len(selected), 9)
+        self.assertEqual(len(selected), 34)
         self.assertEqual(
             {item["context"]["mode"] for item in selected.values()},
-            {"L", "LA", "RGB", "RGBA"},
+            {"L", "LA", "RGB", "RGBA", "CMYK", "F", "I", "YCbCr"},
         )
+        manifest = load_manifest(DEFAULT_MANIFEST)
+        workloads, _, _ = load_benchmarks(manifest)
+        expected_direct_operations = {
+            workload_id
+            for workload_id, item in workloads.items()
+            if workload_id.startswith("pipeline-op.")
+            and item["input"]["kind"] == "parity_case"
+            and item["measurement"]["correctness_gate"] == "parity_pass"
+            and item["context"].get("size") == [1024, 768]
+        }
+        selected_direct_operations = {
+            workload_id for workload_id in selected if workload_id.startswith("pipeline-op.")
+        }
+        self.assertEqual(len(expected_direct_operations), 29)
+        self.assertEqual(selected_direct_operations, expected_direct_operations)
         self.assertTrue(
             all(
                 item["measurement"]["correctness_gate"] == "parity_pass"
