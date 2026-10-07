@@ -72,8 +72,12 @@ async function main() {
           target.dataset.direction = 'faster';
           target.dataset.scoreDirection = 'faster';
           row.dataset.name = 'Browser fixture invert RGBA';
+          row.dataset.search = 'browser fixture invert rgba';
           row.dataset.mode = 'RGBA';
           document.querySelector('#bench-subject').value = 'python-cpu';
+          const search = document.querySelector('#evidence-filter');
+          search.value = 'browser fixture invert rgba';
+          search.dispatchEvent(new Event('input', { bubbles: true }));
           document.querySelector('#bench-subject').dispatchEvent(new Event('change', { bubbles: true }));
           return row.dataset.machine;
         });
@@ -86,11 +90,17 @@ async function main() {
             details.includes('Pillow median 10 µs') && details.includes('median 5 µs');
         });
         if (!initialPlot) throw new Error('Per-workload ratio plot did not render a labeled, faster-than-baseline point');
+        const initialSummary = await page.$eval('#bench-reader-summary', element => element.textContent);
+        if (!initialSummary.includes('faster on 1 of 1 workloads') || !initialSummary.includes('Browser fixture invert RGBA')) {
+          throw new Error(`Reader summary did not explain the selected workload: ${initialSummary}`);
+        }
         await page.type('#evidence-filter', 'no-such-workload');
         const after = await page.$eval('#bench-count', element => element.textContent);
         if (!after.startsWith('0 of')) throw new Error(`Filter failed: ${after}`);
         const filteredPlot = await page.$eval('.bench-workload-plot-svg', svg => svg.textContent.includes('No parity-verified workload pairs'));
         if (!filteredPlot) throw new Error('Ratio plot did not respond to the workload search filter');
+        const filteredSummary = await page.$eval('#bench-reader-summary', element => element.textContent);
+        if (!filteredSummary.includes('No output-verified workload pairs')) throw new Error('Reader summary did not respond to the workload search filter');
         await page.$eval('#evidence-filter', element => {
           element.value = ''; element.dispatchEvent(new Event('input', { bubbles: true }));
         });

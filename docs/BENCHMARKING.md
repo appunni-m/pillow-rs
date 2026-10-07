@@ -122,23 +122,28 @@ See GitHub's
 for the runner classes; physical VM instances are ephemeral, so the labels
 identify runner classes rather than a persistent computer.
 
-At the top of the results page, the per-workload ratio plot shows one labeled
-point for each workload whose output comparison passed. The ratio is the
-baseline median latency divided by the pillow-rs profile median latency: 1×
-means equal median time, values above 1× are faster, and values below 1× are
-slower. Rows are sorted slowest first within each runner, implementation, and
-workload type. The shared log₂ axis is centered on the 1× parity line and
-clips at 1/16× and 16×; each row still shows its speed factor, and hovering a
-point shows both measured medians. The summary reports the median workload
-ratio as the typical result, a geometric mean as a secondary multiplicative
-summary, and counts of faster, slower, and equal workloads. Individual
-operations and complete pipelines remain separate so neither catalog size nor
-runner differences can obscure the other. These are per-workload observations,
-not production-traffic weights, confidence intervals, or guarantees.
+The results page opens with an “At a glance” summary. It defaults to CPU versus
+Pillow when that comparison is measured. Each runner has its own card, and
+individual operations and complete pipelines have separate results. A result
+states how many parity-verified workloads were faster, slower, or tied, gives
+the median per-workload speed ratio, and names the largest slowdown and gain
+with both measured times. The “Compare” selector chooses one profile and
+baseline; “All comparisons” shows separate cards for each pair. Runner cards
+are never pooled. Each workload counts once, so these counts and the median do
+not represent production-traffic weights, confidence intervals, or guarantees.
+
+An expandable ratio plot shows every parity-verified workload in the selected
+comparison. The ratio is the baseline median latency divided by the pillow-rs
+profile median latency: 1× means equal median time, values above 1× are faster,
+and values below 1× are slower. Rows are sorted slowest first within each
+runner, implementation, baseline, and workload type. The shared log₂ axis is
+centered on the 1× parity line and clips at 1/16× and 16×; each row still shows
+its speed factor, and hovering a point shows both measured medians. Its group
+header also includes a geometric mean as a secondary multiplicative summary.
 Execution-only measurements remain in the tables but are excluded from the
-plot. The workload, mode, runner, and implementation filters update the plot
-and both tables. Ratios are paired inside one runner cohort; absolute timing
-across macOS and Linux is not compared.
+summary and plot. Workload, mode, runner, and comparison filters update the
+summary, plot, and both tables. Ratios are paired inside one runner cohort;
+absolute timing across macOS and Linux is not compared.
 
 The x86 Pillow-SIMD run remains a narrow, independently parity-gated cohort
 because its workloads are limited to BoxBlur, GaussianBlur, and getchannel.

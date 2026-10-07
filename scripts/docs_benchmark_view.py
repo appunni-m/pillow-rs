@@ -7,7 +7,6 @@ the per-workload distribution; they do not combine raw timings across hosts.
 """
 from __future__ import annotations
 
-from collections import Counter
 import html
 import math
 import re
@@ -207,6 +206,16 @@ def machine_catalog(snapshot: dict) -> dict[str, dict]:
         return {machine["id"]: machine for machine in machines}
     environment = snapshot.get("environment", {})
     label = environment.get("runner") or environment.get("os") or environment.get("platform") or "Runner not recorded"
+    if isinstance(label, str) and label.startswith("Unpinned runner · "):
+        label = environment.get("os") or environment.get("platform") or label
+    if isinstance(label, str):
+        match = re.match(r"^(macOS|Ubuntu)[-_ ](\d+(?:\.\d+)*)", label, re.IGNORECASE)
+        if match:
+            family, version = match.groups()
+            family = "macOS" if family.lower() == "macos" else "Ubuntu"
+            release = version.split(".")[0] if family == "macOS" else version
+            architecture = environment.get("architecture")
+            label = f"{family} {release}" + (f" · {architecture}" if architecture else "")
     return {"legacy": {"id": "legacy", "label": label}}
 
 
@@ -309,6 +318,74 @@ def render_workload_plot(observations: list[dict]) -> str:
     return "".join(parts)
 
 
+def render_reader_summary(observations: list[dict]) -> str:
+    """Summarize verified workload pairs as runner-specific, scoped findings."""
+    groups: dict[tuple[str, str, str, str], list[dict]] = {}
+    for item in observations:
+        key = (item["machine_id"], item["machine_label"], item["subject"], item["baseline"])
+        groups.setdefault(key, []).append(item)
+
+    cards = []
+    scope_names = {"operations": "Individual operations", "pipelines": "Complete pipelines", "": "Measurements"}
+    for (_machine_id, machine_label, subject, baseline), items in sorted(groups.items()):
+        scopes = []
+        for scope in sorted({item["scope"] for item in items}):
+            scoped = [item for item in items if item["scope"] == scope]
+            ratios = [item["ratio"] for item in scoped]
+            faster = sum(ratio > 1 for ratio in ratios)
+            slower = sum(ratio < 1 for ratio in ratios)
+            equal = sum(ratio == 1 for ratio in ratios)
+            total = len(ratios)
+            faster_percent = int(faster / total * 100 + 0.5)
+            median_ratio = statistics.median(ratios)
+            bar = (
+                f'<div class="bench-outcome-bar" role="img" aria-label="{faster} faster, {equal} same, {slower} slower">'
+                f'<span class="faster" style="width:{faster / total * 100:.3f}%"></span>'
+                f'<span class="tie" style="width:{equal / total * 100:.3f}%"></span>'
+                f'<span class="slower" style="width:{slower / total * 100:.3f}%"></span></div>'
+            )
+            findings = []
+            slowest = min(scoped, key=lambda item: item["ratio"])
+            fastest = max(scoped, key=lambda item: item["ratio"])
+            for label, item, active in (
+                ("Largest slowdown", slowest, slowest["ratio"] < 1),
+                ("Largest gain", fastest, fastest["ratio"] > 1),
+            ):
+                if not active:
+                    continue
+                name = item["title"]
+                if item["mode"] != "Not recorded":
+                    name += f' · {item["mode"]}'
+                if item["context"]:
+                    name += f' · {item["context"]}'
+                findings.append(
+                    f'<li><span>{label}</span><strong>{escape(name)}</strong>'
+                    f'<small>{escape(NAMES.get(subject, subject))} {duration(item["target_us"])} · '
+                    f'{escape(NAMES.get(baseline, baseline))} {duration(item["baseline_us"])} · '
+                    f'{escape(speed_label(item["ratio"]))}</small></li>'
+                )
+            findings_html = f'<ul class="bench-reader-findings">{"".join(findings)}</ul>' if findings else ""
+            scopes.append(
+                f'<section class="bench-reader-scope"><h4>{escape(scope_names.get(scope, scope.title()))}'
+                f'<small>{total} output-verified workload{"s" if total != 1 else ""}</small></h4>'
+                f'<p class="bench-reader-verdict"><strong>{escape(NAMES.get(subject, subject))} was faster on '
+                f'{faster} of {total} workloads ({faster_percent}%).</strong></p>'
+                f'<p class="bench-reader-typical">Typical workload: {escape(speed_label(median_ratio))} '
+                f'<span>(median of per-workload speed ratios)</span></p>{bar}'
+                f'<p class="bench-reader-outcome-labels"><span class="faster">{faster} faster</span>'
+                f'<span class="tie">{equal} tied</span><span class="slower">{slower} slower</span></p>'
+                f'{findings_html}</section>'
+            )
+        cards.append(
+            f'<article class="bench-reader-group"><h3>{escape(machine_label)}</h3>'
+            f'<p class="bench-reader-profile">{escape(NAMES.get(subject, subject))} vs '
+            f'{escape(NAMES.get(baseline, baseline))}</p>{"".join(scopes)}</article>'
+        )
+    if not cards:
+        return '<p class="bench-reader-empty">No output-verified workload pairs match this comparison and its filters.</p>'
+    return "".join(cards)
+
+
 def render_dashboard(snapshot: dict, config: dict) -> str:
     kind = config["benchmark"]["kind"]
     primary_baseline = BASELINES[kind]
@@ -329,6 +406,12 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     else:
         targets = list(dict.fromkeys(row["subject"] for row in snapshot["rows"] if row["subject"] != primary_baseline))
         baseline_ids = [primary_baseline]
+    comparisons = [(subject, BASELINE_FOR.get(subject, primary_baseline)) for subject in targets]
+    if kind == "pillow":
+        comparisons.extend((subject, "pillow-simd") for subject in ("python-cpu", "python-simd") if subject in targets)
+    measured_comparisons = [pair for pair in comparisons if pair[0] in all_subjects and pair[1] in all_subjects]
+    default_comparison = next((pair for pair in measured_comparisons if pair == ("python-cpu", "pillow")),
+                              measured_comparisons[0] if measured_comparisons else comparisons[0] if comparisons else None)
     subjects = [primary_baseline]
     if "python-cpu" in targets:
         subjects.append("python-cpu")
@@ -339,9 +422,7 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     if kind == "pillow":
         subjects.append("python-parallel-cpu")
     subjects.extend(subject for subject in targets if subject not in subjects)
-    counts = {subject: Counter() for subject in targets}
     table_rows = {"pipelines": [], "operations": []}
-    excluded = 0
     for index, ((machine_id, workload), rows) in enumerate(grouped.items()):
         machine_label = machines.get(machine_id, {}).get("label", machine_id)
         by_subject = {row["subject"]: row for row in rows}
@@ -355,8 +436,6 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
             is_baseline = subject in baseline_ids
             if row is None:
                 cells.append(f'<td data-subject="{escape(subject)}" data-role="{"baseline" if subject in baseline_ids else "target"}" data-direction="unavailable"><span class="bench-unavailable">Not measured</span></td>')
-                if not is_baseline:
-                    counts[subject]["unavailable"] += 1
                 continue
             baseline_id = BASELINE_FOR.get(subject, primary_baseline)
             baseline = row if is_baseline else by_subject.get(baseline_id)
@@ -365,9 +444,7 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
             if subject in {"python-cpu", "python-simd"} and not is_baseline and "pillow-simd" in by_subject:
                 simd_ratio, simd_quality, _ = compare(row, by_subject["pillow-simd"])
             direction = "unavailable" if ratio is None else "faster" if ratio > 1 else "slower" if ratio < 1 else "tie"
-            score_direction = direction if quality == "checked" else "unavailable"
             if not is_baseline:
-                counts[subject][score_direction] += 1
                 quality_labels.add(note)
             if ratio is not None:
                 comparable.append(row)
@@ -385,17 +462,13 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
                          f'{route}<span class="bench-sr-only">{escape(name)}. {escape(note)}.</span></td>')
             primary_ratio = ratio if quality == "checked" else None
             pillow_simd_ratio = simd_ratio if simd_quality == "checked" else None
-            if ratio is not None and quality != "checked":
-                excluded += 1
-            if simd_ratio is not None and simd_quality != "checked":
-                excluded += 1
             cells[-1] = cells[-1].replace(
                 ' data-direction="',
                 f' data-ratio-primary="{primary_ratio if primary_ratio is not None else ""}"'
                 f' data-observed-ratio-primary="{ratio if ratio is not None else ""}" data-quality-primary="{quality}"'
                 f' data-ratio-pillow-simd="{pillow_simd_ratio if pillow_simd_ratio is not None else ""}"'
                 f' data-observed-ratio-pillow-simd="{simd_ratio if simd_ratio is not None else ""}"'
-                f' data-quality-pillow-simd="{simd_quality}" data-score-direction="{score_direction}" data-direction="',
+                f' data-quality-pillow-simd="{simd_quality}" data-direction="',
                 1,
             )
         # A row can be numerically fastest without providing matched-output proof.
@@ -420,13 +493,6 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
                     '<div class="bench-detail-table"><table><thead><tr><th>Implementation</th><th>Median</th><th>P90</th><th>P95</th><th>Samples</th><th>Recorded result</th></tr></thead><tbody>'
                     + "".join(detail_rows) + '</tbody></table></div>'
                     + f'<p>Workload ID: <code>{escape(workload)}</code></p></td></tr>')
-    summary = []
-    for subject, count in counts.items():
-        baseline_id = BASELINE_FOR.get(subject, primary_baseline)
-        baseline_name = NAMES.get(baseline_id, baseline_id)
-        summary.append(f'<div class="bench-score" data-score-subject="{escape(subject)}"><strong>{escape(NAMES.get(subject, subject))}</strong>'
-                       f'<span><b data-score="faster">{count["faster"]}</b> faster · <b data-score="slower">{count["slower"]}</b> slower</span>'
-                       f'<small>vs {escape(baseline_name)} · output-verified pairs only · <span data-score="tie">{count["tie"]}</span> equal · <span data-score="unavailable">{count["unavailable"]}</span> not comparable</small></div>')
     scope = {"pillow": "Python API operations and complete pipelines, including their declared setup and output steps. CPU, SIMD and GPU are separate implementations.",
              "fontdone": "Font loading, metadata, text measurement and glyph rendering. Complete multi-step text-layout pipelines are not measured in this snapshot.",
              "jpeg": "JPEG encode and decode across image sizes, quality and color settings. Other codecs and complete decode–encode pipelines are not measured in this snapshot."}[kind]
@@ -434,7 +500,12 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     mode_options = ''.join(f'<option value="{escape(mode)}">{escape(mode)}</option>' for mode in modes)
     machine_filter_options = ''.join(f'<option value="{escape(machine_id)}">{escape(label)}</option>'
                                      for machine_id, label in machine_options)
-    subject_options = ''.join(f'<option value="{escape(subject)}">{escape(NAMES.get(subject, subject))}</option>' for subject in targets)
+    subject_options = ''.join(
+        f'<option value="{escape(subject if baseline == BASELINE_FOR.get(subject, primary_baseline) else subject + "::" + baseline)}" data-target="{escape(subject)}" '
+        f'data-baseline="{escape(baseline)}"{" selected" if (subject, baseline) == default_comparison else ""}>'
+        f'{escape(NAMES.get(subject, subject))} vs {escape(NAMES.get(baseline, baseline))}</option>'
+        for subject, baseline in comparisons
+    )
     headers = ''.join(f'<th scope="col" data-subject="{escape(subject)}" data-baseline-for="{escape(BASELINE_FOR.get(subject, subject))}" aria-sort="none"><button type="button" class="bench-sort" data-sort="{escape(subject)}">{escape(NAMES.get(subject, subject))}<span aria-hidden="true"> ↕</span></button><small>{"Baseline" if subject in baseline_ids else "Median · vs " + escape(NAMES.get(BASELINE_FOR.get(subject, primary_baseline), primary_baseline))}</small></th>' for subject in subjects)
     environment = snapshot["environment"]
     host = environment.get("platforms") or environment.get("runner") or environment.get("os") or environment.get("platform") or "Runner not recorded"
@@ -447,27 +518,31 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     pipeline_count = sum(1 for rows in grouped.values() if facets(rows[0], kind)[0] == "pipelines")
     operation_count = len(grouped) - pipeline_count
     observations = workload_comparisons(grouped, machines, targets, kind)
-    workload_plot = render_workload_plot(observations)
+    selected_observations = [item for item in observations if (item["subject"], item["baseline"]) == default_comparison]
+    reader_summary = render_reader_summary(selected_observations)
+    workload_plot = render_workload_plot(selected_observations)
     intro = (
         "Compare each profile with its workload-matched baseline on the same runner. Parallel CPU is measured separately with the opt-in Rayon feature. Pillow-SIMD appears only for its matched x86 workload cohort. Lower time is better."
         if kind == "pillow" else "Compare only workload pairs with matching inputs and measurement conditions. Lower time is better."
     )
     return (f'<div class="benchmark-dashboard" data-baseline="{escape(primary_baseline)}" data-kind="{escape(kind)}">'
             f'<p class="bench-intro">{escape(intro)}</p>'
-            f'<div class="bench-summary">{"".join(summary)}</div>'
-            '<p class="bench-summary-note">Counts include only exact-output-verified workload pairs. They are per-workload observations, not production-traffic weights or confidence estimates.</p>'
+            '<section class="bench-reader" aria-labelledby="bench-reader-title"><h2 id="bench-reader-title">At a glance</h2>'
+            '<p class="bench-reader-note">Choose one comparison to see how often it wins or loses, then inspect its biggest changes. Results stay separate by runner and by individual operations versus complete pipelines; use Type and Mode to narrow further. Each exact-output-verified workload counts once.</p>'
             '<div class="bench-toolbar" hidden>'
             '<label class="bench-search">Find a workload<input id="evidence-filter" type="search" placeholder="Search operations, pipelines, sizes…" autocomplete="off"></label>'
             f'<label>Type<select id="bench-group"><option value="">All types</option>{options}</select></label>'
             f'<label>Mode<select id="bench-mode"><option value="">All modes</option>{mode_options}</select></label>'
             f'<label>Runner<select id="bench-machine"><option value="">All runners</option>{machine_filter_options}</select></label>'
-            f'<label>Compare<select id="bench-subject"><option value="">All implementations</option>{subject_options}</select></label>'
+            f'<label>Compare<select id="bench-subject"><option value="">All comparisons</option>{subject_options}</select></label>'
             '<button type="button" id="bench-reset">Reset</button><output id="bench-count" aria-live="polite"></output></div>'
-            '<section class="bench-overall"><h2>Per-workload speedup</h2>'
-            '<p>Each row is one parity-verified workload. The ratio is baseline median time divided by pillow-rs median time: 1× means equal median time, higher values mean pillow-rs is faster, and lower values mean it is slower. Rows are sorted slowest first within each runner, implementation, and workload type. The axis is log₂ so reciprocal slowdowns and speedups are spaced evenly; extreme values are clipped at 1/16× and 16×, with the exact factor shown in the row label. Use the filters above to narrow by operation type, mode, runner, or implementation.</p>'
+            f'<div class="bench-reader-summary" id="bench-reader-summary" aria-live="polite">{reader_summary}</div></section>'
+            '<details class="bench-detail-view"><summary>Explore every matched workload on the ratio plot</summary>'
+            '<section class="bench-overall"><h2>Per-workload differences</h2>'
+            '<p>Each point is one exact-output-verified workload. Pillow median time divided by pillow-rs median time means 1× is equal latency, above 1× is faster, and below 1× is slower. The plot is grouped by runner, profile, baseline, and workload type, with slowest cases first. Hover a point for both measured medians.</p>'
             f'<div class="bench-ratio-plot" role="region" aria-label="Filterable per-workload speed ratios">{workload_plot}</div>'
-            f'<p class="bench-ratio-excluded">Workload pairs excluded because exact output parity was not established: <span data-excluded-count>{excluded}</span>. Their timings remain in the tables below, without a speed claim.</p></section>'
-            '<p class="bench-chart-key">Each dot is labeled with its operation or pipeline, mode, and workload context. Hover a dot for both median times. Sort the detailed tables below to inspect absolute latency.</p>'
+            '<p class="bench-ratio-excluded">Timing-only results remain in the tables but are excluded from this parity-verified plot and summary.</p></section></details>'
+            '<p class="bench-chart-key">Use the individual workload tables to compare absolute latency, mode, and measurement boundaries.</p>'
             '<section class="bench-section" data-table-kind="pipelines"><h2>Pipeline benchmarks</h2><p>Composed, matrix, lifecycle and quick workloads. Current snapshot: ' + str(pipeline_count) + ' pipelines.</p>'
             '<div class="bench-table-scroll" role="region" aria-label="Pipeline benchmark comparisons" tabindex="0">'
             '<table class="bench-comparison"><caption>Median time per pipeline workload; each backend is compared with its workload-matched Pillow timing.</caption>'

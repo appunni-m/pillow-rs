@@ -2,7 +2,7 @@
 import copy
 import unittest
 
-from docs_benchmark_view import compare, describe, duration, facets, render_dashboard, speed_label, workload_comparisons
+from docs_benchmark_view import compare, describe, duration, facets, machine_catalog, render_dashboard, render_reader_summary, speed_label, workload_comparisons
 
 
 def row(subject="fontdone", median=10, **changes):
@@ -25,6 +25,10 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertEqual(duration(2500),'2.5 ms')
         self.assertEqual(duration(None),'Not measured')
         self.assertIn('less time',speed_label(1.001))
+
+    def test_legacy_machine_identity_gets_a_short_reader_label(self):
+        catalog = machine_catalog({"environment": {"os": "macOS-15.7.7-arm64-arm-64bit", "architecture": "arm64"}})
+        self.assertEqual(catalog["legacy"]["label"], "macOS 15 · arm64")
 
     def test_missing_zero_and_failed_values_are_not_winners(self):
         baseline=row('FreeType',20)
@@ -86,8 +90,8 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertEqual(by_machine["mac"], [2, 3])
         snapshot = dict(rows=rows, machines=list(machines.values()), environment={"os": "GitHub runners"}, measured_at="2026-10-07")
         text = render_dashboard(snapshot, dict(benchmark={"kind": "pillow"}))
-        self.assertIn("Per-workload speedup", text)
-        self.assertLess(text.index('<div class="bench-summary">'), text.index('<section class="bench-overall">'))
+        self.assertIn("Per-workload differences", text)
+        self.assertLess(text.index('id="bench-reader-summary"'), text.index('<details class="bench-detail-view">'))
         self.assertIn('data-machine="linux"', text)
         self.assertIn('data-machine="mac"', text)
         self.assertIn('id="bench-machine"', text)
@@ -98,11 +102,41 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn("geomean 2× faster", text)
         self.assertIn('data-ratio-primary="2.0"', text)
         self.assertIn('data-ratio-primary=""', text)
-        self.assertIn('<b data-score="faster">4</b> faster', text)
+        self.assertIn('pillow-rs · SIMD was faster on 2 of 2 workloads (100%).', text)
+        self.assertIn('class="bench-reader-group"', text)
         self.assertIn('class="bench-ratio-point faster"', text)
         plot = text.split('<div class="bench-ratio-plot"', 1)[1].split('</div>', 1)[0]
         self.assertNotIn("timing-only", plot)
-        self.assertIn("1× means equal median time", text)
+        self.assertIn("One times means equal median latency", text)
+
+    def test_reader_summary_separates_runner_and_workload_scope(self):
+        checked = "parity_pass: pass"
+        rows = []
+        for machine, workloads in (
+            ("mac", (("pipeline-op.invert.rgba", "RGBA", 10, 20),
+                      ("pipeline.quick.invert", "L", 40, 10))),
+            ("linux", (("pipeline-op.invert.l", "L", 10, 5),)),
+        ):
+            for workload, mode, pillow_time, target_time in workloads:
+                context = {"mode": mode, "operation_class": "point"}
+                rows.extend([
+                    row("pillow", pillow_time, workload=workload, machine_id=machine,
+                        correctness=checked, requested_backend="pillow", actual_backend="pillow", context=context),
+                    row("python-cpu", target_time, workload=workload, machine_id=machine,
+                        correctness=checked, requested_backend="cpu", actual_backend="cpu", context=context),
+                ])
+        machines = {key: {"id": key, "label": name} for key, name in (("mac", "macOS arm64"), ("linux", "Ubuntu x86_64"))}
+        grouped = {}
+        for item in rows:
+            grouped.setdefault((item["machine_id"], item["workload"]), []).append(item)
+        summary = render_reader_summary(workload_comparisons(grouped, machines, ["python-cpu"], "pillow"))
+        self.assertIn("macOS arm64", summary)
+        self.assertIn("Ubuntu x86_64", summary)
+        self.assertIn("Individual operations", summary)
+        self.assertIn("Complete pipelines", summary)
+        self.assertIn("Largest slowdown", summary)
+        self.assertIn("Largest gain", summary)
+        self.assertEqual(summary.count("1 output-verified workload</small>"), 3)
 
     def test_workload_plot_includes_pillow_simd_pair_against_its_matched_host(self):
         machine = "linux-pillow-simd"
@@ -274,8 +308,9 @@ class BenchmarkViewTests(unittest.TestCase):
     def test_unverified_and_missing_pairs_are_unavailable_in_summary(self):
         snapshot=dict(rows=[row('FreeType',20),row(),row('FreeType',30,workload='other')],environment={'os':'Test'},measured_at='2026-09-16')
         text=render_dashboard(snapshot,dict(project='fontdone',benchmark={'kind':'fontdone'}))
-        self.assertIn('data-score="unavailable">2</span>',text)
-        self.assertIn('data-excluded-count>1</span>', text)
+        self.assertIn('No output-verified workload pairs match this comparison', text)
+        self.assertIn('Timing-only results remain in the tables', text)
+        self.assertNotIn('class="bench-outcome-bar"', text)
 
     def test_injected_labels_are_escaped(self):
         snapshot=dict(rows=[row(workload='<script>alert(1)</script>',subject='" onclick="alert(1)')],environment={'os':'<host>'},measured_at='2026-09-16')
