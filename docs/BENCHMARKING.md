@@ -425,6 +425,43 @@ correctness gates, and requested/actual backends. It retains failed subjects and
 missing measurements. It does not aggregate unrelated operations into a headline
 speedup. Hosted runners are useful observations, not controlled laboratory hosts.
 
+### Complete published optimization matrix
+
+The [published full benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and the separate [Pillow-SIMD JSON](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json)
+can be flattened into the complete per-workload record at
+[`docs/evidence/performance-optimization-matrix.csv`](evidence/performance-optimization-matrix.csv).
+The companion [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
+starts with every entry in the selected public manifest and emits CPU, SIMD,
+GPU, and separate Parallel CPU rows, including operations or profiles with no
+published comparison.
+The matrix keeps successful, failed, not-run, fallback, and dirty-snapshot rows.
+It includes source hashes and revisions, runner and workload identity, mode and
+size, full-call policy, exact-parity status, actual backend, observed and
+eligible speed ratios, and separate CPU, SIMD, GPU-latency, and GPU-throughput
+goal fields. A GPU throughput status of `not_measured` is deliberate: the
+published one-request latency cannot establish sustained throughput.
+
+Rebuild it from the raw published assets with:
+
+```sh
+curl -fsSL https://appunni-m.github.io/pillow-rs/assets/benchmark.json -o /tmp/pillow-rs-benchmark.json
+curl -fsSL https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json -o /tmp/pillow-rs-pillow-simd.json
+python3 scripts/build_performance_optimization_matrix.py \
+  --benchmark-snapshot /tmp/pillow-rs-benchmark.json \
+  --pillow-simd-snapshot /tmp/pillow-rs-pillow-simd.json
+```
+
+The committed workload matrix records the GitHub Pages snapshots measured on
+2026-10-07: 8,619 full-benchmark rows across 663 workloads, plus 36
+Pillow-SIMD snapshot rows. The operation matrix has 209 manifest entries and
+836 backend/profile rows; it keeps the two manifest operations without a
+benchmark mapping visible. The full snapshot has 201 `pipeline-op` workload
+IDs; only workload rows with exact parity and completed backend receipts are
+eligible for speed claims. The Pillow-SIMD snapshot was dirty and held 9 of the
+34 declared cases, so its ratios remain diagnostic until a complete clean cohort
+is published. Public exports outside the selected manifest still require audit.
+
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with
 operation classes such as point, multi-image, geometry, neighborhood, and draw.

@@ -360,6 +360,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- benchmark_gpu_batch.py
     |-- build_migration_parity_inputs.py
     |-- build_migration_parity_manifest.py
+    |-- build_performance_optimization_matrix.py
     |-- check_bindings.py
     |-- check_docs_browser.cjs
     |-- check_docs_examples.py

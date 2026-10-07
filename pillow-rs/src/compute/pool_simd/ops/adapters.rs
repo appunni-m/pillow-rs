@@ -14866,9 +14866,10 @@ fn native_cmyk_grayscale_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)
     Some((output, vector_blocks, 0))
 }
 
-/// Extract the Y sample from each exact native YCbCr byte triple. The shared
-/// channel gather uses vector swizzles for complete groups and handles only
-/// the final incomplete group scalarly.
+/// Extract the Y sample from each exact native YCbCr byte triple. Use a
+/// platform-specific vector deinterleave where available and keep incomplete
+/// groups on the scalar tail.
+#[allow(unsafe_code)]
 fn native_ycbcr_grayscale_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
     let DynamicImage::ImageRgb8(source) = img else {
         return None;
@@ -14877,7 +14878,84 @@ fn native_ycbcr_grayscale_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64
     if source.as_raw().len() != dims.total_bytes() {
         return None;
     }
+    #[cfg(target_arch = "x86_64")]
+    if std::is_x86_feature_detected!("ssse3") {
+        // SAFETY: runtime feature detection proves SSSE3 is available, and
+        // the helper's complete-block loop only reads 48 bytes per 16 pixels.
+        return Some(unsafe { gather_ycbcr_y_ssse3(source.as_raw()) });
+    }
     Some(gather_channel::<3, 0>(source.as_raw()))
+}
+
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+#[target_feature(enable = "ssse3")]
+unsafe fn gather_ycbcr_y_ssse3(source: &[u8]) -> (Vec<u8>, u64, u64) {
+    use core::arch::x86_64::{
+        _mm_loadu_si128, _mm_or_si128, _mm_setr_epi8, _mm_shuffle_epi8, _mm_storeu_si128,
+    };
+
+    const LANES: usize = 16;
+    let pixel_count = source.len() / 3;
+    let vector_pixels = pixel_count / LANES * LANES;
+    let mut output: Vec<u8> = Vec::with_capacity(pixel_count);
+
+    // SAFETY: the caller checks SSSE3 at runtime. Every block starts at a
+    // three-byte pixel boundary and reads exactly 48 source bytes for 16
+    // output pixels. `vector_pixels` is bounded by source.len() / 3, so the
+    // final block ends no later than the source allocation. The output has
+    // capacity for `pixel_count`; each 16-byte store initializes the matching
+    // output prefix before `set_len`, and scalar pushes initialize the tail.
+    unsafe {
+        let from_first = _mm_setr_epi8(0, 3, 6, 9, 12, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+        let from_second =
+            _mm_setr_epi8(-1, -1, -1, -1, -1, -1, 2, 5, 8, 11, 14, -1, -1, -1, -1, -1);
+        let from_third = _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 4, 7, 10, 13);
+        for pixel in (0..vector_pixels).step_by(LANES) {
+            let offset = pixel * 3;
+            let first = _mm_loadu_si128(source.as_ptr().add(offset).cast());
+            let second = _mm_loadu_si128(source.as_ptr().add(offset + 16).cast());
+            let third = _mm_loadu_si128(source.as_ptr().add(offset + 32).cast());
+            let y0 = _mm_shuffle_epi8(first, from_first);
+            let y1 = _mm_shuffle_epi8(second, from_second);
+            let y2 = _mm_shuffle_epi8(third, from_third);
+            let y = _mm_or_si128(_mm_or_si128(y0, y1), y2);
+            _mm_storeu_si128(output.as_mut_ptr().add(pixel).cast(), y);
+        }
+        output.set_len(vector_pixels);
+    }
+
+    for pixel in vector_pixels..pixel_count {
+        output.push(source[pixel * 3]);
+    }
+    debug_assert_eq!(output.len(), pixel_count);
+    (
+        output,
+        (vector_pixels / LANES) as u64,
+        (pixel_count - vector_pixels) as u64,
+    )
+}
+
+fn native_ycbcr_grayscale_path() -> &'static str {
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    {
+        "neon-deinterleave"
+    }
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::is_x86_feature_detected!("ssse3") {
+            "ssse3-deinterleave"
+        } else {
+            "vector-gather"
+        }
+    }
+    #[cfg(not(any(
+        all(target_arch = "aarch64", target_feature = "neon"),
+        target_arch = "x86_64"
+    )))]
+    {
+        "vector-gather"
+    }
 }
 
 /// Convert admitted native bytes to L. Complete groups use direct vector
@@ -15033,15 +15111,18 @@ pub fn simd_grayscale(
         };
         result
     };
-    crate::compute::record_pipeline_operation_path(if vector_blocks == 0 {
+    let path = if vector_blocks == 0 {
         "scalar-control"
+    } else if mode == Some("YCbCr") {
+        native_ycbcr_grayscale_path()
     } else if channels == 1 {
         "native-copy"
     } else {
         "vector"
-    });
+    };
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    crate::compute::record_pipeline_operation_path(path);
     crate::image_utils::raw_bytes_to_image_allow_empty(img.width(), img.height(), output, 1).map(
         |result| {
             // Grayscale intentionally changes the public mode to L; preserving
@@ -35591,6 +35672,12 @@ mod tests {
                 .expect("SIMD YCbCr grayscale must be admitted");
             assert_eq!(result.as_bytes(), actual, "SIMD output {width}x{height}");
         }
+        #[cfg(target_arch = "x86_64")]
+        if std::is_x86_feature_detected!("ssse3") {
+            assert_eq!(super::native_ycbcr_grayscale_path(), "ssse3-deinterleave");
+        }
+        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+        assert_eq!(super::native_ycbcr_grayscale_path(), "neon-deinterleave");
     }
 
     #[test]
