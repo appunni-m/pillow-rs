@@ -1,7 +1,7 @@
 # Rust integration
 
 <!-- release:summary -->
-**Latest release: [12.2.0](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0).**
+**Latest release: [12.2.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.1).**
 <!-- /release:summary -->
 
 Install the core image-processing crate from crates.io. Requires Rust 1.96.1
@@ -10,7 +10,7 @@ or newer. Public methods use Rust values and `Result`.
 <!-- release:cargo -->
 ```toml
 [dependencies]
-pillow-rs = "=12.2.0"
+pillow-rs = "=12.2.1"
 ```
 <!-- /release:cargo -->
 
@@ -32,7 +32,7 @@ The constructor takes width, height, mode, and an RGBA color tuple. The image
 retains its selected mode.
 
 <!-- release:rust-api -->
-[Rust API reference](https://docs.rs/pillow-rs/12.2.0/pillow_rs/).
+[Rust API reference](https://docs.rs/pillow-rs/12.2.1/pillow_rs/).
 <!-- /release:rust-api -->
 
 The reference describes arguments, return values, and errors.

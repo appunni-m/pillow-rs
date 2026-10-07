@@ -7,11 +7,12 @@
 [![Latest release](https://img.shields.io/github/v/release/appunni-m/pillow-rs?include_prereleases&sort=semver)](https://github.com/appunni-m/pillow-rs/releases)
 
 <!-- release:summary -->
-**Latest release: [12.2.0](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0).**
+**Latest release: [12.2.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.1).**
 <!-- /release:summary -->
 
 Rust image processing with a familiar Python `PIL` interface and one npm package
-for Node.js and browsers. This alpha supports common image operations;
+for Node.js and browsers. This stable release supports a selected set of common
+image operations;
 [check compatibility](https://appunni-m.github.io/pillow-rs/compatibility/) before replacing Pillow.
 
 [Documentation](https://appunni-m.github.io/pillow-rs/) ·
@@ -33,15 +34,15 @@ so install them in separate environments.
 <!-- release:python -->
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install pillow-rs==12.2.0
+.venv/bin/python -m pip install pillow-rs==12.2.1
 ```
 <!-- /release:python -->
 
 On Windows, use `.venv\Scripts\python.exe` instead of `.venv/bin/python`.
 See [installation requirements](https://appunni-m.github.io/pillow-rs/installation/) for supported platforms.
-The separately built Rayon-backed **Parallel CPU** wheel is configured in the
-current source tree, but a matching package-registry release is not available
-yet. The ordinary wheel remains serial CPU. See the
+The separately built Rayon-backed **Parallel CPU** wheel is available for the
+supported platforms through the `parallel` extra. The ordinary wheel remains
+serial CPU. See the
 [release matrix](https://github.com/appunni-m/pillow-rs/blob/main/docs/REGISTRY_RELEASE_MATRIX.md)
 for package availability.
 
@@ -70,7 +71,8 @@ Continue with [Python recipes](https://appunni-m.github.io/pillow-rs/python/).
 - Use the [compatibility guide](https://appunni-m.github.io/pillow-rs/compatibility/) to check modes, formats, and unsupported integrations.
 
 The version prefix identifies the targeted Pillow version. It does not promise
-complete Pillow compatibility or stable alpha APIs.
+complete Pillow API or mode compatibility; check the documented support before
+replacing Pillow.
 
 ## What pillow-rs adds beyond Pillow
 
@@ -94,12 +96,12 @@ upstream Pillow does not bundle as equivalents.
   does not guarantee that every operation or device uses it.
 - [Explicit GPU batching](docs/IMAGE_BATCHING.md) schedules existing lazy image
   graphs and streams keyed CPU or resident outputs within resource budgets.
-  It uses `GpuBatchExecutor` and remains separate from normal Image routing.
+  It is available in 12.2.1 through `GpuBatchExecutor` and remains separate
+  from normal Image routing.
 - An opt-in Rayon **Parallel CPU** profile, separate from ordinary CPU, SIMD,
-  and GPU execution. Its matching companion wheel is not available from the
-  package registries yet; check the
-  [release matrix](https://github.com/appunni-m/pillow-rs/blob/main/docs/REGISTRY_RELEASE_MATRIX.md)
-  before expecting the `parallel` extra to install.
+  and GPU execution. Install its matching companion wheel with
+  `pillow-rs[parallel]`; see the
+  [installation guide](https://appunni-m.github.io/pillow-rs/installation/#python).
 - A published JavaScript package for Node.js and browser WebAssembly.
 - Optional pipeline receipts that report the requested and actual backend,
   per-operation paths, fallback, timing, and available resource details. Rust
