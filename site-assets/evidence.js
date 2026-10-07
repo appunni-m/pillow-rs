@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const mode = dashboard.querySelector('#bench-mode');
     const machine = dashboard.querySelector('#bench-machine');
     const subject = dashboard.querySelector('#bench-subject');
+    const readerSummary = dashboard.querySelector('#bench-reader-summary');
     const ratioPlot = dashboard.querySelector('.bench-ratio-plot');
     const tables = [...dashboard.querySelectorAll('.bench-comparison')];
     const tableRows = tables.map(table => ({
@@ -18,76 +19,169 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
     const rows = tableRows.flatMap(group => group.rows);
     const columns = tableRows.flatMap(group => group.columns);
-    const scores = [...dashboard.querySelectorAll('[data-score-subject]')];
     const details = new Map(rows.map(row => [row, row.nextElementSibling]));
     const cells = row => [...row.querySelectorAll('td[data-subject]')];
+    const defaultComparison = subject.value;
+    const comparisonOptions = [...subject.options].filter(option => option.dataset.target && option.dataset.baseline);
+    const comparisonFor = option => option && option.dataset.target && option.dataset.baseline
+      ? { target: option.dataset.target, baseline: option.dataset.baseline }
+      : null;
+    const comparisonsToShow = () => {
+      const selectedComparison = comparisonFor(subject.selectedOptions[0]);
+      return selectedComparison ? [selectedComparison] : comparisonOptions.map(comparisonFor).filter(Boolean);
+    };
     let selectedPair = null;
     const pairedSubjects = () => {
-      if (!subject.value) return null;
-      const header = dashboard.querySelector(`th[data-subject="${CSS.escape(subject.value)}"]`);
-      return new Set([subject.value, header?.dataset.baselineFor].filter(Boolean));
+      const selectedComparison = comparisonFor(subject.selectedOptions[0]);
+      return selectedComparison ? new Set([selectedComparison.target, selectedComparison.baseline]) : null;
     };
     const selected = cell => !selectedPair || selectedPair.has(cell.dataset.subject);
     const number = (row, key) => {
       const cell = cells(row).find(item => item.dataset.subject === key);
       return cell?.dataset.value ? Number(cell.dataset.value) : null;
     };
-    const renderWorkloadPlot = () => {
-      if (!ratioPlot) return;
-      const observations = new Map();
-      const targetNames = new Map([...dashboard.querySelectorAll('th[data-subject]')].map(header => [
+    const targetNames = new Map([...dashboard.querySelectorAll('th[data-subject]')].map(header => [
         header.dataset.subject,
         header.querySelector('button')?.childNodes[0]?.textContent.trim() || header.dataset.subject,
       ]));
-      const targetSet = new Set(subject.value ? [subject.value] : [...targetNames.keys()].filter(key => key !== dashboard.dataset.baseline));
-      const push = (key, item) => {
-        if (!observations.has(key)) observations.set(key, item);
-      };
+    const displayName = key => targetNames.get(key) || key;
+    const collectWorkloads = () => {
+      const observations = new Map();
       for (const row of rows) {
         if (row.hidden) continue;
-        for (const cell of cells(row)) {
-          if (!targetSet.has(cell.dataset.subject) || cell.dataset.role !== 'target') continue;
-          for (const [baselineKey, baselineName] of [['ratioPrimary', dashboard.dataset.baseline], ['ratioPillowSimd', 'pillow-simd']]) {
-            if (baselineName === 'pillow-simd' && dashboard.dataset.baseline === 'pillow-simd') continue;
-            const value = Number(cell.dataset[baselineKey]);
-            if (!Number.isFinite(value) || value <= 0) continue;
-            const baselineTime = number(row, baselineName);
-            const targetTime = Number(cell.dataset.value);
-            if (!Number.isFinite(baselineTime) || baselineTime <= 0 || !Number.isFinite(targetTime) || targetTime <= 0) continue;
-            const scope = dashboard.dataset.kind === 'pillow'
-              ? row.dataset.kind
-              : '';
-            const key = `${row.dataset.machine}|${cell.dataset.subject}|${baselineName}|${scope}`;
-            push(key, {
-              machine: row.dataset.machineLabel,
-              subject: cell.dataset.subject,
-              baseline: baselineName,
-              scope,
-              workloads: [],
-            });
-            observations.get(key).workloads.push({
-              name: `${row.dataset.name}${row.dataset.mode && row.dataset.mode !== 'Not recorded' ? ` · ${row.dataset.mode}` : ''}`,
-              workload: row.dataset.workload,
-              ratio: value,
-              baselineTime,
-              targetTime,
-            });
-          }
+        for (const comparison of comparisonsToShow()) {
+          const targetCell = cells(row).find(cell => cell.dataset.subject === comparison.target && cell.dataset.role === 'target');
+          const baselineCell = cells(row).find(cell => cell.dataset.subject === comparison.baseline);
+          if (!targetCell || !baselineCell) continue;
+          const ratioKey = comparison.baseline === 'pillow-simd' ? 'ratioPillowSimd' : 'ratioPrimary';
+          const qualityKey = comparison.baseline === 'pillow-simd' ? 'qualityPillowSimd' : 'qualityPrimary';
+          const ratio = Number(targetCell.dataset[ratioKey]);
+          if (targetCell.dataset[qualityKey] !== 'checked' || !Number.isFinite(ratio) || ratio <= 0) continue;
+          const baselineTime = Number(baselineCell.dataset.value);
+          const targetTime = Number(targetCell.dataset.value);
+          if (!Number.isFinite(baselineTime) || baselineTime <= 0 || !Number.isFinite(targetTime) || targetTime <= 0) continue;
+          const scope = dashboard.dataset.kind === 'pillow' ? row.dataset.kind : '';
+          const key = `${row.dataset.machine}|${comparison.target}|${comparison.baseline}|${scope}`;
+          if (!observations.has(key)) observations.set(key, {
+            machine: row.dataset.machineLabel,
+            subject: comparison.target,
+            baseline: comparison.baseline,
+            scope,
+            workloads: [],
+          });
+          observations.get(key).workloads.push({
+            name: `${row.dataset.name}${row.dataset.mode && row.dataset.mode !== 'Not recorded' ? ` · ${row.dataset.mode}` : ''}`,
+            workload: row.dataset.workload,
+            ratio,
+            baselineTime,
+            targetTime,
+          });
         }
       }
-      const groups = [...observations.values()].sort((a, b) =>
+      return [...observations.values()].sort((a, b) =>
         `${a.machine} ${a.subject} ${a.baseline} ${a.scope}`.localeCompare(`${b.machine} ${b.subject} ${b.baseline} ${b.scope}`));
+    };
+    const median = values => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+    };
+    const speedLabel = ratio => ratio === 1 ? 'Same median time' : `${Number(Math.max(ratio, 1 / ratio).toPrecision(3)).toLocaleString()}× ${ratio > 1 ? 'faster' : 'slower'}`;
+    const displayDuration = microseconds => {
+      const value = n => Number(n.toPrecision(3)).toLocaleString();
+      if (microseconds >= 1_000_000) return `${value(microseconds / 1_000_000)} s`;
+      if (microseconds >= 1000) return `${value(microseconds / 1000)} ms`;
+      if (microseconds >= 1) return `${value(microseconds)} µs`;
+      return `${value(microseconds * 1000)} ns`;
+    };
+    const appendText = (parent, tag, className, text) => {
+      const element = document.createElement(tag);
+      if (className) element.className = className;
+      element.textContent = text;
+      parent.append(element);
+      return element;
+    };
+    const renderReaderSummary = () => {
+      if (!readerSummary) return;
+      const byRunner = new Map();
+      for (const group of collectWorkloads()) {
+        const key = `${group.machine}|${group.subject}|${group.baseline}`;
+        if (!byRunner.has(key)) byRunner.set(key, { machine: group.machine, subject: group.subject, baseline: group.baseline, scopes: [] });
+        byRunner.get(key).scopes.push(group);
+      }
+      const fragment = document.createDocumentFragment();
+      const groups = [...byRunner.values()].sort((a, b) =>
+        `${a.machine} ${a.subject} ${a.baseline}`.localeCompare(`${b.machine} ${b.subject} ${b.baseline}`));
+      for (const group of groups) {
+        const card = document.createElement('article');
+        card.className = 'bench-reader-group';
+        appendText(card, 'h3', '', group.machine);
+        appendText(card, 'p', 'bench-reader-profile', `${displayName(group.subject)} vs ${displayName(group.baseline)}`);
+        group.scopes.sort((a, b) => a.scope.localeCompare(b.scope));
+        for (const scope of group.scopes) {
+          const ratios = scope.workloads.map(item => item.ratio);
+          if (!ratios.length) continue;
+          const total = ratios.length;
+          const faster = ratios.filter(value => value > 1).length;
+          const slower = ratios.filter(value => value < 1).length;
+          const equal = ratios.filter(value => value === 1).length;
+          const fasterPercent = Math.round(faster / total * 100);
+          const section = document.createElement('section');
+          section.className = 'bench-reader-scope';
+          const heading = appendText(section, 'h4', '', scope.scope === 'operations' ? 'Individual operations' : scope.scope === 'pipelines' ? 'Complete pipelines' : 'Measurements');
+          appendText(heading, 'small', '', `${total} output-verified workload${total === 1 ? '' : 's'}`);
+          appendText(section, 'p', 'bench-reader-verdict', `${displayName(group.subject)} was faster on ${faster} of ${total} workloads (${fasterPercent}%).`);
+          appendText(section, 'p', 'bench-reader-typical', `Typical workload: ${speedLabel(median(ratios))} (median of per-workload speed ratios)`);
+          const bar = document.createElement('div');
+          bar.className = 'bench-outcome-bar';
+          bar.setAttribute('role', 'img');
+          bar.setAttribute('aria-label', `${faster} faster, ${equal} same, ${slower} slower`);
+          for (const [name, count] of [['faster', faster], ['tie', equal], ['slower', slower]]) {
+            const segment = document.createElement('span');
+            segment.className = name;
+            segment.style.width = `${count / total * 100}%`;
+            bar.append(segment);
+          }
+          section.append(bar);
+          const labels = document.createElement('p');
+          labels.className = 'bench-reader-outcome-labels';
+          for (const [name, count, label] of [['faster', faster, 'faster'], ['tie', equal, 'tied'], ['slower', slower, 'slower']]) {
+            appendText(labels, 'span', name, `${count} ${label}`);
+          }
+          section.append(labels);
+          const findings = [];
+          const slowest = scope.workloads.reduce((best, item) => item.ratio < best.ratio ? item : best, scope.workloads[0]);
+          const fastest = scope.workloads.reduce((best, item) => item.ratio > best.ratio ? item : best, scope.workloads[0]);
+          if (slowest.ratio < 1) findings.push(['Largest slowdown', slowest]);
+          if (fastest.ratio > 1) findings.push(['Largest gain', fastest]);
+          if (findings.length) {
+            const list = document.createElement('ul');
+            list.className = 'bench-reader-findings';
+            for (const [label, item] of findings) {
+              const entry = document.createElement('li');
+              appendText(entry, 'span', '', label);
+              appendText(entry, 'strong', '', item.name || item.workload);
+              appendText(entry, 'small', '', `${displayName(group.subject)} ${displayDuration(item.targetTime)} · ${displayName(group.baseline)} ${displayDuration(item.baselineTime)} · ${speedLabel(item.ratio)}`);
+              list.append(entry);
+            }
+            section.append(list);
+          }
+          card.append(section);
+        }
+        fragment.append(card);
+      }
+      if (!groups.length) appendText(fragment, 'p', 'bench-reader-empty', 'No output-verified workload pairs match this comparison and its filters.');
+      readerSummary.replaceChildren(fragment);
+    };
+    const renderWorkloadPlot = () => {
+      if (!ratioPlot) return;
+      const groups = collectWorkloads();
       const ns = 'http://www.w3.org/2000/svg';
       const svg = document.createElementNS(ns, 'svg');
       const left = 450, right = 1080, valueX = 1090, top = 44, rowHeight = 25, groupGap = 33, width = 1220;
       const totalRows = groups.reduce((count, item) => count + item.workloads.length, 0);
       const height = Math.max(150, top + groups.reduce((count, item) => count + groupGap + rowHeight * item.workloads.length, 0) + 24);
       const xFor = ratio => left + (Math.max(-4, Math.min(4, Math.log2(ratio))) + 4) / 8 * (right - left);
-      const speedLabel = ratio => ratio === 1 ? 'Same median time' : `${Math.max(ratio, 1 / ratio).toPrecision(3)}× ${ratio > 1 ? 'faster' : 'slower'}`;
-      const median = values => {
-        const middle = Math.floor(values.length / 2);
-        return values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
-      };
       svg.setAttribute('class', 'bench-workload-plot-svg');
       svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
       svg.setAttribute('role', 'img');
@@ -144,7 +238,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const update = () => {
       const query = search.value.trim().toLocaleLowerCase();
       selectedPair = pairedSubjects();
-      const counts = Object.fromEntries(scores.map(score => [score.dataset.scoreSubject, { faster: 0, slower: 0, tie: 0, unavailable: 0 }]));
       let visible = 0;
       for (const cell of columns) cell.hidden = !selected(cell);
       for (const row of rows) {
@@ -156,11 +249,6 @@ document.addEventListener('DOMContentLoaded', () => {
         detail.hidden = row.hidden || row.querySelector('.bench-expand').getAttribute('aria-expanded') !== 'true';
         if (!row.hidden) {
           visible += 1;
-          for (const cell of cells(row)) {
-            if (counts[cell.dataset.subject] && cell.dataset.role === 'target') {
-              counts[cell.dataset.subject][cell.dataset.scoreDirection || cell.dataset.direction] += 1;
-            }
-          }
         }
         const comparable = cells(row).filter(cell => selected(cell) && cell.dataset.ratio);
         const minimum = Math.min(...comparable.map(cell => Number(cell.dataset.value)));
@@ -176,25 +264,9 @@ document.addEventListener('DOMContentLoaded', () => {
         row.querySelector('[data-quality-summary]').textContent = [...new Set(notes)].join('; ') || 'Comparison unavailable';
         for (const cell of cells(row)) cell.classList.toggle('bench-lowest', comparable.length > 1 && selected(cell) && !!cell.dataset.ratio && Number(cell.dataset.value) === minimum);
       }
-      for (const score of scores) {
-        score.hidden = !!(subject.value && score.dataset.scoreSubject !== subject.value);
-        for (const value of score.querySelectorAll('[data-score]')) value.textContent = counts[score.dataset.scoreSubject][value.dataset.score];
-      }
-      let excluded = 0;
-      const targetSet = new Set(subject.value ? [subject.value] : [...dashboard.querySelectorAll('th[data-subject]')]
-        .map(header => header.dataset.subject).filter(key => key !== dashboard.dataset.baseline));
-      for (const row of rows) {
-        if (row.hidden) continue;
-        for (const cell of cells(row)) {
-          if (!targetSet.has(cell.dataset.subject) || cell.dataset.role !== 'target') continue;
-          if (Number(cell.dataset.observedRatioPrimary) > 0 && cell.dataset.qualityPrimary !== 'checked') excluded += 1;
-          if (Number(cell.dataset.observedRatioPillowSimd) > 0 && cell.dataset.qualityPillowSimd !== 'checked') excluded += 1;
-        }
-      }
-      const excludedCount = dashboard.querySelector('[data-excluded-count]');
-      if (excludedCount) excludedCount.textContent = excluded;
       dashboard.querySelector('#bench-count').textContent = `${visible} of ${rows.length} workloads shown`;
       dashboard.querySelector('#bench-empty').hidden = visible !== 0;
+      renderReaderSummary();
       renderWorkloadPlot();
     };
     for (const state of tableRows) {
@@ -229,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     dashboard.querySelector('#bench-reset').addEventListener('click', () => {
-      search.value = ''; type.value = ''; mode.value = ''; machine.value = ''; subject.value = '';
+      search.value = ''; type.value = ''; mode.value = ''; machine.value = ''; subject.value = defaultComparison;
       for (const state of tableRows) {
         const { body, rows: tableWorkloads, sorters } = state;
         state.sort = null; state.ascending = true;
