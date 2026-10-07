@@ -1111,6 +1111,7 @@ def workload_subjects_for_profile(
     """Select the declared benchmark subjects for the active backend profile.
 
     The manifest's standard cohort contains Pillow, serial CPU, SIMD, and GPU.
+    Runners without a GPU retain Pillow and only the requested target backends.
     Parallel CPU reuses the same inputs and parity preflight, but times only its
     own feature-identified CPU profile. The x86 Pillow-SIMD cohort retains the
     ordinary Pillow baseline and times only serial CPU and architecture-specific
@@ -1131,12 +1132,12 @@ def workload_subjects_for_profile(
             "profiled benchmark input must start from the standard Pillow/"
             "CPU/SIMD/GPU subject contract"
         )
-    if PILLOW_SIMD_COMPARISON:
-        return default_subjects[:1] + [
-            {"kind": "target_profile", "id": target_profile_for_backend(backend)}
-            for backend in TARGET_BACKENDS
-        ]
-    return [{"kind": "target_profile", "id": "python-parallel-cpu"}]
+    if PARALLEL_CPU_PROFILE:
+        return [{"kind": "target_profile", "id": "python-parallel-cpu"}]
+    return default_subjects[:1] + [
+        {"kind": "target_profile", "id": target_profile_for_backend(backend)}
+        for backend in TARGET_BACKENDS
+    ]
 
 
 def apply_profile_to_workloads(
