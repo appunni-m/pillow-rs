@@ -15,11 +15,13 @@ import hashlib
 import html
 import json
 import math
+import os
 from pathlib import Path
 import re
 import statistics
 
-SCHEMA = "public-docs/benchmark-snapshot@1"
+SCHEMA = "public-docs/benchmark-snapshot@2"
+LEGACY_SCHEMA = "public-docs/benchmark-snapshot@1"
 SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -32,6 +34,38 @@ def number(value: object, scale: float = 1.0) -> float | None:
     if not math.isfinite(result) or result < 0:
         raise ValueError("benchmark measurements must be finite and nonnegative")
     return result
+
+
+def attach_machine_identity(snapshot: dict, runner_id: str | None = None,
+                            runner_label: str | None = None,
+                            cpu_model: str | None = None,
+                            image_version: str | None = None,
+                            rust_toolchain: str | None = None) -> dict:
+    """Label one hosted-runner cohort without publishing its ephemeral hostname."""
+    environment = snapshot.get("environment", {})
+    architecture = str(environment.get("architecture") or "unknown")
+    os_name = str(environment.get("os") or environment.get("platform") or "unknown")
+    machine_id = runner_id or f"local-{os_name.lower()}-{architecture.lower()}"
+    machine_id = re.sub(r"[^a-zA-Z0-9._-]+", "-", machine_id).strip("-").lower()
+    label = runner_label or f"Unpinned runner · {os_name} · {architecture}"
+    machine = {
+        "id": machine_id,
+        "label": label,
+        "os": os_name,
+        "architecture": architecture,
+        "cpu": cpu_model or environment.get("cpu") or "not recorded",
+        "python_version": environment.get("python_version") or environment.get("toolchain") or "not recorded",
+        "rust_toolchain": rust_toolchain or environment.get("rust_toolchain") or "not recorded",
+        "image_version": image_version or "not recorded",
+    }
+    snapshot["machine"] = machine
+    snapshot["environment"] = {**environment, "runner": label, "cpu_model": machine["cpu"],
+                                "python_version": machine["python_version"],
+                                "rust_toolchain": machine["rust_toolchain"],
+                                "image_version": machine["image_version"]}
+    for row in snapshot.get("rows", []):
+        row["machine_id"] = machine_id
+    return snapshot
 
 
 def project_pillow(document: dict) -> dict:
@@ -67,16 +101,26 @@ def project_pillow(document: dict) -> dict:
                 "fallback_reasons": execution.get("fallback_reason_counts", {}),
             })
     env = document["environment"]
-    return {
+    snapshot = {
         "revision": next(iter(revisions)), "measured_at": identity["finished_at"],
         "clean": all(t.get("dirty") is False for t in targets),
         "status": document["status"], "run_id": identity["run_id"],
-        "environment": {k: env.get(k) for k in ("os", "architecture", "cpu", "toolchain", "power_mode")},
+        "environment": {"os": env.get("os"), "architecture": env.get("architecture"), "cpu": env.get("cpu"),
+                        "python_version": env.get("toolchain"), "power_mode": env.get("power_mode"),
+                        "rust_toolchain": os.environ.get("DOCS_BENCHMARK_RUST_TOOLCHAIN")},
         "policy_status": "Timing budget acceptance is separate; no budget pass is inferred from this result.",
         "notes": ["Whole-workflow timings. successful_execution is an execution gate, not a pixel-parity claim.",
                   "Requested and actual backends are separate. Host controls and missing terminal evidence do not prove native GPU performance."],
         "rows": rows,
     }
+    return attach_machine_identity(
+        snapshot,
+        os.environ.get("DOCS_BENCHMARK_RUNNER_ID"),
+        os.environ.get("DOCS_BENCHMARK_RUNNER_LABEL"),
+        os.environ.get("DOCS_BENCHMARK_CPU_MODEL"),
+        os.environ.get("DOCS_BENCHMARK_IMAGE_VERSION"),
+        os.environ.get("DOCS_BENCHMARK_RUST_TOOLCHAIN"),
+    )
 
 
 def normalize_parallel_cpu_snapshot(snapshot: dict) -> dict:
@@ -188,9 +232,11 @@ def merge_parallel_cpu(snapshot: dict, parallel: dict, source_hash: str, paralle
         row.setdefault("comparison_group", "default")
     snapshot["rows"].extend(merged)
     snapshot["cohorts"] = [
-        {"id": "default", "run_id": snapshot["run_id"], "measured_at": snapshot["measured_at"],
+        {"id": "default", "machine_id": snapshot.get("machine", {}).get("id"),
+         "run_id": snapshot["run_id"], "measured_at": snapshot["measured_at"],
          "source_sha256": source_hash},
-        {"id": "parallel-cpu", "run_id": parallel["run_id"], "measured_at": parallel["measured_at"],
+        {"id": "parallel-cpu", "machine_id": snapshot.get("machine", {}).get("id"),
+         "run_id": parallel["run_id"], "measured_at": parallel["measured_at"],
          "source_sha256": parallel_hash},
     ]
     snapshot["notes"].append(
@@ -288,7 +334,7 @@ def project_jpeg(directory: Path) -> dict:
 
 
 def validate(snapshot: dict, repository: str) -> None:
-    if snapshot.get("schema") != SCHEMA or snapshot.get("repository") != repository:
+    if snapshot.get("schema") not in {SCHEMA, LEGACY_SCHEMA} or snapshot.get("repository") != repository:
         raise ValueError("benchmark snapshot schema/repository mismatch")
     if not SHA.fullmatch(snapshot.get("revision", "")):
         raise ValueError("benchmark source revision is missing")
@@ -296,14 +342,28 @@ def validate(snapshot: dict, repository: str) -> None:
         raise ValueError("benchmark measurement identity is incomplete")
     if not re.fullmatch(r"[0-9a-f]{64}", snapshot.get("source_sha256", "")):
         raise ValueError("benchmark source hash is missing")
+    machines = snapshot.get("machines") or ([snapshot["machine"]] if snapshot.get("machine") else [])
+    machine_ids = {machine.get("id") for machine in machines}
+    if len(machine_ids) != len(machines) or any(not isinstance(item, str) or not item for item in machine_ids):
+        raise ValueError("benchmark runner identities are missing or duplicated")
+    if snapshot.get("schema") == SCHEMA and not machine_ids:
+        raise ValueError("machine-aware benchmark snapshot omitted runner identity")
     keys = set()
-    rows_by_workload: dict[str, dict[str, dict]] = {}
+    rows_by_workload: dict[tuple[str, str], dict[str, dict]] = {}
     for row in snapshot["rows"]:
         cohort = row.get("comparison_group", "default")
         if cohort != "default":
             raise ValueError("unknown benchmark comparison cohort")
-        rows_by_workload.setdefault(row["workload"], {})[row["subject"]] = row
-        key = (row["workload"], row["subject"])
+        if snapshot.get("schema") == SCHEMA:
+            machine_id = row.get("machine_id")
+            if not machine_id:
+                raise ValueError("machine-aware benchmark row omitted its runner identity")
+        else:
+            machine_id = row.get("machine_id", next(iter(machine_ids), "legacy"))
+        if machine_ids and machine_id not in machine_ids:
+            raise ValueError(f"benchmark row references unknown runner: {machine_id}")
+        rows_by_workload.setdefault((machine_id, row["workload"]), {})[row["subject"]] = row
+        key = (machine_id, row["workload"], row["subject"])
         if key in keys:
             raise ValueError(f"duplicate benchmark subject: {key}")
         keys.add(key)
@@ -316,7 +376,7 @@ def validate(snapshot: dict, repository: str) -> None:
             raise ValueError("benchmark row omitted its result or measurement boundary")
     if not keys:
         raise ValueError("an empty result is not a measured benchmark")
-    for workload, subjects in rows_by_workload.items():
+    for (_, workload), subjects in rows_by_workload.items():
         parallel = subjects.get("python-parallel-cpu")
         if parallel is None:
             continue
@@ -326,6 +386,131 @@ def validate(snapshot: dict, repository: str) -> None:
         for field in ("policy", "context", "sample_unit", "sample_count"):
             if pillow[field] != parallel[field]:
                 raise ValueError(f"Parallel CPU and Pillow conditions differ for {workload}: {field}")
+
+
+def merge_pillow_snapshots(source: Path, repository: str, output: Path | None = None) -> dict:
+    """Join one public benchmark snapshot per runner into a provenance-preserving view."""
+    files = sorted(source.rglob("snapshot.json")) if source.is_dir() else [source]
+    if not files:
+        raise ValueError("no public benchmark snapshots were downloaded")
+    snapshots = [json.loads(path.read_text(encoding="utf-8")) for path in files]
+    for snapshot in snapshots:
+        validate(snapshot, repository)
+    revisions = {snapshot["revision"] for snapshot in snapshots}
+    if len(revisions) != 1:
+        raise ValueError("runner snapshots do not share one source revision")
+    machines: list[dict] = []
+    rows: list[dict] = []
+    source_hashes = []
+    run_ids = []
+    cohorts = []
+    notes = []
+    for snapshot in snapshots:
+        children = snapshot.get("machines") or ([snapshot["machine"]] if snapshot.get("machine") else [])
+        if not children:
+            raise ValueError("runner snapshot has no machine identity")
+        for machine in children:
+            if machine["id"] in {item["id"] for item in machines}:
+                raise ValueError(f"duplicate runner snapshot: {machine['id']}")
+            machines.append(machine)
+        child_ids = {machine["id"] for machine in children}
+        for row in snapshot["rows"]:
+            machine_id = row.get("machine_id") or (next(iter(child_ids)) if len(child_ids) == 1 else None)
+            if machine_id not in child_ids:
+                raise ValueError("benchmark row has no unambiguous runner identity")
+            rows.append({**row, "machine_id": machine_id})
+        source_hashes.append(snapshot["source_sha256"])
+        run_ids.append(str(snapshot["run_id"]))
+        for cohort in snapshot.get("cohorts", []):
+            default_machine = next(iter(child_ids)) if len(child_ids) == 1 else None
+            cohorts.append({**cohort, "machine_id": cohort.get("machine_id") or default_machine})
+        notes.extend(snapshot.get("notes", []))
+    combined = {
+        "schema": SCHEMA,
+        "repository": repository,
+        "revision": next(iter(revisions)),
+        "measured_at": max(snapshot["measured_at"] for snapshot in snapshots),
+        "clean": all(snapshot["clean"] for snapshot in snapshots),
+        "status": "completed" if all(snapshot["status"] == "completed" for snapshot in snapshots) else "partial",
+        "run_id": "+".join(run_ids),
+        "environment": {"runner_count": len(machines),
+                        "platforms": "; ".join(machine["label"] for machine in machines)},
+        "machines": machines,
+        "cohorts": cohorts,
+        "policy_status": "Paired workload comparisons are summarized within each runner cohort; runner cohorts are not compared against one another.",
+        "notes": list(dict.fromkeys(notes + [
+            "Each runner cohort is a separate GitHub-hosted measurement. Ratios are formed only between matching rows from that same cohort; runner cohorts are not compared directly.",
+            "The overall box plot gives each parity-verified workload one observation. It shows workload spread, not a confidence interval or a universal speed guarantee.",
+        ])),
+        "rows": rows,
+        "source_sha256": hashlib.sha256("\n".join(sorted(source_hashes)).encode()).hexdigest(),
+    }
+    validate(combined, repository)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(combined, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return combined
+
+
+def merge_pillow_simd_cohort(snapshot: dict, simd_snapshot: dict) -> dict:
+    """Add the separately version-matched x86 cohort as its own runner cohort."""
+    if snapshot["revision"] != simd_snapshot["revision"]:
+        raise ValueError("Pillow-SIMD and main benchmark snapshots use different source revisions")
+    source_machines = simd_snapshot.get("machines") or ([simd_snapshot["machine"]] if simd_snapshot.get("machine") else [])
+    if len(source_machines) != 1:
+        raise ValueError("Pillow-SIMD evidence must identify exactly one runner cohort")
+    source_machine = source_machines[0]
+    main_machines = snapshot.get("machines") or ([snapshot["machine"]] if snapshot.get("machine") else [])
+    comparable_machine = next((machine for machine in main_machines
+                               if machine["id"] == source_machine["id"]), None)
+    if comparable_machine is None:
+        raise ValueError("Pillow-SIMD and main benchmark snapshots use different runner classes")
+    missing_identity = {"not recorded", "not-recorded", "unknown", "unknown-unknown"}
+    for key in ("os", "architecture", "cpu", "python_version", "rust_toolchain", "image_version"):
+        left, right = comparable_machine.get(key), source_machine.get(key)
+        if (
+            not left
+            or not right
+            or str(left).strip().lower() in missing_identity
+            or str(right).strip().lower() in missing_identity
+        ):
+            raise ValueError(f"Pillow-SIMD and main benchmark runner {key} identity is incomplete")
+        if left != right:
+            raise ValueError(f"Pillow-SIMD and main benchmark runner {key} differs")
+    machine = dict(source_machine)
+    machine["id"] = re.sub(r"[^a-zA-Z0-9._-]+", "-", f"{machine['id']}-pillow-simd-paired").strip("-").lower()
+    machine["label"] = f"{machine['label']} · Pillow-SIMD paired cohort"
+    machines = snapshot.get("machines") or ([snapshot["machine"]] if snapshot.get("machine") else [])
+    if machine["id"] in {item["id"] for item in machines}:
+        raise ValueError("Pillow-SIMD runner cohort identity is duplicated")
+    combined = dict(snapshot)
+    combined.pop("machine", None)
+    combined["schema"] = SCHEMA
+    combined["machines"] = [*machines, machine]
+    combined["cohorts"] = [
+        *snapshot.get("cohorts", []),
+        *[{**cohort, "machine_id": machine["id"]} for cohort in simd_snapshot.get("cohorts", [])],
+    ]
+    combined["rows"] = [
+        *snapshot["rows"],
+        *[{**row, "machine_id": machine["id"]} for row in simd_snapshot["rows"]],
+    ]
+    combined["measured_at"] = max(snapshot["measured_at"], simd_snapshot["measured_at"])
+    combined["run_id"] = f"{snapshot['run_id']}+{simd_snapshot['run_id']}"
+    combined["source_sha256"] = hashlib.sha256(
+        f"{snapshot['source_sha256']}\0{simd_snapshot['source_sha256']}".encode()
+    ).hexdigest()
+    combined["environment"] = {
+        "runner_count": len(combined["machines"]),
+        "platforms": "; ".join(item["label"] for item in combined["machines"]),
+    }
+    combined["notes"] = list(dict.fromkeys([
+        *snapshot.get("notes", []),
+        *simd_snapshot.get("notes", []),
+        "Pillow-SIMD rows are paired with ordinary Pillow and pillow-rs CPU/SIMD from one Linux x86 benchmark run; that narrow cohort is kept separate from the full Linux and macOS workloads.",
+    ]))
+    validate(combined, snapshot["repository"])
+    return combined
 
 
 def cell(value: object) -> str:
@@ -358,6 +543,19 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
                 "See the [measurement protocol](benchmarking.md) for the maintained command and CI artifact.\n")
     snapshot = json.loads(source.read_text())
     snapshot = normalize_parallel_cpu_snapshot(snapshot)
+    simd_source = config.get("pillow_simd_benchmark", {}).get("snapshot")
+    simd_note = None
+    if simd_source:
+        simd_snapshot = json.loads((root / simd_source).read_text(encoding="utf-8"))
+        validate(simd_snapshot, config["repository"])
+        if simd_snapshot["revision"] != snapshot["revision"]:
+            simd_note = "The latest Pillow-SIMD run used a different source revision; it remains on its separate comparison page and is excluded from this overall summary."
+        else:
+            try:
+                snapshot = merge_pillow_simd_cohort(snapshot, simd_snapshot)
+            except ValueError as error:
+                simd_note = (f"The latest Pillow-SIMD run is excluded from this overall summary because it is not a matched x86 runner cohort ({error}); "
+                             "its measurements remain on the separate comparison page.")
     validate(snapshot, config["repository"])
     (output / "assets" / "benchmark.json").write_text(json.dumps(snapshot, indent=2) + "\n")
     historical = snapshot["revision"] != config["release_revision"]
@@ -366,6 +564,8 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
               if historical else "**Measurement of the documented release.**")
     lines = ["# Benchmark results", "",
              f'<p class="bench-run-note">Recorded {cell(snapshot["measured_at"][:10])}. {cell(status.replace("**", ""))} Run status: {cell(snapshot["status"])}.</p>', ""]
+    if simd_note:
+        lines.extend([f'<p class="bench-run-note">{cell(simd_note)}</p>', ""])
     details = ["# Benchmark measurement details", "", status, "",
              "[View the results](benchmarks.md) · [Run benchmarks](benchmarking.md)", "",
              "| Measurement identity | Value |", "| --- | --- |",
@@ -374,10 +574,21 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
              f"| Policy | {cell(snapshot['policy_status'])} |"]
     for key, value in snapshot["environment"].items():
         details.append(f"| {cell(key)} | {cell(value)} |")
+    machines = snapshot.get("machines") or ([snapshot["machine"]] if snapshot.get("machine") else [])
+    if machines:
+        details += ["", "## Runner cohorts and hardware", "",
+                    "| Runner cohort | OS | Architecture | CPU | Python | Rust toolchain | Runner image |", "| --- | --- | --- | --- | --- | --- | --- |"]
+        for machine in machines:
+            details.append("| " + " | ".join(cell(machine.get(key)) for key in (
+                "label", "os", "architecture", "cpu", "python_version", "rust_toolchain", "image_version"
+            )) + " |")
     if snapshot.get("cohorts"):
-        details += ["", "## Comparison cohorts", "", "| Cohort | Run | Measured at | Source SHA-256 |", "| --- | --- | --- | --- |"]
+        details += ["", "## Comparison cohorts", "", "| Runner | Cohort | Run | Measured at | Source SHA-256 |", "| --- | --- | --- | --- | --- |"]
         for cohort in snapshot["cohorts"]:
-            details.append("| " + " | ".join(cell(cohort.get(key)) for key in ("id", "run_id", "measured_at", "source_sha256")) + " |")
+            runner = next((machine["label"] for machine in machines
+                           if machine["id"] == cohort.get("machine_id")), "Runner not recorded")
+            details.append("| " + " | ".join([cell(runner)] + [cell(cohort.get(key))
+                            for key in ("id", "run_id", "measured_at", "source_sha256")]) + " |")
     details += ["", "Download the [public measurement data](assets/benchmark.json). This is a presentation snapshot, "
               "not the full source receipt. It preserves the original report hash and numerical observations; "
               "hostnames, local paths, and internal traces are omitted.", ""]
@@ -385,13 +596,16 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
     from docs_benchmark_view import render_dashboard
     lines += [render_dashboard(snapshot, config), ""]
     details += ["", "## Full measurements", "",
-                "| Workload | Subject | Median µs | P90 µs | P95 µs | Samples | Result / correctness | Requested → actual | Terminal receipt |",
-                "| --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |"]
+                "| Workload | Runner | Subject | Median µs | P90 µs | P95 µs | Samples | Result / correctness | Requested → actual | Terminal receipt |",
+                "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |"]
     for row in snapshot["rows"]:
+        machine_id = row.get("machine_id", "")
+        runner = next((machine["label"] for machine in machines if machine["id"] == machine_id),
+                      snapshot.get("machine", {}).get("label", "Runner not recorded"))
         route = f"{row['requested_backend']} → {row['actual_backend']}"
         result = f"{row['status']}; {row['correctness']}"
         terminal = "Complete" if row["terminal_complete"] is True else "Not proven" if row["terminal_complete"] is False else "Not measured" if row["requested_backend"] == "gpu" else "Not applicable"
-        details.append("| " + " | ".join(cell(v) for v in (row["workload"], row["subject"], row["median_us"], row["p90_us"], row["p95_us"], row["sample_count"], result, route, terminal)) + " |")
+        details.append("| " + " | ".join(cell(v) for v in (row["workload"], runner, row["subject"], row["median_us"], row["p90_us"], row["p95_us"], row["sample_count"], result, route, terminal)) + " |")
     lines += ["", "[Measurement details and hardware](benchmark-details.md) · "
               "[Download results](assets/benchmark.json) · [Contributor benchmark guide](benchmarking.md)", ""]
     details += ["", "## Workload boundaries", "", "Repeat counts, dimensions, modes, and cache states are retained per workload:", ""]
@@ -414,6 +628,7 @@ def render_pillow_simd_benchmarks(source: Path, output: Path) -> str:
 
     snapshot = json.loads(source.read_text(encoding="utf-8"))
     validate(snapshot, "appunni-m/pillow-rs")
+    machine = snapshot.get("machine", {})
     (output / "assets" / "pillow-simd-benchmark.json").write_text(
         json.dumps(snapshot, indent=2) + "\n", encoding="utf-8"
     )
@@ -458,7 +673,7 @@ def render_pillow_simd_benchmarks(source: Path, output: Path) -> str:
         [
             "# Pillow-SIMD x86 operation comparison",
             "",
-            f"Recorded {cell(snapshot['measured_at'][:10])} on {cell(snapshot['environment'].get('os') or snapshot['environment'].get('platform') or 'an x86 host')}. This page compares only workloads run on that same host: Pillow {source_versions.get('pillow', 'version not recorded')}, Pillow-SIMD {source_versions.get('pillow-simd', 'version not recorded')}, and the pillow-rs CPU/SIMD profiles.",
+            f"Recorded {cell(snapshot['measured_at'][:10])} on {cell(machine.get('label') or snapshot['environment'].get('os') or 'an x86 runner')} (CPU: {cell(machine.get('cpu') or 'not recorded')}; Python: {cell(machine.get('python_version') or 'not recorded')}; Rust: {cell(machine.get('rust_toolchain') or 'not recorded')}; image: {cell(machine.get('image_version') or 'not recorded')}). This page compares only workloads run in that one benchmark run: Pillow {source_versions.get('pillow', 'version not recorded')}, Pillow-SIMD {source_versions.get('pillow-simd', 'version not recorded')}, and the pillow-rs CPU/SIMD profiles.",
             "",
             "Pillow-SIMD installs the `PIL` namespace, so the two Pillow variants are run in isolated environments. The benchmark admits timings only after each source has independently passed the same exact-output parity cases against pillow-rs. These results are separate from the Apple ARM results on the main [benchmark page](benchmarks.md).",
             "",
@@ -518,13 +733,17 @@ def render_support(root: Path, config: dict, output: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("kind", choices=("pillow", "fontdone", "jpeg"))
+    parser.add_argument("kind", choices=("pillow", "fontdone", "jpeg", "merge"))
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--parallel-source", type=Path,
                         help="optional target-only Parallel CPU result to compare with ordinary Pillow")
     args = parser.parse_args()
+    if args.kind == "merge":
+        snapshot = merge_pillow_snapshots(args.source, args.repository, args.output)
+        print(f"Merged {len(snapshot['machines'])} runner cohorts and {len(snapshot['rows'])} rows")
+        return
     if args.kind == "jpeg":
         snapshot = project_jpeg(args.source)
         raw = b"".join((args.source / name).read_bytes() for name in ("metadata.json", "summary.csv", "raw.jsonl"))

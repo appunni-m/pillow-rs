@@ -2,7 +2,7 @@
 import copy
 import unittest
 
-from docs_benchmark_view import compare, describe, duration, facets, render_dashboard, speed_label
+from docs_benchmark_view import compare, describe, duration, facets, render_dashboard, speed_label, workload_distributions
 
 
 def row(subject="fontdone", median=10, **changes):
@@ -42,6 +42,111 @@ class BenchmarkViewTests(unittest.TestCase):
                         dict(context={'size':64}),dict(sample_unit='round median'),dict(sample_count=5)]:
             with self.subTest(changes=changes):
                 self.assertIsNone(compare(row(**changes),baseline)[0])
+
+    def test_cross_runner_rows_never_form_a_speed_ratio(self):
+        baseline = row("pillow", 20, machine_id="ubuntu-x64")
+        target = row("python-simd", 10, machine_id="macos-arm64", requested_backend="simd", actual_backend="simd")
+        ratio, state, reason = compare(target, baseline)
+        self.assertIsNone(ratio)
+        self.assertEqual(state, "unavailable")
+        self.assertEqual(reason, "Different runner cohorts")
+
+    def test_overall_boxplot_uses_paired_exact_output_workloads_per_runner(self):
+        machines = {
+            "linux": {"id": "linux", "label": "Ubuntu 24.04 · x86_64"},
+            "mac": {"id": "mac", "label": "macOS 15 · arm64"},
+        }
+        rows = []
+        for machine_id, times in (("linux", (20, 10)), ("mac", (30, 10))):
+            for index, (pillow_time, target_time) in enumerate((times, (40, 20))):
+                workload = f"pipeline-op.test-{index}"
+                rows.extend([
+                    row("pillow", pillow_time, workload=workload, machine_id=machine_id,
+                        correctness="parity_pass: pass", requested_backend="pillow", actual_backend="pillow"),
+                    row("python-simd", target_time, workload=workload, machine_id=machine_id,
+                        correctness="parity_pass: pass", requested_backend="simd", actual_backend="simd"),
+                ])
+        rows.extend([
+            row("pillow", 10, workload="pipeline-op.timing-only", machine_id="linux",
+                correctness="successful_execution: pass", requested_backend="pillow", actual_backend="pillow"),
+            row("python-simd", 1, workload="pipeline-op.timing-only", machine_id="linux",
+                correctness="successful_execution: pass", requested_backend="simd", actual_backend="simd"),
+        ])
+        grouped = {}
+        for item in rows:
+            grouped.setdefault((item["machine_id"], item["workload"]), []).append(item)
+        distributions = workload_distributions(grouped, machines, ["python-simd"], "pillow")
+        self.assertEqual(len(distributions), 2)
+        self.assertEqual({item["machine_id"] for item in distributions}, {"linux", "mac"})
+        by_machine = {item["machine_id"]: item for item in distributions}
+        self.assertEqual(by_machine["linux"]["ratios"], [2, 2])
+        self.assertEqual(by_machine["mac"]["ratios"], [2, 3])
+        self.assertEqual(by_machine["linux"]["geomean"], 2)
+        snapshot = dict(rows=rows, machines=list(machines.values()), environment={"os": "GitHub runners"}, measured_at="2026-10-07")
+        text = render_dashboard(snapshot, dict(benchmark={"kind": "pillow"}))
+        self.assertIn("Overall speedup by workload", text)
+        self.assertLess(text.index('<section class="bench-overall">'), text.index('<div class="bench-summary">'))
+        self.assertIn('data-machine="linux"', text)
+        self.assertIn('data-machine="mac"', text)
+        self.assertIn('id="bench-machine"', text)
+        self.assertIn('id="bench-group"', text)
+        self.assertIn('id="bench-mode"', text)
+        self.assertIn('id="bench-subject"', text)
+        self.assertIn('data-sort="runner"', text)
+        self.assertIn("geomean 2× faster", text)
+        self.assertIn('data-ratio-primary="2.0"', text)
+        self.assertIn('data-ratio-primary=""', text)
+        self.assertIn('<b data-score="faster">4</b> faster', text)
+
+    def test_boxplot_includes_pillow_simd_pair_against_its_matched_host(self):
+        machine = "linux-pillow-simd"
+        checked = "parity_pass: pass"
+        rows = [
+            row("pillow", 20, workload="pipeline-op.blur", machine_id=machine, correctness=checked,
+                requested_backend="pillow", actual_backend="pillow"),
+            row("pillow-simd", 10, workload="pipeline-op.blur", machine_id=machine, correctness=checked,
+                requested_backend="pillow-simd", actual_backend="pillow-simd"),
+            row("python-simd", 5, workload="pipeline-op.blur", machine_id=machine, correctness=checked,
+                requested_backend="simd", actual_backend="simd"),
+        ]
+        machines = {machine: {"id": machine, "label": "Ubuntu 24.04 · x86_64 · Pillow-SIMD paired cohort"}}
+        grouped = {(machine, "pipeline-op.blur"): rows}
+        distributions = workload_distributions(grouped, machines, ["python-simd", "pillow-simd"], "pillow")
+        pairs = {(item["subject"], item["baseline"], tuple(item["ratios"])) for item in distributions}
+        self.assertIn(("python-simd", "pillow", (4,)), pairs)
+        self.assertIn(("python-simd", "pillow-simd", (2,)), pairs)
+        self.assertIn(("pillow-simd", "pillow", (2,)), pairs)
+
+    def test_overall_distribution_summarizes_operations_and_pipelines_separately(self):
+        machine = "ubuntu-x64"
+        machines = {machine: {"id": machine, "label": "Ubuntu 24.04 · x86_64"}}
+        rows = []
+        for workload, pillow_time, target_time in (
+            ("pipeline-op.blur.material", 20, 10),
+            ("pipeline.quick.gray", 40, 10),
+        ):
+            context = {"mode": "L", "operation_class": "filter"}
+            rows.extend([
+                row("pillow", pillow_time, workload=workload, machine_id=machine,
+                    correctness="parity_pass: pass", requested_backend="pillow", actual_backend="pillow",
+                    context=context),
+                row("python-cpu", target_time, workload=workload, machine_id=machine,
+                    correctness="parity_pass: pass", requested_backend="cpu", actual_backend="cpu",
+                    context=context),
+            ])
+        grouped = {}
+        for item in rows:
+            grouped.setdefault((item["machine_id"], item["workload"]), []).append(item)
+        distributions = workload_distributions(grouped, machines, ["python-cpu"], "pillow")
+        self.assertEqual({item["scope"] for item in distributions}, {"operations", "pipelines"})
+        by_scope = {item["scope"]: item for item in distributions}
+        self.assertEqual(by_scope["operations"]["geomean"], 2)
+        self.assertEqual(by_scope["pipelines"]["geomean"], 4)
+        dashboard = render_dashboard({"rows": rows, "machines": list(machines.values()),
+                                      "environment": {}, "measured_at": "2026-10-07"},
+                                     {"benchmark": {"kind": "pillow"}})
+        self.assertIn("individual operations", dashboard)
+        self.assertIn("pipeline workflows", dashboard)
 
     def test_timing_only_is_not_promoted_to_checked_output(self):
         baseline=row('FreeType',20)
@@ -137,10 +242,11 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn('Not comparable',text)
         self.assertEqual(snapshot,original)
 
-    def test_missing_target_cells_count_as_unavailable(self):
+    def test_unverified_and_missing_pairs_are_unavailable_in_summary(self):
         snapshot=dict(rows=[row('FreeType',20),row(),row('FreeType',30,workload='other')],environment={'os':'Test'},measured_at='2026-09-16')
         text=render_dashboard(snapshot,dict(project='fontdone',benchmark={'kind':'fontdone'}))
-        self.assertIn('data-score="unavailable">1</span>',text)
+        self.assertIn('data-score="unavailable">2</span>',text)
+        self.assertIn('data-excluded-count>1</span>', text)
 
     def test_injected_labels_are_escaped(self):
         snapshot=dict(rows=[row(workload='<script>alert(1)</script>',subject='" onclick="alert(1)')],environment={'os':'<host>'},measured_at='2026-09-16')

@@ -74,6 +74,16 @@ async function main() {
         const modesMatch = await page.$$eval('.bench-workload:not([hidden])', (rows, mode) => rows.length > 0 && rows.every(row => row.dataset.mode === mode), mode);
         if (!modesMatch) throw new Error('Mode filtering failed');
         await resetFilters();
+        const runnerOptions = await page.$eval('#bench-machine', element => [...element.options].map(option => ({ value: option.value, label: option.textContent })));
+        if (runnerOptions.length > 2) {
+          const runner = runnerOptions[1];
+          await page.select('#bench-machine', runner.value);
+          const runnerMatches = await page.$$eval('.bench-workload:not([hidden])', (rows, value) => rows.length > 0 && rows.every(row => row.dataset.machine === value), runner.value);
+          if (!runnerMatches) throw new Error('Runner filtering failed');
+          const plotLabels = await page.$$eval('.bench-box-label', nodes => nodes.map(node => node.textContent));
+          if (plotLabels.some(label => !label.includes(runner.label))) throw new Error('Box plot retained observations from a filtered runner');
+          await resetFilters();
+        }
         await page.$eval('.bench-table-scroll', element => { element.scrollLeft = 0; element.scrollTop = 0; });
         await page.evaluate(() => window.scrollTo(0, 0));
         const subject = await page.$eval('#bench-subject', element => element.options[1].value);
@@ -89,7 +99,7 @@ async function main() {
         const descending = await page.$$eval('.bench-section[data-table-kind="pipelines"] .bench-workload', (rows, subject) => rows.map(row => [...row.querySelectorAll('[data-subject]')].find(cell => cell.dataset.subject === subject)).filter(cell => cell.dataset.value).map(cell => Number(cell.dataset.value)), subject);
         if (descending.some((value, i) => i > 0 && value > descending[i - 1])) throw new Error('Numeric descending sort failed');
         for (const tableKind of tableKinds) {
-          for (const [key, field] of [['type', 'group'], ['mode', 'mode'], ['name', 'name']]) {
+          for (const [key, field] of [['runner', 'machineLabel'], ['type', 'group'], ['mode', 'mode'], ['name', 'name']]) {
             const section = `.bench-section[data-table-kind="${tableKind}"]`;
             const selector = `${section} button[data-sort="${key}"]`;
             await page.click(selector);

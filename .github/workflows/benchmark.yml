@@ -13,6 +13,7 @@ on:
       - 'docs/PIPELINE_ROADMAP.md'
       - 'scripts/docs_evidence.py'
       - 'scripts/docs_benchmark_view.py'
+      - 'scripts/test_docs_benchmark_selection.py'
       - 'scripts/test_docs_benchmark_view.py'
       - 'docs.mk'
       - 'docs/BENCHMARKING.md'
@@ -46,8 +47,27 @@ env:
 
 jobs:
   benchmark:
-    name: full operation and pipeline benchmark
-    runs-on: macos-14
+    name: full operation and pipeline benchmark (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: macos-15-arm64
+            runner: macos-15
+            architecture: arm64
+            label: macOS 15 · arm64
+            backends: cpu,simd,gpu
+          - id: ubuntu-24.04-x86_64
+            runner: ubuntu-24.04
+            architecture: x86_64
+            label: Ubuntu 24.04 · x86_64
+            backends: cpu,simd
+          - id: ubuntu-24.04-arm64
+            runner: ubuntu-24.04-arm
+            architecture: aarch64
+            label: Ubuntu 24.04 · arm64
+            backends: cpu,simd
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,7 +82,28 @@ jobs:
           python-version: "3.12.10"
       - name: install locked benchmark tools
         run: make setup-venv PYTHON=python
+      - name: verify runner architecture and record hardware identity
+        id: runner
+        shell: bash
+        run: |
+          actual_arch="$(uname -m)"
+          test "$actual_arch" = "${{ matrix.architecture }}"
+          if test "$(uname -s)" = Darwin; then
+            cpu_model="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || sysctl -n hw.model)"
+          else
+            cpu_model="$(awk -F: 'tolower($1) ~ /model name/ {sub(/^ /, "", $2); print $2; exit}' /proc/cpuinfo)"
+            if test -z "$cpu_model"; then
+              cpu_model="$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -n 1)"
+            fi
+            if test -z "$cpu_model"; then
+              cpu_model="$(awk -F: '/^Hardware/ {sub(/^ /, "", $2); print $2; exit}' /proc/cpuinfo)"
+            fi
+          fi
+          printf 'cpu_model=%s\n' "${cpu_model:-not-recorded}" >> "$GITHUB_OUTPUT"
+          printf 'image_version=%s-%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
       - name: run full correctness-gated CPU, SIMD, and GPU benchmark
+        env:
+          MIGRATION_BENCHMARK_BACKENDS: ${{ matrix.backends }}
         run: make migration-parity-benchmark
       - name: run separately gated Parallel CPU benchmark
         run: make migration-parity-benchmark-parallel-cpu
@@ -72,15 +113,17 @@ jobs:
           make migration-parity-pipeline-roadmap-status
       - name: download explicit compatible baseline
         if: ${{ inputs.baseline_run_id != '' }}
+        id: download_baseline
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.baseline_run_id }}
-          name: benchmark-${{ inputs.baseline_run_id }}
+          name: benchmark-${{ inputs.baseline_run_id }}-${{ matrix.id }}
           path: baseline-artifact
       - name: compare compatible baseline budget
-        if: ${{ inputs.baseline_run_id != '' }}
+        if: ${{ inputs.baseline_run_id != '' && steps.download_baseline.outcome == 'success' }}
         id: budget
         shell: bash
         run: |
@@ -120,7 +163,16 @@ jobs:
             exit "$status"
           fi
           exit "$status"
+      - name: report unavailable same-runner baseline
+        if: ${{ inputs.baseline_run_id != '' && steps.download_baseline.outcome != 'success' }}
+        run: echo "No artifact was available for this runner in the selected baseline run; its timing budget was not compared."
       - name: Export both benchmark cohorts for the public view
+        env:
+          DOCS_BENCHMARK_RUNNER_ID: ${{ matrix.id }}
+          DOCS_BENCHMARK_RUNNER_LABEL: ${{ matrix.label }}
+          DOCS_BENCHMARK_CPU_MODEL: ${{ steps.runner.outputs.cpu_model }}
+          DOCS_BENCHMARK_IMAGE_VERSION: ${{ steps.runner.outputs.image_version }}
+          DOCS_BENCHMARK_RUST_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
         run: >-
           make docs-benchmark
           DOCS_BENCHMARK_SOURCE=build/migration-parity/benchmark-result.json
@@ -128,13 +180,13 @@ jobs:
           DOCS_BENCHMARK_OUTPUT=target/public-benchmark/snapshot.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: public-benchmark
+          name: public-benchmark-${{ matrix.id }}
           path: target/public-benchmark/snapshot.json
           if-no-files-found: error
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: benchmark-${{ github.run_id }}
+          name: benchmark-${{ github.run_id }}-${{ matrix.id }}
           path: |
             build/migration-parity/benchmark-result.json
             build/migration-parity/benchmark-parity-result.json
@@ -143,4 +195,30 @@ jobs:
             build/migration-parity/pipeline-performance-report.json
             build/migration-parity/pipeline-roadmap-status.json
             build/migration-parity/pipeline-budget-check.json
+          if-no-files-found: error
+
+  aggregate:
+    name: assemble runner-specific benchmark snapshots
+    needs: [benchmark]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: public-benchmark-*
+          path: target/benchmark-cohorts
+          merge-multiple: false
+      - name: validate and combine runner cohorts
+        run: >-
+          python3 scripts/docs_evidence.py merge
+          target/benchmark-cohorts
+          target/public-benchmark/snapshot.json
+          --repository appunni-m/pillow-rs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: public-benchmark
+          path: target/public-benchmark/snapshot.json
           if-no-files-found: error
