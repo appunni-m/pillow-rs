@@ -58,9 +58,39 @@ async function main() {
         const before = await page.$eval('#bench-count', element => element.textContent);
         const tableKinds = await page.$$eval('.bench-comparison', tables => tables.map(table => table.closest('[data-table-kind]').dataset.tableKind));
         if (tableKinds.join(',') !== 'pipelines,operations') throw new Error(`Expected pipeline and operation tables, got ${tableKinds.join(',')}`);
+        const fixtureRunner = await page.evaluate(() => {
+          const row = [...document.querySelectorAll('.bench-workload')].find(item =>
+            item.querySelector('[data-subject="pillow"]') && item.querySelector('[data-subject="python-cpu"]'));
+          if (!row) throw new Error('No workload row can exercise the ratio plot');
+          const baseline = row.querySelector('[data-subject="pillow"]');
+          const target = row.querySelector('[data-subject="python-cpu"]');
+          baseline.dataset.value = '10';
+          target.dataset.value = '5';
+          target.dataset.ratioPrimary = '2';
+          target.dataset.observedRatioPrimary = '2';
+          target.dataset.qualityPrimary = 'checked';
+          target.dataset.direction = 'faster';
+          target.dataset.scoreDirection = 'faster';
+          row.dataset.name = 'Browser fixture invert RGBA';
+          row.dataset.mode = 'RGBA';
+          document.querySelector('#bench-subject').value = 'python-cpu';
+          document.querySelector('#bench-subject').dispatchEvent(new Event('change', { bubbles: true }));
+          return row.dataset.machine;
+        });
+        const initialPlot = await page.$$eval('.bench-workload-plot-svg', nodes => {
+          const point = nodes[0]?.querySelector('.bench-ratio-point.faster');
+          const x = Number(point?.getAttribute('cx'));
+          const details = point?.querySelector('title')?.textContent || '';
+          return nodes.length === 1 && Math.abs(x - 843.75) < 1 &&
+            nodes[0].textContent.includes('Browser fixture invert RGBA') && nodes[0].textContent.includes('1×') &&
+            details.includes('Pillow median 10 µs') && details.includes('median 5 µs');
+        });
+        if (!initialPlot) throw new Error('Per-workload ratio plot did not render a labeled, faster-than-baseline point');
         await page.type('#evidence-filter', 'no-such-workload');
         const after = await page.$eval('#bench-count', element => element.textContent);
         if (!after.startsWith('0 of')) throw new Error(`Filter failed: ${after}`);
+        const filteredPlot = await page.$eval('.bench-workload-plot-svg', svg => svg.textContent.includes('No parity-verified workload pairs'));
+        if (!filteredPlot) throw new Error('Ratio plot did not respond to the workload search filter');
         await page.$eval('#evidence-filter', element => {
           element.value = ''; element.dispatchEvent(new Event('input', { bubbles: true }));
         });
@@ -76,12 +106,13 @@ async function main() {
         await resetFilters();
         const runnerOptions = await page.$eval('#bench-machine', element => [...element.options].map(option => ({ value: option.value, label: option.textContent })));
         if (runnerOptions.length > 2) {
-          const runner = runnerOptions[1];
+          const runner = runnerOptions.find(option => option.value === fixtureRunner);
+          if (!runner) throw new Error('Ratio plot fixture runner is missing from the runner filter');
           await page.select('#bench-machine', runner.value);
           const runnerMatches = await page.$$eval('.bench-workload:not([hidden])', (rows, value) => rows.length > 0 && rows.every(row => row.dataset.machine === value), runner.value);
           if (!runnerMatches) throw new Error('Runner filtering failed');
-          const plotLabels = await page.$$eval('.bench-box-label', nodes => nodes.map(node => node.textContent));
-          if (plotLabels.some(label => !label.includes(runner.label))) throw new Error('Box plot retained observations from a filtered runner');
+          const plotLabels = await page.$$eval('.bench-ratio-group', nodes => nodes.map(node => node.textContent));
+          if (!plotLabels.length || plotLabels.some(label => !label.includes(runner.label))) throw new Error('Ratio plot retained observations from a filtered runner');
           await resetFilters();
         }
         await page.$eval('.bench-table-scroll', element => { element.scrollLeft = 0; element.scrollTop = 0; });

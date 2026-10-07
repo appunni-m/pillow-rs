@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const mode = dashboard.querySelector('#bench-mode');
     const machine = dashboard.querySelector('#bench-machine');
     const subject = dashboard.querySelector('#bench-subject');
-    const boxplot = dashboard.querySelector('.bench-boxplot');
+    const ratioPlot = dashboard.querySelector('.bench-ratio-plot');
     const tables = [...dashboard.querySelectorAll('.bench-comparison')];
     const tableRows = tables.map(table => ({
       body: table.tBodies[0],
@@ -32,8 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const cell = cells(row).find(item => item.dataset.subject === key);
       return cell?.dataset.value ? Number(cell.dataset.value) : null;
     };
-    const renderBoxplot = () => {
-      if (!boxplot) return;
+    const renderWorkloadPlot = () => {
+      if (!ratioPlot) return;
       const observations = new Map();
       const targetNames = new Map([...dashboard.querySelectorAll('th[data-subject]')].map(header => [
         header.dataset.subject,
@@ -51,8 +51,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (baselineName === 'pillow-simd' && dashboard.dataset.baseline === 'pillow-simd') continue;
             const value = Number(cell.dataset[baselineKey]);
             if (!Number.isFinite(value) || value <= 0) continue;
+            const baselineTime = number(row, baselineName);
+            const targetTime = Number(cell.dataset.value);
+            if (!Number.isFinite(baselineTime) || baselineTime <= 0 || !Number.isFinite(targetTime) || targetTime <= 0) continue;
             const scope = dashboard.dataset.kind === 'pillow'
-              ? row.dataset.kind === 'operations' ? 'individual operations' : 'pipeline workflows'
+              ? row.dataset.kind
               : '';
             const key = `${row.dataset.machine}|${cell.dataset.subject}|${baselineName}|${scope}`;
             push(key, {
@@ -60,38 +63,35 @@ document.addEventListener('DOMContentLoaded', () => {
               subject: cell.dataset.subject,
               baseline: baselineName,
               scope,
-              ratios: [],
+              workloads: [],
             });
-            observations.get(key).ratios.push(value);
+            observations.get(key).workloads.push({
+              name: `${row.dataset.name}${row.dataset.mode && row.dataset.mode !== 'Not recorded' ? ` · ${row.dataset.mode}` : ''}`,
+              workload: row.dataset.workload,
+              ratio: value,
+              baselineTime,
+              targetTime,
+            });
           }
         }
       }
-      const groups = [...observations.values()].map(item => {
-        const values = item.ratios.slice().sort((a, b) => a - b);
-        const quantile = fraction => {
-          if (values.length === 1) return values[0];
-          const position = (values.length - 1) * fraction;
-          const low = Math.floor(position), high = Math.ceil(position);
-          return values[low] + (values[high] - values[low]) * (position - low);
-        };
-        const geomean = Math.exp(values.reduce((sum, value) => sum + Math.log(value), 0) / values.length);
-        return {
-          ...item,
-          ratios: values,
-          q1: quantile(.25), median: quantile(.5), q3: quantile(.75), geomean,
-          faster: values.filter(value => value > 1).length,
-          slower: values.filter(value => value < 1).length,
-        };
-      }).sort((a, b) => `${a.machine} ${a.subject} ${a.baseline}`.localeCompare(`${b.machine} ${b.subject} ${b.baseline}`));
+      const groups = [...observations.values()].sort((a, b) =>
+        `${a.machine} ${a.subject} ${a.baseline} ${a.scope}`.localeCompare(`${b.machine} ${b.subject} ${b.baseline} ${b.scope}`));
       const ns = 'http://www.w3.org/2000/svg';
       const svg = document.createElementNS(ns, 'svg');
-      const left = 385, right = 1070, top = 26, rowHeight = 54, width = 1100;
-      const height = Math.max(150, top + Math.max(1, groups.length) * rowHeight + 44);
+      const left = 450, right = 1080, valueX = 1090, top = 44, rowHeight = 25, groupGap = 33, width = 1220;
+      const totalRows = groups.reduce((count, item) => count + item.workloads.length, 0);
+      const height = Math.max(150, top + groups.reduce((count, item) => count + groupGap + rowHeight * item.workloads.length, 0) + 24);
       const xFor = ratio => left + (Math.max(-4, Math.min(4, Math.log2(ratio))) + 4) / 8 * (right - left);
-      svg.setAttribute('class', 'bench-boxplot-svg');
+      const speedLabel = ratio => ratio === 1 ? 'Same median time' : `${Math.max(ratio, 1 / ratio).toPrecision(3)}× ${ratio > 1 ? 'faster' : 'slower'}`;
+      const median = values => {
+        const middle = Math.floor(values.length / 2);
+        return values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
+      };
+      svg.setAttribute('class', 'bench-workload-plot-svg');
       svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
       svg.setAttribute('role', 'img');
-      svg.setAttribute('aria-labelledby', 'bench-boxplot-title bench-boxplot-desc');
+      svg.setAttribute('aria-labelledby', 'bench-workload-plot-title bench-workload-plot-desc');
       const add = (tag, attrs, text) => {
         const element = document.createElementNS(ns, tag);
         for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, value);
@@ -99,43 +99,47 @@ document.addEventListener('DOMContentLoaded', () => {
         svg.append(element);
         return element;
       };
-      add('title', { id: 'bench-boxplot-title' }, 'Per-workload speedup distribution');
-      add('desc', { id: 'bench-boxplot-desc' }, 'Only exact-output paired workloads are included. Ratios above one are faster. The box shows the first and third quartiles with the median; whiskers reach the furthest observed point within one and a half interquartile ranges.');
+      add('title', { id: 'bench-workload-plot-title' }, 'Parity-verified speed ratio for each workload');
+      add('desc', { id: 'bench-workload-plot-desc' }, 'Each row is one exact-output-verified workload. The ratio is baseline median time divided by target median time. One times means equal median latency; points to the right are faster and points to the left are slower. Rows are sorted slowest first within each runner and comparison.');
       const tickLabels = new Map([[1 / 16, '1/16×'], [1 / 8, '1/8×'], [1 / 4, '1/4×'], [1 / 2, '1/2×'], [1, '1×'], [2, '2×'], [4, '4×'], [8, '8×'], [16, '16×']]);
       for (const tick of tickLabels.keys()) {
         const x = xFor(tick);
-        const baselineTick = tick === 1;
-        add('line', { x1: x, y1: 18, x2: x, y2: height - 30, stroke: baselineTick ? '#52616d' : '#d1d7dc', 'stroke-width': baselineTick ? 2 : 1 });
-        add('text', { class: 'bench-axis-label', x, y: height - 8, 'text-anchor': 'middle' }, tickLabels.get(tick));
+        add('line', { class: tick === 1 ? 'bench-ratio-grid bench-ratio-grid-baseline' : 'bench-ratio-grid', x1: x, y1: 28, x2: x, y2: height - 12 });
+        add('text', { class: 'bench-axis-label', x, y: 18, 'text-anchor': 'middle' }, tickLabels.get(tick));
       }
-      const display = new Map([...targetNames].map(([key, value]) => [key, value.replace('pillow-rs · ', '')]));
       const baselineDisplay = { pillow: 'Pillow', 'pillow-simd': 'Pillow-SIMD · SSE4' };
-      groups.forEach((item, index) => {
-        const y = top + index * rowHeight + 12;
-        const iqr = item.q3 - item.q1;
-        const lowerBound = item.q1 - 1.5 * iqr, upperBound = item.q3 + 1.5 * iqr;
-        const inliers = item.ratios.filter(value => value >= lowerBound && value <= upperBound);
-        const lower = Math.min(...inliers), upper = Math.max(...inliers);
-        const baselineLabel = baselineDisplay[item.baseline] || targetNames.get(item.baseline) || item.baseline;
-        const scopeLabel = item.scope ? ` · ${item.scope}` : '';
-        const label = `${item.machine} · ${display.get(item.subject) || item.subject} vs ${baselineLabel}${scopeLabel}`;
-        const speed = item.geomean === 1 ? 'same median time' : item.geomean > 1 ? `${item.geomean.toPrecision(3)}× faster` : `${(1 / item.geomean).toPrecision(3)}× slower`;
-        add('text', { class: 'bench-box-label', x: 8, y: y - 3 }, label);
-        add('text', { class: 'bench-box-summary', x: 8, y: y + 13 }, `n=${item.ratios.length} · geomean ${speed} · ${item.faster} faster / ${item.slower} slower`);
-        add('line', { class: 'bench-whisker', x1: xFor(lower), y1: y + 2, x2: xFor(upper), y2: y + 2 });
-        add('line', { class: 'bench-whisker', x1: xFor(lower), y1: y - 5, x2: xFor(lower), y2: y + 9 });
-        add('line', { class: 'bench-whisker', x1: xFor(upper), y1: y - 5, x2: xFor(upper), y2: y + 9 });
-        add('rect', { class: 'bench-box', x: xFor(item.q1), y: y - 9, width: Math.max(2, xFor(item.q3) - xFor(item.q1)), height: 22 });
-        add('line', { class: 'bench-median', x1: xFor(item.median), y1: y - 10, x2: xFor(item.median), y2: y + 14 });
-        for (const value of item.ratios) {
-          if (value < lowerBound || value > upperBound) {
-            const point = add('circle', { class: 'bench-outlier', cx: xFor(value), cy: y + 2, r: 3 });
-            const title = document.createElementNS(ns, 'title'); title.textContent = `${value.toPrecision(5)}×`; point.append(title);
-          }
+      let y = top;
+      groups.forEach(item => {
+        item.workloads.sort((a, b) => a.ratio - b.ratio || a.name.localeCompare(b.name) || a.workload.localeCompare(b.workload));
+        const ratios = item.workloads.map(workload => workload.ratio);
+        const logMean = Math.exp(ratios.reduce((sum, value) => sum + Math.log(value), 0) / ratios.length);
+        const geomeanLabel = logMean === 1 ? '1×' : speedLabel(logMean);
+        const faster = ratios.filter(value => value > 1).length;
+        const slower = ratios.filter(value => value < 1).length;
+        const equal = ratios.filter(value => value === 1).length;
+        const scopeLabel = item.scope ? ` · ${item.scope === 'operations' ? 'individual operations' : 'pipelines'}` : '';
+        const label = `${item.machine} · ${targetNames.get(item.subject) || item.subject} vs ${baselineDisplay[item.baseline] || targetNames.get(item.baseline) || item.baseline}${scopeLabel}`;
+        add('text', { class: 'bench-ratio-group', x: 8, y, textLength: 420, lengthAdjust: 'spacingAndGlyphs' }, label);
+        add('text', { class: 'bench-ratio-group-summary', x: 8, y: y + 13, textLength: 420, lengthAdjust: 'spacingAndGlyphs' }, `${ratios.length} workloads · typical ${speedLabel(median(ratios))} · geomean ${geomeanLabel} · ${faster} faster / ${slower} slower / ${equal} equal`);
+        y += groupGap;
+        for (const workload of item.workloads) {
+          const direction = workload.ratio > 1 ? 'faster' : workload.ratio < 1 ? 'slower' : 'tie';
+          const name = workload.name || workload.workload;
+          const baselineName = baselineDisplay[item.baseline] || targetNames.get(item.baseline) || item.baseline;
+          const targetName = targetNames.get(item.subject) || item.subject;
+          const detailsText = `${name}; ${baselineName} median ${workload.baselineTime} µs; ${targetName} median ${workload.targetTime} µs; ${speedLabel(workload.ratio)}`;
+          const text = add('text', { class: 'bench-ratio-workload', x: 8, y: y + 4, textLength: 420, lengthAdjust: 'spacingAndGlyphs' }, name);
+          const title = document.createElementNS(ns, 'title'); title.textContent = detailsText; text.append(title);
+          const point = add('circle', { class: `bench-ratio-point ${direction}`, cx: xFor(workload.ratio), cy: y, r: 4 });
+          const pointTitle = document.createElementNS(ns, 'title'); pointTitle.textContent = detailsText; point.append(pointTitle);
+          add('text', { class: `bench-ratio-value ${direction}`, x: valueX, y: y + 4 }, speedLabel(workload.ratio));
+          y += rowHeight;
         }
       });
-      if (!groups.length) add('text', { class: 'bench-empty-plot', x: width / 2, y: height / 2, 'text-anchor': 'middle' }, 'No parity-verified workload pairs match these filters.');
-      boxplot.replaceChildren(svg);
+      if (!totalRows) add('text', { class: 'bench-empty-plot', x: width / 2, y: height / 2, 'text-anchor': 'middle' }, 'No parity-verified workload pairs match these filters.');
+      const previousPlot = ratioPlot.querySelector('svg');
+      if (previousPlot) previousPlot.replaceWith(svg);
+      else ratioPlot.append(svg);
     };
     const update = () => {
       const query = search.value.trim().toLocaleLowerCase();
@@ -191,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (excludedCount) excludedCount.textContent = excluded;
       dashboard.querySelector('#bench-count').textContent = `${visible} of ${rows.length} workloads shown`;
       dashboard.querySelector('#bench-empty').hidden = visible !== 0;
-      renderBoxplot();
+      renderWorkloadPlot();
     };
     for (const state of tableRows) {
       const { body, rows: tableWorkloads, sorters } = state;
