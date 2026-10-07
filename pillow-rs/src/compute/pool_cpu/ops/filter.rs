@@ -290,6 +290,82 @@ fn pillow_kernel_row_5(pixels: [f32; 5], kernel: &[f32]) -> f32 {
     pixels[4].mul_add(kernel[4], sum)
 }
 
+#[cfg(not(feature = "parallel"))]
+trait F32MulAdd {
+    fn mul_add(&self, sample: f32, weight: f32, accumulator: f32) -> f32;
+}
+
+#[cfg(not(feature = "parallel"))]
+struct PortableF32Fma;
+
+#[cfg(not(feature = "parallel"))]
+impl F32MulAdd for PortableF32Fma {
+    #[inline(always)]
+    fn mul_add(&self, sample: f32, weight: f32, accumulator: f32) -> f32 {
+        sample.mul_add(weight, accumulator)
+    }
+}
+
+#[cfg(all(not(feature = "parallel"), target_arch = "x86_64"))]
+struct X86F32FmaToken {
+    _private: (),
+}
+
+#[cfg(all(not(feature = "parallel"), target_arch = "x86_64"))]
+impl X86F32FmaToken {
+    fn detect() -> Option<Self> {
+        std::is_x86_feature_detected!("fma").then_some(Self { _private: () })
+    }
+}
+
+#[cfg(all(not(feature = "parallel"), target_arch = "x86_64"))]
+impl F32MulAdd for X86F32FmaToken {
+    #[allow(unsafe_code)]
+    #[inline(always)]
+    fn mul_add(&self, sample: f32, weight: f32, accumulator: f32) -> f32 {
+        let mut result = accumulator;
+        // SAFETY: this token is created only after runtime FMA detection. The
+        // I-mode ring selects it only when finite coefficients and the full
+        // i32 input range prove that every intermediate stays finite.
+        unsafe {
+            std::arch::asm!(
+                "vfmadd231ss {result}, {weight}, {sample}",
+                result = inout(xmm_reg) result,
+                weight = in(xmm_reg) weight,
+                sample = in(xmm_reg) sample,
+                options(pure, nomem, nostack, preserves_flags),
+            );
+        }
+        result
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+#[inline(always)]
+fn pillow_kernel_row_5_with_fma<F: F32MulAdd>(pixels: [f32; 5], kernel: &[f32], fma: &F) -> f32 {
+    let sum = pixels[1] * kernel[1];
+    let sum = fma.mul_add(pixels[0], kernel[0], sum);
+    let sum = fma.mul_add(pixels[2], kernel[2], sum);
+    let sum = fma.mul_add(pixels[3], kernel[3], sum);
+    fma.mul_add(pixels[4], kernel[4], sum)
+}
+
+/// Prove that the normalized 5x5 binomial kernel keeps all ordered partial
+/// sums finite and away from subnormals for every signed-I sample. Its exact
+/// dyadic coefficients and zero offset let x86 use hardware FMA without
+/// per-tap checks; arbitrary kernels keep the portable libm implementation.
+#[cfg(all(not(feature = "parallel"), target_arch = "x86_64"))]
+fn i32_filter_f32_fma_is_safe(kernel: &[f32; 25], offset: f32) -> bool {
+    if offset != 0.0 {
+        return false;
+    }
+    let factors = [1.0f32, 4.0, 6.0, 4.0, 1.0];
+    kernel.iter().enumerate().all(|(index, coefficient)| {
+        let expected = factors[index % 5] * factors[index / 5] / 256.0;
+        coefficient.to_bits() == expected.to_bits()
+    })
+}
+
 // ── 3x3 filter (I-mode) ──
 
 /// Apply a 3x3 kernel filter on I-mode (32-bit signed integer) data.
@@ -713,6 +789,25 @@ fn filter_5x5_i32_f32_ring(
     kernel: &[f32; 25],
     offset: f32,
 ) -> Option<Vec<u8>> {
+    #[cfg(target_arch = "x86_64")]
+    if i32_filter_f32_fma_is_safe(kernel, offset)
+        && let Some(fma) = X86F32FmaToken::detect()
+    {
+        return filter_5x5_i32_f32_ring_with_fma(raw, width, height, kernel, offset, &fma);
+    }
+
+    filter_5x5_i32_f32_ring_with_fma(raw, width, height, kernel, offset, &PortableF32Fma)
+}
+
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_i32_f32_ring_with_fma<F: F32MulAdd>(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    offset: f32,
+    fma: &F,
+) -> Option<Vec<u8>> {
     let pixel_count = width.checked_mul(height)?;
     if raw.len() != pixel_count.checked_mul(4)? {
         return None;
@@ -746,11 +841,11 @@ fn filter_5x5_i32_f32_ring(
         }
 
         for x in 2..width - 2 {
-            let bottom0 = pillow_kernel_row_5(windows[0], &kernel[0..5]);
-            let bottom1 = pillow_kernel_row_5(windows[1], &kernel[5..10]);
-            let middle = pillow_kernel_row_5(windows[2], &kernel[10..15]);
-            let top1 = pillow_kernel_row_5(windows[3], &kernel[15..20]);
-            let top0 = pillow_kernel_row_5(windows[4], &kernel[20..25]);
+            let bottom0 = pillow_kernel_row_5_with_fma(windows[0], &kernel[0..5], fma);
+            let bottom1 = pillow_kernel_row_5_with_fma(windows[1], &kernel[5..10], fma);
+            let middle = pillow_kernel_row_5_with_fma(windows[2], &kernel[10..15], fma);
+            let top1 = pillow_kernel_row_5_with_fma(windows[3], &kernel[15..20], fma);
+            let top0 = pillow_kernel_row_5_with_fma(windows[4], &kernel[20..25], fma);
             let mut value = offset + 0.5;
             value += bottom0;
             value += bottom1;
@@ -3058,6 +3153,8 @@ mod i32_filter5x5_uniform_tests {
 
 #[cfg(all(test, not(feature = "parallel")))]
 mod i32_filter5x5_sliding_window_tests {
+    #[cfg(target_arch = "x86_64")]
+    use super::PortableF32Fma;
     use super::{filter_5x5_i32_f32_ring, pillow_kernel_row_5};
 
     fn scalar_reference_row(
@@ -3137,6 +3234,44 @@ mod i32_filter5x5_sliding_window_tests {
                 }
             }
         }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn runtime_x86_f32_fma_matches_portable_fused_operation() {
+        use super::{F32MulAdd, X86F32FmaToken, i32_filter_f32_fma_is_safe};
+
+        let Some(x86_fma) = X86F32FmaToken::detect() else {
+            return;
+        };
+        let portable = PortableF32Fma;
+        for (sample, weight, accumulator) in [
+            (0.1f32, 0.2, 0.3),
+            (1.0 + f32::EPSILON, 1.0 - f32::EPSILON, -1.0),
+            (f32::MIN_POSITIVE, 1.0, -0.0),
+            (-0.0, 1.0, -0.0),
+            (f32::MAX * 0.125, 1.5, -f32::MAX * 0.125),
+        ] {
+            assert_eq!(
+                x86_fma.mul_add(sample, weight, accumulator).to_bits(),
+                portable.mul_add(sample, weight, accumulator).to_bits(),
+                "FMA result differs for {sample:?} * {weight:?} + {accumulator:?}",
+            );
+        }
+
+        let factors = [1.0f32, 4.0, 6.0, 4.0, 1.0];
+        let kernel = std::array::from_fn(|index| factors[index % 5] * factors[index / 5] / 256.0);
+        assert!(i32_filter_f32_fma_is_safe(&kernel, 0.0));
+        assert!(i32_filter_f32_fma_is_safe(&kernel, -0.0));
+
+        let mut nonfinite = kernel;
+        nonfinite[7] = f32::NAN;
+        assert!(!i32_filter_f32_fma_is_safe(&nonfinite, 0.0));
+        assert!(!i32_filter_f32_fma_is_safe(&kernel, f32::INFINITY));
+
+        let mut excessive = [0.0f32; 25];
+        excessive[12] = f32::MAX;
+        assert!(!i32_filter_f32_fma_is_safe(&excessive, 0.0));
     }
 }
 
