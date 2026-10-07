@@ -56,6 +56,54 @@ current local outputs are `build/migration-parity/optimization-goals.json` and
 `build/migration-parity/optimization-goals.md`. See
 [the reporting command](BENCHMARKING.md#correctness-gate-and-budget-gate).
 
+## Published cross-runner inventory — 2026-10-07
+
+The committed [full per-workload matrix](evidence/performance-optimization-matrix.csv)
+and its [manifest-wide per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
+were generated from GitHub Pages' raw [full benchmark snapshot](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json).
+The full snapshot is clean at revision `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`
+and contains 8,619 rows across 663 workloads, including 201 `pipeline-op`
+workload IDs. Forty-four operation or composed-pipeline workloads have exact
+parity results in that snapshot: 29 direct operations and 15 composed pipelines.
+The CSV retains every row and source hash. Only exact parity with the expected
+backend, complete terminal observation, no fallback, clean provenance, and
+matching workload policy produces an eligible speed ratio. Sustained GPU
+throughput remains unmeasured in these one-request snapshots. The companion
+matrix has 836 rows, one row for each of 209 manifest entries and four backend
+profiles, including entries with no mapped or published workload.
+Across the eligible published comparisons, serial CPU is slower than Pillow
+in 25 of 120 workload-runner pairs; SIMD is slower than Pillow in 23 of 120
+and below the 2× target in 40 of 120. GPU latency exceeds SIMD in 22 of its
+38 verified pairs. No sustained GPU throughput is measured.
+
+The first verified CPU gaps to investigate are:
+
+| Workload | Runner | Pillow speedup | Existing checkpoint |
+| --- | --- | ---: | --- |
+| F bicubic resize composed pipeline | x86_64 | 0.232× | F-mode resize, four-attempt checkpoint |
+| I-mode 5 × 5 filter | x86_64 | 0.283× | Arbitrary-range I-mode filter checkpoint |
+| F-mode thumbnail | x86_64 | 0.318× | F-mode thumbnail, three-attempt checkpoint |
+| I-mode 5 × 5 convolution pipeline | x86_64 | 0.331× | I-mode 5 × 5 filter checkpoint |
+| RGB material thumbnail | Apple arm64 | 0.352× | RGB thumbnail checkpoints |
+
+The speedup is Pillow median latency divided by target median latency; every
+listed workload is slower than Pillow on that runner. The x86 rows expose a
+platform gap beyond the earlier arm64 checkpoints. Reopen a checkpoint only
+with a distinct x86-specific profile or lower-bound hypothesis, and retain its
+existing attempts and parity requirements. The first architecture-specific
+revisit in this batch is the severe x86 SIMD gap for YCbCr grayscale, recorded
+at the end of this campaign log.
+
+The Pillow-SIMD asset shares the full snapshot's source revision but is dirty
+and contains only 9 of the 34 declared cases. It is retained in the matrix as
+diagnostic data and is not evidence for deciding that the later Pillow-SIMD
+comparison stage has been completed. The 7 x86 SIMD rows marked failed have
+`successful_execution: not_proven` and no actual-backend receipt; they are
+missing-execution evidence, not reported parity mismatches. FastOctree's 8
+remote rows are `not_run` with parity unproven; the focused current-main CPU
+parity rerun passed 1/1, so those remote rows remain a publication/evidence gap.
+
 ## Equalize optimization
 
 The baseline ranked tiny GPU equalize workloads first: RGB 32 × 32 took
@@ -19516,3 +19564,66 @@ single-image path has no target-only injected failure or fallback contract;
 its CPU, SIMD, and GPU outputs are covered by the live Pillow parity cases
 above. No coverage was run. Temporary parity and benchmark JSON outputs were
 removed after recording the summaries.
+
+## YCbCr grayscale x86 SIMD deinterleave candidate — 2026-10-07
+
+The published 1024 × 768 YCbCr workload
+`pipeline-op.grayscale.material-ycbcr-noise-1024x768` measures 86.139 µs for
+Pillow, 125.679 µs for serial CPU, and 835.315 µs for SIMD on the x86_64
+runner. The CPU result is 0.685× Pillow and SIMD is 0.103× Pillow. Both rows
+have exact parity, complete terminal observations, and matching actual
+backends. The existing SIMD adapter used the shared portable 3-channel
+`wide::swizzle_relaxed` gather on x86; AArch64 already takes a native NEON
+structure deinterleave. The earlier YCbCr checkpoint measured only the arm64
+route, so this x86 profile is a distinct architecture-specific revisit.
+
+Attempt 1 adds a narrow x86_64 SSSE3 path for extracting Y. Each full 16-pixel
+block reads exactly 48 bytes with three unaligned 16-byte loads, selects the
+Y positions with `pshufb`, combines the vectors, and writes sixteen output
+bytes; fewer than sixteen trailing pixels use the scalar gather. Runtime
+feature detection gates this path, and all other architectures retain their
+existing implementation. The operation-path telemetry is written after the
+vector-block counters so the specific `ssse3-deinterleave` label is preserved.
+The focused kernel test checks output and vector-tail counts for 3 × 1, 15 × 3,
+16 × 3, 17 × 3, and 1,024 × 768 inputs and asserts the SSSE3 route on capable
+x86_64 hosts.
+
+The code cross-compiles with
+`cargo check --manifest-path pillow-rs/Cargo.toml --locked -p pillow-rs --tests --target x86_64-unknown-linux-gnu`.
+The focused Rust test passes on the local arm64 build, and strict live Pillow
+parity passes 2/2 cases on each CPU, SIMD, and GPU backend. The local end-to-end
+benchmark uses the same 1024 × 768 varied image, five warmups, 100 timed
+observations, concurrency one, and the public call plus `tobytes` observation.
+Two arm64 runs produced:
+
+| Run | Subject | Median | P95 | Actual executions | Fallbacks |
+| --- | --- | ---: | ---: | --- | ---: |
+| First arm64 run | Pillow | 0.141 ms | 0.377 ms | Pillow | 0 |
+| First arm64 run | Serial CPU | 0.056 ms | 0.202 ms | 100 CPU | 0 |
+| First arm64 run | SIMD | 0.056 ms | 0.170 ms | 100 SIMD | 0 |
+| First arm64 run | GPU | 0.857 ms | 1.717 ms | 100 GPU dispatches | 0 |
+| Final arm64 repeat | Pillow | 0.104 ms | 0.116 ms | Pillow | 0 |
+| Final arm64 repeat | Serial CPU | 0.046 ms | 0.047 ms | 100 CPU | 0 |
+| Final arm64 repeat | SIMD | 0.046 ms | 0.047 ms | 100 SIMD | 0 |
+| Final arm64 repeat | GPU | 0.559 ms | 0.627 ms | 100 GPU dispatches | 0 |
+
+On the final arm64 repeat, CPU and SIMD were each about 2.3× faster than Pillow;
+GPU latency was about 12.2× slower than SIMD despite one actual dispatch per
+sample, 2,359,296 upload bytes, and 786,432 readback bytes. These single-request
+numbers do not establish sustained throughput. The local arm64 runs execute the
+existing NEON route and cannot establish an x86 speedup. This attempt remains
+open until an x86_64 run confirms exact parity, the actual SSSE3 path, and
+end-to-end latency against Pillow. If the new shuffle path does not clear the
+2× SIMD target after paired repeats, profile the complete Python call and
+output observation before another kernel attempt. No coverage was run.
+
+Focused commands:
+
+```sh
+cargo test --manifest-path pillow-rs/Cargo.toml --locked -p pillow-rs --lib native_ycbcr_grayscale_gathers_y_across_vector_tails
+cargo check --manifest-path pillow-rs/Cargo.toml --locked -p pillow-rs --tests --target x86_64-unknown-linux-gnu
+env MIGRATION_TARGET_BACKEND=cpu MIGRATION_STRICT_TARGET_BACKEND=1 MIGRATION_PARITY_CASE_IDS='PIL.ImageOps.grayscale.nuanced.performance-ycbcr-odd-byte-tail,PIL.ImageOps.grayscale.nuanced.performance-material-ycbcr-noise-1024x768' MIGRATION_PARITY_OUTPUT=build/migration-parity/ycbcr-ssse3-final-cpu.json make migration-parity-test PYTHON=.venv/bin/python
+env MIGRATION_TARGET_BACKEND=simd MIGRATION_STRICT_TARGET_BACKEND=1 MIGRATION_PARITY_CASE_IDS='PIL.ImageOps.grayscale.nuanced.performance-ycbcr-odd-byte-tail,PIL.ImageOps.grayscale.nuanced.performance-material-ycbcr-noise-1024x768' MIGRATION_PARITY_OUTPUT=build/migration-parity/ycbcr-ssse3-final-simd.json make migration-parity-test PYTHON=.venv/bin/python
+env MIGRATION_TARGET_BACKEND=gpu MIGRATION_STRICT_TARGET_BACKEND=1 MIGRATION_PARITY_CASE_IDS='PIL.ImageOps.grayscale.nuanced.performance-ycbcr-odd-byte-tail,PIL.ImageOps.grayscale.nuanced.performance-material-ycbcr-noise-1024x768' MIGRATION_PARITY_OUTPUT=build/migration-parity/ycbcr-ssse3-final-gpu.json make migration-parity-test PYTHON=.venv/bin/python
+MIGRATION_BENCHMARK_PROFILE=pipeline MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.grayscale.material-ycbcr-noise-1024x768' MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/ycbcr-ssse3-arm-final.json MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/ycbcr-ssse3-arm-final-parity.json make migration-parity-benchmark PYTHON=.venv/bin/python
+```
