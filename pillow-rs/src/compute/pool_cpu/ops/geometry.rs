@@ -118,11 +118,58 @@ pub(crate) fn resample_kernel(filter: &ResampleFilter) -> (fn(f64) -> f64, f64) 
 // build rather than the compiler's fused Rust loop.
 const F_RESIZE_VECTOR_WIDTH: usize = 16;
 
-fn f_resize_accumulate(
+trait F64MulAdd: Sync {
+    fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64;
+}
+
+struct PortableFma;
+
+impl F64MulAdd for PortableFma {
+    #[inline(always)]
+    fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
+        weight.mul_add(sample, accumulator)
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+struct X86FmaToken {
+    _private: (),
+}
+
+#[cfg(target_arch = "x86_64")]
+impl X86FmaToken {
+    fn detect() -> Option<Self> {
+        std::is_x86_feature_detected!("fma").then_some(Self { _private: () })
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+impl F64MulAdd for X86FmaToken {
+    #[allow(unsafe_code)]
+    #[inline(always)]
+    fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
+        let mut result = accumulator;
+        // SAFETY: `X86FmaToken::detect` only creates this token when runtime
+        // feature detection confirms that the current CPU supports FMA.
+        unsafe {
+            std::arch::asm!(
+                "vfmadd231sd {result}, {weight}, {sample}",
+                result = inout(xmm_reg) result,
+                weight = in(xmm_reg) weight,
+                sample = in(xmm_reg) sample,
+                options(pure, nomem, nostack, preserves_flags),
+            );
+        }
+        result
+    }
+}
+
+fn f_resize_accumulate<F: F64MulAdd>(
     accumulator: &mut f64,
     weight: f64,
     sample: f32,
     separate_product_add: bool,
+    fma: &F,
 ) {
     let sample = f64::from(sample);
     if separate_product_add {
@@ -132,7 +179,7 @@ fn f_resize_accumulate(
         let product = std::hint::black_box(weight * sample);
         *accumulator += product;
     } else {
-        *accumulator = weight.mul_add(sample, *accumulator);
+        *accumulator = fma.mul_add(weight, sample, *accumulator);
     }
 }
 
@@ -143,13 +190,14 @@ fn f_resize_accumulate(
 /// It first resizes vertically to `(source_width, destination_height)`, then
 /// resizes that intermediate horizontally.  The intermediate is still stored
 /// as FLOAT32 between the two native `Resample.c` passes.
-fn resize_f_tall_order(
+fn resize_f_tall_order<F: F64MulAdd>(
     src_floats: &[f32],
     source_width: u32,
     source_height: u32,
     destination_width: u32,
     destination_height: u32,
     filter: &ResampleFilter,
+    fma: &F,
 ) -> Vec<f32> {
     let (kernel, support) = resample_kernel(filter);
     let vertical = precompute_coeffs_f64(destination_height, source_height, kernel, support);
@@ -171,7 +219,8 @@ fn resize_f_tall_order(
                 for (offset, &weight) in vertical.weights[destination_y as usize].iter().enumerate()
                 {
                     let source_y = (y0 + offset as i64) as usize;
-                    accumulator = weight.mul_add(
+                    accumulator = fma.mul_add(
+                        weight,
                         f64::from(src_floats[source_y * source_width_usize + source_x]),
                         accumulator,
                     );
@@ -187,7 +236,8 @@ fn resize_f_tall_order(
             let mut accumulator = 0.0f64;
             for (offset, &weight) in vertical.weights[destination_y].iter().enumerate() {
                 let source_y = (y0 + offset as i64) as usize;
-                accumulator = weight.mul_add(
+                accumulator = fma.mul_add(
+                    weight,
                     f64::from(src_floats[source_y * source_width_usize + source_x]),
                     accumulator,
                 );
@@ -222,6 +272,7 @@ fn resize_f_tall_order(
                         weight,
                         vertical_output[source_row_start + source_x],
                         offset < vector_product_count,
+                        fma,
                     );
                 }
                 *output = accumulator as f32;
@@ -244,6 +295,7 @@ fn resize_f_tall_order(
                     weight,
                     vertical_output[source_row_start + source_x],
                     offset < vector_product_count,
+                    fma,
                 );
             }
             *output = accumulator as f32;
@@ -262,6 +314,20 @@ fn resize_f(
     dst_w: u32,
     dst_h: u32,
     filter: &ResampleFilter,
+) -> Result<DynamicImage, PilError> {
+    #[cfg(target_arch = "x86_64")]
+    if let Some(fma) = X86FmaToken::detect() {
+        return resize_f_with_fma(img, dst_w, dst_h, filter, &fma);
+    }
+    resize_f_with_fma(img, dst_w, dst_h, filter, &PortableFma)
+}
+
+fn resize_f_with_fma<F: F64MulAdd>(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    filter: &ResampleFilter,
+    fma: &F,
 ) -> Result<DynamicImage, PilError> {
     let (sw, sh) = img.dimensions();
 
@@ -399,7 +465,7 @@ fn resize_f(
     // native 2x16384 -> 1x1 BICUBIC and BOX results differ by one ULP), so
     // preserve that axis order and FLOAT32 intermediate boundary here.
     if sh > sw.saturating_mul(100) && dst_h < sh && dst_w != sw {
-        let out_floats = resize_f_tall_order(&src_floats, sw, sh, dst_w, dst_h, filter);
+        let out_floats = resize_f_tall_order(&src_floats, sw, sh, dst_w, dst_h, filter, fma);
         let rgba_bytes: Vec<u8> = out_floats.iter().flat_map(|f| f.to_le_bytes()).collect();
         let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
             .expect("resize_f tall-order output shape must match its dimensions");
@@ -437,6 +503,7 @@ fn resize_f(
                             weight,
                             src_floats[src_row_base + sx],
                             offset < vector_product_count,
+                            fma,
                         );
                     }
                     *output = acc as f32;
@@ -458,6 +525,7 @@ fn resize_f(
                         weight,
                         src_floats[src_row_base + sx],
                         offset < vector_product_count,
+                        fma,
                     );
                 }
                 *output = acc as f32;
@@ -495,8 +563,11 @@ fn resize_f(
                     let mut acc = 0.0f64;
                     for (offset, &weight) in v_coeffs.weights[dy as usize].iter().enumerate() {
                         let sy = (y0 + offset as i64) as usize;
-                        acc =
-                            weight.mul_add(f64::from(intermediate[sy * dst_w as usize + dx]), acc);
+                        acc = fma.mul_add(
+                            weight,
+                            f64::from(intermediate[sy * dst_w as usize + dx]),
+                            acc,
+                        );
                     }
                     // Pillow's `libImaging/Resample.c::ImagingResampleVertical_32bpc`
                     // stores the float32 accumulator directly; do not
@@ -512,7 +583,11 @@ fn resize_f(
                 let mut acc = 0.0f64;
                 for (offset, &weight) in v_coeffs.weights[dy].iter().enumerate() {
                     let sy = (y0 + offset as i64) as usize;
-                    acc = weight.mul_add(f64::from(intermediate[sy * dst_w as usize + dx]), acc);
+                    acc = fma.mul_add(
+                        weight,
+                        f64::from(intermediate[sy * dst_w as usize + dx]),
+                        acc,
+                    );
                 }
                 // Keep the sign of zero, matching the scalar C path.
                 *output = acc as f32;
@@ -2896,9 +2971,35 @@ pub fn execute_reduce(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "x86_64")]
+    use super::{F64MulAdd, PortableFma, X86FmaToken};
     use super::{execute_reduce, reduce_f_thumbnail, reduce_i_thumbnail, resize_f};
     use crate::pipeline::ResampleFilter;
     use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn runtime_x86_fma_matches_portable_fused_operation() {
+        let Some(x86_fma) = X86FmaToken::detect() else {
+            return;
+        };
+        let portable = PortableFma;
+        for (weight, sample, accumulator) in [
+            (0.1, 0.2, 0.3),
+            (1.0 + f64::EPSILON, 1.0 - f64::EPSILON, -1.0),
+            (f64::MAX, 2.0, -f64::MAX),
+            (f64::MIN_POSITIVE, f64::EPSILON, -f64::MIN_POSITIVE),
+            (-0.0, 1.0, -0.0),
+            (f64::INFINITY, 2.0, f64::NEG_INFINITY),
+            (f64::NAN, 1.0, 0.0),
+        ] {
+            assert_eq!(
+                x86_fma.mul_add(weight, sample, accumulator).to_bits(),
+                portable.mul_add(weight, sample, accumulator).to_bits(),
+                "FMA result differs for {weight:?} * {sample:?} + {accumulator:?}",
+            );
+        }
+    }
 
     #[test]
     fn transpose_tiled_rows_preserve_native_pixels_edges_and_trailing_storage() {

@@ -91,6 +91,7 @@ OPERATION_FIELDS = (
     "pillow_simd_snapshot_sha256",
     "operation",
     "api_path",
+    "target_api_paths",
     "kind",
     "classification",
     "profile",
@@ -459,6 +460,7 @@ def matrix_rows(
 def operation_matrix_rows(
     operations: dict[str, dict[str, Any]],
     workload_rows: list[dict[str, str]],
+    public_api_rows: list[dict[str, str]],
 ) -> list[dict[str, str]]:
     full_source = "github-pages/benchmark.json"
     pillow_simd_source = "github-pages/pillow-simd-benchmark.json"
@@ -469,6 +471,11 @@ def operation_matrix_rows(
         (row for row in workload_rows if row["source_snapshot"] == pillow_simd_source), {}
     )
     output: list[dict[str, str]] = []
+    target_paths_by_operation: dict[str, list[str]] = {}
+    for api in public_api_rows:
+        operation = api.get("manifest_operation", "")
+        if operation:
+            target_paths_by_operation.setdefault(operation, []).append(api["public_path"])
     for operation_name, operation in sorted(operations.items()):
         workload_ids = operation["workload_ids"]
         published_workloads = {
@@ -563,6 +570,7 @@ def operation_matrix_rows(
                 "pillow_simd_snapshot_sha256": pillow_simd_metadata.get("source_json_sha256", ""),
                 "operation": operation_name,
                 "api_path": operation["api_path"],
+                "target_api_paths": ";".join(sorted(target_paths_by_operation.get(operation_name, []))),
                 "kind": operation["kind"],
                 "classification": operation["classification"],
                 "profile": profile,
@@ -596,6 +604,68 @@ def operation_matrix_rows(
                 "gpu_sustained_throughput_status": "not_measured" if profile == "python-gpu" else "",
                 "benchmark_workload_ids": ";".join(workload_ids),
             })
+
+    # The manifest defines the selected correctness/performance contract. Keep
+    # every other public PIL path visible as an explicit, unbenchmarked row so
+    # the operation matrix does not imply coverage of only the selected subset.
+    for api in public_api_rows:
+        if api.get("manifest_status") == "selected_manifest":
+            continue
+        path = api["public_path"]
+        for profile in PROFILES:
+            if profile == "python-cpu":
+                baseline, threshold = "Pillow", 1.0
+            elif profile == "python-simd":
+                baseline, threshold = "Pillow", 2.0
+            elif profile == "python-gpu":
+                baseline, threshold = "SIMD", 1.0
+            else:
+                baseline, threshold = "Pillow", None
+            output.append({
+                "full_snapshot_revision": full_metadata.get("source_revision", ""),
+                "full_snapshot_clean": full_metadata.get("source_clean", ""),
+                "full_snapshot_measured_at": full_metadata.get("measured_at", ""),
+                "full_snapshot_sha256": full_metadata.get("source_json_sha256", ""),
+                "pillow_simd_snapshot_revision": pillow_simd_metadata.get("source_revision", ""),
+                "pillow_simd_snapshot_clean": pillow_simd_metadata.get("source_clean", ""),
+                "pillow_simd_snapshot_measured_at": pillow_simd_metadata.get("measured_at", ""),
+                "pillow_simd_snapshot_sha256": pillow_simd_metadata.get("source_json_sha256", ""),
+                "operation": f"public-api.{path}",
+                "api_path": path,
+                "target_api_paths": path,
+                "kind": api["entry_kind"],
+                "classification": "outside_selected_manifest",
+                "profile": profile,
+                "baseline": baseline,
+                "goal_threshold_speedup": "" if threshold is None else f"{threshold:.1f}",
+                "profile_applicability": "public_api_inventory_gap",
+                "profile_status": "not_mapped_to_benchmark",
+                "declared_profiles": "",
+                "manifest_target_profiles": "",
+                "workload_target_profiles": "",
+                "benchmark_workloads": "0",
+                "published_workloads": "0",
+                "missing_published_workloads": "",
+                "published_profile_rows": "0",
+                "verified_comparisons": "0",
+                "below_baseline_comparisons": "0",
+                "below_2x_comparisons": "0",
+                "below_5x_comparisons": "" if profile != "python-simd" else "0",
+                "worst_verified_speedup": "",
+                "worst_verified_workload": "",
+                "worst_verified_runner": "",
+                "execution_only_rows": "0",
+                "parity_not_proven_rows": "0",
+                "failed_rows": "0",
+                "not_run_rows": "0",
+                "fallback_rows": "0",
+                "wrong_backend_rows": "0",
+                "pillow_simd_snapshot_workloads": "0",
+                "verified_pillow_simd_comparisons": "0",
+                "worst_verified_speedup_vs_pillow_simd": "",
+                "gpu_sustained_throughput_status": "not_measured" if profile == "python-gpu" else "",
+                "benchmark_workload_ids": "",
+            })
     return output
 
 
@@ -605,6 +675,9 @@ def main() -> int:
                         help="Downloaded GitHub Pages assets/benchmark.json")
     parser.add_argument("--pillow-simd-snapshot", type=Path,
                         help="Downloaded GitHub Pages assets/pillow-simd-benchmark.json")
+    parser.add_argument("--public-api-inventory", type=Path,
+                        default=ROOT / "docs/evidence/performance-optimization-public-api.csv",
+                        help="Public PIL API census generated by build_public_api_inventory.py")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--operation-output", type=Path, default=DEFAULT_OPERATION_OUTPUT)
     args = parser.parse_args()
@@ -623,7 +696,23 @@ def main() -> int:
     specs = read_workload_specs()
     operations, requirement_owner = read_operation_catalog(specs)
     rows = matrix_rows(snapshots, hashes, specs, requirement_owner)
-    operation_rows = operation_matrix_rows(operations, rows)
+    with args.public_api_inventory.open(encoding="utf-8", newline="") as stream:
+        public_api_rows = list(csv.DictReader(stream))
+    if not public_api_rows or not {"public_path", "entry_kind", "manifest_status"}.issubset(public_api_rows[0]):
+        raise ValueError(f"{args.public_api_inventory}: not a public API inventory CSV")
+    public_manifest_operations = {
+        row["manifest_operation"]
+        for row in public_api_rows
+        if row.get("manifest_status") == "selected_manifest" and row.get("manifest_operation")
+    }
+    if public_manifest_operations != set(operations):
+        missing = sorted(set(operations) - public_manifest_operations)
+        unexpected = sorted(public_manifest_operations - set(operations))
+        raise ValueError(
+            "public API inventory does not map every selected operation "
+            f"(missing={missing}, unexpected={unexpected})"
+        )
+    operation_rows = operation_matrix_rows(operations, rows, public_api_rows)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=FIELDS, extrasaction="raise", lineterminator="\n")
@@ -645,6 +734,10 @@ def main() -> int:
         "operation_output": str(args.operation_output),
         "operation_rows": len(operation_rows),
         "operations": len(operations),
+        "public_api_entries": len(public_api_rows),
+        "public_api_inventory_gaps": sum(
+            row.get("manifest_status") != "selected_manifest" for row in public_api_rows
+        ),
         "workloads": workload_counts,
         "source_revisions": {snapshot["_source_snapshot"]: snapshot["revision"] for snapshot in snapshots},
         "source_clean": {snapshot["_source_snapshot"]: snapshot.get("clean") is True for snapshot in snapshots},

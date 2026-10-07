@@ -431,10 +431,14 @@ The [published full benchmark JSON](https://appunni-m.github.io/pillow-rs/assets
 and the separate [Pillow-SIMD JSON](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json)
 can be flattened into the complete per-workload record at
 [`docs/evidence/performance-optimization-matrix.csv`](evidence/performance-optimization-matrix.csv).
-The companion [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
-starts with every entry in the selected public manifest and emits CPU, SIMD,
-GPU, and separate Parallel CPU rows, including operations or profiles with no
-published comparison.
+The companion [public API census](evidence/performance-optimization-public-api.csv)
+enumerates the loaded `PIL` facade, the native extension, every exported
+function and class, public class methods and properties, and the selected
+manifest mapping. The [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
+has four profile rows for each of its 756 paths: 209 paths map to the selected
+manifest and 547 outside paths remain explicit as `not_mapped_to_benchmark`.
+Those inventory-only rows are unmeasured gaps, not evidence that a profile
+supports or has run the operation.
 The matrix keeps successful, failed, not-run, fallback, and dirty-snapshot rows.
 It includes source hashes and revisions, runner and workload identity, mode and
 size, full-call policy, exact-parity status, actual backend, observed and
@@ -452,15 +456,22 @@ python3 scripts/build_performance_optimization_matrix.py \
   --pillow-simd-snapshot /tmp/pillow-rs-pillow-simd.json
 ```
 
-The committed workload matrix records the GitHub Pages snapshots measured on
-2026-10-07: 8,619 full-benchmark rows across 663 workloads, plus 36
-Pillow-SIMD snapshot rows. The operation matrix has 209 manifest entries and
-836 backend/profile rows; it keeps the two manifest operations without a
-benchmark mapping visible. The full snapshot has 201 `pipeline-op` workload
-IDs; only workload rows with exact parity and completed backend receipts are
-eligible for speed claims. The Pillow-SIMD snapshot was dirty and held 9 of the
-34 declared cases, so its ratios remain diagnostic until a complete clean cohort
-is published. Public exports outside the selected manifest still require audit.
+Refresh the API census from the built local facade before rebuilding the
+operation matrix:
+
+```sh
+PYTHONPATH=pillow-rs-py/python .venv/bin/python scripts/build_public_api_inventory.py
+```
+
+The committed workload matrix records 8,655 full-benchmark rows across 663
+workloads from the clean 2026-10-07 snapshot, plus 36 Pillow-SIMD rows from an
+older dirty snapshot. The operation matrix has 3,024 rows for 756 public paths
+and four profiles. The full snapshot has 201 `pipeline-op` workload IDs; only
+workload rows with exact parity and completed backend receipts are eligible for
+speed claims. The Pillow-SIMD snapshot holds 9 of the 34 declared cases, so its
+ratios remain diagnostic until a complete clean cohort is published. The latest
+Pillow-SIMD workflow failed with exit code 2; GitHub exposes its diagnostics only
+to signed-in users, so the cause remains unverified.
 
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with
