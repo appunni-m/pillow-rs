@@ -111,6 +111,18 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
     def test_selected_profile_has_matching_backend_and_feature_identity(self) -> None:
         selected_parallel = os.environ.get("MIGRATION_TARGET_PROFILE") == "parallel-cpu"
         self.assertEqual(PARALLEL_CPU_PROFILE, selected_parallel)
+        configured_backends = os.environ.get("MIGRATION_BENCHMARK_BACKENDS", "").strip()
+        if configured_backends:
+            expected_backends = tuple(
+                item.strip().lower()
+                for item in configured_backends.split(",")
+                if item.strip()
+            )
+        elif selected_parallel:
+            expected_backends = ("cpu",)
+        else:
+            expected_backends = ("cpu", "simd", "gpu")
+        self.assertEqual(TARGET_BACKENDS, expected_backends)
         if selected_parallel:
             self.assertEqual(TARGET_BACKENDS, ("cpu",))
             self.assertEqual(TARGET_PROFILES, ("python-parallel-cpu",))
@@ -119,8 +131,10 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 TARGET_FEATURES[-2:], ["pillow-rs-py/parallel", "pillow-rs/parallel"]
             )
         else:
-            self.assertEqual(TARGET_BACKENDS, ("cpu", "simd", "gpu"))
-            self.assertEqual(TARGET_PROFILES, ("python-cpu", "python-simd", "python-gpu"))
+            expected_profiles = tuple(f"python-{backend}" for backend in expected_backends)
+            self.assertEqual(TARGET_PROFILES, expected_profiles)
+            for backend, profile in zip(TARGET_BACKENDS, TARGET_PROFILES, strict=True):
+                self.assertEqual(target_profile_for_backend(backend), profile)
 
     def test_parallel_cpu_times_only_its_named_profile_after_pillow_parity(self) -> None:
         standard_subjects = [
@@ -143,14 +157,38 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 [("target_profile", "python-parallel-cpu")],
             )
         else:
-            self.assertEqual(profiled[0]["subjects"], standard_subjects)
+            expected_subjects = standard_subjects[:1] + [
+                {"kind": "target_profile", "id": profile} for profile in TARGET_PROFILES
+            ]
+            self.assertEqual(profiled[0]["subjects"], expected_subjects)
+            self.assertEqual(
+                benchmark_subjects(),
+                [
+                    ("oracle", "pillow"),
+                    *(('target_profile', profile) for profile in TARGET_PROFILES),
+                ],
+            )
+        self.assertEqual(workload["subjects"], standard_subjects)
+
+    def test_standard_cpu_simd_subset_keeps_pillow_and_requested_backends(self) -> None:
+        standard_subjects = [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+            {"kind": "target_profile", "id": "python-simd"},
+            {"kind": "target_profile", "id": "python-gpu"},
+        ]
+        workload = {"workload_id": "fixture", "subjects": standard_subjects}
+        with patch("run_migration_benchmark.PARALLEL_CPU_PROFILE", False), patch(
+            "run_migration_benchmark.PILLOW_SIMD_COMPARISON", False
+        ), patch("run_migration_benchmark.TARGET_BACKENDS", ("cpu", "simd")):
+            profiled = apply_profile_to_workloads([workload])
+            self.assertEqual(profiled[0]["subjects"], standard_subjects[:3])
             self.assertEqual(
                 benchmark_subjects(),
                 [
                     ("oracle", "pillow"),
                     ("target_profile", "python-cpu"),
                     ("target_profile", "python-simd"),
-                    ("target_profile", "python-gpu"),
                 ],
             )
         self.assertEqual(workload["subjects"], standard_subjects)
@@ -163,9 +201,9 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
             {"kind": "target_profile", "id": "python-gpu"},
         ]
         workload = {"workload_id": "fixture", "subjects": standard_subjects}
-        with patch("run_migration_benchmark.PILLOW_SIMD_COMPARISON", True), patch(
-            "run_migration_benchmark.TARGET_BACKENDS", ("cpu", "simd")
-        ):
+        with patch("run_migration_benchmark.PARALLEL_CPU_PROFILE", False), patch(
+            "run_migration_benchmark.PILLOW_SIMD_COMPARISON", True
+        ), patch("run_migration_benchmark.TARGET_BACKENDS", ("cpu", "simd")):
             profiled = apply_profile_to_workloads([workload])
             self.assertEqual(
                 profiled[0]["subjects"],
