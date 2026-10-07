@@ -19845,3 +19845,15 @@ auxiliary bytes, and 6,310,668 retained-cache bytes. This single-request result
 does not demonstrate sustained throughput. Parallel CPU and hosted x86/ARM
 results remain pending for this source change; keep the profiles separate.
 No coverage was run.
+
+Attempt 2 tried to reduce scalar source-load work by reading two packed RGB
+pixels from each row as 64-bit words, with a scalar final pair to stay within
+the validated row bounds. The narrow-row and packed-pair edge cases passed the
+same reducer-reference test, and the public benchmark again passed exact Pillow
+parity. Its local macOS arm64 CPU median was 2.270 ms (p95 2.309 ms), with 100
+actual CPU executions and no fallback. That is indistinguishable from the
+2.270 ms first attempt and 2.268 ms repeat; SIMD was 2.218 ms and GPU 1.885 ms.
+The packed-load implementation is discarded, while the added narrow-row test
+cases remain useful edge checks for the scalar specialization. This hypothesis
+did not identify a genuine test defect or improve the optimization, so retain
+the simpler scalar 2×2 path and move to the next ranked CPU gap.
