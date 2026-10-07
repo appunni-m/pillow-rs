@@ -8,6 +8,8 @@ on:
       - 'scripts/run_migration_benchmark.py'
       - 'scripts/build_migration_parity_inputs.py'
       - 'scripts/report_pipeline_*.py'
+      - 'pillow-rs/src/**'
+      - 'pillow-rs-py/src/**'
       - 'pillow-rs/tests/fixtures/manifest.yaml'
       - 'pillow-rs/tests/fixtures/inputs/benchmark/**'
       - 'docs/PIPELINE_ROADMAP.md'

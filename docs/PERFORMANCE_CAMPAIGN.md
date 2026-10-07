@@ -69,6 +69,8 @@ The committed [full per-workload matrix](evidence/performance-optimization-matri
 [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
 were generated from GitHub Pages' raw [full benchmark snapshot](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
 and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json).
+The full benchmark now runs when core or Python binding source changes, keeping
+backend implementation checkpoints tied to the complete cross-runner suite.
 The latest full snapshot, published by [benchmark run 37687308986](https://github.com/appunni-m/pillow-rs/actions/runs/37687308986),
 is clean at revision `c374907e647b161feadd143d5294daa08803e2bc` and contains
 8,619 rows across 663 workloads, including 201 `pipeline-op` workload IDs.
