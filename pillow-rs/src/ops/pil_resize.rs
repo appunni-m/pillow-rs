@@ -379,11 +379,65 @@ pub(crate) fn filter_from_resample(filter: ResampleFilter) -> (fn(f64) -> f64, f
 // Fractional-box F resizes use the same native resampler contract.
 const F_RESIZE_VECTOR_WIDTH: usize = 16;
 
-fn f_resize_accumulate(
+pub(crate) trait F64MulAdd: Sync {
+    fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64;
+}
+
+pub(crate) struct PortableFma;
+
+impl F64MulAdd for PortableFma {
+    #[inline(always)]
+    fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
+        weight.mul_add(sample, accumulator)
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+pub(crate) struct X86FmaToken {
+    _private: (),
+}
+
+#[cfg(target_arch = "x86_64")]
+impl X86FmaToken {
+    pub(crate) fn detect() -> Option<Self> {
+        std::is_x86_feature_detected!("fma").then_some(Self { _private: () })
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+impl F64MulAdd for X86FmaToken {
+    #[allow(unsafe_code)]
+    #[inline(always)]
+    fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
+        // libm and the hardware instruction can choose different NaN payload
+        // bits for non-finite arithmetic. Preserve the portable reference's
+        // exact float representation for those edge cases.
+        if !weight.is_finite() || !sample.is_finite() || !accumulator.is_finite() {
+            return weight.mul_add(sample, accumulator);
+        }
+        let mut result = accumulator;
+        // SAFETY: `X86FmaToken::detect` only creates this token when runtime
+        // feature detection confirms that the current CPU supports FMA.
+        unsafe {
+            std::arch::asm!(
+                "vfmadd231sd {result}, {weight}, {sample}",
+                result = inout(xmm_reg) result,
+                weight = in(xmm_reg) weight,
+                sample = in(xmm_reg) sample,
+                options(pure, nomem, nostack, preserves_flags),
+            );
+        }
+        result
+    }
+}
+
+#[inline(always)]
+fn f_resize_accumulate<F: F64MulAdd>(
     accumulator: &mut f64,
     weight: f64,
     sample: f32,
     separate_product_add: bool,
+    fma: &F,
 ) {
     let sample = f64::from(sample);
     if separate_product_add {
@@ -393,7 +447,7 @@ fn f_resize_accumulate(
         let product = std::hint::black_box(weight * sample);
         *accumulator += product;
     } else {
-        *accumulator = weight.mul_add(sample, *accumulator);
+        *accumulator = fma.mul_add(weight, sample, *accumulator);
     }
 }
 
@@ -3866,6 +3920,36 @@ fn pil_resize_f_boxed(
     box_bottom: f64,
     filter: ResampleFilter,
 ) -> DynamicImage {
+    #[cfg(target_arch = "x86_64")]
+    if let Some(fma) = X86FmaToken::detect() {
+        return pil_resize_f_boxed_with_fma(
+            img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter, &fma,
+        );
+    }
+    pil_resize_f_boxed_with_fma(
+        img,
+        dst_w,
+        dst_h,
+        box_left,
+        box_top,
+        box_right,
+        box_bottom,
+        filter,
+        &PortableFma,
+    )
+}
+
+fn pil_resize_f_boxed_with_fma<F: F64MulAdd>(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    filter: ResampleFilter,
+    fma: &F,
+) -> DynamicImage {
     // F-mode bytes are stored in the four-byte carrier used by ImageRgba8,
     // but they are scalar float samples, not RGBA channels. Borrow those
     // sample words directly; converting through `to_rgba8()` clones the
@@ -3954,6 +4038,7 @@ fn pil_resize_f_boxed(
                         weight,
                         source[source_start + source_x],
                         tap < vector_product_count,
+                        fma,
                     );
                 }
                 intermediate[intermediate_start + output_x] =
@@ -3972,7 +4057,8 @@ fn pil_resize_f_boxed(
                 let mut sum = 0.0;
                 for (tap, &weight) in vertical.weights[output_y].iter().enumerate() {
                     let source_y = (y0 + tap as i64) as usize;
-                    sum = weight.mul_add(
+                    sum = fma.mul_add(
+                        weight,
                         f64::from(intermediate[source_y * dst_w as usize + output_x]),
                         sum,
                     );
@@ -3990,6 +4076,66 @@ fn pil_resize_f_boxed(
         .flat_map(f32::to_le_bytes)
         .collect();
     raw_to_dynamic_owned(output, dst_w, dst_h, 4)
+}
+
+#[cfg(all(test, target_arch = "x86_64"))]
+mod boxed_f_resize_fma_tests {
+    use super::{PortableFma, X86FmaToken, pil_resize_f_boxed, pil_resize_f_boxed_with_fma};
+    use crate::pipeline::ResampleFilter;
+    use crate::raster::{DynamicImage, RgbaImage};
+
+    #[test]
+    fn runtime_x86_fma_boxed_resize_matches_portable_fused_operations() {
+        let Some(x86_fma) = X86FmaToken::detect() else {
+            return;
+        };
+        let (source_width, source_height) = (96u32, 48u32);
+        let samples = (0..source_width as usize * source_height as usize)
+            .map(|index| (((index * 37 % 257) as i32 - 128) as f32) / 31.0)
+            .collect::<Vec<_>>();
+        let bytes = samples
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect();
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(source_width, source_height, bytes).expect("packed F samples"),
+        );
+        let bounds = (0.125, 0.25, 95.625, 47.5);
+        let actual = pil_resize_f_boxed_with_fma(
+            &image,
+            17,
+            9,
+            bounds.0,
+            bounds.1,
+            bounds.2,
+            bounds.3,
+            ResampleFilter::Lanczos,
+            &x86_fma,
+        );
+        let selected = pil_resize_f_boxed(
+            &image,
+            17,
+            9,
+            bounds.0,
+            bounds.1,
+            bounds.2,
+            bounds.3,
+            ResampleFilter::Lanczos,
+        );
+        let portable = pil_resize_f_boxed_with_fma(
+            &image,
+            17,
+            9,
+            bounds.0,
+            bounds.1,
+            bounds.2,
+            bounds.3,
+            ResampleFilter::Lanczos,
+            &PortableFma,
+        );
+        assert_eq!(selected.as_bytes(), actual.as_bytes());
+        assert_eq!(actual.as_bytes(), portable.as_bytes());
+    }
 }
 
 /// Box-based resize: maps source region [box_left, box_right] × [box_top, box_bottom]

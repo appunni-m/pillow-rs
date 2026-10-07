@@ -11,10 +11,12 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
+#[cfg(target_arch = "x86_64")]
+use crate::ops::pil_resize::X86FmaToken;
 use crate::ops::pil_resize::{
-    f32_samples_from_le_bytes, i32_samples_from_le_bytes, pil_resize, pil_resize_boxed,
-    pillow_sin_f64, precompute_coeffs_f64, precompute_coeffs_f64_boxed, premultiply_alpha,
-    round_up, unpremultiply_alpha,
+    F64MulAdd, PortableFma, f32_samples_from_le_bytes, i32_samples_from_le_bytes, pil_resize,
+    pil_resize_boxed, pillow_sin_f64, precompute_coeffs_f64, precompute_coeffs_f64_boxed,
+    premultiply_alpha, round_up, unpremultiply_alpha,
 };
 use crate::pipeline::{ResampleFilter, TransposeMethod};
 
@@ -117,58 +119,6 @@ pub(crate) fn resample_kernel(filter: &ResampleFilter) -> (fn(f64) -> f64, f64) 
 // implementation so heterogeneous wide reductions match the native Pillow
 // build rather than the compiler's fused Rust loop.
 const F_RESIZE_VECTOR_WIDTH: usize = 16;
-
-trait F64MulAdd: Sync {
-    fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64;
-}
-
-struct PortableFma;
-
-impl F64MulAdd for PortableFma {
-    #[inline(always)]
-    fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
-        weight.mul_add(sample, accumulator)
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-struct X86FmaToken {
-    _private: (),
-}
-
-#[cfg(target_arch = "x86_64")]
-impl X86FmaToken {
-    fn detect() -> Option<Self> {
-        std::is_x86_feature_detected!("fma").then_some(Self { _private: () })
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-impl F64MulAdd for X86FmaToken {
-    #[allow(unsafe_code)]
-    #[inline(always)]
-    fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
-        // libm and the hardware instruction can choose different NaN payload
-        // bits for non-finite arithmetic. Preserve the portable reference's
-        // exact float representation for those edge cases.
-        if !weight.is_finite() || !sample.is_finite() || !accumulator.is_finite() {
-            return weight.mul_add(sample, accumulator);
-        }
-        let mut result = accumulator;
-        // SAFETY: `X86FmaToken::detect` only creates this token when runtime
-        // feature detection confirms that the current CPU supports FMA.
-        unsafe {
-            std::arch::asm!(
-                "vfmadd231sd {result}, {weight}, {sample}",
-                result = inout(xmm_reg) result,
-                weight = in(xmm_reg) weight,
-                sample = in(xmm_reg) sample,
-                options(pure, nomem, nostack, preserves_flags),
-            );
-        }
-        result
-    }
-}
 
 fn f_resize_accumulate<F: F64MulAdd>(
     accumulator: &mut f64,
