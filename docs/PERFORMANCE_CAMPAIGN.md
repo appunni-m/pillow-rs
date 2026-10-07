@@ -65,15 +65,15 @@ were generated from GitHub Pages' raw [full benchmark snapshot](https://appunni-
 and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json).
 The latest full snapshot, published by [benchmark run 37658902695](https://github.com/appunni-m/pillow-rs/actions/runs/37658902695),
 is clean at revision `4634a840bcfa479729d707a6acc76a58b002ff6a` and contains
-8,655 rows across 663 workloads, including 201 `pipeline-op` workload IDs.
+8,619 rows across 663 workloads, including 201 `pipeline-op` workload IDs.
 Forty-four operation or composed-pipeline workloads have exact
 parity results in that snapshot: 29 direct operations and 15 composed pipelines.
 The CSV retains every row and source hash. Only exact parity with the expected
 backend, complete terminal observation, no fallback, clean provenance, and
 matching workload policy produces an eligible speed ratio. Sustained GPU
 throughput remains unmeasured in these one-request snapshots. The API census
-contains 756 paths: all 209 selected-manifest paths plus 547 paths outside that
-contract. Those 547 are explicit unmeasured gaps in the per-operation matrix;
+contains 330 paths: all 209 selected-manifest paths plus 121 paths outside that
+contract. Those 121 are explicit unmeasured gaps in the per-operation matrix;
 they do not count as benchmark coverage. Across the eligible published
 comparisons, serial CPU is slower than Pillow in 24 of 120 workload-runner pairs;
 SIMD is slower than Pillow in 22 of 120 and below the 2× target in 43 of 120.
