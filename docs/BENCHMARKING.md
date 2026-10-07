@@ -459,18 +459,24 @@ python3 scripts/build_performance_optimization_matrix.py \
   --public-api-inventory docs/evidence/performance-optimization-public-api.csv
 ```
 
-The committed workload matrix records 8,655 rows total: 8,619 full-benchmark
-rows across 663 workloads from the clean 2026-10-08 snapshot and 36
-Pillow-SIMD rows across 9 workloads from an older dirty snapshot. The operation
-matrix has 1,320 rows for 330 public paths
-and four profiles. The full snapshot has 201 `pipeline-op` workload IDs; only
-workload rows with exact parity and completed backend receipts are eligible for
-speed claims. The full snapshot is revision `f7d7f6f938910c243ad4945f7e4a1bf447ddffe8`,
-published by benchmark run 37681775264. The Pillow-SIMD snapshot holds 9 of the
-34 declared cases, so its ratios remain diagnostic until a complete clean cohort
-is published. The version-matched workflow 37681775010 is waiting behind
-workflow 37666940900, which remains in progress; do not treat the stale JSON as
-a completed comparison.
+The latest published workload matrix records 8,655 rows total: 8,619 full-
+benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
+The full snapshot is clean at revision
+`01e0dddd88b7bf5babf8758dd108b3dae350c8ba`, measured
+`2026-10-07T22:06:12.999080Z`, and published by [benchmark run
+37691947708](https://github.com/appunni-m/pillow-rs/actions/runs/37691947708).
+It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
+for 330 public paths and four profiles. Only rows with exact parity and
+completed backend receipts are eligible for speed claims. The published
+Pillow-SIMD snapshot is still dirty at revision
+`101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d` and covers 9 of the 34 declared
+cases, so its ratios remain diagnostic. The full benchmark for revision
+`83c2f3907` is running as [workflow
+37695171668](https://github.com/appunni-m/pillow-rs/actions/runs/37695171668):
+Ubuntu x86_64 and ARM64 have completed, and macOS arm64 is still running. Its
+version-matched Pillow-SIMD job is [workflow
+37695171643](https://github.com/appunni-m/pillow-rs/actions/runs/37695171643).
+Refresh both matrices only after the workflows publish their raw JSON assets.
 
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with
