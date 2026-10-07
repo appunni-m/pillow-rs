@@ -69,8 +69,8 @@ The committed [full per-workload matrix](evidence/performance-optimization-matri
 [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
 were generated from GitHub Pages' raw [full benchmark snapshot](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
 and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json).
-The latest full snapshot, published by [benchmark run 37681775264](https://github.com/appunni-m/pillow-rs/actions/runs/37681775264),
-is clean at revision `f7d7f6f938910c243ad4945f7e4a1bf447ddffe8` and contains
+The latest full snapshot, published by [benchmark run 37687308986](https://github.com/appunni-m/pillow-rs/actions/runs/37687308986),
+is clean at revision `c374907e647b161feadd143d5294daa08803e2bc` and contains
 8,619 rows across 663 workloads, including 201 `pipeline-op` workload IDs.
 Forty-four operation or composed-pipeline workloads have exact parity results:
 29 direct operations and 15 composed pipelines. The CSV retains every row and
@@ -89,35 +89,38 @@ The immediate CPU priority is every verified workload currently slower than
 Pillow, with a sequencing gate of at least 2× Pillow before attention shifts to
 workloads that lose to Pillow-SIMD. The eventual per-operation goals remain CPU
 at or below Pillow, SIMD at least 5× faster than Pillow, and GPU latency no
-slower than SIMD with higher sustained throughput. The x86 runner in this
-snapshot is an Intel Xeon Platinum 8573C; the preceding snapshot used AMD EPYC
-9V45, so those x86 runs are not a controlled before/after pair.
+slower than SIMD with higher sustained throughput. The runners are macOS arm64,
+Ubuntu ARM64 (Neoverse-N2), and Ubuntu x86_64 (Intel Xeon 6973P-C). The previous
+full snapshot used an Intel Xeon Platinum 8573C for x86, so those x86 runs are
+not a controlled before/after pair.
 
 The largest verified serial CPU gaps in this snapshot are:
 
 | Workload | Runner | Pillow speedup | Existing checkpoint |
 | --- | --- | ---: | --- |
-| RGB material thumbnail | Apple arm64 | 0.379× | RGB thumbnail checkpoints; profile horizontal gather/plan next |
-| RGB material thumbnail | Ubuntu ARM64 | 0.457× | RGB thumbnail checkpoints |
-| F-mode bicubic resize composed pipeline | x86_64 | 0.477× | x86 scalar FMA candidate measured; CPU target unmet |
-| F-mode thumbnail | x86_64 | 0.496× | Boxed FMA attempt 1; CPU target unmet |
-| RGB material thumbnail | x86_64 | 0.496× | RGB thumbnail checkpoints |
-| I-mode thumbnail | Apple arm64 | 0.510× | Existing I thumbnail checkpoint |
+| RGB material thumbnail | Apple arm64 | 0.363× | RGB 2×2 specialization retained; packed loads and boxed i32 trials rejected |
+| F-mode bicubic resize composed pipeline | x86_64 | 0.454× | Runtime FMA plus local branch-hoist candidate; hosted rerun pending |
+| RGB material thumbnail | Ubuntu ARM64 | 0.455× | RGB thumbnail checkpoints |
+| Sparse CMYK getprojection pipeline | x86_64 | 0.480× | No focused optimization yet |
+| RGB material thumbnail | x86_64 | 0.491× | RGB thumbnail checkpoints |
+| F-mode thumbnail | x86_64 | 0.509× | Boxed FMA attempt 1; CPU target unmet |
 
 The speedup is Pillow median latency divided by target median latency; each
 listed workload is slower than Pillow on that runner. The I-mode 5 × 5 x86 FMA
 candidate meets the CPU≤Pillow target in both its materialized filter and
 composed convolution workloads on all three runners; sub-2× rows remain visible
-in the matrix. The active serial CPU investigation is RGB material thumbnail on
-Apple arm64. The x86 YCbCr SIMD revisit remains open for the later SIMD stage
-and is recorded at the end of this campaign log.
+in the matrix. The RGB thumbnail remains the top ranked CPU gap; its local visit
+reached the bounded-attempt checkpoint above. The current serial CPU visit is
+the next ranked F-mode resize on x86_64. The branch-hoist candidate improved the
+local arm64 CPU median in two repeats; the hosted x86 result is required to
+confirm the row. The x86 YCbCr SIMD revisit remains open for the later SIMD
+stage and is recorded at the end of this campaign log.
 
-The Pillow-SIMD asset remains dirty and contains only 9 of the 34 declared
-cases, from revision `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`. The
-version-matched [Pillow-SIMD workflow 37681775010](https://github.com/appunni-m/pillow-rs/actions/runs/37681775010)
-for this snapshot is waiting behind workflow 37666940900, which remains in
-progress. The comparison stage is incomplete and the published stale asset is
-diagnostic only. The 7 x86 SIMD rows marked failed have
+The published Pillow-SIMD asset remains dirty and contains only 9 of the 34
+declared cases, from revision `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`.
+The new [Pillow-SIMD workflow 37691437080](https://github.com/appunni-m/pillow-rs/actions/runs/37691437080)
+for revision `90f72b9a8` is in progress; until it publishes a complete clean
+asset, the existing JSON is diagnostic only. The 7 x86 SIMD rows marked failed have
 `successful_execution: not_proven` and no actual-backend receipt; they are
 missing-execution evidence, not reported parity mismatches. FastOctree's 8
 remote rows are `not_run` with parity unproven; the focused current-main CPU
@@ -19898,9 +19901,9 @@ with a different CPU bottleneck.
 
 ## F-mode resize horizontal tap branch hoist — 2026-10-08
 
-The full published inventory ranks
-`pipeline-chain.resize-native-f32.bicubic-noise-1024x768` as the third largest
-verified serial CPU gap, at 0.477× Pillow on x86_64. This local trial uses the
+The latest clean full inventory ranks
+`pipeline-chain.resize-native-f32.bicubic-noise-1024x768` as the second largest
+verified serial CPU gap, at 0.454× Pillow on x86_64. This local trial uses the
 same public resize-plus-materialization boundary on macOS 15.7.7 arm64. The
 local CPU path already beats Pillow; the hosted x86 gap remains the target for
 the next clean cross-runner result.
