@@ -113,7 +113,10 @@ def public_class_members(cls: type[Any]) -> dict[str, str]:
 
 def instance_fields(cls: type[Any]) -> set[str]:
     """Find public data attributes set by a Python __init__ implementation."""
-    source = inspect.getsourcefile(cls)
+    try:
+        source = inspect.getsourcefile(cls)
+    except (TypeError, OSError):
+        source = None
     if not source:
         return set()
     try:
@@ -287,12 +290,14 @@ def main() -> int:
         module_path = f"PIL.{alias}"
         if alias == "Image":
             names = list(getattr(module, "__all__", []))
+        elif getattr(module, "__all__", None) is not None:
+            names = list(module.__all__)
         else:
             names = [
                 name for name, value in vars(module).items()
                 if not name.startswith("_")
                 and (inspect.isfunction(value) or inspect.isclass(value))
-                and str(getattr(value, "__module__", "")).startswith(("pillow_rs", "PIL"))
+                and getattr(value, "__module__", None) == module.__name__
             ]
         for name in sorted(set(names)):
             value = getattr(module, name, None)

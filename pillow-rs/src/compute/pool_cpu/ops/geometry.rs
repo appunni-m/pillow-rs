@@ -148,6 +148,12 @@ impl F64MulAdd for X86FmaToken {
     #[allow(unsafe_code)]
     #[inline(always)]
     fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
+        // libm and the hardware instruction can choose different NaN payload
+        // bits for non-finite arithmetic. Preserve the portable reference's
+        // exact float representation for those edge cases.
+        if !weight.is_finite() || !sample.is_finite() || !accumulator.is_finite() {
+            return weight.mul_add(sample, accumulator);
+        }
         let mut result = accumulator;
         // SAFETY: `X86FmaToken::detect` only creates this token when runtime
         // feature detection confirms that the current CPU supports FMA.
