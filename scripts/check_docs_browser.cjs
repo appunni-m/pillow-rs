@@ -56,6 +56,10 @@ async function main() {
           continue;
         }
         const before = await page.$eval('#bench-count', element => element.textContent);
+        const filtersAreAboveSummary = await page.evaluate(() =>
+          document.querySelector('.bench-toolbar').getBoundingClientRect().top <
+          document.querySelector('#bench-reader-summary').getBoundingClientRect().top);
+        if (!filtersAreAboveSummary) throw new Error('Benchmark filters are not above the at-a-glance summary');
         const tableKinds = await page.$$eval('.bench-comparison', tables => tables.map(table => table.closest('[data-table-kind]').dataset.tableKind));
         if (tableKinds.join(',') !== 'pipelines,operations') throw new Error(`Expected pipeline and operation tables, got ${tableKinds.join(',')}`);
         const fixtureRunner = await page.evaluate(() => {
@@ -91,7 +95,10 @@ async function main() {
         });
         if (!initialPlot) throw new Error('Per-workload ratio plot did not render a labeled, faster-than-baseline point');
         const initialSummary = await page.$eval('#bench-reader-summary', element => element.textContent);
-        if (!initialSummary.includes('Faster in 1 of 1 matched cases') || !initialSummary.includes('Browser fixture invert RGBA')) {
+        if (!initialSummary.includes('Faster in 1 of 1 matched cases') ||
+            !initialSummary.includes('Average speedup: 2× faster') ||
+            !initialSummary.includes('Typical case: 2× faster') ||
+            !initialSummary.includes('Browser fixture invert RGBA')) {
           throw new Error(`Reader summary did not explain the selected workload: ${initialSummary}`);
         }
         await page.type('#evidence-filter', 'no-such-workload');

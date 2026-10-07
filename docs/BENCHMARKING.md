@@ -146,8 +146,9 @@ summary and plot. Workload, mode, runner, and comparison filters update the
 summary, plot, and both tables. Ratios are paired inside one runner cohort;
 absolute timing across macOS and Linux is not compared.
 
-The x86 Pillow-SIMD run remains a narrow, independently parity-gated cohort
-because its workloads are limited to BoxBlur, GaussianBlur, and getchannel.
+The x86 Pillow-SIMD run is an independently parity-gated cohort covering all
+29 current full-size `pipeline-op` workloads, the established RGB GaussianBlur
+case, and getchannel in four modes (34 individual-operation cases total).
 The main results plot includes it only when the Pillow-SIMD and full benchmark
 artifacts identify the same source revision and the same Ubuntu runner class,
 OS, architecture, CPU model, Rust toolchain, and image version. Its own run

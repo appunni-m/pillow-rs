@@ -8,10 +8,12 @@ the same x86 runner, using the Pillow-SIMD default SSE4 build
 published table also includes pillow-rs CPU and SIMD timings from that same
 host and exact workload set.
 
-The benchmark currently includes full-size, parity-backed BoxBlur rows in L
-and RGB, GaussianBlur rows in L, LA, and RGB, plus getchannel rows in L, LA,
-RGB, and RGBA. Pillow and Pillow-SIMD each run in an isolated environment because
-both packages provide the `PIL` namespace. Each source must pass the same
+The benchmark currently covers 34 full-size, parity-backed individual
+operation cases: all 29 current `pipeline-op` workloads in the benchmark
+manifest, the established RGB GaussianBlur case, and getchannel in L, LA, RGB,
+and RGBA. Together they cover L, LA, RGB, RGBA, CMYK, F, I, and YCbCr modes.
+Pillow and Pillow-SIMD each run in an isolated environment because both
+packages provide the `PIL` namespace. Each source must pass the same
 exact-output parity cases against pillow-rs before its timing is published.
 
 The [Pillow-SIMD project](https://github.com/uploadcare/pillow-simd) documents
@@ -20,8 +22,8 @@ composition, premultiplied-alpha conversion, RGB-to-L, 3x3/5x5 filters, and
 split. The current maintained benchmark contract does not
 yet provide comparable full-size, parity-backed rows for those operations;
 they are not represented by tiny setup-dominated smoke measurements here.
-Add such workloads to the normal operation contract before including their
-results in this comparison.
+Add full-size parity-backed inputs to the normal operation contract before
+including their results in this comparison.
 
 No comparison is made across ARM and x86, across different Pillow versions, or
 between SSE4 and AVX2 builds. Pillow-SIMD results appear only after the x86
