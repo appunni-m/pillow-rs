@@ -139,6 +139,40 @@ fn f_resize_accumulate<F: F64MulAdd>(
     }
 }
 
+#[inline]
+fn f_resize_horizontal_sample<F: F64MulAdd>(
+    source: &[f32],
+    source_row_start: usize,
+    first_source_x: i64,
+    weights: &[f64],
+    fma: &F,
+) -> f32 {
+    let vector_product_count = (weights.len() / F_RESIZE_VECTOR_WIDTH) * F_RESIZE_VECTOR_WIDTH;
+    let mut accumulator = 0.0f64;
+    if vector_product_count == 0 {
+        for (offset, &weight) in weights.iter().enumerate() {
+            let source_x = (first_source_x + offset as i64) as usize;
+            accumulator = fma.mul_add(
+                weight,
+                f64::from(source[source_row_start + source_x]),
+                accumulator,
+            );
+        }
+    } else {
+        for (offset, &weight) in weights.iter().enumerate() {
+            let source_x = (first_source_x + offset as i64) as usize;
+            f_resize_accumulate(
+                &mut accumulator,
+                weight,
+                source[source_row_start + source_x],
+                offset < vector_product_count,
+                fma,
+            );
+        }
+    }
+    accumulator as f32
+}
+
 /// Run Pillow's tall-image resample ordering for an F image.
 ///
 /// `PIL.Image.Image.resize` avoids a numerically unstable horizontal-first
@@ -448,21 +482,13 @@ fn resize_f_with_fma<F: F64MulAdd>(
             |_row_start, _row_end, sy, row| {
                 let src_row_base = (sy * sw) as usize;
                 for (dx, output) in row.iter_mut().enumerate() {
-                    let x0 = h_coeffs.xmin[dx];
-                    let vector_product_count = (h_coeffs.weights[dx].len() / F_RESIZE_VECTOR_WIDTH)
-                        * F_RESIZE_VECTOR_WIDTH;
-                    let mut acc = 0.0f64;
-                    for (offset, &weight) in h_coeffs.weights[dx].iter().enumerate() {
-                        let sx = (x0 + offset as i64) as usize;
-                        f_resize_accumulate(
-                            &mut acc,
-                            weight,
-                            src_floats[src_row_base + sx],
-                            offset < vector_product_count,
-                            fma,
-                        );
-                    }
-                    *output = acc as f32;
+                    *output = f_resize_horizontal_sample(
+                        &src_floats,
+                        src_row_base,
+                        h_coeffs.xmin[dx],
+                        &h_coeffs.weights[dx],
+                        fma,
+                    );
                 }
             }
         );
@@ -470,21 +496,13 @@ fn resize_f_with_fma<F: F64MulAdd>(
         for (sy, row) in intermediate.chunks_mut(dst_w as usize).enumerate() {
             let src_row_base = sy * sw as usize;
             for (dx, output) in row.iter_mut().enumerate() {
-                let x0 = h_coeffs.xmin[dx];
-                let vector_product_count =
-                    (h_coeffs.weights[dx].len() / F_RESIZE_VECTOR_WIDTH) * F_RESIZE_VECTOR_WIDTH;
-                let mut acc = 0.0f64;
-                for (offset, &weight) in h_coeffs.weights[dx].iter().enumerate() {
-                    let sx = (x0 + offset as i64) as usize;
-                    f_resize_accumulate(
-                        &mut acc,
-                        weight,
-                        src_floats[src_row_base + sx],
-                        offset < vector_product_count,
-                        fma,
-                    );
-                }
-                *output = acc as f32;
+                *output = f_resize_horizontal_sample(
+                    &src_floats,
+                    src_row_base,
+                    h_coeffs.xmin[dx],
+                    &h_coeffs.weights[dx],
+                    fma,
+                );
             }
         }
     } else {

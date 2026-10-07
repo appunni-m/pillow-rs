@@ -19895,3 +19895,48 @@ benchmark runs. CPU medians were 2.426 ms and 2.438 ms (p95 2.514 ms and
 Drop the unrolled i32 variant and its code changes. The kernel-width idea is
 closed for this visit; preserve the proven scalar reducer gain and continue
 with a different CPU bottleneck.
+
+## F-mode resize horizontal tap branch hoist — 2026-10-08
+
+The full published inventory ranks
+`pipeline-chain.resize-native-f32.bicubic-noise-1024x768` as the third largest
+verified serial CPU gap, at 0.477× Pillow on x86_64. This local trial uses the
+same public resize-plus-materialization boundary on macOS 15.7.7 arm64. The
+local CPU path already beats Pillow; the hosted x86 gap remains the target for
+the next clean cross-runner result.
+
+For the horizontal F resampler, `f_resize_accumulate` previously received a
+per-tap boolean deciding whether Pillow's complete 16-tap product/add blocks
+apply. The common bicubic 8-tap rows always selected fused multiply-add, but
+the loop still evaluated that condition on every tap. A focused helper computes
+the full-block count once per output sample and uses a direct ordered FMA loop
+when there are no complete 16-tap blocks. Longer rows retain the existing
+separate product/add rule for each complete block and FMA tails. Four public
+workflow runs used five warmups, 20 iterations across five samples, concurrency
+one, and both the `call` and `materialize` steps. All four passed exact Pillow
+parity. Their local arm64 medians (ms) are:
+
+| Run | Pillow | CPU | SIMD | GPU | CPU speedup vs Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 2.891 | 2.374 | 5.495 | 54.204 | 1.218× |
+| Baseline repeat | 2.819 | 2.281 | 5.501 | 54.810 | 1.236× |
+| Branch-hoist candidate | 2.807 | 1.993 | 5.490 | 53.271 | 1.408× |
+| Candidate repeat | 2.823 | 2.010 | 5.459 | 53.019 | 1.404× |
+
+CPU executed 100/100 observations with no fallback in each run. The candidate
+CPU medians are 12–16% below the two same-host baselines. The SIMD backend also
+executed 100/100 times without fallback and did not improve; its latency
+remains above Pillow. GPU executed 100/100 times with two dispatches, 3,145,728
+uploaded bytes, and 786,432 readback bytes. Its roughly 53 ms latency remains
+above SIMD, and these single-request runs do not demonstrate sustained GPU
+throughput. The local trial does not validate the x86 code path or close the
+published x86 CPU gap. No genuine test defect was found. Benchmark harness
+selection tests passed; no coverage was run.
+
+The local receipts are `f32-resize-baseline-20261008.json`,
+`f32-resize-baseline-repeat-20261008.json`,
+`f32-resize-attempt1-20261008.json`, and
+`f32-resize-attempt1-repeat-20261008.json` under `build/migration-parity/`.
+The per-operation matrix remains sourced from the published full benchmark and
+version-matched Pillow-SIMD JSON; refresh it only when the next clean full
+snapshot is published.
