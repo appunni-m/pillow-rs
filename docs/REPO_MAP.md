@@ -361,6 +361,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- build_migration_parity_inputs.py
     |-- build_migration_parity_manifest.py
     |-- build_performance_optimization_matrix.py
+    |-- build_public_api_inventory.py
     |-- check_bindings.py
     |-- check_docs_browser.cjs
     |-- check_docs_examples.py
