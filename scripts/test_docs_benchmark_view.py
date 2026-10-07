@@ -2,7 +2,7 @@
 import copy
 import unittest
 
-from docs_benchmark_view import compare, describe, duration, facets, render_dashboard, speed_label, workload_distributions
+from docs_benchmark_view import compare, describe, duration, facets, render_dashboard, speed_label, workload_comparisons
 
 
 def row(subject="fontdone", median=10, **changes):
@@ -51,7 +51,7 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertEqual(state, "unavailable")
         self.assertEqual(reason, "Different runner cohorts")
 
-    def test_overall_boxplot_uses_paired_exact_output_workloads_per_runner(self):
+    def test_workload_plot_lists_paired_exact_output_workloads_per_runner(self):
         machines = {
             "linux": {"id": "linux", "label": "Ubuntu 24.04 · x86_64"},
             "mac": {"id": "mac", "label": "macOS 15 · arm64"},
@@ -75,17 +75,19 @@ class BenchmarkViewTests(unittest.TestCase):
         grouped = {}
         for item in rows:
             grouped.setdefault((item["machine_id"], item["workload"]), []).append(item)
-        distributions = workload_distributions(grouped, machines, ["python-simd"], "pillow")
-        self.assertEqual(len(distributions), 2)
-        self.assertEqual({item["machine_id"] for item in distributions}, {"linux", "mac"})
-        by_machine = {item["machine_id"]: item for item in distributions}
-        self.assertEqual(by_machine["linux"]["ratios"], [2, 2])
-        self.assertEqual(by_machine["mac"]["ratios"], [2, 3])
-        self.assertEqual(by_machine["linux"]["geomean"], 2)
+        comparisons = workload_comparisons(grouped, machines, ["python-simd"], "pillow")
+        self.assertEqual(len(comparisons), 4)
+        self.assertEqual({item["machine_id"] for item in comparisons}, {"linux", "mac"})
+        by_machine = {
+            machine_id: sorted(item["ratio"] for item in comparisons if item["machine_id"] == machine_id)
+            for machine_id in ("linux", "mac")
+        }
+        self.assertEqual(by_machine["linux"], [2, 2])
+        self.assertEqual(by_machine["mac"], [2, 3])
         snapshot = dict(rows=rows, machines=list(machines.values()), environment={"os": "GitHub runners"}, measured_at="2026-10-07")
         text = render_dashboard(snapshot, dict(benchmark={"kind": "pillow"}))
-        self.assertIn("Overall speedup by workload", text)
-        self.assertLess(text.index('<section class="bench-overall">'), text.index('<div class="bench-summary">'))
+        self.assertIn("Per-workload speedup", text)
+        self.assertLess(text.index('<div class="bench-summary">'), text.index('<section class="bench-overall">'))
         self.assertIn('data-machine="linux"', text)
         self.assertIn('data-machine="mac"', text)
         self.assertIn('id="bench-machine"', text)
@@ -97,8 +99,12 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn('data-ratio-primary="2.0"', text)
         self.assertIn('data-ratio-primary=""', text)
         self.assertIn('<b data-score="faster">4</b> faster', text)
+        self.assertIn('class="bench-ratio-point faster"', text)
+        plot = text.split('<div class="bench-ratio-plot"', 1)[1].split('</div>', 1)[0]
+        self.assertNotIn("timing-only", plot)
+        self.assertIn("1× means equal median time", text)
 
-    def test_boxplot_includes_pillow_simd_pair_against_its_matched_host(self):
+    def test_workload_plot_includes_pillow_simd_pair_against_its_matched_host(self):
         machine = "linux-pillow-simd"
         checked = "parity_pass: pass"
         rows = [
@@ -111,13 +117,36 @@ class BenchmarkViewTests(unittest.TestCase):
         ]
         machines = {machine: {"id": machine, "label": "Ubuntu 24.04 · x86_64 · Pillow-SIMD paired cohort"}}
         grouped = {(machine, "pipeline-op.blur"): rows}
-        distributions = workload_distributions(grouped, machines, ["python-simd", "pillow-simd"], "pillow")
-        pairs = {(item["subject"], item["baseline"], tuple(item["ratios"])) for item in distributions}
-        self.assertIn(("python-simd", "pillow", (4,)), pairs)
-        self.assertIn(("python-simd", "pillow-simd", (2,)), pairs)
-        self.assertIn(("pillow-simd", "pillow", (2,)), pairs)
+        comparisons = workload_comparisons(grouped, machines, ["python-simd", "pillow-simd"], "pillow")
+        pairs = {(item["subject"], item["baseline"], item["ratio"]) for item in comparisons}
+        self.assertIn(("python-simd", "pillow", 4), pairs)
+        self.assertIn(("python-simd", "pillow-simd", 2), pairs)
+        self.assertIn(("pillow-simd", "pillow", 2), pairs)
 
-    def test_overall_distribution_summarizes_operations_and_pipelines_separately(self):
+    def test_workload_plot_shows_native_mode_and_slower_workloads_first(self):
+        machine = "ubuntu-x64"
+        context = {"mode": "RGBA", "size": [640, 480], "operation_class": "point"}
+        rows = [
+            row("pillow", 10, workload="pipeline-op.invert.rgba", machine_id=machine,
+                correctness="parity_pass: pass", requested_backend="pillow", actual_backend="pillow", context=context),
+            row("python-cpu", 20, workload="pipeline-op.invert.rgba", machine_id=machine,
+                correctness="parity_pass: pass", requested_backend="cpu", actual_backend="cpu", context=context),
+            row("pillow", 10, workload="pipeline-op.invert.l", machine_id=machine,
+                correctness="parity_pass: pass", requested_backend="pillow", actual_backend="pillow", context={**context, "mode": "L"}),
+            row("python-cpu", 5, workload="pipeline-op.invert.l", machine_id=machine,
+                correctness="parity_pass: pass", requested_backend="cpu", actual_backend="cpu", context={**context, "mode": "L"}),
+        ]
+        snapshot = dict(rows=rows, machines=[{"id": machine, "label": "Ubuntu x86_64"}],
+                        environment={}, measured_at="2026-10-07")
+        text = render_dashboard(snapshot, dict(benchmark={"kind": "pillow"}))
+        plot = text.split('<div class="bench-ratio-plot"', 1)[1].split('</div>', 1)[0]
+        self.assertLess(plot.index("Invert rgba · RGBA"), plot.index("Invert l · L"))
+        self.assertIn("2× slower", plot)
+        self.assertIn("2× faster", plot)
+        self.assertIn("Pillow median 10 µs", plot)
+        self.assertIn("pillow-rs · CPU median 20 µs", plot)
+
+    def test_workload_plot_keeps_operations_and_pipelines_separate(self):
         machine = "ubuntu-x64"
         machines = {machine: {"id": machine, "label": "Ubuntu 24.04 · x86_64"}}
         rows = []
@@ -137,16 +166,16 @@ class BenchmarkViewTests(unittest.TestCase):
         grouped = {}
         for item in rows:
             grouped.setdefault((item["machine_id"], item["workload"]), []).append(item)
-        distributions = workload_distributions(grouped, machines, ["python-cpu"], "pillow")
-        self.assertEqual({item["scope"] for item in distributions}, {"operations", "pipelines"})
-        by_scope = {item["scope"]: item for item in distributions}
-        self.assertEqual(by_scope["operations"]["geomean"], 2)
-        self.assertEqual(by_scope["pipelines"]["geomean"], 4)
+        comparisons = workload_comparisons(grouped, machines, ["python-cpu"], "pillow")
+        self.assertEqual({item["scope"] for item in comparisons}, {"operations", "pipelines"})
+        by_scope = {item["scope"]: item for item in comparisons}
+        self.assertEqual(by_scope["operations"]["ratio"], 2)
+        self.assertEqual(by_scope["pipelines"]["ratio"], 4)
         dashboard = render_dashboard({"rows": rows, "machines": list(machines.values()),
                                       "environment": {}, "measured_at": "2026-10-07"},
                                      {"benchmark": {"kind": "pillow"}})
         self.assertIn("individual operations", dashboard)
-        self.assertIn("pipeline workflows", dashboard)
+        self.assertIn("pipelines", dashboard)
 
     def test_timing_only_is_not_promoted_to_checked_output(self):
         baseline=row('FreeType',20)

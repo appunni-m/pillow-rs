@@ -29,16 +29,23 @@ body:has(.benchmark-dashboard) .md-sidebar--secondary { display: none; }
 .bench-overall { margin: .8rem 0 1.2rem; padding: .65rem .8rem; border: 1px solid var(--md-default-fg-color--lightest); background: var(--md-code-bg-color); }
 .bench-overall h2 { margin: 0 0 .25rem; font-size: 1rem; }
 .bench-overall > p { margin: .25rem 0 .55rem; font-size: .68rem; color: var(--bench-muted); }
-.bench-boxplot { overflow-x: auto; border-top: 1px solid var(--md-default-fg-color--lightest); border-bottom: 1px solid var(--md-default-fg-color--lightest); }
-.bench-boxplot-svg { display: block; width: 100%; min-width: 840px; height: auto; font: .68rem system-ui, sans-serif; }
-.bench-box-label { fill: var(--md-default-fg-color); font-size: 10px; font-weight: 650; }
-.bench-box-summary, .bench-axis-label { fill: var(--bench-muted); font-size: 9px; }
-.bench-whisker { stroke: var(--md-default-fg-color--light); stroke-width: 2; }
-.bench-box { fill: color-mix(in srgb, var(--bench-positive) 24%, var(--md-default-bg-color)); stroke: var(--bench-positive); stroke-width: 2; }
-.bench-median { stroke: var(--md-default-fg-color); stroke-width: 3; }
-.bench-outlier { fill: var(--bench-negative); stroke: var(--md-default-bg-color); stroke-width: 1; }
+.bench-ratio-plot { max-height: min(58rem, 78vh); overflow: auto; border-top: 1px solid var(--md-default-fg-color--lightest); border-bottom: 1px solid var(--md-default-fg-color--lightest); }
+.bench-workload-plot-svg { display: block; width: 100%; min-width: 1050px; height: auto; font: .68rem system-ui, sans-serif; }
+.bench-ratio-grid { stroke: var(--md-default-fg-color--lightest); stroke-width: 1; }
+.bench-ratio-grid-baseline { stroke: var(--md-default-fg-color--light); stroke-width: 2; }
+.bench-axis-label, .bench-ratio-group-summary { fill: var(--bench-muted); font-size: 9px; }
+.bench-ratio-group { fill: var(--md-default-fg-color); font-size: 10px; font-weight: 700; }
+.bench-ratio-workload { fill: var(--md-default-fg-color); font-size: 9px; }
+.bench-ratio-point { stroke: var(--md-default-bg-color); stroke-width: 1; }
+.bench-ratio-point.faster { fill: var(--bench-positive); }
+.bench-ratio-point.slower { fill: var(--bench-negative); }
+.bench-ratio-point.tie { fill: var(--bench-muted); }
+.bench-ratio-value { font-size: 9px; font-variant-numeric: tabular-nums; }
+.bench-ratio-value.faster { fill: var(--bench-positive); font-weight: 700; }
+.bench-ratio-value.slower { fill: var(--bench-negative); }
+.bench-ratio-value.tie { fill: var(--bench-muted); }
 .bench-empty-plot { fill: var(--bench-muted); font-size: 12px; }
-.bench-boxplot-excluded { font-variant-numeric: tabular-nums; }
+.bench-ratio-excluded { font-variant-numeric: tabular-nums; }
 .bench-summary { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0 .4rem; }
 .bench-score { flex: 1; min-width: 12rem; padding: .6rem .8rem; border: 1px solid var(--md-default-fg-color--lightest); border-radius: .5rem; background: var(--md-code-bg-color); }
 .bench-score > strong, .bench-score > span, .bench-score small { display: block; }

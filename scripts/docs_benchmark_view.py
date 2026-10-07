@@ -210,102 +210,100 @@ def machine_catalog(snapshot: dict) -> dict[str, dict]:
     return {"legacy": {"id": "legacy", "label": label}}
 
 
-def quantile(values: list[float], fraction: float) -> float:
-    ordered = sorted(values)
-    if len(ordered) == 1:
-        return ordered[0]
-    position = (len(ordered) - 1) * fraction
-    lower = math.floor(position)
-    upper = math.ceil(position)
-    return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
-
-
-def workload_distributions(grouped: dict, machines: dict[str, dict], targets: list[str],
-                           kind: str) -> list[dict]:
-    observations: dict[tuple[str, str, str, str | None], list[float]] = {}
+def workload_comparisons(grouped: dict, machines: dict[str, dict], targets: list[str],
+                         kind: str) -> list[dict]:
+    """Return output-verified ratios with their workload and matched timings."""
+    result = []
     for (machine_id, _workload), rows in grouped.items():
         by_subject = {row["subject"]: row for row in rows}
-        scope = facets(rows[0], kind)[0] if kind == "pillow" else None
+        table_kind, workload_type, mode, title, context = facets(rows[0], kind)
         comparisons = [(subject, BASELINE_FOR.get(subject, BASELINES[kind])) for subject in targets]
         if kind == "pillow" and "pillow-simd" in by_subject:
             comparisons.extend((subject, "pillow-simd") for subject in ("python-cpu", "python-simd"))
         for subject, baseline_id in comparisons:
-            target = by_subject.get(subject)
-            baseline = by_subject.get(baseline_id)
+            target, baseline = by_subject.get(subject), by_subject.get(baseline_id)
             ratio, quality, _ = compare(target, baseline) if target and baseline else (None, "unavailable", "Missing pair")
-            # Only a passing output comparison belongs in the headline. Execution-only
-            # timings remain visible in the detailed tables but are not speed claims.
-            if ratio is not None and quality == "checked":
-                observations.setdefault((machine_id, subject, baseline_id, scope), []).append(ratio)
-    result = []
-    for (machine_id, subject, baseline, scope), ratios in sorted(observations.items()):
-        ordered = sorted(ratios)
-        result.append({
-            "machine_id": machine_id,
-            "machine_label": machines.get(machine_id, {}).get("label", machine_id),
-            "subject": subject,
-            "baseline": baseline,
-            "scope": scope,
-            "ratios": ordered,
-            "q1": quantile(ordered, .25),
-            "median": quantile(ordered, .5),
-            "q3": quantile(ordered, .75),
-            "geomean": math.exp(statistics.mean(math.log(value) for value in ordered)),
-            "faster": sum(value > 1 for value in ordered),
-            "slower": sum(value < 1 for value in ordered),
-            "equal": sum(value == 1 for value in ordered),
-        })
+            if ratio is None or quality != "checked":
+                continue
+            result.append({
+                "machine_id": machine_id,
+                "machine_label": machines.get(machine_id, {}).get("label", machine_id),
+                "subject": subject,
+                "baseline": baseline_id,
+                "scope": table_kind if kind == "pillow" else "",
+                "workload": rows[0]["workload"],
+                "workload_type": workload_type,
+                "mode": mode,
+                "title": title,
+                "context": context,
+                "ratio": ratio,
+                "target_us": target["median_us"],
+                "baseline_us": baseline["median_us"],
+            })
     return result
 
 
-def render_boxplot(groups: list[dict]) -> str:
-    """Render a log-scale Tukey box plot of parity-verified workload ratios."""
-    left, right = 385, 1070
+def render_workload_plot(observations: list[dict]) -> str:
+    """Render every verified workload as a labeled point on a shared ratio axis."""
+    left, right, value_x = 450, 1080, 1090
     minimum_log, maximum_log = -4.0, 4.0
-    row_height = 54
-    top = 26
-    height = max(150, top + max(1, len(groups)) * row_height + 44)
-    width = 1100
+    row_height, group_gap, top = 25, 33, 44
+    width = 1220
 
     def x_for(ratio: float) -> float:
         position = max(minimum_log, min(maximum_log, math.log2(ratio)))
         return left + (position - minimum_log) / (maximum_log - minimum_log) * (right - left)
 
-    parts = [f'<svg class="bench-boxplot-svg" viewBox="0 0 {width} {height}" role="img" aria-labelledby="bench-boxplot-title bench-boxplot-desc">',
-             '<title id="bench-boxplot-title">Per-workload speedup distribution</title>',
-             '<desc id="bench-boxplot-desc">Each observation is one workload whose output comparison passed. Ratios above one are faster. Boxes show the first and third quartiles with a median line; whiskers reach the furthest observed point within one and a half interquartile ranges.</desc>']
+    grouped: dict[tuple[str, str, str, str, str], list[dict]] = {}
+    for observation in observations:
+        key = (observation["machine_id"], observation["machine_label"], observation["subject"],
+               observation["baseline"], observation["scope"])
+        grouped.setdefault(key, []).append(observation)
+    ordered_groups = sorted(grouped.items(), key=lambda item: item[0])
+    height = max(150, top + sum(group_gap + row_height * len(items) for _, items in ordered_groups) + 24)
+    parts = [f'<svg class="bench-workload-plot-svg" viewBox="0 0 {width} {height}" role="img" aria-labelledby="bench-workload-plot-title bench-workload-plot-desc">',
+             '<title id="bench-workload-plot-title">Parity-verified speed ratio for each workload</title>',
+             '<desc id="bench-workload-plot-desc">Each row is one exact-output-verified workload. The ratio is baseline median time divided by target median time. One times means equal median latency; points to the right are faster and points to the left are slower. Rows are sorted slowest first within each runner and comparison.</desc>']
     ticks = ((1 / 16, "1/16×"), (1 / 8, "1/8×"), (1 / 4, "1/4×"), (1 / 2, "1/2×"),
              (1, "1×"), (2, "2×"), (4, "4×"), (8, "8×"), (16, "16×"))
     for tick, label in ticks:
         x = x_for(tick)
         stroke = "#52616d" if tick == 1 else "#d1d7dc"
         thickness = "2" if tick == 1 else "1"
-        parts.append(f'<line x1="{x:.1f}" y1="18" x2="{x:.1f}" y2="{height - 30}" stroke="{stroke}" stroke-width="{thickness}"/>')
-        parts.append(f'<text class="bench-axis-label" x="{x:.1f}" y="{height - 8}" text-anchor="middle">{label}</text>')
-    for index, item in enumerate(groups):
-        y = top + index * row_height + 12
-        ratios = item["ratios"]
-        q1, median, q3 = item["q1"], item["median"], item["q3"]
-        iqr = q3 - q1
-        lower_bound, upper_bound = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-        inliers = [value for value in ratios if lower_bound <= value <= upper_bound]
-        lower, upper = min(inliers), max(inliers)
-        scope = {"operations": "individual operations", "pipelines": "pipeline workflows"}.get(item.get("scope"))
-        scope_label = f' · {scope}' if scope else ""
-        label = f'{item["machine_label"]} · {NAMES.get(item["subject"], item["subject"])} vs {NAMES.get(item["baseline"], item["baseline"])}{scope_label}'
-        summary = f'n={len(ratios)} · geomean {speed_label(item["geomean"])} · {item["faster"]} faster / {item["slower"]} slower'
-        parts.append(f'<text class="bench-box-label" x="8" y="{y - 3}">{escape(label)}</text>')
-        parts.append(f'<text class="bench-box-summary" x="8" y="{y + 13}">{escape(summary)}</text>')
-        parts.append(f'<line x1="{x_for(lower):.1f}" y1="{y + 2}" x2="{x_for(upper):.1f}" y2="{y + 2}" class="bench-whisker"/>')
-        parts.append(f'<line x1="{x_for(lower):.1f}" y1="{y - 5}" x2="{x_for(lower):.1f}" y2="{y + 9}" class="bench-whisker"/>')
-        parts.append(f'<line x1="{x_for(upper):.1f}" y1="{y - 5}" x2="{x_for(upper):.1f}" y2="{y + 9}" class="bench-whisker"/>')
-        box_x, box_end = x_for(q1), x_for(q3)
-        parts.append(f'<rect x="{box_x:.1f}" y="{y - 9}" width="{max(2.0, box_end - box_x):.1f}" height="22" class="bench-box"/>')
-        parts.append(f'<line x1="{x_for(median):.1f}" y1="{y - 10}" x2="{x_for(median):.1f}" y2="{y + 14}" class="bench-median"/>')
-        for value in ratios:
-            if value < lower_bound or value > upper_bound:
-                parts.append(f'<circle cx="{x_for(value):.1f}" cy="{y + 2}" r="3" class="bench-outlier"><title>{value:.5g}×</title></circle>')
-    if not groups:
+        parts.append(f'<line x1="{x:.1f}" y1="28" x2="{x:.1f}" y2="{height - 12}" class="bench-ratio-grid{" bench-ratio-grid-baseline" if tick == 1 else ""}" stroke="{stroke}" stroke-width="{thickness}"/>')
+        parts.append(f'<text class="bench-axis-label" x="{x:.1f}" y="18" text-anchor="middle">{label}</text>')
+    y = top
+    for (_machine_id, machine_label, subject, baseline, scope), items in ordered_groups:
+        items.sort(key=lambda item: (item["ratio"], item["title"], item["mode"], item["workload"]))
+        ratios = [item["ratio"] for item in items]
+        geomean = math.exp(statistics.mean(math.log(value) for value in ratios))
+        geomean_label = "1×" if geomean == 1 else speed_label(geomean)
+        summary = (f'{len(items)} workloads · typical {speed_label(statistics.median(ratios))} '
+                   f'· geomean {geomean_label} '
+                   f'· {sum(value > 1 for value in ratios)} faster / {sum(value < 1 for value in ratios)} slower / {sum(value == 1 for value in ratios)} equal')
+        scope_label = {"operations": " · individual operations", "pipelines": " · pipelines"}.get(scope, "")
+        header = f'{machine_label} · {NAMES.get(subject, subject)} vs {NAMES.get(baseline, baseline)}{scope_label}'
+        parts.append(f'<text class="bench-ratio-group" x="8" y="{y}" textLength="420" lengthAdjust="spacingAndGlyphs">{escape(header)}</text>')
+        parts.append(f'<text class="bench-ratio-group-summary" x="8" y="{y + 13}" textLength="420" lengthAdjust="spacingAndGlyphs">{escape(summary)}</text>')
+        y += group_gap
+        for item in items:
+            label_parts = [item["title"]]
+            if item["mode"] != "Not recorded":
+                label_parts.append(item["mode"])
+            if item["context"]:
+                label_parts.append(item["context"])
+            label = " · ".join(label_parts)
+            point_x = x_for(item["ratio"])
+            direction = "faster" if item["ratio"] > 1 else "slower" if item["ratio"] < 1 else "tie"
+            baseline_name = NAMES.get(item["baseline"], item["baseline"])
+            target_name = NAMES.get(item["subject"], item["subject"])
+            details = (f'{label}; {baseline_name} median {duration(item["baseline_us"])}; '
+                       f'{target_name} median {duration(item["target_us"])}; {speed_label(item["ratio"])}')
+            parts.append(f'<text class="bench-ratio-workload" x="8" y="{y + 4}" textLength="420" lengthAdjust="spacingAndGlyphs">{escape(label)}<title>{escape(details)}</title></text>')
+            parts.append(f'<circle class="bench-ratio-point {direction}" cx="{point_x:.1f}" cy="{y}" r="4"><title>{escape(details)}</title></circle>')
+            parts.append(f'<text class="bench-ratio-value {direction}" x="{value_x}" y="{y + 4}">{escape(speed_label(item["ratio"]))}</text>')
+            y += row_height
+    if not observations:
         parts.append(f'<text class="bench-empty-plot" x="{width / 2}" y="{height / 2}" text-anchor="middle">No parity-verified workload pairs match these filters.</text>')
     parts.append('</svg>')
     return "".join(parts)
@@ -448,20 +446,16 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
             + headers + '<th scope="col">Lowest median<small>Among comparable implementations</small></th></tr></thead>')
     pipeline_count = sum(1 for rows in grouped.values() if facets(rows[0], kind)[0] == "pipelines")
     operation_count = len(grouped) - pipeline_count
-    distributions = workload_distributions(grouped, machines, targets, kind)
-    boxplot = render_boxplot(distributions)
+    observations = workload_comparisons(grouped, machines, targets, kind)
+    workload_plot = render_workload_plot(observations)
     intro = (
         "Compare each profile with its workload-matched baseline on the same runner. Parallel CPU is measured separately with the opt-in Rayon feature. Pillow-SIMD appears only for its matched x86 workload cohort. Lower time is better."
         if kind == "pillow" else "Compare only workload pairs with matching inputs and measurement conditions. Lower time is better."
     )
     return (f'<div class="benchmark-dashboard" data-baseline="{escape(primary_baseline)}" data-kind="{escape(kind)}">'
             f'<p class="bench-intro">{escape(intro)}</p>'
-            '<section class="bench-overall"><h2>Overall speedup by workload</h2>'
-            '<p>Each observation is one workload whose exact output comparison passed. The box shows the middle half of paired speed ratios, the center line is the median, and whiskers reach the furthest observed point within 1.5× the interquartile range. Ratios above 1× mean less time than the named baseline. Geometric means are split between individual operations and complete pipelines so catalog size does not make one dominate the other. Runner cohorts stay separate, and timing-only pairs are excluded.</p>'
-            f'<div class="bench-boxplot" aria-label="Filterable per-workload speedup box plot">{boxplot}</div>'
-            f'<p class="bench-boxplot-excluded">Timing-only pairs excluded from the plot: <span data-excluded-count>{excluded}</span>. They remain in the tables and are not parity-backed speed claims.</p></section>'
             f'<div class="bench-summary">{"".join(summary)}</div>'
-            '<p class="bench-summary-note">The cards count observed per-workload directions. They are not a weighted score or a confidence estimate.</p>'
+            '<p class="bench-summary-note">Counts include only exact-output-verified workload pairs. They are per-workload observations, not production-traffic weights or confidence estimates.</p>'
             '<div class="bench-toolbar" hidden>'
             '<label class="bench-search">Find a workload<input id="evidence-filter" type="search" placeholder="Search operations, pipelines, sizes…" autocomplete="off"></label>'
             f'<label>Type<select id="bench-group"><option value="">All types</option>{options}</select></label>'
@@ -469,7 +463,11 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
             f'<label>Runner<select id="bench-machine"><option value="">All runners</option>{machine_filter_options}</select></label>'
             f'<label>Compare<select id="bench-subject"><option value="">All implementations</option>{subject_options}</select></label>'
             '<button type="button" id="bench-reset">Reset</button><output id="bench-count" aria-live="polite"></output></div>'
-            '<p class="bench-chart-key">Shorter bars = less time within a row. Sort by runner, type, mode, operation or pipeline, or backend latency. Scroll each table horizontally on small screens.</p>'
+            '<section class="bench-overall"><h2>Per-workload speedup</h2>'
+            '<p>Each row is one parity-verified workload. The ratio is baseline median time divided by pillow-rs median time: 1× means equal median time, higher values mean pillow-rs is faster, and lower values mean it is slower. Rows are sorted slowest first within each runner, implementation, and workload type. The axis is log₂ so reciprocal slowdowns and speedups are spaced evenly; extreme values are clipped at 1/16× and 16×, with the exact factor shown in the row label. Use the filters above to narrow by operation type, mode, runner, or implementation.</p>'
+            f'<div class="bench-ratio-plot" role="region" aria-label="Filterable per-workload speed ratios">{workload_plot}</div>'
+            f'<p class="bench-ratio-excluded">Workload pairs excluded because exact output parity was not established: <span data-excluded-count>{excluded}</span>. Their timings remain in the tables below, without a speed claim.</p></section>'
+            '<p class="bench-chart-key">Each dot is labeled with its operation or pipeline, mode, and workload context. Hover a dot for both median times. Sort the detailed tables below to inspect absolute latency.</p>'
             '<section class="bench-section" data-table-kind="pipelines"><h2>Pipeline benchmarks</h2><p>Composed, matrix, lifecycle and quick workloads. Current snapshot: ' + str(pipeline_count) + ' pipelines.</p>'
             '<div class="bench-table-scroll" role="region" aria-label="Pipeline benchmark comparisons" tabindex="0">'
             '<table class="bench-comparison"><caption>Median time per pipeline workload; each backend is compared with its workload-matched Pillow timing.</caption>'

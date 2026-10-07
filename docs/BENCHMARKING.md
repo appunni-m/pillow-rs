@@ -122,21 +122,23 @@ See GitHub's
 for the runner classes; physical VM instances are ephemeral, so the labels
 identify runner classes rather than a persistent computer.
 
-At the top of the results page, a box-and-whisker plot summarizes
-parity-verified per-workload speed ratios. A ratio is Pillow median latency
-divided by the pillow-rs profile median latency; values above 1× are faster.
-The box is the 25th–75th percentile, its center is the median, and whiskers
-reach the furthest observation within 1.5 interquartile ranges. The geometric
-mean summarizes multiplicative speed ratios, giving each workload one vote.
-Individual operations and complete pipelines have separate distributions and
-geometric means so a larger table cannot dominate the other. This is a
-workload-distribution summary, not a production-traffic-weighted
-score, confidence interval, or guarantee. Execution-only measurements remain
-in the tables but are excluded from the plot. The plot is on a log2 scale and
-clips its displayed axis at 1/16× and 16×; exact timings remain in the tables.
-Runner filters update the plot and both tables. Tables sort by runner, type,
-mode, workload name, or measured latency. Ratios are paired inside one
-runner cohort; absolute timing across macOS and Linux is not compared.
+At the top of the results page, the per-workload ratio plot shows one labeled
+point for each workload whose output comparison passed. The ratio is the
+baseline median latency divided by the pillow-rs profile median latency: 1×
+means equal median time, values above 1× are faster, and values below 1× are
+slower. Rows are sorted slowest first within each runner, implementation, and
+workload type. The shared log₂ axis is centered on the 1× parity line and
+clips at 1/16× and 16×; each row still shows its speed factor, and hovering a
+point shows both measured medians. The summary reports the median workload
+ratio as the typical result, a geometric mean as a secondary multiplicative
+summary, and counts of faster, slower, and equal workloads. Individual
+operations and complete pipelines remain separate so neither catalog size nor
+runner differences can obscure the other. These are per-workload observations,
+not production-traffic weights, confidence intervals, or guarantees.
+Execution-only measurements remain in the tables but are excluded from the
+plot. The workload, mode, runner, and implementation filters update the plot
+and both tables. Ratios are paired inside one runner cohort; absolute timing
+across macOS and Linux is not compared.
 
 The x86 Pillow-SIMD run remains a narrow, independently parity-gated cohort
 because its workloads are limited to BoxBlur, GaussianBlur, and getchannel.

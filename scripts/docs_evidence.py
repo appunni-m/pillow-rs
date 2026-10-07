@@ -440,7 +440,7 @@ def merge_pillow_snapshots(source: Path, repository: str, output: Path | None = 
         "policy_status": "Paired workload comparisons are summarized within each runner cohort; runner cohorts are not compared against one another.",
         "notes": list(dict.fromkeys(notes + [
             "Each runner cohort is a separate GitHub-hosted measurement. Ratios are formed only between matching rows from that same cohort; runner cohorts are not compared directly.",
-            "The overall box plot gives each parity-verified workload one observation. It shows workload spread, not a confidence interval or a universal speed guarantee.",
+            "The per-workload ratio plot shows each parity-verified workload as a labeled observation; it is not a confidence interval or a universal speed guarantee.",
         ])),
         "rows": rows,
         "source_sha256": hashlib.sha256("\n".join(sorted(source_hashes)).encode()).hexdigest(),
