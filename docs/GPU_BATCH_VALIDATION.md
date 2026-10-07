@@ -280,8 +280,8 @@ cargo package --list --locked -p pillow-rs
 The standard wheel, companion wheel, `pillow-rs[parallel]` installation, sdist
 build/installed examples, Rust package verification against registry dependencies,
 and npm consumer/license checks passed. The core crate contains 234 packaged
-files; the npm artifact contains ten. The retired archive is outside each
-package root/allowlist. Older wheel artifacts were preserved separately.
+files; the npm artifact contains ten. The unshipped ImageBatch prototype was not
+part of these package artifacts. Older wheel artifacts were preserved separately.
 
 The Windows x86_64 type check, documentation tests/site build, and fmt/Clippy
 checks were repeated after the typed conversion change and passed. Source

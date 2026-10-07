@@ -419,6 +419,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_coverage_context.py
     |-- test_docs_benchmark_selection.py
     |-- test_docs_benchmark_view.py
+    |-- test_docs_evidence.py
     |-- test_docs_release.py
     |-- test_docs_site.py
     |-- test_font_native_cases.py

@@ -13,9 +13,9 @@
 //!
 //! Descriptors are re-exported from the crate root for Rust callers
 //! and backend integration without Python or JavaScript objects. Call methods
-//! on [`crate::Image`] for Pillow-style argument validation. The retired batch
-//! executor is archived under `deprecated/imagebatch`; the GPU feature exposes
-//! its replacement through `GpuBatchExecutor`.
+//! on [`crate::Image`] for Pillow-style argument validation. The unshipped
+//! ImageBatch wrapper was never part of the public API; the GPU feature exposes
+//! explicit scheduling through `GpuBatchExecutor`.
 //!
 //! Every new operation must keep these tables aligned:
 //!

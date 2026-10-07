@@ -56,10 +56,10 @@ name. Use one process per environment.
 
 ## Explicit GPU scheduling
 
-The former `PIL.ImageBatch` experiment is deprecated and no longer exported.
-Use [GpuBatchExecutor](IMAGE_BATCHING.md) to submit existing lazy Image results
-or stream keyed inputs with bounded CPU/resident outputs. This separate source
-API leaves normal Image routing unchanged.
+The unshipped `PIL.ImageBatch` prototype is not part of the public API. Use
+[GpuBatchExecutor](IMAGE_BATCHING.md) to submit existing lazy Image results or
+stream keyed inputs with bounded CPU/resident outputs. This separate API leaves
+normal Image routing unchanged.
 
 ## Fonts and sequences
 

@@ -1,6 +1,6 @@
 {
   "project": "pillow-rs",
-  "version": "12.2.0",
+  "version": "12.2.1",
   "release_revision": "9aa7594c513e37eefe2bd1f9ad07dc2a4fbf3272",
   "repository": "appunni-m/pillow-rs",
   "site_url": "https://appunni-m.github.io/pillow-rs/",

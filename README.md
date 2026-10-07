@@ -94,7 +94,7 @@ upstream Pillow does not bundle as equivalents.
   does not guarantee that every operation or device uses it.
 - [Explicit GPU batching](docs/IMAGE_BATCHING.md) schedules existing lazy image
   graphs and streams keyed CPU or resident outputs within resource budgets.
-  It is implemented in source; the earlier ImageBatch experiment is archived.
+  It uses `GpuBatchExecutor` and remains separate from normal Image routing.
 - An opt-in Rayon **Parallel CPU** profile, separate from ordinary CPU, SIMD,
   and GPU execution. Its matching companion wheel is not available from the
   package registries yet; check the

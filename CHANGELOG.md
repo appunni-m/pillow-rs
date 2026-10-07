@@ -3,6 +3,11 @@
 All notable user-facing changes are recorded here. Stable release scope,
 parity status, and backend limitations are described in the documentation.
 
+## 12.2.1 - 2026-10-07
+
+- Remove the unshipped ImageBatch prototype and update documentation to describe
+  the current `GpuBatchExecutor` without pointing to removed files.
+
 ## 12.2.0 - 2026-10-05
 
 - Add exact rolling-row CPU and vectorized SIMD paths for uniform native-L
@@ -21,8 +26,7 @@ teardown checks. See the [release evidence](docs/REGISTRY_RELEASE_MATRIX.md#alph
   or resident GPU results, stable job IDs and caller keys, and immediate
   rejection of unsupported pending contexts. Reuse existing lazy image graphs;
   document cancellation, ownership, limits, and measured throughput.
-- Archive the experimental ImageBatch API and its implementation under
-  `deprecated/imagebatch`; remove its runtime exports.
+- Retire the experimental ImageBatch API and remove its runtime exports.
 - Add native-mode composed GPU execution and retain derived-image metadata.
 - Read native packed L samples correctly in GPU geometry-table transforms.
 - Keep SIMD `I`/`F` sample widening separate from L/LA-to-RGBA expansion;

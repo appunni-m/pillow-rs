@@ -27,7 +27,7 @@ has no Python or npm distribution.
 
 ## Version policy
 
-Use one declared version in Cargo, npm, Python, the Python runtime, and the documentation source-version field: **12.2.0**. This stable candidate follows the targeted Pillow version; a matching Pillow version is a compatibility target, not a claim that every API is implemented.
+Use one declared version in Cargo, npm, Python, the Python runtime, and the documentation source-version field: **12.2.1**. This stable patch follows the published 12.2.0 release; the Pillow version is a compatibility target, not a claim that every API is implemented.
 
 Python tooling normalizes the declared spelling automatically for its registry
 metadata and archive filenames. Do not maintain a separate Python version.
@@ -40,7 +40,7 @@ uses `next` for prerelease versions and `latest` for stable versions.
 
 ```sh
 make release-lock-update
-make release-version-check RELEASE_VERSION=v12.2.0
+make release-version-check RELEASE_VERSION=v12.2.1
 ```
 
 ## Prepare a release

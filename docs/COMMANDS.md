@@ -33,8 +33,8 @@ enabled.
 | Cache cleanup | `make clean` | Removes Python bytecode and the temporary report |
 | Build cleanup | `make clean-all` | Also removes Cargo build outputs |
 
-The previous ImageBatch targets and scripts are archived with their code.
-Use the separate [explicit GPU executor](IMAGE_BATCHING.md); its focused
+ImageBatch prototype-specific targets and scripts have been removed. Use the
+separate [explicit GPU executor](IMAGE_BATCHING.md); its focused
 [validation lanes](GPU_BATCH_VALIDATION.md) print evidence without JSON files.
 
 Setup installs dependencies; ordinary help and documentation builds do not.
