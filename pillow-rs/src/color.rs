@@ -357,6 +357,7 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
     // output before overwriting it. Keep the former zero-fill behavior if an
     // internal caller supplies a truncated buffer.
     gray.resize(expected_pixels, 0);
+    crate::compute::record_pipeline_allocation(expected_pixels);
     gray
 }
 
