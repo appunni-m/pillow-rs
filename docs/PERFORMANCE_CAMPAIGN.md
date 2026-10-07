@@ -101,7 +101,7 @@ The largest verified serial CPU gaps in this snapshot are:
 | Workload | Runner | Pillow speedup | Existing checkpoint |
 | --- | --- | ---: | --- |
 | RGB material thumbnail | Apple arm64 | 0.363× | RGB 2×2 specialization retained; packed loads and boxed i32 trials rejected |
-| F-mode bicubic resize composed pipeline | x86_64 | 0.454× | Runtime FMA plus local branch-hoist candidate; hosted rerun pending |
+| F-mode bicubic resize composed pipeline | x86_64 | 0.454× | Runtime FMA plus horizontal and vertical eight-tap unrolls; hosted reruns pending |
 | RGB material thumbnail | Ubuntu ARM64 | 0.455× | RGB thumbnail checkpoints |
 | Sparse CMYK getprojection pipeline | x86_64 | 0.480× | No focused optimization yet |
 | RGB material thumbnail | x86_64 | 0.491× | RGB thumbnail checkpoints |
@@ -19952,3 +19952,108 @@ parity outputs include `f-resize-138-parity-20261008.json`,
 The per-operation matrix remains sourced from the published full benchmark and
 version-matched Pillow-SIMD JSON; refresh it only when the next clean full
 snapshot is published.
+
+### Attempt 2: explicitly unroll the common eight-tap horizontal row
+
+The first candidate moved the wide-block decision out of the tap loop. A second
+candidate adds a fixed ordered FMA sequence when a horizontal coefficient row
+has exactly eight weights, retaining the branch-hoisted loop for every other
+row length and the existing wide-block product/add handling. This makes the
+common scale-two bicubic row independent of the generic enumerated tap loop.
+The output rounding boundary and FMA order remain unchanged.
+
+The initial direct-index candidate passed two full call-plus-materialization
+runs. It was subsequently rewritten to use checked source slices after Clippy
+flagged the direct index casts. Both versions used five warmups, 20 iterations
+across five samples, and concurrency one. Local macOS arm64 medians (ms) are:
+
+| Run | Pillow | CPU | SIMD | GPU | CPU speedup vs Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Initial direct-index candidate | 2.839 | 1.638 | 5.548 | 51.990 | 1.733× |
+| Initial candidate repeat | 2.926 | 1.650 | 5.512 | 54.209 | 1.773× |
+
+Each run recorded 100/100 actual CPU, SIMD, and GPU executions without
+fallback. CPU improved from 1.993/2.010 ms for the branch-hoisted candidate to
+1.638/1.650 ms. The SIMD path remained around 5.5 ms; GPU remained around
+52–54 ms with two dispatches and measured upload/readback, so GPU latency still
+exceeds SIMD and sustained throughput remains unmeasured. The local CPU speedup
+was about 1.75× Pillow, short of the 2× sequencing gate.
+
+Receipts are `f32-resize-attempt2-20261008.json` and
+`f32-resize-attempt2-repeat-20261008.json`, with parity outputs
+`f-resize-138-attempt2-parity-20261008.json`,
+`f-resize-138-simd-attempt2-parity-20261008.json`, and
+`f-resize-138-gpu-attempt2-parity-20261008.json` under
+`build/migration-parity/`.
+
+#### Checked-slice revision
+
+The retained horizontal fast path matches exactly eight coefficients and uses
+checked slice lookups for eight contiguous samples before issuing the ordered
+FMA sequence. It preserves the prior generic loop for clipped or wide rows.
+Two public runs passed exact parity and measured CPU medians of 1.426 and
+1.426 ms against Pillow medians of 2.829 and 2.846 ms (1.985× and 1.996×).
+CPU, SIMD, and GPU each executed all 100 observations with no fallback. SIMD
+remained at 5.46–5.50 ms. GPU remained at 53.68–54.04 ms with two dispatches,
+3,145,728 uploaded bytes, and 786,432 readback bytes. The bounded GPU runs do
+not measure sustained throughput. This revision still fell slightly short of
+the 2× CPU gate.
+
+Receipts are `f32-resize-attempt2-checked-20261008.json` and
+`f32-resize-attempt2-checked-repeat-20261008.json`; their public parity sidecars
+are the correspondingly named `*-parity-20261008.json` files.
+
+### Attempt 3: unroll the common eight-tap vertical row
+
+The vertical pass remained an indexed tap loop after horizontal unrolling. Add
+a fixed eight-tap ordered FMA path for rows with exactly eight coefficients,
+preserving the generic loop for other lengths. Use it in both the ordinary and
+tall-image vertical resamplers. Each tap still reads the same intermediate
+FLOAT32 sample and enters the same accumulator in Pillow order.
+
+Two public full-call-plus-materialization runs passed exact Pillow parity. The
+local macOS arm64 medians (ms) were:
+
+| Run | Pillow | CPU | SIMD | GPU | CPU speedup vs Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Initial vertical-unroll candidate | 2.829 | 1.331 | 5.539 | 54.323 | 2.126× |
+| Initial candidate repeat | 2.857 | 1.318 | 5.508 | 54.519 | 2.167× |
+| Checked-coordinate candidate | 2.880 | 1.340 | 5.508 | 52.969 | 2.149× |
+| Checked-coordinate repeat | 2.858 | 1.335 | 5.536 | 53.247 | 2.141× |
+
+Every run recorded 100/100 actual CPU, SIMD, and GPU executions with no
+fallback. The final checked-coordinate implementation uses `usize::try_from`
+before its fixed source-index path and leaves the ordered generic loop for
+other coordinates and row lengths. GPU used two dispatches, 3,145,728 uploaded
+bytes, and 786,432 readback bytes. SIMD remained about 4.1× slower than Pillow
+on this workload; GPU remained about 10× slower than SIMD, and sustained GPU
+throughput is unmeasured. The final CPU result clears the local 2× sequencing
+gate, but the published x86 gap is not closed until hosted results verify this
+revision. The final 138-case F-mode resize lane passes 138/138 with strict CPU
+selection and SIMD/GPU requested. These per-case receipts establish parity;
+only the full benchmark receipts establish execution backend counts. The first
+parity rerun used the system Python and was rejected because it had Pillow
+11.3.0 instead of the pinned 12.2.0 oracle. Rerunning with the repository
+`.venv` passed all cases. This was an environment selection error, not a test
+defect. No coverage was run.
+
+An alternative chained-slice implementation checked each of the eight
+vertical samples through successive `get` calls. Its single full public run
+measured CPU at 1.429 ms versus Pillow at 2.829 ms (1.98×), so it missed the
+2× gate and was removed. The retained path performs a checked signed-to-unsigned
+row conversion, then relies on the coefficient table's clipped source bounds
+for its fixed indexing sequence. Clippy reports arithmetic-side-effect
+warnings for that index math; no lint was disabled. Keep the bounds invariant
+documented beside the helper and seek a warning-free form only if it preserves
+the demonstrated speed.
+
+Initial benchmark receipts are `f32-resize-attempt3-vertical-unroll-20261008.json`
+and `f32-resize-attempt3-vertical-unroll-repeat-20261008.json`. Final checked
+benchmark receipts are `f32-resize-attempt3-vertical-unroll-checked-20261008.json`
+and `f32-resize-attempt3-vertical-unroll-checked-repeat-20261008.json`; final
+parity receipts are `f-resize-138-attempt3-final-cpu-parity-20261008.json`,
+`f-resize-138-attempt3-final-simd-parity-20261008.json`, and
+`f-resize-138-attempt3-final-gpu-parity-20261008.json` under
+`build/migration-parity/`. The all-workload hosted benchmark for the previous
+candidate remains in progress; this source change will be evaluated by the
+next hosted full run.
