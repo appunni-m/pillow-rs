@@ -1,6 +1,0 @@
-# Archived build hooks. These are not included by the active workspace.
-# Former pillow-rs/Cargo.toml [features]:
-migration-fault-injection = []
-
-# Former pillow-rs-py/Cargo.toml [features]:
-# migration-fault-injection = ["pillow-rs/migration-fault-injection"]

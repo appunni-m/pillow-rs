@@ -4,12 +4,12 @@
 **Checkout:** /Users/lazytrot/work/pillow-rs
 **Purpose:** Find places where a logical image mode is not handled directly, where general RGBA staging or redundant copies cost work, and where a generic implementation may be masking missing mode-specific paths.
 
-**Archive note (2026-10-05):** ImageBatch references below describe the former
-experiment, now retained in `deprecated/imagebatch` and no longer exported.
-Single-image measurements remain historical evidence. The
+**Historical note (2026-10-05):** ImageBatch references below describe an
+unshipped prototype, not the current public executor. Single-image
+measurements remain historical evidence. The
 [replacement GPU executor](IMAGE_BATCHING.md) has separate, scoped
 [throughput and latency measurements](GPU_BATCH_VALIDATION.md); those results
-do not validate the archived experiment or every operation listed below.
+do not validate the prototype or every operation listed below.
 
 ## Scope and method
 
@@ -229,7 +229,7 @@ Some mode-specific packed kernels exist, but admission is narrow: GPU has packed
 
 The 2026-10-04 LA `RankFilter(3, rank=1)` checkpoint adds a packed native-LA GPU shader. It stores two `[L, A]` pixels per word and selects the second-smallest L and alpha values independently; other ranks in this 3×3 specialization use exact min/max reductions or the full sorting network. At 1024 × 768, GPU p50 fell from 27.144 ms on the generic converted path to 0.943 ms, with transfers reduced from 3,145,728 to 1,572,864 bytes each way and zero mode conversions. Four seeded rank cases (0, 1, 4, and 8), including odd-width tails and the material workload, passed exact Pillow parity on CPU, SIMD, and GPU. The performance measurement covers material rank 1 only; other sizes, modes, and filter ranks remain open.
 
-The 2026-10-04 native-L `RankFilter(3, rank=1)` checkpoint adds a separate packed-L shader with four adjacent pixels per word. CPU and SIMD now use exact second-minimum reductions for this rank; the GPU path transfers 786,432 bytes each direction at 1024 × 768 with one dispatch and no mode conversion. On the material single-image workload, GPU p50 fell from 26.659 ms to 0.807 ms; strict CPU/SIMD/GPU Pillow parity passed 3/3 for odd-tail, single-column, and material cases. The GPU specialization intentionally rejects other ranks and sizes, which remain on existing routes. The archived `ImageBatch` experiment reused this native-L path for compatible size-3/rank-1 jobs and left ordinary `Image.filter` dispatch unchanged.
+The 2026-10-04 native-L `RankFilter(3, rank=1)` checkpoint adds a separate packed-L shader with four adjacent pixels per word. CPU and SIMD now use exact second-minimum reductions for this rank; the GPU path transfers 786,432 bytes each direction at 1024 × 768 with one dispatch and no mode conversion. On the material single-image workload, GPU p50 fell from 26.659 ms to 0.807 ms; strict CPU/SIMD/GPU Pillow parity passed 3/3 for odd-tail, single-column, and material cases. The GPU specialization intentionally rejects other ranks and sizes, which remain on existing routes. The historical ImageBatch prototype reused this native-L path for compatible size-3/rank-1 jobs and left ordinary `Image.filter` dispatch unchanged.
 
 **Assessment:** the general kernels still express extra channel work, and measurements now confirm material costs for LA MedianFilter(3), LA RankFilter(3), and the former converted L RankFilter(3) path on this adapter. Native-L and native-LA rank-one kernels address only these ranks and material sizes; other convolution, resize, and thumbnail paths remain unmeasured. Profile each format-specific workload before generalizing, and preserve each operation's rounding, edge behavior, and alpha semantics.
 
@@ -436,7 +436,7 @@ GPU median latency fell from 2.918 ms to 1.204 ms. Serial CPU was 5.41× faster
 than Pillow, SIMD 7.00× faster, and GPU had 7.33× lower latency than SIMD on
 this sample. This closes only native-LA MaxFilter(3) at the measured
 size; other LA filters and sizes retain separate parity and performance rows.
-The explicit `ImageBatch` API and ordinary single-image paths were untouched.
+Explicit batched execution and ordinary single-image paths were untouched.
 See `PERFORMANCE_CAMPAIGN.md` for the distinct Parallel CPU result and
 receipts.
 
@@ -448,7 +448,7 @@ passed for the material LA case and two boundary sizes. GPU transfer bytes
 fell by half, mode conversions fell from one to zero, and median latency fell
 from 2.993 ms to 1.246 ms. Serial CPU measured 5.53× faster than Pillow, SIMD
 6.99× faster, and GPU had 7.43× lower latency than SIMD in this q1 test. The
-separate `ImageBatch` feature and normal single-image routing were not changed;
+separate batched feature and normal single-image routing were not changed;
 queued throughput is not inferred from these measurements. P1 remains open
 for other operations and modes. See `PERFORMANCE_CAMPAIGN.md` for commands and
 receipts.
@@ -476,8 +476,8 @@ P9 now has measured native-L and native-LA Filter5x5 specializations plus an
 exact native-LA binomial Filter3x3 path. For the 1024 × 768 LA Filter3x3
 workload, serial CPU is 1.27× faster than Pillow and SIMD is 6.45× faster;
 GPU fell from 2.68 ms to 0.94 ms with zero mode conversions, but remains about
-1.99× slower than SIMD at one request. The archived ImageBatch experiment did not
-support Filter3x3; replacement queued GPU throughput remains unmeasured. LA Filter5x5
+1.99× slower than SIMD at one request. The historical ImageBatch prototype did not
+support Filter3x3; queued GPU Filter3x3 throughput remains unmeasured. LA Filter5x5
 SIMD remains at 3.97× Pillow, below its 5× target, and other operation/mode
 combinations remain unmeasured. P2, P5–P8, and P10 remain audit candidates
 without measured follow-up in this checkpoint.

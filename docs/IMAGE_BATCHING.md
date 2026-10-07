@@ -6,9 +6,8 @@
 
 `GpuBatchExecutor` is implemented in the source checkout. It schedules existing
 lazy image graphs on the pillow-rs GPU device, separately from normal Image routing.
-The former ImageBatch experiment remains in the
-[deprecated archive](../deprecated/imagebatch/README.md). No release is implied
-by this source change.
+The earlier ImageBatch prototype was never part of the public API; this executor
+uses the existing `PipelineOp` and image graph directly.
 
 ## Submit the existing operation result
 
