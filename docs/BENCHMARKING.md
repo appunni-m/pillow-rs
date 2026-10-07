@@ -462,9 +462,9 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`01e0dddd88b7bf5babf8758dd108b3dae350c8ba`, measured
-`2026-10-07T22:06:12.999080Z`, and published by [benchmark run
-37691947708](https://github.com/appunni-m/pillow-rs/actions/runs/37691947708).
+`83c2f390759bc5b04c0ffc3dac57dfbc451a5a2b`, measured
+`2026-10-07T22:34:34.209735Z`, and published by [benchmark run
+37695171668](https://github.com/appunni-m/pillow-rs/actions/runs/37695171668).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles. Only rows with exact parity and
 completed backend receipts are eligible for speed claims. The published
@@ -475,12 +475,9 @@ for revision `83c2f3907` is [workflow
 37695171643](https://github.com/appunni-m/pillow-rs/actions/runs/37695171643); it
 failed in its parity-gated benchmark step with exit code 2, and its public check
 annotation does not expose a specific failure cause. The full benchmark for the
-same revision is running as [workflow
-37695171668](https://github.com/appunni-m/pillow-rs/actions/runs/37695171668):
-all three runner jobs completed successfully, and GitHub is assembling the
-combined snapshot. The raw JSON assets still contain the preceding revisions.
-Refresh the full matrix only after the benchmark publishes its asset, and use
-Pillow-SIMD comparisons only after a complete clean matched cohort is available.
+same revision completed successfully on all three runners and published the
+clean snapshot. Use Pillow-SIMD comparisons only after a complete clean matched
+cohort is available.
 
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with

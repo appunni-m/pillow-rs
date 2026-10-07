@@ -71,8 +71,8 @@ were generated from GitHub Pages' raw [full benchmark snapshot](https://appunni-
 and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json).
 The full benchmark now runs when core or Python binding source changes, keeping
 backend implementation checkpoints tied to the complete cross-runner suite.
-The latest published full snapshot is from [benchmark run 37691947708](https://github.com/appunni-m/pillow-rs/actions/runs/37691947708),
-clean at revision `01e0dddd88b7bf5babf8758dd108b3dae350c8ba`. It contains 8,619
+The latest published full snapshot is from [benchmark run 37695171668](https://github.com/appunni-m/pillow-rs/actions/runs/37695171668),
+clean at revision `83c2f390759bc5b04c0ffc3dac57dfbc451a5a2b`. It contains 8,619
 rows across 663 workloads, including 201 `pipeline-op` workload IDs. The CSV
 retains every row and source hash. Only exact parity with the expected backend,
 complete terminal observation, no fallback, clean provenance, and matching
@@ -81,8 +81,8 @@ remains unmeasured in these one-request snapshots. The API census contains 330
 paths: all 209 selected-manifest paths plus 121 paths outside that contract.
 Those 121 are explicit unmeasured gaps in the per-operation matrix; they do not
 count as benchmark coverage. Across verified workload-runner pairs, serial CPU
-is slower than Pillow in 24 of 120 and below 2× Pillow in 69 of 120; SIMD is
-slower than Pillow in 25 of 120, below 2× in 43 of 120, and below 5× in 82 of
+is slower than Pillow in 24 of 120 and below 2× Pillow in 68 of 120; SIMD is
+slower than Pillow in 25 of 120, below 2× in 44 of 120, and below 5× in 82 of
 120. GPU latency is slower than SIMD in 23 of its 38 verified pairs.
 
 The immediate CPU priority is every verified workload currently slower than
@@ -98,43 +98,43 @@ The largest verified serial CPU gaps in this snapshot are:
 
 | Workload | Runner | Pillow speedup | Existing checkpoint |
 | --- | --- | ---: | --- |
-| RGB material thumbnail | Apple arm64 | 0.456× | Four bounded attempts in the current visit; no repeatable gain beyond the retained scalar reducer specialization |
-| RGB material thumbnail | Ubuntu ARM64 | 0.458× | Same RGB thumbnail checkpoint; hosted revision predates local paired-row rejection |
-| RGB material thumbnail | Ubuntu x86_64 | 0.474× | Same RGB thumbnail checkpoint; hosted revision predates local paired-row rejection |
-| F-mode bicubic resize composed pipeline | Ubuntu x86_64 | 0.499× | Horizontal and vertical eight-tap unrolls; local arm64 reaches 2.14× and hosted run 37695171668 is in progress |
-| F-mode thumbnail | Ubuntu x86_64 | 0.500× | Uses the F reducing-gap and boxed resize path; hosted run 37695171668 is in progress |
-| Sparse CMYK getprojection pipeline | Apple arm64 | 0.523× | Native four-ink scan retained; four bounded implementation attempts were previously measured |
-| I-mode bicubic resize composed pipeline | Ubuntu x86_64 | 0.528× | Shared typed-I resampling path; revisit after the current hosted F results |
-| LA material GaussianBlur | Apple arm64 | 0.531× | Native alpha-aware blur path; per-operation target remains open |
+| RGB material thumbnail | Apple arm64 | 0.396× | Four bounded attempts in the current visit; no repeatable gain beyond the retained scalar reducer specialization |
+| I-mode thumbnail | Apple arm64 | 0.439× | Four-attempt typed-I revisit; direct sampling and alternate reduction paths remain rejected |
+| RGB material thumbnail | Ubuntu ARM64 | 0.455× | Same RGB thumbnail checkpoint; CPU remains over 2× slower than Pillow |
+| F-mode thumbnail | Ubuntu x86_64 | 0.464× | Reducing-gap plus boxed F resize; CPU remains slower than Pillow and requested GPU fell back to CPU |
+| Sparse CMYK getprojection pipeline | Apple arm64 | 0.492× | Native four-ink scan retained; four bounded implementation attempts were previously measured |
+| F-mode bicubic resize composed pipeline | Ubuntu x86_64 | 0.498× | Eight-tap horizontal and vertical unrolls; hosted x86 CPU remains slower than Pillow |
+| I-mode bicubic resize composed pipeline | Ubuntu x86_64 | 0.521× | Shared typed-I resampling path; prior four-attempt checkpoint remains open |
+| RGB material thumbnail | Ubuntu x86_64 | 0.549× | RGB thumbnail checkpoint; CPU remains below the 2× sequencing gate |
 
 The speedup is Pillow median latency divided by target median latency; each
 listed workload is slower than Pillow on that runner. The I-mode 5 × 5 x86 FMA
 candidate meets the CPU≤Pillow target in both its materialized filter and
 composed convolution workloads on all three runners; sub-2× rows remain visible
-in the matrix. The RGB thumbnail remains the top ranked CPU gap; its four
-attempts in this visit found no repeatable gain beyond the retained reducer
-specialization, so the next visit should begin with a different ranked CPU
-workload. The F-mode resize unroll reaches 2.14× Pillow on local arm64;
-workflow 37695171668 will show whether its x86 and ARM rows move enough to
-change the ranking. Keep working through every verified CPU workload below
-Pillow and raise those rows to at least 2× before shifting the main optimization
-queue to workloads that only lose to Pillow-SIMD. The x86 YCbCr SIMD revisit
-remains open for that later stage and is recorded at the end of this campaign
-log.
+in the matrix. The RGB and I-mode thumbnail gaps remain the first priorities,
+but their recent visits reached bounded attempt limits without meeting the
+sequencing target. The F-mode resize unroll reaches 2.14× Pillow in a local
+arm64 call-plus-materialization benchmark; this clean hosted snapshot records
+1.77× on macOS arm64, 1.18× on Ubuntu ARM64, and 0.498× on x86_64, so the local
+result does not close the cross-runner gap. The F-mode thumbnail remains at
+0.464× on x86_64; its requested GPU row used CPU fallback and is ineligible.
+Continue through every verified CPU workload below Pillow and raise those rows
+to at least 2× before shifting the main optimization queue to workloads that
+only lose to Pillow-SIMD. The x86 YCbCr SIMD revisit remains open for that later
+stage and is recorded at the end of this campaign log.
 
 The published Pillow-SIMD asset remains dirty and contains only 9 of the 34
 declared cases, from revision `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`.
 Workflow 37691437080 for revision `90f72b9a8` failed. The new
 [Pillow-SIMD workflow 37695171643](https://github.com/appunni-m/pillow-rs/actions/runs/37695171643)
-for revision `83c2f3907` also failed, at the parity-gated benchmark step, after
+for revision `83c2f3907` also failed in its parity-gated benchmark step after
 21m38s with exit code 2. Its public check annotation provides only the generic
 exit code; no failure category or test defect is confirmed. Until a complete
 clean asset is published, the existing JSON is diagnostic only. The
 corresponding [full benchmark workflow
 37695171668](https://github.com/appunni-m/pillow-rs/actions/runs/37695171668)
-has completed all three runner jobs successfully and is still assembling the
-combined snapshot. The public matrix therefore still reflects revision
-`01e0dddd88b7bf5babf8758dd108b3dae350c8ba`. The 7 x86 SIMD rows marked failed have
+completed all three runner jobs successfully and published the clean 83c2
+snapshot. The 7 x86 SIMD rows marked failed have
 `successful_execution: not_proven` and no actual-backend receipt; they are
 missing-execution evidence, not reported parity mismatches. FastOctree's 8
 remote rows are `not_run` with parity unproven; the focused current-main CPU
