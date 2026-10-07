@@ -19935,13 +19935,20 @@ remains above Pillow. GPU executed 100/100 times with two dispatches, 3,145,728
 uploaded bytes, and 786,432 readback bytes. Its roughly 53 ms latency remains
 above SIMD, and these single-request runs do not demonstrate sustained GPU
 throughput. The local trial does not validate the x86 code path or close the
-published x86 CPU gap. No genuine test defect was found. Benchmark harness
-selection tests passed; no coverage was run.
+published x86 CPU gap. A separate affected parity run passed all 138 maintained
+F-mode resize cases with CPU, SIMD, and GPU requested; CPU used strict backend
+selection. Those parity receipts prove output equality, while the per-case
+parity harness does not record actual backend receipts. Only the full public
+benchmark receipts support the execution counts above. No genuine test defect
+was found. Benchmark harness selection tests passed; no coverage was run.
 
 The local receipts are `f32-resize-baseline-20261008.json`,
 `f32-resize-baseline-repeat-20261008.json`,
 `f32-resize-attempt1-20261008.json`, and
-`f32-resize-attempt1-repeat-20261008.json` under `build/migration-parity/`.
+`f32-resize-attempt1-repeat-20261008.json` under `build/migration-parity/`;
+parity outputs include `f-resize-138-parity-20261008.json`,
+`f-resize-138-simd-parity-20261008.json`, and
+`f-resize-138-gpu-parity-20261008.json`.
 The per-operation matrix remains sourced from the published full benchmark and
 version-matched Pillow-SIMD JSON; refresh it only when the next clean full
 snapshot is published.
