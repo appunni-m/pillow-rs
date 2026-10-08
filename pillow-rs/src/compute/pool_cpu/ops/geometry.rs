@@ -14,7 +14,8 @@ use crate::image_utils::raw_bytes_to_image;
 #[cfg(target_arch = "x86_64")]
 use crate::ops::pil_resize::X86FmaToken;
 use crate::ops::pil_resize::{
-    F64MulAdd, FilterCoeffsF64, PortableFma, f32_samples_from_le_bytes, i32_samples_from_le_bytes,
+    F64MulAdd, FilterCoeffsF64, PortableFma, f_resize_coefficients_allow_finite_fma,
+    f_resize_samples_allow_finite_fma, f32_samples_from_le_bytes, i32_samples_from_le_bytes,
     pil_resize, pil_resize_boxed, pillow_sin_f64, precompute_coeffs_f64,
     precompute_coeffs_f64_boxed, premultiply_alpha, round_up, unpremultiply_alpha,
 };
@@ -318,32 +319,6 @@ fn f_resize_vertical_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
         );
     }
     accumulator as f32
-}
-
-fn f_resize_samples_allow_finite_fma<F: F64MulAdd>(fma: &F, samples: &[f32]) -> bool {
-    fma.supports_finite_mul_add() && samples.iter().all(|sample| sample.is_finite())
-}
-
-/// Check that every input to a finite-only FMA row is finite and that each
-/// ordered f64 accumulator stays well within the finite range. F-mode samples
-/// are f32, so a row's sum of absolute weighted sample bounds proves every
-/// intermediate f64 accumulator finite.
-fn f_resize_coefficients_allow_finite_fma(coefficients: &FilterCoeffsF64) -> bool {
-    let max_accumulator = f64::MAX * 0.5;
-    let max_sample = f64::from(f32::MAX);
-    coefficients.weights.iter().all(|row| {
-        let mut absolute_sum = 0.0f64;
-        for &weight in row {
-            if !weight.is_finite() {
-                return false;
-            }
-            absolute_sum += weight.abs() * max_sample;
-            if !absolute_sum.is_finite() || absolute_sum >= max_accumulator {
-                return false;
-            }
-        }
-        true
-    })
 }
 
 fn f_resize_horizontal_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
