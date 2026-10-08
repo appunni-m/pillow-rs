@@ -20190,17 +20190,28 @@ call and output materialization; every row passed exact Pillow parity.
 | Pushed boxed-resize view, local baseline | 1.084 | 1.283 | 1.028 | 1.958 / CPU fallback |
 | Reducing-gap view candidate 1 | 1.045 | 0.809 | 1.043 | 1.182 / CPU fallback |
 | Reducing-gap view candidate 2 | 1.053 | 0.837 | 1.037 | 1.175 / CPU fallback |
+| Row-major vertical pass, candidate 3 | 1.051 | 0.729 | 1.047 | 1.039 / CPU fallback |
+| Row-major vertical pass, repeat 4 | 1.049 | 0.730 | 1.037 | 1.044 / CPU fallback |
+| Direct byte output, candidate 5 | 1.048 | 0.731 | 1.071 | 1.040 / CPU fallback |
 
-Both candidates recorded 100/100 actual CPU and SIMD observations. CPU latency
-fell about 35–37% versus the immediately preceding source-view candidate and
-was 1.26–1.29× faster than Pillow on these local macOS arm64 runs. It still
-misses the 2× sequencing gate. SIMD remains close to Pillow and far from 2×;
-GPU is not demonstrated because all 100 requested GPU observations fell back
-to CPU for the unproven typed-F reducing-gap contract. The full hosted run for
-the preceding commit is pending, so this improvement needs the next hosted
-cross-runner matrix before it is accepted as campaign evidence.
+Every candidate recorded 100/100 actual CPU and SIMD observations and passed
+exact parity. The aligned reducing-gap reads cut CPU latency about 35–37% versus
+the immediately preceding source-view candidate. Reordering the vertical pass
+to visit contiguous source rows, while preserving each output pixel's tap
+order, reduced it a further 13% in two repeats; CPU is now about 1.44× faster
+than Pillow locally, still short of the 2× sequencing gate. The final direct-
+byte-output trial measured the same latency while removing the temporary
+FLOAT32 output vector and its full-frame conversion pass. SIMD remains close to
+Pillow and far from 2×. GPU is not demonstrated because all requested GPU
+observations fell back to CPU for the unproven typed-F reducing-gap contract.
+The hosted run for pushed commit `e62df1d8d` is pending, so these additional
+local changes need the next hosted cross-runner matrix before they are
+campaign evidence.
 
-Receipts are `thumbnail-f-reduce-borrow-candidate1.json` and
-`thumbnail-f-reduce-borrow-candidate2.json`, with corresponding
-`-parity.json` sidecars under `build/migration-parity/`. No test defect was
-identified and no coverage was run.
+Receipts are `thumbnail-f-reduce-borrow-candidate1.json`,
+`thumbnail-f-reduce-borrow-candidate2.json`,
+`thumbnail-f-row-major-vertical-candidate3.json`,
+`thumbnail-f-row-major-vertical-candidate4.json`, and
+`thumbnail-f-direct-output-candidate5.json`, with corresponding `-parity.json`
+sidecars under `build/migration-parity/`. No test defect was identified and no
+coverage was run.
