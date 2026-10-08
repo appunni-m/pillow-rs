@@ -1395,6 +1395,12 @@ pub(crate) struct PreparedExecution {
     fallback_reason: Option<String>,
 }
 
+impl PreparedExecution {
+    pub(crate) fn is_serial_cpu_without_fallback(&self) -> bool {
+        self.selected_backend == Backend::Cpu && self.fallback_reason.is_none()
+    }
+}
+
 /// Performs the route and validation phases before a source image is
 /// materialized. Keeping this separate preserves the explicit-backend contract
 /// while allowing the actual backend phase to be measured later.
@@ -1919,6 +1925,79 @@ pub(crate) fn execute_prepared_shared(
     }
 
     execute_prepared(prepared, ops, img, mode).map(Arc::new)
+}
+
+/// Runs a serial CPU terminal that folds a pending image pipeline into its
+/// result instead of materializing an intermediate image. The closure must
+/// produce the exact public result for every operation in `ops`.
+pub(crate) fn execute_prepared_cpu_terminal<T>(
+    prepared: &PreparedExecution,
+    ops: &[PipelineOp],
+    input: &DynamicImage,
+    output_buffer_sizes: [usize; 2],
+    execute: impl FnOnce() -> Result<T, PilError>,
+) -> Result<T, PilError> {
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let result = execute()?;
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        for op in ops {
+            begin_pipeline_operation_telemetry(registry::variant_key(op));
+            record_pipeline_operation_path("cpu");
+            finish_pipeline_operation_telemetry();
+        }
+
+        let mut resource = host_resource_telemetry(input);
+        let output_bytes = output_buffer_sizes
+            .iter()
+            .map(|&size| size as u64)
+            .fold(0u64, u64::saturating_add);
+        let output_count = output_buffer_sizes
+            .iter()
+            .filter(|&&size| size != 0)
+            .count() as u64;
+        resource.host_buffer_count = resource.host_buffer_count.saturating_add(output_count);
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
+        resource.fused_operation_count = ops.len() as u64;
+        for size in output_buffer_sizes {
+            if size != 0 {
+                record_pipeline_allocation(size);
+            }
+        }
+        let allocation = take_pipeline_allocation_telemetry();
+        resource.host_allocation_count = allocation.allocation_count;
+        resource.host_allocated_bytes = allocation.allocated_bytes;
+        record_pipeline_resource_telemetry(resource);
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: prepared.requested_backend,
+            actual_backend: Backend::Cpu,
+            operation_count: ops.len(),
+            route_ns: prepared.route_ns,
+            validation_ns: prepared.validation_ns,
+            backend_ns,
+            dispatch_count: None,
+            fallback_reason: prepared.fallback_reason.clone(),
+            resource: Some(resource),
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok(result)
 }
 
 #[cfg(test)]
