@@ -462,30 +462,32 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`24da760bf9fc2a05c32c344491b6c42e8b74f446`, measured
-`2026-10-08T18:23:31.849129Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-and [Benchmark workflow 37821693990](https://github.com/appunni-m/pillow-rs/actions/runs/37821693990).
+`3066fc85dd869f2d99ebba82d35d44c49435aa1c`, measured
+`2026-10-08T18:54:59.558082Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and [Benchmark workflow 37825764990](https://github.com/appunni-m/pillow-rs/actions/runs/37825764990).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles. Only rows with exact parity and
 completed backend receipts are eligible for speed claims. The x86 RGB
 grayscale delta-form candidate passed exact parity and recorded 100/100 actual
-CPU samples with no fallback, but its median was 0.9660 ms versus 0.5307 ms for
-Pillow (0.549×), so it remains a CPU miss. The prior four-pixel batching
-candidate was rejected; its result is recorded in the reusable optimization
-skill.
+CPU samples with no fallback. On Intel Xeon Platinum 8573C, its median was
+0.8251 ms versus 0.6614 ms for Pillow (0.802×), so it remains a CPU miss. The
+prior 24da snapshot ran on AMD EPYC 7763 and reported 0.9660 ms versus 0.5307
+ms (0.549×); these different hosts make that cross-run change unsuitable as a
+causal speedup claim. The prior four-pixel batching candidate was rejected;
+its result is recorded in the reusable optimization skill.
 Across the 120 verified serial CPU workload-runner pairs, 6 are slower than
-Pillow, 61 are below 2×, and 98 are below 5×. The corresponding SIMD counts are
-22 slower than Pillow, 42 below 2×, and 84 below 5×. GPU latency is slower than
-SIMD in 23 of its 38 verified pairs; sustained throughput remains unmeasured.
+Pillow, 64 are below 2×, and 99 are below 5×. The corresponding SIMD counts are
+22 slower than Pillow, 44 below 2×, and 85 below 5×. GPU latency is slower than
+SIMD in 22 of its 38 verified pairs; sustained throughput remains unmeasured.
 The separately built Parallel CPU profile uses the opt-in Cargo `parallel`
-feature; 21 of its 120 verified pairs are slower than Pillow, 55 are below 2×,
+feature; 20 of its 120 verified pairs are slower than Pillow, 57 are below 2×,
 and 83 are below 5×.
 
-The six verified serial CPU misses are RGB material grayscale (0.549× on
-x86_64), YCbCr material grayscale (0.635× on x86_64), I-mode bicubic resize
-(0.816× on x86_64), LA material GaussianBlur (0.907× on macOS arm64), I-mode
-thumbnail (0.932× on x86_64), and RGB material thumbnail (0.960× on Ubuntu
-arm64). Their per-workload rows and the remaining below-2× rows are retained
+The six verified serial CPU misses are I-mode bicubic resize (0.651× on
+x86_64), RGB material grayscale (0.802× on x86_64), LA material GaussianBlur
+(0.823× on macOS arm64), I-mode thumbnail (0.908× on x86_64), RGB material
+thumbnail (0.952× on Ubuntu arm64), and YCbCr material grayscale (0.992× on
+x86_64). Their per-workload rows and the remaining below-2× rows are retained
 in the matrix rather than aggregated into one operation score.
 
 The published Pillow-SIMD snapshot is still dirty at revision
