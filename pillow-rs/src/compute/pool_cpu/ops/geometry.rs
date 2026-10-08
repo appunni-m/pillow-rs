@@ -852,16 +852,14 @@ fn i32_sample_bytes_from_native_storage(img: &DynamicImage) -> Result<(u32, u32,
     Ok((width, height, source_bytes))
 }
 
-/// Decode I-mode samples for boxed resize, whose existing materialized path
-/// keeps owned values while it constructs the fractional source window.
-fn i32_samples_from_native_storage(img: &DynamicImage) -> Result<(u32, u32, Vec<i32>), PilError> {
+/// Borrow aligned little-endian I samples for boxed resize. Keep an exact
+/// decoder fallback for unaligned or other-endian source storage.
+fn i32_samples_from_native_storage<'a>(
+    img: &'a DynamicImage,
+) -> Result<(u32, u32, std::borrow::Cow<'a, [i32]>), PilError> {
     let (width, height, source_bytes) = i32_sample_bytes_from_native_storage(img)?;
     let source_pixels = CheckedDims::new_allow_empty(width, height, 4)?.total_pixels();
-    let samples = source_bytes
-        .chunks_exact(4)
-        .take(source_pixels)
-        .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
-        .collect();
+    let samples = i32_samples_from_le_bytes(source_bytes, source_pixels);
     Ok((width, height, samples))
 }
 
@@ -903,10 +901,10 @@ fn resize_i_boxed(
         }
     }
 
-    let mut output = vec![0i32; (dst_w * dst_h) as usize];
+    let output_dimensions = CheckedDims::new_allow_empty(dst_w, dst_h, 4)?;
+    let mut output_bytes = Vec::with_capacity(output_dimensions.total_bytes());
     for output_y in 0..dst_h as usize {
         let y0 = vertical.xmin[output_y];
-        let output_row = output_y * dst_w as usize;
         for output_x in 0..dst_w as usize {
             let mut sum = 0.0f64;
             for (tap, &weight) in vertical.weights[output_y].iter().enumerate() {
@@ -916,14 +914,10 @@ fn resize_i_boxed(
                     sum,
                 );
             }
-            output[output_row + output_x] = round_up(sum) as i32;
+            output_bytes.extend_from_slice(&(round_up(sum) as i32).to_le_bytes());
         }
     }
-    let bytes: Vec<u8> = output
-        .iter()
-        .flat_map(|value| value.to_le_bytes())
-        .collect();
-    let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, bytes).ok_or_else(|| {
+    let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, output_bytes).ok_or_else(|| {
         PilError::ValueError("resize_i boxed: failed to create output buffer".into())
     })?;
     Ok(DynamicImage::ImageRgba8(out))
@@ -2516,11 +2510,38 @@ fn reduce_i_thumbnail(
             ));
         }
     };
-    let sample_i32 = |x: u32, y: u32| {
-        let sample = source_image.get_pixel(x, y);
-        i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]])
-    };
+    let source_bytes = source_image.as_raw();
+    let source_samples = i32_samples_from_le_bytes(
+        source_bytes,
+        source_bytes.len() / std::mem::size_of::<i32>(),
+    );
+    let source_stride = src_w as usize;
+    let sample_i32 = |x: u32, y: u32| source_samples[y as usize * source_stride + x as usize];
     let mut out = Vec::with_capacity((dst_w * dst_h * 4) as usize);
+
+    // Pillow's common native-I thumbnail reducing-gap uses complete 2×2
+    // quartets. Traverse each pair of source rows contiguously and preserve
+    // Reduce.c's wrapping INT32 additions before the f64 average. Partial
+    // blocks and other factors stay on the generic path below.
+    if factor_x == 2 && factor_y == 2 && src_w > 0 && src_h > 0 && src_w % 2 == 0 && src_h % 2 == 0
+    {
+        let row_pair_len = source_stride
+            .checked_mul(2)
+            .ok_or_else(|| PilError::InternalError("I thumbnail row size overflow".into()))?;
+        for rows in source_samples.chunks_exact(row_pair_len) {
+            let (top, bottom) = rows.split_at(source_stride);
+            for (top_pair, bottom_pair) in top.chunks_exact(2).zip(bottom.chunks_exact(2)) {
+                let quartet = top_pair[0]
+                    .wrapping_add(top_pair[1])
+                    .wrapping_add(bottom_pair[0])
+                    .wrapping_add(bottom_pair[1]);
+                let value = round_up(f64::from(quartet) / 4.0) as i32;
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        return raw_bytes_to_image(dst_w, dst_h, out, 4);
+    }
+
     let main_width = src_w / factor_x;
     let main_height = src_h / factor_y;
     for y in 0..dst_h {
@@ -3695,6 +3716,117 @@ mod tests {
         // Reduce.c forms the interior quartet while still INT32: four
         // INT32_MAX values wrap to -4 before promotion and averaging.
         assert_eq!(output.as_raw(), &(-1i32).to_le_bytes());
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn i_thumbnail_2x2_row_path_matches_multiple_wrapping_quartets() {
+        let source_words = [
+            i32::MAX,
+            1,
+            i32::MIN,
+            -1,
+            -3,
+            i32::MAX,
+            9,
+            11,
+            4,
+            -4,
+            5,
+            -5,
+            6,
+            8,
+            i32::MIN,
+            i32::MAX,
+        ];
+        let source_bytes = source_words
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(4, 4, source_bytes).expect("source shape must be valid"),
+        );
+        let output =
+            reduce_i_thumbnail(&source, 2, 2, 2, 2).expect("I-mode 2x2 reduction must succeed");
+
+        let mut expected = Vec::with_capacity(2 * 2 * 4);
+        for y in 0..2usize {
+            for x in 0..2usize {
+                let top = y * 2 * 4 + x * 2;
+                let bottom = top + 4;
+                let quartet = source_words[top]
+                    .wrapping_add(source_words[top + 1])
+                    .wrapping_add(source_words[bottom])
+                    .wrapping_add(source_words[bottom + 1]);
+                let value = super::round_up(f64::from(quartet) / 4.0) as i32;
+                expected.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        assert_eq!(output.as_bytes(), expected);
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn i_thumbnail_odd_2x2_edges_keep_partial_double_accumulation() {
+        let source_words = [
+            i32::MAX,
+            1,
+            i32::MIN,
+            -1,
+            17,
+            -3,
+            i32::MAX,
+            9,
+            11,
+            -29,
+            4,
+            -4,
+            5,
+            -5,
+            i32::MIN,
+        ];
+        let source_bytes = source_words
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(5, 3, source_bytes).expect("source shape must be valid"),
+        );
+        let output = reduce_i_thumbnail(&source, 3, 2, 2, 2)
+            .expect("I-mode odd-edge reduction must succeed");
+
+        let mut expected = Vec::with_capacity(3 * 2 * 4);
+        let main_width = 5 / 2;
+        let main_height = 3 / 2;
+        for y in 0..2usize {
+            for x in 0..3usize {
+                let source_x = x * 2;
+                let source_y = y * 2;
+                let block_width = 2.min(5 - source_x);
+                let block_height = 2.min(3 - source_y);
+                let mut sum = 0.0f64;
+                if x < main_width && y < main_height {
+                    let top = source_y * 5 + source_x;
+                    let bottom = top + 5;
+                    let quartet = source_words[top]
+                        .wrapping_add(source_words[top + 1])
+                        .wrapping_add(source_words[bottom])
+                        .wrapping_add(source_words[bottom + 1]);
+                    sum = f64::from(quartet);
+                } else {
+                    for dy in 0..block_height {
+                        for dx in 0..block_width {
+                            sum += f64::from(source_words[(source_y + dy) * 5 + source_x + dx]);
+                        }
+                    }
+                }
+                let divisor =
+                    u32::try_from(block_width * block_height).expect("test block size fits u32");
+                let value = super::round_up(sum / f64::from(divisor)) as i32;
+                expected.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        assert_eq!(output.as_bytes(), expected);
     }
 
     #[cfg(target_endian = "little")]
