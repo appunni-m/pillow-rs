@@ -20132,3 +20132,43 @@ on x86_64. This confirms the retained candidate's exact parity but leaves its
 CPU latency below the 2× sequencing gate on all three runners; SIMD and GPU
 also remain above their respective targets in the full matrix. No coverage
 was run.
+
+## F-mode thumbnail source-view revisit — 2026-10-08
+
+The current source-view candidate starts from `d64cfbda5` and targets the
+filtered boxed-F resize inside `pipeline-op.thumbnail.native-f32-1024x768`.
+The full public call, including reducing-gap processing and output
+materialization, passed its exact Pillow gate. These local macOS arm64 runs
+used five warmups, 20 iterations across five samples, and concurrency one:
+
+| Run | Pillow ms | CPU ms | SIMD ms | Requested GPU profile ms / actual backend |
+| --- | ---: | ---: | ---: | ---: |
+| Clean baseline | 1.048 | 1.347 | 1.020 | 1.994 / CPU fallback |
+| Checked source view, repeat 1 | 1.056 | 1.307 | 1.019 | 1.953 / CPU fallback |
+| Checked source view, repeat 2 | 1.047 | 1.304 | 1.013 | 1.915 / CPU fallback |
+| Lint-clean source view, final parity run | 1.084 | 1.283 | 1.028 | 1.958 / CPU fallback |
+
+The retained code reuses `f32_samples_from_le_bytes` and binds its result once
+as a plain `&[f32]`. Aligned little-endian storage can be borrowed; unaligned
+or other-endian storage uses the existing exact decoder, including its
+`chunks_exact(4)` trailing-byte behavior. Both repeat runs and the final
+lint-clean run passed exact Pillow parity and recorded 100/100 actual CPU and
+SIMD observations. The two repeat medians show about a 3.1% CPU gain versus the
+clean local baseline; the final parity run measured a lower CPU median, but
+also a slower Pillow median. CPU remains slower than Pillow in every local run
+(about 1.18–1.25×). This is a local ARM result; x86 remains the target gap and
+needs the hosted cross-runner matrix before any cross-platform claim.
+
+Two follow-ups were removed: caching the boxed coefficients recorded 200 hits
+but measured 1.310 ms CPU, and a six-tap horizontal unroll measured 1.325 ms.
+Neither improved the source-view candidate's 1.304 ms result. The requested
+GPU profile fell back to CPU for the unproven typed-F reducing-gap contract and
+is excluded from GPU comparisons. The exact benchmark receipts are
+`thumbnail-f-boxed-borrow-baseline.json`,
+`thumbnail-f-boxed-borrow-candidate2.json`,
+`thumbnail-f-boxed-borrow-candidate3.json`,
+`thumbnail-f-boxed-borrow-cache-candidate4.json`,
+`thumbnail-f-boxed-six-tap-candidate5.json`, and
+`thumbnail-f-boxed-borrow-final.json`, with matching `-parity.json`
+sidecars under `build/migration-parity/`. No test defect was identified; no
+coverage was run.

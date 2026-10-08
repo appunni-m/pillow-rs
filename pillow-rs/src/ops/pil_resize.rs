@@ -4014,10 +4014,8 @@ fn pil_resize_f_boxed_with_fma<F: F64MulAdd>(
     // Filtered resampling requires numeric samples and keeps Pillow's
     // f64-accumulate/f32-store order. Decode only for this branch; nearest
     // resampling copies the original four-byte F sample words above.
-    let source: Vec<f32> = source_bytes
-        .chunks_exact(4)
-        .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
-        .collect();
+    let source_samples = f32_samples_from_le_bytes(source_bytes, source_bytes.len() / 4);
+    let source: &[f32] = source_samples.as_ref();
     let horizontal = precompute_coeffs_f64_boxed(dst_w, source_width, box_left, box_right, filter);
     let vertical = precompute_coeffs_f64_boxed(dst_h, source_height, box_top, box_bottom, filter);
     let mut intermediate = vec![0.0f32; source_height as usize * dst_w as usize];
@@ -4046,7 +4044,7 @@ fn pil_resize_f_boxed_with_fma<F: F64MulAdd>(
             }
         }
     } else {
-        intermediate.copy_from_slice(&source);
+        intermediate.copy_from_slice(source);
     }
 
     let output_floats = if need_vertical {
