@@ -21101,3 +21101,59 @@ reverted. These runs did not reveal a test defect. Receipts are
 `l-blur-luma-row-fusion-candidate3-repeat-20261008.json`, and
 `l-blur-specialized-luma-line-candidate4-20261008.json`, each with its parity
 sidecar under `build/migration-parity/`. No coverage was run.
+
+### LA GaussianBlur horizontal fusion and copy-elision trials — rejected — 2026-10-08
+
+The fresh-source workload was
+`pipeline-op.gaussianblur.material-la-noise-1024x768` at the
+`apply-filter` plus `observe-filter-result` boundary. The latter materializes
+the lazy result before timing stops. Clean revision `5509e2d8` measured two
+baseline runs with five warmups, 20 iterations across five samples, and
+concurrency one. Both passed exact Pillow parity:
+
+| Run | Pillow | Serial CPU | Pillow/CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Clean baseline A1 | 6.5601 ms | 7.0717 ms | 0.928× | 4.6816 ms | 2.4872 ms |
+| Clean baseline A2 | 6.3925 ms | 6.5983 ms | 0.969× | 5.0165 ms | 2.5640 ms |
+
+The measured CPU route owns two full-frame buffers totaling 3,145,728 bytes;
+its receipt reports no upload, mode conversion, or full-frame copy. GPU moves
+1,572,864 bytes each way, copies one full frame, and dispatches six times. GPU
+latency is below SIMD in these single-request measurements, but concurrency
+one does not establish sustained throughput. SIMD is only 1.27–1.40× faster
+than Pillow, short of the requested 2× single-thread floor and the final 5×
+goal. Serial CPU remains slower than Pillow.
+
+Four bounded CPU attempts did not improve the paired whole-call ratio:
+
+| Attempt | Pillow | CPU | Pillow/CPU | Decision |
+| --- | ---: | ---: | ---: | --- |
+| LA row fusion, first run | 6.6886 ms | 17.5336 ms | 0.381× | Host-contended outlier; repeat before deciding |
+| LA row fusion, repeat | 6.1558 ms | 6.9914 ms | 0.880× | Reverted; no gain |
+| Row fusion plus a two-channel recurrence | 5.4649 ms | 6.1977 ms | 0.882× | Reverted; no gain |
+| Two-channel recurrence alone | 6.6327 ms | 7.4554 ms | 0.890× | Reverted; no gain |
+| Read input directly for the first pass | 27.4694 ms | 30.3778 ms | excluded | Reverted; severe host contention |
+
+The last run passed strict Pillow parity. Each CPU, SIMD, and GPU profile
+recorded 100/100 actual backend executions with no fallback. During that run,
+an unrelated `uvicorn-rs-httpbench` workload saturated a CPU core; Pillow
+and target medians both rose by about four times versus the clean baseline.
+Exclude it from performance ranking. Its source-copy-elision hypothesis still
+showed no evidence of a win, and the candidate was removed. Focused tests for
+row-pass order, two-channel recurrence, and direct-input equivalence passed;
+no test defect was identified.
+
+The experiments and their parity sidecars are
+`la-blur-current-source-baseline-20261008.json`,
+`la-blur-current-source-repeat-20261008.json`,
+`la-blur-row-fusion-candidate1-20261008.json`,
+`la-blur-row-fusion-candidate1-repeat-20261008.json`,
+`la-blur-two-channel-step-candidate2-20261008.json`,
+`la-blur-two-channel-step-candidate3-20261008.json`, and
+`la-blur-direct-first-pass-candidate4-20261008.json` under
+`build/migration-parity/`. The LA CPU slowdown remains open. Keep the complete
+per-operation CSV tied to its clean published source snapshot; these local
+candidate runs update this dated investigation only. No coverage was run.
+The next known current-source CPU miss is material RGB Thumbnail at 0.920×
+Pillow (1.1675 ms CPU versus 1.0744 ms Pillow); its old published row uses an
+invalid boundary, so use the local whole-workflow evidence when ranking it.
