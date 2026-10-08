@@ -462,41 +462,43 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`7cd96ac43be67a1346680b7297c0980cee544477`, measured
-`2026-10-08T17:43:01.433246Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
+`24da760bf9fc2a05c32c344491b6c42e8b74f446`, measured
+`2026-10-08T18:23:31.849129Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and [Benchmark workflow 37821693990](https://github.com/appunni-m/pillow-rs/actions/runs/37821693990).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles. Only rows with exact parity and
-completed backend receipts are eligible for speed claims. The snapshot's RGB
-grayscale result includes an x86-only four-pixel batching experiment that was
-rejected and removed from the working source.
-Across the 120 verified serial CPU workload-runner pairs, 8 are slower than
-Pillow, 58 are below 2×, and 98 are below 5×. The corresponding SIMD counts are
-23 slower than Pillow, 41 below 2×, and 86 below 5×. GPU latency is slower than
+completed backend receipts are eligible for speed claims. The x86 RGB
+grayscale delta-form candidate passed exact parity and recorded 100/100 actual
+CPU samples with no fallback, but its median was 0.9660 ms versus 0.5307 ms for
+Pillow (0.549×), so it remains a CPU miss. The prior four-pixel batching
+candidate was rejected; its result is recorded in the reusable optimization
+skill.
+Across the 120 verified serial CPU workload-runner pairs, 6 are slower than
+Pillow, 61 are below 2×, and 98 are below 5×. The corresponding SIMD counts are
+22 slower than Pillow, 42 below 2×, and 84 below 5×. GPU latency is slower than
 SIMD in 23 of its 38 verified pairs; sustained throughput remains unmeasured.
 The separately built Parallel CPU profile uses the opt-in Cargo `parallel`
-feature; 15 of its 120 verified pairs are slower than Pillow, 49 are below 2×,
-and 82 are below 5×.
+feature; 21 of its 120 verified pairs are slower than Pillow, 55 are below 2×,
+and 83 are below 5×.
 
-The eight verified serial CPU misses are RGB material grayscale (0.490× on
-x86_64), YCbCr material grayscale (0.581× on x86_64), I-mode bicubic resize
-(0.812× on x86_64), I-mode thumbnail (0.905× on x86_64), RGB material
-thumbnail (0.942× on macOS arm64), RGB+L merge (0.947× on x86_64), RGB material
-thumbnail (0.958× on Ubuntu arm64), and LA material GaussianBlur (0.972× on
-macOS arm64). Their per-workload rows and the remaining below-2× rows are
-retained in the matrix rather than aggregated into one operation score.
+The six verified serial CPU misses are RGB material grayscale (0.549× on
+x86_64), YCbCr material grayscale (0.635× on x86_64), I-mode bicubic resize
+(0.816× on x86_64), LA material GaussianBlur (0.907× on macOS arm64), I-mode
+thumbnail (0.932× on x86_64), and RGB material thumbnail (0.960× on Ubuntu
+arm64). Their per-workload rows and the remaining below-2× rows are retained
+in the matrix rather than aggregated into one operation score.
 
 The published Pillow-SIMD snapshot is still dirty at revision
 `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d` and covers 9 of the 34 declared
 cases, so its ratios remain diagnostic. The latest version-matched Pillow-SIMD
-job for candidate revision `67728573c` is [workflow
-37802856387](https://github.com/appunni-m/pillow-rs/actions/runs/37802856387); it
-failed in its parity-gated benchmark step, and its public check annotation only
-reports exit code 2. The F-mode thumbnail candidate is outside that workflow's
-workload allowlist, so the failure does not diagnose this operation. No
-specific failing case or test defect is confirmed. Use Pillow-SIMD comparisons
-only after a complete clean matched cohort is available. Full benchmark run
-37813889817 updated the full benchmark asset but did not change the separate
-Pillow-SIMD asset, which still points to the incomplete revision above.
+job for candidate revision `24da760bf` is [workflow
+37821693770](https://github.com/appunni-m/pillow-rs/actions/runs/37821693770).
+It failed in its parity-gated benchmark step, and its public check annotation
+only reports exit code 2. No specific failing case or test defect is
+confirmed. Use Pillow-SIMD comparisons only after a complete clean matched
+cohort is available. The full benchmark run updated the full benchmark asset
+but did not change the separate Pillow-SIMD asset, which still points to the
+incomplete revision above.
 
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with
