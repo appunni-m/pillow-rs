@@ -462,24 +462,26 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`5509e2d8c483f50b285f06fd15d15695f17badad`, measured
-`2026-10-08T09:36:31.664150Z`, and published by [benchmark run
-37755680386](https://github.com/appunni-m/pillow-rs/actions/runs/37755680386).
+`67728573cb035b2a3445d5fb48cf236d503a6edd`, measured
+`2026-10-08T16:01:13.916251Z`, and published by [benchmark run
+37802856333](https://github.com/appunni-m/pillow-rs/actions/runs/37802856333).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles. Only rows with exact parity and
 completed backend receipts are eligible for speed claims. Across the 120
-verified serial CPU workload-runner pairs, 5 are slower than Pillow, 61 are
-below 2×, and 100 are below 5×. The corresponding SIMD counts are 24 slower
-than Pillow, 40 below 2×, and 81 below 5×. GPU latency is slower than SIMD in
-23 of its 38 verified pairs; sustained throughput remains unmeasured. The
+verified serial CPU workload-runner pairs, 8 are slower than Pillow, 59 are
+below 2×, and 96 are below 5×. The corresponding SIMD counts are 23 slower
+than Pillow, 40 below 2×, and 82 below 5×. GPU latency is slower than SIMD in
+22 of its 38 verified pairs; sustained throughput remains unmeasured. The
 separately built Parallel CPU profile uses the opt-in Cargo `parallel` feature;
-20 of its 120 verified pairs are slower than Pillow, 54 are below 2×, and 84
+17 of its 120 verified pairs are slower than Pillow, 43 are below 2×, and 82
 are below 5×.
 
-The five verified serial CPU misses are F-mode thumbnail (0.677× on x86_64),
-I-mode bicubic resize (0.774× on x86_64), RGB grayscale (0.881× on x86_64),
-I-mode thumbnail (0.937× on x86_64), and material RGB thumbnail (0.965× on
-ARM64). Their per-workload rows and the remaining below-2× rows are retained in
+The eight verified serial CPU misses are F-mode thumbnail (0.633× on x86_64),
+YCbCr material grayscale (0.643× on x86_64), RGB material grayscale (0.664× on
+x86_64), I-mode bicubic resize (0.787× on x86_64), LA material GaussianBlur
+(0.818× on macOS arm64), I-mode thumbnail (0.848× on x86_64), RGB material
+thumbnail (0.961× on ARM64), and RGB material UnsharpMask (0.969× on macOS
+arm64). Their per-workload rows and the remaining below-2× rows are retained in
 the matrix rather than aggregated into one operation score.
 
 The published Pillow-SIMD snapshot is still dirty at revision
@@ -491,7 +493,9 @@ failed in its parity-gated benchmark step, and its public check annotation only
 reports exit code 2. The F-mode thumbnail candidate is outside that workflow's
 workload allowlist, so the failure does not diagnose this operation. No
 specific failing case or test defect is confirmed. Use Pillow-SIMD comparisons
-only after a complete clean matched cohort is available.
+only after a complete clean matched cohort is available. The Pillow-SIMD run for
+`c84fb100e` is in progress at [workflow
+37805854242](https://github.com/appunni-m/pillow-rs/actions/runs/37805854242).
 
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with
