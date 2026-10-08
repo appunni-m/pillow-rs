@@ -300,6 +300,54 @@ impl BackendImpl for CpuPool {
                     end += 1;
                 }
                 let consumed = end - index;
+                if let Some(thumbnail_op @ PipelineOp::Thumbnail { .. }) = ops.get(end)
+                    && ops::geometry::rgb_putpixel_thumbnail_fusion_supported(
+                        input,
+                        &ops[index..end],
+                        thumbnail_op,
+                        current_mode.as_deref(),
+                    )
+                {
+                    let fused_count = consumed + 1;
+                    for op in &ops[index..=end] {
+                        crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(
+                            op,
+                        ));
+                    }
+                    let next = ops::geometry::execute_rgb_putpixel_thumbnail_fusion(
+                        input,
+                        &ops[index..end],
+                        thumbnail_op,
+                        current_mode.as_deref(),
+                    );
+                    let next = match next {
+                        Ok(next) => next,
+                        Err(error) => {
+                            for _ in 0..fused_count {
+                                crate::compute::record_pipeline_operation_path("cpu");
+                                crate::compute::finish_pipeline_operation_telemetry();
+                            }
+                            return Err(error);
+                        }
+                    };
+                    for _ in 0..fused_count {
+                        crate::compute::record_pipeline_operation_path("cpu");
+                        crate::compute::finish_pipeline_operation_telemetry();
+                    }
+                    crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
+                    resources.fused_operation_count = resources
+                        .fused_operation_count
+                        .saturating_add(fused_count as u64);
+                    result = Some(next);
+                    for op in &ops[index..=end] {
+                        current_mode = crate::compute::pool_simd::ops::adapters::simd_mode_after_op(
+                            op,
+                            current_mode.as_deref(),
+                        );
+                    }
+                    index = end + 1;
+                    continue;
+                }
                 if consumed > 1 {
                     for op in &ops[index..end] {
                         crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(

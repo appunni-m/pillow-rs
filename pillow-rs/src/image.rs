@@ -5653,6 +5653,94 @@ impl Image {
         Ok((img.width(), img.height()))
     }
 
+    /// Whether this CPU-locked RGB pipeline contains only public, already
+    /// validated pixel writes over an in-memory source. `thumbnail()` can use
+    /// shape metadata for this prefix and keep the writes in the same batch.
+    pub(crate) fn has_deferable_cpu_rgb_putpixel_prefix(&self) -> bool {
+        let Image::Pipeline {
+            source,
+            ops,
+            backend,
+            explicit_mode,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        let cpu_route_is_unambiguous = match backend {
+            Some(crate::compute::Backend::Cpu) => true,
+            None => crate::compute::cpu_is_only_active_backend(),
+            Some(_) => false,
+        };
+        if !cpu_route_is_unambiguous {
+            return false;
+        }
+        if !matches!(explicit_mode.as_deref(), None | Some("RGB")) || ops.is_empty() {
+            return false;
+        }
+        let Image::Loaded(source) = source.as_ref() else {
+            return false;
+        };
+        if !matches!(source.image.as_ref(), DynamicImage::ImageRgb8(_)) {
+            return false;
+        }
+        ops.iter().all(|op| {
+            matches!(
+                op,
+                PipelineOp::PutPixel {
+                    palette_index: false,
+                    ..
+                }
+            )
+        })
+    }
+
+    /// Check the concrete CPU fusion admission for this lazy write prefix and
+    /// requested thumbnail. The geometry backend owns the mode, size, filter,
+    /// and factor proof shared with its fused executor.
+    pub(crate) fn can_defer_cpu_rgb_putpixel_thumbnail(
+        &self,
+        width: u32,
+        height: u32,
+        filter: ResampleFilter,
+    ) -> bool {
+        if !self.has_deferable_cpu_rgb_putpixel_prefix() {
+            return false;
+        }
+        let Image::Pipeline {
+            source,
+            ops,
+            backend,
+            explicit_mode,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        let cpu_route_is_unambiguous = match backend {
+            Some(crate::compute::Backend::Cpu) => true,
+            None => crate::compute::cpu_is_only_active_backend(),
+            Some(_) => false,
+        };
+        if !cpu_route_is_unambiguous {
+            return false;
+        }
+        let Image::Loaded(source) = source.as_ref() else {
+            return false;
+        };
+        let thumbnail = PipelineOp::Thumbnail {
+            w: width,
+            h: height,
+            filter,
+        };
+        crate::compute::cpu_rgb_putpixel_thumbnail_fusion_supported(
+            source.image.as_ref(),
+            ops.as_slice(),
+            &thumbnail,
+            explicit_mode.as_deref(),
+        )
+    }
+
     /// Returns the Pillow mode string for this image.
     ///
     /// # Errors

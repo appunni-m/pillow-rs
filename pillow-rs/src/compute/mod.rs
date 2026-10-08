@@ -838,6 +838,31 @@ pub use pool_gpu::stream::{
     GpuBatchExecutor, GpuBatchStats, GpuImage,
 };
 mod pool_simd;
+
+/// Ask the CPU execution path whether an RGB PutPixel prefix can be folded
+/// into a non-nearest 2×2 thumbnail reduction without materializing the prefix.
+pub(crate) fn cpu_rgb_putpixel_thumbnail_fusion_supported(
+    img: &DynamicImage,
+    putpixel_ops: &[PipelineOp],
+    thumbnail: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    pool_cpu::ops::geometry::rgb_putpixel_thumbnail_fusion_supported(
+        img,
+        putpixel_ops,
+        thumbnail,
+        mode,
+    )
+}
+
+/// Whether an unlocked pipeline can only be routed to the serial CPU backend.
+/// A CPU-locked pipeline is handled directly by its caller; this check keeps
+/// narrow CPU-only fusion admission from intercepting normal multi-backend
+/// routing.
+pub(crate) fn cpu_is_only_active_backend() -> bool {
+    matches!(active_backends(), Ok(active) if active.as_slice() == [Backend::Cpu])
+}
+
 pub(crate) mod registry;
 
 pub(crate) use pool_cpu::CpuPool;
