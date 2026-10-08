@@ -20878,3 +20878,35 @@ parity defect. No coverage was run. Receipts are
 `rgb-thumb-rgb-row-candidate4.json`,
 `rgb-thumb-rgb-row-candidate4-repeat.json`, and the rejected streaming
 candidate above, each with parity sidecars under `build/migration-parity/`.
+
+### I-mode bicubic vertical tap dispatch — 2026-10-08
+
+For `pipeline-chain.resize-native-i32.bicubic-noise-1024x768`, each vertical
+output row shares one coefficient span across all destination x coordinates.
+The serial CPU loop was checking whether that shared span had eight taps once
+per pixel. Moving the eight-tap versus generic-span choice outside the x loop
+removes those repeated checks while preserving the exact FMA order and rounded
+INT32 intermediate. Clipped spans continue through the original generic loop.
+
+The current-source 5-second profile showed `resize_i` as the largest sampled
+native function (52 samples); source inspection identified the shared vertical
+tap check. The focused eight-tap signed-extreme test passed bitwise, and two
+100-sample whole-workflow runs passed strict Pillow parity with actual CPU,
+SIMD, and GPU execution and no fallback:
+
+| Run | Pillow | Serial CPU | SIMD | GPU | Pillow/CPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Current source | 1.9804 ms | 1.6948 ms | 4.5248 ms | 36.5258 ms | 1.169× |
+| Vertical dispatch A1 | 1.9882 ms | 1.4259 ms | 4.5041 ms | 36.1653 ms | 1.394× |
+| Vertical dispatch A2 | 1.9825 ms | 1.4655 ms | 4.5237 ms | 36.6359 ms | 1.353× |
+
+Serial CPU improved 13.5–15.9% against the same-host baseline and is now
+faster than Pillow on this Apple arm64 workload, but remains short of the 2×
+CPU sequencing gate. The published x86_64 row remains at 0.573× until a fresh
+x86_64 run measures this source. SIMD remains about 2.25× slower than Pillow.
+GPU is about 8× slower than SIMD in single-request latency; each request
+uploads 3 MiB and reads back 768 KiB, with two dispatches. Sustained throughput
+is unmeasured. The `parallel` Cargo feature was disabled; this is serial CPU.
+Receipts are `i32-resize-current-arm64.json`,
+`i32-resize-vertical-dispatch-candidate1.json`, and its repeat, with parity
+sidecars under `build/migration-parity/`. No coverage was run.

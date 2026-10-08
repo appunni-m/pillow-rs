@@ -1001,12 +1001,15 @@ fn resize_i(
     for (dy, row) in output_bytes.chunks_mut(output_stride).enumerate() {
         let y0 = v_coeffs_f64.xmin[dy];
         let weights = &v_coeffs_f64.weights[dy];
-        for (dx, output) in row.chunks_exact_mut(4).enumerate() {
-            let accumulator = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
-                resize_i_sum_eight(weights, y0 as usize, |sy| {
+        if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
+            for (dx, output) in row.chunks_exact_mut(4).enumerate() {
+                let accumulator = resize_i_sum_eight(weights, y0 as usize, |sy| {
                     intermediate[sy * dst_w as usize + dx]
-                })
-            } else {
+                });
+                output.copy_from_slice(&(round_up(accumulator) as i32).to_le_bytes());
+            }
+        } else {
+            for (dx, output) in row.chunks_exact_mut(4).enumerate() {
                 let mut accumulator: f64 = 0.0;
                 for (cix, &weight) in weights.iter().enumerate() {
                     let sy = (y0 + cix as i64) as usize;
@@ -1015,9 +1018,8 @@ fn resize_i(
                         accumulator,
                     );
                 }
-                accumulator
-            };
-            output.copy_from_slice(&(round_up(accumulator) as i32).to_le_bytes());
+                output.copy_from_slice(&(round_up(accumulator) as i32).to_le_bytes());
+            }
         }
     }
 
