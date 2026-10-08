@@ -1162,6 +1162,15 @@ fn resize_i_boxed(
     if dst_w == 0 || dst_h == 0 || source_width == 0 || source_height == 0 {
         return Ok(DynamicImage::new_rgba8(dst_w, dst_h));
     }
+    if box_left == 0.0
+        && box_top == 0.0
+        && box_right == f64::from(source_width)
+        && box_bottom == f64::from(source_height)
+    {
+        // A full-image box uses the same coefficient domain as ordinary I
+        // resize. Reuse its fixed-width tap path and runtime FMA dispatch.
+        return resize_i(img, dst_w, dst_h, &filter);
+    }
     let (_, _, source) = i32_samples_from_native_storage(img)?;
     let horizontal = precompute_coeffs_f64_boxed(dst_w, source_width, box_left, box_right, filter);
     let vertical = precompute_coeffs_f64_boxed(dst_h, source_height, box_top, box_bottom, filter);
