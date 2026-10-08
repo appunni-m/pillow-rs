@@ -19856,6 +19856,12 @@ that the x86 candidate improves end-to-end latency. No coverage was run.
 
 ## RGB material thumbnail scalar 2×2 rounding specialization — 2026-10-08
 
+Correction: the workload used `observed_steps`, which excluded its eager Pillow
+`putpixel` setup while charging the lazy pillow-rs write to terminal execution.
+The figures in this historical section are not valid Pillow comparisons; the
+whole-workflow correction and replacement results are recorded at the end of
+this log.
+
 The clean published inventory ranks the material RGB thumbnail at 0.379× Pillow
 on macOS arm64. The prior RGB thumbnail visits reached their bounded attempt
 limit; this revisit starts from the newly confirmed CPU reduction bottleneck.
@@ -20579,3 +20585,45 @@ locking replaced the wrapper's Rust image handle between workflow steps, so
 the retained view read a stale handle. Locking now updates the existing handle
 in place; the case passes in a focused rerun (1/1). The full suite was not
 rerun after this harness correction. No coverage was run.
+
+### Correction: RGB thumbnail benchmark boundary and sparse 2×2 reducer — 2026-10-08
+
+The earlier material-RGB thumbnail runs used `observed_steps` for only
+`thumbnail` and `tobytes`. Their parity case creates a 1024×768 RGB image and
+calls `putpixel` in setup. Pillow applies that write eagerly before timing;
+pillow-rs queues it and executes it when the thumbnail is materialized. The
+old comparison therefore charged target setup work to the timed call but not
+Pillow. Treat the earlier local ratios and hosted 0.441×/0.455×/0.505× CPU rows
+as invalid for Pillow comparison. The builder now selects `whole_workflow`,
+including image creation, the write, thumbnail, and byte materialization on
+both sides. `make migration-parity-inputs` regenerated 945 benchmark workloads.
+
+On the corrected workload, the native RGB reducer uses a sparse 2×2 path only
+for large images with at most one nonzero input pixel per 1024 source pixels.
+It scans once, accumulates only touched blocks, and leaves the established
+reducer in place for dense input. The test compares its output with the generic
+reducer and verifies dense images leave the sparse route. Two corrected A/B
+pairs passed exact Pillow parity and recorded 100/100 actual CPU, SIMD, and GPU
+samples without fallback:
+
+| Run | Pillow | Serial CPU | SIMD | GPU | CPU/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline A1 | 1.0647 ms | 2.5399 ms | 2.3427 ms | 2.0369 ms | 0.419× |
+| Baseline A2 | 1.0473 ms | 2.5274 ms | 2.7936 ms | 2.0228 ms | 0.414× |
+| Sparse reducer B1 | 1.0526 ms | 2.3999 ms | 2.3329 ms | 2.0444 ms | 0.439× |
+| Sparse reducer B2 | 1.0639 ms | 2.4064 ms | 2.8407 ms | 2.0391 ms | 0.442× |
+
+The CPU change lowered the paired end-to-end medians by 5.5% and 4.8%. The
+candidate remains about 2.3× slower than Pillow, so this is progress, not a
+passed CPU target. SIMD remains slower than Pillow and misses its half-Pillow
+target. GPU latency is below SIMD in these single-request runs, but sustained
+throughput is unmeasured. CPU receipts report 2.51 MB of host buffers; GPU
+receipts include 3 MiB upload, 192 KiB readback, and three dispatches per
+request. A second resampler scan and an active-row handoff added no repeatable
+gain and were reverted. The old observed-step receipts remain in
+`build/migration-parity/` only as history; use the corrected whole-workflow
+receipts `rgb-thumbnail-whole-workflow-baseline.json`,
+`rgb-thumbnail-whole-workflow-baseline-repeat.json`,
+`rgb-thumbnail-whole-workflow-candidate.json`, and
+`rgb-thumbnail-whole-workflow-candidate-repeat.json` for this checkpoint. No
+coverage was run.

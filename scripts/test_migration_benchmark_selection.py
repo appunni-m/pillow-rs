@@ -67,6 +67,26 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 limit=None,
             )
 
+    def test_material_rgb_thumbnail_times_lazy_pixel_setup(self) -> None:
+        inputs = (
+            Path(__file__).resolve().parents[1]
+            / "pillow-rs"
+            / "tests"
+            / "fixtures"
+            / "inputs"
+            / "benchmark"
+            / "pipeline-operations.json"
+        )
+        workloads = json.loads(inputs.read_text(encoding="utf-8"))["workloads"]
+        workload = next(
+            workload
+            for workload in workloads
+            if workload["workload_id"] == "pipeline-op.thumbnail.material-rgb-1024x768"
+        )
+
+        self.assertEqual(workload["measurement"]["boundary"], "whole_workflow")
+        self.assertEqual(workload["measurement"]["step_ids"], [])
+
     def test_backend_parity_receipt_is_removed_after_loading(self) -> None:
         expected = {"status": "completed", "comparisons": [{"case_id": "case"}]}
         with tempfile.TemporaryDirectory() as directory:
