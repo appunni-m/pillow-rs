@@ -989,10 +989,13 @@ fn native_ycbcr_luma(img: &DynamicImage) -> Option<crate::raster::GrayImage> {
     if pixels == 0 || source.as_raw().len() != dims.total_bytes() {
         return None;
     }
-    // This CPU path only needs the first byte of each triple. The portable
-    // SIMD gather used by other channel operations builds three vectors and a
-    // swizzle mask per block; a direct strided copy gives LLVM a much simpler
-    // loop to lower for this one-channel conversion.
+    // This CPU path only needs the first byte of each triple. On x86, pack
+    // four Y samples from three native words and store them together. Keep
+    // the portable loop on other targets; the explicit sixteen-lane
+    // deinterleave remains in the SIMD adapter.
+    #[cfg(target_arch = "x86_64")]
+    let output = native_ycbcr_luma_packed_blocks(source.as_raw(), pixels);
+    #[cfg(not(target_arch = "x86_64"))]
     let output: Vec<u8> = source
         .as_raw()
         .chunks_exact(3)
@@ -1000,6 +1003,51 @@ fn native_ycbcr_luma(img: &DynamicImage) -> Option<crate::raster::GrayImage> {
         .collect();
     crate::compute::record_pipeline_allocation(pixels);
     crate::raster::GrayImage::from_raw(img.width(), img.height(), output)
+}
+
+/// Extract four Y samples per block using bounded word loads and stores. Each
+/// complete block is exactly twelve bytes, so the loads stay within the source
+/// allocation. The remainder contains complete three-byte pixels only.
+#[cfg(any(target_arch = "x86_64", test))]
+fn native_ycbcr_luma_packed_blocks(source: &[u8], pixels: usize) -> Vec<u8> {
+    let mut packed = Vec::<[u8; 4]>::with_capacity(pixels.div_ceil(4));
+    let mut blocks = source.chunks_exact(12);
+    packed.extend(blocks.by_ref().map(|block| {
+        let first = u32::from_le_bytes(
+            block[0..4]
+                .try_into()
+                .expect("a complete YCbCr block has four bytes"),
+        );
+        let second = u32::from_le_bytes(
+            block[4..8]
+                .try_into()
+                .expect("a complete YCbCr block has four bytes"),
+        );
+        let third = u32::from_le_bytes(
+            block[8..12]
+                .try_into()
+                .expect("a complete YCbCr block has four bytes"),
+        );
+        [
+            first as u8,
+            (first >> 24) as u8,
+            (second >> 16) as u8,
+            (third >> 8) as u8,
+        ]
+    }));
+    let remainder = blocks.remainder();
+    if !remainder.is_empty() {
+        let mut tail = [0; 4];
+        for (pixel, luma) in remainder.chunks_exact(3).zip(&mut tail) {
+            *luma = pixel[0];
+        }
+        packed.push(tail);
+    }
+    // `[u8; 4]` has byte alignment, so flattening reuses this allocation.
+    let mut output = packed.into_flattened();
+    output.truncate(pixels);
+    debug_assert_eq!(output.len(), pixels);
+    output
 }
 
 /// Gather one byte channel from tightly packed native pixels. The same
@@ -1103,6 +1151,30 @@ mod grayscale_native_tests {
         };
         assert_eq!(result.as_raw(), &[17, 129, 231]);
         assert_eq!(image.as_bytes(), &[17, 240, 3, 129, 4, 250, 231, 78, 9]);
+    }
+
+    #[test]
+    fn ycbcr_grayscale_keeps_scalar_block_tails() {
+        for pixels in 1..=8usize {
+            let source: Vec<u8> = (0..pixels * 3)
+                .map(|sample| (sample * 71 + 17) as u8)
+                .collect();
+            let expected: Vec<u8> = source.iter().step_by(3).copied().collect();
+            assert_eq!(
+                super::native_ycbcr_luma_packed_blocks(&source, pixels),
+                expected,
+                "packed block pixel count {pixels}"
+            );
+            let image = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(pixels as u32, 1, source).expect("YCbCr byte triples"),
+            );
+
+            let result = op_grayscale(&image, Some("YCbCr")).expect("YCbCr grayscale");
+            let DynamicImage::ImageLuma8(result) = result else {
+                panic!("YCbCr grayscale must produce L storage");
+            };
+            assert_eq!(result.as_raw(), &expected, "pixel count {pixels}");
+        }
     }
 
     #[test]
