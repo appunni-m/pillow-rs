@@ -57719,7 +57719,7 @@
         "case_id": "PIL.Image.Image.getprojection.nuanced.sparse-cmyk-1024x768"
       },
       "measurement": {
-        "boundary": "observed_steps",
+        "boundary": "whole_workflow",
         "step_ids": [
           "call"
         ],

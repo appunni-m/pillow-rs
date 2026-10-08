@@ -1209,17 +1209,19 @@ impl PyImage {
     ///
     /// This keeps an explicitly selected SIMD or GPU process from silently
     /// benchmarking CPU fallback. Ordinary multi-backend routing is unchanged.
-    fn lock_active_backend(&self) -> PyResult<PyImage> {
+    fn lock_active_backend(&mut self) -> PyResult<PyImage> {
         let active = pillow_rs::active_backends().map_err(map_error)?;
         let already_locked = active
             .first()
             .is_some_and(|backend| self.inner.backend() == Some(*backend));
-        let inner = if active.len() == 1 && !already_locked {
-            self.inner.clone().use_backend(active[0])
-        } else {
-            self.inner.clone()
-        };
-        Ok(PyImage { inner })
+        if active.len() == 1 && !already_locked {
+            // Keep this Python handle's identity stable. Strict parity workflows
+            // can retain live views over it across later operations.
+            self.inner = self.inner.clone().use_backend(active[0]);
+        }
+        Ok(PyImage {
+            inner: self.inner.clone(),
+        })
     }
 
     #[pyo3(signature = (rawmode=None))]

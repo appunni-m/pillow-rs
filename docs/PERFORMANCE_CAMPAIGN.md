@@ -20538,3 +20538,44 @@ these measurements do not establish sustained GPU throughput. Receipts are
 `f32-resize-interleave-candidate-arm-repeat.json`, and
 `f32-resize-interleave-candidate-arm-repeat-parity.json` under
 `build/migration-parity/`. No test defect was found; no coverage was run.
+
+### Correction: sparse CMYK `getprojection` boundary and retained CPU batch — 2026-10-08
+
+The earlier sparse-CMYK table above measured only the `getprojection` step.
+That was not equivalent end-to-end work: Pillow had already applied the three
+`putpixel` writes during setup, while pillow-rs deferred those writes until the
+timed projection materialized the pipeline. The canonical workload now uses
+`whole_workflow`, so both sides time image creation, all three writes, lazy
+materialization, and projection. Do not use the earlier 0.430/0.424/1.286 ms
+target samples as a valid comparison.
+
+The retained change treats validated `PutPixel` as dimension-preserving, so
+subsequent queued writes do not materialize earlier writes just to re-check
+bounds. The CPU executor batches adjacent writes and clones the native image
+once for the run. Against the corrected pre-batch receipt (CPU 0.791 ms,
+Pillow 0.427 ms), the current CPU median is lower, but this was not a paired
+run and remains slower than Pillow. A fresh whole-workflow measurement used
+five warmups, 20 iterations × five samples, concurrency one, and 100 timing
+observations per subject:
+
+| Subject | Median latency | Pillow / target | Verified execution |
+| --- | ---: | ---: | --- |
+| Pillow | 0.4165 ms | — | Pillow oracle |
+| Serial CPU | 0.5624 ms | 0.741× | CPU, 100/100; no fallback |
+| SIMD | 0.8470 ms | 0.492× | SIMD profile, 100/100; no fallback |
+| GPU | 1.5652 ms | 0.266× | GPU, 100/100; 3 dispatches per request |
+
+The benchmark passed exact parity on the selected sparse workflow. CPU's
+receipt accounts for two 3 MiB host buffers per sample; the SIMD profile
+accounts for four. GPU uploads and reads back 3 MiB per sample, then the public
+projection scan still runs on the host. These results do not show a GPU
+projection kernel or sustained concurrent GPU throughput. The CPU target,
+SIMD latency target, and GPU latency/throughput targets remain open.
+
+The full CPU parity run immediately before the harness fix had 17,107 passes
+and one failure. The failure was the retained-view
+`getdata.nuanced.retained-view-mutation-and-thumbnail` case: strict backend
+locking replaced the wrapper's Rust image handle between workflow steps, so
+the retained view read a stale handle. Locking now updates the existing handle
+in place; the case passes in a focused rerun (1/1). The full suite was not
+rerun after this harness correction. No coverage was run.

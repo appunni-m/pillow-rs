@@ -50097,7 +50097,7 @@ def build_pipeline_benchmark_document(
         "subjects": benchmark_subjects(),
         "input": {"kind": "parity_case", "case_id": getprojection_cmyk_sparse_case_id},
         "measurement": {
-            "boundary": "observed_steps",
+            "boundary": "whole_workflow",
             "step_ids": ["call"],
             "metrics": ["latency", "throughput"],
             "warmup_iterations": 5,

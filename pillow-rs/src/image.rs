@@ -468,6 +468,11 @@ fn known_pipeline_op_dimensions(
         | PipelineOp::Grayscale
         | PipelineOp::Colorize { .. }
         | PipelineOp::Constant { .. }
+        // Public putpixel validates coordinates before queuing and cannot
+        // change the image dimensions. Keeping its shape known prevents a
+        // later write from materializing the earlier writes just to check
+        // bounds.
+        | PipelineOp::PutPixel { .. }
         | PipelineOp::Offset { .. }
         | PipelineOp::Duplicate
         | PipelineOp::InvertChops

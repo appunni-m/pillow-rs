@@ -3,9 +3,10 @@
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::ops::pil_resize::{premultiply_alpha, unpremultiply_alpha};
-use crate::pipeline::{ColorMode, PixelMode, ResampleFilter, TransformMethod};
+use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod};
 use crate::raster::{
-    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, RgbImage, RgbaImage,
+    DynamicImage, GenericImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, RgbImage,
+    RgbaImage,
 };
 use std::borrow::Cow;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -4038,6 +4039,69 @@ pub fn op_put_pixel(
                 crate::raster::Rgba([color.0, color.1, color.2, color.3]),
             );
             Ok(DynamicImage::ImageRgba8(rgba))
+        }
+        _ => Err(PilError::NotImplementedError(
+            "putpixel not supported for this image type".into(),
+        )),
+    }
+}
+
+fn apply_put_pixel_batch<I, F>(
+    image: &mut I,
+    ops: &[PipelineOp],
+    mut pixel_from_color: F,
+) -> Result<(), PilError>
+where
+    I: GenericImage,
+    F: FnMut((u8, u8, u8, u8)) -> I::Pixel,
+{
+    for op in ops {
+        let PipelineOp::PutPixel { x, y, color, .. } = op else {
+            return Err(PilError::ValueError("expected PutPixel op".into()));
+        };
+        if !image.in_bounds(*x, *y) {
+            return Err(PilError::IndexError("image index out of range".into()));
+        }
+        image.put_pixel(*x, *y, pixel_from_color(*color));
+    }
+    Ok(())
+}
+
+/// Applies adjacent byte-oriented pixel writes after cloning the source once.
+///
+/// Public putpixel validates every coordinate before queuing its operation, so
+/// the batch preserves the original ordered writes while avoiding one full
+/// image copy per queued pixel.
+pub fn op_put_pixel_batch(
+    img: &DynamicImage,
+    ops: &[PipelineOp],
+) -> Result<DynamicImage, PilError> {
+    match img {
+        DynamicImage::ImageLuma8(image) => {
+            let mut output = image.clone();
+            apply_put_pixel_batch(&mut output, ops, |color| crate::raster::Luma([color.0]))?;
+            Ok(DynamicImage::ImageLuma8(output))
+        }
+        DynamicImage::ImageLumaA8(image) => {
+            let mut output = image.clone();
+            apply_put_pixel_batch(&mut output, ops, |color| {
+                crate::raster::LumaA([color.0, color.3])
+            })?;
+            Ok(DynamicImage::ImageLumaA8(output))
+        }
+        DynamicImage::ImageRgb8(image) => {
+            let mut output = image.clone();
+            apply_put_pixel_batch(&mut output, ops, |color| {
+                crate::raster::Rgb([color.0, color.1, color.2])
+            })?;
+            Ok(DynamicImage::ImageRgb8(output))
+        }
+        DynamicImage::ImageRgba8(image) => {
+            let mut output = image.clone();
+            apply_put_pixel_batch(&mut output, ops, |color| {
+                crate::raster::Rgba([color.0, color.1, color.2, color.3])
+            })?;
+            Ok(DynamicImage::ImageRgba8(output))
         }
         _ => Err(PilError::NotImplementedError(
             "putpixel not supported for this image type".into(),

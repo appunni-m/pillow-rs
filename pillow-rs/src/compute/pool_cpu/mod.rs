@@ -294,6 +294,33 @@ impl BackendImpl for CpuPool {
         let mut current_mode = mode.map(str::to_owned);
         while index < ops.len() {
             let input = result.as_ref().unwrap_or(img);
+            if matches!(&ops[index], PipelineOp::PutPixel { .. }) {
+                let mut end = index + 1;
+                while end < ops.len() && matches!(&ops[end], PipelineOp::PutPixel { .. }) {
+                    end += 1;
+                }
+                let consumed = end - index;
+                if consumed > 1 {
+                    for op in &ops[index..end] {
+                        crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(
+                            op,
+                        ));
+                    }
+                    let next = ops::effects::op_put_pixel_batch(input, &ops[index..end]);
+                    for _ in 0..consumed {
+                        crate::compute::record_pipeline_operation_path("cpu");
+                        crate::compute::finish_pipeline_operation_telemetry();
+                    }
+                    let next = next?;
+                    crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
+                    resources.fused_operation_count = resources
+                        .fused_operation_count
+                        .saturating_add(consumed as u64);
+                    result = Some(next);
+                    index = end;
+                    continue;
+                }
+            }
             // Transposes only permute opaque pixels, so composing adjacent
             // methods is exact in every native mode, including indexed and
             // typed samples. A cancelled run can retain an owned intermediate
