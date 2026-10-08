@@ -1604,6 +1604,66 @@ fn blur_line_step(
     let far_left_base = line_start + far_left * element_width;
     let far_right_base = line_start + far_right * element_width;
 
+    if element_width == 3 {
+        let output = &mut destination[output_base..output_base + 3];
+        let subtract = &source[subtract_base..subtract_base + 3];
+        let add = &source[add_base..add_base + 3];
+        if fractional_weight == 0 {
+            let next0 = accumulator[0]
+                .wrapping_sub(u32::from(subtract[0]))
+                .wrapping_add(u32::from(add[0]));
+            let next1 = accumulator[1]
+                .wrapping_sub(u32::from(subtract[1]))
+                .wrapping_add(u32::from(add[1]));
+            let next2 = accumulator[2]
+                .wrapping_sub(u32::from(subtract[2]))
+                .wrapping_add(u32::from(add[2]));
+            accumulator[0] = next0;
+            accumulator[1] = next1;
+            accumulator[2] = next2;
+            output[0] = (next0.wrapping_mul(whole_weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+            output[1] = (next1.wrapping_mul(whole_weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+            output[2] = (next2.wrapping_mul(whole_weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+        } else {
+            let far_left = &source[far_left_base..far_left_base + 3];
+            let far_right = &source[far_right_base..far_right_base + 3];
+            let next0 = accumulator[0]
+                .wrapping_sub(u32::from(subtract[0]))
+                .wrapping_add(u32::from(add[0]));
+            let next1 = accumulator[1]
+                .wrapping_sub(u32::from(subtract[1]))
+                .wrapping_add(u32::from(add[1]));
+            let next2 = accumulator[2]
+                .wrapping_sub(u32::from(subtract[2]))
+                .wrapping_add(u32::from(add[2]));
+            accumulator[0] = next0;
+            accumulator[1] = next1;
+            accumulator[2] = next2;
+            let far0 =
+                (u32::from(far_left[0]) + u32::from(far_right[0])).wrapping_mul(fractional_weight);
+            let far1 =
+                (u32::from(far_left[1]) + u32::from(far_right[1])).wrapping_mul(fractional_weight);
+            let far2 =
+                (u32::from(far_left[2]) + u32::from(far_right[2])).wrapping_mul(fractional_weight);
+            output[0] = (next0
+                .wrapping_mul(whole_weight)
+                .wrapping_add(far0)
+                .wrapping_add(BOX_BLUR_BIAS)
+                >> 24) as u8;
+            output[1] = (next1
+                .wrapping_mul(whole_weight)
+                .wrapping_add(far1)
+                .wrapping_add(BOX_BLUR_BIAS)
+                >> 24) as u8;
+            output[2] = (next2
+                .wrapping_mul(whole_weight)
+                .wrapping_add(far2)
+                .wrapping_add(BOX_BLUR_BIAS)
+                >> 24) as u8;
+        }
+        return;
+    }
+
     let output = &mut destination[output_base..output_base + element_width];
     let subtract = &source[subtract_base..subtract_base + element_width];
     let add = &source[add_base..add_base + element_width];
@@ -1649,6 +1709,7 @@ fn blur_line_step(
 /// entering and one leaving sample for every output pixel. Keeping the same
 /// regions avoids a radius-sized inner loop while preserving Pillow's edge
 /// replication and unsigned 24-bit fixed-point arithmetic.
+#[inline(always)]
 fn blur_line(
     source: &[u8],
     destination: &mut [u8],
