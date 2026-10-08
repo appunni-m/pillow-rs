@@ -826,7 +826,10 @@ def lock_target_image_pipeline(value: Any) -> Any:
     rust_image = getattr(value, "_rust_image", None)
     lock = getattr(rust_image, "lock_active_backend", None)
     if callable(lock):
-        value._rust_image = lock()
+        # The Rust binding locks the existing handle in place. Replacing the
+        # wrapper's handle here would detach retained live views such as
+        # getdata() sequences from later in-place mutations.
+        lock()
     return value
 
 
