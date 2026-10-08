@@ -14,9 +14,9 @@ use crate::image_utils::raw_bytes_to_image;
 #[cfg(target_arch = "x86_64")]
 use crate::ops::pil_resize::X86FmaToken;
 use crate::ops::pil_resize::{
-    F64MulAdd, PortableFma, f32_samples_from_le_bytes, i32_samples_from_le_bytes, pil_resize,
-    pil_resize_boxed, pillow_sin_f64, precompute_coeffs_f64, precompute_coeffs_f64_boxed,
-    premultiply_alpha, round_up, unpremultiply_alpha,
+    F64MulAdd, FilterCoeffsF64, PortableFma, f32_samples_from_le_bytes, i32_samples_from_le_bytes,
+    pil_resize, pil_resize_boxed, pillow_sin_f64, precompute_coeffs_f64,
+    precompute_coeffs_f64_boxed, premultiply_alpha, round_up, unpremultiply_alpha,
 };
 use crate::pipeline::{ResampleFilter, TransposeMethod};
 
@@ -120,7 +120,20 @@ pub(crate) fn resample_kernel(filter: &ResampleFilter) -> (fn(f64) -> f64, f64) 
 // build rather than the compiler's fused Rust loop.
 const F_RESIZE_VECTOR_WIDTH: usize = 16;
 
-fn f_resize_accumulate<F: F64MulAdd>(
+fn f_resize_mul_add<const FINITE_OPERANDS: bool, F: F64MulAdd>(
+    fma: &F,
+    weight: f64,
+    sample: f64,
+    accumulator: f64,
+) -> f64 {
+    if FINITE_OPERANDS {
+        fma.mul_add_finite(weight, sample, accumulator)
+    } else {
+        fma.mul_add(weight, sample, accumulator)
+    }
+}
+
+fn f_resize_accumulate<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     accumulator: &mut f64,
     weight: f64,
     sample: f32,
@@ -135,12 +148,12 @@ fn f_resize_accumulate<F: F64MulAdd>(
         let product = std::hint::black_box(weight * sample);
         *accumulator += product;
     } else {
-        *accumulator = fma.mul_add(weight, sample, *accumulator);
+        *accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(fma, weight, sample, *accumulator);
     }
 }
 
 #[inline]
-fn f_resize_horizontal_sample<F: F64MulAdd>(
+fn f_resize_horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     source_row_start: usize,
     first_source_x: i64,
@@ -173,14 +186,22 @@ fn f_resize_horizontal_sample<F: F64MulAdd>(
             ],
         ) = source_row.get(..8)
     {
-        let mut accumulator = fma.mul_add(*weight0, f64::from(*sample0), 0.0);
-        accumulator = fma.mul_add(*weight1, f64::from(*sample1), accumulator);
-        accumulator = fma.mul_add(*weight2, f64::from(*sample2), accumulator);
-        accumulator = fma.mul_add(*weight3, f64::from(*sample3), accumulator);
-        accumulator = fma.mul_add(*weight4, f64::from(*sample4), accumulator);
-        accumulator = fma.mul_add(*weight5, f64::from(*sample5), accumulator);
-        accumulator = fma.mul_add(*weight6, f64::from(*sample6), accumulator);
-        accumulator = fma.mul_add(*weight7, f64::from(*sample7), accumulator);
+        let mut accumulator =
+            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight0, f64::from(*sample0), 0.0);
+        accumulator =
+            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight1, f64::from(*sample1), accumulator);
+        accumulator =
+            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight2, f64::from(*sample2), accumulator);
+        accumulator =
+            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight3, f64::from(*sample3), accumulator);
+        accumulator =
+            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight4, f64::from(*sample4), accumulator);
+        accumulator =
+            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight5, f64::from(*sample5), accumulator);
+        accumulator =
+            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight6, f64::from(*sample6), accumulator);
+        accumulator =
+            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight7, f64::from(*sample7), accumulator);
         return accumulator as f32;
     }
 
@@ -189,7 +210,8 @@ fn f_resize_horizontal_sample<F: F64MulAdd>(
     if vector_product_count == 0 {
         for (offset, &weight) in weights.iter().enumerate() {
             let source_x = (first_source_x + offset as i64) as usize;
-            accumulator = fma.mul_add(
+            accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+                fma,
                 weight,
                 f64::from(source[source_row_start + source_x]),
                 accumulator,
@@ -198,7 +220,7 @@ fn f_resize_horizontal_sample<F: F64MulAdd>(
     } else {
         for (offset, &weight) in weights.iter().enumerate() {
             let source_x = (first_source_x + offset as i64) as usize;
-            f_resize_accumulate(
+            f_resize_accumulate::<FINITE_OPERANDS, _>(
                 &mut accumulator,
                 weight,
                 source[source_row_start + source_x],
@@ -211,7 +233,7 @@ fn f_resize_horizontal_sample<F: F64MulAdd>(
 }
 
 #[inline]
-fn f_resize_vertical_sample<F: F64MulAdd>(
+fn f_resize_vertical_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     source_row_stride: usize,
     first_source_y: i64,
@@ -234,38 +256,50 @@ fn f_resize_vertical_sample<F: F64MulAdd>(
         // `precompute_coeffs_f64` clips every coefficient row to the source
         // geometry, and callers pass a source x from that same row's width.
         let first_source_index = first_source_y * source_row_stride + source_x;
-        let mut accumulator = fma.mul_add(*weight0, f64::from(source[first_source_index]), 0.0);
-        accumulator = fma.mul_add(
+        let mut accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+            fma,
+            *weight0,
+            f64::from(source[first_source_index]),
+            0.0,
+        );
+        accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+            fma,
             *weight1,
             f64::from(source[first_source_index + source_row_stride]),
             accumulator,
         );
-        accumulator = fma.mul_add(
+        accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+            fma,
             *weight2,
             f64::from(source[first_source_index + source_row_stride * 2]),
             accumulator,
         );
-        accumulator = fma.mul_add(
+        accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+            fma,
             *weight3,
             f64::from(source[first_source_index + source_row_stride * 3]),
             accumulator,
         );
-        accumulator = fma.mul_add(
+        accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+            fma,
             *weight4,
             f64::from(source[first_source_index + source_row_stride * 4]),
             accumulator,
         );
-        accumulator = fma.mul_add(
+        accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+            fma,
             *weight5,
             f64::from(source[first_source_index + source_row_stride * 5]),
             accumulator,
         );
-        accumulator = fma.mul_add(
+        accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+            fma,
             *weight6,
             f64::from(source[first_source_index + source_row_stride * 6]),
             accumulator,
         );
-        accumulator = fma.mul_add(
+        accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+            fma,
             *weight7,
             f64::from(source[first_source_index + source_row_stride * 7]),
             accumulator,
@@ -276,13 +310,130 @@ fn f_resize_vertical_sample<F: F64MulAdd>(
     let mut accumulator = 0.0f64;
     for (offset, &weight) in weights.iter().enumerate() {
         let source_y = (first_source_y + offset as i64) as usize;
-        accumulator = fma.mul_add(
+        accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+            fma,
             weight,
             f64::from(source[source_y * source_row_stride + source_x]),
             accumulator,
         );
     }
     accumulator as f32
+}
+
+fn f_resize_samples_allow_finite_fma<F: F64MulAdd>(fma: &F, samples: &[f32]) -> bool {
+    fma.supports_finite_mul_add() && samples.iter().all(|sample| sample.is_finite())
+}
+
+/// Check that every input to a finite-only FMA row is finite and that each
+/// ordered f64 accumulator stays well within the finite range. F-mode samples
+/// are f32, so a row's sum of absolute weighted sample bounds proves every
+/// intermediate f64 accumulator finite.
+fn f_resize_coefficients_allow_finite_fma(coefficients: &FilterCoeffsF64) -> bool {
+    let max_accumulator = f64::MAX * 0.5;
+    let max_sample = f64::from(f32::MAX);
+    coefficients.weights.iter().all(|row| {
+        let mut absolute_sum = 0.0f64;
+        for &weight in row {
+            if !weight.is_finite() {
+                return false;
+            }
+            absolute_sum += weight.abs() * max_sample;
+            if !absolute_sum.is_finite() || absolute_sum >= max_accumulator {
+                return false;
+            }
+        }
+        true
+    })
+}
+
+fn f_resize_horizontal_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
+    source: &[f32],
+    output: &mut [f32],
+    source_width: usize,
+    destination_width: usize,
+    _source_height: usize,
+    coefficients: &FilterCoeffsF64,
+    fma: &F,
+) {
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut_typed!(
+        output,
+        destination_width,
+        _source_height,
+        |_row_start, _row_end, source_y, row| {
+            let source_row_start = source_y as usize * source_width;
+            for (destination_x, output) in row.iter_mut().enumerate() {
+                *output = f_resize_horizontal_sample::<FINITE_OPERANDS, _>(
+                    source,
+                    source_row_start,
+                    coefficients.xmin[destination_x],
+                    &coefficients.weights[destination_x],
+                    fma,
+                );
+            }
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for (source_y, row) in output.chunks_mut(destination_width).enumerate() {
+        let source_row_start = source_y * source_width;
+        for (destination_x, output) in row.iter_mut().enumerate() {
+            *output = f_resize_horizontal_sample::<FINITE_OPERANDS, _>(
+                source,
+                source_row_start,
+                coefficients.xmin[destination_x],
+                &coefficients.weights[destination_x],
+                fma,
+            );
+        }
+    }
+}
+
+fn f_resize_vertical_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
+    source: &[f32],
+    output: &mut [f32],
+    destination_width: usize,
+    _destination_height: usize,
+    coefficients: &FilterCoeffsF64,
+    fma: &F,
+) {
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut_typed!(
+        output,
+        destination_width,
+        _destination_height,
+        |_row_start, _row_end, destination_y, row| {
+            let source_y = coefficients.xmin[destination_y as usize];
+            let weights = &coefficients.weights[destination_y as usize];
+            for (source_x, output) in row.iter_mut().enumerate() {
+                // Pillow stores the f32 accumulator directly; retain its
+                // signed-zero result at this observable pass boundary.
+                *output = f_resize_vertical_sample::<FINITE_OPERANDS, _>(
+                    source,
+                    destination_width,
+                    source_y,
+                    source_x,
+                    weights,
+                    fma,
+                );
+            }
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for (destination_y, row) in output.chunks_mut(destination_width).enumerate() {
+        let source_y = coefficients.xmin[destination_y];
+        let weights = &coefficients.weights[destination_y];
+        for (source_x, output) in row.iter_mut().enumerate() {
+            // Keep the sign of zero, matching Pillow's scalar C path.
+            *output = f_resize_vertical_sample::<FINITE_OPERANDS, _>(
+                source,
+                destination_width,
+                source_y,
+                source_x,
+                weights,
+                fma,
+            );
+        }
+    }
 }
 
 /// Run Pillow's tall-image resample ordering for an F image.
@@ -318,7 +469,7 @@ fn resize_f_tall_order<F: F64MulAdd>(
             let y0 = vertical.xmin[destination_y as usize];
             let weights = &vertical.weights[destination_y as usize];
             for (source_x, output) in row.iter_mut().enumerate() {
-                *output = f_resize_vertical_sample(
+                *output = f_resize_vertical_sample::<false, _>(
                     src_floats,
                     source_width_usize,
                     y0,
@@ -334,7 +485,7 @@ fn resize_f_tall_order<F: F64MulAdd>(
         let y0 = vertical.xmin[destination_y];
         let weights = &vertical.weights[destination_y];
         for (source_x, output) in row.iter_mut().enumerate() {
-            *output = f_resize_vertical_sample(
+            *output = f_resize_vertical_sample::<false, _>(
                 src_floats,
                 source_width_usize,
                 y0,
@@ -366,7 +517,7 @@ fn resize_f_tall_order<F: F64MulAdd>(
                 let mut accumulator = 0.0f64;
                 for (offset, &weight) in horizontal.weights[destination_x].iter().enumerate() {
                     let source_x = (x0 + offset as i64) as usize;
-                    f_resize_accumulate(
+                    f_resize_accumulate::<false, _>(
                         &mut accumulator,
                         weight,
                         vertical_output[source_row_start + source_x],
@@ -389,7 +540,7 @@ fn resize_f_tall_order<F: F64MulAdd>(
             let mut accumulator = 0.0f64;
             for (offset, &weight) in horizontal.weights[destination_x].iter().enumerate() {
                 let source_x = (x0 + offset as i64) as usize;
-                f_resize_accumulate(
+                f_resize_accumulate::<false, _>(
                     &mut accumulator,
                     weight,
                     vertical_output[source_row_start + source_x],
@@ -571,6 +722,9 @@ fn resize_f_with_fma<F: F64MulAdd>(
         return Ok(DynamicImage::ImageRgba8(out));
     }
 
+    // The x86 finite-only FMA route is admitted only after proving the source
+    // samples finite. Portable and other architecture paths skip this scan.
+    let finite_source_samples = f_resize_samples_allow_finite_fma(fma, &src_floats);
     let (kernel, support) = resample_kernel(filter);
     let needs_horizontal = dst_w != sw;
     let needs_vertical = dst_h != sh;
@@ -583,36 +737,26 @@ fn resize_f_with_fma<F: F64MulAdd>(
     let mut intermediate = vec![0.0f32; (sh * dst_w) as usize];
     if needs_horizontal {
         let h_coeffs = precompute_coeffs_f64(dst_w, sw, kernel, support);
-        #[cfg(feature = "parallel")]
-        crate::par_rows_mut_typed!(
-            &mut intermediate,
-            dst_w as usize,
-            sh as usize,
-            |_row_start, _row_end, sy, row| {
-                let src_row_base = (sy * sw) as usize;
-                for (dx, output) in row.iter_mut().enumerate() {
-                    *output = f_resize_horizontal_sample(
-                        &src_floats,
-                        src_row_base,
-                        h_coeffs.xmin[dx],
-                        &h_coeffs.weights[dx],
-                        fma,
-                    );
-                }
-            }
-        );
-        #[cfg(not(feature = "parallel"))]
-        for (sy, row) in intermediate.chunks_mut(dst_w as usize).enumerate() {
-            let src_row_base = sy * sw as usize;
-            for (dx, output) in row.iter_mut().enumerate() {
-                *output = f_resize_horizontal_sample(
-                    &src_floats,
-                    src_row_base,
-                    h_coeffs.xmin[dx],
-                    &h_coeffs.weights[dx],
-                    fma,
-                );
-            }
+        if finite_source_samples && f_resize_coefficients_allow_finite_fma(&h_coeffs) {
+            f_resize_horizontal_pass::<true, _>(
+                &src_floats,
+                &mut intermediate,
+                sw as usize,
+                dst_w as usize,
+                sh as usize,
+                &h_coeffs,
+                fma,
+            );
+        } else {
+            f_resize_horizontal_pass::<false, _>(
+                &src_floats,
+                &mut intermediate,
+                sw as usize,
+                dst_w as usize,
+                sh as usize,
+                &h_coeffs,
+                fma,
+            );
         }
     } else {
         #[cfg(feature = "parallel")]
@@ -635,38 +779,29 @@ fn resize_f_with_fma<F: F64MulAdd>(
     let out_floats: Vec<f32> = if needs_vertical {
         let v_coeffs = precompute_coeffs_f64(dst_h, sh, kernel, support);
         let mut output = vec![0.0f32; (dst_w * dst_h) as usize];
-        #[cfg(feature = "parallel")]
-        crate::par_rows_mut_typed!(
-            &mut output,
-            dst_w as usize,
-            dst_h as usize,
-            |_row_start, _row_end, dy, row| {
-                let y0 = v_coeffs.xmin[dy as usize];
-                let weights = &v_coeffs.weights[dy as usize];
-                for (dx, output) in row.iter_mut().enumerate() {
-                    // Pillow's `libImaging/Resample.c::ImagingResampleVertical_32bpc`
-                    // stores the float32 accumulator directly; do not
-                    // canonicalize a negative zero produced by the sum.
-                    *output = f_resize_vertical_sample(
-                        &intermediate,
-                        dst_w as usize,
-                        y0,
-                        dx,
-                        weights,
-                        fma,
-                    );
-                }
-            }
-        );
-        #[cfg(not(feature = "parallel"))]
-        for (dy, row) in output.chunks_mut(dst_w as usize).enumerate() {
-            let y0 = v_coeffs.xmin[dy];
-            let weights = &v_coeffs.weights[dy];
-            for (dx, output) in row.iter_mut().enumerate() {
-                // Keep the sign of zero, matching the scalar C path.
-                *output =
-                    f_resize_vertical_sample(&intermediate, dst_w as usize, y0, dx, weights, fma);
-            }
+        let vertical_samples_are_finite = if needs_horizontal {
+            f_resize_samples_allow_finite_fma(fma, &intermediate)
+        } else {
+            finite_source_samples
+        };
+        if vertical_samples_are_finite && f_resize_coefficients_allow_finite_fma(&v_coeffs) {
+            f_resize_vertical_pass::<true, _>(
+                &intermediate,
+                &mut output,
+                dst_w as usize,
+                dst_h as usize,
+                &v_coeffs,
+                fma,
+            );
+        } else {
+            f_resize_vertical_pass::<false, _>(
+                &intermediate,
+                &mut output,
+                dst_w as usize,
+                dst_h as usize,
+                &v_coeffs,
+                fma,
+            );
         }
         output
     } else {
@@ -3093,6 +3228,8 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     use super::{F64MulAdd, PortableFma, X86FmaToken};
     use super::{execute_reduce, reduce_f_thumbnail, reduce_i_thumbnail, resize_f};
+    #[cfg(target_arch = "x86_64")]
+    use super::{f_resize_samples_allow_finite_fma, resize_f_with_fma};
     use crate::pipeline::ResampleFilter;
     use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
 
@@ -3102,6 +3239,7 @@ mod tests {
         let Some(x86_fma) = X86FmaToken::detect() else {
             return;
         };
+        assert!(x86_fma.supports_finite_mul_add());
         let portable = PortableFma;
         for (weight, sample, accumulator) in [
             (0.1, 0.2, 0.3),
@@ -3109,6 +3247,7 @@ mod tests {
             (f64::MAX, 2.0, -f64::MAX),
             (f64::MIN_POSITIVE, f64::EPSILON, -f64::MIN_POSITIVE),
             (-0.0, 1.0, -0.0),
+            (1.0, -0.0, -0.0),
             (f64::INFINITY, 2.0, f64::NEG_INFINITY),
             (f64::NAN, 1.0, 0.0),
         ] {
@@ -3116,6 +3255,64 @@ mod tests {
                 x86_fma.mul_add(weight, sample, accumulator).to_bits(),
                 portable.mul_add(weight, sample, accumulator).to_bits(),
                 "FMA result differs for {weight:?} * {sample:?} + {accumulator:?}",
+            );
+            if weight.is_finite() && sample.is_finite() && accumulator.is_finite() {
+                assert_eq!(
+                    x86_fma
+                        .mul_add_finite(weight, sample, accumulator)
+                        .to_bits(),
+                    portable.mul_add(weight, sample, accumulator).to_bits(),
+                    "finite FMA result differs for {weight:?} * {sample:?} + {accumulator:?}",
+                );
+            }
+        }
+    }
+
+    #[cfg(target_endian = "little")]
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn finite_x86_f_resize_path_matches_checked_reference() {
+        let Some(x86_fma) = X86FmaToken::detect() else {
+            return;
+        };
+        let (source_width, source_height) = (32u32, 24u32);
+        let mut sample_sets = vec![
+            (0..source_width as usize * source_height as usize)
+                .map(|index| (((index * 73 % 4093) as i32 - 2046) as f32) / 17.0)
+                .collect::<Vec<_>>(),
+            (0..source_width as usize * source_height as usize)
+                .map(|index| if index % 2 == 0 { f32::MAX } else { -f32::MAX })
+                .collect::<Vec<_>>(),
+        ];
+        let mut nonfinite = sample_sets[0].clone();
+        nonfinite[7] = f32::from_bits(0x7fc1_2345);
+        nonfinite[19] = f32::INFINITY;
+        nonfinite[41] = f32::NEG_INFINITY;
+        sample_sets.push(nonfinite);
+
+        for (set_index, samples) in sample_sets.iter().enumerate() {
+            assert_eq!(
+                f_resize_samples_allow_finite_fma(&x86_fma, samples),
+                set_index < 2,
+                "finite-sample admission differs for sample set {set_index}",
+            );
+            let source_bytes = samples
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect();
+            let source = DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(source_width, source_height, source_bytes)
+                    .expect("F sample source shape must be valid"),
+            );
+            let actual = resize_f_with_fma(&source, 16, 12, &ResampleFilter::Bicubic, &x86_fma)
+                .expect("x86 F resize must succeed");
+            let portable =
+                resize_f_with_fma(&source, 16, 12, &ResampleFilter::Bicubic, &PortableFma)
+                    .expect("portable F resize must succeed");
+            assert_eq!(
+                actual.as_bytes(),
+                portable.as_bytes(),
+                "F resize differs from checked reference for sample set {set_index}",
             );
         }
     }
