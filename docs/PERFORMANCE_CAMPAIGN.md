@@ -20836,6 +20836,33 @@ and all five filters, but CPU latency regressed to 1.2019 ms versus Pillow at
 it; eliminating an intermediate allocation did not improve this call. Its
 receipt is `rgb-thumb-stream-row-candidate5.json` with its parity sidecar.
 
+A later sparse-resize trial recognized an all-zero RGB source with a small
+PutPixel prefix, computed only affected 2×2 reduced blocks, and skipped
+inactive rows/taps during the boxed resize. Exact parity passed, and receipts
+confirmed two fused operations per CPU sample, actual CPU/SIMD/GPU execution,
+and no fallback. The whole-workflow CPU medians were 2.4858 ms vs Pillow at
+1.0528 ms, then 2.7336 ms vs Pillow at 1.1407 ms. The extra zero scan and
+sparse-row bookkeeping cost more than the ordinary boxed path; this candidate
+was reverted. The profile is under
+`build/migration-parity/profiles/rgb-thumbnail-sparse-zero-candidate7/`;
+receipts are `rgb-thumb-sparse-zero-candidate7.json` and
+`rgb-thumb-sparse-zero-candidate7-repeat.json`, with parity sidecars.
+
+The next candidate reused the warm standard-resize coefficient cache for
+full-source boxes whose f32 boundaries exactly equal the integer image extent.
+The cached and boxed coefficient arrays matched byte-for-byte for Bilinear,
+Bicubic, Lanczos, Box, and Hamming across six size pairs. Three whole-workflow
+runs measured CPU 1.1300/1.1317/1.1301 ms against Pillow
+1.0500/1.0444/1.0411 ms. CPU receipts show two coefficient-cache hits and two
+fused operations per sample; all three requested backend profiles passed
+parity with no fallback. The paired CPU/Pillow ratios were about
+0.929×/0.922×/0.921×, which does not improve repeatably over the prior 0.923×
+row-specialized result. Revert this candidate: coefficient hits alone did not
+produce an end-to-end win. Receipts are
+`rgb-thumb-coeff-cache-candidate8.json`,
+`rgb-thumb-coeff-cache-candidate8-repeat.json`, and
+`rgb-thumb-coeff-cache-final-refactor.json`, each with a parity sidecar.
+
 The benchmark exposed a real validation gap in the first fusion candidate:
 the fast-path unit case exercised Bicubic with an explicitly locked CPU route,
 while the public workload uses resample code 2 (Bilinear) through the ordinary
