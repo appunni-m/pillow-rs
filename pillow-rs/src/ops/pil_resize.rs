@@ -4062,32 +4062,38 @@ fn pil_resize_f_boxed_with_fma<F: F64MulAdd>(
         intermediate.copy_from_slice(source);
     }
 
-    let output_floats = if need_vertical {
-        let mut output_floats = vec![0.0f32; dst_w as usize * dst_h as usize];
+    let output = if need_vertical {
+        let output_width = dst_w as usize;
+        let mut output = Vec::with_capacity(output_len);
+        let mut sums = vec![0.0f64; output_width];
         for output_y in 0..dst_h as usize {
             let y0 = vertical.xmin[output_y];
-            for output_x in 0..dst_w as usize {
-                let mut sum = 0.0;
-                for (tap, &weight) in vertical.weights[output_y].iter().enumerate() {
-                    let source_y = (y0 + tap as i64) as usize;
-                    sum = fma.mul_add(
+            sums.fill(0.0);
+            // Keep each column's tap accumulation ordered like Pillow while
+            // visiting each source row contiguously across the output width.
+            for (tap, &weight) in vertical.weights[output_y].iter().enumerate() {
+                let source_y = (y0 + tap as i64) as usize;
+                let source_row = source_y * output_width;
+                for output_x in 0..output_width {
+                    sums[output_x] = fma.mul_add(
                         weight,
-                        f64::from(intermediate[source_y * dst_w as usize + output_x]),
-                        sum,
+                        f64::from(intermediate[source_row + output_x]),
+                        sums[output_x],
                     );
                 }
-                output_floats[output_y * dst_w as usize + output_x] =
-                    if sum == 0.0 { 0.0 } else { sum as f32 };
+            }
+            for &sum in &sums {
+                let value = if sum == 0.0 { 0.0 } else { sum as f32 };
+                output.extend_from_slice(&value.to_le_bytes());
             }
         }
-        output_floats
+        output
     } else {
         intermediate
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect()
     };
-    let output: Vec<u8> = output_floats
-        .into_iter()
-        .flat_map(f32::to_le_bytes)
-        .collect();
     raw_to_dynamic_owned(output, dst_w, dst_h, 4)
 }
 
