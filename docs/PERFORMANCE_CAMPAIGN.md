@@ -21044,5 +21044,60 @@ row is host-only and has no native backend receipts, so its apparent SIMD/GPU
 timings are not accelerated-execution evidence. Current cross-runner matrices
 remain tied to the clean published snapshot; these local receipts are
 candidate evidence, not a regenerated matrix. The next largest eligible CPU
-gap is the corrected RGB material-thumbnail workflow at about 0.44× Pillow.
-No coverage was run.
+gap is the current L GaussianBlur workflow, which reached 1.45–1.63× Pillow
+after row fusion but has not reached the 2× sequencing gate. A fresh RGB
+material-thumbnail baseline is 0.92× Pillow, replacing the older pre-fusion
+0.44× local result for current-source prioritization. No coverage was run.
+
+### L GaussianBlur horizontal row fusion — 2026-10-08
+
+The fresh-source baseline for
+`pipeline-op.gaussianblur.material-l-noise-1024x768` was measured from clean
+revision `ca3d8b3f7`, with 100 timed observations, five warmups, concurrency
+one, and exact Pillow parity. The complete observed operation includes
+`apply-filter` and `observe-filter-result`, so pillow-rs materializes the lazy
+filter result before stopping the timer. Baseline medians were 3.8553 ms Pillow,
+4.4026 ms serial CPU (0.876× Pillow), 5.4620 ms SIMD, and 1.0007 ms GPU.
+Actual-backend receipts covered all 100 target observations with no fallback.
+CPU telemetry reports two host buffers totaling 1,572,864 bytes, with no
+full-frame copy or mode conversion; it does not count the two 1,024-byte row
+scratch vectors, which are allocated inside the timed call. GPU used 786,432
+bytes each way, one full-frame copy, and six dispatches. Its concurrency-one
+latency does not establish sustained throughput.
+
+For the three horizontal box passes, L rows are independent and each pass
+preserves byte rounding. The retained path processes all three passes per row
+through two reusable row buffers, keeping Pillow's pass order and exact
+intermediate rounding. A direct single-byte recurrence avoids per-sample
+one-element slices and iterator zips. Focused tests compare the scalar step to
+the generic two-component recurrence and compare row-fused output to three
+full-frame passes across tiny widths, edge-overlapping radii, and fractional
+radii.
+
+Two strict parity-gated observed-step runs measured:
+
+| Run | Pillow | Serial CPU | Pillow/CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Row fusion A1 | 4.0341 ms | 2.7733 ms | 1.455× | 6.3613 ms | 1.6736 ms |
+| Row fusion A2 | 3.8692 ms | 2.3711 ms | 1.632× | 5.4789 ms | 1.1875 ms |
+
+The candidate used actual CPU, SIMD, and GPU for 100/100 samples with no
+fallback. A1 overlapped another CPU-heavy benchmark; A2 was the quieter repeat.
+CPU remains below the 2× sequencing gate. SIMD is slower than Pillow
+and misses the requested half-Pillow ceiling; GPU latency is below SIMD in
+these single-request runs but sustained throughput is unmeasured. The profile
+placed about 44% of main-thread samples in the fused horizontal-row routine;
+allocation and copy stacks were much smaller. The fresh RGB thumbnail baseline
+was 1.1675 ms CPU versus 1.0744 ms Pillow (0.920×), making this L blur the
+larger of those two current local CPU gaps.
+
+Two ideas were rejected. Adding only the direct one-byte branch, without row
+fusion, measured 1.15–1.22× Pillow and did not establish the 2× gate. A
+dedicated stride-free L line kernel passed its exact reference tests but
+measured 1.556× Pillow, below the row-fusion repeat at 1.632×; it was
+reverted. These runs did not reveal a test defect. Receipts are
+`l-blur-current-source-baseline-20261008.json`,
+`l-blur-luma-row-fusion-candidate3-20261008.json`,
+`l-blur-luma-row-fusion-candidate3-repeat-20261008.json`, and
+`l-blur-specialized-luma-line-candidate4-20261008.json`, each with its parity
+sidecar under `build/migration-parity/`. No coverage was run.

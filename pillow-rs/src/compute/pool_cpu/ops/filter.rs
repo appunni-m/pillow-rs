@@ -1664,6 +1664,21 @@ fn blur_line_step(
         return;
     }
 
+    if element_width == 1 {
+        let next = accumulator[0]
+            .wrapping_sub(u32::from(source[subtract_base]))
+            .wrapping_add(u32::from(source[add_base]));
+        accumulator[0] = next;
+        let mut bulk = next.wrapping_mul(whole_weight);
+        if fractional_weight != 0 {
+            let far = (u32::from(source[far_left_base]) + u32::from(source[far_right_base]))
+                .wrapping_mul(fractional_weight);
+            bulk = bulk.wrapping_add(far);
+        }
+        destination[output_base] = (bulk.wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+        return;
+    }
+
     let output = &mut destination[output_base..output_base + element_width];
     let subtract = &source[subtract_base..subtract_base + element_width];
     let add = &source[add_base..add_base + element_width];
@@ -2020,6 +2035,66 @@ fn blur_rgb_rows_three_passes(
     }
 }
 
+/// Run the three horizontal Gaussian box passes one L row at a time.
+///
+/// Each row is independent for a horizontal pass, so the exact intermediate
+/// byte rounds can stay in two row buffers. This avoids writing and rereading
+/// two full-frame horizontal intermediates while retaining Pillow's pass
+/// order.
+#[cfg(not(feature = "parallel"))]
+fn blur_luma_rows_three_passes(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    radius: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let mut first_intermediate = vec![0u8; width];
+    let mut second_intermediate = vec![0u8; width];
+    let mut accumulator = [0u32; 4];
+
+    for row in 0..height {
+        let start = row * width;
+        let source_row = &source[start..start + width];
+        let destination_row = &mut destination[start..start + width];
+        blur_line(
+            source_row,
+            &mut first_intermediate,
+            0,
+            width,
+            1,
+            radius,
+            whole_weight,
+            fractional_weight,
+            &mut accumulator,
+        );
+        blur_line(
+            &first_intermediate,
+            &mut second_intermediate,
+            0,
+            width,
+            1,
+            radius,
+            whole_weight,
+            fractional_weight,
+            &mut accumulator,
+        );
+        blur_line(
+            &second_intermediate,
+            destination_row,
+            0,
+            width,
+            1,
+            radius,
+            whole_weight,
+            fractional_weight,
+            &mut accumulator,
+        );
+    }
+}
+
 #[cfg(feature = "parallel")]
 const VERTICAL_BLUR_TRANSPOSE_THRESHOLD: usize = 512 * 512;
 
@@ -2159,8 +2234,12 @@ fn pil_box_blur_xy_impl(
     let rgb_gaussian_row_fusion = passes == 3 && matches!(img, DynamicImage::ImageRgb8(_));
     #[cfg(feature = "parallel")]
     let rgb_gaussian_row_fusion = false;
+    #[cfg(not(feature = "parallel"))]
+    let luma_gaussian_row_fusion = passes == 3 && matches!(img, DynamicImage::ImageLuma8(_));
+    #[cfg(feature = "parallel")]
+    let luma_gaussian_row_fusion = false;
 
-    let mut work = if rgb_gaussian_row_fusion {
+    let mut work = if rgb_gaussian_row_fusion || luma_gaussian_row_fusion {
         CheckedDims::new(w_u32, h_u32, channels as u8)?.alloc_buffer()
     } else {
         img.as_bytes().to_vec()
@@ -2171,6 +2250,17 @@ fn pil_box_blur_xy_impl(
     if rgb_gaussian_row_fusion {
         #[cfg(not(feature = "parallel"))]
         blur_rgb_rows_three_passes(
+            img.as_bytes(),
+            &mut work,
+            width,
+            height,
+            horizontal_radius,
+            horizontal_weight,
+            horizontal_fractional_weight,
+        );
+    } else if luma_gaussian_row_fusion {
+        #[cfg(not(feature = "parallel"))]
+        blur_luma_rows_three_passes(
             img.as_bytes(),
             &mut work,
             width,
@@ -3101,7 +3191,119 @@ pub fn execute_rank_filter_with_mode(
 
 #[cfg(all(test, not(feature = "parallel")))]
 mod gaussian_blur_row_fusion_tests {
-    use super::{blur_parameters, blur_rgb_rows_three_passes, blur_rows};
+    use super::{
+        blur_line, blur_luma_rows_three_passes, blur_parameters, blur_rgb_rows_three_passes,
+        blur_rows,
+    };
+
+    #[test]
+    fn luma_three_pass_row_fusion_matches_full_frame_passes() {
+        for (width, height, radius) in [
+            (1, 1, 1.375),
+            (2, 3, 1.375),
+            (5, 7, 0.25),
+            (17, 9, 1.375),
+            (65, 47, 2.5),
+        ] {
+            let source = (0..width * height)
+                .map(|index| ((index * 73 + index / 7 * 19 + 31) % 256) as u8)
+                .collect::<Vec<_>>();
+            let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
+            let mut fused = vec![0u8; source.len()];
+            let mut reference_a = source.clone();
+            let mut reference_b = vec![0u8; source.len()];
+
+            blur_luma_rows_three_passes(
+                &source,
+                &mut fused,
+                width,
+                height,
+                integer_radius,
+                whole_weight,
+                fractional_weight,
+            );
+            for _ in 0..3 {
+                blur_rows(
+                    &reference_a,
+                    &mut reference_b,
+                    width,
+                    height,
+                    1,
+                    integer_radius,
+                    whole_weight,
+                    fractional_weight,
+                );
+                std::mem::swap(&mut reference_a, &mut reference_b);
+            }
+
+            assert_eq!(
+                fused, reference_a,
+                "L rows {width}x{height}, radius={radius}"
+            );
+        }
+    }
+
+    #[test]
+    fn single_channel_step_matches_two_component_generic_reference() {
+        for (width, height, radius) in [
+            (1, 1, 1.375),
+            (2, 3, 1.375),
+            (5, 7, 0.25),
+            (17, 9, 1.375),
+            (65, 47, 2.5),
+        ] {
+            let source = (0..width * height)
+                .map(|index| ((index * 73 + index / 7 * 19 + 31) % 256) as u8)
+                .collect::<Vec<_>>();
+            let mut specialized = vec![0u8; source.len()];
+            let mut generic = vec![0u8; source.len()];
+            let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
+
+            blur_rows(
+                &source,
+                &mut specialized,
+                width,
+                height,
+                1,
+                integer_radius,
+                whole_weight,
+                fractional_weight,
+            );
+
+            // A two-byte pixel takes the generic recurrence while each byte
+            // evolves independently. Duplicate every L sample and use the
+            // first output byte as the one-channel reference.
+            for row in 0..height {
+                let row_start = row * width;
+                let mut paired_source = Vec::with_capacity(width * 2);
+                for &sample in &source[row_start..row_start + width] {
+                    paired_source.extend_from_slice(&[sample, sample]);
+                }
+                let mut paired_output = vec![0u8; width * 2];
+                let mut accumulator = [0u32; 4];
+                blur_line(
+                    &paired_source,
+                    &mut paired_output,
+                    0,
+                    width,
+                    2,
+                    integer_radius,
+                    whole_weight,
+                    fractional_weight,
+                    &mut accumulator,
+                );
+                for (x, pair) in paired_output.chunks_exact(2).enumerate() {
+                    assert_eq!(pair[0], pair[1]);
+                    generic[row_start + x] = pair[0];
+                }
+            }
+
+            assert_eq!(
+                specialized, generic,
+                "L rows {width}x{height}, radius={radius}"
+            );
+        }
+    }
 
     #[test]
     fn rgb_gaussian_horizontal_row_fusion_matches_three_full_frame_passes() {
