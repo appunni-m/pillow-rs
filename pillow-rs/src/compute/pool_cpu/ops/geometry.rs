@@ -835,6 +835,44 @@ fn resize_i_sum_eight(
     weights[7].mul_add(f64::from(sample(first_sample + 7)), accumulator)
 }
 
+#[inline(always)]
+#[cfg(not(feature = "parallel"))]
+fn resize_i_sum_general(
+    weights: &[f64],
+    first_sample: usize,
+    sample: impl Fn(usize) -> i32,
+) -> f64 {
+    let mut accumulator = 0.0_f64;
+    for (offset, &weight) in weights.iter().enumerate() {
+        accumulator = weight.mul_add(f64::from(sample(first_sample + offset)), accumulator);
+    }
+    accumulator
+}
+
+/// Copy one contiguous run of eight-tap coefficients into a dense fixed-width
+/// table so row resampling does not reclassify the same horizontal spans.
+#[cfg(not(feature = "parallel"))]
+fn resize_i_contiguous_eight_tap_weights(
+    coefficients: &[Vec<f64>],
+) -> Option<(usize, Vec<[f64; 8]>)> {
+    let first = coefficients.iter().position(|weights| weights.len() == 8)?;
+    let last = coefficients
+        .iter()
+        .rposition(|weights| weights.len() == 8)?
+        .checked_add(1)?;
+    let spans = coefficients.get(first..last)?;
+    if spans.iter().any(|weights| weights.len() != 8) {
+        return None;
+    }
+
+    let mut fixed_width = Vec::with_capacity(spans.len());
+    for weights in spans {
+        let fixed: &[f64; 8] = weights.as_slice().try_into().ok()?;
+        fixed_width.push(*fixed);
+    }
+    Some((first, fixed_width))
+}
+
 fn resize_i(
     img: &DynamicImage,
     dst_w: u32,
@@ -913,6 +951,8 @@ fn resize_i(
     // Use f64 accumulation + ROUND_UP matching PIL's ImagingResample for 32-bit types.
     let h_coeffs_f64 = precompute_coeffs_f64(dst_w, sw, kernel, support);
     let v_coeffs_f64 = precompute_coeffs_f64(dst_h, sh, kernel, support);
+    #[cfg(not(feature = "parallel"))]
+    let h_eight_tap_weights = resize_i_contiguous_eight_tap_weights(&h_coeffs_f64.weights);
 
     // ImagingResample stores the horizontal INT32 pass in an INT32 image
     // before the vertical pass. Keeping this buffer as f64 changes overflow
@@ -948,19 +988,41 @@ fn resize_i(
     #[cfg(not(feature = "parallel"))]
     for (sy, row) in intermediate.chunks_mut(dst_w as usize).enumerate() {
         let src_row_base = sy * sw as usize;
+        if let Some((first_eight_tap, fixed_weights)) = &h_eight_tap_weights {
+            for dx in 0..*first_eight_tap {
+                let x0 = h_coeffs_f64.xmin[dx];
+                let weights = &h_coeffs_f64.weights[dx];
+                let accumulator =
+                    resize_i_sum_general(weights, x0 as usize, |sx| src_ints[src_row_base + sx]);
+                row[dx] = round_up(accumulator) as i32;
+            }
+
+            let eight_tap_end = first_eight_tap + fixed_weights.len();
+            for (dx, weights) in (*first_eight_tap..eight_tap_end).zip(fixed_weights) {
+                let accumulator =
+                    resize_i_sum_eight(weights, h_coeffs_f64.xmin[dx] as usize, |sx| {
+                        src_ints[src_row_base + sx]
+                    });
+                row[dx] = round_up(accumulator) as i32;
+            }
+
+            for dx in eight_tap_end..dst_w as usize {
+                let x0 = h_coeffs_f64.xmin[dx];
+                let weights = &h_coeffs_f64.weights[dx];
+                let accumulator =
+                    resize_i_sum_general(weights, x0 as usize, |sx| src_ints[src_row_base + sx]);
+                row[dx] = round_up(accumulator) as i32;
+            }
+            continue;
+        }
+
         for (dx, output) in row.iter_mut().enumerate() {
             let x0 = h_coeffs_f64.xmin[dx];
             let weights = &h_coeffs_f64.weights[dx];
             let accumulator = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
                 resize_i_sum_eight(weights, x0 as usize, |sx| src_ints[src_row_base + sx])
             } else {
-                let mut accumulator: f64 = 0.0;
-                for (cix, &weight) in weights.iter().enumerate() {
-                    let sx = (x0 + cix as i64) as usize;
-                    accumulator =
-                        weight.mul_add(f64::from(src_ints[src_row_base + sx]), accumulator);
-                }
-                accumulator
+                resize_i_sum_general(weights, x0 as usize, |sx| src_ints[src_row_base + sx])
             };
             *output = round_up(accumulator) as i32;
         }
@@ -3507,6 +3569,8 @@ pub fn execute_reduce(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "parallel"))]
+    use super::resize_i_contiguous_eight_tap_weights;
     use super::resize_i_sum_eight;
     #[cfg(target_arch = "x86_64")]
     use super::{F64MulAdd, PortableFma, X86FmaToken};
@@ -4450,6 +4514,26 @@ mod tests {
             let actual = resize_i_sum_eight(&weights, 0, |index| source[index]);
             assert_eq!(actual.to_bits(), expected.to_bits());
         }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[test]
+    fn i_resize_packs_only_a_contiguous_eight_tap_interior() {
+        let coefficients = vec![
+            vec![0.0; 4],
+            (0..8).map(f64::from).collect(),
+            (8..16).map(f64::from).collect(),
+            vec![0.0; 3],
+        ];
+        let Some((first, packed)) = resize_i_contiguous_eight_tap_weights(&coefficients) else {
+            panic!("the adjacent eight-tap spans must be packed");
+        };
+        assert_eq!(first, 1);
+        assert_eq!(packed[0], [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
+        assert_eq!(packed[1], [8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0]);
+
+        let disjoint = vec![vec![1.0; 8], vec![1.0; 3], vec![1.0; 8]];
+        assert!(resize_i_contiguous_eight_tap_weights(&disjoint).is_none());
     }
 
     #[test]
