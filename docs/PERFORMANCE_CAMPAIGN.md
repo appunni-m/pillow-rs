@@ -20172,3 +20172,35 @@ is excluded from GPU comparisons. The exact benchmark receipts are
 `thumbnail-f-boxed-borrow-final.json`, with matching `-parity.json`
 sidecars under `build/migration-parity/`. No test defect was identified; no
 coverage was run.
+
+## F-mode thumbnail reducing-gap typed view — 2026-10-08
+
+Starting from pushed commit `db69daff8`, the local candidate reuses a checked
+little-endian/alignment view in the frequent full 2 × 2 F reducing-gap branch.
+The unaligned and other-endian fallback continues decoding the same little-
+endian words directly from bytes without materializing another source frame.
+Both paths preserve Pillow's f32 quartet order, f64 accumulator boundary, and
+f32 reduction store. Odd dimensions and partial blocks stay on the general
+path. The public workload remains
+`pipeline-op.thumbnail.native-f32-1024x768`, including the whole thumbnail
+call and output materialization; every row passed exact Pillow parity.
+
+| Run | Pillow ms | CPU ms | SIMD ms | Requested GPU profile ms / actual backend |
+| --- | ---: | ---: | ---: | ---: |
+| Pushed boxed-resize view, local baseline | 1.084 | 1.283 | 1.028 | 1.958 / CPU fallback |
+| Reducing-gap view candidate 1 | 1.045 | 0.809 | 1.043 | 1.182 / CPU fallback |
+| Reducing-gap view candidate 2 | 1.053 | 0.837 | 1.037 | 1.175 / CPU fallback |
+
+Both candidates recorded 100/100 actual CPU and SIMD observations. CPU latency
+fell about 35–37% versus the immediately preceding source-view candidate and
+was 1.26–1.29× faster than Pillow on these local macOS arm64 runs. It still
+misses the 2× sequencing gate. SIMD remains close to Pillow and far from 2×;
+GPU is not demonstrated because all 100 requested GPU observations fell back
+to CPU for the unproven typed-F reducing-gap contract. The full hosted run for
+the preceding commit is pending, so this improvement needs the next hosted
+cross-runner matrix before it is accepted as campaign evidence.
+
+Receipts are `thumbnail-f-reduce-borrow-candidate1.json` and
+`thumbnail-f-reduce-borrow-candidate2.json`, with corresponding
+`-parity.json` sidecars under `build/migration-parity/`. No test defect was
+identified and no coverage was run.

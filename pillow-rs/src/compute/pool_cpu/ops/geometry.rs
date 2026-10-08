@@ -2349,6 +2349,35 @@ pub fn execute_thumbnail(
     Ok(preserve_mode(img, result))
 }
 
+fn reduce_f_thumbnail_2x2_samples(
+    dst_w: u32,
+    dst_h: u32,
+    source_width: u32,
+    output_bytes: usize,
+    mut sample_f32: impl FnMut(usize) -> f32,
+) -> Result<DynamicImage, PilError> {
+    let source_width = source_width as usize;
+    let mut output = Vec::with_capacity(output_bytes);
+    for y in 0..dst_h as usize {
+        let top_row = y * 2 * source_width;
+        let bottom_row = top_row + source_width;
+        for x in 0..dst_w as usize {
+            let source_x = x * 2;
+            let top_left = sample_f32(top_row + source_x);
+            let top_right = sample_f32(top_row + source_x + 1);
+            let bottom_left = sample_f32(bottom_row + source_x);
+            let bottom_right = sample_f32(bottom_row + source_x + 1);
+            // Pillow adds this quartet in f32 order before promoting it to f64.
+            let quartet = ((top_left + top_right) + bottom_left) + bottom_right;
+            let mut sum = 0.0f64;
+            sum += f64::from(quartet);
+            let value = (sum * 0.25) as f32;
+            output.extend_from_slice(&value.to_le_bytes());
+        }
+    }
+    raw_bytes_to_image(dst_w, dst_h, output, 4)
+}
+
 fn reduce_f_thumbnail(
     img: &DynamicImage,
     dst_w: u32,
@@ -2384,33 +2413,24 @@ fn reduce_f_thumbnail(
             ));
         }
         let output_dims = CheckedDims::new_allow_empty(dst_w, dst_h, 4)?;
-        let source_row_stride = source_dims.row_stride();
-        let mut output = Vec::with_capacity(output_dims.total_bytes());
-        let sample_f32 = |byte_index: usize| {
+        let output_bytes = output_dims.total_bytes();
+        if let Some(samples) = crate::ops::pil_resize::f32_samples_borrowed_from_le_bytes(
+            source_bytes,
+            source_dims.total_bytes() / 4,
+        ) {
+            return reduce_f_thumbnail_2x2_samples(dst_w, dst_h, src_w, output_bytes, |index| {
+                samples[index]
+            });
+        }
+        return reduce_f_thumbnail_2x2_samples(dst_w, dst_h, src_w, output_bytes, |index| {
+            let byte_index = index * 4;
             f32::from_le_bytes([
                 source_bytes[byte_index],
                 source_bytes[byte_index + 1],
                 source_bytes[byte_index + 2],
                 source_bytes[byte_index + 3],
             ])
-        };
-        for y in 0..dst_h as usize {
-            let top_row = y * 2 * source_row_stride;
-            let bottom_row = top_row + source_row_stride;
-            for x in 0..dst_w as usize {
-                let source_x = x * 8;
-                let top_left = sample_f32(top_row + source_x);
-                let top_right = sample_f32(top_row + source_x + 4);
-                let bottom_left = sample_f32(bottom_row + source_x);
-                let bottom_right = sample_f32(bottom_row + source_x + 4);
-                let quartet = ((top_left + top_right) + bottom_left) + bottom_right;
-                let mut sum = 0.0f64;
-                sum += f64::from(quartet);
-                let value = (sum * 0.25) as f32;
-                output.extend_from_slice(&value.to_le_bytes());
-            }
-        }
-        return raw_bytes_to_image(dst_w, dst_h, output, 4);
+        });
     }
 
     let sample_f32 = |x: u32, y: u32| {
