@@ -396,6 +396,15 @@ const F_RESIZE_VECTOR_WIDTH: usize = 16;
 
 pub(crate) trait F64MulAdd: Sync {
     fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64;
+
+    #[inline(always)]
+    fn mul_add_finite(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
+        self.mul_add(weight, sample, accumulator)
+    }
+
+    fn supports_finite_mul_add(&self) -> bool {
+        false
+    }
 }
 
 pub(crate) struct PortableFma;
@@ -417,6 +426,24 @@ impl X86FmaToken {
     pub(crate) fn detect() -> Option<Self> {
         std::is_x86_feature_detected!("fma").then_some(Self { _private: () })
     }
+
+    #[allow(unsafe_code)]
+    #[inline(always)]
+    fn mul_add_finite_operands(weight: f64, sample: f64, accumulator: f64) -> f64 {
+        let mut result = accumulator;
+        // SAFETY: callers have an `X86FmaToken` created by runtime feature
+        // detection, so the current CPU supports the scalar FMA instruction.
+        unsafe {
+            std::arch::asm!(
+                "vfmadd231sd {result}, {weight}, {sample}",
+                result = inout(xmm_reg) result,
+                weight = in(xmm_reg) weight,
+                sample = in(xmm_reg) sample,
+                options(pure, nomem, nostack, preserves_flags),
+            );
+        }
+        result
+    }
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -430,19 +457,17 @@ impl F64MulAdd for X86FmaToken {
         if !weight.is_finite() || !sample.is_finite() || !accumulator.is_finite() {
             return weight.mul_add(sample, accumulator);
         }
-        let mut result = accumulator;
-        // SAFETY: `X86FmaToken::detect` only creates this token when runtime
-        // feature detection confirms that the current CPU supports FMA.
-        unsafe {
-            std::arch::asm!(
-                "vfmadd231sd {result}, {weight}, {sample}",
-                result = inout(xmm_reg) result,
-                weight = in(xmm_reg) weight,
-                sample = in(xmm_reg) sample,
-                options(pure, nomem, nostack, preserves_flags),
-            );
-        }
-        result
+        Self::mul_add_finite_operands(weight, sample, accumulator)
+    }
+
+    #[inline(always)]
+    fn mul_add_finite(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
+        Self::mul_add_finite_operands(weight, sample, accumulator)
+    }
+
+    #[inline(always)]
+    fn supports_finite_mul_add(&self) -> bool {
+        true
     }
 }
 
