@@ -20306,3 +20306,61 @@ any target-specific gather path. Hosted full benchmark run 37709889769 was
 queued for commit `cbe747014`; it includes the CPU eight-tap candidate but
 predates these SIMD changes. The combined checkpoint needs its own clean
 cross-runner run before those results can be promoted into the matrix.
+
+## I-mode `Image.thumbnail` local CPU checkpoint — 2026-10-08
+
+This visit targeted the 1024×768 native-I thumbnail after ranking its prior
+CPU result below Pillow. A strict CPU profile attributed 1,337 of 3,855 sampled
+frames to `reduce_i_thumbnail` and 1,047 to `resize_i_boxed`. After the
+reducer change, a second profile attributed 1,278 samples to boxed resize and
+327 to reduction.
+
+Keep the native-I reducing-gap arithmetic exact: complete 2×2 blocks use
+ordered wrapping int32 quartet additions followed by the same f64 division
+and `round_up`; partial edge blocks retain their original f64 accumulation.
+The implementation now borrows aligned little-endian source samples through
+`i32_samples_from_le_bytes`, with its decode fallback for unaligned or
+other-endian storage. The complete 2×2 reducer traverses pairs of source rows
+contiguously. In boxed resize, the vertical pass writes each rounded int32
+sample directly to the checked final byte buffer. The horizontal int32
+intermediate remains because Pillow rounds and stores that pass before the
+vertical accumulation.
+
+All public-call benchmark runs below used five warmups, 20 iterations × five
+samples, concurrency one, and included setup, execution, and receiver
+materialization in the reported total. Every candidate passed the exact Pillow
+parity gate. Times are medians in milliseconds:
+
+| Run | Pillow terminal | CPU terminal | Pillow full total | CPU full total | CPU speedup, full total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Clean baseline | 0.864292 | 1.613396 | 1.224875 | 1.902563 | 0.64× |
+| Borrowed source view | 0.852167 | 1.263999 | 1.199437 | 1.551667 | 0.77× |
+| Contiguous 2×2 row pairs | 0.858375 | 0.786896 | 1.207375 | 1.077834 | 1.12× |
+| Row-pair repeat | 0.851021 | 0.785834 | 1.192854 | 1.080083 | 1.10× |
+| Boxed source view | 0.858688 | 0.758125 | 1.217209 | 1.048021 | 1.16× |
+| Boxed source-view repeat | 0.851000 | 0.757563 | 1.202542 | 1.042917 | 1.15× |
+| Direct output bytes | 0.851625 | 0.719625 | 1.201104 | 1.010146 | 1.19× |
+| Direct-output repeat | 0.852313 | 0.744917 | 1.194480 | 1.024104 | 1.17× |
+
+The clean baseline itself was parity-gated. The reducer's exact tests cover
+multiple wrapping quartets, odd 2×2 edges, the Pillow int32 grouping rule, and
+SIMD tails; all four focused tests passed after the final change. CPU and SIMD
+each recorded 100 actual executions without fallback. SIMD remained slower
+than Pillow at 1.52–1.54 ms. Every requested GPU execution was CPU fallback
+because the exact reducing-gap/typed-arithmetic semantic control is not yet
+proven; GPU latency and throughput are therefore unavailable.
+
+This local macOS arm64 candidate is faster than Pillow end to end, but only
+about 1.17–1.19×, below the user's 2× CPU sequencing threshold. Keep it as a
+measured checkpoint and revisit I thumbnail before leaving CPU optimization.
+No test defect was found and no coverage was run. Receipts and parity sidecars
+are `i32-thumbnail-view-baseline-20261008`,
+`i32-thumbnail-view-candidate1-20261008`,
+`i32-thumbnail-row-pairs-candidate2-20261008`,
+`i32-thumbnail-row-pairs-candidate2-repeat-20261008`,
+`i32-thumbnail-boxed-source-view-candidate3-20261008`,
+`i32-thumbnail-boxed-source-view-candidate3-repeat-20261008`,
+`i32-thumbnail-direct-output-candidate4-20261008`, and
+`i32-thumbnail-direct-output-candidate4-repeat-20261008` under
+`build/migration-parity/`. These local rows do not replace the published
+cross-runner results matrix; refresh that matrix from a clean hosted benchmark.
