@@ -849,6 +849,14 @@ fn resize_i_sum_general(
     accumulator
 }
 
+/// Convert a serial I-resize accumulator with Pillow's sign-aware half offset.
+/// Casting to i32 already truncates, so avoid a separate float truncation step.
+#[inline(always)]
+#[cfg(not(feature = "parallel"))]
+fn resize_i_round_up_to_i32(value: f64) -> i32 {
+    (value + 0.5_f64.copysign(value)) as i32
+}
+
 /// Copy one contiguous run of eight-tap coefficients into a dense fixed-width
 /// table so row resampling does not reclassify the same horizontal spans.
 #[cfg(not(feature = "parallel"))]
@@ -994,7 +1002,7 @@ fn resize_i(
                 let weights = &h_coeffs_f64.weights[dx];
                 let accumulator =
                     resize_i_sum_general(weights, x0 as usize, |sx| src_ints[src_row_base + sx]);
-                row[dx] = round_up(accumulator) as i32;
+                row[dx] = resize_i_round_up_to_i32(accumulator);
             }
 
             let eight_tap_end = first_eight_tap + fixed_weights.len();
@@ -1003,7 +1011,7 @@ fn resize_i(
                     resize_i_sum_eight(weights, h_coeffs_f64.xmin[dx] as usize, |sx| {
                         src_ints[src_row_base + sx]
                     });
-                row[dx] = round_up(accumulator) as i32;
+                row[dx] = resize_i_round_up_to_i32(accumulator);
             }
 
             for dx in eight_tap_end..dst_w as usize {
@@ -1011,7 +1019,7 @@ fn resize_i(
                 let weights = &h_coeffs_f64.weights[dx];
                 let accumulator =
                     resize_i_sum_general(weights, x0 as usize, |sx| src_ints[src_row_base + sx]);
-                row[dx] = round_up(accumulator) as i32;
+                row[dx] = resize_i_round_up_to_i32(accumulator);
             }
             continue;
         }
@@ -1024,7 +1032,7 @@ fn resize_i(
             } else {
                 resize_i_sum_general(weights, x0 as usize, |sx| src_ints[src_row_base + sx])
             };
-            *output = round_up(accumulator) as i32;
+            *output = resize_i_round_up_to_i32(accumulator);
         }
     }
 
@@ -1068,7 +1076,7 @@ fn resize_i(
                 let accumulator = resize_i_sum_eight(weights, y0 as usize, |sy| {
                     intermediate[sy * dst_w as usize + dx]
                 });
-                output.copy_from_slice(&(round_up(accumulator) as i32).to_le_bytes());
+                output.copy_from_slice(&resize_i_round_up_to_i32(accumulator).to_le_bytes());
             }
         } else {
             for (dx, output) in row.chunks_exact_mut(4).enumerate() {
@@ -1080,7 +1088,7 @@ fn resize_i(
                         accumulator,
                     );
                 }
-                output.copy_from_slice(&(round_up(accumulator) as i32).to_le_bytes());
+                output.copy_from_slice(&resize_i_round_up_to_i32(accumulator).to_le_bytes());
             }
         }
     }
@@ -3580,6 +3588,8 @@ mod tests {
     };
     #[cfg(target_arch = "x86_64")]
     use super::{f_resize_samples_allow_finite_fma, resize_f_with_fma};
+    #[cfg(not(feature = "parallel"))]
+    use super::{resize_i_round_up_to_i32, round_up};
     use crate::pipeline::{PipelineOp, ResampleFilter};
     use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
 
@@ -4513,6 +4523,60 @@ mod tests {
                 });
             let actual = resize_i_sum_eight(&weights, 0, |index| source[index]);
             assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[test]
+    fn i_resize_rounding_fast_path_matches_pillow_conversion() {
+        let mut values = vec![
+            f64::NEG_INFINITY,
+            f64::INFINITY,
+            f64::NAN,
+            f64::MAX,
+            f64::MIN,
+            -0.0,
+            0.0,
+            f64::from(i32::MIN) - 0.5,
+            f64::from(i32::MIN),
+            f64::from(i32::MAX),
+            f64::from(i32::MAX) + 0.5,
+            f64::from_bits(0.5_f64.to_bits() - 1),
+            0.5,
+            f64::from_bits(0.5_f64.to_bits() + 1),
+            f64::from_bits((-0.5_f64).to_bits() - 1),
+            -0.5,
+            f64::from_bits((-0.5_f64).to_bits() + 1),
+        ];
+
+        for integer in -1024_i32..=1024 {
+            let positive_half = f64::from(integer) + 0.5;
+            let negative_half = -positive_half;
+            for boundary in [positive_half, negative_half] {
+                values.push(f64::from_bits(boundary.to_bits() - 1));
+                values.push(boundary);
+                values.push(f64::from_bits(boundary.to_bits() + 1));
+            }
+        }
+
+        let mut state = 0x8a5c_13d7_6b24_e901_u64;
+        for _ in 0..10_000 {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            let bytes = state.to_le_bytes();
+            let integer = i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+            let fraction_bits = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+            let fraction = f64::from(fraction_bits) / f64::from(u32::MAX);
+            values.push(f64::from(integer) + fraction - 0.5);
+        }
+
+        for value in values {
+            assert_eq!(
+                resize_i_round_up_to_i32(value),
+                round_up(value) as i32,
+                "rounding mismatch for {value:?}"
+            );
         }
     }
 

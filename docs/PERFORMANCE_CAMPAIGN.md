@@ -109,12 +109,12 @@ eager in Pillow. Exclude those published ratios. Corrected local
 whole-workflow results put RGB thumbnail at 0.439–0.442× and sparse-CMYK
 `getprojection` at 0.741× on Apple arm64. The I-mode bicubic resize remains
 0.573× on the published x86_64 runner; the latest local Apple candidate is
-1.475–1.493× and still needs a fresh x86 runner result.
+1.614–1.615× and still needs a fresh x86 runner result.
 
 | Workload | Runner | Pillow speedup | Existing checkpoint |
 | --- | --- | ---: | --- |
 | RGB material thumbnail | Apple arm64 | 0.439–0.442× | Corrected whole-workflow sparse 2×2 reducer; below Pillow |
-| I-mode bicubic resize composed pipeline | Ubuntu x86_64 | 0.573× | Shared typed-I resampling; local Apple arm64 candidate is 1.475–1.493× Pillow, still below 2× |
+| I-mode bicubic resize composed pipeline | Ubuntu x86_64 | 0.573× | Shared typed-I resampling; local Apple arm64 candidate is 1.614–1.615× Pillow, still below 2× |
 | RGB unsharp mask | Apple arm64 | 0.689× | Native-RGB paths remain below Pillow |
 | L Gaussian blur | Ubuntu ARM64 | 0.727× | Native-L follow-up is documented; CPU target remains open |
 | LA Gaussian blur | Apple arm64 | 0.737× | Native alpha path remains below Pillow |
@@ -20954,3 +20954,44 @@ slower than the 1.3230 ms packed-horizontal repeat. Revert that follow-up; its
 small address-arithmetic saving was not a whole-workflow win. The per-operation
 matrix remains sourced from the clean published cross-runner snapshot until a
 new full snapshot is available. No coverage was run.
+
+A follow-up replaced the serial zero-initialized horizontal INT32 intermediate
+with a preallocated vector populated through `push`. It passed the same exact
+Pillow parity gate and recorded 100/100 actual CPU, SIMD, and GPU runs without
+fallback, but the two CPU medians were 1.3635 and 1.3606 ms versus 1.3230 ms
+for the retained packed-span repeat. Pillow measured 2.0140 and 2.0269 ms;
+SIMD measured 4.5972 and 4.5760 ms; GPU measured 38.3903 and 38.7108 ms with
+two dispatches, 3 MiB uploaded, and 768 KiB read back. The intermediate buffer
+is fully overwritten, but avoiding its zero-fill did not improve this public
+call. Revert the append path; this is a measured whole-call miss, not a parity
+defect. Receipts are `i32-resize-nozero-intermediate-candidate4.json` and its
+repeat, with parity sidecars under `build/migration-parity/`.
+
+### I-mode bicubic direct integer rounding — 2026-10-08
+
+The serial I-mode output rounds each f64 accumulator with Pillow's sign-aware
+half offset and then converts it to i32. A private helper applies
+`0.5_f64.copysign(value)` and uses the conversion's truncation directly,
+avoiding a separate float truncation. The opt-in Parallel CPU path remains on
+its prior rounding route. The focused test checks signed zero, NaN, infinities,
+i32 limits, adjacent values around half boundaries, and 10,000 deterministic
+in-range values against the existing Pillow rounding function.
+
+Two parity-gated public benchmark runs used the same `call` plus `materialize`
+boundary, five warmups, 20 iterations across five samples, and concurrency one.
+Both passed exact Pillow parity and recorded 100/100 actual CPU, SIMD, and GPU
+executions without fallback:
+
+| Run | Pillow | Serial CPU | SIMD | GPU | Pillow/CPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Direct rounding A1 | 2.0115 ms | 1.2459 ms | 4.5665 ms | 37.6456 ms | 1.615× |
+| Direct rounding A2 | 2.0036 ms | 1.2412 ms | 4.5539 ms | 37.6975 ms | 1.614× |
+
+CPU latency improved 5.8–6.2% over the retained 1.3230 ms packed-horizontal
+candidate, reaching 1.614–1.615× Pillow locally. It remains short of the 2×
+gate, and the published x86_64 row still needs a fresh measurement. SIMD
+remains about 2.3× slower than Pillow. GPU remains about 8× slower than SIMD
+with two dispatches, 3 MiB uploaded, and 768 KiB read back; one-request timing
+does not establish sustained throughput. Receipts are
+`i32-resize-direct-rounding-candidate5.json` and its repeat, with parity
+sidecars under `build/migration-parity/`. No coverage was run.
