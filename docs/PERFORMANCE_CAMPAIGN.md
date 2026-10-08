@@ -21157,3 +21157,38 @@ candidate runs update this dated investigation only. No coverage was run.
 The next known current-source CPU miss is material RGB Thumbnail at 0.920×
 Pillow (1.1675 ms CPU versus 1.0744 ms Pillow); its old published row uses an
 invalid boundary, so use the local whole-workflow evidence when ranking it.
+
+### RGB Thumbnail all-zero reducer precheck — rejected — 2026-10-08
+
+The current profile attributes about 44% of main-thread samples to native RGB
+reducing, so a narrow candidate added a bytewise all-zero precheck to the
+sparse 2×2 reducer. A full zero reduction then writes the same zero-filled
+output directly. The prior packed 64-bit zero-group scan was already rejected;
+this trial tested the standard slice iterator on the common fully-zero input.
+
+The clean whole-workflow baseline at source revision `ca3d8b3f7d` measured
+1.0744 ms Pillow, 1.1675 ms CPU (0.920× Pillow), 2.8392 ms SIMD, and 2.2252 ms
+GPU. The candidate run at revision `56c48909` passed exact Pillow parity and
+recorded 100/100 actual CPU, SIMD, and GPU executions with no fallback:
+
+| Run | Pillow | Serial CPU | Pillow/CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Clean current-source baseline | 1.0744 ms | 1.1675 ms | 0.920× | 2.8392 ms | 2.2252 ms |
+| Bytewise zero precheck | 1.2350 ms | 1.4045 ms | 0.879× | 2.4923 ms | 2.5261 ms |
+
+The candidate overlapped an unrelated `uvicorn-rs-httpbench` load that was
+repeatedly saturating a CPU core, and all four medians shifted. Exclude its
+timing from ranking; it gives no evidence of a win, so the runtime precheck was
+reverted. Each CPU sample still reported two fused operations and no full-frame
+copy. GPU moved 3,145,728 bytes to the device and 196,608 bytes back, copied
+one frame, converted one mode, and dispatched three times. This one-request
+run does not prove sustained GPU throughput.
+
+The existing sparse-reducer test covered a few nonzero pixels and dense input
+but omitted the fully-zero source; it now compares that common case with the
+generic reduction. The test passed on the restored runtime path. No behavioral
+parity defect was found. The complete cross-runner CSV remains tied to its
+published snapshot until a fresh full GitHub benchmark is available. Receipts
+are `rgb-thumb-current-source-baseline-20261008.json` and
+`rgb-thumb-all-zero-byte-scan-attempt1-20261008.json`, with parity sidecars
+under `build/migration-parity/`. No coverage was run.
