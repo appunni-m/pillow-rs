@@ -462,25 +462,25 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`f4c4b9b6436e7202abec4833c08ff6eeb6b17b78`, measured
-`2026-10-07T23:46:30.070733Z`, and published by [benchmark run
-37700845295](https://github.com/appunni-m/pillow-rs/actions/runs/37700845295).
+`2bf6d16105ffdee80c4f8a22a014a54115e0720f`, measured
+`2026-10-08T01:57:47.569742Z`, and published by [benchmark run
+37713536055](https://github.com/appunni-m/pillow-rs/actions/runs/37713536055).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles. Only rows with exact parity and
 completed backend receipts are eligible for speed claims. Across the 120
-verified serial CPU workload-runner pairs, 22 are slower than Pillow, 68 are
+verified serial CPU workload-runner pairs, 18 are slower than Pillow, 64 are
 below 2×, and 98 are below 5×. The corresponding SIMD counts are 24 slower
 than Pillow, 40 below 2×, and 82 below 5×. GPU latency is slower than SIMD in
-22 of its 38 verified pairs; sustained throughput remains unmeasured. The
+23 of its 38 verified pairs; sustained throughput remains unmeasured. The
 separately built Parallel CPU profile uses the opt-in Cargo `parallel` feature;
-30 of its 120 verified pairs are slower than Pillow, 60 are below 2×, and 84
+26 of its 120 verified pairs are slower than Pillow, 57 are below 2×, and 84
 are below 5×.
 
 The published Pillow-SIMD snapshot is still dirty at revision
 `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d` and covers 9 of the 34 declared
 cases, so its ratios remain diagnostic. The version-matched Pillow-SIMD job
-for revision `83c2f3907` is [workflow
-37695171643](https://github.com/appunni-m/pillow-rs/actions/runs/37695171643); it
+for revision `2bf6d1610` is [workflow
+37713535952](https://github.com/appunni-m/pillow-rs/actions/runs/37713535952); it
 failed in its parity-gated benchmark step with exit code 2, and its public check
 annotation does not expose a specific failure cause. No specific failure or
 test defect is confirmed. Use Pillow-SIMD comparisons only after a complete
