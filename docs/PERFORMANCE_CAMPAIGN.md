@@ -101,24 +101,30 @@ baseline used Xeon 8370C. Treat cross-snapshot x86 timing changes as
 uncontrolled unless the host model matches; use each run's paired Pillow ratio
 for this candidate.
 
-The largest verified serial CPU gaps in this snapshot are:
+The largest current verified serial CPU gaps are:
+
+The 2026-10-08 public CSV's RGB-thumbnail and sparse-CMYK rows use
+`observed_steps` even though setup `putpixel` writes are lazy in pillow-rs and
+eager in Pillow. Exclude those published ratios. Corrected local
+whole-workflow results put RGB thumbnail at 0.439–0.442× and sparse-CMYK
+`getprojection` at 0.741× on Apple arm64. The I-mode bicubic resize remains
+0.573× on the published x86_64 runner; the latest local Apple candidate is
+1.164–1.176× and still needs a fresh x86 runner result.
 
 | Workload | Runner | Pillow speedup | Existing checkpoint |
 | --- | --- | ---: | --- |
-| RGB material thumbnail | Apple arm64 | 0.441× | Keep scalar 2×2 reducer; streamed reduce-to-resize fusion was neutral |
-| RGB material thumbnail | Ubuntu ARM64 | 0.455× | Same native reducer; below Pillow |
-| RGB material thumbnail | Ubuntu x86_64 | 0.505× | Same native reducer; below Pillow |
-| Sparse CMYK getprojection pipeline | Apple arm64 | 0.541× | Native four-ink scan retained after bounded attempts |
+| RGB material thumbnail | Apple arm64 | 0.439–0.442× | Corrected whole-workflow sparse 2×2 reducer; below Pillow |
 | I-mode bicubic resize composed pipeline | Ubuntu x86_64 | 0.573× | Shared typed-I resampling path; x86 remains below Pillow |
-| Sparse CMYK getprojection pipeline | Ubuntu ARM64 | 0.630× | Native four-ink scan remains below Pillow |
 | RGB unsharp mask | Apple arm64 | 0.689× | Native-RGB paths remain below Pillow |
 | L Gaussian blur | Ubuntu ARM64 | 0.727× | Native-L follow-up is documented; CPU target remains open |
 | LA Gaussian blur | Apple arm64 | 0.737× | Native alpha path remains below Pillow |
+| Sparse CMYK getprojection pipeline | Apple arm64 | 0.741× | Corrected whole-workflow scan and writes; below Pillow |
 | RGB grayscale | Ubuntu x86_64 | 0.775× | Direct output collection retained; still below Pillow and the 2× gate |
 | F-mode thumbnail | Ubuntu x86_64 | 0.796× | Reducing-gap plus boxed F resize |
 
 The speedup is Pillow median latency divided by target median latency; each
-listed workload is slower than Pillow on that runner. The I-mode 5 × 5 x86 FMA
+listed cross-runner workload is slower than Pillow on that runner. The I-mode
+Apple result is the exception noted above. The I-mode 5 × 5 x86 FMA
 candidate still meets the CPU≤Pillow target in its materialized filter and
 composed convolution workloads; sub-2× rows remain in the matrix. RGB thumbnail
 is the largest open CPU gap. Native-I thumbnail ranges from 0.984× on x86 to
@@ -20627,3 +20633,43 @@ receipts `rgb-thumbnail-whole-workflow-baseline.json`,
 `rgb-thumbnail-whole-workflow-candidate.json`, and
 `rgb-thumbnail-whole-workflow-candidate-repeat.json` for this checkpoint. No
 coverage was run.
+
+### I-mode bicubic resize eight-tap CPU pass — 2026-10-08
+
+The next ranked workload is `pipeline-chain.resize-native-i32.bicubic-noise-1024x768`,
+which resizes seeded 1024×768 mode-I data to 512×384 with Bicubic and
+materializes the output. The timed steps are `call` and `materialize`; the
+input is built with `frombytes`, which materializes immediately on both sides,
+so this boundary does not defer source setup into only the target's timed
+work. A local five-second CPU profile attributed 1,326 of 2,667 main-thread
+samples to `resize_i`. The host uses an aligned little-endian source view, so
+the old full decode allocation was not this remaining hotspot.
+
+`resize_i` now specializes eight-tap coefficient spans. The eight fused
+multiply-adds remain in Pillow's original sequential order; shorter clipped
+edge spans and other tap counts keep the existing loop. The focused unit test
+checks bitwise accumulator equality with signed extremes and mixed signs. Two
+same-boundary A/B samples per version passed exact Pillow parity and recorded
+100/100 actual CPU, SIMD, and GPU runs without fallback:
+
+| Run | Pillow | Serial CPU | SIMD | GPU | CPU/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline A1 | 1.9870 ms | 2.1712 ms | 4.5867 ms | 36.4166 ms | 0.915× |
+| Baseline A2 | 1.9925 ms | 2.1578 ms | 4.5669 ms | 36.9139 ms | 0.923× |
+| Eight-tap B1 | 2.0085 ms | 1.7249 ms | 4.5805 ms | 36.9471 ms | 1.164× |
+| Eight-tap B2 | 2.0144 ms | 1.7125 ms | 4.5460 ms | 36.9167 ms | 1.176× |
+
+CPU latency fell by 20.6% across the paired medians and is now below Pillow on
+this Apple arm64 workload. It remains short of the 2× CPU sequencing gate, and
+the published x86_64 row is still 0.573× pending a fresh runner measurement.
+SIMD remains about 2.25× slower than Pillow, well short of the 5× target. GPU
+latency is about eight times SIMD latency; each request records two dispatches,
+3 MiB upload and 768 KiB readback. This path includes the existing host-side
+I32 exactness proof and does not meet the GPU target. No sustained GPU
+throughput was measured. The `parallel` Cargo feature was disabled; this result
+is serial CPU, not Parallel CPU. Receipts are
+`i32-resize-next-baseline.json`, `i32-resize-next-baseline-repeat.json`,
+`i32-resize-eight-tap-candidate1.json`, and
+`i32-resize-eight-tap-candidate1-repeat.json`, each with a parity sidecar under
+`build/migration-parity/`. The candidate clears the current local CPU≤Pillow
+floor but leaves the cross-runner 2× gate open. No coverage was run.

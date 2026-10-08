@@ -817,6 +817,24 @@ fn resize_f_with_fma<F: F64MulAdd>(
 
 /// Resize an I-mode image (32-bit signed integers stored as RGBA8 bytes LE).
 /// Uses PIL's two-pass separable approach matching ImagingResample.
+/// The common eight-tap interior keeps Pillow's sequential FMA order; clipped
+/// edge spans retain the general tap loop.
+#[inline(always)]
+fn resize_i_sum_eight(
+    weights: &[f64; 8],
+    first_sample: usize,
+    sample: impl Fn(usize) -> i32,
+) -> f64 {
+    let mut accumulator = weights[0].mul_add(f64::from(sample(first_sample)), 0.0);
+    accumulator = weights[1].mul_add(f64::from(sample(first_sample + 1)), accumulator);
+    accumulator = weights[2].mul_add(f64::from(sample(first_sample + 2)), accumulator);
+    accumulator = weights[3].mul_add(f64::from(sample(first_sample + 3)), accumulator);
+    accumulator = weights[4].mul_add(f64::from(sample(first_sample + 4)), accumulator);
+    accumulator = weights[5].mul_add(f64::from(sample(first_sample + 5)), accumulator);
+    accumulator = weights[6].mul_add(f64::from(sample(first_sample + 6)), accumulator);
+    weights[7].mul_add(f64::from(sample(first_sample + 7)), accumulator)
+}
+
 fn resize_i(
     img: &DynamicImage,
     dst_w: u32,
@@ -911,12 +929,19 @@ fn resize_i(
             let src_row_base = (sy * sw) as usize;
             for (dx, output) in row.iter_mut().enumerate() {
                 let x0 = h_coeffs_f64.xmin[dx];
-                let mut acc: f64 = 0.0;
-                for (cix, &weight) in h_coeffs_f64.weights[dx].iter().enumerate() {
-                    let sx = (x0 + cix as i64) as usize;
-                    acc = weight.mul_add(f64::from(src_ints[src_row_base + sx]), acc);
-                }
-                *output = round_up(acc) as i32;
+                let weights = &h_coeffs_f64.weights[dx];
+                let accumulator = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
+                    resize_i_sum_eight(weights, x0 as usize, |sx| src_ints[src_row_base + sx])
+                } else {
+                    let mut accumulator: f64 = 0.0;
+                    for (cix, &weight) in weights.iter().enumerate() {
+                        let sx = (x0 + cix as i64) as usize;
+                        accumulator =
+                            weight.mul_add(f64::from(src_ints[src_row_base + sx]), accumulator);
+                    }
+                    accumulator
+                };
+                *output = round_up(accumulator) as i32;
             }
         }
     );
@@ -925,12 +950,19 @@ fn resize_i(
         let src_row_base = sy * sw as usize;
         for (dx, output) in row.iter_mut().enumerate() {
             let x0 = h_coeffs_f64.xmin[dx];
-            let mut acc: f64 = 0.0;
-            for (cix, &weight) in h_coeffs_f64.weights[dx].iter().enumerate() {
-                let sx = (x0 + cix as i64) as usize;
-                acc = weight.mul_add(f64::from(src_ints[src_row_base + sx]), acc);
-            }
-            *output = round_up(acc) as i32;
+            let weights = &h_coeffs_f64.weights[dx];
+            let accumulator = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
+                resize_i_sum_eight(weights, x0 as usize, |sx| src_ints[src_row_base + sx])
+            } else {
+                let mut accumulator: f64 = 0.0;
+                for (cix, &weight) in weights.iter().enumerate() {
+                    let sx = (x0 + cix as i64) as usize;
+                    accumulator =
+                        weight.mul_add(f64::from(src_ints[src_row_base + sx]), accumulator);
+                }
+                accumulator
+            };
+            *output = round_up(accumulator) as i32;
         }
     }
 
@@ -942,27 +974,50 @@ fn resize_i(
         output_stride,
         dst_h as usize,
         |_row_start, _row_end, dy, row| {
-            let y0 = v_coeffs_f64.xmin[dy as usize];
+            let output_y = dy as usize;
+            let y0 = v_coeffs_f64.xmin[output_y];
+            let weights = &v_coeffs_f64.weights[output_y];
             for (dx, output) in row.chunks_exact_mut(4).enumerate() {
-                let mut acc: f64 = 0.0;
-                for (cix, &weight) in v_coeffs_f64.weights[dy as usize].iter().enumerate() {
-                    let sy = (y0 + cix as i64) as usize;
-                    acc = weight.mul_add(f64::from(intermediate[(sy * dst_w as usize) + dx]), acc);
-                }
-                output.copy_from_slice(&(round_up(acc) as i32).to_le_bytes());
+                let accumulator = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
+                    resize_i_sum_eight(weights, y0 as usize, |sy| {
+                        intermediate[sy * dst_w as usize + dx]
+                    })
+                } else {
+                    let mut accumulator: f64 = 0.0;
+                    for (cix, &weight) in weights.iter().enumerate() {
+                        let sy = (y0 + cix as i64) as usize;
+                        accumulator = weight.mul_add(
+                            f64::from(intermediate[(sy * dst_w as usize) + dx]),
+                            accumulator,
+                        );
+                    }
+                    accumulator
+                };
+                output.copy_from_slice(&(round_up(accumulator) as i32).to_le_bytes());
             }
         }
     );
     #[cfg(not(feature = "parallel"))]
     for (dy, row) in output_bytes.chunks_mut(output_stride).enumerate() {
         let y0 = v_coeffs_f64.xmin[dy];
+        let weights = &v_coeffs_f64.weights[dy];
         for (dx, output) in row.chunks_exact_mut(4).enumerate() {
-            let mut acc: f64 = 0.0;
-            for (cix, &weight) in v_coeffs_f64.weights[dy].iter().enumerate() {
-                let sy = (y0 + cix as i64) as usize;
-                acc = weight.mul_add(f64::from(intermediate[(sy * dst_w as usize) + dx]), acc);
-            }
-            output.copy_from_slice(&(round_up(acc) as i32).to_le_bytes());
+            let accumulator = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
+                resize_i_sum_eight(weights, y0 as usize, |sy| {
+                    intermediate[sy * dst_w as usize + dx]
+                })
+            } else {
+                let mut accumulator: f64 = 0.0;
+                for (cix, &weight) in weights.iter().enumerate() {
+                    let sy = (y0 + cix as i64) as usize;
+                    accumulator = weight.mul_add(
+                        f64::from(intermediate[(sy * dst_w as usize) + dx]),
+                        accumulator,
+                    );
+                }
+                accumulator
+            };
+            output.copy_from_slice(&(round_up(accumulator) as i32).to_le_bytes());
         }
     }
 
@@ -3279,6 +3334,7 @@ pub fn execute_reduce(
 
 #[cfg(test)]
 mod tests {
+    use super::resize_i_sum_eight;
     #[cfg(target_arch = "x86_64")]
     use super::{F64MulAdd, PortableFma, X86FmaToken};
     use super::{execute_reduce, reduce_f_thumbnail, reduce_i_thumbnail, resize_f};
@@ -4198,5 +4254,25 @@ mod tests {
             .flat_map(u32::to_le_bytes)
             .collect();
         assert_eq!(output.as_raw(), &expected_bytes);
+    }
+
+    #[test]
+    fn i_resize_eight_tap_accumulation_matches_scalar_fma_order() {
+        let weights: [f64; 8] = [
+            -0.03125, 0.09375, -0.15625, 0.59375, 0.59375, -0.15625, 0.09375, -0.03125,
+        ];
+        for source in [
+            [i32::MIN, i32::MAX, -1, 0, 1, i32::MIN + 1, i32::MAX - 1, 17],
+            [-1_000_003, 923_771, 0, 17, -31, 63, -127, 255],
+        ] {
+            let expected = weights
+                .iter()
+                .zip(source)
+                .fold(0.0_f64, |acc, (&weight, sample)| {
+                    weight.mul_add(f64::from(sample), acc)
+                });
+            let actual = resize_i_sum_eight(&weights, 0, |index| source[index]);
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
     }
 }
