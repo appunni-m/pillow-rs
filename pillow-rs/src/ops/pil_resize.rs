@@ -466,6 +466,50 @@ fn f_resize_accumulate<F: F64MulAdd>(
     }
 }
 
+#[inline(always)]
+fn f_resize_accumulate_boxed_row<F: F64MulAdd, const UNROLL_EIGHT: bool>(
+    accumulator: &mut f64,
+    source: &[f32],
+    source_row_start: usize,
+    source_width: usize,
+    source_x: i64,
+    weights: &[f64],
+    fma: &F,
+) {
+    if UNROLL_EIGHT && weights.len() == 8 {
+        let source_start = usize::try_from(source_x)
+            .ok()
+            .and_then(|x| source_row_start.checked_add(x));
+        let source_end = source_start.and_then(|start| start.checked_add(8));
+        if let (Some(start), Some(end)) = (source_start, source_end)
+            && end <= source_row_start.saturating_add(source_width)
+            && let Some(samples) = source.get(start..end)
+        {
+            *accumulator = fma.mul_add(weights[0], f64::from(samples[0]), *accumulator);
+            *accumulator = fma.mul_add(weights[1], f64::from(samples[1]), *accumulator);
+            *accumulator = fma.mul_add(weights[2], f64::from(samples[2]), *accumulator);
+            *accumulator = fma.mul_add(weights[3], f64::from(samples[3]), *accumulator);
+            *accumulator = fma.mul_add(weights[4], f64::from(samples[4]), *accumulator);
+            *accumulator = fma.mul_add(weights[5], f64::from(samples[5]), *accumulator);
+            *accumulator = fma.mul_add(weights[6], f64::from(samples[6]), *accumulator);
+            *accumulator = fma.mul_add(weights[7], f64::from(samples[7]), *accumulator);
+            return;
+        }
+    }
+
+    let vector_product_count = (weights.len() / F_RESIZE_VECTOR_WIDTH) * F_RESIZE_VECTOR_WIDTH;
+    for (tap, &weight) in weights.iter().enumerate() {
+        let source_x = (source_x + tap as i64) as usize;
+        f_resize_accumulate(
+            accumulator,
+            weight,
+            source[source_row_start + source_x],
+            tap < vector_product_count,
+            fma,
+        );
+    }
+}
+
 // ── Pixel access helpers ──
 
 /// Get pixel as 4 f64 values (r, g, b, a). Grayscale replicates to RGB.
@@ -3937,11 +3981,11 @@ fn pil_resize_f_boxed(
 ) -> DynamicImage {
     #[cfg(target_arch = "x86_64")]
     if let Some(fma) = X86FmaToken::detect() {
-        return pil_resize_f_boxed_with_fma(
+        return pil_resize_f_boxed_with_fma::<_, true>(
             img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter, &fma,
         );
     }
-    pil_resize_f_boxed_with_fma(
+    pil_resize_f_boxed_with_fma::<_, true>(
         img,
         dst_w,
         dst_h,
@@ -3954,7 +3998,7 @@ fn pil_resize_f_boxed(
     )
 }
 
-fn pil_resize_f_boxed_with_fma<F: F64MulAdd>(
+fn pil_resize_f_boxed_with_fma<F: F64MulAdd, const UNROLL_EIGHT: bool>(
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
@@ -4041,19 +4085,15 @@ fn pil_resize_f_boxed_with_fma<F: F64MulAdd>(
             for output_x in 0..dst_w as usize {
                 let x0 = horizontal.xmin[output_x];
                 let mut sum = 0.0;
-                let vector_product_count = (horizontal.weights[output_x].len()
-                    / F_RESIZE_VECTOR_WIDTH)
-                    * F_RESIZE_VECTOR_WIDTH;
-                for (tap, &weight) in horizontal.weights[output_x].iter().enumerate() {
-                    let source_x = (x0 + tap as i64) as usize;
-                    f_resize_accumulate(
-                        &mut sum,
-                        weight,
-                        source[source_start + source_x],
-                        tap < vector_product_count,
-                        fma,
-                    );
-                }
+                f_resize_accumulate_boxed_row::<F, UNROLL_EIGHT>(
+                    &mut sum,
+                    source,
+                    source_start,
+                    source_width as usize,
+                    x0,
+                    &horizontal.weights[output_x],
+                    fma,
+                );
                 intermediate[intermediate_start + output_x] =
                     if sum == 0.0 { 0.0 } else { sum as f32 };
             }
@@ -4097,6 +4137,77 @@ fn pil_resize_f_boxed_with_fma<F: F64MulAdd>(
     raw_to_dynamic_owned(output, dst_w, dst_h, 4)
 }
 
+#[cfg(test)]
+mod boxed_f_resize_eight_tap_tests {
+    use super::{PortableFma, pil_resize_f_boxed_with_fma};
+    use crate::pipeline::ResampleFilter;
+    use crate::raster::{DynamicImage, RgbaImage};
+
+    #[test]
+    fn eight_tap_boxed_resize_matches_ordered_generic_reference() {
+        for (source_width, source_height, dst_w, dst_h, bounds, filter) in [
+            (
+                512u32,
+                384u32,
+                256u32,
+                192u32,
+                (0.0, 0.0, 512.0, 384.0),
+                ResampleFilter::Bicubic,
+            ),
+            (
+                37,
+                23,
+                19,
+                11,
+                (0.25, 0.5, 36.625, 22.75),
+                ResampleFilter::Bicubic,
+            ),
+            (
+                96,
+                48,
+                17,
+                9,
+                (0.125, 0.25, 95.625, 47.5),
+                ResampleFilter::Lanczos,
+            ),
+        ] {
+            let samples = (0..source_width as usize * source_height as usize)
+                .map(|index| (((index * 37 % 257) as i32 - 128) as f32) / 31.0)
+                .collect::<Vec<_>>();
+            let bytes = samples
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect();
+            let image = DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(source_width, source_height, bytes).expect("packed F samples"),
+            );
+            let optimized = pil_resize_f_boxed_with_fma::<_, true>(
+                &image,
+                dst_w,
+                dst_h,
+                bounds.0,
+                bounds.1,
+                bounds.2,
+                bounds.3,
+                filter,
+                &PortableFma,
+            );
+            let generic = pil_resize_f_boxed_with_fma::<_, false>(
+                &image,
+                dst_w,
+                dst_h,
+                bounds.0,
+                bounds.1,
+                bounds.2,
+                bounds.3,
+                filter,
+                &PortableFma,
+            );
+            assert_eq!(optimized.as_bytes(), generic.as_bytes());
+        }
+    }
+}
+
 #[cfg(all(test, target_arch = "x86_64"))]
 mod boxed_f_resize_fma_tests {
     use super::{PortableFma, X86FmaToken, pil_resize_f_boxed, pil_resize_f_boxed_with_fma};
@@ -4120,7 +4231,7 @@ mod boxed_f_resize_fma_tests {
             RgbaImage::from_raw(source_width, source_height, bytes).expect("packed F samples"),
         );
         let bounds = (0.125, 0.25, 95.625, 47.5);
-        let actual = pil_resize_f_boxed_with_fma(
+        let actual = pil_resize_f_boxed_with_fma::<_, true>(
             &image,
             17,
             9,
@@ -4141,7 +4252,7 @@ mod boxed_f_resize_fma_tests {
             bounds.3,
             ResampleFilter::Lanczos,
         );
-        let portable = pil_resize_f_boxed_with_fma(
+        let portable = pil_resize_f_boxed_with_fma::<_, true>(
             &image,
             17,
             9,

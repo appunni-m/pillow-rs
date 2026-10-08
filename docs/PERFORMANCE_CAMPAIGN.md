@@ -20204,9 +20204,9 @@ byte-output trial measured the same latency while removing the temporary
 FLOAT32 output vector and its full-frame conversion pass. SIMD remains close to
 Pillow and far from 2×. GPU is not demonstrated because all requested GPU
 observations fell back to CPU for the unproven typed-F reducing-gap contract.
-The hosted run for pushed commit `e62df1d8d` is pending, so these additional
-local changes need the next hosted cross-runner matrix before they are
-campaign evidence.
+The queued benchmark for `e62df1d8d` was canceled before execution by the later
+push. The full hosted run for `7802be7ee` is pending and includes these changes;
+use its published clean snapshot to judge cross-runner results.
 
 Receipts are `thumbnail-f-reduce-borrow-candidate1.json`,
 `thumbnail-f-reduce-borrow-candidate2.json`,
@@ -20215,3 +20215,44 @@ Receipts are `thumbnail-f-reduce-borrow-candidate1.json`,
 `thumbnail-f-direct-output-candidate5.json`, with corresponding `-parity.json`
 sidecars under `build/migration-parity/`. No test defect was identified and no
 coverage was run.
+
+## F-mode thumbnail boxed bicubic eight-tap CPU candidate — 2026-10-08
+
+The previous clean snapshot ranked F thumbnail below the 2× CPU sequencing
+threshold. A strict local CPU profile of the complete 1024×768 F thumbnail
+workflow ran 2,500 repetitions and sampled 853 frames in boxed F resize versus
+449 in its 2×2 reducing-gap pass. The common post-reduction bicubic resize has
+eight horizontal taps for its full interior rows.
+
+The candidate adds a checked eight-sample source window and an explicit ordered
+FMA sequence for exactly eight boxed-F horizontal weights. Clipped edge rows,
+other filters, and wider tap windows retain the generic path. The accumulator
+remains f64, each separable pass stores f32, and the operation order is
+unchanged. A focused Rust test compares the candidate with the generic
+implementation bit-for-bit for the full scale-two bicubic case, fractional
+bicubic boxes, and a Lanczos fallback.
+
+The parity-gated public workload measures the complete thumbnail call and
+receiver observation at 1024×768. Each row used five warmups, 20 iterations ×
+five samples, and concurrency one:
+
+| Run | Pillow p50 (ms) | CPU p50 (ms) | SIMD p50 (ms) | Requested GPU p50 (ms) | CPU execution | SIMD execution | GPU execution |
+| --- | ---: | ---: | ---: | ---: | --- | --- | --- |
+| Same-tree baseline | 1.032 | 0.731 | 1.035 | 1.050 | 100 CPU, no fallback | 100 SIMD, no fallback | CPU fallback, excluded |
+| Eight-tap candidate | 1.051 | 0.513 | 1.036 | 0.834 | 100 CPU, no fallback | 100 SIMD, no fallback | CPU fallback, excluded |
+| Candidate repeat | 1.016 | 0.505 | 1.046 | 0.828 | 100 CPU, no fallback | 100 SIMD, no fallback | CPU fallback, excluded |
+
+All three runs passed the exact Pillow parity gate. CPU improved 30–31% against
+the same-tree baseline and exceeded 2× Pillow in both candidate runs on this
+local macOS arm64 host. SIMD remained near Pillow and did not meet the 2× or 5×
+target. All requested GPU observations reported CPU fallback for unproven
+reducing-gap/typed-F semantics; their latency is not GPU evidence. The
+7802be7ee full hosted benchmark is running against the pre-candidate source;
+the candidate still needs a clean hosted matrix across architectures. No test
+defect was found and no coverage was run.
+
+Receipts are `build/migration-parity/thumbnail-f-eight-tap-baseline.json`,
+`thumbnail-f-eight-tap-candidate1.json`, and
+`thumbnail-f-eight-tap-candidate1-repeat.json`, each with a corresponding
+`-parity.json` sidecar. The profile receipt is
+`build/migration-parity/profiles/pipeline-op.thumbnail.native-f32-1024x768-cpu.profile.json`.
