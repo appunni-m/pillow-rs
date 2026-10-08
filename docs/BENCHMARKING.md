@@ -462,28 +462,28 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`c84fb100ee7948bb17b9d5ef1a5cbd18c22d066b`, measured
-`2026-10-08T16:24:56.527113Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
+`7cd96ac43be67a1346680b7297c0980cee544477`, measured
+`2026-10-08T17:43:01.433246Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles. Only rows with exact parity and
-completed backend receipts are eligible for speed claims. Across the 120
-verified serial CPU workload-runner pairs, 10 are slower than Pillow, 61 are
-below 2×, and 98 are below 5×. The corresponding SIMD counts are 24 slower
-than Pillow, 42 below 2×, and 87 below 5×. GPU latency is slower than SIMD in
-22 of its 38 verified pairs; sustained throughput remains unmeasured. The
-separately built Parallel CPU profile uses the opt-in Cargo `parallel` feature;
-19 of its 120 verified pairs are slower than Pillow, 51 are below 2×, and 83
-are below 5×.
+completed backend receipts are eligible for speed claims. The snapshot's RGB
+grayscale result includes an x86-only four-pixel batching experiment that was
+rejected and removed from the working source.
+Across the 120 verified serial CPU workload-runner pairs, 8 are slower than
+Pillow, 58 are below 2×, and 98 are below 5×. The corresponding SIMD counts are
+23 slower than Pillow, 41 below 2×, and 86 below 5×. GPU latency is slower than
+SIMD in 23 of its 38 verified pairs; sustained throughput remains unmeasured.
+The separately built Parallel CPU profile uses the opt-in Cargo `parallel`
+feature; 15 of its 120 verified pairs are slower than Pillow, 49 are below 2×,
+and 82 are below 5×.
 
-The ten verified serial CPU misses are RGB material grayscale (0.413× on
-x86_64), YCbCr material grayscale (0.574× on x86_64), LA material GaussianBlur
-(0.690× on macOS arm64), I-mode bicubic resize (0.807× on x86_64), RGB material
-UnsharpMask (0.841× on macOS arm64), RGB material BoxBlur (0.881× on macOS
-arm64), YCbCr material grayscale (0.911× on macOS arm64), I-mode thumbnail
-(0.920× on x86_64), RGB material thumbnail (0.927× on macOS arm64), and RGB
-material thumbnail (0.942× on ARM64). Their per-workload rows and the remaining
-below-2× rows are retained in the matrix rather than aggregated into one
-operation score.
+The eight verified serial CPU misses are RGB material grayscale (0.490× on
+x86_64), YCbCr material grayscale (0.581× on x86_64), I-mode bicubic resize
+(0.812× on x86_64), I-mode thumbnail (0.905× on x86_64), RGB material
+thumbnail (0.942× on macOS arm64), RGB+L merge (0.947× on x86_64), RGB material
+thumbnail (0.958× on Ubuntu arm64), and LA material GaussianBlur (0.972× on
+macOS arm64). Their per-workload rows and the remaining below-2× rows are
+retained in the matrix rather than aggregated into one operation score.
 
 The published Pillow-SIMD snapshot is still dirty at revision
 `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d` and covers 9 of the 34 declared
@@ -494,9 +494,9 @@ failed in its parity-gated benchmark step, and its public check annotation only
 reports exit code 2. The F-mode thumbnail candidate is outside that workflow's
 workload allowlist, so the failure does not diagnose this operation. No
 specific failing case or test defect is confirmed. Use Pillow-SIMD comparisons
-only after a complete clean matched cohort is available. The latest published
-asset still points to that incomplete revision; the in-progress c84 run has
-not published a matched Pillow-SIMD snapshot yet.
+only after a complete clean matched cohort is available. Full benchmark run
+37813889817 updated the full benchmark asset but did not change the separate
+Pillow-SIMD asset, which still points to the incomplete revision above.
 
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with

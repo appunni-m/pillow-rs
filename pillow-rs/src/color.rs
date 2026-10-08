@@ -342,39 +342,10 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
     rounding: u32,
 ) -> Vec<u8> {
     let expected_pixels = dims.total_pixels();
-    // Keep four-pixel batching x86-only: its fixed-length extension compiles
-    // to one 32-bit destination store here, while the equivalent ARM full-call
-    // experiment regressed and stays on the iterator path.
-    #[cfg(target_arch = "x86_64")]
-    let mut gray = {
-        let available_pixels = (source.len() / CHANNELS).min(expected_pixels);
-        let block_pixels = available_pixels / 4 * 4;
-        let block_bytes = block_pixels * CHANNELS;
-        let mut output = Vec::with_capacity(expected_pixels);
-        for block in source[..block_bytes].chunks_exact(CHANNELS * 4) {
-            output.extend([
-                grayscale_rgb_pixel(&block[0..CHANNELS], rounding),
-                grayscale_rgb_pixel(&block[CHANNELS..CHANNELS * 2], rounding),
-                grayscale_rgb_pixel(&block[CHANNELS * 2..CHANNELS * 3], rounding),
-                grayscale_rgb_pixel(&block[CHANNELS * 3..CHANNELS * 4], rounding),
-            ]);
-        }
-        for pixel in source[block_bytes..available_pixels * CHANNELS].chunks_exact(CHANNELS) {
-            output.push(grayscale_rgb_pixel(pixel, rounding));
-        }
-        output
-    };
-    #[cfg(not(target_arch = "x86_64"))]
     let mut gray: Vec<u8> = source
         .chunks_exact(CHANNELS)
         .take(expected_pixels)
-        .map(|pixel| {
-            ((19595 * u32::from(pixel[0])
-                + 38470 * u32::from(pixel[1])
-                + 7471 * u32::from(pixel[2])
-                + rounding)
-                >> 16) as u8
-        })
+        .map(|pixel| grayscale_rgb_pixel(pixel, rounding))
         .collect();
     // Valid image buffers yield every pixel and avoid zero-initializing the
     // output before overwriting it. Keep the former zero-fill behavior if an
@@ -384,14 +355,33 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
     gray
 }
 
-#[cfg(target_arch = "x86_64")]
 #[inline(always)]
 fn grayscale_rgb_pixel(pixel: &[u8], rounding: u32) -> u8 {
-    ((19595 * u32::from(pixel[0])
-        + 38470 * u32::from(pixel[1])
-        + 7471 * u32::from(pixel[2])
-        + rounding)
-        >> 16) as u8
+    #[cfg(target_arch = "x86_64")]
+    {
+        grayscale_rgb_pixel_delta(pixel, rounding)
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        ((19595 * u32::from(pixel[0])
+            + 38470 * u32::from(pixel[1])
+            + 7471 * u32::from(pixel[2])
+            + rounding)
+            >> 16) as u8
+    }
+}
+
+#[cfg(any(test, target_arch = "x86_64"))]
+#[inline(always)]
+fn grayscale_rgb_pixel_delta(pixel: &[u8], rounding: u32) -> u8 {
+    let green = i32::from(pixel[1]);
+    // The BT.601 coefficients sum to 65536, so G is an exact base and the
+    // correction needs only R/G and B/G differences:
+    // Y = G + (((R-G)*19595 + (B-G)*7471 + rounding) >> 16).
+    let correction = (i32::from(pixel[0]) - green) * 19595
+        + (i32::from(pixel[2]) - green) * 7471
+        + rounding as i32;
+    (green + (correction >> 16)) as u8
 }
 
 /// Converts a CMYK image to Pillow-compatible grayscale.
@@ -1601,8 +1591,8 @@ pub fn palette_getcolor_validate_input(
 #[cfg(test)]
 mod tests {
     use super::{
-        ColorValue, f_to_i, f_to_l, getcolor, grayscale_rgb_bytes, i_to_f, i_to_l, muldiv255,
-        rgb_to_hsv, rgb_to_luma_u8,
+        ColorValue, f_to_i, f_to_l, getcolor, grayscale_rgb_bytes, grayscale_rgb_pixel_delta,
+        i_to_f, i_to_l, muldiv255, rgb_to_hsv, rgb_to_luma_u8,
     };
     use crate::checked_dims::CheckedDims;
     use crate::error::PilError;
@@ -1682,6 +1672,22 @@ mod tests {
                 }
 
                 for bytes in [source.as_slice(), &source[..source.len().saturating_sub(1)]] {
+                    for pixel in bytes.chunks_exact(channels) {
+                        assert_eq!(
+                            grayscale_rgb_pixel_delta(pixel, 32768),
+                            rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]),
+                            "rounded delta grayscale for channels={channels}"
+                        );
+                        let truncated = ((19595 * u32::from(pixel[0])
+                            + 38470 * u32::from(pixel[1])
+                            + 7471 * u32::from(pixel[2]))
+                            >> 16) as u8;
+                        assert_eq!(
+                            grayscale_rgb_pixel_delta(pixel, 0),
+                            truncated,
+                            "truncated delta grayscale for channels={channels}"
+                        );
+                    }
                     let dims = CheckedDims::new_allow_empty(pixel_count as u32, 1, 1)
                         .expect("valid grayscale output dimensions");
                     let actual = match channels {
@@ -1699,6 +1705,25 @@ mod tests {
                         actual, expected,
                         "channels={channels}, pixels={pixel_count}"
                     );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn grayscale_rgb_pixel_delta_matches_reference_for_all_rgb_values() {
+        for red in 0..=u8::MAX {
+            for green in 0..=u8::MAX {
+                for blue in 0..=u8::MAX {
+                    let pixel = [red, green, blue];
+                    for rounding in [0, 32768] {
+                        let expected = ((19595 * u32::from(red)
+                            + 38470 * u32::from(green)
+                            + 7471 * u32::from(blue)
+                            + rounding)
+                            >> 16) as u8;
+                        assert_eq!(grayscale_rgb_pixel_delta(&pixel, rounding), expected);
+                    }
                 }
             }
         }
