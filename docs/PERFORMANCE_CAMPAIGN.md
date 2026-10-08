@@ -20481,3 +20481,60 @@ but its latency is 12.1× the SIMD latency; sustained GPU throughput is not
 measured. The existing Pillow-SIMD asset is dirty and incomplete, and its
 latest failed workflow does not include this F-mode workload. No test defect
 was found and no coverage was run.
+
+
+### Rejected F-resize attempt: bulk-cast output encoding — 2026-10-08
+
+A second attempt replaced the final `f32::to_le_bytes` collection with one
+little-endian `bytemuck` slice copy, retaining explicit conversion for
+big-endian systems. A focused unit check preserved the bit patterns for normal
+values, negative zero, a NaN payload, and both infinities. Two local full-call
+runs of the exact 1024×768 F-mode bicubic pipeline each passed parity with
+Pillow and recorded actual CPU/SIMD/GPU execution without fallback. The public
+measurement used warm cache, five warmups, 20 iterations × five samples,
+concurrency one, and `call` plus `materialize`.
+
+| Run | Pillow (ms) | CPU (ms) | CPU speedup | SIMD (ms) | GPU (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Bulk-copy candidate | 2.683542 | 1.325375 | 2.025× | 5.192917 | 49.975167 |
+| Bulk-copy repeat | 2.687042 | 1.325417 | 2.027× | 5.195854 | 49.998437 |
+
+The CPU medians were about 1–2% below the prior finite-FMA checkpoint's
+1.351313 and 1.340812 ms, but the paired speedup ratios were below that
+checkpoint's 2.041× and 2.063×. Pillow timing also shifted between independent
+runs, so the lower raw CPU medians do not establish a repeatable whole-call
+gain. Revert the byte-pack change and keep the finite-FMA checkpoint. Receipts
+are `f32-resize-pack-candidate-arm.json`,
+`f32-resize-pack-candidate-arm-parity.json`,
+`f32-resize-pack-candidate-arm-repeat.json`, and
+`f32-resize-pack-candidate-arm-repeat-parity.json` under
+`build/migration-parity/`. No test defect was found; no coverage was run.
+
+### Rejected F-resize attempt: interleave four scalar accumulators — 2026-10-08
+
+Interleaving four independent output accumulators in the 8-tap horizontal and
+vertical F-mode resamplers retained each output's scalar tap order. The focused
+pass test compared intermediate `f32` bit patterns against repeated scalar
+samples and passed. Two parity-gated full-call runs of the exact 1024×768
+F-mode bicubic pipeline also passed against Pillow. Both recorded 100 actual
+CPU, SIMD, and GPU executions with no fallback; the GPU recorded two dispatches
+per sample, 3.15 MB upload and 786 KB readback. Measurements used warm cache,
+five warmups, 20 iterations × five samples, concurrency one, and `call` plus
+`materialize`.
+
+| Run | Pillow (ms) | CPU (ms) | CPU speedup | SIMD (ms) | GPU (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Interleaved candidate | 2.774833 | 1.716667 | 1.616× | 5.196083 | 52.322750 |
+| Interleaved repeat | 2.703813 | 1.711937 | 1.579× | 5.190729 | 49.933729 |
+| Finite-FMA checkpoint | 2.758375 | 1.351313 | 2.041× | 5.256146 | 52.235895 |
+| Finite-FMA repeat | 2.767125 | 1.340812 | 2.064× | 5.209147 | 52.448875 |
+
+The candidate regressed CPU latency by about 27% against the paired checkpoint
+despite bit-exact intermediate results. Revert the interleaving and retain the
+finite-FMA path. The SIMD and GPU paths remain outside their latency targets;
+these measurements do not establish sustained GPU throughput. Receipts are
+`f32-resize-interleave-candidate-arm.json`,
+`f32-resize-interleave-candidate-arm-parity.json`,
+`f32-resize-interleave-candidate-arm-repeat.json`, and
+`f32-resize-interleave-candidate-arm-repeat-parity.json` under
+`build/migration-parity/`. No test defect was found; no coverage was run.
