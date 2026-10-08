@@ -462,45 +462,60 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`3066fc85dd869f2d99ebba82d35d44c49435aa1c`, measured
-`2026-10-08T18:54:59.558082Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-and [Benchmark workflow 37825764990](https://github.com/appunni-m/pillow-rs/actions/runs/37825764990).
+`c0982c2bd19315aecab466ef14aeec33e3376cf2`, measured
+`2026-10-08T19:40:41.321540Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and [Benchmark workflow 37831154347](https://github.com/appunni-m/pillow-rs/actions/runs/37831154347).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles. Only rows with exact parity and
-completed backend receipts are eligible for speed claims. The x86 RGB
-grayscale delta-form candidate passed exact parity and recorded 100/100 actual
-CPU samples with no fallback. On Intel Xeon Platinum 8573C, its median was
-0.8251 ms versus 0.6614 ms for Pillow (0.802×), so it remains a CPU miss. The
-prior 24da snapshot ran on AMD EPYC 7763 and reported 0.9660 ms versus 0.5307
-ms (0.549×); these different hosts make that cross-run change unsuitable as a
-causal speedup claim. The prior four-pixel batching candidate was rejected;
-its result is recorded in the reusable optimization skill.
-Across the 120 verified serial CPU workload-runner pairs, 6 are slower than
-Pillow, 64 are below 2×, and 99 are below 5×. The corresponding SIMD counts are
-22 slower than Pillow, 44 below 2×, and 85 below 5×. GPU latency is slower than
-SIMD in 22 of its 38 verified pairs; sustained throughput remains unmeasured.
-The separately built Parallel CPU profile uses the opt-in Cargo `parallel`
-feature; 20 of its 120 verified pairs are slower than Pillow, 57 are below 2×,
-and 83 are below 5×.
+completed backend receipts are eligible for speed claims.
 
-The six verified serial CPU misses are I-mode bicubic resize (0.651× on
-x86_64), RGB material grayscale (0.802× on x86_64), LA material GaussianBlur
-(0.823× on macOS arm64), I-mode thumbnail (0.908× on x86_64), RGB material
-thumbnail (0.952× on Ubuntu arm64), and YCbCr material grayscale (0.992× on
-x86_64). Their per-workload rows and the remaining below-2× rows are retained
-in the matrix rather than aggregated into one operation score.
+The x86 runtime-FMA I-mode resize candidate passed exact parity on all three
+runner cohorts. Its workload is
+`pipeline-chain.resize-native-i32.bicubic-noise-1024x768`; the measured
+boundary includes the resize call and result materialization, with 100 samples
+per subject. On Ubuntu 24.04 x86_64 with an
+Intel Xeon Platinum 8573C and the same runner image version as the previous
+snapshot, serial CPU changed from 14.6863 ms to 5.8657 ms while Pillow changed
+from 9.5636 ms to 9.3603 ms. The verified speed factor moved from 0.651× to
+1.596× Pillow. The candidate used the requested and actual CPU backend, had a
+complete terminal receipt, and reported no fallback. It clears the serial-CPU
+miss on this workload, but does not reach 2×. The runner model and image match;
+hosted VMs are ephemeral, so this is a matched runner-class comparison rather
+than a same-machine repeat. SIMD remains below its 5× target on all three
+cohorts, and the measured macOS GPU latency is slower than SIMD. GPU sustained
+throughput is still unmeasured. The earlier x86 RGB grayscale delta-form
+candidate passed exact parity and recorded 100/100 actual CPU samples with no
+fallback, but remains slower than Pillow at 0.803× on the current snapshot.
+The previous four-pixel batching candidate was rejected; its result is
+recorded in the reusable optimization skill.
+
+Across the 120 verified serial CPU workload-runner pairs, 4 are slower than
+Pillow, 61 are below 2×, and 97 are below 5×. The corresponding SIMD counts are
+23 slower than Pillow, 41 below 2×, and 83 below 5×. GPU latency is slower than
+SIMD in 23 of its 38 verified pairs; sustained throughput remains unmeasured.
+The separately built Parallel CPU profile uses the opt-in Cargo `parallel`
+feature; 14 of its 120 verified pairs are slower than Pillow, 46 are below 2×,
+and 78 are below 5×.
+
+The four verified serial CPU misses are LA material GaussianBlur (0.749× on
+macOS arm64), RGB material grayscale (0.803× on x86_64), I-mode material
+thumbnail (0.879× on x86_64), and RGB material thumbnail (0.964× on Ubuntu
+arm64). Their per-workload rows and the remaining below-2× rows are retained in
+the matrix rather than aggregated into one operation score.
 
 The published Pillow-SIMD snapshot is still dirty at revision
 `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d` and covers 9 of the 34 declared
 cases, so its ratios remain diagnostic. The latest version-matched Pillow-SIMD
-job for candidate revision `24da760bf` is [workflow
-37821693770](https://github.com/appunni-m/pillow-rs/actions/runs/37821693770).
-It failed in its parity-gated benchmark step, and its public check annotation
-only reports exit code 2. No specific failing case or test defect is
-confirmed. Use Pillow-SIMD comparisons only after a complete clean matched
-cohort is available. The full benchmark run updated the full benchmark asset
-but did not change the separate Pillow-SIMD asset, which still points to the
-incomplete revision above.
+job for candidate revision `c0982c2bd` is [workflow
+37831154323](https://github.com/appunni-m/pillow-rs/actions/runs/37831154323).
+Its oracle setup passed, but the parity-gated benchmark step exited with code
+2; public annotations do not identify a workload, and its raw logs and partial
+artifact require GitHub authentication. The declared Pillow-SIMD workload list
+does not include the I-mode bicubic resize changed in this candidate, so this
+failure is not evidence against that resize. No specific failing case or test
+defect is confirmed. Use Pillow-SIMD comparisons only after a complete clean
+matched cohort is available. The full benchmark asset was updated, but the
+separate Pillow-SIMD asset remains the incomplete revision above.
 
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with
