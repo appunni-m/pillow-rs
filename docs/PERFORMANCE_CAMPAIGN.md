@@ -109,12 +109,12 @@ eager in Pillow. Exclude those published ratios. Corrected local
 whole-workflow results put RGB thumbnail at 0.439–0.442× and sparse-CMYK
 `getprojection` at 0.741× on Apple arm64. The I-mode bicubic resize remains
 0.573× on the published x86_64 runner; the latest local Apple candidate is
-1.164–1.176× and still needs a fresh x86 runner result.
+1.475–1.493× and still needs a fresh x86 runner result.
 
 | Workload | Runner | Pillow speedup | Existing checkpoint |
 | --- | --- | ---: | --- |
 | RGB material thumbnail | Apple arm64 | 0.439–0.442× | Corrected whole-workflow sparse 2×2 reducer; below Pillow |
-| I-mode bicubic resize composed pipeline | Ubuntu x86_64 | 0.573× | Shared typed-I resampling path; x86 remains below Pillow |
+| I-mode bicubic resize composed pipeline | Ubuntu x86_64 | 0.573× | Shared typed-I resampling; local Apple arm64 candidate is 1.475–1.493× Pillow, still below 2× |
 | RGB unsharp mask | Apple arm64 | 0.689× | Native-RGB paths remain below Pillow |
 | L Gaussian blur | Ubuntu ARM64 | 0.727× | Native-L follow-up is documented; CPU target remains open |
 | LA Gaussian blur | Apple arm64 | 0.737× | Native alpha path remains below Pillow |
@@ -20910,3 +20910,47 @@ is unmeasured. The `parallel` Cargo feature was disabled; this is serial CPU.
 Receipts are `i32-resize-current-arm64.json`,
 `i32-resize-vertical-dispatch-candidate1.json`, and its repeat, with parity
 sidecars under `build/migration-parity/`. No coverage was run.
+
+### I-mode bicubic fixed-width horizontal spans — 2026-10-08
+
+The 1024×768 → 512×384 native-I Bicubic workflow has a contiguous interior
+region where every horizontal coefficient span has eight taps. Copy that run
+once into fixed-width `[f64; 8]` entries, use the explicit ordered FMA helper
+for the interior, and retain the generic clipped-span helper at both edges.
+This avoids converting every coefficient slice to a fixed-width reference for
+each source row. The parallel CPU path is unchanged; this is a serial-CPU
+optimization.
+
+The focused signed-extreme accumulation test still compares bitwise against
+the generic sequential FMA order, and the new packing test checks both a valid
+contiguous run and disjoint eight-tap spans. The parity-gated public benchmark
+timed `call` and `materialize` for the same composed operation on both sides,
+with five warmups, 20 iterations across five samples, and concurrency one.
+Both candidate runs passed exact Pillow parity with 100/100 actual CPU, SIMD,
+and GPU executions and no fallback:
+
+| Run | Pillow | Serial CPU | SIMD | GPU | Pillow/CPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Packed horizontal A1 | 2.0080 ms | 1.3608 ms | 4.6287 ms | 36.5163 ms | 1.476× |
+| Packed horizontal A2 | 1.9753 ms | 1.3230 ms | 4.5218 ms | 36.4750 ms | 1.493× |
+
+Against the original same-host baseline before vertical tap hoisting
+(1.6948 ms CPU), the combined retained changes reduce CPU latency by
+19.7–21.9%. Relative to the immediately preceding vertical-dispatch repeat
+(1.4655 ms), horizontal span packing adds a further 7.1–9.7% reduction and
+raises the local CPU/Pillow speedup to 1.48–1.49×. CPU is still short of the
+2× sequencing gate. SIMD is
+about 2.3× slower than Pillow; GPU is about 8× slower than SIMD, with two
+dispatches, 3 MiB uploaded, and 768 KiB read back per request. Concurrency one
+does not establish sustained GPU throughput. The published x86_64 row remains
+unrefreshed. Receipts are `i32-resize-horizontal-fixed-candidate2.json` and
+`i32-resize-horizontal-fixed-candidate2-repeat.json`, each with parity
+sidecars under `build/migration-parity/`.
+
+A follow-up tried precomputing eight vertical row bases before the x loop and
+loading through those offsets. The bitwise vertical helper test and exact
+backend parity passed, but the two CPU medians were 1.3403 and 1.3531 ms,
+slower than the 1.3230 ms packed-horizontal repeat. Revert that follow-up; its
+small address-arithmetic saving was not a whole-workflow win. The per-operation
+matrix remains sourced from the clean published cross-runner snapshot until a
+new full snapshot is available. No coverage was run.
