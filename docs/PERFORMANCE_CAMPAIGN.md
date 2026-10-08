@@ -19862,6 +19862,14 @@ The test cross-compiles for `x86_64-apple-darwin`; this Apple arm64 host cannot
 execute the x86 binary, so the x86 benchmark preflight now runs the test before
 timing.
 
+The optimized x86 cross-assembly was generated with
+`RUSTC_WRAPPER= cargo rustc --locked -p pillow-rs --lib --release --target x86_64-apple-darwin -- --emit=asm`.
+It shows the source-sample finiteness scan before the common eight-tap loop;
+that loop emits direct `vfmadd231sd` instructions without per-tap finiteness
+checks. The generic wide-tap path retains separate product/add blocks where
+Pillow requires them. This confirms generated control flow and instructions,
+not runtime execution or a whole-call gain.
+
 The strict local 1024×768 public thumbnail run passed exact parity and timed
 `call` plus output materialization with five warmups and 100 observations.
 Pillow measured 1.053 ms, CPU 0.480 ms, and SIMD 0.821 ms. All CPU and SIMD
