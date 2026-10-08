@@ -25800,11 +25800,8 @@ fn simd_resize_f_boxed(
         ));
     }
     let mut vector_blocks = 0u64;
-    let source: Vec<f32> = img
-        .as_bytes()
-        .chunks_exact(4)
-        .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
-        .collect();
+    let source_samples = f32_samples_from_le_bytes(img.as_bytes(), pixel_count);
+    let source: &[f32] = source_samples.as_ref();
 
     let output_floats = if source_width == 0 || source_height == 0 {
         let mut output_floats = vec![0.0f32; output_count];
@@ -25867,23 +25864,58 @@ fn simd_resize_f_boxed(
                 let intermediate_row = source_y * output_width;
                 for output_x in (0..output_width).step_by(SIMD_F64_LANES) {
                     let count = (output_width - output_x).min(SIMD_F64_LANES);
-                    let max_count = (0..count)
-                        .map(|lane| horizontal.weights[output_x + lane].len())
-                        .max()
-                        .unwrap_or(0);
                     let mut sums = f64x8::splat(0.0);
-                    for tap in 0..max_count {
-                        let mut values = [0.0; SIMD_F64_LANES];
-                        let mut weights = [0.0; SIMD_F64_LANES];
-                        for lane in 0..count {
-                            let output_index = output_x + lane;
-                            if tap < horizontal.weights[output_index].len() {
+                    let first_weights = &horizontal.weights[output_x];
+                    let full_eight_taps = count == SIMD_F64_LANES
+                        && (0..count).all(|lane| horizontal.weights[output_x + lane].len() == 8);
+                    let shared_weights = full_eight_taps
+                        && (1..count).all(|lane| {
+                            horizontal.weights[output_x + lane].as_slice() == first_weights
+                        });
+                    if shared_weights {
+                        // Scale-two boxed bicubic rows often repeat the same
+                        // eight coefficients across a complete output block.
+                        // Once equality is proven, broadcast each exact
+                        // coefficient instead of rebuilding a lane vector.
+                        for tap in 0..8 {
+                            let values = std::array::from_fn(|lane| {
+                                let output_index = output_x + lane;
                                 let source_x = horizontal.xmin[output_index] as usize + tap;
-                                values[lane] = f64::from(source[source_row + source_x]);
-                                weights[lane] = horizontal.weights[output_index][tap];
-                            }
+                                f64::from(source[source_row + source_x])
+                            });
+                            sums =
+                                f64x8::splat(first_weights[tap]).mul_add(f64x8::new(values), sums);
                         }
-                        sums = f64x8::new(weights).mul_add(f64x8::new(values), sums);
+                    } else if full_eight_taps {
+                        for tap in 0..8 {
+                            let values = std::array::from_fn(|lane| {
+                                let output_index = output_x + lane;
+                                let source_x = horizontal.xmin[output_index] as usize + tap;
+                                f64::from(source[source_row + source_x])
+                            });
+                            let weights = std::array::from_fn(|lane| {
+                                horizontal.weights[output_x + lane][tap]
+                            });
+                            sums = f64x8::new(weights).mul_add(f64x8::new(values), sums);
+                        }
+                    } else {
+                        let max_count = (0..count)
+                            .map(|lane| horizontal.weights[output_x + lane].len())
+                            .max()
+                            .unwrap_or(0);
+                        for tap in 0..max_count {
+                            let mut values = [0.0; SIMD_F64_LANES];
+                            let mut weights = [0.0; SIMD_F64_LANES];
+                            for lane in 0..count {
+                                let output_index = output_x + lane;
+                                if tap < horizontal.weights[output_index].len() {
+                                    let source_x = horizontal.xmin[output_index] as usize + tap;
+                                    values[lane] = f64::from(source[source_row + source_x]);
+                                    weights[lane] = horizontal.weights[output_index][tap];
+                                }
+                            }
+                            sums = f64x8::new(weights).mul_add(f64x8::new(values), sums);
+                        }
                     }
                     // Pillow's 32bpc path preserves the sign of zero. Do not
                     // canonicalize a negative cancellation result to +0.0.
@@ -25895,7 +25927,7 @@ fn simd_resize_f_boxed(
             }
             intermediate
         } else {
-            source.clone()
+            source.to_vec()
         };
         if need_vertical {
             let vertical = precompute_coeffs_f64_boxed(
@@ -25913,16 +25945,30 @@ fn simd_resize_f_boxed(
                 for output_x in (0..output_width).step_by(SIMD_F64_LANES) {
                     let count = (output_width - output_x).min(SIMD_F64_LANES);
                     let mut sums = f64x8::splat(0.0);
-                    for (tap, &weight) in weights.iter().enumerate() {
-                        let source_row = (y0 + tap) * output_width;
-                        let values = std::array::from_fn(|lane| {
-                            if lane < count {
-                                f64::from(intermediate[source_row + output_x + lane])
-                            } else {
-                                0.0
-                            }
-                        });
-                        sums = f64x8::splat(weight).mul_add(f64x8::new(values), sums);
+                    if weights.len() == 8 {
+                        for tap in 0..8 {
+                            let source_row = (y0 + tap) * output_width;
+                            let values = std::array::from_fn(|lane| {
+                                if lane < count {
+                                    f64::from(intermediate[source_row + output_x + lane])
+                                } else {
+                                    0.0
+                                }
+                            });
+                            sums = f64x8::splat(weights[tap]).mul_add(f64x8::new(values), sums);
+                        }
+                    } else {
+                        for (tap, &weight) in weights.iter().enumerate() {
+                            let source_row = (y0 + tap) * output_width;
+                            let values = std::array::from_fn(|lane| {
+                                if lane < count {
+                                    f64::from(intermediate[source_row + output_x + lane])
+                                } else {
+                                    0.0
+                                }
+                            });
+                            sums = f64x8::splat(weight).mul_add(f64x8::new(values), sums);
+                        }
                     }
                     // Pillow's 32bpc path preserves the sign of zero. Do not
                     // canonicalize a negative cancellation result to +0.0.
@@ -33465,6 +33511,124 @@ mod tests {
         assert_eq!(actual.as_bytes(), expected);
         assert_eq!(vector_blocks, height as u64 / 2);
         assert_eq!(scalar_tail, 0);
+    }
+
+    #[test]
+    fn f_boxed_resize_sample_view_matches_cpu_reference() {
+        use crate::ops::pil_resize::pil_resize_boxed;
+        use crate::pipeline::ResampleFilter;
+        use crate::raster::{DynamicImage, RgbaImage};
+
+        let cases = [
+            (
+                "bicubic scale two",
+                512,
+                384,
+                256,
+                192,
+                0.0,
+                0.0,
+                512.0,
+                384.0,
+                ResampleFilter::Bicubic,
+            ),
+            (
+                "odd bicubic tail",
+                511,
+                383,
+                255,
+                191,
+                0.0,
+                0.0,
+                511.0,
+                383.0,
+                ResampleFilter::Bicubic,
+            ),
+            (
+                "fractional bicubic box",
+                512,
+                384,
+                256,
+                192,
+                0.25,
+                0.5,
+                511.5,
+                383.5,
+                ResampleFilter::Bicubic,
+            ),
+            (
+                "lanczos fallback",
+                512,
+                384,
+                256,
+                192,
+                0.0,
+                0.0,
+                512.0,
+                384.0,
+                ResampleFilter::Lanczos,
+            ),
+        ];
+
+        for (
+            case,
+            source_width,
+            source_height,
+            output_width,
+            output_height,
+            box_left,
+            box_top,
+            box_right,
+            box_bottom,
+            filter,
+        ) in cases
+        {
+            let samples = (0..source_width as usize * source_height as usize)
+                .map(|index| (((index * 41 % 1021) as i32 - 510) as f32) / 37.0)
+                .collect::<Vec<_>>();
+            let bytes = samples
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect();
+            let image = DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(source_width, source_height, bytes).expect("packed F samples"),
+            );
+            let expected = pil_resize_boxed(
+                &image,
+                output_width,
+                output_height,
+                box_left,
+                box_top,
+                box_right,
+                box_bottom,
+                filter,
+                Some("F"),
+            );
+            let actual = super::simd_resize_f_boxed(
+                &image,
+                output_width,
+                output_height,
+                box_left,
+                box_top,
+                box_right,
+                box_bottom,
+                filter,
+            )
+            .expect("SIMD boxed F resize");
+
+            let actual_bytes = actual.as_bytes();
+            let expected_bytes = expected.as_bytes();
+            let first_mismatch = actual_bytes
+                .iter()
+                .zip(expected_bytes)
+                .position(|(actual, expected)| actual != expected);
+            assert!(
+                actual_bytes.len() == expected_bytes.len() && first_mismatch.is_none(),
+                "{case}: first mismatching byte {first_mismatch:?}; actual={:?}, expected={:?}",
+                first_mismatch.and_then(|index| actual_bytes.get(index..index + 4)),
+                first_mismatch.and_then(|index| expected_bytes.get(index..index + 4)),
+            );
+        }
     }
 
     #[test]

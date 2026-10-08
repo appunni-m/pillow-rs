@@ -142,6 +142,11 @@ have `successful_execution: not_proven` and no actual-backend receipt; they are
 missing-execution evidence, not reported parity mismatches. FastOctree's 8
 remote rows are `not_run` with parity unproven; the focused current-main CPU
 parity rerun passed 1/1, so those remote rows remain a publication/evidence gap.
+The newer [Pillow-SIMD run 37709889883](https://github.com/appunni-m/pillow-rs/actions/runs/37709889883)
+for revision `cbe747014` also failed in the parity-gated step after 15m59s;
+its only public annotation is exit code 2. No failing case or genuine test
+defect is confirmed, so this run does not qualify as Pillow-SIMD comparison
+data.
 
 ## Grayscale CPU checkpoint — 2026-10-08
 
@@ -20256,3 +20261,48 @@ Receipts are `build/migration-parity/thumbnail-f-eight-tap-baseline.json`,
 `thumbnail-f-eight-tap-candidate1-repeat.json`, each with a corresponding
 `-parity.json` sidecar. The profile receipt is
 `build/migration-parity/profiles/pipeline-op.thumbnail.native-f32-1024x768-cpu.profile.json`.
+
+### SIMD visit: borrow F samples and specialize full eight-tap rows
+
+The same operation's SIMD path decoded every four-byte F sample into a new
+`Vec<f32>`. Reuse `f32_samples_from_le_bytes` so aligned little-endian inputs
+borrow their source samples and other layouts keep the exact decoding fallback.
+Then recognize complete eight-coefficient horizontal and vertical rows once
+per SIMD block, skipping repeated tap-count scans and per-lane length checks.
+When all eight horizontal lanes share the same coefficient slice, broadcast
+each ordered coefficient directly instead of constructing a repeated weight
+vector. Other row widths, clipped edges, and partial vector tails retain the
+general path.
+
+The focused CPU-reference test covers full scale-two bicubic rows, an odd
+output width and height, a fractional bicubic box, and the wider-tap Lanczos
+fallback. Each case compares every output byte. The public 1024×768 thumbnail
+benchmark uses the full call and receiver observation, five warmups, 20
+iterations × five samples, and concurrency one. Both coefficient-broadcast
+runs passed exact Pillow parity:
+
+| Run | Pillow p50 (ms) | CPU p50 (ms) | SIMD p50 (ms) | SIMD speedup vs Pillow |
+| --- | ---: | ---: | ---: | ---: |
+| Full eight-tap rows | 1.047729 | 0.481625 | 0.855125 | 1.23× |
+| Full eight-tap repeat | 1.041292 | 0.507708 | 0.851396 | 1.22× |
+| Shared coefficient broadcast | 1.043000 | 0.510438 | 0.813625 | 1.28× |
+| Shared coefficient repeat | 1.047667 | 0.482313 | 0.808271 | 1.30× |
+
+The final SIMD medians improve about 5% against the prior eight-tap attempt,
+and about 21% against the source-borrow-only SIMD candidates. Every measured
+CPU and SIMD sample named its requested backend: 100/100 CPU and 100/100 SIMD
+executions, with no fallback. The requested GPU profile fell back to CPU for
+the unproven typed-F thumbnail context on all 100 observations; exclude it
+from GPU latency and throughput claims. These are single-request runs and do
+not measure sustained throughput. SIMD is still only about 1.3× Pillow, short
+of the two-times priority gate and the eventual five-times target.
+
+A scale-two NEON gather experiment was rejected after the full boxed-F test
+returned zero at output byte 32 while the CPU reference expected a nonzero
+sample. A standalone gather test passed, but that did not validate the full
+multi-block resize. The cause was not isolated; no test defect was found. Keep
+the portable SIMD candidate and require full-operation parity before retaining
+any target-specific gather path. Hosted full benchmark run 37709889769 was
+queued for commit `cbe747014`; it includes the CPU eight-tap candidate but
+predates these SIMD changes. The combined checkpoint needs its own clean
+cross-runner run before those results can be promoted into the matrix.
