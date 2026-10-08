@@ -4167,6 +4167,14 @@ mod tests {
     #[test]
     fn rgb_sparse_2x2_reduction_matches_generic_and_rejects_dense_input() {
         let (width, height) = (1024, 768);
+        let zero = DynamicImage::ImageRgb8(RgbImage::new(width, height));
+        let zero_sparse = super::execute_reduce_rgb_sparse_2x2(&zero, width / 2, height / 2)
+            .expect("all-zero RGB reduction must succeed")
+            .expect("all-zero RGB should use the sparse path");
+        let zero_reference =
+            execute_reduce(&zero, 2, 2, None).expect("generic zero RGB reduction must succeed");
+        assert_eq!(zero_sparse.as_bytes(), zero_reference.as_bytes());
+
         let mut source = vec![0; width as usize * height as usize * 3];
         for (x, y, color) in [
             (0, 0, [1, 2, 3]),
