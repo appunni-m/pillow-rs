@@ -12929,11 +12929,8 @@
         "case_id": "PIL.Image.Image.thumbnail.nuanced.performance-large-rgb-1024x768"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call",
-          "observe-receiver"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"

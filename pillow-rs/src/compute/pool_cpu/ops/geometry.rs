@@ -2772,6 +2772,12 @@ fn execute_reduce_rgb(
         return Ok(None);
     }
 
+    if fx == 2 && fy == 2 && width % 2 == 0 && height % 2 == 0 {
+        if let Some(output) = execute_reduce_rgb_sparse_2x2(img, new_width, new_height)? {
+            return Ok(Some(output));
+        }
+    }
+
     let mut output = CheckedDims::new(new_width, new_height, 3)?.alloc_buffer();
     if new_width == 0 || new_height == 0 {
         return raw_bytes_to_image(new_width, new_height, output, 3).map(Some);
@@ -3004,6 +3010,54 @@ fn execute_reduce_rgb(
     for y in 0..new_height {
         let start = y as usize * output_stride;
         process_row(y, &mut output[start..start + output_stride]);
+    }
+
+    raw_bytes_to_image(new_width, new_height, output, 3).map(Some)
+}
+
+/// Reduce large sparse RGB sources by updating only blocks with nonzero input.
+/// Dense sources stop at the density bound and use the ordinary row kernel.
+fn execute_reduce_rgb_sparse_2x2(
+    img: &DynamicImage,
+    new_width: u32,
+    new_height: u32,
+) -> Result<Option<DynamicImage>, PilError> {
+    let (width, height) = img.dimensions();
+    let source = img.as_bytes();
+    let source_pixels = source.len() / 3;
+    if source_pixels < 512 * 512 || width == 0 || height == 0 {
+        return Ok(None);
+    }
+    // Scanning remains worthwhile only when very few input pixels contribute
+    // nonzero samples. Stop early on denser images so they pay only a bounded
+    // prefix scan before continuing through the established reducer.
+    let maximum_nonzero_pixels = source_pixels / 1024;
+    let mut nonzero_pixels = 0usize;
+    let mut block_sums = std::collections::HashMap::<usize, [u16; 3]>::new();
+    for (source_index, pixel) in source.chunks_exact(3).enumerate() {
+        if pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0 {
+            continue;
+        }
+        nonzero_pixels += 1;
+        if nonzero_pixels > maximum_nonzero_pixels {
+            return Ok(None);
+        }
+
+        let source_x = source_index % width as usize;
+        let source_y = source_index / width as usize;
+        let block_index = (source_y / 2) * new_width as usize + source_x / 2;
+        let sums = block_sums.entry(block_index).or_insert([0; 3]);
+        sums[0] += u16::from(pixel[0]);
+        sums[1] += u16::from(pixel[1]);
+        sums[2] += u16::from(pixel[2]);
+    }
+
+    let mut output = CheckedDims::new(new_width, new_height, 3)?.alloc_buffer();
+    for (block_index, sums) in block_sums {
+        let output_index = block_index * 3;
+        output[output_index] = ((sums[0] + 2) >> 2) as u8;
+        output[output_index + 1] = ((sums[1] + 2) >> 2) as u8;
+        output[output_index + 2] = ((sums[2] + 2) >> 2) as u8;
     }
 
     raw_bytes_to_image(new_width, new_height, output, 3).map(Some)
@@ -3802,6 +3856,44 @@ mod tests {
                 "RGB Reduce mismatch for {width}×{height} by {x_factor}×{y_factor}"
             );
         }
+    }
+
+    #[test]
+    fn rgb_sparse_2x2_reduction_matches_generic_and_rejects_dense_input() {
+        let (width, height) = (1024, 768);
+        let mut source = vec![0; width as usize * height as usize * 3];
+        for (x, y, color) in [
+            (0, 0, [1, 2, 3]),
+            (1, 1, [255, 17, 9]),
+            (700, 300, [0, 129, 0]),
+            (1023, 767, [12, 34, 56]),
+        ] {
+            let index = (y * width + x) as usize * 3;
+            source[index..index + 3].copy_from_slice(&color);
+        }
+        let image = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(width, height, source).expect("RGB source shape must be valid"),
+        );
+
+        let sparse = super::execute_reduce_rgb_sparse_2x2(&image, width / 2, height / 2)
+            .expect("sparse RGB reduction must succeed")
+            .expect("few nonzero RGB pixels should use the sparse path");
+        let routed = execute_reduce(&image, 2, 2, Some("RGB")).expect("RGB Reduce must succeed");
+        let reference =
+            execute_reduce(&image, 2, 2, None).expect("generic RGB Reduce reference must succeed");
+        assert_eq!(sparse.as_bytes(), reference.as_bytes());
+        assert_eq!(routed.as_bytes(), reference.as_bytes());
+
+        let dense = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(width, height, vec![1; width as usize * height as usize * 3])
+                .expect("dense RGB source shape must be valid"),
+        );
+        assert!(
+            super::execute_reduce_rgb_sparse_2x2(&dense, width / 2, height / 2)
+                .expect("density probe must succeed")
+                .is_none(),
+            "dense RGB inputs must retain the established reducer"
+        );
     }
 
     #[test]

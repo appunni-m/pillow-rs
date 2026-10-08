@@ -49268,8 +49268,8 @@ def build_pipeline_benchmark_document(
         },
         "measurement": {
             **copy.deepcopy(policy),
-            "boundary": "observed_steps",
-            "step_ids": ["call", "observe-receiver"],
+            "boundary": "whole_workflow",
+            "step_ids": [],
             "warmup_iterations": 5,
             "measurement_iterations": 20,
             "samples": 5,
