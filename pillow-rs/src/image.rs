@@ -7182,6 +7182,200 @@ impl Image {
         Ok(-entropy)
     }
 
+    fn cmyk_projection(image: &crate::raster::RgbaImage) -> (Vec<u32>, Vec<u32>) {
+        let (w, h) = (image.width() as usize, image.height() as usize);
+        let mut h_proj = vec![0u32; w];
+        let mut v_proj = vec![0u32; h];
+        let mut covered_columns = 0usize;
+        let mut all_columns_covered = w == 0;
+        let row_bytes = w * 4;
+        let bytes = image.as_raw();
+        let nonzero_16 = |samples: &[u8]| {
+            let mut packed = [0; 16];
+            packed.copy_from_slice(samples);
+            u128::from_ne_bytes(packed) != 0
+        };
+        let nonzero_4 = |samples: &[u8]| {
+            let mut packed = [0; 4];
+            packed.copy_from_slice(samples);
+            u32::from_ne_bytes(packed) != 0
+        };
+        for y in 0..h {
+            let row = &bytes[y * row_bytes..(y + 1) * row_bytes];
+            let row_nonzero = if all_columns_covered {
+                let blocks = row.chunks_exact(16);
+                blocks.clone().any(nonzero_16) || blocks.remainder().chunks_exact(4).any(nonzero_4)
+            } else {
+                let mut any = false;
+                let blocks = row.chunks_exact(16);
+                for (block_index, block) in blocks.clone().enumerate() {
+                    if !nonzero_16(block) {
+                        continue;
+                    }
+                    for (lane, pixel) in block.chunks_exact(4).enumerate() {
+                        if !nonzero_4(pixel) {
+                            continue;
+                        }
+                        let x = block_index * 4 + lane;
+                        if h_proj[x] == 0 {
+                            h_proj[x] = 1;
+                            covered_columns += 1;
+                            all_columns_covered = covered_columns == w;
+                        }
+                        any = true;
+                    }
+                }
+                let tail_start = blocks.len() * 16;
+                for (tail_index, pixel) in row[tail_start..].chunks_exact(4).enumerate() {
+                    if !nonzero_4(pixel) {
+                        continue;
+                    }
+                    let x = tail_start / 4 + tail_index;
+                    if h_proj[x] == 0 {
+                        h_proj[x] = 1;
+                        covered_columns += 1;
+                        all_columns_covered = covered_columns == w;
+                    }
+                    any = true;
+                }
+                any
+            };
+            if row_nonzero {
+                v_proj[y] = 1;
+            }
+        }
+        (h_proj, v_proj)
+    }
+
+    fn cmyk_projection_with_putpixel_ops(
+        image: &crate::raster::RgbaImage,
+        ops: &[PipelineOp],
+    ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+        let (w, h) = (image.width() as usize, image.height() as usize);
+        let mut pending_writes = Vec::with_capacity(ops.len());
+        for (order, op) in ops.iter().enumerate() {
+            let PipelineOp::PutPixel { x, y, color, .. } = op else {
+                return Err(PilError::InternalError(
+                    "CMYK projection fusion received a non-pixel operation".into(),
+                ));
+            };
+            if *x >= image.width() || *y >= image.height() {
+                return Err(PilError::IndexError("image index out of range".into()));
+            }
+            let index = *y as usize * w + *x as usize;
+            pending_writes.push((index, order, [color.0, color.1, color.2, color.3]));
+        }
+        pending_writes.sort_unstable_by_key(|(index, order, _)| (*index, *order));
+        let mut writes: Vec<(usize, [u8; 4])> = Vec::with_capacity(pending_writes.len());
+        for (index, _, color) in pending_writes {
+            if let Some((previous_index, previous_color)) = writes.last_mut()
+                && *previous_index == index
+            {
+                *previous_color = color;
+            } else {
+                writes.push((index, color));
+            }
+        }
+
+        let (mut h_proj, mut v_proj) = Self::cmyk_projection(image);
+        let bytes = image.as_raw();
+        let mut cleared_columns = Vec::new();
+        let mut cleared_rows = Vec::new();
+        for &(index, color) in &writes {
+            let x = index % w;
+            let y = index / w;
+            if color.iter().any(|value| *value != 0) {
+                h_proj[x] = 1;
+                v_proj[y] = 1;
+            } else {
+                cleared_columns.push(x);
+                cleared_rows.push(y);
+            }
+        }
+        cleared_columns.sort_unstable();
+        cleared_columns.dedup();
+        cleared_rows.sort_unstable();
+        cleared_rows.dedup();
+
+        let pixel_is_nonzero = |index: usize| {
+            if let Ok(write) = writes.binary_search_by_key(&index, |(write_index, _)| *write_index)
+            {
+                writes[write].1.iter().any(|value| *value != 0)
+            } else {
+                let offset = index * 4;
+                bytes[offset] | bytes[offset + 1] | bytes[offset + 2] | bytes[offset + 3] != 0
+            }
+        };
+        for x in cleared_columns {
+            h_proj[x] = u32::from((0..h).any(|y| pixel_is_nonzero(y * w + x)));
+        }
+        for y in cleared_rows {
+            v_proj[y] = u32::from((0..w).any(|x| pixel_is_nonzero(y * w + x)));
+        }
+        Ok((h_proj, v_proj))
+    }
+
+    fn try_getprojection_cmyk_putpixel_pipeline(
+        &self,
+    ) -> Result<Option<(Vec<u32>, Vec<u32>)>, PilError> {
+        // A projection is the terminal result here. On a serial CPU route,
+        // applying queued CMYK pixels to the two projections is exact and
+        // avoids creating a full-frame image that the caller never receives.
+        // The lazy pipeline remains intact for any later image operation.
+        let Image::Pipeline {
+            source,
+            ops,
+            explicit_mode,
+            backend,
+            ..
+        } = self
+        else {
+            return Ok(None);
+        };
+        if explicit_mode.as_deref() != Some("CMYK") || ops.is_empty() {
+            return Ok(None);
+        }
+        let cpu_candidate = match backend {
+            Some(crate::compute::Backend::Cpu) => true,
+            Some(_) => false,
+            None => crate::compute::cpu_is_only_active_backend(),
+        };
+        if !cpu_candidate
+            || !ops
+                .as_slice()
+                .iter()
+                .all(|op| matches!(op, PipelineOp::PutPixel { .. }))
+        {
+            return Ok(None);
+        }
+        let prepared = crate::compute::prepare_execution(ops.as_slice(), *backend)?;
+        if !prepared.is_serial_cpu_without_fallback() {
+            return Ok(None);
+        }
+        if !matches!(source.as_ref(), Image::Loaded(_) | Image::Bytes { .. }) {
+            return Ok(None);
+        }
+        let input = source.materialized_shared()?;
+        if source.mode_from_materialized(&input) != "CMYK" {
+            return Ok(None);
+        }
+        let DynamicImage::ImageRgba8(image) = input.as_ref() else {
+            return Ok(None);
+        };
+        let output_sizes = [
+            image.width() as usize * std::mem::size_of::<u32>(),
+            image.height() as usize * std::mem::size_of::<u32>(),
+        ];
+        let result = crate::compute::execute_prepared_cpu_terminal(
+            &prepared,
+            ops.as_slice(),
+            input.as_ref(),
+            output_sizes,
+            || Self::cmyk_projection_with_putpixel_ops(image, ops.as_slice()),
+        )?;
+        Ok(Some(result))
+    }
+
     /// Returns horizontal and vertical non-zero pixel projections.
     ///
     /// The first vector has one entry per column and the second has one entry
@@ -7192,6 +7386,9 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization fails.
     pub fn getprojection(&self) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+        if let Some(projection) = self.try_getprojection_cmyk_putpixel_pipeline()? {
+            return Ok(projection);
+        }
         let img = self.materialized_shared()?;
         let (w, h) = (img.width() as usize, img.height() as usize);
         let mut h_proj = vec![0u32; w];
@@ -7275,33 +7472,7 @@ impl Image {
                     }
                 }
                 crate::raster::DynamicImage::ImageRgba8(image) if mode == "CMYK" => {
-                    // CMYK shares the four-byte carrier, but its fourth sample
-                    // is K. Projection tests all four stored inks; reading the
-                    // matching carrier directly avoids cloning it as RGBA.
-                    let mut covered_columns = 0usize;
-                    let mut all_columns_covered = w == 0;
-                    for (y, mut row) in image.rows().enumerate() {
-                        let row_nonzero = if all_columns_covered {
-                            row.any(|pixel| pixel.0.iter().any(|value| *value != 0))
-                        } else {
-                            let mut any = false;
-                            for (x, pixel) in row.enumerate() {
-                                let [cyan, magenta, yellow, black] = pixel.0;
-                                if cyan != 0 || magenta != 0 || yellow != 0 || black != 0 {
-                                    if h_proj[x] == 0 {
-                                        h_proj[x] = 1;
-                                        covered_columns += 1;
-                                        all_columns_covered = covered_columns == w;
-                                    }
-                                    any = true;
-                                }
-                            }
-                            any
-                        };
-                        if row_nonzero {
-                            v_proj[y] = 1;
-                        }
-                    }
+                    (h_proj, v_proj) = Self::cmyk_projection(image);
                 }
                 _ => match mode.as_str() {
                     "L" | "1" | "P" => {
@@ -8084,6 +8255,64 @@ mod putdata_shared_bytes_tests {
             image.use_backend(Backend::Cpu).tobytes()?,
             [13, 71, 209, 255]
         );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod getprojection_cmyk_tests {
+    use super::{Image, PilError};
+
+    #[test]
+    fn packed_cmyk_projection_covers_grouped_pixels_and_row_tails() -> Result<(), PilError> {
+        let mut image = Image::new(7, 3, "CMYK", (0, 0, 0, 0))?;
+        image.putpixel(1, 0, 1, 0, 0, 0)?;
+        image.putpixel(4, 1, 0, 1, 0, 0)?;
+        image.putpixel(6, 2, 0, 0, 1, 0)?;
+        image.putpixel(2, 2, 0, 0, 0, 1)?;
+
+        assert_eq!(
+            image.getprojection()?,
+            (vec![0, 1, 1, 0, 1, 0, 1], vec![1, 1, 1])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn packed_cmyk_projection_preserves_empty_width_rows() -> Result<(), PilError> {
+        let image = Image::new(0, 3, "CMYK", (0, 0, 0, 0))?;
+        assert_eq!(image.getprojection()?, (vec![], vec![0, 0, 0]));
+        Ok(())
+    }
+
+    #[test]
+    fn pending_cmyk_projection_applies_overwrites_without_changing_image() -> Result<(), PilError> {
+        let mut image = Image::new(7, 3, "CMYK", (1, 0, 0, 0))?;
+        for x in 0..7 {
+            image.putpixel(x, 2, 0, 0, 0, 0)?;
+        }
+        for y in 0..2 {
+            image.putpixel(4, y, 0, 0, 0, 0)?;
+        }
+        image.putpixel(3, 0, 0, 0, 0, 0)?;
+        image.putpixel(3, 0, 1, 0, 0, 0)?;
+
+        assert_eq!(
+            image.getprojection()?,
+            (vec![1, 1, 1, 1, 0, 1, 1], vec![1, 1, 0])
+        );
+
+        let mut expected = Vec::with_capacity(7 * 3 * 4);
+        for y in 0..3 {
+            for x in 0..7 {
+                expected.extend_from_slice(if y == 2 || x == 4 {
+                    &[0, 0, 0, 0]
+                } else {
+                    &[1, 0, 0, 0]
+                });
+            }
+        }
+        assert_eq!(image.tobytes()?, expected);
         Ok(())
     }
 }

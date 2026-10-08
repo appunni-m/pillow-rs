@@ -101,15 +101,17 @@ baseline used Xeon 8370C. Treat cross-snapshot x86 timing changes as
 uncontrolled unless the host model matches; use each run's paired Pillow ratio
 for this candidate.
 
-The largest current verified serial CPU gaps are:
+The published snapshot's largest verified serial CPU gaps are:
 
 The 2026-10-08 public CSV's RGB-thumbnail and sparse-CMYK rows use
 `observed_steps` even though setup `putpixel` writes are lazy in pillow-rs and
 eager in Pillow. Exclude those published ratios. Corrected local
-whole-workflow results put RGB thumbnail at 0.439–0.442× and sparse-CMYK
-`getprojection` at 0.741× on Apple arm64. The I-mode bicubic resize remains
-0.573× on the published x86_64 runner; the latest local Apple candidate is
-1.614–1.615× and still needs a fresh x86 runner result.
+whole-workflow results put RGB thumbnail at 0.439–0.442× on Apple arm64. The
+sparse-CMYK `getprojection` row's published 0.741× value is superseded by the
+two local terminal-fusion runs at 2.020×/2.077× by median; the means are
+1.993×/2.070×. The I-mode bicubic resize remains 0.573× on the published
+x86_64 runner; the latest local Apple candidate is 1.614–1.615× and still
+needs a fresh x86 runner result.
 
 | Workload | Runner | Pillow speedup | Existing checkpoint |
 | --- | --- | ---: | --- |
@@ -118,7 +120,7 @@ whole-workflow results put RGB thumbnail at 0.439–0.442× and sparse-CMYK
 | RGB unsharp mask | Apple arm64 | 0.689× | Native-RGB paths remain below Pillow |
 | L Gaussian blur | Ubuntu ARM64 | 0.727× | Native-L follow-up is documented; CPU target remains open |
 | LA Gaussian blur | Apple arm64 | 0.737× | Native alpha path remains below Pillow |
-| Sparse CMYK getprojection pipeline | Apple arm64 | 0.741× | Corrected whole-workflow scan and writes; below Pillow |
+| Sparse CMYK getprojection pipeline | Apple arm64 | 0.741× | Published ratio; superseded by local terminal-fusion candidate at 2.020–2.077× median |
 | RGB grayscale | Ubuntu x86_64 | 0.775× | Direct output collection retained; still below Pillow and the 2× gate |
 | F-mode thumbnail | Ubuntu x86_64 | 0.796× | Reducing-gap plus boxed F resize |
 
@@ -20995,3 +20997,52 @@ with two dispatches, 3 MiB uploaded, and 768 KiB read back; one-request timing
 does not establish sustained throughput. Receipts are
 `i32-resize-direct-rounding-candidate5.json` and its repeat, with parity
 sidecars under `build/migration-parity/`. No coverage was run.
+
+### Sparse CMYK getprojection CPU terminal fusion — 2026-10-08
+
+The sparse CMYK projection workload first received a native packed scan. It
+checks 16-byte groups for zero and inspects four-byte pixels only in nonzero
+groups, preserving all four CMYK samples, row tails, and the all-columns
+early-exit behavior. The follow-up fuses a pending pipeline containing only
+CMYK `PutPixel` operations into the terminal projection on a verified serial
+CPU route. It canonicalizes repeated writes in order and updates only affected
+projection axes; the lazy image pipeline remains available for later image
+operations. The terminal receipt records CPU execution, the projection
+allocations, source retention, and no full-frame output copy.
+
+The sparse candidate passed exact Pillow parity on the complete
+image-construction, queued-write, projection, and materialization workflow.
+Two whole-workflow runs used the same parity-gated 1024×768 workload, five
+warmups, 100 observations, and concurrency one. Both passed strict Pillow
+parity, with 100/100 actual CPU, SIMD, and GPU execution samples and no
+fallback:
+
+| Run | Pillow | Serial CPU | SIMD | GPU | Pillow/CPU median |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Terminal fusion A1 | 0.4410 ms | 0.2183 ms | 0.6465 ms | 1.3468 ms | 2.020× |
+| Terminal fusion A2 | 0.4183 ms | 0.2014 ms | 0.6020 ms | 1.2586 ms | 2.077× |
+
+CPU means were 0.4405/0.2210 ms for Pillow/CPU in A1 and 0.4245/0.2051 ms in
+A2, so the mean ratios were 1.993× and 2.070×. The CPU receipt recorded three
+fused operations, 3,152,896 retained/produced host bytes, and zero full-frame
+copies. These runs clear the CPU≤Pillow floor and the 2× sequencing gate by
+median; A1's mean ratio is just under 2×. SIMD remains slower than Pillow
+(median 0.602–0.647 ms), and GPU is about 2.08–2.09× slower than SIMD. Each GPU
+request moves 3 MiB in each direction, dispatches three times, and copies the
+full frame; concurrency one does not establish sustained throughput. The
+terminal projection fusion applies only to the serial CPU route and is not a
+SIMD or GPU acceleration claim. Receipts are
+`cmyk-getprojection-terminal-fusion-f7.json` and
+`cmyk-getprojection-terminal-fusion-final.json`, with parity sidecars in
+`build/migration-parity/`.
+
+A separate attempt changed zero-filled CMYK image construction to a
+zero-initialized allocation. Despite a setup saving, its exact-parity
+whole-workflow CPU mean regressed from 0.3192 to 0.3456 ms because pipeline
+latency increased. That change was reverted. The standalone dense projection
+row is host-only and has no native backend receipts, so its apparent SIMD/GPU
+timings are not accelerated-execution evidence. Current cross-runner matrices
+remain tied to the clean published snapshot; these local receipts are
+candidate evidence, not a regenerated matrix. The next largest eligible CPU
+gap is the corrected RGB material-thumbnail workflow at about 0.44× Pillow.
+No coverage was run.
