@@ -135,6 +135,12 @@ through every verified CPU workload below Pillow and raise those rows to at
 least 2× before shifting the main queue to workloads that only lose to
 Pillow-SIMD.
 
+The published RGB UnsharpMask row above predates the current local CPU pass.
+The 2026-10-08 Apple arm64 full-workflow checkpoint now measures 1.055× and
+1.092× Pillow after a retained blur-line specialization. Keep the published
+runner row intact until a comparable hosted run updates the snapshot; the local
+result clears CPU≤Pillow but not the 2× sequencing gate.
+
 The published Pillow-SIMD asset remains dirty and contains only 9 of the 34
 declared cases, from revision `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`.
 The latest published Pillow-SIMD asset remains dirty and contains only 9 of the
@@ -20673,3 +20679,104 @@ is serial CPU, not Parallel CPU. Receipts are
 `i32-resize-eight-tap-candidate1-repeat.json`, each with a parity sidecar under
 `build/migration-parity/`. The candidate clears the current local CPU≤Pillow
 floor but leaves the cross-runner 2× gate open. No coverage was run.
+
+### Rejected RGB thumbnail packed zero-group scan — 2026-10-08
+
+A packed 64-bit zero-group scan was tested inside the sparse RGB 2×2 reducer
+after a profile suggested that scanning the source for touched blocks might be
+worth reducing. The first candidate receipt was contaminated by a stale macOS
+`sample` process (PID 76371, profiling an already-exited PID 105) consuming
+roughly half of a CPU for about 1.5 hours. Exclude
+`rgb-thumbnail-packed-scan-candidate1.json` from timing comparisons. After
+stopping that process, two sequential candidate runs passed exact whole-workflow
+Pillow parity and recorded 100/100 actual CPU, SIMD, and GPU executions with
+no fallback. Their CPU medians were 2.489 ms and 2.514 ms, compared with the
+retained sparse-reducer pair at 2.3999 ms and 2.4064 ms. The packed scan did not
+improve the paired CPU/Pillow ratios and was reverted. The clean receipts are
+`rgb-thumbnail-packed-scan-candidate1-repeat.json` and
+`rgb-thumbnail-packed-scan-candidate2.json`, each with its parity sidecar. The
+stale profiler was environmental contamination, not a fixture defect. No
+coverage was run.
+
+### Rejected RGB Gaussian blur redundant-slice simplification — 2026-10-08
+
+The next CPU gap was the full RGB `UnsharpMask(radius=2, percent=150,
+threshold=3)` workflow. A clean full-call profile at source revision
+`c008b3e9d` attributed 2,285 of 4,259 main-thread samples to `blur_line`.
+The public call includes Gaussian blur and blend, with `observed_steps` timing
+the operation and final materialization. Baseline Pillow/CPU/SIMD/GPU medians
+were 9.8355/11.8182/9.4298/3.8513 ms. Each lane passed exact output parity;
+all 100 CPU, SIMD, and GPU samples used their requested backend without
+fallback. CPU accounted for 4,718,592 host-buffer bytes. GPU used six
+dispatches, 3 MiB upload, and 3 MiB readback; this is not sustained-throughput
+evidence.
+
+`blur_line_step` received a trial removing a byte slice that duplicated the
+`subtract` slice at all six current call sites. The focused horizontal-row test,
+format check, and public exact parity passed. Two candidate runs had CPU
+medians 9.4666 and 9.5145 ms with Pillow at 7.6626 and 7.7005 ms, for paired
+CPU/Pillow speedups of 0.809× and 0.810×. The baseline paired ratios were
+0.832× and 0.832×. Although raw timings shifted substantially between runs,
+the paired ratios show no gain and a small regression; the edit was reverted.
+The candidate receipts are
+`rgb-unsharp-blur-candidate1.json` and
+`rgb-unsharp-blur-candidate1-repeat.json`, each with its parity sidecar. This
+did not reveal a test defect. The full operation remains below Pillow and its
+CPU≤Pillow target is open. No coverage was run.
+
+### Benchmark hygiene: verify profiler process lifetime — 2026-10-08
+
+Before each timed sample, inspect live profiler and benchmark processes and
+record whether unrelated CPU work is active. A completed profile artifact does
+not guarantee its sampling subprocess exited: the RGB thumbnail profile left
+an orphaned `sample` process targeting a dead PID. Exclude timings gathered
+while that process was active, stop the orphan, and repeat sequentially before
+using results. Compare paired target/Pillow ratios when cross-run medians drift;
+do not infer an optimization from an unpaired raw latency decrease.
+
+### RGB UnsharpMask inline blur-line and RGB triplet checkpoint — 2026-10-08
+
+The selected public workload is
+`pipeline-op.unsharpmask.material-rgb-noise-1024x768-radius-2`, with the
+`apply-filter` and `observe-filter-result` steps timed on a materialized,
+seeded 1024×768 RGB image. The strict benchmark runs reported
+`correctness_gate=parity_pass`; each baseline and candidate passed exact
+Pillow output parity in CPU, SIMD, and GPU lanes. Every lane recorded 100/100
+requested-backend samples with no fallback. The serial CPU feature set was the
+default profile, with `parallel` disabled.
+
+A clean profile of the prior implementation put 2,285 of 4,259 main-thread
+samples in `blur_line`. Marking `blur_line` `#[inline(always)]` enabled the
+release compiler to specialize its channel width at callers. Two paired
+candidate runs measured CPU/Pillow speedups of 1.143× and 1.021×. A follow-up
+spelled out the three independent RGB component updates for the common
+three-byte line width. Its two runs reached 1.055× and 1.092×. The direct
+triplet path was retained on the paired ratios; it makes the current local
+CPU≤Pillow floor, but still misses the 2× sequencing gate.
+
+| Run | Pillow | Serial CPU | SIMD | GPU | CPU/Pillow | SIMD/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Fresh baseline | 8.5896 ms | 11.1884 ms | 8.8648 ms | 3.8354 ms | 0.768× | 0.969× |
+| Inline line A1 | 8.6553 ms | 7.5750 ms | 8.0603 ms | 4.0806 ms | 1.143× | 1.074× |
+| Inline line A2 | 8.5170 ms | 8.3432 ms | 8.7489 ms | 3.8329 ms | 1.021× | 0.973× |
+| RGB triplet B1 | 7.6247 ms | 7.2251 ms | 7.4110 ms | 3.7701 ms | 1.055× | 1.029× |
+| RGB triplet B2 | 8.1697 ms | 7.4798 ms | 7.7213 ms | 3.7276 ms | 1.092× | 1.058× |
+
+The SIMD lane still misses both the requested half-Pillow floor and the
+repository's stricter 5× SIMD goal. GPU single-request latency is lower than
+SIMD in both final runs, but each sample uses six dispatches, 3 MiB upload, and
+3 MiB readback; concurrency is one, so sustained throughput remains unproven.
+CPU and SIMD each use two 4,718,592-byte host buffers per sample. The extra
+mode/size workload matrix was recorded as execution-only because its gate is
+`successful_execution`; it is not pixel-parity evidence. Separate strict
+backend parity runs passed 18 CPU cases, 5 SIMD cases, and 5 GPU cases across
+GaussianBlur and UnsharpMask L, LA, RGB, RGBA, CMYK, and RGBX inputs, including
+small and fractional-radius cases. The three material-RGB UnsharpMask benchmark
+parity cases also passed on all three backends. No test defect was found and no
+coverage was run. Receipts are `rgb-unsharp-revisit-baseline.json`,
+`rgb-unsharp-inline-line-candidate1.json`,
+`rgb-unsharp-inline-line-candidate1-repeat.json`,
+`rgb-unsharp-step-rgb-candidate1.json`, and
+`rgb-unsharp-step-rgb-candidate1-repeat.json`, with parity sidecars in
+`build/migration-parity/`. The profile is under
+`build/migration-parity/profiles/rgb-unsharp-inline-cpu/`.
