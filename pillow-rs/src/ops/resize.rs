@@ -289,10 +289,15 @@ impl Image {
         filter: Option<ResampleInput>,
     ) -> Result<(), PilError> {
         // Pillow's in-place thumbnail loads the source before returning from
-        // the public call. Materialize here so deferred codec failures are
-        // reported at thumbnail(), rather than being delayed until a later
-        // observation of the mutated image.
-        let source_size = self.materialized_shared()?.dimensions();
+        // the public call. Keep that boundary for decode-backed images and
+        // every operation prefix except the CPU RGB PutPixel case whose work
+        // can be folded exactly into its reducing-gap pass.
+        let deferable_putpixel_prefix = self.has_deferable_cpu_rgb_putpixel_prefix();
+        let source_size = if deferable_putpixel_prefix {
+            self.size()?
+        } else {
+            self.materialized_shared()?.dimensions()
+        };
         // Pillow returns before evaluating the aspect-ratio division when
         // both requested bounds already contain the source. This also covers
         // empty images: every non-negative bound contains a (0, 0) source,
@@ -302,18 +307,48 @@ impl Image {
             && size.0 >= 0
             && size.1 >= 0
         {
+            if deferable_putpixel_prefix {
+                self.materialized_shared()?;
+            }
             return Ok(());
         }
-        let dimensions = Self::thumbnail_dimensions(size, source_size)?;
+        let dimensions = match Self::thumbnail_dimensions(size, source_size) {
+            Ok(dimensions) => dimensions,
+            Err(error) => {
+                if deferable_putpixel_prefix {
+                    self.materialized_shared()?;
+                }
+                return Err(error);
+            }
+        };
         if dimensions == (0, 0) {
+            if deferable_putpixel_prefix {
+                self.materialized_shared()?;
+            }
             return Ok(());
         }
-        let mut filter = parse_resample_input(filter)?;
+        let mut filter = match parse_resample_input(filter) {
+            Ok(filter) => filter,
+            Err(error) => {
+                if deferable_putpixel_prefix {
+                    self.materialized_shared()?;
+                }
+                return Err(error);
+            }
+        };
         if source_size.0 == 0 || source_size.1 == 0 {
             // Pillow's aspect-preserving size can be positive even when the
             // source has a zero dimension. Its subsequent Image.resize call
             // then rejects the zero-sized source before any pixels are produced.
+            if deferable_putpixel_prefix {
+                self.materialized_shared()?;
+            }
             return Err(PilError::ValueError("height and width must be > 0".into()));
+        }
+        if deferable_putpixel_prefix
+            && !self.can_defer_cpu_rgb_putpixel_thumbnail(dimensions.0, dimensions.1, filter)
+        {
+            self.materialized_shared()?;
         }
         self.thumbnail_with_filter(dimensions, &mut filter)
     }
@@ -508,6 +543,84 @@ fn round_aspect(number: f64, key: impl Fn(f64) -> f64) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::{Image, PilError};
+    use crate::compute::Backend;
+    use crate::image::Image as CoreImage;
+    use crate::pipeline::PipelineOp;
+
+    #[test]
+    fn cpu_rgb_thumbnail_keeps_valid_putpixel_prefix_in_the_same_batch() {
+        let mut image = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
+        image.putpixel(2, 3, 180, 120, 60, 255).unwrap();
+        let CoreImage::Pipeline {
+            source,
+            ops,
+            backend,
+            explicit_mode,
+            ..
+        } = &image
+        else {
+            panic!("putpixel must create a pipeline");
+        };
+        assert_eq!(*backend, None);
+        assert!(matches!(explicit_mode.as_deref(), None | Some("RGB")));
+        assert!(matches!(source.as_ref(), CoreImage::Loaded(_)));
+        assert!(ops.iter().all(|op| matches!(
+            op,
+            PipelineOp::PutPixel {
+                palette_index: false,
+                ..
+            }
+        )));
+        assert!(image.has_deferable_cpu_rgb_putpixel_prefix());
+
+        let mut image = image;
+        image
+            .thumbnail((256, 256), Some(super::ResampleInput::Code(2)))
+            .unwrap();
+        let CoreImage::Pipeline {
+            ops, materialized, ..
+        } = &image
+        else {
+            panic!("thumbnail must remain a lazy pipeline until observed");
+        };
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(ops[0], PipelineOp::PutPixel { .. }));
+        assert!(matches!(ops[1], PipelineOp::Thumbnail { .. }));
+        assert!(materialized.get().is_none());
+
+        let actual = image.materialize().unwrap();
+        let mut reference = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
+        reference.putpixel(2, 3, 180, 120, 60, 255).unwrap();
+        let materialized_reference = reference.materialize().unwrap();
+        let mut expected = CoreImage::from_dynamic(materialized_reference, Some("RGB".into()));
+        expected
+            .thumbnail((256, 256), Some(super::ResampleInput::Code(2)))
+            .unwrap();
+        let expected = expected.materialize().unwrap();
+        assert_eq!(actual.as_bytes(), expected.as_bytes());
+    }
+
+    #[test]
+    fn cpu_rgb_thumbnail_noop_and_invalid_request_keep_eager_prefix_load() {
+        let mut noop = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
+        noop.putpixel(2, 3, 180, 120, 60, 255).unwrap();
+        let mut noop = noop.use_backend(Backend::Cpu);
+        noop.thumbnail((1024, 768), None).unwrap();
+        let CoreImage::Pipeline { materialized, .. } = &noop else {
+            panic!("putpixel must remain represented by a pipeline");
+        };
+        assert!(materialized.get().is_some());
+
+        let mut invalid = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
+        invalid.putpixel(2, 3, 180, 120, 60, 255).unwrap();
+        let mut invalid = invalid.use_backend(Backend::Cpu);
+        let error = invalid.thumbnail((-1, 256), None).unwrap_err();
+        assert!(matches!(error, PilError::ValueError(_)));
+        let CoreImage::Pipeline { materialized, .. } = &invalid else {
+            panic!("putpixel must remain represented by a pipeline");
+        };
+        assert!(materialized.get().is_some());
+    }
 
     #[test]
     fn thumbnail_empty_source_nonnegative_bounds_is_noop() {

@@ -18,7 +18,7 @@ use crate::ops::pil_resize::{
     pil_resize, pil_resize_boxed, pillow_sin_f64, precompute_coeffs_f64,
     precompute_coeffs_f64_boxed, premultiply_alpha, round_up, unpremultiply_alpha,
 };
-use crate::pipeline::{ResampleFilter, TransposeMethod};
+use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
 
 // ── PIL-compatible filter kernels (f64 precision) ──
 
@@ -2533,6 +2533,177 @@ pub fn execute_thumbnail(
     Ok(preserve_mode(img, result))
 }
 
+/// Return whether a validated RGB pixel-write prefix can be folded into a
+/// 2×2 non-nearest thumbnail reduction without materializing a full source clone.
+pub(crate) fn rgb_putpixel_thumbnail_fusion_supported(
+    img: &DynamicImage,
+    putpixel_ops: &[PipelineOp],
+    thumbnail: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    let DynamicImage::ImageRgb8(_) = img else {
+        return false;
+    };
+    if !matches!(mode, None | Some("RGB"))
+        || putpixel_ops.is_empty()
+        || !putpixel_ops.iter().all(|op| {
+            matches!(
+                op,
+                PipelineOp::PutPixel {
+                    palette_index: false,
+                    ..
+                }
+            )
+        })
+    {
+        return false;
+    }
+    let PipelineOp::Thumbnail { w, h, filter } = thumbnail else {
+        return false;
+    };
+    if matches!(filter, ResampleFilter::Nearest) {
+        return false;
+    }
+
+    let (source_width, source_height) = img.dimensions();
+    if source_width < 2
+        || source_height < 2
+        || source_width % 2 != 0
+        || source_height % 2 != 0
+        || (source_width as usize).saturating_mul(source_height as usize) < 512 * 512
+    {
+        return false;
+    }
+    let (new_width, new_height) = (
+        (*w).max(1).min(source_width),
+        (*h).max(1).min(source_height),
+    );
+    if new_width == 0 || new_height == 0 {
+        return false;
+    }
+    let factor_x = ((source_width as f64 / new_width as f64 / 2.0) as u32).max(1);
+    let factor_y = ((source_height as f64 / new_height as f64 / 2.0) as u32).max(1);
+    factor_x == 2 && factor_y == 2
+}
+
+/// Apply validated RGB PutPixel operations at the exact integer-reduction
+/// boundary, then run the same boxed resampling filter as `execute_thumbnail`.
+/// This avoids cloning the full source image merely to change a few pixels.
+pub(crate) fn execute_rgb_putpixel_thumbnail_fusion(
+    img: &DynamicImage,
+    putpixel_ops: &[PipelineOp],
+    thumbnail: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if !rgb_putpixel_thumbnail_fusion_supported(img, putpixel_ops, thumbnail, mode) {
+        return Err(PilError::InternalError(
+            "unsupported RGB PutPixel thumbnail fusion request".into(),
+        ));
+    }
+    let DynamicImage::ImageRgb8(source) = img else {
+        return Err(PilError::InternalError(
+            "RGB thumbnail fusion source changed after admission".into(),
+        ));
+    };
+    let PipelineOp::Thumbnail { w, h, filter } = thumbnail else {
+        return Err(PilError::InternalError(
+            "RGB thumbnail fusion operation changed after admission".into(),
+        ));
+    };
+    let (source_width, source_height) = img.dimensions();
+    let new_width = (*w).max(1).min(source_width);
+    let new_height = (*h).max(1).min(source_height);
+    let reduced_width = source_width / 2;
+    let reduced_height = source_height / 2;
+
+    // Preserve ordered writes, including repeated coordinates, while keeping
+    // only the final native RGB value for each source pixel.
+    let mut pixel_overrides = std::collections::BTreeMap::<usize, [u8; 3]>::new();
+    for op in putpixel_ops {
+        let PipelineOp::PutPixel {
+            x,
+            y,
+            color,
+            palette_index: false,
+        } = op
+        else {
+            return Err(PilError::InternalError(
+                "RGB PutPixel fusion received a different operation".into(),
+            ));
+        };
+        if *x >= source_width || *y >= source_height {
+            return Err(PilError::IndexError("image index out of range".into()));
+        }
+        let pixel_index = *y as usize * source_width as usize + *x as usize;
+        pixel_overrides.insert(pixel_index, [color.0, color.1, color.2]);
+    }
+
+    let mut reduced_bytes = match execute_reduce(img, 2, 2, Some("RGB"))? {
+        DynamicImage::ImageRgb8(reduced) => reduced.into_raw(),
+        _ => {
+            return Err(PilError::InternalError(
+                "RGB thumbnail reduction changed the native mode".into(),
+            ));
+        }
+    };
+    let affected_blocks = pixel_overrides
+        .keys()
+        .map(|&pixel_index| {
+            let x = pixel_index % source_width as usize;
+            let y = pixel_index / source_width as usize;
+            (y / 2) * reduced_width as usize + x / 2
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    let source_bytes = source.as_raw();
+    for block_index in affected_blocks {
+        let block_x = block_index % reduced_width as usize;
+        let block_y = block_index / reduced_width as usize;
+        let mut sums = [0u32; 3];
+        for dy in 0..2usize {
+            for dx in 0..2usize {
+                let source_pixel_index =
+                    (block_y * 2 + dy) * source_width as usize + block_x * 2 + dx;
+                let sample = pixel_overrides
+                    .get(&source_pixel_index)
+                    .copied()
+                    .unwrap_or_else(|| {
+                        let source_start = source_pixel_index * 3;
+                        [
+                            source_bytes[source_start],
+                            source_bytes[source_start + 1],
+                            source_bytes[source_start + 2],
+                        ]
+                    });
+                for channel in 0..3 {
+                    sums[channel] += u32::from(sample[channel]);
+                }
+            }
+        }
+
+        let output_start = block_index * 3;
+        for channel in 0..3 {
+            reduced_bytes[output_start + channel] = ((sums[channel] + 2) >> 2) as u8;
+        }
+    }
+
+    let reduced =
+        crate::raster::RgbImage::from_raw(reduced_width, reduced_height, reduced_bytes)
+            .ok_or_else(|| PilError::InternalError("RGB reduction buffer shape mismatch".into()))?;
+    let reduced = DynamicImage::ImageRgb8(reduced);
+    let resized = pil_resize_boxed(
+        &reduced,
+        new_width,
+        new_height,
+        0.0,
+        0.0,
+        f64::from(source_width) / 2.0,
+        f64::from(source_height) / 2.0,
+        *filter,
+        Some("RGB"),
+    );
+    Ok(preserve_mode(img, resized))
+}
+
 fn reduce_f_thumbnail_2x2_samples(
     dst_w: u32,
     dst_h: u32,
@@ -3337,10 +3508,13 @@ mod tests {
     use super::resize_i_sum_eight;
     #[cfg(target_arch = "x86_64")]
     use super::{F64MulAdd, PortableFma, X86FmaToken};
-    use super::{execute_reduce, reduce_f_thumbnail, reduce_i_thumbnail, resize_f};
+    use super::{
+        execute_reduce, execute_rgb_putpixel_thumbnail_fusion, execute_thumbnail,
+        reduce_f_thumbnail, reduce_i_thumbnail, resize_f, rgb_putpixel_thumbnail_fusion_supported,
+    };
     #[cfg(target_arch = "x86_64")]
     use super::{f_resize_samples_allow_finite_fma, resize_f_with_fma};
-    use crate::pipeline::ResampleFilter;
+    use crate::pipeline::{PipelineOp, ResampleFilter};
     use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
 
     #[cfg(target_arch = "x86_64")]
@@ -4273,6 +4447,100 @@ mod tests {
                 });
             let actual = resize_i_sum_eight(&weights, 0, |index| source[index]);
             assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+
+    #[test]
+    fn rgb_putpixel_thumbnail_fusion_matches_materialized_putpixel_and_thumbnail() {
+        let (source_width, source_height) = (1024, 768);
+        let (output_width, output_height) = (256, 192);
+        let filters = [
+            ResampleFilter::Bilinear,
+            ResampleFilter::Bicubic,
+            ResampleFilter::Lanczos,
+            ResampleFilter::Box,
+            ResampleFilter::Hamming,
+        ];
+        let putpixel_ops = vec![
+            PipelineOp::PutPixel {
+                x: 2,
+                y: 3,
+                color: (180, 120, 60, 255),
+                palette_index: false,
+            },
+            PipelineOp::PutPixel {
+                x: 2,
+                y: 3,
+                color: (10, 20, 30, 255),
+                palette_index: false,
+            },
+            PipelineOp::PutPixel {
+                x: source_width - 1,
+                y: source_height - 1,
+                color: (7, 129, 251, 255),
+                palette_index: false,
+            },
+        ];
+
+        for dense in [false, true] {
+            let bytes = if dense {
+                (0..source_width as usize * source_height as usize * 3)
+                    .map(|index| (index.wrapping_mul(73).wrapping_add(index / 17 * 29)) as u8)
+                    .collect()
+            } else {
+                vec![0; source_width as usize * source_height as usize * 3]
+            };
+            let source = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(source_width, source_height, bytes)
+                    .expect("test RGB source dimensions must match its bytes"),
+            );
+            let nearest_thumbnail = PipelineOp::Thumbnail {
+                w: output_width,
+                h: output_height,
+                filter: ResampleFilter::Nearest,
+            };
+            assert!(!rgb_putpixel_thumbnail_fusion_supported(
+                &source,
+                &putpixel_ops,
+                &nearest_thumbnail,
+                Some("RGB"),
+            ));
+            let materialized_source =
+                crate::compute::pool_cpu::ops::effects::op_put_pixel_batch(&source, &putpixel_ops)
+                    .expect("validated RGB pixel writes must succeed");
+            for filter in filters {
+                let thumbnail = PipelineOp::Thumbnail {
+                    w: output_width,
+                    h: output_height,
+                    filter,
+                };
+                assert!(rgb_putpixel_thumbnail_fusion_supported(
+                    &source,
+                    &putpixel_ops,
+                    &thumbnail,
+                    Some("RGB"),
+                ));
+                let expected = execute_thumbnail(
+                    &materialized_source,
+                    output_width,
+                    output_height,
+                    &filter,
+                    Some("RGB"),
+                )
+                .expect("reference RGB thumbnail must succeed");
+                let actual = execute_rgb_putpixel_thumbnail_fusion(
+                    &source,
+                    &putpixel_ops,
+                    &thumbnail,
+                    Some("RGB"),
+                )
+                .expect("fused RGB thumbnail must succeed");
+                assert_eq!(
+                    actual.as_bytes(),
+                    expected.as_bytes(),
+                    "dense={dense} filter={filter:?}"
+                );
+            }
         }
     }
 }

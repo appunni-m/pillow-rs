@@ -20780,3 +20780,74 @@ coverage was run. Receipts are `rgb-unsharp-revisit-baseline.json`,
 `rgb-unsharp-step-rgb-candidate1-repeat.json`, with parity sidecars in
 `build/migration-parity/`. The profile is under
 `build/migration-parity/profiles/rgb-unsharp-inline-cpu/`.
+
+### RGB material-thumbnail PutPixel fusion and vertical-row specialization — 2026-10-08
+
+The next ranked workload was
+`pipeline-op.thumbnail.material-rgb-1024x768`: create a 1024×768 RGB image,
+write one pixel, run `thumbnail((256, 256), resample=2)` (Pillow Bilinear), then
+observe `tobytes`. The whole-workflow benchmark includes setup, lazy operation
+construction, materialization, and byte observation (5 warmups, 20 iterations
+across 5 samples, concurrency 1, warm cache). This corrects the earlier
+observed-step timing that omitted lazy setup. The two historical cross-runner
+rows for this workload still use the wrong `observed_steps` boundary; this
+local arm64 result is separate and does not rewrite the published matrix.
+
+The prior sparse-reducer implementation measured CPU medians near 2.40 ms
+against Pillow near 1.05 ms. A direct comparison with PutPixel→Thumbnail
+fusion disabled measured 2.5093 ms CPU / 1.0541 ms Pillow. The retained
+fusion combines the pending sparse writes with the exact RGB 2×2 reducing-gap
+rounding, then runs the same boxed Bilinear resampler. Two fused runs measured
+1.2840 / 1.0593 ms and 1.2918 / 1.0639 ms (CPU / Pillow), cutting CPU latency
+about 49% versus the non-fused comparison. CPU remained 1.21× slower than
+Pillow.
+
+The post-fusion profile shifted the remaining samples to the boxed resampler.
+A row-oriented RGB vertical pass now fetches the shared vertical coefficients
+and source-row bases once per output row. Its exact-byte row-vs-column test
+covers Bilinear, Bicubic, Lanczos, Box, and Hamming, including one-pixel and
+partial-edge widths. Two whole-workflow runs measured:
+
+| Run | Pillow | Serial CPU | SIMD | GPU | Pillow/CPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| RGB row A1 | 1.0516 ms | 1.1358 ms | 2.3086 ms | 2.2389 ms | 0.926× |
+| RGB row A2 | 1.0472 ms | 1.1351 ms | 2.3007 ms | 2.2142 ms | 0.923× |
+| Final checkpoint | 1.0551 ms | 1.1395 ms | 2.3201 ms | 2.2101 ms | 0.926× |
+
+Each run passed exact Pillow parity for CPU, SIMD, and GPU. Receipts show
+100/100 actual CPU samples, two fused operations per CPU sample, 100/100
+actual SIMD and GPU samples, and no fallback. The serial CPU `parallel` Cargo
+feature was disabled. CPU is still about 8% slower than Pillow, so this is an
+open optimization. SIMD is about 2.2× slower than Pillow and misses both the
+requested half-Pillow floor and the repository's stricter 5× SIMD target. GPU
+single-request latency is slightly below SIMD, with three dispatches, 3 MiB
+uploaded, and 192 KiB read back per request; concurrency was one, so sustained
+throughput is unproven. CPU host-buffer telemetry reports two terminal buffers
+totalling 2,506,752 bytes; it does not count the intermediate Rust image
+allocations. Do not interpret it as an allocation total.
+The final pre-push source rebuild passed the same parity gate and confirmed
+100/100 requested-backend executions with two CPU fusion counts per sample.
+
+A subsequent streaming-reduction trial removed the full 589,824-byte reduced
+RGB image buffer and fed one reduced row into the horizontal pass. It preserved
+the exact materialized-stage output across both zero and varied source images
+and all five filters, but CPU latency regressed to 1.2019 ms versus Pillow at
+1.0524 ms, about 5.9% slower than the prior row-specialized candidate. Revert
+it; eliminating an intermediate allocation did not improve this call. Its
+receipt is `rgb-thumb-stream-row-candidate5.json` with its parity sidecar.
+
+The benchmark exposed a real validation gap in the first fusion candidate:
+the fast-path unit case exercised Bicubic with an explicitly locked CPU route,
+while the public workload uses resample code 2 (Bilinear) through the ordinary
+unlocked CPU-only route. The fusion counter stayed zero, so its timing was
+rejected instead of being credited to the candidate. The regression now checks
+the actual Bilinear public route, and every timing candidate must show two
+fused operations per CPU observation before it can support a fusion claim.
+This was a test-coverage defect in the initial candidate check, not a Pillow
+parity defect. No coverage was run. Receipts are
+`rgb-thumb-putpixel-fusion-candidate2.json`,
+`rgb-thumb-putpixel-fusion-candidate3.json`,
+`rgb-thumb-putpixel-fusion-candidate3-repeat.json`,
+`rgb-thumb-rgb-row-candidate4.json`,
+`rgb-thumb-rgb-row-candidate4-repeat.json`, and the rejected streaming
+candidate above, each with parity sidecars under `build/migration-parity/`.

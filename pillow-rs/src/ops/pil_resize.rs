@@ -3243,6 +3243,69 @@ fn horizontal_pass_boxed_rows(
     }
 }
 
+/// Resample one RGB output row while loading its vertical coefficients and
+/// source-row bases only once. A boxed resize uses the same vertical filter
+/// for every x coordinate in an output row, so repeating this setup in
+/// `vertical_pass_col` needlessly multiplies it by the output width.
+#[inline]
+fn vertical_pass_rgb_row(
+    intermediate: &[u8],
+    output_width: u32,
+    coeffs: &FilterCoeffs,
+    out_y: usize,
+    output_row: &mut [u8],
+) {
+    let y0 = coeffs.xmin[out_y] as usize;
+    let weights = coeffs.weights_for(out_y);
+    if weights.is_empty() {
+        output_row.fill(0);
+        return;
+    }
+
+    let source_stride = output_width as usize * 3;
+    if let [weight0, weight1, weight2, weight3] = weights {
+        let source_row0 = &intermediate[y0 * source_stride..];
+        let source_row1 = &intermediate[(y0 + 1) * source_stride..];
+        let source_row2 = &intermediate[(y0 + 2) * source_stride..];
+        let source_row3 = &intermediate[(y0 + 3) * source_stride..];
+        for (x, pixel) in output_row.chunks_exact_mut(3).enumerate() {
+            let source_index = x * 3;
+            let mut red = i64::from(source_row0[source_index]) * weight0;
+            let mut green = i64::from(source_row0[source_index + 1]) * weight0;
+            let mut blue = i64::from(source_row0[source_index + 2]) * weight0;
+            red += i64::from(source_row1[source_index]) * weight1;
+            green += i64::from(source_row1[source_index + 1]) * weight1;
+            blue += i64::from(source_row1[source_index + 2]) * weight1;
+            red += i64::from(source_row2[source_index]) * weight2;
+            green += i64::from(source_row2[source_index + 1]) * weight2;
+            blue += i64::from(source_row2[source_index + 2]) * weight2;
+            red += i64::from(source_row3[source_index]) * weight3;
+            green += i64::from(source_row3[source_index + 1]) * weight3;
+            blue += i64::from(source_row3[source_index + 2]) * weight3;
+            pixel[0] = fixed_point_to_u8(red);
+            pixel[1] = fixed_point_to_u8(green);
+            pixel[2] = fixed_point_to_u8(blue);
+        }
+        return;
+    }
+
+    for (x, pixel) in output_row.chunks_exact_mut(3).enumerate() {
+        let source_index = x * 3;
+        let mut red = 0i64;
+        let mut green = 0i64;
+        let mut blue = 0i64;
+        for (tap, &weight) in weights.iter().enumerate() {
+            let source_index = (y0 + tap) * source_stride + source_index;
+            red += i64::from(intermediate[source_index]) * weight;
+            green += i64::from(intermediate[source_index + 1]) * weight;
+            blue += i64::from(intermediate[source_index + 2]) * weight;
+        }
+        pixel[0] = fixed_point_to_u8(red);
+        pixel[1] = fixed_point_to_u8(green);
+        pixel[2] = fixed_point_to_u8(blue);
+    }
+}
+
 fn vertical_pass_rows(
     intermediate: &[u8],
     source_rows: u32,
@@ -3264,6 +3327,10 @@ fn vertical_pass_rows(
         for y in 0..output_height as usize {
             let output_start = y * output_stride;
             let row = &mut output[output_start..output_start + output_stride];
+            if channels == 3 {
+                vertical_pass_rgb_row(intermediate, output_width, coeffs, y, row);
+                continue;
+            }
             for dx in 0..output_width {
                 let value = vertical_pass_col(
                     intermediate,
@@ -3302,18 +3369,28 @@ fn vertical_pass_rows(
         output_stride,
         output_height as usize,
         |_row_start, _row_end, y, row| {
-            for dx in 0..output_width {
-                let value = vertical_pass_col(
+            if channels == 3 {
+                vertical_pass_rgb_row(
                     intermediate,
-                    source_rows,
-                    dx,
                     output_width,
-                    channels,
                     coeffs,
                     y as usize,
+                    &mut row[..output_stride],
                 );
-                let start = dx as usize * channels;
-                row[start..start + channels].copy_from_slice(&value[..channels]);
+            } else {
+                for dx in 0..output_width {
+                    let value = vertical_pass_col(
+                        intermediate,
+                        source_rows,
+                        dx,
+                        output_width,
+                        channels,
+                        coeffs,
+                        y as usize,
+                    );
+                    let start = dx as usize * channels;
+                    row[start..start + channels].copy_from_slice(&value[..channels]);
+                }
             }
         }
     );
@@ -3322,6 +3399,10 @@ fn vertical_pass_rows(
     for y in 0..output_height as usize {
         let output_start = y * output_stride;
         let row = &mut output[output_start..output_start + output_stride];
+        if channels == 3 {
+            vertical_pass_rgb_row(intermediate, output_width, coeffs, y, row);
+            continue;
+        }
         for dx in 0..output_width {
             let value = vertical_pass_col(
                 intermediate,
@@ -3379,6 +3460,62 @@ fn vertical_pass_rows_transposed(
                 vertical_pass_col_transposed(intermediate, source_rows, dx, channels, coeffs, y);
             let start = dx as usize * channels;
             row[start..start + channels].copy_from_slice(&value[..channels]);
+        }
+    }
+}
+
+#[cfg(test)]
+mod rgb_vertical_pass_tests {
+    use super::{
+        filter_from_resample, precompute_coeffs_boxed, vertical_pass_col, vertical_pass_rgb_row,
+    };
+    use crate::pipeline::ResampleFilter;
+
+    #[test]
+    fn rgb_row_kernel_matches_column_reference_for_boxed_filters_and_edges() {
+        for filter in [
+            ResampleFilter::Bilinear,
+            ResampleFilter::Bicubic,
+            ResampleFilter::Lanczos,
+            ResampleFilter::Box,
+            ResampleFilter::Hamming,
+        ] {
+            let (kernel, support) = filter_from_resample(filter);
+            for (source_rows, output_height, output_width) in
+                [(7u32, 3u32, 1u32), (19, 11, 7), (37, 23, 31)]
+            {
+                let coeffs = precompute_coeffs_boxed(
+                    output_height,
+                    source_rows,
+                    0.0,
+                    f64::from(source_rows),
+                    kernel,
+                    support,
+                );
+                let source = (0..source_rows as usize * output_width as usize * 3)
+                    .map(|index| {
+                        index
+                            .wrapping_mul(71)
+                            .wrapping_add(index / (output_width as usize * 3) * 43)
+                            as u8
+                    })
+                    .collect::<Vec<_>>();
+                for y in 0..output_height as usize {
+                    let mut expected = vec![0u8; output_width as usize * 3];
+                    for x in 0..output_width {
+                        let pixel =
+                            vertical_pass_col(&source, source_rows, x, output_width, 3, &coeffs, y);
+                        let start = x as usize * 3;
+                        expected[start..start + 3].copy_from_slice(&pixel[..3]);
+                    }
+                    let mut actual = vec![0u8; output_width as usize * 3];
+                    vertical_pass_rgb_row(&source, output_width, &coeffs, y, &mut actual);
+                    assert_eq!(
+                        actual, expected,
+                        "{filter:?} {source_rows}x{output_width} row {y}"
+                    );
+                }
+            }
         }
     }
 }
