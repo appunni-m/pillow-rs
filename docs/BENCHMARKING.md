@@ -462,28 +462,27 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`df5231519bb4810e6b0098560c5c791e56dc9952`, measured
-`2026-10-09T01:11:25.338187Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-and [Benchmark workflow 37867071947](https://github.com/appunni-m/pillow-rs/actions/runs/37867071947).
+`bd54c3abe45eafc396a418348543b1de4db0664f`, measured
+`2026-10-09T02:03:55.412316Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and [Benchmark workflow 37870849801](https://github.com/appunni-m/pillow-rs/actions/runs/37870849801).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles; 209 paths map to the benchmark manifest
 and 121 remain explicit inventory gaps. Only rows with exact parity and
 completed backend receipts are eligible for speed claims.
 
-Across the 120 verified serial CPU workload-runner pairs, 5 are slower than
-Pillow, 58 are below 2×, and 99 are below 5×. The corresponding SIMD counts are
-22 slower than Pillow, 43 below 2×, and 82 below 5×. The separately built
-Parallel CPU profile uses the opt-in Cargo `parallel` feature; 17 of its 120
-verified pairs are slower than Pillow, 50 are below 2×, and 83 are below 5×.
-GPU latency is slower than SIMD in 22 of its 38 verified pairs, with 25 below
-2× and 35 below 5×; sustained GPU throughput remains unmeasured.
+Across the 120 verified serial CPU workload-runner pairs, 6 are slower than
+Pillow and 56 are below 2×. The corresponding SIMD counts are 21 slower than
+Pillow, 40 below 2×, and 84 below 5×. The separately built Parallel CPU profile
+uses the opt-in Cargo `parallel` feature; 18 of its 120 verified pairs are
+slower than Pillow and 51 are below 2×. GPU latency is slower than SIMD in 23
+of its 38 verified pairs; sustained GPU throughput remains unmeasured.
 
-The five verified serial CPU misses, ranked by speed factor, are RGB material
-grayscale (0.597× on Ubuntu x86_64), YCbCr material grayscale (0.864× on macOS
-arm64), RGB material thumbnail (0.880× on macOS arm64), LA material
-GaussianBlur (0.918× on macOS arm64), and RGB material thumbnail (0.963× on
-Ubuntu arm64). All 120 CPU comparisons and every below-2× row remain visible
-in the matrix.
+The current verified serial CPU misses, ranked by speed factor, are YCbCr
+material grayscale (0.495× on Ubuntu arm64), LA material GaussianBlur (0.836×
+on macOS arm64), RGB material UnsharpMask (0.909× on macOS arm64), RGB/L
+material merge (0.920× on Ubuntu x86_64), and RGB material thumbnail (0.952×
+on Ubuntu arm64). The YCbCr operation has two below-Pillow comparisons. All 120
+CPU comparisons and every below-2× row remain visible in the matrix.
 
 The c12 RGB grayscale candidate in revision `e9a8a7cf2` selected the signed
 two-multiply delta formula on x86 without AVX-512 and retained contribution
@@ -515,6 +514,32 @@ Ubuntu x86 runner. The clean c11 three-table baseline measured 815.868 versus
 518.728 µs (0.636×); c14 increased the target median by 8.5% while Pillow
 shifted 1.8%. Reject the larger paired table and restore the three-table path.
 The c14 matrix preserves the exact-parity regression as measured evidence.
+
+The c16 AVX2 RGB grayscale candidate in revision `bd54c3abe` deinterleaves
+sixteen RGB samples and evaluates Pillow's exact rounded BT.601 fixed-point
+formula. The x86 exhaustive check covered all 2^24 RGB colors and vector tails;
+it passed in [Benchmark workflow 37870849801](https://github.com/appunni-m/pillow-rs/actions/runs/37870849801).
+On that run's Ubuntu x86_64 `pipeline-op.grayscale.material-rgb-noise-1024x768`
+workload, exact-parity CPU measured 242.6945 µs versus Pillow's 529.435 µs
+(2.181×); SIMD measured 245.424 µs (2.157×). Both rows recorded 100 samples,
+the requested backend, complete terminal receipts, and no fallback. These
+ratios meet the CPU and 2× SIMD thresholds for this RGB workload on this runner.
+They do not meet the grayscale operation's all-mode and all-size targets: its
+worst verified CPU row is the YCbCr ARM result below, and its worst verified
+SIMD row is RGB on Ubuntu ARM at 1.341× Pillow. The x86 machine model also
+changed between c15 (EPYC 9V45) and c16 (EPYC 7763), so the within-run Pillow
+ratios are useful while raw cross-run timing differences are not a paired
+speedup claim.
+
+The c16 YCbCr CPU row needs a repeat before attributing its timing to source
+behavior. The exact workload on the same Neoverse-N2 runner measured 421.179 µs
+versus Pillow's 208.410 µs (0.495×) in c16; c15 measured 113.1725 versus
+208.1385 µs (1.839×). The YCbCr CPU implementation was unchanged between those
+revisions, and the c16 SIMD row remained 112.408 µs. Keep the latest miss in
+the matrix and repeat it; do not attribute it to the x86-only AVX2 change.
+An exploratory local ARM microbenchmark rejected applying the existing
+packed-word extraction helper on ARM: its median was 192.42 µs versus 50.08 µs
+for the current scalar gather. That helper change was reverted before commit.
 
 The x86 YCbCr luma-packing change in revision `ca2e8ae4f` first cleared its CPU
 miss in c10. For `pipeline-op.grayscale.material-ycbcr-noise-1024x768`, c9
