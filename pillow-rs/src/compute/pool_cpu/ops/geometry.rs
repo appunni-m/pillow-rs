@@ -2811,11 +2811,17 @@ fn reduce_f_thumbnail_2x2_samples(
     mut sample_f32: impl FnMut(usize) -> f32,
 ) -> Result<DynamicImage, PilError> {
     let source_width = source_width as usize;
-    let mut output = Vec::with_capacity(output_bytes);
+    let output_row_bytes = (dst_w as usize)
+        .checked_mul(4)
+        .ok_or_else(|| PilError::InternalError("F thumbnail row size overflow".into()))?;
+    let mut output = vec![0; output_bytes];
     for y in 0..dst_h as usize {
         let top_row = y * 2 * source_width;
         let bottom_row = top_row + source_width;
-        for x in 0..dst_w as usize {
+        let output_row_start = y * output_row_bytes;
+        let output_row_end = output_row_start + output_row_bytes;
+        let output_row = &mut output[output_row_start..output_row_end];
+        for (x, output_sample) in output_row.chunks_exact_mut(4).enumerate() {
             let source_x = x * 2;
             let top_left = sample_f32(top_row + source_x);
             let top_right = sample_f32(top_row + source_x + 1);
@@ -2826,7 +2832,7 @@ fn reduce_f_thumbnail_2x2_samples(
             let mut sum = 0.0f64;
             sum += f64::from(quartet);
             let value = (sum * 0.25) as f32;
-            output.extend_from_slice(&value.to_le_bytes());
+            output_sample.copy_from_slice(&value.to_le_bytes());
         }
     }
     raw_bytes_to_image(dst_w, dst_h, output, 4)
@@ -4378,6 +4384,53 @@ mod tests {
             panic!("F-mode thumbnail reduction must retain packed float storage");
         };
         assert_eq!(output.as_raw(), &0xc3ca_a3eau32.to_le_bytes());
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_thumbnail_2x2_row_output_keeps_scalar_rounding_and_bits() {
+        let (width, height) = (16u32, 10u32);
+        let mut source_words = (0..width as usize * height as usize)
+            .map(|index| (((index * 37 % 257) as i32 - 128) as f32) / 31.0)
+            .map(f32::to_bits)
+            .collect::<Vec<_>>();
+        source_words[0] = (-0.0f32).to_bits();
+        source_words[1] = (-0.0f32).to_bits();
+        source_words[width as usize] = (-0.0f32).to_bits();
+        source_words[width as usize + 1] = (-0.0f32).to_bits();
+        source_words[4] = f32::from_bits(0x7fc1_2345).to_bits();
+        source_words[width as usize * 2 + 7] = f32::INFINITY.to_bits();
+        source_words[width as usize * 4 + 13] = f32::NEG_INFINITY.to_bits();
+        let source_bytes = source_words
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .collect::<Vec<_>>();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(width, height, source_bytes).expect("F source shape must be valid"),
+        );
+
+        let actual = reduce_f_thumbnail(&source, width / 2, height / 2, 2, 2)
+            .expect("even 2x2 F thumbnail reduction must succeed");
+        let DynamicImage::ImageRgba8(actual) = actual else {
+            panic!("F-mode thumbnail reduction must retain packed float storage");
+        };
+        let mut expected = Vec::with_capacity(width as usize * height as usize);
+        for y in 0..height as usize / 2 {
+            let top_row = y * 2 * width as usize;
+            let bottom_row = top_row + width as usize;
+            for x in 0..width as usize / 2 {
+                let source_x = x * 2;
+                let top_left = f32::from_bits(source_words[top_row + source_x]);
+                let top_right = f32::from_bits(source_words[top_row + source_x + 1]);
+                let bottom_left = f32::from_bits(source_words[bottom_row + source_x]);
+                let bottom_right = f32::from_bits(source_words[bottom_row + source_x + 1]);
+                let quartet = ((top_left + top_right) + bottom_left) + bottom_right;
+                let mut sum = 0.0f64;
+                sum += f64::from(quartet);
+                expected.extend_from_slice(&((sum * 0.25) as f32).to_le_bytes());
+            }
+        }
+        assert_eq!(actual.as_raw(), expected.as_slice());
     }
 
     #[cfg(target_endian = "little")]
