@@ -462,27 +462,28 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`bd54c3abe45eafc396a418348543b1de4db0664f`, measured
-`2026-10-09T02:03:55.412316Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-and [Benchmark workflow 37870849801](https://github.com/appunni-m/pillow-rs/actions/runs/37870849801).
+`1a300c98600fed0df3f34b44a4733996f37c9682`, measured
+`2026-10-09T02:48:51.280256Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and [Benchmark workflow 37874811737](https://github.com/appunni-m/pillow-rs/actions/runs/37874811737).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles; 209 paths map to the benchmark manifest
 and 121 remain explicit inventory gaps. Only rows with exact parity and
 completed backend receipts are eligible for speed claims.
 
-Across the 120 verified serial CPU workload-runner pairs, 6 are slower than
-Pillow and 56 are below 2×. The corresponding SIMD counts are 21 slower than
-Pillow, 40 below 2×, and 84 below 5×. The separately built Parallel CPU profile
-uses the opt-in Cargo `parallel` feature; 18 of its 120 verified pairs are
-slower than Pillow and 51 are below 2×. GPU latency is slower than SIMD in 23
+Across the 120 verified serial CPU workload-runner pairs, 3 are slower than
+Pillow and 60 are below 2×. The corresponding SIMD counts are 22 slower than
+Pillow, 41 below 2×, and 85 below 5×. The separately built Parallel CPU profile
+uses the opt-in Cargo `parallel` feature; 14 of its 120 verified pairs are
+slower than Pillow and 47 are below 2×. GPU latency is slower than SIMD in 23
 of its 38 verified pairs; sustained GPU throughput remains unmeasured.
 
-The current verified serial CPU misses, ranked by speed factor, are YCbCr
-material grayscale (0.495× on Ubuntu arm64), LA material GaussianBlur (0.836×
-on macOS arm64), RGB material UnsharpMask (0.909× on macOS arm64), RGB/L
-material merge (0.920× on Ubuntu x86_64), and RGB material thumbnail (0.952×
-on Ubuntu arm64). The YCbCr operation has two below-Pillow comparisons. All 120
-CPU comparisons and every below-2× row remain visible in the matrix.
+The current verified serial CPU misses, ranked by speed factor, are the
+composed RGB `getdata` band read (0.711× on macOS arm64), LA material
+GaussianBlur (0.892× on macOS arm64), and RGB material thumbnail (0.959× on
+Ubuntu arm64). The `getdata` observation is a single 512×512 workload-runner
+pair with six timed executions; c16 measured 1.686× Pillow on the same runner,
+so retain the c17 miss but repeat it before attributing it to code. All 120 CPU
+comparisons and every below-2× row remain visible in the matrix.
 
 The c12 RGB grayscale candidate in revision `e9a8a7cf2` selected the signed
 two-multiply delta formula on x86 without AVX-512 and retained contribution
@@ -531,15 +532,29 @@ changed between c15 (EPYC 9V45) and c16 (EPYC 7763), so the within-run Pillow
 ratios are useful while raw cross-run timing differences are not a paired
 speedup claim.
 
-The c16 YCbCr CPU row needs a repeat before attributing its timing to source
+The c16 YCbCr CPU row needed a repeat before attributing its timing to source
 behavior. The exact workload on the same Neoverse-N2 runner measured 421.179 µs
 versus Pillow's 208.410 µs (0.495×) in c16; c15 measured 113.1725 versus
 208.1385 µs (1.839×). The YCbCr CPU implementation was unchanged between those
-revisions, and the c16 SIMD row remained 112.408 µs. Keep the latest miss in
-the matrix and repeat it; do not attribute it to the x86-only AVX2 change.
-An exploratory local ARM microbenchmark rejected applying the existing
-packed-word extraction helper on ARM: its median was 192.42 µs versus 50.08 µs
-for the current scalar gather. That helper change was reverted before commit.
+revisions, and the c16 SIMD row remained 112.408 µs. The c17 repeat measured
+112.921 µs versus Pillow's 214.8815 µs (1.903×), so c16 remains visible as an
+isolated timing outlier rather than a current source regression. An exploratory
+local ARM microbenchmark rejected applying the existing packed-word extraction
+helper on ARM: its median was 192.42 µs versus 50.08 µs for the current scalar
+gather. That helper change was reverted before commit.
+
+The c17 LA GaussianBlur row on macOS ARM measured 10,986.104 µs CPU versus
+9,797.625 µs Pillow (0.892×), improving on c16's 11,718.2085 versus 9,794.5
+µs (0.836×) with 100 samples in both runs. Exact parity, the requested CPU
+backend, complete terminal receipts, and no fallback were recorded, but the
+serial CPU miss remains. The c17 SIMD row measured 6,648.9375 µs (1.474×
+Pillow), still below the 2× SIMD priority threshold. Separately, c17's composed
+`getdata` band-read CPU row on macOS ARM measured 954.1455 µs versus Pillow's
+678.3545 µs (0.711×), while c16 measured 328.896 versus 554.646 µs (1.686×).
+That source path was unchanged, and this workload has only six timed executions;
+keep the c17 exact-parity miss in the matrix and repeat it before selecting an
+optimization. These timing outliers do not establish a test defect. No genuine
+test defect has been confirmed, and no coverage was run.
 
 The x86 YCbCr luma-packing change in revision `ca2e8ae4f` first cleared its CPU
 miss in c10. For `pipeline-op.grayscale.material-ycbcr-noise-1024x768`, c9
