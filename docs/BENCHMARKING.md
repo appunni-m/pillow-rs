@@ -462,29 +462,28 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`a8bcf03afe3f2e880d9f2a23a7db230347ef7724`, measured
-`2026-10-09T00:36:37.991240Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-and [Benchmark workflow 37864202617](https://github.com/appunni-m/pillow-rs/actions/runs/37864202617).
+`df5231519bb4810e6b0098560c5c791e56dc9952`, measured
+`2026-10-09T01:11:25.338187Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and [Benchmark workflow 37867071947](https://github.com/appunni-m/pillow-rs/actions/runs/37867071947).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles; 209 paths map to the benchmark manifest
 and 121 remain explicit inventory gaps. Only rows with exact parity and
 completed backend receipts are eligible for speed claims.
 
-Across the 120 verified serial CPU workload-runner pairs, 7 are slower than
-Pillow, 57 are below 2×, and 97 are below 5×. The corresponding SIMD counts are
-23 slower than Pillow, 39 below 2×, and 84 below 5×. The separately built
-Parallel CPU profile uses the opt-in Cargo `parallel` feature; 14 of its 120
-verified pairs are slower than Pillow, 42 are below 2×, and 83 are below 5×.
-GPU latency is slower than SIMD in 22 of its 38 verified pairs; sustained GPU
-throughput remains unmeasured.
+Across the 120 verified serial CPU workload-runner pairs, 5 are slower than
+Pillow, 58 are below 2×, and 99 are below 5×. The corresponding SIMD counts are
+22 slower than Pillow, 43 below 2×, and 82 below 5×. The separately built
+Parallel CPU profile uses the opt-in Cargo `parallel` feature; 17 of its 120
+verified pairs are slower than Pillow, 50 are below 2×, and 83 are below 5×.
+GPU latency is slower than SIMD in 22 of its 38 verified pairs, with 25 below
+2× and 35 below 5×; sustained GPU throughput remains unmeasured.
 
-The seven verified serial CPU misses, ranked by speed factor, are RGB material
-grayscale (0.382× on Ubuntu x86_64), LA material GaussianBlur (0.882× on macOS
-arm64), YCbCr material grayscale (0.950× on Ubuntu x86_64), float-mode native
-thumbnail (0.954× on Ubuntu x86_64), RGB material thumbnail (0.955× on Ubuntu
-arm64), RGB/L material merge (0.968× on Ubuntu x86_64), and RGB material
-thumbnail (0.997× on macOS arm64). All 120 CPU comparisons and every below-2×
-row remain visible in the matrix.
+The five verified serial CPU misses, ranked by speed factor, are RGB material
+grayscale (0.597× on Ubuntu x86_64), YCbCr material grayscale (0.864× on macOS
+arm64), RGB material thumbnail (0.880× on macOS arm64), LA material
+GaussianBlur (0.918× on macOS arm64), and RGB material thumbnail (0.963× on
+Ubuntu arm64). All 120 CPU comparisons and every below-2× row remain visible
+in the matrix.
 
 The c12 RGB grayscale candidate in revision `e9a8a7cf2` selected the signed
 two-multiply delta formula on x86 without AVX-512 and retained contribution
@@ -504,8 +503,18 @@ complete terminal receipt, and no fallback, but further regressed on the same
 AMD EPYC 7763 image: 1,444.471 µs CPU versus 551.185 µs Pillow (0.382×). The
 c11 table-path baseline measured 815.868 versus 518.728 µs (0.636×), so direct
 multiplication increased the CPU median 77.0% while Pillow shifted 6.3%. Reject
-this candidate and retain the table path while testing a different loop
-strategy. The full c13 matrix preserves the exact-parity regression.
+this candidate and return to the contribution tables while testing a different
+loop strategy. The full c13 matrix preserves the exact-parity regression.
+
+The c14 paired-contribution RGB grayscale candidate in revision `df5231519`
+kept the three 256-entry tables on AVX-512 x86 and used a 65,536-entry paired
+red/green table plus the blue table on other x86. It passed exact parity with
+100/100 actual CPU samples, a complete terminal receipt, and no fallback, but
+measured 885.304 µs versus Pillow's 528.082 µs (0.597×) on the AMD EPYC 7763
+Ubuntu x86 runner. The clean c11 three-table baseline measured 815.868 versus
+518.728 µs (0.636×); c14 increased the target median by 8.5% while Pillow
+shifted 1.8%. Reject the larger paired table and restore the three-table path.
+The c14 matrix preserves the exact-parity regression as measured evidence.
 
 The x86 YCbCr luma-packing change in revision `ca2e8ae4f` first cleared its CPU
 miss in c10. For `pipeline-op.grayscale.material-ycbcr-noise-1024x768`, c9
