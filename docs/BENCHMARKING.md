@@ -462,27 +462,37 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`ca2e8ae4f4f6c6218a794f0ed40383a7590a97b6`, measured
-`2026-10-08T23:11:29.308114Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-and [Benchmark workflow 37854781233](https://github.com/appunni-m/pillow-rs/actions/runs/37854781233).
+`e9a8a7cf2318024c8196b8658afb959880258902`, measured
+`2026-10-09T00:04:15.604239Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and [Benchmark workflow 37859792267](https://github.com/appunni-m/pillow-rs/actions/runs/37859792267).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles; 209 paths map to the benchmark manifest
 and 121 remain explicit inventory gaps. Only rows with exact parity and
 completed backend receipts are eligible for speed claims.
 
-Across the 120 verified serial CPU workload-runner pairs, 5 are slower than
-Pillow, 58 are below 2×, and 98 are below 5×. The corresponding SIMD counts are
-21 slower than Pillow, 43 below 2×, and 81 below 5×. The separately built
+Across the 120 verified serial CPU workload-runner pairs, 3 are slower than
+Pillow, 61 are below 2×, and 97 are below 5×. The corresponding SIMD counts are
+22 slower than Pillow, 42 below 2×, and 85 below 5×. The separately built
 Parallel CPU profile uses the opt-in Cargo `parallel` feature; 15 of its 120
-verified pairs are slower than Pillow, 51 are below 2×, and 83 are below 5×.
+verified pairs are slower than Pillow, 46 are below 2×, and 83 are below 5×.
 GPU latency is slower than SIMD in 22 of its 38 verified pairs; sustained GPU
 throughput remains unmeasured.
 
-The five verified serial CPU misses, ranked by speed factor, are RGB material
-grayscale (0.636× on Ubuntu x86_64), RGB material thumbnail (0.953× on Ubuntu
-arm64 and 0.971× on macOS arm64), LA material GaussianBlur (0.979× on macOS
-arm64), and float-mode native thumbnail (0.997× on Ubuntu x86_64). All 120 CPU
+The three verified serial CPU misses, ranked by speed factor, are RGB material
+grayscale (0.448× on Ubuntu x86_64) and RGB material thumbnail (0.953× on
+Ubuntu arm64 and 0.988× on macOS arm64). All 120 CPU
 comparisons and every below-2× row remain visible in the matrix.
+
+The c12 RGB grayscale candidate in revision `e9a8a7cf2` selected the signed
+two-multiply delta formula on x86 without AVX-512 and retained contribution
+tables on AVX-512 x86. It passed exact parity with 100/100 actual CPU samples,
+a complete terminal receipt, and no fallback, but regressed on the AMD EPYC
+7763 runner: 1,173.324 µs CPU versus 526.164 µs Pillow (0.448×). The clean c11
+same-image baseline with the table path measured 815.868 versus 518.728 µs
+(0.636×), so the candidate increased the CPU median by 43.8% while Pillow's
+median shifted by 1.4%. Reject the delta path on this x86 cohort; the RGB
+grayscale CPU gap remains the first optimization target. The published matrix
+preserves this exact-parity regression as an observed, verified comparison.
 
 The x86 YCbCr luma-packing change in revision `ca2e8ae4f` clears its prior CPU
 miss. For `pipeline-op.grayscale.material-ycbcr-noise-1024x768`, the clean
@@ -508,13 +518,16 @@ ephemeral x86 host model differs from the earlier c7 cohort.
 The separate Pillow-SIMD asset remains unusable for verified ratios: revision
 `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d` is marked dirty and covers 9 of 34
 declared cases, so the matrix classifies its 18 reference rows and 18 target
-rows as dirty evidence. Both the c8 version-matched job for revision
+rows as dirty evidence. The c8 version-matched job for revision
 `469f8faa3` ([workflow 37849632545](https://github.com/appunni-m/pillow-rs/actions/runs/37849632545))
-and the c10 job for revision `ca2e8ae4f`
+and c10 job for revision `ca2e8ae4f`
 ([workflow 37854781213](https://github.com/appunni-m/pillow-rs/actions/runs/37854781213))
-passed oracle installation but failed in the parity-gated benchmark step. The
-public job summaries do not identify a workload, and the raw logs require
-GitHub authentication. No specific failing case or test defect is confirmed.
+failed at the parity-gated benchmark step. The c12 job for revision
+`e9a8a7cf2`
+([workflow 37859792281](https://github.com/appunni-m/pillow-rs/actions/runs/37859792281))
+also failed. Public job summaries do not identify a workload, and the raw logs
+require GitHub authentication. No specific failing case or test defect is
+confirmed.
 Until a clean, complete matched cohort is published, the matrix does not treat
 Pillow-SIMD ratios as verified evidence.
 
