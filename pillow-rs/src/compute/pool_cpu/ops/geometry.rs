@@ -3359,13 +3359,13 @@ fn execute_reduce_rgb_sparse_2x2(
     let maximum_nonzero_pixels = source_pixels / 1024;
     let mut nonzero_pixels = 0usize;
     let mut block_sums = std::collections::HashMap::<usize, [u16; 3]>::new();
-    for (source_index, pixel) in source.chunks_exact(3).enumerate() {
+    let mut accumulate_pixel = |source_index: usize, pixel: &[u8]| {
         if pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0 {
-            continue;
+            return true;
         }
         nonzero_pixels += 1;
         if nonzero_pixels > maximum_nonzero_pixels {
-            return Ok(None);
+            return false;
         }
 
         let source_x = source_index % width as usize;
@@ -3375,6 +3375,39 @@ fn execute_reduce_rgb_sparse_2x2(
         sums[0] += u16::from(pixel[0]);
         sums[1] += u16::from(pixel[1]);
         sums[2] += u16::from(pixel[2]);
+        true
+    };
+
+    // The common sparse case contains long runs of black RGB pixels. Check
+    // three native words at a time, which covers eight complete pixels, before
+    // entering the per-pixel accounting loop. Keep the pixel loop for any
+    // nonzero block so channel order, density bounds, and edge coordinates
+    // remain identical to the ordinary sparse scan.
+    let grouped_pixels = source.len() / 24 * 8;
+    for block_index in 0..source.len() / 24 {
+        let byte_start = block_index * 24;
+        let block = &source[byte_start..byte_start + 24];
+        let words_are_zero = [0usize, 8, 16].into_iter().all(|offset| {
+            u64::from_ne_bytes(
+                block[offset..offset + 8]
+                    .try_into()
+                    .expect("each sparse RGB scan word has eight bytes"),
+            ) == 0
+        });
+        if words_are_zero {
+            continue;
+        }
+        for (pixel_offset, pixel) in block.chunks_exact(3).enumerate() {
+            let source_index = block_index * 8 + pixel_offset;
+            if !accumulate_pixel(source_index, pixel) {
+                return Ok(None);
+            }
+        }
+    }
+    for (pixel_offset, pixel) in source[grouped_pixels * 3..].chunks_exact(3).enumerate() {
+        if !accumulate_pixel(grouped_pixels + pixel_offset, pixel) {
+            return Ok(None);
+        }
     }
 
     let mut output = CheckedDims::new(new_width, new_height, 3)?.alloc_buffer();
@@ -4225,6 +4258,25 @@ mod tests {
             execute_reduce(&image, 2, 2, None).expect("generic RGB Reduce reference must succeed");
         assert_eq!(sparse.as_bytes(), reference.as_bytes());
         assert_eq!(routed.as_bytes(), reference.as_bytes());
+
+        let (tail_width, tail_height) = (1022, 514);
+        let mut tail_source = vec![0; tail_width as usize * tail_height as usize * 3];
+        let last_pixel = (tail_width as usize * tail_height as usize - 1) * 3;
+        tail_source[last_pixel..last_pixel + 3].copy_from_slice(&[19, 37, 251]);
+        let tail_image = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(tail_width, tail_height, tail_source)
+                .expect("tail RGB source shape must be valid"),
+        );
+        let tail_sparse = super::execute_reduce_rgb_sparse_2x2(
+            &tail_image,
+            tail_width.div_ceil(2),
+            tail_height.div_ceil(2),
+        )
+        .expect("sparse RGB scan tail must succeed")
+        .expect("sparse RGB scan with a partial eight-pixel tail should be selected");
+        let tail_reference = execute_reduce(&tail_image, 2, 2, None)
+            .expect("generic odd-size RGB reduction must succeed");
+        assert_eq!(tail_sparse.as_bytes(), tail_reference.as_bytes());
 
         let dense = DynamicImage::ImageRgb8(
             RgbImage::from_raw(width, height, vec![1; width as usize * height as usize * 3])

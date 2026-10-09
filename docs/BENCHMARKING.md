@@ -462,28 +462,27 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`fdbebcdcde5c876763ccbe8a533762e59b4b7d38`, measured
-`2026-10-09T03:44:16.168521Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-and [Benchmark workflow 37878281726](https://github.com/appunni-m/pillow-rs/actions/runs/37878281726).
+`1ba7fd704378cd065d8bdc169047e40219fcb226`, measured
+`2026-10-09T04:37:53.470115Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles; 209 paths map to the benchmark manifest
 and 121 remain explicit inventory gaps. Only rows with exact parity and
 completed backend receipts are eligible for speed claims.
 
 Across the 120 verified serial CPU workload-runner pairs, 3 are slower than
-Pillow and 56 are below 2×. The corresponding SIMD counts are 22 slower than
-Pillow, 40 below 2×, and 83 below 5×. The separately built Parallel CPU profile
-uses the opt-in Cargo `parallel` feature; 20 of its 120 verified pairs are
-slower than Pillow and 46 are below 2×. GPU latency is slower than SIMD in 22
+Pillow and 56 are below 2×. The corresponding SIMD counts are 21 slower than
+Pillow, 41 below 2×, and 86 below 5×. The separately built Parallel CPU profile
+uses the opt-in Cargo `parallel` feature; 18 of its 120 verified pairs are
+slower than Pillow and 50 are below 2×. GPU latency is slower than SIMD in 22
 of its 38 verified pairs; sustained GPU throughput remains unmeasured.
 
 The current verified serial CPU misses, ranked by speed factor, are RGB
-material grayscale on Ubuntu x86_64 / AMD EPYC 9V74 (0.671× Pillow), native-F
-material thumbnail on Ubuntu x86_64 (0.953×), and RGB material thumbnail on
-Ubuntu arm64 (0.988×). The RGB grayscale workload has five timed executions;
-all three rows have exact parity, completed CPU terminal receipts, the
-requested CPU backend, and no fallback. Every CPU pair and every below-2× row
-remains visible in the matrix.
+material thumbnail on macOS arm64 (0.961× Pillow), LA material GaussianBlur on
+macOS arm64 (0.975×), and RGB material thumbnail on Ubuntu arm64 (0.987×). All
+three rows have exact parity, five timed samples (100 timed workflow
+iterations), completed CPU terminal receipts, the requested CPU backend, and
+no fallback. Every CPU pair and every below-2× row remains visible in the
+matrix.
 
 The c12 RGB grayscale candidate in revision `e9a8a7cf2` selected the signed
 two-multiply delta formula on x86 without AVX-512 and retained contribution
@@ -596,7 +595,7 @@ confirmed.
 Until a clean, complete matched cohort is published, the matrix does not treat
 Pillow-SIMD ratios as verified evidence.
 
-### fdb snapshot and next CPU priority
+### c18 result, c19 repeat, and c20 AVX2 result
 
 The fdb run includes the two-channel `blur_line_step` specialization for LA
 GaussianBlur. Its focused direct-window reference test covers widths 1, 2, 5,
@@ -609,30 +608,60 @@ run measured CPU speedups of 1.371× on macOS ARM, 1.845× on Ubuntu ARM, and
 All rows had exact parity, the requested backend, complete terminal receipts,
 and no fallback. macOS GPU measured 5.250 ms versus SIMD at 8.294 ms (1.580×
 lower latency); Linux has no GPU runner, and sustained GPU throughput is not
-measured. The change has a small local CPU win; the earlier c17/aaf same-source
-variation means the hosted change from a c17 miss to fdb above Pillow does not
-by itself establish causation.
+measured. The c19 unchanged-source repeat measured LA CPU at 1.095× on macOS
+ARM, 1.844× on Ubuntu ARM, and 2.881× on x86. These are above Pillow on all
+three hosts, but hosted Mac movement across c17, aaf, fdb, and c19 is
+non-monotonic; the 3.1% local CPU gain does not establish the cause of the
+hosted ratio changes.
 
-The first stable CPU target is now RGB material grayscale on Ubuntu x86_64.
-Its fdb result is 635.962 µs CPU versus 426.457 µs Pillow (0.671×), with exact
-parity and five measured samples. The aaf repeat was 640.579 versus 426.302 µs
-(0.665×) on the same EPYC 9V74 runner model; c17 measured 242.737 versus
-528.870 µs (2.179×) on an EPYC 7763. Grayscale source code did not change
-between c17 and fdb, so those cross-runner ratios do not prove a regression.
-The current x86 CPU route uses the scalar contribution-table loop when AVX-512
-is detected, while the SIMD adapter can select the AVX2 kernel. This provides
-a concrete dispatch candidate to measure on EPYC 9V74; it is not yet evidence
-that AVX2 improves the CPU profile on AVX-512 hardware. The other exact-parity
-CPU misses in fdb are native-F thumbnail at 0.953× on Ubuntu x86 and RGB
-thumbnail at 0.988× on Ubuntu ARM. No genuine test defect has been identified.
+RGB material grayscale on Ubuntu x86_64 was the first stable CPU target. Its
+c19 result was 637.799 µs CPU versus 427.073 µs Pillow (0.670×), with exact
+parity and five measured samples. The fdb result was 635.962 versus 426.457 µs
+(0.671×), and aaf was 640.579 versus 426.302 µs (0.665×) on the same EPYC 9V74
+runner model. c17 measured 242.737 versus 528.870 µs (2.179×) on an EPYC 7763.
+Grayscale source code did not change between c17 and c19, so those
+cross-runner ratios do not prove a regression; the aaf/fdb/c19 repeats confirm
+that the 9V74 CPU miss was stable before the dispatch change.
 
-The fdb grayscale rows also keep mode-specific limits visible: YCbCr CPU is
-1.730× on macOS ARM, 1.916× on Ubuntu ARM, and 1.028× on Ubuntu x86, all below
-the 2× priority threshold. RGB grayscale SIMD is 2.182× on macOS ARM, 1.399×
-on Ubuntu ARM, and 2.286× on Ubuntu x86. The composed RGB `getdata` band-read
-row on macOS ARM is 1.592× in fdb, following 1.834× in aaf; c17's 0.711×
-result is not repeatable evidence of a stable miss. Preserve every cohort in
-the matrix.
+Revision `1ba7fd7` enables the existing exact AVX2 kernel in the CPU path even
+when AVX-512 is present. The clean c20 snapshot confirms the x86 RGB result at
+245.548 µs CPU versus 525.931 µs Pillow (2.142×), compared with c19's 637.799
+µs (0.670×). The c20 CPU result has five timed sample batches (100 timed
+workflow iterations); it passed exact parity, recorded the requested CPU
+backend and a complete terminal receipt, and reported no fallback. This closes
+the RGB grayscale CPU miss on that x86 cohort and clears 2× there. The remaining
+c20 serial CPU misses are RGB thumbnail on macOS ARM (0.961×), LA GaussianBlur
+on macOS ARM (0.975×), and RGB thumbnail on Ubuntu ARM (0.987×). No genuine
+test defect has been identified.
+
+### c21 local candidate: sparse RGB thumbnail reduction
+
+The next CPU miss is RGB material thumbnail on macOS ARM. Its CPU profile
+showed the RGB 2×2 reducing-gap scan and horizontal resample as the largest
+sampled native stacks. A local candidate changes only the large sparse RGB
+reducer: it skips eight-pixel blocks whose three 64-bit words are all zero,
+while keeping the existing density cutoff and dense reducer. On this Mac, a
+5,000-repeat target-only profile moved from a 1.153 ms median to 0.792 ms
+(1.456×); this profile is diagnostic, not the published acceptance result.
+
+The local correctness-gated whole-workflow benchmark includes image setup,
+the pixel write, thumbnail, allocation, and materialization. Pillow measured
+1.078 ms and CPU 0.791 ms (1.363×). CPU, SIMD, and GPU parity preflights all
+passed, each requested backend produced 100 timed samples with a complete
+terminal receipt and no fallback, and the reported actual backends matched.
+SIMD measured 2.323 ms and GPU 2.321 ms on this host. This is local evidence
+only; keep the candidate pending until its clean hosted cohort confirms the
+full mode and runner matrix. The sparse test also checks the scan tail on an
+even-sized input whose pixel count is not divisible by eight.
+
+The c19 grayscale rows keep mode-specific limits visible: YCbCr CPU is 2.214×
+on macOS ARM, 1.887× on Ubuntu ARM, and 1.036× on Ubuntu x86. In c20, these
+ratios are 2.222×, 1.779×, and 1.084× respectively; the x86 YCbCr path is now
+the weakest CPU grayscale row. RGB grayscale SIMD is 2.089× on macOS ARM,
+1.316× on Ubuntu ARM, and 2.158× on Ubuntu x86 in c20. The composed RGB
+`getdata` band-read row on macOS ARM was 2.393× in c19, following 1.592× in
+fdb and 1.834× in aaf; c17's 0.711× result is not repeatable evidence of a
+stable miss. Preserve every cohort in the matrix.
 
 The published Pillow-SIMD JSON remains marked dirty at revision
 `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d` and contains only 9 of the 34
