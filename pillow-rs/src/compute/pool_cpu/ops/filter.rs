@@ -1679,6 +1679,42 @@ fn blur_line_step(
         return;
     }
 
+    if element_width == 2 {
+        let output = &mut destination[output_base..output_base + 2];
+        let subtract = &source[subtract_base..subtract_base + 2];
+        let add = &source[add_base..add_base + 2];
+        let next0 = accumulator[0]
+            .wrapping_sub(u32::from(subtract[0]))
+            .wrapping_add(u32::from(add[0]));
+        let next1 = accumulator[1]
+            .wrapping_sub(u32::from(subtract[1]))
+            .wrapping_add(u32::from(add[1]));
+        accumulator[0] = next0;
+        accumulator[1] = next1;
+        if fractional_weight == 0 {
+            output[0] = (next0.wrapping_mul(whole_weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+            output[1] = (next1.wrapping_mul(whole_weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+        } else {
+            let far_left = &source[far_left_base..far_left_base + 2];
+            let far_right = &source[far_right_base..far_right_base + 2];
+            let far0 =
+                (u32::from(far_left[0]) + u32::from(far_right[0])).wrapping_mul(fractional_weight);
+            let far1 =
+                (u32::from(far_left[1]) + u32::from(far_right[1])).wrapping_mul(fractional_weight);
+            output[0] = (next0
+                .wrapping_mul(whole_weight)
+                .wrapping_add(far0)
+                .wrapping_add(BOX_BLUR_BIAS)
+                >> 24) as u8;
+            output[1] = (next1
+                .wrapping_mul(whole_weight)
+                .wrapping_add(far1)
+                .wrapping_add(BOX_BLUR_BIAS)
+                >> 24) as u8;
+        }
+        return;
+    }
+
     let output = &mut destination[output_base..output_base + element_width];
     let subtract = &source[subtract_base..subtract_base + element_width];
     let add = &source[add_base..add_base + element_width];
@@ -3212,6 +3248,62 @@ mod gaussian_blur_row_fusion_tests {
         blur_parameters, blur_rows, execute_gaussian_blur,
     };
     use crate::raster::{DynamicImage, GrayAlphaImage};
+
+    #[test]
+    fn two_channel_step_matches_direct_box_blur_reference() {
+        for width in [1, 2, 5, 17] {
+            let source = (0..width * 2)
+                .map(|index| ((index * 47 + index / 2 * 31 + 17) % 256) as u8)
+                .collect::<Vec<_>>();
+            for radius in [0.0, 0.25, 1.0, 1.375, 4.75, 30.0] {
+                let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
+                let mut actual = vec![0u8; source.len()];
+                let mut accumulator = [0u32; 2];
+                blur_line(
+                    &source,
+                    &mut actual,
+                    0,
+                    width,
+                    2,
+                    integer_radius,
+                    whole_weight,
+                    fractional_weight,
+                    &mut accumulator,
+                );
+
+                let mut expected = vec![0u8; source.len()];
+                let last = width as isize - 1;
+                for x in 0..width {
+                    for channel in 0..2 {
+                        let mut whole_sum = 0u32;
+                        for offset in -(integer_radius as isize)..=(integer_radius as isize) {
+                            let sample_x = (x as isize + offset).clamp(0, last) as usize;
+                            whole_sum =
+                                whole_sum.wrapping_add(u32::from(source[sample_x * 2 + channel]));
+                        }
+                        let mut weighted_sum = whole_sum.wrapping_mul(whole_weight);
+                        if fractional_weight != 0 {
+                            let left_x =
+                                (x as isize - integer_radius as isize - 1).clamp(0, last) as usize;
+                            let right_x =
+                                (x as isize + integer_radius as isize + 1).clamp(0, last) as usize;
+                            let far_sum = u32::from(source[left_x * 2 + channel])
+                                + u32::from(source[right_x * 2 + channel]);
+                            weighted_sum =
+                                weighted_sum.wrapping_add(far_sum.wrapping_mul(fractional_weight));
+                        }
+                        expected[x * 2 + channel] =
+                            (weighted_sum.wrapping_add(super::BOX_BLUR_BIAS) >> 24) as u8;
+                    }
+                }
+
+                assert_eq!(
+                    actual, expected,
+                    "width={width}, radius={radius}, integer_radius={integer_radius}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn luma_three_pass_row_fusion_matches_full_frame_passes() {
