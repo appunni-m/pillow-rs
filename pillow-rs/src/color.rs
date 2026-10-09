@@ -528,24 +528,25 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
 ) -> Vec<u8> {
     let expected_pixels = dims.total_pixels();
     #[cfg(target_arch = "x86_64")]
-    let mut gray: Vec<u8> =
-        if CHANNELS == 3 && rounding == 32768 && !std::is_x86_feature_detected!("avx512f") {
-            grayscale_rgb_avx2(source, expected_pixels)
-                .map(|(gray, _)| gray)
-                .unwrap_or_else(|| {
-                    source
-                        .chunks_exact(CHANNELS)
-                        .take(expected_pixels)
-                        .map(|pixel| grayscale_rgb_pixel(pixel, rounding))
-                        .collect()
-                })
-        } else {
-            source
-                .chunks_exact(CHANNELS)
-                .take(expected_pixels)
-                .map(|pixel| grayscale_rgb_pixel(pixel, rounding))
-                .collect()
-        };
+    // The same AVX2 kernel is used by strict SIMD on AVX-512 hosts. Try it in
+    // the CPU path too; runtime AVX2 detection retains the exact scalar fallback.
+    let mut gray: Vec<u8> = if CHANNELS == 3 && rounding == 32768 {
+        grayscale_rgb_avx2(source, expected_pixels)
+            .map(|(gray, _)| gray)
+            .unwrap_or_else(|| {
+                source
+                    .chunks_exact(CHANNELS)
+                    .take(expected_pixels)
+                    .map(|pixel| grayscale_rgb_pixel(pixel, rounding))
+                    .collect()
+            })
+    } else {
+        source
+            .chunks_exact(CHANNELS)
+            .take(expected_pixels)
+            .map(|pixel| grayscale_rgb_pixel(pixel, rounding))
+            .collect()
+    };
     #[cfg(not(target_arch = "x86_64"))]
     let mut gray: Vec<u8> = source
         .chunks_exact(CHANNELS)
