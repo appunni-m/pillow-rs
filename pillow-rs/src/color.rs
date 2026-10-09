@@ -284,8 +284,8 @@ pub fn rgb_to_luma_u8(r: u8, g: u8, b: u8) -> u8 {
     (((19595u32 * r as u32 + 38470u32 * g as u32 + 7471u32 * b as u32 + 32768) >> 16) & 0xFF) as u8
 }
 
-// Retain exact per-channel lookups on the tested AVX-512 x86 class while
-// evaluating arithmetic on non-AVX-512 x86 hosts.
+// The x86 scalar path sums precomputed exact contributions so each pixel uses
+// small, cache-resident lookups instead of variable coefficient multiplies.
 #[cfg(any(test, target_arch = "x86_64"))]
 const fn grayscale_contribution_table(coefficient: u32) -> [u32; 256] {
     let mut table = [0; 256];
@@ -362,21 +362,6 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
     rounding: u32,
 ) -> Vec<u8> {
     let expected_pixels = dims.total_pixels();
-    #[cfg(target_arch = "x86_64")]
-    let mut gray: Vec<u8> = if std::is_x86_feature_detected!("avx512f") {
-        source
-            .chunks_exact(CHANNELS)
-            .take(expected_pixels)
-            .map(|pixel| grayscale_rgb_pixel_lookup(pixel, rounding))
-            .collect()
-    } else {
-        source
-            .chunks_exact(CHANNELS)
-            .take(expected_pixels)
-            .map(|pixel| grayscale_rgb_pixel(pixel, rounding))
-            .collect()
-    };
-    #[cfg(not(target_arch = "x86_64"))]
     let mut gray: Vec<u8> = source
         .chunks_exact(CHANNELS)
         .take(expected_pixels)
@@ -392,11 +377,18 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
 
 #[inline(always)]
 fn grayscale_rgb_pixel(pixel: &[u8], rounding: u32) -> u8 {
-    ((19595 * u32::from(pixel[0])
-        + 38470 * u32::from(pixel[1])
-        + 7471 * u32::from(pixel[2])
-        + rounding)
-        >> 16) as u8
+    #[cfg(target_arch = "x86_64")]
+    {
+        grayscale_rgb_pixel_lookup(pixel, rounding)
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        ((19595 * u32::from(pixel[0])
+            + 38470 * u32::from(pixel[1])
+            + 7471 * u32::from(pixel[2])
+            + rounding)
+            >> 16) as u8
+    }
 }
 
 #[cfg(any(test, target_arch = "x86_64"))]
