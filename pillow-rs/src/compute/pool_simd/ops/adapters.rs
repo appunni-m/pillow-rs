@@ -14975,10 +14975,25 @@ fn native_grayscale_bytes(img: &DynamicImage, channels: usize) -> Option<(Vec<u8
             grayscale_interleaved::<2>(source),
             pixels.div_ceil(16) as u64,
         ),
-        3 => (
-            grayscale_interleaved::<3>(source),
-            pixels.div_ceil(16) as u64,
-        ),
+        3 => {
+            #[cfg(target_arch = "x86_64")]
+            if let Some((output, vector_blocks)) = crate::color::grayscale_rgb_avx2(source, pixels)
+            {
+                (output, vector_blocks)
+            } else {
+                (
+                    grayscale_interleaved::<3>(source),
+                    pixels.div_ceil(16) as u64,
+                )
+            }
+            #[cfg(not(target_arch = "x86_64"))]
+            {
+                (
+                    grayscale_interleaved::<3>(source),
+                    pixels.div_ceil(16) as u64,
+                )
+            }
+        }
         4 => (
             grayscale_interleaved::<4>(source),
             pixels.div_ceil(16) as u64,

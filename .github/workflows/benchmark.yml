@@ -111,6 +111,9 @@ jobs:
           cargo test --locked -p pillow-rs --lib runtime_x86_f32_fma_matches_portable_fused_operation
           cargo test --locked -p pillow-rs --lib finite_x86_f_resize_path_matches_checked_reference
           cargo test --locked -p pillow-rs --lib finite_x86_fma_boxed_resize_matches_portable_and_rejects_nonfinite_samples
+      - name: verify AVX2 grayscale across every RGB color and vector tail
+        if: matrix.architecture == 'x86_64'
+        run: cargo test --locked -p pillow-rs --lib grayscale_rgb_avx2_matches_every_color_and_handles_tails
       - name: run full correctness-gated CPU, SIMD, and GPU benchmark
         env:
           MIGRATION_BENCHMARK_BACKENDS: ${{ matrix.backends }}
