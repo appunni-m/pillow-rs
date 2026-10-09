@@ -831,3 +831,45 @@ The presentation takes cues from [Artificial Analysis](https://artificialanalysi
 and [MLPerf Endpoints](https://mlcommons.org/benchmarks/endpoints/): make the
 comparison clear while keeping task, environment and quality context visible.
 These projects are references for presentation, not validators of these results.
+
+### Rejected local RGB UnsharpMask vertical specialization
+
+The c22 verified CPU matrix ranks material RGB `UnsharpMask(radius=2,
+percent=150, threshold=3)` at 1.051× Pillow on macOS ARM, 1.938× on Ubuntu
+ARM, and 2.500× on Ubuntu x86_64. A fresh local profile confirmed the
+native RGB Gaussian blur dominates the CPU stack; one trial specialized its
+radius-one fractional vertical pass. The row walk reused the leaving sample
+for the left fractional tap and matched the generic fixed-point pass byte for
+byte on tiny and ordinary shapes.
+
+The same 100-sample correctness-gated workflow passed exact parity in CPU,
+SIMD, and GPU lanes. Local baseline CPU/Pillow medians were 9.022/9.754 ms
+(1.081×); the two candidate pairs were 8.706/9.508 ms (1.092×) and
+8.733/9.476 ms (1.085×). All 100 target samples used their requested backend
+with complete terminal receipts and no fallback. The raw CPU latency decrease
+tracked Pillow's run-to-run shift, so the Pillow-relative result did not
+improve and the candidate was reverted. GPU single-request latency remained
+below SIMD, but sustained throughput is still unmeasured. No genuine test
+defect was found; no coverage was run.
+
+### Local RGB UnsharpMask horizontal-row candidate
+
+A second CPU trial specializes the three horizontal RGB Gaussian passes when
+their integer radius is one and the fractional weight is nonzero. It keeps the
+three channel accumulators explicit and reuses the leaving sample as the left
+fractional tap. The focused scalar comparison covers widths 5, 6, 7, 17, 65,
+and 1024; the existing fused-versus-full-frame test covers RGB multi-pass
+rounding and small rows.
+
+The same 100-sample public workflow passed exact Pillow parity in all three
+backend lanes. The clean local CPU/Pillow median pair was 9.022/9.754 ms
+(1.081×); two candidate pairs were 7.237/8.487 ms (1.173×) and 7.168/8.512
+ms (1.188×). Each target lane ran 100/100 times on its requested CPU, SIMD, or
+GPU backend with complete terminal receipts and no fallback. The candidate
+therefore improves the local CPU/Pillow ratio by 8.5–9.8% over the local
+baseline, but still misses the 2× sequencing target. SIMD remains about
+1.04–1.08× Pillow, below its half-Pillow target. The GPU single-request rows
+remain faster than SIMD, but sustained throughput is unmeasured. Keep this as
+a local candidate pending clean hosted confirmation; the complete matrix
+remains tied to the clean c22 snapshot. No genuine test defect was found; no
+coverage was run.
