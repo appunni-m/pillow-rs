@@ -1974,14 +1974,14 @@ fn blur_rows(
     }
 }
 
-/// Run the three horizontal Gaussian box passes one RGB row at a time.
+/// Run the three horizontal Gaussian box passes one interleaved row at a time.
 ///
 /// Horizontal filtering never reads another image row, so the intermediate
 /// byte rounding can stay in two reusable row buffers instead of two extra
 /// full-frame buffers. The same per-pass `blur_line` operation preserves the
 /// order and byte result of three image-wide horizontal passes.
 #[cfg(not(feature = "parallel"))]
-fn blur_rgb_rows_three_passes(
+fn blur_interleaved_rows_three_passes<const CHANNELS: usize>(
     source: &[u8],
     destination: &mut [u8],
     width: usize,
@@ -1990,7 +1990,7 @@ fn blur_rgb_rows_three_passes(
     whole_weight: u32,
     fractional_weight: u32,
 ) {
-    let row_length = width * 3;
+    let row_length = width * CHANNELS;
     let mut first_intermediate = vec![0u8; row_length];
     let mut second_intermediate = vec![0u8; row_length];
     let mut accumulator = [0u32; 4];
@@ -2004,7 +2004,7 @@ fn blur_rgb_rows_three_passes(
             &mut first_intermediate,
             0,
             width,
-            3,
+            CHANNELS,
             radius,
             whole_weight,
             fractional_weight,
@@ -2015,7 +2015,7 @@ fn blur_rgb_rows_three_passes(
             &mut second_intermediate,
             0,
             width,
-            3,
+            CHANNELS,
             radius,
             whole_weight,
             fractional_weight,
@@ -2026,7 +2026,7 @@ fn blur_rgb_rows_three_passes(
             destination_row,
             0,
             width,
-            3,
+            CHANNELS,
             radius,
             whole_weight,
             fractional_weight,
@@ -2238,8 +2238,13 @@ fn pil_box_blur_xy_impl(
     let luma_gaussian_row_fusion = passes == 3 && matches!(img, DynamicImage::ImageLuma8(_));
     #[cfg(feature = "parallel")]
     let luma_gaussian_row_fusion = false;
+    #[cfg(not(feature = "parallel"))]
+    let la_gaussian_row_fusion = passes == 3 && matches!(img, DynamicImage::ImageLumaA8(_));
+    #[cfg(feature = "parallel")]
+    let la_gaussian_row_fusion = false;
 
-    let mut work = if rgb_gaussian_row_fusion || luma_gaussian_row_fusion {
+    let mut work = if rgb_gaussian_row_fusion || luma_gaussian_row_fusion || la_gaussian_row_fusion
+    {
         CheckedDims::new(w_u32, h_u32, channels as u8)?.alloc_buffer()
     } else {
         img.as_bytes().to_vec()
@@ -2249,7 +2254,7 @@ fn pil_box_blur_xy_impl(
     // PIL does ALL horizontal passes first (matching ImagingBoxBlur order)
     if rgb_gaussian_row_fusion {
         #[cfg(not(feature = "parallel"))]
-        blur_rgb_rows_three_passes(
+        blur_interleaved_rows_three_passes::<3>(
             img.as_bytes(),
             &mut work,
             width,
@@ -2261,6 +2266,17 @@ fn pil_box_blur_xy_impl(
     } else if luma_gaussian_row_fusion {
         #[cfg(not(feature = "parallel"))]
         blur_luma_rows_three_passes(
+            img.as_bytes(),
+            &mut work,
+            width,
+            height,
+            horizontal_radius,
+            horizontal_weight,
+            horizontal_fractional_weight,
+        );
+    } else if la_gaussian_row_fusion {
+        #[cfg(not(feature = "parallel"))]
+        blur_interleaved_rows_three_passes::<2>(
             img.as_bytes(),
             &mut work,
             width,
@@ -3192,9 +3208,10 @@ pub fn execute_rank_filter_with_mode(
 #[cfg(all(test, not(feature = "parallel")))]
 mod gaussian_blur_row_fusion_tests {
     use super::{
-        blur_line, blur_luma_rows_three_passes, blur_parameters, blur_rgb_rows_three_passes,
-        blur_rows,
+        blur_columns, blur_interleaved_rows_three_passes, blur_line, blur_luma_rows_three_passes,
+        blur_parameters, blur_rows, execute_gaussian_blur,
     };
+    use crate::raster::{DynamicImage, GrayAlphaImage};
 
     #[test]
     fn luma_three_pass_row_fusion_matches_full_frame_passes() {
@@ -3306,35 +3323,86 @@ mod gaussian_blur_row_fusion_tests {
     }
 
     #[test]
-    fn rgb_gaussian_horizontal_row_fusion_matches_three_full_frame_passes() {
-        for (width, height, radius) in
-            [(1, 1, 1.375), (2, 3, 1.375), (7, 5, 1.375), (65, 47, 1.375)]
-        {
+    fn interleaved_gaussian_horizontal_row_fusion_matches_three_full_frame_passes() {
+        for channels in [2, 3] {
+            for (width, height, radius) in
+                [(1, 1, 1.375), (2, 3, 1.375), (7, 5, 1.375), (65, 47, 1.375)]
+            {
+                let pixel_count = width * height;
+                let source = (0..pixel_count * channels)
+                    .map(|index| ((index * 73 + index / 7 * 19 + 31) % 256) as u8)
+                    .collect::<Vec<_>>();
+                let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
+                let mut fused = vec![0; source.len()];
+                if channels == 2 {
+                    blur_interleaved_rows_three_passes::<2>(
+                        &source,
+                        &mut fused,
+                        width,
+                        height,
+                        integer_radius,
+                        whole_weight,
+                        fractional_weight,
+                    );
+                } else {
+                    blur_interleaved_rows_three_passes::<3>(
+                        &source,
+                        &mut fused,
+                        width,
+                        height,
+                        integer_radius,
+                        whole_weight,
+                        fractional_weight,
+                    );
+                }
+
+                let mut work = source.clone();
+                let mut scratch = vec![0; source.len()];
+                for _ in 0..3 {
+                    blur_rows(
+                        &work,
+                        &mut scratch,
+                        width,
+                        height,
+                        channels,
+                        integer_radius,
+                        whole_weight,
+                        fractional_weight,
+                    );
+                    std::mem::swap(&mut work, &mut scratch);
+                }
+
+                assert_eq!(
+                    fused, work,
+                    "fused {channels}-channel passes differ at {width}×{height}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn la_gaussian_blur_row_fusion_matches_full_frame_passes() {
+        for (width, height) in [(1, 1), (2, 3), (7, 5), (65, 47)] {
             let pixel_count = width * height;
-            let source = (0..pixel_count * 3)
+            let source = (0..pixel_count * 2)
                 .map(|index| ((index * 73 + index / 7 * 19 + 31) % 256) as u8)
                 .collect::<Vec<_>>();
-            let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
-            let mut fused = vec![0; source.len()];
-            blur_rgb_rows_three_passes(
-                &source,
-                &mut fused,
-                width,
-                height,
-                integer_radius,
-                whole_weight,
-                fractional_weight,
+            let image = DynamicImage::ImageLumaA8(
+                GrayAlphaImage::from_raw(width as u32, height as u32, source.clone())
+                    .expect("valid LA fixture"),
             );
+            let actual = execute_gaussian_blur(&image, 2.0).expect("LA GaussianBlur");
 
-            let mut work = source.clone();
-            let mut scratch = vec![0; source.len()];
+            let (integer_radius, whole_weight, fractional_weight) = blur_parameters(1.375);
+            let mut work = source;
+            let mut scratch = vec![0; work.len()];
             for _ in 0..3 {
                 blur_rows(
                     &work,
                     &mut scratch,
                     width,
                     height,
-                    3,
+                    2,
                     integer_radius,
                     whole_weight,
                     fractional_weight,
@@ -3342,7 +3410,27 @@ mod gaussian_blur_row_fusion_tests {
                 std::mem::swap(&mut work, &mut scratch);
             }
 
-            assert_eq!(fused, work, "fused RGB passes differ at {width}×{height}");
+            let mut accumulator = vec![0u32; width * 2];
+            for _ in 0..3 {
+                blur_columns(
+                    &work,
+                    &mut scratch,
+                    width,
+                    height,
+                    2,
+                    integer_radius,
+                    whole_weight,
+                    fractional_weight,
+                    &mut accumulator,
+                );
+                std::mem::swap(&mut work, &mut scratch);
+            }
+
+            assert_eq!(
+                actual.as_bytes(),
+                work,
+                "fused LA GaussianBlur differs at {width}×{height}"
+            );
         }
     }
 }
