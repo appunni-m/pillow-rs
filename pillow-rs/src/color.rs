@@ -304,6 +304,26 @@ const GRAYSCALE_GREEN_CONTRIBUTIONS: [u32; 256] = grayscale_contribution_table(3
 #[cfg(any(test, target_arch = "x86_64"))]
 const GRAYSCALE_BLUE_CONTRIBUTIONS: [u32; 256] = grayscale_contribution_table(7471);
 
+// x86 experiment: combine red and green contributions to reduce the hot loop
+// from three independent table reads to two.
+#[cfg(any(test, target_arch = "x86_64"))]
+const fn grayscale_red_green_table() -> [u32; 65_536] {
+    let mut table = [0; 65_536];
+    let mut red = 0;
+    while red < 256 {
+        let mut green = 0;
+        while green < 256 {
+            table[red * 256 + green] = red as u32 * 19595 + green as u32 * 38470;
+            green += 1;
+        }
+        red += 1;
+    }
+    table
+}
+
+#[cfg(any(test, target_arch = "x86_64"))]
+static GRAYSCALE_RED_GREEN_CONTRIBUTIONS: [u32; 65_536] = grayscale_red_green_table();
+
 /// Converts an image to Pillow-compatible `L` grayscale.
 ///
 /// The conversion uses Pillow's rounded BT.601 fixed-point formula, not the
@@ -362,6 +382,23 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
     rounding: u32,
 ) -> Vec<u8> {
     let expected_pixels = dims.total_pixels();
+    // Preserve the previously measured lookup path on AVX-512 hosts while
+    // evaluating the paired table on the current non-AVX-512 x86 cohort.
+    #[cfg(target_arch = "x86_64")]
+    let mut gray: Vec<u8> = if std::is_x86_feature_detected!("avx512f") {
+        source
+            .chunks_exact(CHANNELS)
+            .take(expected_pixels)
+            .map(|pixel| grayscale_rgb_pixel_lookup(pixel, rounding))
+            .collect()
+    } else {
+        source
+            .chunks_exact(CHANNELS)
+            .take(expected_pixels)
+            .map(|pixel| grayscale_rgb_pixel_pair_lookup(pixel, rounding))
+            .collect()
+    };
+    #[cfg(not(target_arch = "x86_64"))]
     let mut gray: Vec<u8> = source
         .chunks_exact(CHANNELS)
         .take(expected_pixels)
@@ -376,19 +413,13 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
 }
 
 #[inline(always)]
+#[cfg(not(target_arch = "x86_64"))]
 fn grayscale_rgb_pixel(pixel: &[u8], rounding: u32) -> u8 {
-    #[cfg(target_arch = "x86_64")]
-    {
-        grayscale_rgb_pixel_lookup(pixel, rounding)
-    }
-    #[cfg(not(target_arch = "x86_64"))]
-    {
-        ((19595 * u32::from(pixel[0])
-            + 38470 * u32::from(pixel[1])
-            + 7471 * u32::from(pixel[2])
-            + rounding)
-            >> 16) as u8
-    }
+    ((19595 * u32::from(pixel[0])
+        + 38470 * u32::from(pixel[1])
+        + 7471 * u32::from(pixel[2])
+        + rounding)
+        >> 16) as u8
 }
 
 #[cfg(any(test, target_arch = "x86_64"))]
@@ -399,6 +430,15 @@ fn grayscale_rgb_pixel_lookup(pixel: &[u8], rounding: u32) -> u8 {
         + GRAYSCALE_BLUE_CONTRIBUTIONS[usize::from(pixel[2])]
         + rounding;
     (sum >> 16) as u8
+}
+
+#[cfg(any(test, target_arch = "x86_64"))]
+#[inline(always)]
+fn grayscale_rgb_pixel_pair_lookup(pixel: &[u8], rounding: u32) -> u8 {
+    let red_green =
+        GRAYSCALE_RED_GREEN_CONTRIBUTIONS[(usize::from(pixel[0]) << 8) | usize::from(pixel[1])];
+    let blue = GRAYSCALE_BLUE_CONTRIBUTIONS[usize::from(pixel[2])];
+    ((red_green + blue + rounding) >> 16) as u8
 }
 
 #[cfg(test)]
@@ -1622,7 +1662,8 @@ pub fn palette_getcolor_validate_input(
 mod tests {
     use super::{
         ColorValue, f_to_i, f_to_l, getcolor, grayscale_rgb_bytes, grayscale_rgb_pixel_delta,
-        grayscale_rgb_pixel_lookup, i_to_f, i_to_l, muldiv255, rgb_to_hsv, rgb_to_luma_u8,
+        grayscale_rgb_pixel_lookup, grayscale_rgb_pixel_pair_lookup, i_to_f, i_to_l, muldiv255,
+        rgb_to_hsv, rgb_to_luma_u8,
     };
     use crate::checked_dims::CheckedDims;
     use crate::error::PilError;
@@ -1754,6 +1795,7 @@ mod tests {
                             >> 16) as u8;
                         assert_eq!(grayscale_rgb_pixel_delta(&pixel, rounding), expected);
                         assert_eq!(grayscale_rgb_pixel_lookup(&pixel, rounding), expected);
+                        assert_eq!(grayscale_rgb_pixel_pair_lookup(&pixel, rounding), expected);
                     }
                 }
             }
