@@ -462,28 +462,28 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`1a300c98600fed0df3f34b44a4733996f37c9682`, measured
-`2026-10-09T02:48:51.280256Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-and [Benchmark workflow 37874811737](https://github.com/appunni-m/pillow-rs/actions/runs/37874811737).
+`fdbebcdcde5c876763ccbe8a533762e59b4b7d38`, measured
+`2026-10-09T03:44:16.168521Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and [Benchmark workflow 37878281726](https://github.com/appunni-m/pillow-rs/actions/runs/37878281726).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles; 209 paths map to the benchmark manifest
 and 121 remain explicit inventory gaps. Only rows with exact parity and
 completed backend receipts are eligible for speed claims.
 
 Across the 120 verified serial CPU workload-runner pairs, 3 are slower than
-Pillow and 60 are below 2×. The corresponding SIMD counts are 22 slower than
-Pillow, 41 below 2×, and 85 below 5×. The separately built Parallel CPU profile
-uses the opt-in Cargo `parallel` feature; 14 of its 120 verified pairs are
-slower than Pillow and 47 are below 2×. GPU latency is slower than SIMD in 23
+Pillow and 56 are below 2×. The corresponding SIMD counts are 22 slower than
+Pillow, 40 below 2×, and 83 below 5×. The separately built Parallel CPU profile
+uses the opt-in Cargo `parallel` feature; 20 of its 120 verified pairs are
+slower than Pillow and 46 are below 2×. GPU latency is slower than SIMD in 22
 of its 38 verified pairs; sustained GPU throughput remains unmeasured.
 
-The current verified serial CPU misses, ranked by speed factor, are the
-composed RGB `getdata` band read (0.711× on macOS arm64), LA material
-GaussianBlur (0.892× on macOS arm64), and RGB material thumbnail (0.959× on
-Ubuntu arm64). The `getdata` observation is a single 512×512 workload-runner
-pair with six timed executions; c16 measured 1.686× Pillow on the same runner,
-so retain the c17 miss but repeat it before attributing it to code. All 120 CPU
-comparisons and every below-2× row remain visible in the matrix.
+The current verified serial CPU misses, ranked by speed factor, are RGB
+material grayscale on Ubuntu x86_64 / AMD EPYC 9V74 (0.671× Pillow), native-F
+material thumbnail on Ubuntu x86_64 (0.953×), and RGB material thumbnail on
+Ubuntu arm64 (0.988×). The RGB grayscale workload has five timed executions;
+all three rows have exact parity, completed CPU terminal receipts, the
+requested CPU backend, and no fallback. Every CPU pair and every below-2× row
+remains visible in the matrix.
 
 The c12 RGB grayscale candidate in revision `e9a8a7cf2` selected the signed
 two-multiply delta formula on x86 without AVX-512 and retained contribution
@@ -595,6 +595,53 @@ require GitHub authentication. No specific failing case or test defect is
 confirmed.
 Until a clean, complete matched cohort is published, the matrix does not treat
 Pillow-SIMD ratios as verified evidence.
+
+### fdb snapshot and next CPU priority
+
+The fdb run includes the two-channel `blur_line_step` specialization for LA
+GaussianBlur. Its focused direct-window reference test covers widths 1, 2, 5,
+and 17 and radii 0, 0.25, 1, 1.375, 4.75, and 30; the existing fused/full-frame
+test also passes. On a separate local macOS ARM host, the exact-parity
+1024×768 LA benchmark measured 5.150375 ms CPU versus 5.663083 ms Pillow,
+about 3.1% faster than the same host's pre-change CPU median. The hosted fdb
+run measured CPU speedups of 1.371× on macOS ARM, 1.845× on Ubuntu ARM, and
+2.873× on Ubuntu x86. SIMD measured 1.328×, 2.072×, and 4.455× respectively.
+All rows had exact parity, the requested backend, complete terminal receipts,
+and no fallback. macOS GPU measured 5.250 ms versus SIMD at 8.294 ms (1.580×
+lower latency); Linux has no GPU runner, and sustained GPU throughput is not
+measured. The change has a small local CPU win; the earlier c17/aaf same-source
+variation means the hosted change from a c17 miss to fdb above Pillow does not
+by itself establish causation.
+
+The first stable CPU target is now RGB material grayscale on Ubuntu x86_64.
+Its fdb result is 635.962 µs CPU versus 426.457 µs Pillow (0.671×), with exact
+parity and five measured samples. The aaf repeat was 640.579 versus 426.302 µs
+(0.665×) on the same EPYC 9V74 runner model; c17 measured 242.737 versus
+528.870 µs (2.179×) on an EPYC 7763. Grayscale source code did not change
+between c17 and fdb, so those cross-runner ratios do not prove a regression.
+The current x86 CPU route uses the scalar contribution-table loop when AVX-512
+is detected, while the SIMD adapter can select the AVX2 kernel. This provides
+a concrete dispatch candidate to measure on EPYC 9V74; it is not yet evidence
+that AVX2 improves the CPU profile on AVX-512 hardware. The other exact-parity
+CPU misses in fdb are native-F thumbnail at 0.953× on Ubuntu x86 and RGB
+thumbnail at 0.988× on Ubuntu ARM. No genuine test defect has been identified.
+
+The fdb grayscale rows also keep mode-specific limits visible: YCbCr CPU is
+1.730× on macOS ARM, 1.916× on Ubuntu ARM, and 1.028× on Ubuntu x86, all below
+the 2× priority threshold. RGB grayscale SIMD is 2.182× on macOS ARM, 1.399×
+on Ubuntu ARM, and 2.286× on Ubuntu x86. The composed RGB `getdata` band-read
+row on macOS ARM is 1.592× in fdb, following 1.834× in aaf; c17's 0.711×
+result is not repeatable evidence of a stable miss. Preserve every cohort in
+the matrix.
+
+The published Pillow-SIMD JSON remains marked dirty at revision
+`101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d` and contains only 9 of the 34
+declared x86 cases (36 rows across 9 workloads). The full-benchmark matrix
+therefore retains those rows as dirty evidence instead of treating them as
+verified Pillow-SIMD comparisons. Use the published JSON as the source for
+rankings, but do not begin the Pillow-SIMD-only phase until the serial CPU
+priority cohort has cleared its 2× target and a clean, complete matched
+Pillow-SIMD cohort is available.
 
 The Pillow results page has two searchable and sortable tables.
 **Individual operations** lists the declared single-operation workloads, with
