@@ -37,3 +37,4 @@ pillow-rs-freetype/freetype/
 tests/fixtures/outputs/
 pillow-rs/tests/fixtures/imagingft_matrix.json
 pillow-rs/tests/fixtures/outputs/imagingft/
+.kata.local.toml
