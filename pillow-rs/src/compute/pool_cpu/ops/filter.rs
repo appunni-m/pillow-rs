@@ -2010,6 +2010,154 @@ fn blur_rows(
     }
 }
 
+#[cfg(not(feature = "parallel"))]
+#[inline(always)]
+fn blur_rgb_radius_one_fractional_step(
+    source: &[u8],
+    destination: &mut [u8],
+    accumulator: &mut [u32; 3],
+    output: usize,
+    subtract: usize,
+    add: usize,
+    far_right: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let next0 = accumulator[0]
+        .wrapping_sub(u32::from(source[subtract]))
+        .wrapping_add(u32::from(source[add]));
+    let next1 = accumulator[1]
+        .wrapping_sub(u32::from(source[subtract + 1]))
+        .wrapping_add(u32::from(source[add + 1]));
+    let next2 = accumulator[2]
+        .wrapping_sub(u32::from(source[subtract + 2]))
+        .wrapping_add(u32::from(source[add + 2]));
+    accumulator[0] = next0;
+    accumulator[1] = next1;
+    accumulator[2] = next2;
+
+    let far0 = (u32::from(source[subtract]) + u32::from(source[far_right]))
+        .wrapping_mul(fractional_weight);
+    let far1 = (u32::from(source[subtract + 1]) + u32::from(source[far_right + 1]))
+        .wrapping_mul(fractional_weight);
+    let far2 = (u32::from(source[subtract + 2]) + u32::from(source[far_right + 2]))
+        .wrapping_mul(fractional_weight);
+    destination[output] = (next0
+        .wrapping_mul(whole_weight)
+        .wrapping_add(far0)
+        .wrapping_add(BOX_BLUR_BIAS)
+        >> 24) as u8;
+    destination[output + 1] = (next1
+        .wrapping_mul(whole_weight)
+        .wrapping_add(far1)
+        .wrapping_add(BOX_BLUR_BIAS)
+        >> 24) as u8;
+    destination[output + 2] = (next2
+        .wrapping_mul(whole_weight)
+        .wrapping_add(far2)
+        .wrapping_add(BOX_BLUR_BIAS)
+        >> 24) as u8;
+}
+
+/// Blur one RGB row for a radius-one fractional Gaussian box pass.
+#[cfg(not(feature = "parallel"))]
+fn blur_rgb_radius_one_fractional_line(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    debug_assert!(width > 0);
+    debug_assert!(source.len() >= width * 3);
+    debug_assert!(destination.len() >= width * 3);
+    debug_assert_ne!(fractional_weight, 0);
+
+    if width < 5 {
+        let mut accumulator = [0u32; 3];
+        blur_line(
+            source,
+            destination,
+            0,
+            width,
+            3,
+            1,
+            whole_weight,
+            fractional_weight,
+            &mut accumulator,
+        );
+        return;
+    }
+
+    let mut accumulator = [
+        u32::from(source[0]) * 3,
+        u32::from(source[1]) * 3,
+        u32::from(source[2]) * 3,
+    ];
+    blur_rgb_radius_one_fractional_step(
+        source,
+        destination,
+        &mut accumulator,
+        0,
+        0,
+        3,
+        6,
+        whole_weight,
+        fractional_weight,
+    );
+    blur_rgb_radius_one_fractional_step(
+        source,
+        destination,
+        &mut accumulator,
+        3,
+        0,
+        6,
+        9,
+        whole_weight,
+        fractional_weight,
+    );
+
+    for output_pixel in 2..width - 2 {
+        let output = output_pixel * 3;
+        blur_rgb_radius_one_fractional_step(
+            source,
+            destination,
+            &mut accumulator,
+            output,
+            output - 6,
+            output + 3,
+            output + 6,
+            whole_weight,
+            fractional_weight,
+        );
+    }
+
+    let last_pixel = (width - 1) * 3;
+    let penultimate_pixel = last_pixel - 3;
+    blur_rgb_radius_one_fractional_step(
+        source,
+        destination,
+        &mut accumulator,
+        penultimate_pixel,
+        penultimate_pixel - 6,
+        last_pixel,
+        last_pixel,
+        whole_weight,
+        fractional_weight,
+    );
+    blur_rgb_radius_one_fractional_step(
+        source,
+        destination,
+        &mut accumulator,
+        last_pixel,
+        last_pixel - 6,
+        last_pixel,
+        last_pixel,
+        whole_weight,
+        fractional_weight,
+    );
+}
+
 /// Run the three horizontal Gaussian box passes one interleaved row at a time.
 ///
 /// Horizontal filtering never reads another image row, so the intermediate
@@ -2030,44 +2178,70 @@ fn blur_interleaved_rows_three_passes<const CHANNELS: usize>(
     let mut first_intermediate = vec![0u8; row_length];
     let mut second_intermediate = vec![0u8; row_length];
     let mut accumulator = [0u32; 4];
+    let rgb_radius_one_fractional =
+        CHANNELS == 3 && radius == 1 && fractional_weight != 0 && width >= 5;
 
     for row in 0..height {
         let start = row * row_length;
         let source_row = &source[start..start + row_length];
         let destination_row = &mut destination[start..start + row_length];
-        blur_line(
-            source_row,
-            &mut first_intermediate,
-            0,
-            width,
-            CHANNELS,
-            radius,
-            whole_weight,
-            fractional_weight,
-            &mut accumulator,
-        );
-        blur_line(
-            &first_intermediate,
-            &mut second_intermediate,
-            0,
-            width,
-            CHANNELS,
-            radius,
-            whole_weight,
-            fractional_weight,
-            &mut accumulator,
-        );
-        blur_line(
-            &second_intermediate,
-            destination_row,
-            0,
-            width,
-            CHANNELS,
-            radius,
-            whole_weight,
-            fractional_weight,
-            &mut accumulator,
-        );
+        if rgb_radius_one_fractional {
+            blur_rgb_radius_one_fractional_line(
+                source_row,
+                &mut first_intermediate,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+            blur_rgb_radius_one_fractional_line(
+                &first_intermediate,
+                &mut second_intermediate,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+            blur_rgb_radius_one_fractional_line(
+                &second_intermediate,
+                destination_row,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+        } else {
+            blur_line(
+                source_row,
+                &mut first_intermediate,
+                0,
+                width,
+                CHANNELS,
+                radius,
+                whole_weight,
+                fractional_weight,
+                &mut accumulator,
+            );
+            blur_line(
+                &first_intermediate,
+                &mut second_intermediate,
+                0,
+                width,
+                CHANNELS,
+                radius,
+                whole_weight,
+                fractional_weight,
+                &mut accumulator,
+            );
+            blur_line(
+                &second_intermediate,
+                destination_row,
+                0,
+                width,
+                CHANNELS,
+                radius,
+                whole_weight,
+                fractional_weight,
+                &mut accumulator,
+            );
+        }
     }
 }
 
@@ -3424,7 +3598,8 @@ pub fn execute_rank_filter_with_mode(
 mod gaussian_blur_row_fusion_tests {
     use super::{
         blur_columns, blur_interleaved_rows_three_passes, blur_la_radius_one_fractional_line,
-        blur_line, blur_luma_rows_three_passes, blur_parameters, blur_rows, execute_gaussian_blur,
+        blur_line, blur_luma_rows_three_passes, blur_parameters,
+        blur_rgb_radius_one_fractional_line, blur_rows, execute_gaussian_blur,
     };
     use crate::raster::{DynamicImage, GrayAlphaImage};
 
@@ -3516,6 +3691,41 @@ mod gaussian_blur_row_fusion_tests {
             );
 
             assert_eq!(actual, expected, "LA row width={width}");
+        }
+    }
+
+    #[test]
+    fn rgb_radius_one_fractional_line_matches_generic_fixed_point_blur() {
+        let (radius, whole_weight, fractional_weight) = blur_parameters(1.375);
+        assert_eq!(radius, 1);
+        assert_ne!(fractional_weight, 0);
+
+        for width in [5, 6, 7, 17, 65, 1024] {
+            let source = (0..width * 3)
+                .map(|index| ((index * 73 + index / 7 * 19 + 31) % 256) as u8)
+                .collect::<Vec<_>>();
+            let mut actual = vec![0u8; source.len()];
+            let mut expected = vec![0u8; source.len()];
+            blur_rgb_radius_one_fractional_line(
+                &source,
+                &mut actual,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+            blur_line(
+                &source,
+                &mut expected,
+                0,
+                width,
+                3,
+                radius,
+                whole_weight,
+                fractional_weight,
+                &mut [0u32; 4],
+            );
+
+            assert_eq!(actual, expected, "RGB row width={width}");
         }
     }
 
