@@ -654,6 +654,30 @@ only; keep the candidate pending until its clean hosted cohort confirms the
 full mode and runner matrix. The sparse test also checks the scan tail on an
 even-sized input whose pixel count is not divisible by eight.
 
+### c22 local candidate: fractional radius-one LA GaussianBlur
+
+The c20 serial CPU matrix ranked native LA GaussianBlur at 0.975× Pillow on
+macOS ARM. A local profile found the fused three-pass horizontal LA routine
+among the main native stacks. The candidate specializes fractional radius-one
+rows, keeps Pillow's per-pass byte rounding and fixed-point weights, and
+separates replicated edge pixels from the interior loop. Its exact line
+comparison covers widths 5, 6, 7, 17, 65, and 1024; existing fused-versus-
+full-frame checks cover tiny and ordinary LA images.
+
+On the same local Mac and source revision, the generic CPU median was 5.110 ms
+versus Pillow at 5.430 ms; the candidate median was 3.682 ms versus Pillow at
+5.480 ms (1.488×). This is a 1.388× local improvement over the generic CPU
+path. Candidate profiling sampled the new LA radius-one row and line functions
+inside the materialized CPU operation. The correctness-gated whole-workflow
+benchmark passed all three Pillow parity comparisons (CPU, SIMD, GPU); each
+target had 100 timed samples, the requested backend actually ran, a complete
+terminal receipt, and no fallback. SIMD measured 4.149 ms and GPU 2.078 ms in
+this local run; the GPU row recorded 1,572,864 upload and readback bytes.
+These are local diagnostics. The c22 clean hosted matrix must confirm the
+candidate before it is accepted, and one-request measurements do not prove
+sustained GPU throughput. No genuine test defect was found; no coverage was
+run.
+
 The c19 grayscale rows keep mode-specific limits visible: YCbCr CPU is 2.214×
 on macOS ARM, 1.887× on Ubuntu ARM, and 1.036× on Ubuntu x86. In c20, these
 ratios are 2.222×, 1.779×, and 1.084× respectively; the x86 YCbCr path is now
