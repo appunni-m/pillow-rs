@@ -462,27 +462,29 @@ python3 scripts/build_performance_optimization_matrix.py \
 The latest published workload matrix records 8,655 rows total: 8,619 full-
 benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`1ba7fd704378cd065d8bdc169047e40219fcb226`, measured
-`2026-10-09T04:37:53.470115Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
+`94b816f265051a730f1dbb7422b7f14c87552cb8`, measured
+`2026-10-09T05:24:12.974805Z`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
 It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
 for 330 public paths and four profiles; 209 paths map to the benchmark manifest
 and 121 remain explicit inventory gaps. Only rows with exact parity and
 completed backend receipts are eligible for speed claims.
 
-Across the 120 verified serial CPU workload-runner pairs, 3 are slower than
-Pillow and 56 are below 2×. The corresponding SIMD counts are 21 slower than
-Pillow, 41 below 2×, and 86 below 5×. The separately built Parallel CPU profile
-uses the opt-in Cargo `parallel` feature; 18 of its 120 verified pairs are
-slower than Pillow and 50 are below 2×. GPU latency is slower than SIMD in 22
-of its 38 verified pairs; sustained GPU throughput remains unmeasured.
+Across the 120 verified serial CPU workload-runner pairs, 1 is slower than
+Pillow and 57 are below 2×. The corresponding SIMD counts are 20 slower than
+Pillow, 41 below 2×, and 83 below 5×. The separately built Parallel CPU profile
+uses the opt-in Cargo `parallel` feature; 15 of its 120 verified pairs are
+slower than Pillow, 44 are below 2×, and 81 are below 5×. GPU latency is slower
+than SIMD in 22 of its 38 verified pairs; sustained GPU throughput remains
+unmeasured.
 
-The current verified serial CPU misses, ranked by speed factor, are RGB
-material thumbnail on macOS arm64 (0.961× Pillow), LA material GaussianBlur on
-macOS arm64 (0.975×), and RGB material thumbnail on Ubuntu arm64 (0.987×). All
-three rows have exact parity, five timed samples (100 timed workflow
-iterations), completed CPU terminal receipts, the requested CPU backend, and
-no fallback. Every CPU pair and every below-2× row remains visible in the
-matrix.
+The c21 sparse RGB thumbnail candidate cleared the prior below-Pillow RGB
+thumbnail pairs: macOS arm64 and Ubuntu arm64 now exceed Pillow in the clean
+full matrix. The only verified serial CPU miss is native-F thumbnail on Ubuntu
+x86_64 at 0.990× Pillow. It has exact parity, five timed sample batches (100
+timed workflow iterations), a completed CPU terminal receipt, the requested
+CPU backend, and no fallback. Every CPU pair and every below-2× row remains
+visible in the matrix. The Pillow-SIMD snapshot remains dirty and partial (9 of
+34 declared cases), so its ratios are excluded from the optimization ranking.
 
 The c12 RGB grayscale candidate in revision `e9a8a7cf2` selected the signed
 two-multiply delta formula on x86 without AVX-512 and retained contribution
@@ -649,10 +651,13 @@ the pixel write, thumbnail, allocation, and materialization. Pillow measured
 1.078 ms and CPU 0.791 ms (1.363×). CPU, SIMD, and GPU parity preflights all
 passed, each requested backend produced 100 timed samples with a complete
 terminal receipt and no fallback, and the reported actual backends matched.
-SIMD measured 2.323 ms and GPU 2.321 ms on this host. This is local evidence
-only; keep the candidate pending until its clean hosted cohort confirms the
-full mode and runner matrix. The sparse test also checks the scan tail on an
-even-sized input whose pixel count is not divisible by eight.
+SIMD measured 2.323 ms and GPU 2.321 ms on this host. The clean c21 full
+snapshot at revision `94b816f` confirms exact-parity CPU results for the
+1024×768 RGB thumbnail on macOS ARM (1.501× Pillow), Ubuntu ARM (1.322×), and
+Ubuntu x86_64 (1.513×), each with 100 samples, a complete requested-CPU
+receipt, and no fallback. The two earlier ARM CPU misses are now above Pillow,
+but all three hosted rows remain below 2×. The sparse test also checks the
+scan tail on an even-sized input whose pixel count is not divisible by eight.
 
 ### c22 local candidate: fractional radius-one LA GaussianBlur
 
@@ -677,6 +682,26 @@ These are local diagnostics. The c22 clean hosted matrix must confirm the
 candidate before it is accepted, and one-request measurements do not prove
 sustained GPU throughput. No genuine test defect was found; no coverage was
 run.
+
+### Rejected c23 local candidate: native-F thumbnail 12-tap unrolling
+
+The c20 native-F thumbnail was near Pillow on x86 (1.025× CPU) and Ubuntu ARM
+(1.053×), though the local Mac row already measured 2.254×. A local profile
+identified boxed F Lanczos horizontal accumulation, so two scalar candidates
+were tried: interleave four independent 12-tap outputs, then specialize one
+12-tap output. The whole-workflow benchmark retained the public thumbnail call
+and receiver observation, ran 100 samples, and passed exact Pillow parity for
+each candidate. Against the local generic CPU median of 0.485396 ms, four-output
+interleaving measured 0.572354 ms (17.9% slower) and per-output unrolling
+measured 0.505750 ms (4.2% slower). Both experiments were reverted.
+
+The local GPU request fell back to CPU in all 100 samples with the reason
+`Thumbnail reducing-gap or typed arithmetic is not proven`; those rows are not
+GPU measurements. The focused bitwise test initially assumed six interior
+Lanczos taps for 2× reduction. The coefficient builder actually produces 12
+interior taps, with tapered edge rows; the test assumption was corrected and
+the scalar-order check passed. This was an invalid new test assumption, not a
+product or existing-test defect. No coverage was run.
 
 The c19 grayscale rows keep mode-specific limits visible: YCbCr CPU is 2.214×
 on macOS ARM, 1.887× on Ubuntu ARM, and 1.036× on Ubuntu x86. In c20, these
