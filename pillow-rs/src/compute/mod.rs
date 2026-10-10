@@ -28,6 +28,7 @@ use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashSet};
+#[cfg(not(test))]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Instant;
@@ -324,12 +325,18 @@ struct PipelineTelemetry {
     resize_coeff_cache_misses: u64,
 }
 
+#[cfg(not(test))]
 static GPU_SHADER_COVERAGE_ENABLED: AtomicBool = AtomicBool::new(false);
+#[cfg(not(test))]
 static GPU_SHADER_COVERAGE: OnceLock<
     Mutex<BTreeMap<(&'static str, &'static str), GpuShaderDispatchCounters>>,
 > = OnceLock::new();
 
 thread_local! {
+    #[cfg(test)]
+    static GPU_SHADER_COVERAGE_ENABLED: Cell<bool> = const { Cell::new(false) };
+    #[cfg(test)]
+    static GPU_SHADER_COVERAGE: RefCell<BTreeMap<(&'static str, &'static str), GpuShaderDispatchCounters>> = RefCell::new(BTreeMap::new());
     static PIPELINE_TELEMETRY_ENABLED: Cell<bool> = const { Cell::new(false) };
     static LAST_PIPELINE_TELEMETRY: RefCell<Option<PipelineTelemetry>> = const { RefCell::new(None) };
     static LAST_PIPELINE_RESOURCE_TELEMETRY: RefCell<Option<PipelineResourceTelemetry>> = const { RefCell::new(None) };
@@ -374,6 +381,7 @@ fn set_pipeline_telemetry_enabled(enabled: bool) -> bool {
     previous
 }
 
+#[cfg(not(test))]
 fn set_gpu_shader_coverage_enabled(enabled: bool) -> bool {
     let previous = GPU_SHADER_COVERAGE_ENABLED.swap(enabled, Ordering::Relaxed);
     if !enabled {
@@ -386,6 +394,15 @@ fn set_gpu_shader_coverage_enabled(enabled: bool) -> bool {
     previous
 }
 
+#[cfg(test)]
+fn set_gpu_shader_coverage_enabled(enabled: bool) -> bool {
+    let previous = GPU_SHADER_COVERAGE_ENABLED.with(|setting| setting.replace(enabled));
+    if !enabled {
+        GPU_SHADER_COVERAGE.with(|coverage| coverage.borrow_mut().clear());
+    }
+    previous
+}
+
 /// Record one actual GPU dispatch for the managed shader execution report.
 #[cfg(feature = "gpu")]
 pub(crate) fn record_gpu_shader_dispatch(
@@ -393,26 +410,48 @@ pub(crate) fn record_gpu_shader_dispatch(
     shader_file: &'static str,
     workgroups: u64,
 ) {
+    #[cfg(test)]
+    if !GPU_SHADER_COVERAGE_ENABLED.with(Cell::get) {
+        return;
+    }
+    #[cfg(not(test))]
     if !GPU_SHADER_COVERAGE_ENABLED.load(Ordering::Relaxed) {
         return;
     }
-    let coverage = GPU_SHADER_COVERAGE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let Ok(mut coverage) = coverage.lock() else {
-        return;
-    };
-    let counters = coverage.entry((variant_name, shader_file)).or_default();
-    counters.dispatches = counters.dispatches.saturating_add(1);
-    counters.workgroups = counters.workgroups.saturating_add(workgroups);
+
+    #[cfg(test)]
+    GPU_SHADER_COVERAGE.with(|coverage| {
+        let mut coverage = coverage.borrow_mut();
+        let counters = coverage.entry((variant_name, shader_file)).or_default();
+        counters.dispatches = counters.dispatches.saturating_add(1);
+        counters.workgroups = counters.workgroups.saturating_add(workgroups);
+    });
+    #[cfg(not(test))]
+    {
+        let coverage = GPU_SHADER_COVERAGE.get_or_init(|| Mutex::new(BTreeMap::new()));
+        let Ok(mut coverage) = coverage.lock() else {
+            return;
+        };
+        let counters = coverage.entry((variant_name, shader_file)).or_default();
+        counters.dispatches = counters.dispatches.saturating_add(1);
+        counters.workgroups = counters.workgroups.saturating_add(workgroups);
+    }
 }
 
 fn take_gpu_shader_coverage() -> Vec<GpuShaderDispatchTelemetry> {
-    let Some(coverage) = GPU_SHADER_COVERAGE.get() else {
-        return Vec::new();
+    #[cfg(test)]
+    let counters = GPU_SHADER_COVERAGE.with(|coverage| std::mem::take(&mut *coverage.borrow_mut()));
+    #[cfg(not(test))]
+    let counters = {
+        let Some(coverage) = GPU_SHADER_COVERAGE.get() else {
+            return Vec::new();
+        };
+        let Ok(mut coverage) = coverage.lock() else {
+            return Vec::new();
+        };
+        std::mem::take(&mut *coverage)
     };
-    let Ok(mut coverage) = coverage.lock() else {
-        return Vec::new();
-    };
-    std::mem::take(&mut *coverage)
+    counters
         .into_iter()
         .map(
             |((variant_name, shader_file), counters)| GpuShaderDispatchTelemetry {
@@ -423,6 +462,41 @@ fn take_gpu_shader_coverage() -> Vec<GpuShaderDispatchTelemetry> {
             },
         )
         .collect()
+}
+
+#[cfg(all(test, feature = "gpu"))]
+mod gpu_shader_coverage_tests {
+    use super::{
+        record_gpu_shader_dispatch, set_gpu_shader_coverage_enabled, take_gpu_shader_coverage,
+    };
+
+    #[test]
+    fn shader_dispatch_coverage_is_isolated_between_test_threads() {
+        struct RestoreCoverage(bool);
+        impl Drop for RestoreCoverage {
+            fn drop(&mut self) {
+                set_gpu_shader_coverage_enabled(self.0);
+            }
+        }
+
+        let previous = set_gpu_shader_coverage_enabled(true);
+        let _restore = RestoreCoverage(previous);
+        let _ = take_gpu_shader_coverage();
+
+        std::thread::spawn(|| {
+            record_gpu_shader_dispatch("other_thread", "other.wgsl", 1);
+        })
+        .join()
+        .expect("test thread should finish");
+        record_gpu_shader_dispatch("current_thread", "current.wgsl", 2);
+
+        let coverage = take_gpu_shader_coverage();
+        assert_eq!(coverage.len(), 1);
+        assert_eq!(coverage[0].variant_name, "current_thread");
+        assert_eq!(coverage[0].shader_file, "current.wgsl");
+        assert_eq!(coverage[0].dispatches, 1);
+        assert_eq!(coverage[0].workgroups, 2);
+    }
 }
 
 fn reset_pipeline_allocation_telemetry() {
@@ -855,12 +929,244 @@ pub(crate) fn cpu_rgb_putpixel_thumbnail_fusion_supported(
     )
 }
 
+/// Run the SIMD CMYK projection block scanner and return its vector/tail
+/// evidence together with the two Pillow-compatible result axes.
+pub(crate) fn simd_cmyk_projection(
+    image: &crate::raster::RgbaImage,
+) -> (Vec<u32>, Vec<u32>, u64, u64) {
+    pool_simd::ops::adapters::simd_cmyk_projection(image)
+}
+
+/// Derive CMYK projection axes from a proven zero source and positive writes.
+pub(crate) fn simd_cmyk_projection_from_positive_writes(
+    width: u32,
+    height: u32,
+    ops: &[PipelineOp],
+) -> Option<(Vec<u32>, Vec<u32>, u64, u64)> {
+    pool_simd::ops::adapters::simd_cmyk_projection_from_positive_writes(width, height, ops)
+}
+
+pub(crate) fn simd_rgb_projection(
+    image: &crate::raster::RgbImage,
+) -> (Vec<u32>, Vec<u32>, u64, u64) {
+    pool_simd::ops::adapters::simd_rgb_projection(image)
+}
+
+pub(crate) fn execute_eager_cpu_getprojection(
+    input: &DynamicImage,
+    requested_backend: Option<Backend>,
+    fallback_reason: Option<String>,
+    execute: impl FnOnce() -> Result<(Vec<u32>, Vec<u32>), PilError>,
+) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let result = execute()?;
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        begin_pipeline_operation_telemetry("GetProjection");
+        record_pipeline_operation_path("cpu");
+        finish_pipeline_operation_telemetry();
+        if fallback_reason.is_some() {
+            record_pipeline_operation_handoff(1);
+        }
+
+        let mut resource = host_resource_telemetry(input);
+        let output_bytes =
+            (result.0.len() + result.1.len()).saturating_mul(std::mem::size_of::<u32>()) as u64;
+        resource.host_buffer_count = resource.host_buffer_count.saturating_add(2);
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
+        resource.fused_operation_count = 0;
+        record_pipeline_allocation(result.0.len() * std::mem::size_of::<u32>());
+        record_pipeline_allocation(result.1.len() * std::mem::size_of::<u32>());
+        let allocation = take_pipeline_allocation_telemetry();
+        resource.host_allocation_count = allocation.allocation_count;
+        resource.host_allocated_bytes = allocation.allocated_bytes;
+        record_pipeline_resource_telemetry(resource);
+        let resource = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let dispatch_count = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend,
+            actual_backend: Backend::Cpu,
+            operation_count: 1,
+            route_ns: 0,
+            validation_ns: 0,
+            backend_ns,
+            dispatch_count,
+            fallback_reason,
+            resource,
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok(result)
+}
+
+pub(crate) fn execute_eager_simd_getprojection(
+    input: &DynamicImage,
+    execute: impl FnOnce() -> Result<((Vec<u32>, Vec<u32>), u64, u64), PilError>,
+) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let (result, vector_blocks, scalar_tail) = execute()?;
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        begin_pipeline_operation_telemetry("GetProjection");
+        record_pipeline_operation_vector_blocks(vector_blocks);
+        record_pipeline_operation_scalar_tail(scalar_tail);
+        finish_pipeline_operation_telemetry();
+
+        let mut resource = host_resource_telemetry(input);
+        let output_bytes =
+            (result.0.len() + result.1.len()).saturating_mul(std::mem::size_of::<u32>()) as u64;
+        resource.host_buffer_count = resource.host_buffer_count.saturating_add(2);
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
+        resource.fused_operation_count = 0;
+        record_pipeline_allocation(result.0.len() * std::mem::size_of::<u32>());
+        record_pipeline_allocation(result.1.len() * std::mem::size_of::<u32>());
+        let allocation = take_pipeline_allocation_telemetry();
+        resource.host_allocation_count = allocation.allocation_count;
+        resource.host_allocated_bytes = allocation.allocated_bytes;
+        record_pipeline_resource_telemetry(resource);
+        let resource = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let dispatch_count = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: Some(Backend::Simd),
+            actual_backend: Backend::Simd,
+            operation_count: 1,
+            route_ns: 0,
+            validation_ns: 0,
+            backend_ns,
+            dispatch_count,
+            fallback_reason: None,
+            resource,
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok(result)
+}
+
+#[cfg(feature = "gpu")]
+pub(crate) fn execute_eager_gpu_rgb_getprojection(
+    input: &DynamicImage,
+) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+    if !pool_gpu::GpuPool::rgb_projection_supported(input) {
+        return Err(PilError::NotImplementedError(
+            "GPU does not support this RGB projection".into(),
+        ));
+    }
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let (horizontal, vertical, mut resource, dispatches) =
+        pool_gpu::GpuPool.execute_rgb_projection(input)?;
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        begin_pipeline_operation_telemetry("GetProjection");
+        record_pipeline_operation_path("gpu");
+        finish_pipeline_operation_telemetry();
+        let output_bytes =
+            (horizontal.len() + vertical.len()).saturating_mul(std::mem::size_of::<u32>()) as u64;
+        resource.host_buffer_count = resource.host_buffer_count.saturating_add(2);
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
+        let allocation = take_pipeline_allocation_telemetry();
+        resource.host_allocation_count = allocation.allocation_count;
+        resource.host_allocated_bytes = allocation.allocated_bytes;
+        record_pipeline_resource_telemetry(resource);
+        let resource = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let dispatch_count = take_pipeline_dispatch_count().or(Some(dispatches));
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: Some(Backend::Gpu),
+            actual_backend: Backend::Gpu,
+            operation_count: 1,
+            route_ns: 0,
+            validation_ns: 0,
+            backend_ns,
+            dispatch_count,
+            fallback_reason: None,
+            resource,
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok((horizontal, vertical))
+}
+
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_cmyk_projection_terminal_supported(
+    image: &DynamicImage,
+    ops: &[PipelineOp],
+) -> bool {
+    pool_gpu::GpuPool::cmyk_projection_terminal_supported(image, ops)
+}
+
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_rgb_projection_supported(image: &DynamicImage) -> bool {
+    pool_gpu::GpuPool::rgb_projection_supported(image)
+}
+
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_rgb_projection_terminal_supported(
+    image: &DynamicImage,
+    ops: &[PipelineOp],
+) -> bool {
+    pool_gpu::GpuPool::rgb_projection_terminal_supported(image, ops)
+}
+
 /// Whether an unlocked pipeline can only be routed to the serial CPU backend.
 /// A CPU-locked pipeline is handled directly by its caller; this check keeps
 /// narrow CPU-only fusion admission from intercepting normal multi-backend
 /// routing.
 pub(crate) fn cpu_is_only_active_backend() -> bool {
     matches!(active_backends(), Ok(active) if active.as_slice() == [Backend::Cpu])
+}
+
+/// Select the highest-priority active backend for one eager image operation
+/// without allocating the sorted vector returned by [`active_backends`].
+pub(crate) fn preferred_active_backend() -> Result<Option<(Backend, bool)>, PilError> {
+    let active = active_lock()?;
+    let selected = [Backend::Gpu, Backend::Simd, Backend::Cpu]
+        .into_iter()
+        .find(|backend| active.contains(backend));
+    Ok(selected.map(|backend| (backend, active.len() == 1)))
 }
 
 pub(crate) mod registry;
@@ -1398,6 +1704,14 @@ pub(crate) struct PreparedExecution {
 impl PreparedExecution {
     pub(crate) fn is_serial_cpu_without_fallback(&self) -> bool {
         self.selected_backend == Backend::Cpu && self.fallback_reason.is_none()
+    }
+
+    pub(crate) fn is_simd_without_fallback(&self) -> bool {
+        self.selected_backend == Backend::Simd && self.fallback_reason.is_none()
+    }
+
+    pub(crate) fn is_gpu_without_fallback(&self) -> bool {
+        self.selected_backend == Backend::Gpu && self.fallback_reason.is_none()
     }
 }
 
@@ -1998,6 +2312,208 @@ pub(crate) fn execute_prepared_cpu_terminal<T>(
         });
     }
     Ok(result)
+}
+
+/// Runs a SIMD terminal that folds a supported pending image pipeline into
+/// its result instead of materializing an intermediate image. The closure
+/// returns the measured SIMD block and scalar-tail counts with the result.
+pub(crate) fn execute_prepared_simd_terminal<T>(
+    prepared: &PreparedExecution,
+    ops: &[PipelineOp],
+    input: &DynamicImage,
+    output_buffer_sizes: [usize; 2],
+    execute: impl FnOnce() -> Result<(T, u64, u64), PilError>,
+) -> Result<T, PilError> {
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let (result, vector_blocks, scalar_tail) = execute()?;
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        for (index, op) in ops.iter().enumerate() {
+            begin_pipeline_operation_telemetry(registry::variant_key(op));
+            if index == 0 {
+                record_pipeline_operation_vector_blocks(vector_blocks);
+                record_pipeline_operation_scalar_tail(scalar_tail);
+            } else {
+                record_pipeline_operation_path("scalar-control");
+            }
+            finish_pipeline_operation_telemetry();
+        }
+
+        let mut resource = host_resource_telemetry(input);
+        let output_bytes = output_buffer_sizes
+            .iter()
+            .map(|&size| size as u64)
+            .fold(0u64, u64::saturating_add);
+        let output_count = output_buffer_sizes
+            .iter()
+            .filter(|&&size| size != 0)
+            .count() as u64;
+        resource.host_buffer_count = resource.host_buffer_count.saturating_add(output_count);
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
+        resource.fused_operation_count = ops.len() as u64;
+        for size in output_buffer_sizes {
+            if size != 0 {
+                record_pipeline_allocation(size);
+            }
+        }
+        let allocation = take_pipeline_allocation_telemetry();
+        resource.host_allocation_count = allocation.allocation_count;
+        resource.host_allocated_bytes = allocation.allocated_bytes;
+        record_pipeline_resource_telemetry(resource);
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: prepared.requested_backend,
+            actual_backend: Backend::Simd,
+            operation_count: ops.len(),
+            route_ns: prepared.route_ns,
+            validation_ns: prepared.validation_ns,
+            backend_ns,
+            dispatch_count: None,
+            fallback_reason: prepared.fallback_reason.clone(),
+            resource: Some(resource),
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok(result)
+}
+
+#[cfg(feature = "gpu")]
+pub(crate) fn execute_prepared_gpu_cmyk_projection_terminal(
+    prepared: &PreparedExecution,
+    ops: &[PipelineOp],
+    input: &DynamicImage,
+    source_is_known_zero: bool,
+) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+    if prepared.selected_backend != Backend::Gpu || prepared.fallback_reason.is_some() {
+        return Err(PilError::InternalError(
+            "GPU projection terminal was called without an admitted GPU route".into(),
+        ));
+    }
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let (horizontal, vertical, mut resource, dispatches) =
+        pool_gpu::GpuPool.execute_cmyk_projection_terminal(input, ops, source_is_known_zero)?;
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        for op in ops {
+            begin_pipeline_operation_telemetry(registry::variant_key(op));
+            record_pipeline_operation_path("gpu");
+            finish_pipeline_operation_telemetry();
+        }
+        let output_bytes =
+            (horizontal.len() + vertical.len()).saturating_mul(std::mem::size_of::<u32>()) as u64;
+        resource.host_buffer_count = resource.host_buffer_count.saturating_add(2);
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
+        let allocation = take_pipeline_allocation_telemetry();
+        resource.host_allocation_count = allocation.allocation_count;
+        resource.host_allocated_bytes = allocation.allocated_bytes;
+        record_pipeline_resource_telemetry(resource);
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: prepared.requested_backend,
+            actual_backend: Backend::Gpu,
+            operation_count: ops.len(),
+            route_ns: prepared.route_ns,
+            validation_ns: prepared.validation_ns,
+            backend_ns,
+            dispatch_count: Some(dispatches),
+            fallback_reason: None,
+            resource: Some(resource),
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok((horizontal, vertical))
+}
+
+#[cfg(feature = "gpu")]
+pub(crate) fn execute_prepared_gpu_rgb_projection_terminal(
+    prepared: &PreparedExecution,
+    ops: &[PipelineOp],
+    input: &DynamicImage,
+    source_is_known_zero: bool,
+) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+    if prepared.selected_backend != Backend::Gpu || prepared.fallback_reason.is_some() {
+        return Err(PilError::InternalError(
+            "GPU projection terminal was called without an admitted GPU route".into(),
+        ));
+    }
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let (horizontal, vertical, mut resource, dispatches) =
+        pool_gpu::GpuPool.execute_rgb_projection_terminal(input, ops, source_is_known_zero)?;
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        for op in ops {
+            begin_pipeline_operation_telemetry(registry::variant_key(op));
+            record_pipeline_operation_path("gpu");
+            finish_pipeline_operation_telemetry();
+        }
+        let output_bytes =
+            (horizontal.len() + vertical.len()).saturating_mul(std::mem::size_of::<u32>()) as u64;
+        resource.host_buffer_count = resource.host_buffer_count.saturating_add(2);
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
+        let allocation = take_pipeline_allocation_telemetry();
+        resource.host_allocation_count = allocation.allocation_count;
+        resource.host_allocated_bytes = allocation.allocated_bytes;
+        record_pipeline_resource_telemetry(resource);
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: prepared.requested_backend,
+            actual_backend: Backend::Gpu,
+            operation_count: ops.len(),
+            route_ns: prepared.route_ns,
+            validation_ns: prepared.validation_ns,
+            backend_ns,
+            dispatch_count: Some(dispatches),
+            fallback_reason: None,
+            resource: Some(resource),
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok((horizontal, vertical))
 }
 
 #[cfg(test)]

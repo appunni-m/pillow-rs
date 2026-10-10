@@ -39835,19 +39835,20 @@ def build_nuanced_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "thumbnail",
                 "requirement_suffix": "performance.standard",
-                "name": f"performance-large-{mode.lower()}-1024x768",
+                "name": f"performance-large-{mode.lower()}-{width}x{height}",
                 "mode": mode,
-                "size": [1024, 768],
-                "edge": "noise-fill",
+                "size": [width, height],
+                "edge": "noise-ref-fill",
                 "seed": 240931 if mode == "F" else 240932,
                 "observe_receiver": True,
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "values": {
-                    "size": literal([256, 256]),
+                    "size": literal([width // 4, width // 4]),
                     "resample": literal(3),
                     "reducing_gap": literal(2.0),
                 },
             }
+            for width, height in ((512, 384), (1024, 768), (2048, 1536))
             for mode in ("F", "I")
         ),
         *(
@@ -42745,6 +42746,7 @@ def build_nuanced_cases(
     cases.extend(cmyk_to_rgb_parity_cases(surface_id))
     cases.extend(cmyk_to_1_parity_cases(surface_id))
     cases.extend(cmyk_grayscale_parity_cases(surface_id))
+    cases.extend(getprojection_performance_parity_cases(surface_id))
     cases.extend(getprojection_cmyk_parity_cases(surface_id))
     cases.extend(putpixel_input_parity_cases(surface_id))
     cases.extend(solarize_threshold_parity_cases(surface_id))
@@ -43570,6 +43572,109 @@ def rgb_to_rgba_performance_parity_cases(surface_id: str) -> list[dict[str, Any]
             ],
             "observations": ["call", "materialize"],
         }
+    ]
+
+
+def getprojection_performance_parity_cases(
+    surface_id: str,
+) -> list[dict[str, Any]]:
+    """Exercise multi-backend getprojection scans at dense and tail sizes."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    target_profiles = ["python-cpu", "python-simd", "python-gpu"]
+
+    def case(
+        suffix: str,
+        mode: str,
+        size: list[int],
+        color: Any,
+        *,
+        image_step: str = "setup-image-1",
+        pixels: tuple[tuple[list[int], Any, str], ...] = (),
+    ) -> dict[str, Any]:
+        steps = [
+            {
+                "step_id": image_step,
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(mode),
+                    "size": literal(size),
+                    "color": literal(color),
+                },
+            }
+        ]
+        for xy, value, step_id in pixels:
+            steps.append(
+                {
+                    "step_id": step_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "putpixel",
+                    "receiver": binding(image_step),
+                    "arguments": {"xy": literal(xy), "value": literal(value)},
+                }
+            )
+        steps.append(
+            {
+                "step_id": "call",
+                "surface": surface_id,
+                "operation": "getprojection",
+                "receiver": binding(image_step),
+                "arguments": {},
+            }
+        )
+        return {
+            "case_id": f"{surface_id}.getprojection.parity.{suffix}",
+            "surface": surface_id,
+            "operation": "getprojection",
+            "covers": [f"{surface_id}.getprojection.performance.standard"],
+            "target_profiles": target_profiles.copy(),
+            "assets": [],
+            "steps": steps,
+            "observations": ["call"],
+        }
+
+    return [
+        case("standard", "RGB", [16, 16], 0),
+        case(
+            "material-cmyk-1024x768",
+            "CMYK",
+            [1024, 768],
+            [17, 83, 149, 211],
+            image_step="image",
+        ),
+        case(
+            "sparse-cmyk-1024x768",
+            "CMYK",
+            [1024, 768],
+            [0, 0, 0, 0],
+            image_step="image",
+            pixels=(
+                ([0, 0], [1, 0, 0, 0], "pixel-0"),
+                ([400, 100], [0, 1, 0, 0], "pixel-1"),
+                ([1023, 767], [0, 0, 0, 1], "pixel-2"),
+            ),
+        ),
+        case(
+            "material-rgb-solid-1024x768",
+            "RGB",
+            [1024, 768],
+            [1, 2, 3],
+        ),
+        case("rgb-dense-tail-17x4", "RGB", [17, 4], [1, 2, 3]),
+        case(
+            "rgb-sparse-tail-17x4",
+            "RGB",
+            [17, 4],
+            0,
+            pixels=(
+                ([16, 1], [0, 0, 7], "setup-tail-pixel"),
+                ([0, 3], [9, 0, 0], "setup-first-block-pixel"),
+            ),
+        ),
+        case("rgb-dense-scalar-tail-15x3", "RGB", [15, 3], [1, 2, 3]),
     ]
 
 
@@ -49637,39 +49742,44 @@ def build_pipeline_benchmark_document(
     }
 
     thumbnail_scalar_workloads = []
-    for mode, suffix in (("F", "f32"), ("I", "i32")):
-        case_id = (
-            f"PIL.Image.Image.thumbnail.nuanced.performance-large-"
-            f"{mode.lower()}-1024x768"
-        )
-        case = cases_by_id.get(case_id)
-        if case is None:
-            raise ValueError(f"typed thumbnail benchmark references missing case: {case_id}")
-        workload = {
-            "workload_id": f"pipeline-op.thumbnail.native-{suffix}-1024x768",
-            "covers": [
-                _performance_requirement(operations, "PIL.Image.Image", "thumbnail")
-            ],
-            "subjects": benchmark_subjects(),
-            "input": {"kind": "parity_case", "case_id": case_id},
-            "measurement": {
-                **copy.deepcopy(policy),
-                "boundary": "observed_steps",
-                "step_ids": ["call", "observe-receiver"],
-                "warmup_iterations": 5,
-                "measurement_iterations": 20,
-                "samples": 5,
-                "correctness_gate": "parity_pass",
-            },
-            "context": _workflow_benchmark_context(
-                case,
-                variant=f"thumbnail-native-{suffix}-1024x768",
-                surface="PIL.Image.Image",
-                operation="thumbnail",
-            ),
-        }
-        workload["context"]["operation_class"] = "geometry"
-        thumbnail_scalar_workloads.append(workload)
+    for width, height in ((512, 384), (1024, 768), (2048, 1536)):
+        for mode, suffix in (("F", "f32"), ("I", "i32")):
+            case_id = (
+                f"PIL.Image.Image.thumbnail.nuanced.performance-large-"
+                f"{mode.lower()}-{width}x{height}"
+            )
+            case = cases_by_id.get(case_id)
+            if case is None:
+                raise ValueError(
+                    f"typed thumbnail benchmark references missing case: {case_id}"
+                )
+            workload = {
+                "workload_id": (
+                    f"pipeline-op.thumbnail.native-{suffix}-{width}x{height}"
+                ),
+                "covers": [
+                    _performance_requirement(operations, "PIL.Image.Image", "thumbnail")
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": {
+                    **copy.deepcopy(policy),
+                    "boundary": "observed_steps",
+                    "step_ids": ["call", "observe-receiver"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "correctness_gate": "parity_pass",
+                },
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant=f"thumbnail-native-{suffix}-{width}x{height}",
+                    surface="PIL.Image.Image",
+                    operation="thumbnail",
+                ),
+            }
+            workload["context"]["operation_class"] = "geometry"
+            thumbnail_scalar_workloads.append(workload)
 
     f_boxed_resize_case_id = (
         "PIL.Image.Image.resize.nuanced.f-boxed-nearest-noise-512x512"
@@ -52444,8 +52554,9 @@ def build_pipeline_benchmark_document(
             {
                 "suite_id": "pipeline-operations.thumbnail-typed-scalar-suite",
                 "description": (
-                    "Material noisy F-mode and I-mode thumbnail reduction plus "
-                    "terminal materialization across CPU, SIMD, and GPU."
+                    "Material noisy F-mode and I-mode thumbnail reduction at "
+                    "three source sizes, plus terminal materialization across "
+                    "CPU, SIMD, and GPU."
                 ),
                 "members": [
                     {"workload_id": item["workload_id"], "weight": 1}

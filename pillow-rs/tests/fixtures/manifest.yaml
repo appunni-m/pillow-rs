@@ -6810,10 +6810,14 @@ surfaces:
       - benchmark
       target_profiles:
       - python-cpu
+      - python-simd
+      - python-gpu
     parity:
       applicability: required
       target_profiles:
       - python-cpu
+      - python-simd
+      - python-gpu
     coverage:
       applicability: required
       target_profiles:
@@ -6824,6 +6828,8 @@ surfaces:
       applicability: required
       target_profiles:
       - python-cpu
+      - python-simd
+      - python-gpu
       metrics:
       - latency
       - throughput

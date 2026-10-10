@@ -123,7 +123,7 @@ class GpuBatchExecutor:
     active. GPU-unsupported contexts fail during admission.
     """
     def __init__(self, *, queue=True, gpu_bytes=512 << 20, host_bytes=256 << 20,
-                 max_jobs=64, max_in_flight=2):
+                 max_jobs=64, max_in_flight=4):
         try:
             self._native = _core.GpuBatchExecutor(queue=queue, gpu_bytes=gpu_bytes,
                 host_bytes=host_bytes, max_jobs=max_jobs, max_in_flight=max_in_flight)

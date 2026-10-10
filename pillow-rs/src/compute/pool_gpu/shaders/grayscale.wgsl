@@ -22,21 +22,40 @@ fn rgb_luma(red: u32, green: u32, blue: u32) -> u32 {
     return (19595u * red + 38470u * green + 7471u * blue + 32768u) >> 16u;
 }
 
-fn pixel_luma(pixel: u32) -> u32 {
+fn cmyk_luma(pixel: u32) -> u32 {
     let first = pixel & 0xffu;
     let second = (pixel >> 8u) & 0xffu;
     let third = (pixel >> 16u) & 0xffu;
+    let k = (pixel >> 24u) & 0xffu;
+    let ink = 255u - k;
+    let red = ink - muldiv255(first, ink);
+    let green = ink - muldiv255(second, ink);
+    let blue = ink - muldiv255(third, ink);
+    return rgb_luma(red, green, blue);
+}
+
+fn pixel_luma(pixel: u32) -> u32 {
     if params.mode == 4u {
-        let k = (pixel >> 24u) & 0xffu;
-        let ink = 255u - k;
-        let red = ink - muldiv255(first, ink);
-        let green = ink - muldiv255(second, ink);
-        let blue = ink - muldiv255(third, ink);
-        return rgb_luma(red, green, blue);
+        return cmyk_luma(pixel);
     }
+    let first = pixel & 0xffu;
+    let second = (pixel >> 8u) & 0xffu;
+    let third = (pixel >> 16u) & 0xffu;
     // L and LA uploads replicate their luma value across RGB. RGBA ignores
     // alpha, matching Pillow's ImageOps.grayscale contract.
     return rgb_luma(first, second, third);
+}
+
+fn native_cmyk_group_luma(output_word: u32) -> u32 {
+    // CMYK uses the ordinary four-byte transport. One output word covers four
+    // adjacent pixels, so load those source words directly and skip the
+    // per-pixel loop and tail bounds checks for complete groups.
+    let first_pixel = output_word * 4u;
+    let l0 = cmyk_luma(input[first_pixel]);
+    let l1 = cmyk_luma(input[first_pixel + 1u]);
+    let l2 = cmyk_luma(input[first_pixel + 2u]);
+    let l3 = cmyk_luma(input[first_pixel + 3u]);
+    return l0 | (l1 << 8u) | (l2 << 16u) | (l3 << 24u);
 }
 
 fn native_triple(pixel_index: u32) -> u32 {
@@ -90,18 +109,20 @@ fn source_luma(pixel_index: u32) -> u32 {
     return pixel_luma(input[pixel_index]);
 }
 
-@compute @workgroup_size(64, 1, 1)
+@compute @workgroup_size(256, 1, 1)
 fn main(
     @builtin(global_invocation_id) gid: vec3<u32>,
     @builtin(num_workgroups) workgroups: vec3<u32>,
 ) {
     let pixel_count = params.width * params.height;
     let output_word_count = pixel_count / 4u + select(0u, 1u, pixel_count % 4u != 0u);
-    let output_word = gid.x + gid.y * workgroups.x * 64u;
+    let output_word = gid.x + gid.y * workgroups.x * 256u;
     if output_word >= output_word_count { return; }
 
     var packed = 0u;
-    if params._pad == 1u && output_word < pixel_count / 4u {
+    if params.mode == 4u && output_word < pixel_count / 4u {
+        packed = native_cmyk_group_luma(output_word);
+    } else if params._pad == 1u && output_word < pixel_count / 4u {
         // The complete four-pixel groups use three aligned RGB loads. A final
         // partial group stays on the bounds-checked scalar gather below.
         packed = native_rgb_group_luma(output_word);

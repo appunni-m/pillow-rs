@@ -22,6 +22,7 @@ from run_migration_benchmark import (
     select_workloads,
     write_parity_artifact,
 )
+import run_migration_parity
 from run_migration_parity import TARGET_FEATURES, target_profile_for_backend
 
 
@@ -57,6 +58,21 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 workload_ids=["pil-imagechops.overlay.standard"],
                 limit=None,
             )
+
+    def test_benchmark_backend_proof_does_not_add_target_lock_to_timing(self) -> None:
+        with (
+            patch.object(run_migration_parity, "STRICT_TARGET_BACKEND", True),
+            patch.object(run_migration_parity, "BENCHMARK_ADAPTER", True),
+        ):
+            self.assertFalse(run_migration_parity.should_lock_target_backend("target"))
+            self.assertFalse(run_migration_parity.should_lock_target_backend("source"))
+
+        with (
+            patch.object(run_migration_parity, "STRICT_TARGET_BACKEND", True),
+            patch.object(run_migration_parity, "BENCHMARK_ADAPTER", False),
+        ):
+            self.assertTrue(run_migration_parity.should_lock_target_backend("target"))
+            self.assertFalse(run_migration_parity.should_lock_target_backend("source"))
 
     def test_unknown_workload_ids_remain_errors(self) -> None:
         with self.assertRaisesRegex(ValueError, "unknown benchmark workload"):

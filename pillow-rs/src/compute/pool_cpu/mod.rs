@@ -420,6 +420,49 @@ impl BackendImpl for CpuPool {
                     continue;
                 }
             }
+            if index + 1 < ops.len()
+                && let (
+                    PipelineOp::AlphaComposite {
+                        source,
+                        dest: (0, 0),
+                        src: (0, 0),
+                    },
+                    PipelineOp::Mirror,
+                ) = (&ops[index], &ops[index + 1])
+                && matches!(input, DynamicImage::ImageRgba8(_))
+                && matches!(current_mode.as_deref(), None | Some("RGBA"))
+                && input.width() != 0
+                && input.height() != 0
+                && source.size().ok() == Some(input.dimensions())
+            {
+                crate::compute::begin_pipeline_operation_telemetry("AlphaComposite");
+                crate::compute::begin_pipeline_operation_telemetry("Mirror");
+                let next = match ops::effects::op_alpha_composite_mirror(input, source) {
+                    Ok(next) => next,
+                    Err(error) => {
+                        for _ in 0..2 {
+                            crate::compute::record_pipeline_operation_path("cpu");
+                            crate::compute::finish_pipeline_operation_telemetry();
+                        }
+                        return Err(error);
+                    }
+                };
+                for _ in 0..2 {
+                    crate::compute::record_pipeline_operation_path("cpu");
+                    crate::compute::finish_pipeline_operation_telemetry();
+                }
+                crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
+                resources.fused_operation_count = resources.fused_operation_count.saturating_add(2);
+                result = Some(next);
+                for op in &ops[index..index + 2] {
+                    current_mode = crate::compute::pool_simd::ops::adapters::simd_mode_after_op(
+                        op,
+                        current_mode.as_deref(),
+                    );
+                }
+                index += 2;
+                continue;
+            }
             if ops::draw::is_draw_op(&ops[index]) {
                 let mut end = index + 1;
                 while end < ops.len() && ops::draw::is_draw_op(&ops[end]) {
@@ -591,9 +634,11 @@ mod tests {
     use super::CpuPool;
     use crate::compute::{BackendImpl, registry};
     use crate::error::PilError;
+    use crate::image::Image;
     use crate::image_utils::raw_bytes_to_image;
     use crate::pipeline::{PipelineOp, TransposeMethod};
     use crate::raster::GenericImageView;
+    use std::sync::Arc;
 
     #[test]
     fn transpose_batches_preserve_sequential_pixels_and_dimensions() -> Result<(), PilError> {
@@ -635,6 +680,60 @@ mod tests {
                 }
                 assert_eq!(source.as_bytes(), bytes);
             }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn alpha_composite_mirror_fusion_matches_sequential_rgba_for_uniform_and_varied_pixels()
+    -> Result<(), PilError> {
+        for (width, height, uniform) in [(64u32, 3u32, true), (17, 5, false), (1, 1, true)] {
+            let pixel_count = width as usize * height as usize;
+            let mut destination_bytes = if uniform {
+                [30, 60, 90, 64].repeat(pixel_count)
+            } else {
+                (0..pixel_count * 4)
+                    .map(|index| (index.wrapping_mul(71).wrapping_add(19)) as u8)
+                    .collect::<Vec<_>>()
+            };
+            let mut source_bytes = if uniform {
+                [200, 150, 100, 192].repeat(pixel_count)
+            } else {
+                (0..pixel_count * 4)
+                    .map(|index| (index.wrapping_mul(37).wrapping_add(83)) as u8)
+                    .collect::<Vec<_>>()
+            };
+            if !uniform {
+                for (pixel, alpha) in source_bytes
+                    .chunks_exact_mut(4)
+                    .zip([0, 1, 64, 128, 255].into_iter().cycle())
+                {
+                    pixel[3] = alpha;
+                }
+                for (pixel, alpha) in destination_bytes
+                    .chunks_exact_mut(4)
+                    .zip([0, 63, 127, 192, 255].into_iter().cycle())
+                {
+                    pixel[3] = alpha;
+                }
+            }
+
+            let destination = raw_bytes_to_image(width, height, destination_bytes, 4)?;
+            let source_dynamic = raw_bytes_to_image(width, height, source_bytes, 4)?;
+            let source = Arc::new(Image::from_dynamic(source_dynamic, Some("RGBA".to_owned())));
+            let operations = [
+                PipelineOp::AlphaComposite {
+                    source,
+                    dest: (0, 0),
+                    src: (0, 0),
+                },
+                PipelineOp::Mirror,
+            ];
+            let composite = registry::execute_cpu(&operations[0], &destination, Some("RGBA"))?;
+            let expected = registry::execute_cpu(&operations[1], &composite, Some("RGBA"))?;
+            let actual = CpuPool.execute_batch(&operations, &destination, Some("RGBA"))?;
+            assert_eq!(actual.dimensions(), expected.dimensions());
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
         }
         Ok(())
     }

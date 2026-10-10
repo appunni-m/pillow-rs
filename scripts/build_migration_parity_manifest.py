@@ -45,10 +45,14 @@ BENCHMARK_BACKENDS = ("cpu", "simd", "gpu")
 DEFAULT_TARGET_FEATURES = ["pillow-rs-py/default", "pillow-rs/default"]
 TARGET_ID = "pillow-rs-python"
 ORACLE_ID = "pillow"
-# ImageOps.mirror has an explicit three-backend benchmark lane in the fixed
-# fixture manifest; preserve that scope when regenerating the manifest.
+# These endpoints have explicit three-backend performance requirements in
+# the fixed fixture manifest; preserve that scope when regenerating it.
 BENCHMARK_TARGET_PROFILE_OVERRIDES = {
     "PIL.ImageOps.mirror": ["python-cpu", "python-simd", "python-gpu"],
+    "PIL.Image.Image.getprojection": ["python-cpu", "python-simd", "python-gpu"],
+}
+PARITY_TARGET_PROFILE_OVERRIDES = {
+    "PIL.Image.Image.getprojection": ["python-cpu", "python-simd", "python-gpu"],
 }
 
 # The legacy authority records the Qt-only ImageQt endpoints as ignored for
@@ -751,7 +755,7 @@ def requirement(
         "dimension": dimension,
         "description": description,
         "lanes": lanes,
-        "target_profiles": target_profiles or [TARGET_PROFILE],
+        "target_profiles": list(target_profiles or [TARGET_PROFILE]),
     }
 
 
@@ -1093,7 +1097,11 @@ def operation_contract(
         "requirements": requirements,
         "parity": {
             "applicability": "required",
-            "target_profiles": [TARGET_PROFILE],
+            "target_profiles": list(
+                PARITY_TARGET_PROFILE_OVERRIDES.get(
+                    endpoint.source_path, [TARGET_PROFILE]
+                )
+            ),
         },
         "coverage": (
             {
@@ -1111,7 +1119,11 @@ def operation_contract(
     if benchmark_applicable:
         contract["benchmark"] = {
             "applicability": "required",
-            "target_profiles": [TARGET_PROFILE],
+            "target_profiles": list(
+                PARITY_TARGET_PROFILE_OVERRIDES.get(
+                    endpoint.source_path, [TARGET_PROFILE]
+                )
+            ),
             "metrics": ["latency", "throughput"],
         }
     else:

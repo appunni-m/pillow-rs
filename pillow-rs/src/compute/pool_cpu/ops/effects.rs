@@ -1494,6 +1494,74 @@ pub fn op_alpha_composite(
     Ok(DynamicImage::ImageRgba8(dest_rgba))
 }
 
+/// Composite full-frame RGBA inputs and mirror the result in one output pass.
+/// The fused scan reads each input at its mirrored coordinate and writes the
+/// final row-major output, avoiding an intermediate composite image and the
+/// subsequent mirror copy. Uniform image pairs need only one exact Pillow
+/// pixel calculation; they are still scanned and every output sample is
+/// materialized.
+pub fn op_alpha_composite_mirror(
+    img: &DynamicImage,
+    source: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
+    let DynamicImage::ImageRgba8(destination) = img else {
+        return Err(PilError::ValueError("images do not match".into()));
+    };
+    let source_owner = source.materialized_shared()?;
+    let DynamicImage::ImageRgba8(source_image) = source_owner.as_ref() else {
+        return Err(PilError::ValueError("images do not match".into()));
+    };
+    if source_image.dimensions() != img.dimensions() {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
+
+    let (width, height) = img.dimensions();
+    let dims = crate::checked_dims::CheckedDims::new(width, height, 4)?;
+    let destination_bytes = destination.as_raw();
+    let source_bytes = source_image.as_raw();
+    if destination_bytes.len() != dims.total_bytes() || source_bytes.len() != dims.total_bytes() {
+        return Err(PilError::InternalError(
+            "RGBA alpha composite mirror storage does not match its dimensions".into(),
+        ));
+    }
+
+    let mut output = dims.alloc_buffer();
+    let uniform_pixel = |bytes: &[u8]| {
+        let first: [u8; 4] = bytes.get(..4)?.try_into().ok()?;
+        bytes
+            .chunks_exact(4)
+            .all(|pixel| pixel == first.as_slice())
+            .then_some(first)
+    };
+    if let (Some(source_pixel), Some(destination_pixel)) = (
+        uniform_pixel(source_bytes),
+        uniform_pixel(destination_bytes),
+    ) {
+        let mut result_pixel = destination_pixel;
+        alpha_composite_pixel::<4>(&source_pixel, &mut result_pixel);
+        for pixel in output.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&result_pixel);
+        }
+    } else {
+        let row_stride = dims.row_stride();
+        for (row_index, output_row) in output.chunks_exact_mut(row_stride).enumerate() {
+            let row_start = row_index * row_stride;
+            for (output_x, output_pixel) in output_row.chunks_exact_mut(4).enumerate() {
+                let source_x = width as usize - 1 - output_x;
+                let source_offset = row_start + source_x * 4;
+                output_pixel.copy_from_slice(&destination_bytes[source_offset..source_offset + 4]);
+                alpha_composite_pixel::<4>(
+                    &source_bytes[source_offset..source_offset + 4],
+                    output_pixel,
+                );
+            }
+        }
+    }
+
+    let result = crate::image_utils::raw_bytes_to_image_allow_empty(width, height, output, 4)?;
+    Ok(preserve_mode(img, result))
+}
+
 // ── Merge ──
 
 #[allow(unsafe_code)]

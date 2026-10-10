@@ -312,9 +312,10 @@ class BenchmarkViewTests(unittest.TestCase):
         # Pin the complete generated catalog so additions and removals must
         # keep both public benchmark tables current. These counts match the
         # checked-in generated input catalog.
-        # The native L uniform 5x5 benchmark is an additional operation row.
-        self.assertEqual(len(workloads), 658)
-        self.assertEqual(categories.count("operations"), 196)
+        # The native L uniform 5x5 row and four native F/I Thumbnail sizes are
+        # additional operation rows in the checked-in generated catalog.
+        self.assertEqual(len(workloads), 662)
+        self.assertEqual(categories.count("operations"), 200)
         self.assertEqual(categories.count("pipelines"), 462)
 
     def test_all_observations_retained_without_mutating_snapshot(self):

@@ -58,7 +58,7 @@ struct PyGpuBatchExecutor {
 #[pymethods]
 impl PyGpuBatchExecutor {
     #[new]
-    #[pyo3(signature = (*, queue=true, gpu_bytes=536870912, host_bytes=268435456, max_jobs=64, max_in_flight=2))]
+    #[pyo3(signature = (*, queue=true, gpu_bytes=536870912, host_bytes=268435456, max_jobs=64, max_in_flight=4))]
     fn new(
         py: Python<'_>,
         queue: bool,

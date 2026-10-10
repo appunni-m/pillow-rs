@@ -13739,6 +13739,118 @@
       }
     },
     {
+      "workload_id": "pipeline-op.thumbnail.native-f32-512x384",
+      "covers": [
+        "PIL.Image.Image.thumbnail.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.thumbnail.nuanced.performance-large-f-512x384"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          512,
+          384
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-op.thumbnail.native-i32-512x384",
+      "covers": [
+        "PIL.Image.Image.thumbnail.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.thumbnail.nuanced.performance-large-i-512x384"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          512,
+          384
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-op.thumbnail.native-f32-1024x768",
       "covers": [
         "PIL.Image.Image.thumbnail.performance.standard"
@@ -13842,6 +13954,118 @@
         "size": [
           1024,
           768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-op.thumbnail.native-f32-2048x1536",
+      "covers": [
+        "PIL.Image.Image.thumbnail.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.thumbnail.nuanced.performance-large-f-2048x1536"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          2048,
+          1536
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-op.thumbnail.native-i32-2048x1536",
+      "covers": [
+        "PIL.Image.Image.thumbnail.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.thumbnail.nuanced.performance-large-i-2048x1536"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          2048,
+          1536
         ],
         "mode": "I",
         "chain_length": 1,
@@ -246856,14 +247080,30 @@
     },
     {
       "suite_id": "pipeline-operations.thumbnail-typed-scalar-suite",
-      "description": "Material noisy F-mode and I-mode thumbnail reduction plus terminal materialization across CPU, SIMD, and GPU.",
+      "description": "Material noisy F-mode and I-mode thumbnail reduction at three source sizes, plus terminal materialization across CPU, SIMD, and GPU.",
       "members": [
+        {
+          "workload_id": "pipeline-op.thumbnail.native-f32-512x384",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-op.thumbnail.native-i32-512x384",
+          "weight": 1
+        },
         {
           "workload_id": "pipeline-op.thumbnail.native-f32-1024x768",
           "weight": 1
         },
         {
           "workload_id": "pipeline-op.thumbnail.native-i32-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-op.thumbnail.native-f32-2048x1536",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-op.thumbnail.native-i32-2048x1536",
           "weight": 1
         }
       ]

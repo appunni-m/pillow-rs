@@ -32,6 +32,7 @@ from scripts.run_migration_benchmark import (
 )
 from scripts.run_migration_parity import (
     DEFAULT_MANIFEST,
+    _benchmark_receipt_can_skip_observation_serialization,
     classify_pipeline_case,
     load_cases,
     load_manifest,
@@ -68,6 +69,8 @@ RESOURCE_FIELDS = (
     "host_buffer_bytes",
     "peak_live_host_bytes",
     "fused_operation_count",
+    "host_allocation_count",
+    "host_allocated_bytes",
 )
 
 
@@ -141,9 +144,9 @@ class BenchmarkSuiteComparabilityTests(unittest.TestCase):
                 "terminal_complete": True,
                 "requested_backend": "cpu",
                 "actual_backend": "cpu",
-                "actual_backend_counts": {"cpu": 2},
+                "actual_backend_counts": {"cpu": 1},
                 "fallback_reason_counts": {},
-                "sample_count": 2,
+                "sample_count": 1,
                 "errors": [],
             },
         )
@@ -934,7 +937,7 @@ class ReceiptStateTests(unittest.TestCase):
         self.assertEqual(report["status"], "proven")
 
     def test_benchmark_execution_keeps_prefix_fallbacks_out_of_no_fallback_claim(self) -> None:
-        first = benchmark_record(terminal_complete=True)
+        first = benchmark_record(terminal_complete=False)
         first["fallback_reason"] = "exact host semantic control"
         result = execution_result(
             "target_profile",
@@ -1033,8 +1036,48 @@ class ReceiptStateTests(unittest.TestCase):
         self.assertTrue(result["terminal_complete"])
         self.assertEqual(result["actual_backend_counts"], {"gpu": 1})
 
+    def test_representative_receipt_is_not_sliced_as_a_timing_warmup(self) -> None:
+        record = benchmark_record(terminal_complete=True)
+        record["actual_backend"] = "cpu"
+        result = execution_result(
+            "target_profile",
+            "python-cpu",
+            [record],
+            {"warmup_iterations": 5, "measurement_iterations": 20, "samples": 5},
+        )
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["sample_count"], 1)
+        self.assertEqual(result["actual_backend_counts"], {"cpu": 1})
+
+    def test_benchmark_execution_reports_checked_host_allocations(self) -> None:
+        record = benchmark_record(terminal_complete=True)
+        record["resource"].update(
+            host_allocation_count=2,
+            host_allocated_bytes=2_368_512,
+        )
+        result = execution_result(
+            "target_profile",
+            "python-cpu",
+            [record],
+            aggregate_policy(),
+        )
+        self.assertEqual(
+            result["resource"]["host_allocation_count"]["median"], 2
+        )
+        self.assertEqual(
+            result["resource"]["host_allocated_bytes"]["median"], 2_368_512
+        )
+
     def test_legacy_receipt_without_bit_remains_accepted(self) -> None:
         legacy = execution_receipt_value(terminal_complete=None)
+        execution_receipt(legacy, "legacy.execution")
+
+    def test_legacy_resource_receipt_without_allocation_counters_remains_accepted(
+        self,
+    ) -> None:
+        legacy = execution_receipt_value(status="completed", terminal_complete=True)
+        legacy["resource"].pop("host_allocation_count")
+        legacy["resource"].pop("host_allocated_bytes")
         execution_receipt(legacy, "legacy.execution")
 
     def test_impossible_aggregate_states_are_rejected(self) -> None:
@@ -1701,6 +1744,39 @@ class ReceiptStateTests(unittest.TestCase):
                 "reason": "workflow contains no deferred image-pipeline operation",
             },
         )
+
+    def test_benchmark_receipt_proof_skips_redundant_intermediate_observations(
+        self,
+    ) -> None:
+        case = {
+            "steps": [
+                {"step_id": "composited", "operation": "alpha_composite"},
+                {"step_id": "mirrored", "operation": "mirror"},
+                {"step_id": "materialize", "operation": "tobytes"},
+            ]
+        }
+        with patch("scripts.run_migration_parity.BENCHMARK_ADAPTER", True):
+            self.assertTrue(
+                _benchmark_receipt_can_skip_observation_serialization(
+                    case, has_execution_output=True
+                )
+            )
+            self.assertFalse(
+                _benchmark_receipt_can_skip_observation_serialization(
+                    case, has_execution_output=False
+                )
+            )
+            self.assertFalse(
+                _benchmark_receipt_can_skip_observation_serialization(
+                    {"steps": case["steps"][:-1]}, has_execution_output=True
+                )
+            )
+        with patch("scripts.run_migration_parity.BENCHMARK_ADAPTER", False):
+            self.assertFalse(
+                _benchmark_receipt_can_skip_observation_serialization(
+                    case, has_execution_output=True
+                )
+            )
 
     def test_successful_final_observation_keeps_prior_receipt_terminal(self) -> None:
         class Telemetry:

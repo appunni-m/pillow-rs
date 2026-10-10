@@ -1127,6 +1127,37 @@ newly declared complete. The next bounded visit is `PIL.Image.Image.resize`,
 including its mapped pipeline workloads; Grayscale remains pending with the
 specific blockers above.
 
+### Grayscale follow-up: CMYK arithmetic and queue tuning, 2026-10-10
+
+The local CMYK grayscale CPU path now uses an exact `u16` MULDIV255 helper;
+the exhaustive byte-pair check and two matched end-to-end cohorts are recorded
+in `docs/BENCHMARKING.md`. Keep that CPU candidate for its tested input while
+the grayscale API remains open for its other modes, sizes, and backend targets.
+
+The explicit GPU batch default is now `max_in_flight=4`. Matched 64-image,
+1024² completed-window comparisons measured queued GPU at 1,150.1/811.0/706.6
+images/s for L/RGB/CMYK with two flights, 1,233.0/971.1/726.0 across two
+four-flight runs, and 1,329.3/1,028.1/786.7 with the rebuilt four-flight
+default. Each timed window includes construction, submission, execution,
+materialization, and byte export. Exact bytes passed; requested backends ran
+without fallback. Queued GPU reached only 0.181×/0.278×/0.353× SIMD throughput
+in the rebuilt-default run, and no sustained kernel overlap was established.
+A matched eight-flight diagnostic was mixed: L throughput fell slightly,
+RGB/CMYK gained only a few percent, and submission counts increased; keep four
+as the default.
+
+A direct mapped-input upload trial preserved exact output but cut queued RGB
+throughput to 466.6 images/s from 1,028.1. The post-revert control returned to
+1,016.4 images/s. Reject mapped uploads for this batched path and keep
+`queue.write_buffer`; the transfer volume did not change.
+
+The initial system-Python 3.9/Pillow 11.3 queue timings are marked
+inconclusive because the project's oracle pin is Pillow 12.2.0. The benchmark
+runner now records the installed Pillow distribution separately from the
+replacement facade version. Full eligible and excluded rows are retained in
+`docs/evidence/performance-optimization-local-runs.csv`; the focus remains
+grayscale until all serial CPU gaps are cleared. No coverage was run.
+
 ## Resize visit
 
 This visit uses four bounded attempts: repair source-box/reduction semantics,
@@ -21177,6 +21208,69 @@ The experiments and their parity sidecars are
 `build/migration-parity/`. The LA CPU slowdown remains open. Keep the complete
 per-operation CSV tied to its clean published source snapshot; these local
 candidate runs update this dated investigation only. No coverage was run.
+
+### F-mode resize four-lane SIMD trial — rejected — 2026-10-10
+
+For `pipeline-chain.resize-native-f32.bicubic-noise-1024x768`, an experimental
+four-lane `f64x4` version of the existing exact-2:1 horizontal and vertical
+coefficient plans preserved tap order and the f32 pass boundary. The clean
+eight-lane working-tree control and candidate each ran five warmups followed
+by 20 iterations across five samples at concurrency one. The observed-step
+boundary measures the resize call and result materialization; the report also
+retains the wider phase total, which includes setup. Both reports passed all
+three backend parity comparisons, and CPU, SIMD, and GPU receipts named their
+actual backend with no fallback.
+
+| Cohort | Pillow | Serial CPU | Pillow/CPU | SIMD | Pillow/SIMD | GPU | SIMD/GPU |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Eight-lane control | 3.049437 ms | 1.185167 ms | 2.573× | 2.435105 ms | 1.2523× | 58.527104 ms | 0.04161× |
+| Four-lane candidate | 2.801813 ms | 1.063375 ms | 2.635× | 2.238396 ms | 1.2517× | 53.717479 ms | 0.04167× |
+
+The four-lane SIMD time fell by about 8%, but its paired Pillow time fell by
+about the same amount; the normalized SIMD/Pillow result was unchanged. Treat
+the absolute shift as run variation and revert the four-lane change. The
+retained eight-lane SIMD path remains short of the requested 2× Pillow target.
+The GPU receipt records two dispatches, 3 MiB uploaded, 768 KiB read back, and
+one full-frame copy; sustained throughput is unmeasured. Host allocation
+telemetry reports zero and does not count every Rust temporary. No genuine test
+defect was found and no coverage was run.
+
+Receipts are `build/migration-parity/f32-resize-four-lane-control-20261010.json`
+and `build/migration-parity/f32-resize-four-lane-candidate-20261010.json`, with
+parity sidecars using the corresponding `-parity` names. Run IDs are
+`migration-benchmark-e19d52837e3a4d66aafeb71638af7dc6` and
+`migration-benchmark-a7bb214436974e77b3b48016d32c8414`. The complete published
+cross-runner operation matrix remains tied to its existing clean snapshot;
+these local cohorts are retained in the local-run evidence ledger.
+
+### F-mode vertical SIMD weight broadcast hoist — rejected — 2026-10-10
+
+The next trial stored each vertical tap's broadcast `f64x8` weight once per
+output row and reused it across horizontal blocks, leaving tap order unchanged.
+The control and candidate each used five warmups, 20 iterations across five
+samples, concurrency one, and the call-plus-materialization observed-step
+boundary. Both parity gates passed all three CPU/SIMD/GPU comparisons, with the
+requested backends executing and no fallback.
+
+| Cohort | Pillow | Serial CPU | Pillow/CPU | SIMD | Pillow/SIMD | GPU | SIMD/GPU |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Eight-lane control | 2.800271 ms | 1.043229 ms | 2.684× | 1.972625 ms | 1.4196× | 52.362938 ms | 0.03767× |
+| Pre-splatted vertical weights | 2.807084 ms | 0.968896 ms | 2.897× | 2.041500 ms | 1.3750× | 52.406458 ms | 0.03896× |
+
+Pillow and GPU were stable, while SIMD regressed 3.5% and its normalized
+Pillow speedup fell from 1.420× to 1.375×. Revert the candidate. The GPU
+executed two dispatches, uploaded 3 MiB, read back 768 KiB, and copied one full
+frame; sustained throughput is unmeasured. Allocation telemetry does not count
+every Rust temporary. No genuine test defect was found and no coverage was run.
+
+Receipts are `build/migration-parity/f32-resize-vertical-splat-control-20261010.json`
+and `build/migration-parity/f32-resize-vertical-splat-candidate-20261010.json`,
+with `-parity` sidecars. Run IDs are
+`migration-benchmark-4d73beda13564a2fb54ae70cc4c2df36` and
+`migration-benchmark-73b30e1776ac4929a1f05e217934cce2`. Eight rows were added
+to the local-run evidence ledger (1,566 rows); the published operation matrix
+remains tied to its existing clean snapshot.
+
 The next known current-source CPU miss is material RGB Thumbnail at 0.920×
 Pillow (1.1675 ms CPU versus 1.0744 ms Pillow); its old published row uses an
 invalid boundary, so use the local whole-workflow evidence when ranking it.
@@ -21215,3 +21309,157 @@ published snapshot until a fresh full GitHub benchmark is available. Receipts
 are `rgb-thumb-current-source-baseline-20261008.json` and
 `rgb-thumb-all-zero-byte-scan-attempt1-20261008.json`, with parity sidecars
 under `build/migration-parity/`. No coverage was run.
+
+### F Resize explicit GPU batching follow-up, 2026-10-10
+
+The explicit graph planner now accepts F-mode filtered Resize only when the
+ordered-f64 shader contract proves the geometry and computes the exact stage
+arena reservation from the same cached coefficient tables. A 2048×1536 graph
+previously reached stage compilation with a generic coefficient estimate and
+failed its fixed reservation. Dynamic planning now charges the ordered-f64
+tables before upload and retains the existing lease accounting.
+
+Queued and eager GPU each passed 253/253 exact Pillow graph comparisons,
+including the 2048×1536 to 1024×768 case. Nine GPU stream lifecycle/lease
+contract checks also passed. The final parity-gated completed-window cohort
+used fresh graphs, two warmup windows, seven measured windows, and included
+construction, submission, execution, materialization, and byte export. Queued
+GPU rates were 1,343.5/538.6/145.8 images/s at 256×768/1024×768/2048×1536;
+SIMD rates were 2,693.5/646.5/150.9. GPU executed the requested backend with no
+fallback and used two dispatches per graph. It remains below SIMD at all three
+sizes; the 2048 case is close but does not demonstrate a gain. The separate
+single-image F Resize measurement is still about 1.18× slower than SIMD, and
+long-duration sustained throughput is unmeasured. Keep Resize open.
+
+Evidence is retained in `docs/evidence/performance-optimization-local-runs.csv`
+and ignored run reports `build/migration-parity/f-resize-batch-final-*.json`.
+No genuine test defect was found; the large-graph failure was an implementation
+reservation defect, now covered by the 2048 parity case. No coverage was run.
+
+## RGB material `Image.thumbnail` CPU sparse-row pass — 2026-10-10
+
+The latest parity-gated public workload is
+`pipeline-op.thumbnail.material-rgb-1024x768`: create a black 1024×768 RGB
+image, write one pixel, call `thumbnail((256,256), resample=2/BILINEAR)`, then
+materialize with `tobytes()`. Timing covers that whole workflow, including
+allocation and export; each report has 100 observations (five warmups, twenty
+iterations, five samples) at concurrency one.
+
+The prior CPU path already fused the RGB PutPixel+Thumbnail graph and used a
+sparse 2×2 reducer, but discarded which reduced rows contained output data. The
+retained change carries exact active-row facts from that reducer into the
+boxed RGB resize. It skips horizontal rows the sparse reducer proved zero and
+vertical outputs whose filter taps touch only those zero rows. Dense reduction
+keeps the established path; the hint is absent unless the reducer's bounded
+sparse scan succeeds. Sparse and dense materialized results passed the focused
+five-filter RGB fusion comparison, and the sparse-reducer test still matches
+the generic reference and rejects dense inputs.
+
+The same-source baseline measured serial CPU at 780.3 µs versus Pillow at
+1,103.4 µs (1.41×). Two candidate runs measured CPU at 206.0 and 243.0 µs
+versus Pillow at 1,059.1 and 1,060.1 µs (5.14× and 4.36×). The median of the
+paired speedups is 4.75×, clearing the user-requested 2× CPU sequencing tier
+for this workload. Both runs reported the actual CPU backend, complete
+materialization, and no fallback.
+
+The unchanged SIMD profile measured 421.0/431.3 µs (2.52×/2.46× Pillow); it
+meets the user's 2× comparison on this row but remains below the repository's
+5× SIMD target. GPU measured 2,351.2/2,225.7 µs and ran the actual GPU backend
+without fallback, but reached only 0.18×/0.19× SIMD latency. It used three
+dispatches, uploaded 3,145,728 bytes, read back 196,608 bytes, and performed a
+mode conversion. Sustained GPU throughput was not measured. Parallel CPU was
+not measured, and no Pillow-SIMD comparison is recorded because the current
+published Pillow-SIMD JSON is dirty, partial, and has no Thumbnail workload.
+
+Keep the operation open: the result covers one RGB size and one materialized
+pipeline, while the other sizes and modes, Parallel CPU, the 5× SIMD bar, and
+GPU latency/throughput targets remain. Local evidence is in
+`docs/evidence/performance-optimization-local-runs.csv`; reports are
+`build/migration-parity/thumbnail-rgb-current-baseline-20261010.json`,
+`build/migration-parity/thumbnail-rgb-sparse-row-candidate1-20261010.json`, and
+`build/migration-parity/thumbnail-rgb-sparse-row-candidate1-repeat-20261010.json`
+with parity sidecars. No parity-test defect was found and no coverage was run.
+
+## Thumbnail native typed-mode CPU ranking — 2026-10-10
+
+Fresh reports for `pipeline-op.thumbnail.native-f32-1024x768` and
+`pipeline-op.thumbnail.native-i32-1024x768` measure the public call and result
+materialization (`call`, `observe-receiver`) for 100 observations at
+concurrency one; input setup is a separate phase. Both passed exact live-Pillow
+parity. On this Apple arm64 host, F mode measured 988.1 µs Pillow / 356.3 µs
+serial CPU (2.77×); SIMD measured 534.4 µs (1.85× Pillow). I mode measured
+874.3 µs Pillow / 457.0 µs serial CPU (1.91×); SIMD measured 1,542.9 µs
+(0.57×). These are local statuses and do not replace the x86/hosted matrix.
+Both requested GPU profiles fell back to CPU because the exact reducing-gap
+and typed-arithmetic semantic control is not proven; exclude them as GPU
+measurements.
+
+An arithmetic-only I thumbnail candidate replaced the complete 2×2 quartet's
+`round_up(f64(sum)/4)` with integer quotient/remainder rounding. The mapping is
+mathematically exact for wrapped i32 sums, and the focused five-test I
+thumbnail suite passed while the candidate was present. Two candidate reports
+passed Pillow parity, but their call-plus-materialization CPU/Pillow speedups
+were 1.72× and 1.73× versus 1.91× in the pre-candidate and post-revert
+controls. No repeatable gain appeared, so the integer substitution was
+reverted; Pillow's floating-point rounding rule remains in place.
+
+For even-sized native-I images whose reducing-gap factors are exactly 2×2, the
+retained serial-CPU candidate streams each reduced row into the existing
+vertical resize ring. It preserves Reduce.c's wrapped-i32 quartet, f64
+round-up, and the i32 horizontal and vertical pass boundaries while avoiding a
+full reduced image allocation. A five-filter, two-size comparison against the
+materialized reduce-then-resize reference passed exactly, including i32 edge
+values. Four parity-gated candidate cohorts measured CPU/Pillow speedups of
+1.79×, 2.03×, 2.11×, and 2.03×; the adjacent materialized control measured
+1.87×. The adjacent candidate reduced CPU latency from 455.8 to 422.4 µs while
+Pillow stayed at 852.2/856.0 µs, so this local comparison clears the requested
+2× CPU tier. SIMD remains slower than Pillow at 0.46×–0.56×. GPU requests
+continued to fall back to CPU and do not count as GPU execution. Parallel CPU,
+other modes and sizes, Pillow-SIMD, and GPU latency/throughput remain open.
+
+The local ledger now has 2,465 rows. A boundary audit corrected 52 existing
+Thumbnail rows so median, p95, and speed ratios use each report's declared
+latency measurement rather than setup-inclusive phase totals; the full phase
+totals remain available in the JSON reports. Receipts include
+`build/migration-parity/thumbnail-f32-whole-workflow-20261010.json`,
+`build/migration-parity/thumbnail-i32-whole-workflow-20261010.json`,
+`build/migration-parity/thumbnail-i32-int-round-candidate1-20261010.json`,
+`build/migration-parity/thumbnail-i32-int-round-candidate1-repeat-20261010.json`,
+`build/migration-parity/thumbnail-i32-int-round-recontrol-20261010.json`, and
+the `thumbnail-i32-streaming-reduce-{candidate,control}-*.json` reports, with
+parity sidecars. This was a benchmark-ledger boundary error, not a parity-test
+defect. No genuine test defect was found and no coverage was run.
+
+### Native-I Thumbnail SIMD stride-two gather — rejected — 2026-10-10
+
+The trial replaced the regular eight-lane source-index array construction with
+explicit scalar loads from every other INT32 source sample inside the fused
+2×2 reducing-gap path. Two immediately adjacent cohorts measured the same
+three native-I public Thumbnail workloads: 512×384, 1024×768, and 2048×1536.
+Each cohort used five warmups, 20 iterations across five samples (100
+observations), concurrency one, and the `call` plus `observe-receiver`
+measurement boundary. Both passed all 18 live Pillow parity comparisons.
+Receipts confirmed the CPU and SIMD paths actually ran with no fallback.
+
+| Input | Pillow | CPU | Pillow/CPU | SIMD without stride gather | Pillow/SIMD | SIMD with stride gather | Pillow/SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 512×384 | 226.4 µs | 109.6 µs | 2.07× | 158.4 µs | 1.43× | 198.4 µs | 1.10× |
+| 1024×768 | 866.7 µs | 415.4 µs | 2.09× | 613.2 µs | 1.41× | 756.3 µs | 1.14× |
+| 2048×1536 | 3,453.9 µs | 1,601.0 µs | 2.16× | 2,453.9 µs | 1.41× | 3,173.0 µs | 1.09× |
+
+The candidate's normalized SIMD speedup fell at every size, so remove the
+specialization and keep the lane-masked indexed gather. On a final rerun after
+regenerating the checked-in input corpus, the retained implementation again
+passed 18/18 parity comparisons. Native-I CPU/Pillow speedups measured 1.95×,
+2.05×, and 2.24× at the same three sizes; SIMD measured 1.36×, 1.41×, and
+1.42×. CPU stayed at or below Pillow latency, while the 512×384 CPU case
+remains just under the user's 2× sequencing tier and should stay in the active
+priority set. The retained SIMD path remains below the requested 2× Pillow
+target. The GPU profile fell back to CPU because the exact typed reducing-gap
+host control is not proven; exclude it from GPU latency and throughput claims.
+No sustained GPU throughput was measured. The case set exposed no genuine
+parity-test defect and no coverage was run. The paired rows are in
+`docs/evidence/performance-optimization-local-runs.csv`; the reports and
+parity receipts are
+`build/migration-parity/thumbnail-native-i-{stride-gather,no-stride-gather,final}-20261010.json`
+and their `-parity` sidecars.

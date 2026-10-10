@@ -64,6 +64,15 @@ if TARGET_PROFILE_OVERRIDE == "parallel-cpu":
 STRICT_TARGET_BACKEND = os.environ.get(
     "MIGRATION_STRICT_TARGET_BACKEND", "0"
 ).strip().lower() in {"1", "true", "yes"}
+# The benchmark adapter activates exactly one backend and checks an untimed
+# execution receipt from the same case using the same no-lock dispatch policy.
+# Do not call the target-only locking helper in timed or proof runs: eager
+# operations do not need it, and locking a lazy graph changes its cache state.
+# Strict parity/capability runs retain the lock so an unsupported graph is
+# forced through the requested route.
+BENCHMARK_ADAPTER = os.environ.get(
+    "MIGRATION_PARITY_BENCHMARK_ADAPTER", "0"
+).strip().lower() in {"1", "true", "yes"}
 DEFAULT_GPU_TIMEOUT_SECONDS = 120
 MAX_GPU_TIMEOUT_SECONDS = 300
 PROCESS_REAP_TIMEOUT_SECONDS = 10
@@ -749,6 +758,12 @@ def _call_arguments(
     return positional, keywords
 
 
+def should_lock_target_backend(side: str) -> bool:
+    """Return whether this strict target run must force lazy image routing."""
+
+    return side == "target" and STRICT_TARGET_BACKEND and not BENCHMARK_ADAPTER
+
+
 def call_workflow_step(
     side: str,
     step: dict[str, Any],
@@ -769,7 +784,7 @@ def call_workflow_step(
         , side=side
     )
     operation = step["operation"]
-    if side == "target" and STRICT_TARGET_BACKEND and lock_backend:
+    if should_lock_target_backend(side) and lock_backend:
         # Strict capability audits must lock every image participating in a
         # workflow before Python enters the public operation.  Locking only
         # ``tobytes`` misses static functions (for example ImageChops) and
@@ -884,7 +899,7 @@ def _serialize_image_record(
         # `ImageOps.exif_transpose` with `in_place=True`) serialize as
         # null; the comparison policy still applies to non-null values.
         return None
-    if side == "target" and STRICT_TARGET_BACKEND:
+    if should_lock_target_backend(side):
         value = lock_target_image_pipeline(value)
     try:
         raw = bytes(value.tobytes())
@@ -1265,6 +1280,29 @@ _TERMINAL_OBSERVATION_OPS = {
     "var",
     "stddev",
 }
+
+
+def _benchmark_receipt_can_skip_observation_serialization(
+    case: dict[str, Any], *, has_execution_output: bool
+) -> bool:
+    """Avoid replacing a measured terminal receipt with an intermediate read.
+
+    The benchmark's parity preflight serializes every observation separately.
+    Its untimed receipt proof only needs the route taken by the complete
+    workflow. When that workflow already ends with a materializing observation,
+    serializing intermediate image observations again can execute an earlier
+    lazy prefix and overwrite the full-workflow receipt.
+    """
+
+    steps = case.get("steps")
+    return (
+        BENCHMARK_ADAPTER
+        and has_execution_output
+        and isinstance(steps, list)
+        and bool(steps)
+        and isinstance(steps[-1], dict)
+        and steps[-1].get("operation") in _TERMINAL_OBSERVATION_OPS
+    )
 
 
 def _observation_materializes_pipeline(step: dict[str, Any]) -> bool:
@@ -2762,7 +2800,12 @@ def _run_side_subprocess_batch(
     # can exceed a gigabyte.  Release the raw text before retaining the parsed
     # case records so constrained CI runners do not keep both representations.
     del stdout
-    if set(result) != {"identity", "results"}:
+    required_envelope_keys = {"identity", "results"}
+    optional_envelope_keys = {"timings_ns", "telemetry", "execution"}
+    if (
+        not required_envelope_keys.issubset(result)
+        or set(result) - required_envelope_keys - optional_envelope_keys
+    ):
         raise RuntimeError(f"{side} adapter emitted invalid handshake envelope")
     results = result["results"]
     by_id = {item["case_id"]: item for item in results}
@@ -3888,7 +3931,7 @@ def run_resident_case(
     # is correct for ordinary parity observations, but it would turn this
     # benchmark's resident lifecycle into repeated cold execution.  The
     # terminal calls below therefore skip the lock after this one setup.
-    if side == "target" and STRICT_TARGET_BACKEND:
+    if should_lock_target_backend(side):
         locked_receivers: set[int] = set()
         for terminal in terminal_steps:
             receiver_desc = terminal.get("receiver")
@@ -3999,7 +4042,10 @@ def run_side(args: argparse.Namespace) -> int:
         if args.side == "target"
         else None
     )
-    if (args.timings or execution_output) and args.side == "target":
+    # Backend receipts are collected in a separate untimed adapter run.  When
+    # timing only, leave pipeline telemetry disabled so its bookkeeping does
+    # not become target-only work inside the measured public call.
+    if execution_output and args.side == "target":
         telemetry_api = importlib.import_module("pillow_rs._core")
         telemetry_api.set_pipeline_telemetry(True)
     shader_coverage_output = os.environ.get("MIGRATION_GPU_WGSL_COVERAGE_OUTPUT")
@@ -4053,7 +4099,12 @@ def run_side(args: argparse.Namespace) -> int:
                             timing_sink=sink if args.timings else None,
                             telemetry_sink=phase_sink if args.timings else None,
                             timing_boundary=args.timing_boundary,
-                            serialize_observations=not args.timings,
+                            serialize_observations=(
+                                not args.timings
+                                and not _benchmark_receipt_can_skip_observation_serialization(
+                                    case, has_execution_output=bool(execution_output)
+                                )
+                            ),
                             pipeline_execution_api=(
                                 telemetry_api if execution_output else None
                             ),
@@ -4133,7 +4184,7 @@ def run_side(args: argparse.Namespace) -> int:
             results=evidence_results,
         )
     envelope: dict[str, Any] = {"identity": handshake, "results": results}
-    if args.timings:
+    if args.timings or execution_output:
         envelope["timings_ns"] = timings
         envelope["telemetry"] = telemetry
         envelope["execution"] = execution

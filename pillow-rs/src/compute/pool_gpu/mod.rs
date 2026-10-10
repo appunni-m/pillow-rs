@@ -29,6 +29,7 @@ use std::collections::HashMap;
 use std::num::NonZeroU64;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use wide::u8x16;
 
 /// Explicit bounded GPU scheduling; ordinary image routing stays independent.
 pub(crate) mod stream;
@@ -81,6 +82,34 @@ const GPU_NATIVE_RGB_LUMA_MERGE_MODE: u32 = 0x4d524742;
 // route to host semantic control.
 const GPU_F_AFFINE_PROOF_MAX_PIXELS: usize = 1024 * 1024;
 const MAX_GPU_SCALE_FIXED_POINT: f64 = u32::MAX as f64;
+
+fn projection_source_is_zero(source: &[u8]) -> bool {
+    let zero = u8x16::splat(0);
+    let mut blocks = source.chunks_exact(64);
+    for block in blocks.by_ref() {
+        let mut combined = zero;
+        for samples in block.chunks_exact(16) {
+            let lanes: [u8; 16] = samples
+                .try_into()
+                .expect("projection SIMD zero check has sixteen-byte lanes");
+            combined |= u8x16::new(lanes);
+        }
+        if combined != zero {
+            return false;
+        }
+    }
+
+    let remainder = blocks.remainder();
+    let mut tail = remainder.chunks_exact(16);
+    let mut combined = zero;
+    for samples in tail.by_ref() {
+        let lanes: [u8; 16] = samples
+            .try_into()
+            .expect("projection SIMD zero check has sixteen-byte lanes");
+        combined |= u8x16::new(lanes);
+    }
+    combined == zero && tail.remainder().iter().all(|&byte| byte == 0)
+}
 // Add/Subtract currently dispatch only the exact unit-divisor/integral-offset
 // subset. Other valid public parameters are routed to CPU until the shader
 // carries the full f64 contract without rounding differences.
@@ -91,10 +120,11 @@ const MAX_GPU_SCALE_FIXED_POINT: f64 = u32::MAX as f64;
 const GPU_READBACK_TIMEOUT: Duration = Duration::from_secs(30);
 /// Even large transfers can finish before the native scheduler's 1 ms timer
 /// granularity. Give every read a bounded initial polling window; long jobs
-/// return to the conservative backoff after a fixed retry count. Thirty-two
-/// retries avoid ending this window just before a typical frame completes.
+/// return to the conservative backoff after a fixed retry count. Sixty-four
+/// retries avoid ending this window just before a short compute frame
+/// completes and paying a whole additional millisecond of scheduler delay.
 const GPU_POLL_FAST_BACKOFF: Duration = Duration::from_micros(50);
-const GPU_POLL_FAST_RETRIES: usize = 32;
+const GPU_POLL_FAST_RETRIES: usize = 64;
 const GPU_POLL_BACKOFF: Duration = Duration::from_millis(1);
 /// Pillow's `ImagingLineBoxBlur{8,32}` in `src/libImaging/BoxBlur.c` uses a
 /// normalized replicated-edge average, so a constant image remains constant
@@ -2039,11 +2069,134 @@ fn gpu_f_resize_uses_pillow_tall_order(
         && destination_dimensions.0 != source_dimensions.0
 }
 
+/// Check the static bounds required by the exact ordered-f64 GPU reducer.
+/// Its integer implementation mirrors Pillow's per-tap binary64 rounding;
+/// input words are handled in the shader, including subnormals and IEEE
+/// specials. Keep the unrolled horizontal FMA domain bounded to 15 taps and
+/// avoid tiled coefficient transport here; wider cases use the existing
+/// input-driven proof until they have a matching device contract.
+fn gpu_f_resize_f64_ordered_shader_is_supported(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if logical_mode != Some("F") || ops.len() != 1 || !matches!(image, DynamicImage::ImageRgba8(_))
+    {
+        return false;
+    }
+    let DynamicImage::ImageRgba8(pixels) = image else {
+        return false;
+    };
+    let PipelineOp::Resize { w, h, filter } = &ops[0] else {
+        return false;
+    };
+    let source_dimensions = image.dimensions();
+    let source_checked = CheckedDims::new(source_dimensions.0, source_dimensions.1, 4).ok();
+    if source_checked
+        .as_ref()
+        .is_none_or(|dims| dims.total_pixels() > GPU_BUFFER_CAPACITY as usize)
+        || source_checked.map(|dims| dims.total_bytes()) != Some(pixels.as_raw().len())
+    {
+        return false;
+    }
+
+    gpu_f_resize_f64_ordered_geometry_is_supported(source_dimensions, (*w, *h), *filter)
+}
+
+fn gpu_f_resize_f64_ordered_geometry_is_supported(
+    source_dimensions: (u32, u32),
+    destination_dimensions: (u32, u32),
+    filter: ResampleFilter,
+) -> bool {
+    gpu_f_resize_f64_ordered_coefficients(source_dimensions, destination_dimensions, filter)
+        .is_some()
+}
+
+fn gpu_f_resize_f64_ordered_coefficients(
+    source_dimensions: (u32, u32),
+    destination_dimensions: (u32, u32),
+    filter: ResampleFilter,
+) -> Option<(Arc<FilterCoeffsF64>, Arc<FilterCoeffsF64>)> {
+    if matches!(filter, ResampleFilter::Nearest)
+        || source_dimensions.0 == 0
+        || source_dimensions.1 == 0
+        || destination_dimensions.0 == 0
+        || destination_dimensions.1 == 0
+        || destination_dimensions == source_dimensions
+        || CheckedDims::new(destination_dimensions.0, destination_dimensions.1, 1)
+            .ok()
+            .is_none_or(|dims| dims.total_pixels() > GPU_BUFFER_CAPACITY as usize)
+    {
+        return None;
+    }
+
+    let (kernel, support) = filter_from_resample(filter);
+    let horizontal = precompute_coeffs_f64(
+        destination_dimensions.0,
+        source_dimensions.0,
+        kernel,
+        support,
+    );
+    let vertical = precompute_coeffs_f64(
+        destination_dimensions.1,
+        source_dimensions.1,
+        kernel,
+        support,
+    );
+    for (coeffs, horizontal_axis) in [(&horizontal, true), (&vertical, false)] {
+        if coeffs.xmin.len() != coeffs.count.len()
+            || coeffs.xmin.len() != coeffs.weights.len()
+            || coeffs.count.iter().any(|&count| {
+                count == 0
+                    || count > GPU_F_RESIZE_TILE_TAPS
+                    || (horizontal_axis && count > GPU_F_RESIZE_HORIZONTAL_FMA_MAX_TAPS)
+            })
+            || !gpu_f_resize_f64_coefficients_fit_binding(coeffs.as_ref())
+        {
+            return None;
+        }
+    }
+    Some((horizontal, vertical))
+}
+
+/// Size the per-stage arenas for an explicit streamed F Resize before input
+/// upload. The batch planner reserves this exact parameter and ordered-f64
+/// coefficient storage, while eager dispatch keeps its independent limits.
+fn gpu_f_resize_ordered_stage_resource_bytes(
+    source_dimensions: (u32, u32),
+    destination_dimensions: (u32, u32),
+    filter: ResampleFilter,
+    uniform_alignment: usize,
+    storage_alignment: usize,
+) -> Option<usize> {
+    let (horizontal, vertical) =
+        gpu_f_resize_f64_ordered_coefficients(source_dimensions, destination_dimensions, filter)?;
+    let coefficient_bytes = |coeffs: &FilterCoeffsF64| {
+        resize_coeff_word_count_f64(coeffs)
+            .ok()?
+            .checked_mul(std::mem::size_of::<u32>())
+            .map(|bytes| aligned_bytes(bytes, storage_alignment))
+    };
+    let horizontal_bytes = coefficient_bytes(horizontal.as_ref())?;
+    let vertical_bytes = coefficient_bytes(vertical.as_ref())?;
+    let resize = PipelineOp::Resize {
+        w: destination_dimensions.0,
+        h: destination_dimensions.1,
+        filter,
+    };
+    let parameter_words = 4usize
+        .checked_add(registry::extract_params(&resize).len())?
+        .checked_add(2)?;
+    let parameter_bytes = parameter_words.checked_mul(std::mem::size_of::<u32>())?;
+    aligned_bytes(parameter_bytes, uniform_alignment)
+        .checked_add(horizontal_bytes)?
+        .checked_add(vertical_bytes)
+}
+
 /// Prove one direct, changed-axis F resize in the bounded ordered-f64 domain.
 /// Intermediate horizontal words are materialized before the vertical pass,
-/// exactly as Pillow's separable resampler does.  Chained/relocation inputs
-/// remain on marker 9 or exact host semantic control until they receive a
-/// separate proof.
+/// exactly as Pillow's separable resampler does. Chained/relocation inputs
+/// remain on exact host semantic control until they receive a separate proof.
 fn gpu_f_resize_f64_ordered_is_exact(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -2189,7 +2342,7 @@ fn gpu_i_f64_integer_to_i32(sum: i128, scale_exp: i32) -> Option<i32> {
 /// rounding with Pillow's ordered f64 FMA accumulation; rows where the two
 /// boundaries differ are rejected.
 fn gpu_i_resize_f64_sample_bits(
-    bytes: &[u8],
+    samples: &[u32],
     source_dimensions: (u32, u32),
     coeffs: &FilterCoeffsF64,
     output_index: usize,
@@ -2215,25 +2368,10 @@ fn gpu_i_resize_f64_sample_bits(
     };
     let sample_at = |tap: usize| -> Option<i32> {
         let pixel = source_pixel(tap)?;
-        let offset = pixel.checked_mul(4)?;
-        let word = bytes.get(offset..offset.checked_add(4)?)?;
-        Some(i32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+        Some(samples.get(pixel).copied()? as i32)
     };
 
     let mut minimum_exponent = None;
-    for (tap, &weight) in weights.iter().enumerate() {
-        let coeff = gpu_f64_integer_parts(weight)?;
-        let sample = sample_at(tap)?;
-        if coeff.mantissa != 0 && sample != 0 {
-            minimum_exponent = Some(
-                minimum_exponent.map_or(coeff.exponent, |minimum: i32| minimum.min(coeff.exponent)),
-            );
-        }
-    }
-    let Some(minimum_exponent) = minimum_exponent else {
-        return Some(0);
-    };
-
     let mut exact_sum = 0i128;
     let mut ordered_f64 = 0.0f64;
     for (tap, &weight) in weights.iter().enumerate() {
@@ -2243,14 +2381,38 @@ fn gpu_i_resize_f64_sample_bits(
         if coeff.mantissa == 0 || sample == 0 {
             continue;
         }
+
+        let exponent = coeff.exponent;
+        let shift = match minimum_exponent {
+            Some(minimum) if exponent < minimum => {
+                let shift = u32::try_from(minimum.checked_sub(exponent)?).ok()?;
+                if shift >= 127 {
+                    if exact_sum != 0 {
+                        return None;
+                    }
+                } else {
+                    exact_sum = exact_sum.checked_mul(1i128 << shift)?;
+                }
+                minimum_exponent = Some(exponent);
+                0
+            }
+            Some(minimum) => u32::try_from(exponent.checked_sub(minimum)?).ok()?,
+            None => {
+                minimum_exponent = Some(exponent);
+                0
+            }
+        };
         let magnitude = if sample < 0 {
             i128::from(sample).checked_neg()?
         } else {
             i128::from(sample)
         };
         let product = magnitude.checked_mul(i128::try_from(coeff.mantissa).ok()?)?;
-        let shift = u32::try_from(coeff.exponent.checked_sub(minimum_exponent)?).ok()?;
-        let term = product.checked_shl(shift)?;
+        let term = if shift >= 127 {
+            return None;
+        } else {
+            product.checked_mul(1i128 << shift)?
+        };
         let term = if sample < 0 {
             term.checked_neg()?
         } else {
@@ -2263,6 +2425,9 @@ fn gpu_i_resize_f64_sample_bits(
         };
         exact_sum = exact_sum.checked_add(term)?;
     }
+    let Some(minimum_exponent) = minimum_exponent else {
+        return Some(0);
+    };
     if !ordered_f64.is_finite() {
         return None;
     }
@@ -2278,7 +2443,7 @@ fn gpu_i_resize_f64_sample_bits(
 /// Evaluate every word produced by one exact I-mode resize pass. The result
 /// order matches the packed image rows consumed by the next shader pass.
 fn gpu_i_resize_f64_pass_bits(
-    bytes: &[u8],
+    samples: &[u32],
     source_dimensions: (u32, u32),
     coeffs: &FilterCoeffsF64,
     horizontal: bool,
@@ -2299,16 +2464,10 @@ fn gpu_i_resize_f64_pass_bits(
         return None;
     }
     if output_count == source_axis {
-        let expected = word_count.checked_mul(4)?;
-        if bytes.len() != expected {
+        if samples.len() != word_count {
             return None;
         }
-        return Some(
-            bytes
-                .chunks_exact(4)
-                .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
-                .collect(),
-        );
+        return Some(samples.to_vec());
     }
     let mut result = Vec::new();
     result.try_reserve(word_count).ok()?;
@@ -2316,7 +2475,7 @@ fn gpu_i_resize_f64_pass_bits(
         for line in 0..line_count {
             for output_index in 0..output_count {
                 result.push(gpu_i_resize_f64_sample_bits(
-                    bytes,
+                    samples,
                     source_dimensions,
                     coeffs,
                     output_index,
@@ -2329,7 +2488,7 @@ fn gpu_i_resize_f64_pass_bits(
         for output_index in 0..output_count {
             for line in 0..line_count {
                 result.push(gpu_i_resize_f64_sample_bits(
-                    bytes,
+                    samples,
                     source_dimensions,
                     coeffs,
                     output_index,
@@ -2395,16 +2554,20 @@ fn gpu_i_resize_f64_is_exact(
     }
 
     let bytes = pixels.as_raw();
-    let horizontal_words = gpu_i_resize_f64_pass_bits(bytes, source_dimensions, &horizontal, true);
+    let samples = bytes
+        .chunks_exact(4)
+        .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+        .collect::<Vec<_>>();
+    if samples.len().checked_mul(4) != Some(bytes.len()) {
+        return false;
+    }
+    let horizontal_words =
+        gpu_i_resize_f64_pass_bits(&samples, source_dimensions, &horizontal, true);
     let Some(horizontal_words) = horizontal_words else {
         return false;
     };
-    let horizontal_bytes = horizontal_words
-        .iter()
-        .flat_map(|word| word.to_le_bytes())
-        .collect::<Vec<_>>();
     gpu_i_resize_f64_pass_bits(
-        &horizontal_bytes,
+        &horizontal_words,
         (*w, source_dimensions.1),
         &vertical,
         false,
@@ -3861,10 +4024,14 @@ struct BufferPool {
     img2_arena: ReusableGpuBuffer,
     img3_arena: ReusableGpuBuffer,
     lut_arena: ReusableGpuBuffer,
-    // Native transposes may upload directly to shared Metal storage.
-    // Keep this write-combined input separate from cached readback buffers.
+    // Native transposes and selected native byte filters may upload directly
+    // to shared Metal storage. Keep this write-combined input separate from
+    // cached readback buffers.
     #[cfg(target_endian = "little")]
-    mapped_transpose_input: Option<ReusableGpuBuffer>,
+    mapped_native_input: Option<ReusableGpuBuffer>,
+    /// The zero-source projection shader has stable bindings for a reused
+    /// working set. Cache its bind group so timed calls do not rebuild one.
+    projection_zero_bind_group: Option<(u64, wgpu::BindGroup)>,
     capacity: u32,
 }
 
@@ -4145,6 +4312,15 @@ impl ReadbackTarget {
 
 impl BufferPool {
     fn new(device: &wgpu::Device, capacity: u32, direct_primary_readback: bool) -> Self {
+        Self::new_with_mapped_input(device, capacity, direct_primary_readback, false)
+    }
+
+    fn new_with_mapped_input(
+        device: &wgpu::Device,
+        capacity: u32,
+        direct_primary_readback: bool,
+        mapped_input: bool,
+    ) -> Self {
         let size = (capacity.max(1) as u64) * 4;
         let mut image_usage = wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_DST
@@ -4154,10 +4330,15 @@ impl BufferPool {
             // MAP_WRITE would select write-combined caching and penalize reads.
             image_usage |= wgpu::BufferUsages::MAP_READ;
         }
+        let input_usage = if mapped_input {
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::MAP_WRITE
+        } else {
+            image_usage
+        };
         let buf_a = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("gpu_buf_a"),
             size,
-            usage: image_usage,
+            usage: input_usage,
             mapped_at_creation: false,
         });
         let buf_b = device.create_buffer(&wgpu::BufferDescriptor {
@@ -4233,7 +4414,8 @@ impl BufferPool {
             img3_arena,
             lut_arena,
             #[cfg(target_endian = "little")]
-            mapped_transpose_input: None,
+            mapped_native_input: None,
+            projection_zero_bind_group: None,
             capacity,
         }
     }
@@ -4491,7 +4673,7 @@ impl BufferPool {
             .saturating_add(self.lut_arena.capacity_bytes);
         #[cfg(target_endian = "little")]
         let bytes = bytes.saturating_add(
-            self.mapped_transpose_input
+            self.mapped_native_input
                 .as_ref()
                 .map_or(0, |input| input.capacity_bytes),
         );
@@ -4707,70 +4889,91 @@ fn plan_packed_point_luma_dispatch(
 
 /// Plan compact one-channel output dispatches such as ExtractBand and
 /// Grayscale as a near-square 2D grid. One shader invocation writes one packed
-/// word containing four output pixels, and each workgroup contains 64
-/// invocations. The flattened word index uses `u32`, so reject dimensions and
-/// padded grids outside that index range.
-fn plan_extract_band_dispatch(
+/// word containing four output pixels. The flattened word index uses `u32`, so
+/// reject dimensions and padded grids outside that index range.
+const GRAYSCALE_WORKGROUP_SIZE: u64 = 256;
+
+/// Plan one invocation per four-pixel output word across a bounded 2D grid.
+fn plan_packed_output_dispatch(
     width: u32,
     height: u32,
     max_workgroups_per_dimension: u32,
+    workgroup_size: u64,
+    operation: &'static str,
 ) -> Result<(u32, u32), PilError> {
     let pixel_count = u64::from(width)
         .checked_mul(u64::from(height))
-        .ok_or_else(|| PilError::ValueError("GPU channel extraction image is too large".into()))?;
+        .ok_or_else(|| PilError::ValueError(format!("{operation} image is too large")))?;
     if pixel_count == 0 || pixel_count > u64::from(u32::MAX) {
-        return Err(PilError::ValueError(
-            "GPU channel extraction dimensions exceed shader indexing limits".into(),
-        ));
+        return Err(PilError::ValueError(format!(
+            "{operation} dimensions exceed shader indexing limits"
+        )));
     }
     if max_workgroups_per_dimension == 0 {
         return Err(PilError::ValueError(
             "GPU adapter reports no compute workgroups per dimension".into(),
         ));
     }
+    if workgroup_size == 0 {
+        return Err(PilError::ValueError(
+            "GPU packed-output workgroup size must be nonzero".into(),
+        ));
+    }
 
     let output_words = pixel_count.div_ceil(4);
-    let required_workgroups = output_words.div_ceil(64).max(1);
+    let required_workgroups = output_words.div_ceil(workgroup_size).max(1);
     let mut groups_x = required_workgroups.isqrt();
     let groups_x_square = groups_x
         .checked_mul(groups_x)
-        .ok_or_else(|| PilError::ValueError("GPU channel extraction dispatch overflows".into()))?;
+        .ok_or_else(|| PilError::ValueError(format!("{operation} dispatch overflows")))?;
     if groups_x_square < required_workgroups {
-        groups_x = groups_x.checked_add(1).ok_or_else(|| {
-            PilError::ValueError("GPU channel extraction dispatch overflows".into())
-        })?;
+        groups_x = groups_x
+            .checked_add(1)
+            .ok_or_else(|| PilError::ValueError(format!("{operation} dispatch overflows")))?;
     }
     groups_x = groups_x.min(u64::from(max_workgroups_per_dimension));
     let groups_y = required_workgroups.div_ceil(groups_x);
     if groups_y > u64::from(max_workgroups_per_dimension) {
-        return Err(PilError::ValueError(
-            "GPU channel extraction exceeds adapter workgroup limits".into(),
-        ));
+        return Err(PilError::ValueError(format!(
+            "{operation} exceeds adapter workgroup limits"
+        )));
     }
 
     let padded_word_count = groups_x
         .checked_mul(groups_y)
-        .and_then(|groups| groups.checked_mul(64))
-        .ok_or_else(|| PilError::ValueError("GPU channel extraction dispatch overflows".into()))?;
+        .and_then(|groups| groups.checked_mul(workgroup_size))
+        .ok_or_else(|| PilError::ValueError(format!("{operation} dispatch overflows")))?;
     let Some(max_output_word) = padded_word_count.checked_sub(1) else {
-        return Err(PilError::ValueError(
-            "GPU channel extraction dispatch exceeds shader indexing limits".into(),
-        ));
+        return Err(PilError::ValueError(format!(
+            "{operation} dispatch exceeds shader indexing limits"
+        )));
     };
     if max_output_word > u64::from(u32::MAX) {
-        return Err(PilError::ValueError(
-            "GPU channel extraction dispatch exceeds shader indexing limits".into(),
-        ));
+        return Err(PilError::ValueError(format!(
+            "{operation} dispatch exceeds shader indexing limits"
+        )));
     }
 
     Ok((
-        u32::try_from(groups_x).map_err(|_| {
-            PilError::ValueError("GPU channel extraction dispatch is too wide".into())
-        })?,
-        u32::try_from(groups_y).map_err(|_| {
-            PilError::ValueError("GPU channel extraction dispatch is too tall".into())
-        })?,
+        u32::try_from(groups_x)
+            .map_err(|_| PilError::ValueError(format!("{operation} dispatch is too wide")))?,
+        u32::try_from(groups_y)
+            .map_err(|_| PilError::ValueError(format!("{operation} dispatch is too tall")))?,
     ))
+}
+
+fn plan_extract_band_dispatch(
+    width: u32,
+    height: u32,
+    max_workgroups_per_dimension: u32,
+) -> Result<(u32, u32), PilError> {
+    plan_packed_output_dispatch(
+        width,
+        height,
+        max_workgroups_per_dimension,
+        64,
+        "GPU channel extraction",
+    )
 }
 
 const SHARPNESS_L_WORKGROUP_WIDTH: u64 = 16;
@@ -6485,6 +6688,7 @@ fn create_sized_buffer(
 struct GpuBatchResources<'a> {
     buf_a: &'a wgpu::Buffer,
     buf_b: &'a wgpu::Buffer,
+    initial_input: Option<&'a wgpu::Buffer>,
     fallback_img2: &'a wgpu::Buffer,
     fallback_img3: &'a wgpu::Buffer,
     fallback_lut: &'a wgpu::Buffer,
@@ -7228,6 +7432,32 @@ impl GpuInner {
                     include_str!("shaders/sharpness_rgb_native.wgsl"),
                 )?;
                 resolved.push(ResolvedPipeline::Single(sharpness));
+                index += 1;
+                continue;
+            }
+            if native_rgb_packed_output
+                && matches!(logical_mode, None | Some("RGB"))
+                && matches!(op, PipelineOp::BoxBlur { radius: 1 })
+            {
+                let fused = self.resolve_pipeline(
+                    "__internal_blur_hv_rgb_radius_one_packed",
+                    "box_blur_hv_rgb_radius_one_packed.wgsl",
+                    include_str!("shaders/box_blur_hv_rgb_radius_one_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(fused));
+                index += 1;
+                continue;
+            }
+            if packed_native_byte_filter
+                && matches!(logical_mode, None | Some("L"))
+                && matches!(op, PipelineOp::BoxBlur { radius: 1 })
+            {
+                let fused = self.resolve_pipeline(
+                    "__internal_blur_hv_luma_radius_one_packed",
+                    "box_blur_hv_luma_radius_one_packed.wgsl",
+                    include_str!("shaders/box_blur_hv_luma_radius_one_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(fused));
                 index += 1;
                 continue;
             }
@@ -8592,6 +8822,36 @@ impl GpuInner {
             ));
         }
 
+        // A full-frame RGBA composite has one already-packed auxiliary image.
+        // Put its bytes directly into the reusable device arena instead of
+        // first duplicating them into the temporary host-side u32 arena. The
+        // specialized pair is deliberately narrow; all other image formats
+        // and operation graphs retain the general pack-and-arena path.
+        #[cfg(target_endian = "little")]
+        let direct_alpha_composite_rgba = if can_fuse_gpu_alpha_composite_mirror(
+            ops,
+            0,
+            logical_mode,
+            (w, h),
+        ) && w != 0
+            && h != 0
+        {
+            match auxiliary_images
+                .first()
+                .and_then(|auxiliary| auxiliary.second.as_deref())
+            {
+                Some(DynamicImage::ImageRgba8(rgba)) => {
+                    let expected_bytes = CheckedDims::new(w, h, 4)?.total_bytes();
+                    (rgba.as_raw().len() == expected_bytes).then_some(rgba.as_raw().as_slice())
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        #[cfg(target_endian = "big")]
+        let direct_alpha_composite_rgba: Option<&[u8]> = None;
+
         let limits = self.device.limits();
         let uniform_alignment = limits.min_uniform_buffer_offset_alignment as usize;
         let storage_alignment = limits.min_storage_buffer_offset_alignment as usize;
@@ -9819,7 +10079,15 @@ impl GpuInner {
                         Some(range)
                     } else {
                         let key = Arc::as_ptr(second) as usize;
-                        if let Some(range) = auxiliary_cache.second_ranges.get(&key).copied() {
+                        if index == 0 && direct_alpha_composite_rgba.is_some() {
+                            Some(BufferRange {
+                                offset: 0,
+                                size: direct_alpha_composite_rgba
+                                    .expect("checked direct RGBA auxiliary")
+                                    .len() as u64,
+                            })
+                        } else if let Some(range) = auxiliary_cache.second_ranges.get(&key).copied()
+                        {
                             Some(range)
                         } else if let Some(range) = second_cache.get(&key).copied() {
                             Some(range)
@@ -9913,7 +10181,11 @@ impl GpuInner {
             bytemuck::cast_slice(&params_arena),
         );
 
-        let img2 = if auxiliary_cache.img2_values.is_empty() && img2_arena.is_empty() {
+        let direct_img2_bytes = direct_alpha_composite_rgba.unwrap_or_default();
+        let arena_img2_bytes = (auxiliary_cache.img2_values.len() + img2_arena.len())
+            .saturating_mul(std::mem::size_of::<u32>());
+        let required_img2_bytes = arena_img2_bytes.max(direct_img2_bytes.len());
+        let img2 = if required_img2_bytes == 0 {
             None
         } else {
             let previous_capacity = buffers.img2_arena.capacity_bytes;
@@ -9921,8 +10193,7 @@ impl GpuInner {
                 &self.device,
                 "gpu_batch_img2",
                 wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                (auxiliary_cache.img2_values.len() + img2_arena.len())
-                    .saturating_mul(std::mem::size_of::<u32>()),
+                required_img2_bytes,
                 storage_alignment,
             );
             if buffers.img2_arena.capacity_bytes != previous_capacity
@@ -9940,6 +10211,10 @@ impl GpuInner {
                     (auxiliary_cache.img2_values.len() * 4) as u64,
                     bytemuck::cast_slice(&img2_arena),
                 );
+            }
+            if !direct_img2_bytes.is_empty() {
+                self.queue
+                    .write_buffer(&buffers.img2_arena.buffer, 0, direct_img2_bytes);
             }
             Some(&buffers.img2_arena.buffer)
         };
@@ -10007,7 +10282,8 @@ impl GpuInner {
         let resource_telemetry = PipelineResourceTelemetry {
             parameter_bytes: (params_arena.len() * std::mem::size_of::<u32>()) as u64,
             auxiliary_bytes: ((img2_arena.len() + img3_arena.len() + lut_arena.len())
-                * std::mem::size_of::<u32>()) as u64,
+                * std::mem::size_of::<u32>()) as u64
+                + direct_img2_bytes.len() as u64,
             ..PipelineResourceTelemetry::default()
         };
 
@@ -10015,6 +10291,7 @@ impl GpuInner {
             resources: GpuBatchResources {
                 buf_a: &buffers.buf_a,
                 buf_b: &buffers.buf_b,
+                initial_input: None,
                 fallback_img2: &buffers.buf_img2,
                 fallback_img3: &buffers.buf_img3,
                 fallback_lut: &buffers.lut_buf,
@@ -10054,7 +10331,14 @@ impl GpuInner {
         output_dims: (u32, u32),
     ) -> Result<bool, PilError> {
         let (input_buf, output_buf) = if current_is_a {
-            (resources.buf_a, resources.buf_b)
+            (
+                if index == 0 {
+                    resources.initial_input.unwrap_or(resources.buf_a)
+                } else {
+                    resources.buf_a
+                },
+                resources.buf_b,
+            )
         } else {
             (resources.buf_b, resources.buf_a)
         };
@@ -10139,13 +10423,13 @@ impl GpuInner {
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
-            "__internal_blur_h_luma_packed" | "__internal_blur_v_luma_packed" => {
-                plan_packed_luma_dispatch(
-                    output_dims.0,
-                    output_dims.1,
-                    self.device.limits().max_compute_workgroups_per_dimension,
-                )?
-            }
+            "__internal_blur_h_luma_packed"
+            | "__internal_blur_v_luma_packed"
+            | "__internal_blur_hv_luma_radius_one_packed" => plan_packed_luma_dispatch(
+                output_dims.0,
+                output_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
             "__internal_blur_h_la_packed" | "__internal_blur_v_la_packed" => {
                 plan_packed_la_dispatch(
                     output_dims.0,
@@ -10173,10 +10457,17 @@ impl GpuInner {
                 output_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
-            "ExtractBand" | "Grayscale" | "Constant" => plan_extract_band_dispatch(
+            "ExtractBand" | "Constant" => plan_extract_band_dispatch(
                 output_dims.0,
                 output_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
+            "Grayscale" => plan_packed_output_dispatch(
+                output_dims.0,
+                output_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+                GRAYSCALE_WORKGROUP_SIZE,
+                "GPU grayscale",
             )?,
             "__internal_sharpness_l_native" => {
                 let plan = plan_sharpness_l_dispatch(
@@ -10720,7 +11011,7 @@ impl GpuInner {
         layout: &PackedRgbTransposeLayout,
         buffers: &mut BufferPool,
     ) -> Result<(), PilError> {
-        self.upload_native_transpose_mapped(
+        self.upload_native_bytes_mapped(
             image.as_raw(),
             layout.native_bytes,
             layout.transfer_bytes,
@@ -10729,7 +11020,19 @@ impl GpuInner {
     }
 
     #[cfg(target_endian = "little")]
-    fn upload_native_transpose_mapped(
+    fn upload_packed_luma8_mapped(
+        &self,
+        image: &crate::raster::GrayImage,
+        buffers: &mut BufferPool,
+    ) -> Result<(), PilError> {
+        let (width, height) = image.dimensions();
+        let native_bytes = CheckedDims::new(width, height, 1)?.total_bytes();
+        let transfer_bytes = compact_luma8_transfer_bytes(width, height)?;
+        self.upload_native_bytes_mapped(image.as_raw(), native_bytes, transfer_bytes, buffers)
+    }
+
+    #[cfg(target_endian = "little")]
+    fn upload_native_bytes_mapped(
         &self,
         bytes: &[u8],
         native_bytes: usize,
@@ -10738,7 +11041,7 @@ impl GpuInner {
     ) -> Result<(), PilError> {
         if !self.direct_primary_readback {
             return Err(PilError::InternalError(
-                "GPU mapped transpose upload requires supported shared Metal storage".into(),
+                "GPU mapped native upload requires supported shared Metal storage".into(),
             ));
         }
         if bytes.len() != native_bytes
@@ -10746,34 +11049,62 @@ impl GpuInner {
             || (native_bytes as u64).checked_add(3).map(|bytes| bytes & !3) != Some(transfer_bytes)
         {
             return Err(PilError::InternalError(
-                "GPU mapped transpose upload does not fit its checked working set".into(),
+                "GPU mapped native upload does not fit its checked working set".into(),
             ));
         }
         let size = usize::try_from(transfer_bytes)
-            .map_err(|_| PilError::InternalError("GPU transpose upload size overflow".into()))?;
+            .map_err(|_| PilError::InternalError("GPU mapped input size overflow".into()))?;
         let usage = wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::STORAGE;
-        let input = buffers.mapped_transpose_input.get_or_insert_with(|| {
-            ReusableGpuBuffer::new(&self.device, "gpu_mapped_transpose_input", usage, size, 4)
+        let input = buffers.mapped_native_input.get_or_insert_with(|| {
+            ReusableGpuBuffer::new(&self.device, "gpu_mapped_native_input", usage, size, 4)
         });
-        input.ensure_capacity(&self.device, "gpu_mapped_transpose_input", usage, size, 4);
+        input.ensure_capacity(&self.device, "gpu_mapped_native_input", usage, size, 4);
+        self.upload_bytes_to_mapped_buffer(
+            &input.buffer,
+            bytes,
+            native_bytes,
+            transfer_bytes,
+            "GPU mapped native upload",
+        )
+    }
+
+    #[cfg(target_endian = "little")]
+    fn upload_bytes_to_mapped_buffer(
+        &self,
+        buffer: &wgpu::Buffer,
+        bytes: &[u8],
+        native_bytes: usize,
+        transfer_bytes: u64,
+        stage: &str,
+    ) -> Result<(), PilError> {
+        if !self.direct_primary_readback {
+            return Err(PilError::InternalError(
+                "GPU mapped native upload requires supported shared Metal storage".into(),
+            ));
+        }
+        if bytes.len() != native_bytes
+            || transfer_bytes > buffer.size()
+            || (native_bytes as u64).checked_add(3).map(|bytes| bytes & !3) != Some(transfer_bytes)
+        {
+            return Err(PilError::InternalError(format!(
+                "{stage} does not fit its checked mapped buffer"
+            )));
+        }
+        let size = usize::try_from(transfer_bytes)
+            .map_err(|_| PilError::InternalError("GPU mapped input size overflow".into()))?;
         // The batch owns this buffer exclusively. Recycled batches reached
         // output map completion, so their input has no outstanding GPU use.
-        self.wait_for_buffer_mapping(
-            transfer_bytes,
-            &input.buffer,
-            wgpu::MapMode::Write,
-            "GPU native transpose upload",
-        )?;
+        self.wait_for_buffer_mapping(transfer_bytes, buffer, wgpu::MapMode::Write, stage)?;
         let result = {
-            let mut view = input.buffer.slice(..transfer_bytes).get_mapped_range_mut();
+            let mut view = buffer.slice(..transfer_bytes).get_mapped_range_mut();
             // BufferViewMut's read dereference logs a slow-read warning even
             // for len(). We only write: obtain the writable slice explicitly
             // while preserving the checked mapping length and view lifetime.
             let mapped = view.as_mut();
             if mapped.len() != size {
-                Err(PilError::InternalError(
-                    "GPU mapped transpose upload has an unexpected byte length".into(),
-                ))
+                Err(PilError::InternalError(format!(
+                    "{stage} has an unexpected mapped byte length"
+                )))
             } else {
                 mapped[..native_bytes].copy_from_slice(bytes);
                 mapped[native_bytes..].fill(0);
@@ -10782,7 +11113,7 @@ impl GpuInner {
         };
         // Drop the host view and unmap before any shader can reference it,
         // including the defensive error path above.
-        input.buffer.unmap();
+        buffer.unmap();
         result
     }
 
@@ -11116,7 +11447,7 @@ impl GpuInner {
                 NativeTransposeInput::Rgb(image, layout) => {
                     self.upload_packed_rgb_mapped(image, layout, buffers)?
                 }
-                NativeTransposeInput::Rgba(_) => self.upload_native_transpose_mapped(
+                NativeTransposeInput::Rgba(_) => self.upload_native_bytes_mapped(
                     input.bytes(),
                     dimensions.total_bytes(),
                     transfer_bytes,
@@ -11142,7 +11473,7 @@ impl GpuInner {
         });
         let input_buffer = if mapped_input {
             &buffers
-                .mapped_transpose_input
+                .mapped_native_input
                 .as_ref()
                 .expect("successful mapped upload owns an input buffer")
                 .buffer
@@ -13703,7 +14034,7 @@ impl GpuInner {
             (image, other)
         };
         if self.direct_primary_readback {
-            self.upload_native_transpose_mapped(
+            self.upload_native_bytes_mapped(
                 input_image.as_bytes(),
                 length,
                 transfer_bytes,
@@ -13729,7 +14060,7 @@ impl GpuInner {
         );
         let input = if self.direct_primary_readback {
             &buffers
-                .mapped_transpose_input
+                .mapped_native_input
                 .as_ref()
                 .expect("successful mapped upload owns an input buffer")
                 .buffer
@@ -14442,6 +14773,7 @@ impl GpuInner {
         f_resize_dyadic_is_exact: bool,
         f_resize_f64_is_exact: bool,
         f_resize_f64_ordered_is_exact: bool,
+        initial_input: Option<&wgpu::Buffer>,
         buffers: &mut BufferPool,
     ) -> Result<
         (
@@ -14614,11 +14946,16 @@ impl GpuInner {
                 )
                 })?;
             let chunk_ops = &ops[chunk_start..chunk_end];
-            dispatch_count = dispatch_count.saturating_add(gpu_dispatch_count(
-                chunk_ops,
-                logical_mode,
-                (cur_w, cur_h),
-            ));
+            let chunk_dispatch_count = if (packed_native_byte_filter
+                && matches!(logical_mode, None | Some("L"))
+                || native_rgb_packed_output && matches!(logical_mode, None | Some("RGB")))
+                && matches!(chunk_ops, [PipelineOp::BoxBlur { radius: 1 }])
+            {
+                1
+            } else {
+                gpu_dispatch_count(chunk_ops, logical_mode, (cur_w, cur_h))
+            };
+            dispatch_count = dispatch_count.saturating_add(chunk_dispatch_count);
             resource_telemetry.fused_operation_count = resource_telemetry
                 .fused_operation_count
                 .saturating_add(gpu_fused_operation_count(
@@ -14633,7 +14970,7 @@ impl GpuInner {
                 .iter()
                 .fold(0u64, |total, work| total.saturating_add(*work));
 
-            let prepared = self.prepare_batch(
+            let mut prepared = self.prepare_batch(
                 &ops[chunk_start..chunk_end],
                 &auxiliary_images[chunk_start..chunk_end],
                 cur_w,
@@ -14672,6 +15009,9 @@ impl GpuInner {
                 buffers,
                 &auxiliary_cache,
             )?;
+            if chunk_start == 0 {
+                prepared.resources.initial_input = initial_input;
+            }
             native_expand_output |= prepared.resources.native_expand_output.is_some();
             resource_telemetry.parameter_bytes = resource_telemetry
                 .parameter_bytes
@@ -14878,6 +15218,29 @@ fn gpu_native_grayscale_rgb_input(
     };
     let input_bytes = layout.total_bytes();
     input_bytes > 0 && input_bytes <= u32::MAX as usize && rgb.as_raw().len() == input_bytes
+}
+
+/// Admit exact packed CMYK storage for the singleton grayscale shader. CMYK
+/// already occupies the shader's ordinary four-byte input layout, so the
+/// mapped path can retain Pillow's mode-specific conversion without expanding
+/// or rewriting the source pixels on the host.
+#[cfg(target_endian = "little")]
+fn gpu_native_grayscale_cmyk_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if !matches!(ops, [PipelineOp::Grayscale]) || logical_mode != Some("CMYK") {
+        return false;
+    }
+    let DynamicImage::ImageRgba8(cmyk) = image else {
+        return false;
+    };
+    let Ok(layout) = CheckedDims::new(image.width(), image.height(), 4) else {
+        return false;
+    };
+    let input_bytes = layout.total_bytes();
+    input_bytes > 0 && input_bytes <= u32::MAX as usize && cmyk.as_raw().len() == input_bytes
 }
 
 /// Admit a singleton L -> RGBA conversion whose shader can unpack source
@@ -15672,6 +16035,15 @@ fn gpu_native_extract_band_channels(
 
 #[cfg(not(target_endian = "little"))]
 fn gpu_native_grayscale_rgb_input(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> bool {
+    false
+}
+
+#[cfg(not(target_endian = "little"))]
+fn gpu_native_grayscale_cmyk_input(
     _ops: &[PipelineOp],
     _image: &DynamicImage,
     _logical_mode: Option<&str>,
@@ -22211,6 +22583,521 @@ impl GpuPool {
             Err(error) => Err(error.clone()),
         }
     }
+
+    pub(crate) fn cmyk_projection_terminal_supported(
+        image: &DynamicImage,
+        ops: &[PipelineOp],
+    ) -> bool {
+        !ops.is_empty() && Self::projection_terminal_supported(image, ops, 4)
+    }
+
+    pub(crate) fn rgb_projection_supported(image: &DynamicImage) -> bool {
+        Self::projection_terminal_supported(image, &[], 3)
+    }
+
+    pub(crate) fn rgb_projection_terminal_supported(
+        image: &DynamicImage,
+        ops: &[PipelineOp],
+    ) -> bool {
+        !ops.is_empty() && Self::projection_terminal_supported(image, ops, 3)
+    }
+
+    fn projection_terminal_supported(
+        image: &DynamicImage,
+        ops: &[PipelineOp],
+        channels: u8,
+    ) -> bool {
+        let source = match (channels, image) {
+            (3, DynamicImage::ImageRgb8(pixels)) => pixels.as_raw().as_slice(),
+            (4, DynamicImage::ImageRgba8(pixels)) => pixels.as_raw().as_slice(),
+            _ => return false,
+        };
+        let Ok(dimensions) = CheckedDims::new(image.width(), image.height(), channels) else {
+            return false;
+        };
+        if image.width() == 0
+            || image.height() == 0
+            || ops.len() > 128
+            || dimensions.total_bytes() % 4 != 0
+            || !ops
+                .iter()
+                .all(|op| matches!(op, PipelineOp::PutPixel { .. }))
+        {
+            return false;
+        }
+        if dimensions.total_bytes() != source.len() {
+            return false;
+        }
+        let Ok(gpu) = Self::ensure_init() else {
+            return false;
+        };
+        let limits = gpu.device.limits();
+        let width = u64::from(image.width());
+        let height = u64::from(image.height());
+        let pixels = dimensions.total_pixels() as u64;
+        let output_words = u64::from(image.width()).saturating_add(u64::from(image.height()));
+        let Some(output_bytes) = output_words.checked_mul(4) else {
+            return false;
+        };
+        let capacity_words = pixels.max(output_words).max(1);
+        let Some(capacity_bytes) = capacity_words.checked_mul(4) else {
+            return false;
+        };
+        let groups_x = width.div_ceil(16);
+        let groups_y = height
+            .div_ceil(16)
+            .checked_add(u64::from(ops.iter().any(|op| match op {
+                PipelineOp::PutPixel { color, .. } => {
+                    color.0 != 0 || color.1 != 0 || color.2 != 0 || (channels == 4 && color.3 != 0)
+                }
+                _ => false,
+            })))
+            .unwrap_or(u64::MAX);
+        if pixels > u64::from(GPU_BUFFER_CAPACITY)
+            || capacity_words > u64::from(GPU_BUFFER_CAPACITY)
+            || capacity_bytes > limits.max_buffer_size
+            || capacity_bytes > u64::from(limits.max_storage_buffer_binding_size)
+            || output_bytes > u64::from(limits.max_storage_buffer_binding_size)
+            || groups_x > u64::from(limits.max_compute_workgroups_per_dimension)
+            || groups_y > u64::from(limits.max_compute_workgroups_per_dimension)
+        {
+            return false;
+        }
+        ops.iter().all(|op| match op {
+            PipelineOp::PutPixel { x, y, .. } => *x < image.width() && *y < image.height(),
+            _ => false,
+        })
+    }
+
+    pub(crate) fn execute_cmyk_projection_terminal(
+        &self,
+        image: &DynamicImage,
+        ops: &[PipelineOp],
+        source_is_known_zero: bool,
+    ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {
+        if !Self::cmyk_projection_terminal_supported(image, ops) {
+            return Err(PilError::NotImplementedError(
+                "GPU does not support this CMYK projection terminal".into(),
+            ));
+        }
+        Self::ensure_init()?.execute_projection_terminal(image, ops, 4, source_is_known_zero)
+    }
+
+    pub(crate) fn execute_rgb_projection(
+        &self,
+        image: &DynamicImage,
+    ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {
+        self.execute_rgb_projection_terminal(image, &[], false)
+    }
+
+    pub(crate) fn execute_rgb_projection_terminal(
+        &self,
+        image: &DynamicImage,
+        ops: &[PipelineOp],
+        source_is_known_zero: bool,
+    ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {
+        let supported = if ops.is_empty() {
+            Self::rgb_projection_supported(image)
+        } else {
+            Self::rgb_projection_terminal_supported(image, ops)
+        };
+        if !supported {
+            return Err(PilError::NotImplementedError(
+                "GPU does not support this RGB projection terminal".into(),
+            ));
+        }
+        Self::ensure_init()?.execute_projection_terminal(image, ops, 3, source_is_known_zero)
+    }
+}
+
+impl GpuInner {
+    fn create_projection_bind_group(
+        &self,
+        layout: &wgpu::BindGroupLayout,
+        source: &wgpu::Buffer,
+        source_bytes: u64,
+        output: &wgpu::Buffer,
+        output_bytes: u64,
+        params: &wgpu::Buffer,
+        overrides: &wgpu::Buffer,
+        override_bytes: u64,
+    ) -> Result<wgpu::BindGroup, PilError> {
+        Ok(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("gpu_getprojection"),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: ranged_binding(
+                        source,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: source_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: ranged_binding(
+                        output,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: output_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: ranged_binding(
+                        params,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: 32,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: ranged_binding(
+                        overrides,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: override_bytes,
+                        }),
+                    )?,
+                },
+            ],
+        }))
+    }
+
+    fn execute_projection_terminal(
+        &self,
+        image: &DynamicImage,
+        ops: &[PipelineOp],
+        channels: u8,
+        source_is_known_zero: bool,
+    ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {
+        let source: &[u8] = match (channels, image) {
+            (3, DynamicImage::ImageRgb8(pixels)) => pixels.as_raw(),
+            (4, DynamicImage::ImageRgba8(pixels)) => pixels.as_raw(),
+            _ => {
+                return Err(PilError::InternalError(
+                    "GPU projection received an unsupported native carrier".into(),
+                ));
+            }
+        };
+        let (width, height) = image.dimensions();
+        let dimensions = CheckedDims::new(width, height, channels)?;
+        let source_bytes = dimensions.total_bytes();
+        if source.len() != source_bytes {
+            return Err(PilError::InternalError(
+                "GPU projection source is not tightly packed".into(),
+            ));
+        }
+        // A zero-filled source contributes no projected pixels. The sparse
+        // override kernel can handle this case without transferring or
+        // dispatching across the full frame.
+        // A constructor-proven zero fill avoids the CPU preflight scan. Other
+        // sources still require an exact scan before the zero-upload shader
+        // route can be admitted.
+        let source_is_zero =
+            !ops.is_empty() && (source_is_known_zero || projection_source_is_zero(source));
+
+        let mut pending = Vec::with_capacity(ops.len());
+        for (order, op) in ops.iter().enumerate() {
+            let PipelineOp::PutPixel { x, y, color, .. } = op else {
+                return Err(PilError::InternalError(
+                    "GPU projection received a non-pixel operation".into(),
+                ));
+            };
+            if *x >= width || *y >= height {
+                return Err(PilError::IndexError("image index out of range".into()));
+            }
+            let index = y
+                .checked_mul(width)
+                .and_then(|row| row.checked_add(*x))
+                .ok_or_else(|| PilError::ValueError("GPU projection index overflow".into()))?;
+            let nonzero = u32::from(
+                color.0 != 0 || color.1 != 0 || color.2 != 0 || (channels == 4 && color.3 != 0),
+            );
+            pending.push((index, order, nonzero));
+        }
+        pending.sort_unstable_by_key(|(index, order, _)| (*index, *order));
+        let mut overrides: Vec<(u32, u32)> = Vec::with_capacity(pending.len());
+        for (index, _, nonzero) in pending {
+            if let Some((previous_index, previous_nonzero)) = overrides.last_mut()
+                && *previous_index == index
+            {
+                *previous_nonzero = nonzero;
+            } else {
+                overrides.push((index, nonzero));
+            }
+        }
+        let has_nonzero_override = overrides.iter().any(|(_, nonzero)| *nonzero != 0);
+
+        let output_words = width
+            .checked_add(height)
+            .ok_or_else(|| PilError::ValueError("GPU projection size overflow".into()))?;
+        let output_bytes = usize::try_from(output_words)
+            .ok()
+            .and_then(|words| words.checked_mul(std::mem::size_of::<u32>()))
+            .ok_or_else(|| PilError::ValueError("GPU projection is too large".into()))?;
+        // A known-zero source contributes only the sparse overrides. Pack the
+        // two axis vectors into bitsets while they are on the GPU, then expand
+        // the public Vec<u32> results after the smaller readback completes.
+        let packed_output = source_is_zero;
+        let packed_column_words = width.div_ceil(32) as usize;
+        let packed_row_words = height.div_ceil(32) as usize;
+        let transfer_bytes_len = if packed_output {
+            packed_column_words
+                .checked_add(packed_row_words)
+                .and_then(|words| words.checked_mul(std::mem::size_of::<u32>()))
+                .ok_or_else(|| PilError::ValueError("GPU projection is too large".into()))?
+        } else {
+            output_bytes
+        };
+        let transfer_bytes = u64::try_from(transfer_bytes_len)
+            .map_err(|_| PilError::ValueError("GPU projection is too large".into()))?;
+        // The zero-source shader branch never reads the frame binding. Give
+        // it one valid storage word and size the working set for the packed
+        // result instead of allocating two full-frame buffers.
+        let capacity_words = u32::try_from(if packed_output {
+            (transfer_bytes_len / std::mem::size_of::<u32>()).max(1)
+        } else {
+            dimensions.total_pixels().max(output_words as usize).max(1)
+        })
+        .map_err(|_| PilError::ValueError("GPU projection working set is too large".into()))?;
+        let mut buffers = self.acquire_buffers(capacity_words)?;
+
+        let uniform_alignment = self.device.limits().min_uniform_buffer_offset_alignment as usize;
+        buffers.params_arena.ensure_capacity(
+            &self.device,
+            "gpu_getprojection_params",
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            32,
+            uniform_alignment,
+        );
+        let mut params = [0u8; 32];
+        params[0..4].copy_from_slice(&width.to_le_bytes());
+        params[4..8].copy_from_slice(&height.to_le_bytes());
+        params[8..12].copy_from_slice(&(overrides.len() as u32).to_le_bytes());
+        let has_zero_override = overrides.iter().any(|(_, nonzero)| *nonzero == 0);
+        params[12..16].copy_from_slice(&u32::from(has_zero_override).to_le_bytes());
+        params[16..20].copy_from_slice(&(channels as u32).to_le_bytes());
+        params[20..24].copy_from_slice(&u32::from(source_is_zero).to_le_bytes());
+        params[24..28].copy_from_slice(&u32::from(packed_output).to_le_bytes());
+
+        let mut override_bytes = Vec::with_capacity(overrides.len() * 8);
+        for (index, nonzero) in &overrides {
+            override_bytes.extend_from_slice(&index.to_le_bytes());
+            override_bytes.extend_from_slice(&nonzero.to_le_bytes());
+        }
+        #[cfg(target_endian = "little")]
+        if !source_is_zero {
+            if self.direct_primary_readback {
+                let source_transfer_bytes = u64::try_from(source_bytes).map_err(|_| {
+                    PilError::ValueError("GPU projection source is too large".into())
+                })?;
+                self.upload_native_bytes_mapped(
+                    source,
+                    source_bytes,
+                    source_transfer_bytes,
+                    &mut buffers,
+                )?;
+            } else {
+                self.queue.write_buffer(&buffers.buf_a, 0, source);
+            }
+        }
+        #[cfg(not(target_endian = "little"))]
+        if !source_is_zero {
+            self.queue.write_buffer(&buffers.buf_a, 0, source);
+        }
+        self.queue
+            .write_buffer(&buffers.params_arena.buffer, 0, &params);
+        if !override_bytes.is_empty() {
+            self.queue
+                .write_buffer(&buffers.lut_buf, 0, &override_bytes);
+        }
+
+        let cached = self.resolve_pipeline(
+            "__internal_getprojection_atomic",
+            "getprojection_atomic.wgsl",
+            include_str!("shaders/getprojection_atomic.wgsl"),
+        )?;
+        let transient_bind_group;
+        let bind_group = if source_is_zero {
+            let params_capacity_bytes = buffers.params_arena.capacity_bytes;
+            if buffers
+                .projection_zero_bind_group
+                .as_ref()
+                .is_none_or(|(capacity, _)| *capacity != params_capacity_bytes)
+            {
+                let output_binding_bytes = buffers.buf_b.size().min(u64::from(
+                    self.device.limits().max_storage_buffer_binding_size,
+                ));
+                if output_binding_bytes < transfer_bytes {
+                    return Err(PilError::InternalError(
+                        "GPU projection pooled output binding is too small".into(),
+                    ));
+                }
+                let bind_group = self.create_projection_bind_group(
+                    &cached.bind_group_layout,
+                    &buffers.buf_a,
+                    std::mem::size_of::<u32>() as u64,
+                    &buffers.buf_b,
+                    output_binding_bytes,
+                    &buffers.params_arena.buffer,
+                    &buffers.lut_buf,
+                    buffers.lut_buf.size(),
+                )?;
+                buffers.projection_zero_bind_group = Some((params_capacity_bytes, bind_group));
+            }
+            buffers
+                .projection_zero_bind_group
+                .as_ref()
+                .map(|(_, bind_group)| bind_group)
+                .expect("zero-source projection bind group was created")
+        } else {
+            #[cfg(target_endian = "little")]
+            let source_buffer = if self.direct_primary_readback {
+                &buffers
+                    .mapped_native_input
+                    .as_ref()
+                    .expect("successful mapped projection upload retains its source")
+                    .buffer
+            } else {
+                &buffers.buf_a
+            };
+            #[cfg(not(target_endian = "little"))]
+            let source_buffer = &buffers.buf_a;
+            transient_bind_group = self.create_projection_bind_group(
+                &cached.bind_group_layout,
+                source_buffer,
+                source_bytes as u64,
+                &buffers.buf_b,
+                transfer_bytes,
+                &buffers.params_arena.buffer,
+                &buffers.lut_buf,
+                override_bytes.len().max(8) as u64,
+            )?;
+            &transient_bind_group
+        };
+        let readback = self.prepare_readback(&buffers.buf_b, transfer_bytes)?;
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("gpu_getprojection"),
+            });
+        encoder.clear_buffer(&buffers.buf_b, 0, Some(transfer_bytes));
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("gpu_getprojection"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&cached.pipeline);
+            pass.set_bind_group(0, bind_group, &[]);
+            let (groups_x, groups_y) = if source_is_zero {
+                (1, 1)
+            } else {
+                (
+                    width.div_ceil(16),
+                    height.div_ceil(16) + u32::from(has_nonzero_override),
+                )
+            };
+            pass.dispatch_workgroups(groups_x, groups_y, 1);
+            crate::compute::record_gpu_shader_dispatch(
+                cached.variant_name,
+                cached.shader_file,
+                u64::from(groups_x) * u64::from(groups_y),
+            );
+        }
+        if let ReadbackTarget::Staging(staging) = &readback {
+            encoder.copy_buffer_to_buffer(&buffers.buf_b, 0, &staging.buffer, 0, transfer_bytes);
+        }
+        self.queue.submit(Some(encoder.finish()));
+        self.poll_device("GPU projection submission")?;
+
+        // Mapping the result polls the submitted work until readback is ready.
+        let (horizontal, vertical) =
+            self.readback_with(transfer_bytes, readback.buffer(&buffers, false), |mapped| {
+                if mapped.len() != transfer_bytes_len {
+                    return Err(PilError::InternalError(
+                        "GPU projection readback length mismatch".into(),
+                    ));
+                }
+                let (horizontal, vertical) = if packed_output {
+                    let packed = |index: usize| {
+                        let start = index * std::mem::size_of::<u32>();
+                        u32::from_le_bytes([
+                            mapped[start],
+                            mapped[start + 1],
+                            mapped[start + 2],
+                            mapped[start + 3],
+                        ])
+                    };
+                    let horizontal = (0..width as usize)
+                        .map(|index| (packed(index / 32) >> (index % 32)) & 1)
+                        .collect::<Vec<_>>();
+                    let vertical = (0..height as usize)
+                        .map(|index| (packed(packed_column_words + index / 32) >> (index % 32)) & 1)
+                        .collect::<Vec<_>>();
+                    (horizontal, vertical)
+                } else {
+                    let horizontal = (0..width as usize)
+                        .map(|index| {
+                            let word_offset = index * 4;
+                            u32::from_le_bytes([
+                                mapped[word_offset],
+                                mapped[word_offset + 1],
+                                mapped[word_offset + 2],
+                                mapped[word_offset + 3],
+                            ])
+                        })
+                        .collect::<Vec<_>>();
+                    let vertical_base = width as usize * 4;
+                    let vertical = (0..height as usize)
+                        .map(|index| {
+                            let word_offset = vertical_base + index * 4;
+                            u32::from_le_bytes([
+                                mapped[word_offset],
+                                mapped[word_offset + 1],
+                                mapped[word_offset + 2],
+                                mapped[word_offset + 3],
+                            ])
+                        })
+                        .collect::<Vec<_>>();
+                    (horizontal, vertical)
+                };
+                crate::compute::record_pipeline_allocation(width as usize * 4);
+                crate::compute::record_pipeline_allocation(height as usize * 4);
+                Ok((horizontal, vertical))
+            })?;
+        let dispatches = 1;
+        let resource = PipelineResourceTelemetry {
+            upload_bytes: if source_is_zero {
+                0
+            } else {
+                source_bytes as u64
+            },
+            readback_bytes: transfer_bytes,
+            auxiliary_bytes: override_bytes.len() as u64,
+            parameter_bytes: params.len() as u64,
+            retained_cache_bytes: buffers.retained_bytes(),
+            full_frame_copy_count: u64::from(!source_is_zero)
+                + u64::from(
+                    transfer_bytes >= source_bytes as u64
+                        && matches!(&readback, ReadbackTarget::Staging(_)),
+                ),
+            fused_operation_count: ops.len() as u64,
+            ..PipelineResourceTelemetry::default()
+        };
+        crate::compute::record_pipeline_dispatch_count(dispatches);
+        if let ReadbackTarget::Staging(staging) = readback {
+            self.recycle_staging(staging);
+        }
+        self.recycle_buffers(buffers);
+        Ok((horizontal, vertical, resource, dispatches))
+    }
 }
 
 /// Shared logical-mode admission for queued submission and device execution.
@@ -23023,18 +23910,28 @@ impl GpuPool {
         let f_resize_identity_is_exact = gpu_f_resize_identity_is_exact(&dispatch_ops, img, mode);
         let f_resize_box_average_is_exact =
             gpu_f_resize_box_average_is_exact(&dispatch_ops, img, mode);
-        let f_resize_dyadic_is_exact = gpu_f_resize_dyadic_is_exact(&dispatch_ops, img, mode);
         let f_pad_f64_is_exact = gpu_f_pad_f64_is_exact(&dispatch_ops, img, mode);
-        let f_resize_f64_is_exact = gpu_f_resize_f64_is_exact(&dispatch_ops, img, mode)
-            || f_pad_f64_is_exact
-            || gpu_luma16_resize_f64_is_exact(&dispatch_ops, img, mode)
-            || gpu_i_resize_f64_is_exact(&dispatch_ops, img, mode);
-        // The ordered-f64 marker performs a full host simulation to prove its
-        // result. Run it only after marker 9 and the other exact typed proofs
-        // fail; when one of those proofs succeeds, marker 12 cannot be
-        // selected and its simulation cannot change the dispatch.
-        let f_resize_f64_ordered_proof =
-            !f_resize_f64_is_exact && gpu_f_resize_f64_ordered_is_exact(&dispatch_ops, img, mode);
+        let f_resize_f64_ordered_shader_is_supported =
+            gpu_f_resize_f64_ordered_shader_is_supported(&dispatch_ops, img, mode);
+        // The static ordered-f64 contract covers every source bit pattern and
+        // does not need the per-pixel marker-6 CPU simulation. Run that more
+        // expensive input proof only when the ordered shader cannot accept
+        // this geometry.
+        let f_resize_dyadic_is_exact = !f_resize_f64_ordered_shader_is_supported
+            && gpu_f_resize_dyadic_is_exact(&dispatch_ops, img, mode);
+        // The bounded ordered-f64 shader implements Pillow's per-tap
+        // accumulation for finite inputs, subnormals, and special values.
+        // Use its static coefficient/geometry contract first; otherwise keep
+        // the existing input-driven exact proofs for marker 9 and the
+        // restricted marker-12 simulation.
+        let f_resize_f64_is_exact = !f_resize_f64_ordered_shader_is_supported
+            && (gpu_f_resize_f64_is_exact(&dispatch_ops, img, mode)
+                || f_pad_f64_is_exact
+                || gpu_luma16_resize_f64_is_exact(&dispatch_ops, img, mode)
+                || gpu_i_resize_f64_is_exact(&dispatch_ops, img, mode));
+        let f_resize_f64_ordered_proof = f_resize_f64_ordered_shader_is_supported
+            || (!f_resize_f64_is_exact
+                && gpu_f_resize_f64_ordered_is_exact(&dispatch_ops, img, mode));
         // Marker 12 is selected only when none of the earlier F proofs owns
         // the operation.  In particular, Box-average/dyadic markers consume
         // the fixed-point coefficient table, whereas marker 12 requires the
@@ -24182,11 +25079,30 @@ impl GpuPool {
         let native_extract_band = native_extract_band_channels.is_some();
         let output_only_constant = matches!(ops, [PipelineOp::Constant { .. }]);
         let native_grayscale_rgb_input = gpu_native_grayscale_rgb_input(ops, img, mode);
+        let native_grayscale_cmyk_input = gpu_native_grayscale_cmyk_input(ops, img, mode);
         let native_sharpness_l_input = gpu_native_sharpness_l_input(ops, img, mode);
         let native_sharpness_la_input = gpu_native_sharpness_la_input(ops, img, mode);
         let native_sharpness_rgb_input = gpu_native_sharpness_rgb_input(ops, img, mode);
         let native_reduce_rgb_input = gpu_native_reduce_rgb_input(ops, img, mode);
         let native_expand_channels = gpu_native_expand_channels(ops, img, mode);
+        #[cfg(target_endian = "little")]
+        let mapped_native_box_blur_input = gpu.direct_primary_readback
+            && matches!(ops, [PipelineOp::BoxBlur { radius: 1 }])
+            && ((packed_native_byte_filter
+                && matches!(mode, None | Some("L"))
+                && matches!(img, DynamicImage::ImageLuma8(image)
+                    if image.as_raw().len() == (w as usize).saturating_mul(h as usize)))
+                || (native_rgb_compact_input
+                    && matches!(mode, None | Some("RGB"))
+                    && matches!(img, DynamicImage::ImageRgb8(image)
+                        if image.as_raw().len() == (w as usize).saturating_mul(h as usize).saturating_mul(3))));
+        #[cfg(not(target_endian = "little"))]
+        let mapped_native_box_blur_input = false;
+        #[cfg(target_endian = "little")]
+        let mapped_native_grayscale_input = gpu.direct_primary_readback
+            && (native_grayscale_rgb_input || native_grayscale_cmyk_input);
+        #[cfg(not(target_endian = "little"))]
+        let mapped_native_grayscale_input = false;
         gpu_log!(
             "[GPU] step=upload start output_only_constant={output_only_constant} native_luma16={native_luma16} native_luma16_convert={native_luma16_convert} native_luma16_paste={native_luma16_paste}"
         );
@@ -24228,15 +25144,51 @@ impl GpuPool {
                     "packed-luma GPU input requires native L samples".into(),
                 ));
             };
-            buffers.upload_packed_luma8(&gpu.queue, image)?;
+            if mapped_native_box_blur_input {
+                gpu.upload_packed_luma8_mapped(image, &mut buffers)?;
+            } else {
+                buffers.upload_packed_luma8(&gpu.queue, image)?;
+            }
         } else if native_la_transform_output {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, 2, img.as_bytes())?;
         } else if native_rgb_compact_input {
-            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
+            if mapped_native_box_blur_input {
+                let transfer_bytes = compact_native_channel_transfer_bytes(w, h, 3)?;
+                gpu.upload_native_bytes_mapped(
+                    img.as_bytes(),
+                    img.as_bytes().len(),
+                    transfer_bytes,
+                    &mut buffers,
+                )?;
+            } else {
+                buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
+            }
         } else if let Some(channels) = native_extract_band_channels {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
         } else if native_grayscale_rgb_input {
-            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
+            if mapped_native_grayscale_input {
+                let transfer_bytes = compact_native_channel_transfer_bytes(w, h, 3)?;
+                gpu.upload_native_bytes_mapped(
+                    img.as_bytes(),
+                    img.as_bytes().len(),
+                    transfer_bytes,
+                    &mut buffers,
+                )?;
+            } else {
+                buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
+            }
+        } else if native_grayscale_cmyk_input {
+            if mapped_native_grayscale_input {
+                let transfer_bytes = compact_native_channel_transfer_bytes(w, h, 4)?;
+                gpu.upload_native_bytes_mapped(
+                    img.as_bytes(),
+                    img.as_bytes().len(),
+                    transfer_bytes,
+                    &mut buffers,
+                )?;
+            } else {
+                buffers.upload_standard_image(&gpu.queue, img)?;
+            }
         } else if native_sharpness_l_input {
             let DynamicImage::ImageLuma8(image) = img else {
                 return Err(PilError::InternalError(
@@ -24268,6 +25220,16 @@ impl GpuPool {
             "[GPU] step=upload done output_only_constant={output_only_constant} native_luma16={native_luma16}"
         );
         gpu_log!("[GPU] step=execute_batch_impl start");
+        let mapped_native_input = if mapped_native_box_blur_input || mapped_native_grayscale_input {
+            Some(buffers.mapped_native_input.take().ok_or_else(|| {
+                PilError::InternalError(
+                    "mapped native upload completed without retaining its input buffer".into(),
+                )
+            })?)
+        } else {
+            None
+        };
+        let initial_input = mapped_native_input.as_ref().map(|input| &input.buffer);
         let (
             final_is_a,
             final_w,
@@ -24313,8 +25275,19 @@ impl GpuPool {
             f_resize_dyadic_is_exact,
             f_resize_f64_is_exact,
             f_resize_f64_ordered_is_exact,
+            initial_input,
             &mut buffers,
         )?;
+        // The ordinary image route shares the same fused shader resolver as
+        // explicit GPU batches, but its per-operation telemetry was not
+        // carrying the fusion count. Keep the receipt aligned with the
+        // admitted dispatch plan without counting an unrelated CPU fallback.
+        resource_telemetry.fused_operation_count = resource_telemetry
+            .fused_operation_count
+            .max(gpu_fused_operation_count(ops, mode, (w, h)));
+        if let Some(input) = mapped_native_input {
+            buffers.mapped_native_input = Some(input);
+        }
         gpu_log!(
             "[GPU] step=execute_batch_impl done final=({},{}) is_a={}",
             final_w,
@@ -24682,7 +25655,8 @@ mod tests {
         gpu_f_resize_compact_box_axis, gpu_f_resize_compact_box_is_exact,
         gpu_f_resize_compact_box_vertical_only_geometry, gpu_f_resize_constant_bits,
         gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact, gpu_f_resize_f64_ordered_is_exact,
-        gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
+        gpu_f_resize_f64_ordered_shader_is_supported, gpu_f_resize_identity_is_exact,
+        gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_f64_ordered_add_product,
         gpu_f64_ordered_round, gpu_f64_ordered_state_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
@@ -26880,7 +27854,7 @@ mod tests {
             gpu.upload_packed_rgb_mapped(&rgb, &layout, &mut buffers)
                 .unwrap();
             assert_eq!(buffers.retained_bytes(), base_bytes + retained_bytes);
-            let input = &buffers.mapped_transpose_input.as_ref().unwrap().buffer;
+            let input = &buffers.mapped_native_input.as_ref().unwrap().buffer;
             assert!(input.usage().contains(wgpu::BufferUsages::MAP_WRITE));
             assert!(!input.usage().contains(wgpu::BufferUsages::MAP_READ));
             assert!(
@@ -27265,6 +28239,7 @@ mod tests {
                         false,
                         false,
                         false,
+                        None,
                         &mut buffers,
                     )
                     .unwrap();
@@ -28128,7 +29103,7 @@ mod tests {
         #[cfg(target_endian = "little")]
         let bytes = bytes
             + buffers
-                .mapped_transpose_input
+                .mapped_native_input
                 .as_ref()
                 .map_or(0, |input| input.buffer.size());
         bytes
@@ -31830,7 +32805,7 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
-    fn gpu_native_grayscale_native_triples_require_singleton_exact_storage() {
+    fn gpu_native_grayscale_inputs_require_singleton_exact_storage() {
         let grayscale = PipelineOp::Grayscale;
         let rgb = DynamicImage::ImageRgb8(
             RgbImage::from_raw(3, 1, vec![12, 34, 56, 78, 90, 123, 234, 210, 98]).unwrap(),
@@ -31868,17 +32843,43 @@ mod tests {
             &rgba,
             Some("RGB")
         ));
+        assert!(super::gpu_native_grayscale_cmyk_input(
+            std::slice::from_ref(&grayscale),
+            &rgba,
+            Some("CMYK")
+        ));
+        assert!(!super::gpu_native_grayscale_cmyk_input(
+            std::slice::from_ref(&grayscale),
+            &rgba,
+            None
+        ));
+        assert!(!super::gpu_native_grayscale_cmyk_input(
+            std::slice::from_ref(&grayscale),
+            &rgba,
+            Some("RGB")
+        ));
         let multiple = [grayscale, PipelineOp::Duplicate];
         assert!(!super::gpu_native_grayscale_rgb_input(
             &multiple,
             &rgb,
             Some("RGB")
         ));
+        assert!(!super::gpu_native_grayscale_cmyk_input(
+            &multiple,
+            &rgba,
+            Some("CMYK")
+        ));
         let empty = DynamicImage::ImageRgb8(RgbImage::new(0, 1));
         assert!(!super::gpu_native_grayscale_rgb_input(
             &[PipelineOp::Grayscale],
             &empty,
             Some("RGB")
+        ));
+        let empty_cmyk = DynamicImage::ImageRgba8(RgbaImage::new(0, 1));
+        assert!(!super::gpu_native_grayscale_cmyk_input(
+            &[PipelineOp::Grayscale],
+            &empty_cmyk,
+            Some("CMYK")
         ));
     }
 
@@ -32378,6 +33379,136 @@ mod tests {
             &DynamicImage::ImageLuma8(GrayImage::new(0, 1)),
             Some("L")
         ));
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_luma_box_blur_radius_one_matches_cpu_at_edges_and_fuses_axes() {
+        use crate::compute::{execute_prepared, prepare_execution};
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+        let operation = PipelineOp::BoxBlur { radius: 1 };
+        for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (5, 3), (33, 35)] {
+            let pixel_count = width as usize * height as usize;
+            let pixels = (0..pixel_count)
+                .map(|index| ((index * 71 + index / 9 * 37 + 23) % 256) as u8)
+                .collect::<Vec<_>>();
+            let source = DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width, height, pixels).expect("L BoxBlur source"),
+            );
+            let expected = crate::compute::registry::execute_cpu(&operation, &source, Some("L"))
+                .expect("CPU L BoxBlur reference");
+            let prepared = prepare_execution(std::slice::from_ref(&operation), Some(Backend::Gpu))
+                .expect("GPU L BoxBlur routing");
+            let actual = match execute_prepared(
+                &prepared,
+                std::slice::from_ref(&operation),
+                &source,
+                Some("L"),
+            ) {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    return;
+                }
+                Err(error) => panic!("native GPU L BoxBlur failed: {error}"),
+            };
+            assert!(matches!(&actual, DynamicImage::ImageLuma8(_)));
+            assert_eq!(actual.dimensions(), expected.dimensions());
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
+
+            let receipt = Backend::take_pipeline_telemetry().expect("native L blur receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native L blur resources");
+            let transfer_bytes = pixel_count.div_ceil(4) * 4;
+            assert_eq!(resources.upload_bytes, transfer_bytes as u64);
+            assert_eq!(resources.readback_bytes, transfer_bytes as u64);
+            assert_eq!(resources.mode_conversion_count, 0);
+        }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_rgb_box_blur_radius_one_matches_cpu_at_edges_and_fuses_axes() {
+        use crate::compute::{execute_prepared, prepare_execution};
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+        let operation = PipelineOp::BoxBlur { radius: 1 };
+        for (width, height) in [
+            (1u32, 1u32),
+            (1, 3),
+            (4, 3),
+            (5, 3),
+            (33, 35),
+            (65, 47),
+            (67, 53),
+        ] {
+            let byte_count = width as usize * height as usize * 3;
+            let pixels = (0..byte_count)
+                .map(|index| ((index * 71 + index / 9 * 37 + 23) % 256) as u8)
+                .collect::<Vec<_>>();
+            let source = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, pixels).expect("RGB BoxBlur source"),
+            );
+            let expected = crate::compute::registry::execute_cpu(&operation, &source, Some("RGB"))
+                .expect("CPU RGB BoxBlur reference");
+            let prepared = prepare_execution(std::slice::from_ref(&operation), Some(Backend::Gpu))
+                .expect("GPU RGB BoxBlur routing");
+            let actual = match execute_prepared(
+                &prepared,
+                std::slice::from_ref(&operation),
+                &source,
+                Some("RGB"),
+            ) {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    return;
+                }
+                Err(error) => panic!("native GPU RGB BoxBlur failed: {error}"),
+            };
+            assert!(matches!(&actual, DynamicImage::ImageRgb8(_)));
+            assert_eq!(actual.dimensions(), expected.dimensions());
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
+
+            let receipt = Backend::take_pipeline_telemetry().expect("native RGB blur receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native RGB blur resources");
+            let transfer_bytes = byte_count.div_ceil(4) * 4;
+            assert_eq!(resources.upload_bytes, transfer_bytes as u64);
+            assert_eq!(resources.readback_bytes, transfer_bytes as u64);
+            assert_eq!(resources.mode_conversion_count, 0);
+        }
     }
 
     #[test]
@@ -38543,6 +39674,54 @@ mod tests {
             assert_eq!(telemetry.7, None);
         }
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_ordered_shader_admission_checks_geometry_and_coefficients() {
+        let source = Image::frombytes("F", (32, 24), &vec![0; 32 * 24 * 4]).expect("F source");
+        let source_dynamic = source.materialize().expect("materialize F source");
+        let op = PipelineOp::Resize {
+            w: 16,
+            h: 12,
+            filter: ResampleFilter::Bicubic,
+        };
+        assert!(gpu_f_resize_f64_ordered_shader_is_supported(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_f64_ordered_shader_is_supported(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("I")
+        ));
+
+        let nearest = PipelineOp::Resize {
+            w: 16,
+            h: 12,
+            filter: ResampleFilter::Nearest,
+        };
+        assert!(!gpu_f_resize_f64_ordered_shader_is_supported(
+            std::slice::from_ref(&nearest),
+            &source_dynamic,
+            Some("F")
+        ));
+
+        let wide_row_source =
+            Image::frombytes("F", (128, 8), &vec![0; 128 * 8 * 4]).expect("wide F source");
+        let wide_row_dynamic = wide_row_source
+            .materialize()
+            .expect("materialize wide F source");
+        let wide_row = PipelineOp::Resize {
+            w: 4,
+            h: 8,
+            filter: ResampleFilter::Lanczos,
+        };
+        assert!(!gpu_f_resize_f64_ordered_shader_is_supported(
+            std::slice::from_ref(&wide_row),
+            &wide_row_dynamic,
+            Some("F")
+        ));
     }
 
     #[test]

@@ -102,6 +102,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- box_blur_h_la_packed.wgsl
 |   |   |   |   |   |-- box_blur_h_luma_packed.wgsl
 |   |   |   |   |   |-- box_blur_h_rgb_packed.wgsl
+|   |   |   |   |   |-- box_blur_hv_luma_radius_one_packed.wgsl
+|   |   |   |   |   |-- box_blur_hv_rgb_radius_one_packed.wgsl
 |   |   |   |   |   |-- box_blur_v.wgsl
 |   |   |   |   |   |-- box_blur_v_la_packed.wgsl
 |   |   |   |   |   |-- box_blur_v_luma_packed.wgsl
@@ -146,6 +148,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- flip.wgsl
 |   |   |   |   |   |-- flip_native_byte_rows.wgsl
 |   |   |   |   |   |-- gaussian_blur.wgsl
+|   |   |   |   |   |-- getprojection_atomic.wgsl
+|   |   |   |   |   |-- getprojection_cmyk.wgsl
 |   |   |   |   |   |-- grayscale.wgsl
 |   |   |   |   |   |-- hard_light.wgsl
 |   |   |   |   |   |-- histogram_clear.wgsl

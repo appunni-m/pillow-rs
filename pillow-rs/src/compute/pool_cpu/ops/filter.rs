@@ -2012,51 +2012,109 @@ fn blur_rows(
 
 #[cfg(not(feature = "parallel"))]
 #[inline(always)]
-fn blur_rgb_radius_one_fractional_step(
-    source: &[u8],
-    destination: &mut [u8],
-    accumulator: &mut [u32; 3],
-    output: usize,
-    subtract: usize,
-    add: usize,
-    far_right: usize,
+fn store_radius_one_fractional_sample(
+    destination: &mut u8,
+    whole_sum: u32,
+    far_sum: u32,
     whole_weight: u32,
     fractional_weight: u32,
 ) {
-    let next0 = accumulator[0]
-        .wrapping_sub(u32::from(source[subtract]))
-        .wrapping_add(u32::from(source[add]));
-    let next1 = accumulator[1]
-        .wrapping_sub(u32::from(source[subtract + 1]))
-        .wrapping_add(u32::from(source[add + 1]));
-    let next2 = accumulator[2]
-        .wrapping_sub(u32::from(source[subtract + 2]))
-        .wrapping_add(u32::from(source[add + 2]));
-    accumulator[0] = next0;
-    accumulator[1] = next1;
-    accumulator[2] = next2;
+    let bulk = whole_sum
+        .wrapping_mul(whole_weight)
+        .wrapping_add(far_sum.wrapping_mul(fractional_weight))
+        .wrapping_add(BOX_BLUR_BIAS);
+    *destination = (bulk >> 24) as u8;
+}
 
-    let far0 = (u32::from(source[subtract]) + u32::from(source[far_right]))
-        .wrapping_mul(fractional_weight);
-    let far1 = (u32::from(source[subtract + 1]) + u32::from(source[far_right + 1]))
-        .wrapping_mul(fractional_weight);
-    let far2 = (u32::from(source[subtract + 2]) + u32::from(source[far_right + 2]))
-        .wrapping_mul(fractional_weight);
-    destination[output] = (next0
-        .wrapping_mul(whole_weight)
-        .wrapping_add(far0)
-        .wrapping_add(BOX_BLUR_BIAS)
-        >> 24) as u8;
-    destination[output + 1] = (next1
-        .wrapping_mul(whole_weight)
-        .wrapping_add(far1)
-        .wrapping_add(BOX_BLUR_BIAS)
-        >> 24) as u8;
-    destination[output + 2] = (next2
-        .wrapping_mul(whole_weight)
-        .wrapping_add(far2)
-        .wrapping_add(BOX_BLUR_BIAS)
-        >> 24) as u8;
+/// Blur one L row with Pillow's radius-one fractional taps.
+#[cfg(not(feature = "parallel"))]
+fn blur_luma_radius_one_fractional_line(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    debug_assert!(width > 0);
+    debug_assert!(source.len() >= width);
+    debug_assert!(destination.len() >= width);
+    debug_assert_ne!(fractional_weight, 0);
+
+    if width < 5 {
+        let mut accumulator = [0u32; 4];
+        blur_line(
+            source,
+            destination,
+            0,
+            width,
+            1,
+            1,
+            whole_weight,
+            fractional_weight,
+            &mut accumulator,
+        );
+        return;
+    }
+
+    let first = u32::from(source[0]);
+    store_radius_one_fractional_sample(
+        &mut destination[0],
+        first * 2 + u32::from(source[1]),
+        first + u32::from(source[2]),
+        whole_weight,
+        fractional_weight,
+    );
+    store_radius_one_fractional_sample(
+        &mut destination[1],
+        first + u32::from(source[1]) + u32::from(source[2]),
+        first + u32::from(source[3]),
+        whole_weight,
+        fractional_weight,
+    );
+
+    let interior_destination = &mut destination[2..width - 2];
+    let far_left_samples = &source[..width - 4];
+    let left_samples = &source[1..width - 3];
+    let center_samples = &source[2..width - 2];
+    let right_samples = &source[3..width - 1];
+    let far_right_samples = &source[4..];
+    for (((((output, &far_left), &left), &center), &right), &far_right) in interior_destination
+        .iter_mut()
+        .zip(far_left_samples)
+        .zip(left_samples)
+        .zip(center_samples)
+        .zip(right_samples)
+        .zip(far_right_samples)
+    {
+        let whole_sum = u32::from(left) + u32::from(center) + u32::from(right);
+        let far_sum = u32::from(far_left) + u32::from(far_right);
+        store_radius_one_fractional_sample(
+            output,
+            whole_sum,
+            far_sum,
+            whole_weight,
+            fractional_weight,
+        );
+    }
+
+    let last = width - 1;
+    let penultimate = last - 1;
+    store_radius_one_fractional_sample(
+        &mut destination[penultimate],
+        u32::from(source[penultimate - 1])
+            + u32::from(source[penultimate])
+            + u32::from(source[last]),
+        u32::from(source[penultimate - 2]) + u32::from(source[last]),
+        whole_weight,
+        fractional_weight,
+    );
+    store_radius_one_fractional_sample(
+        &mut destination[last],
+        u32::from(source[last - 1]) + u32::from(source[last]) * 2,
+        u32::from(source[last - 2]) + u32::from(source[last]),
+        whole_weight,
+        fractional_weight,
+    );
 }
 
 /// Blur one RGB row for a radius-one fractional Gaussian box pass.
@@ -2089,73 +2147,69 @@ fn blur_rgb_radius_one_fractional_line(
         return;
     }
 
-    let mut accumulator = [
-        u32::from(source[0]) * 3,
-        u32::from(source[1]) * 3,
-        u32::from(source[2]) * 3,
-    ];
-    blur_rgb_radius_one_fractional_step(
-        source,
-        destination,
-        &mut accumulator,
-        0,
-        0,
-        3,
-        6,
-        whole_weight,
-        fractional_weight,
-    );
-    blur_rgb_radius_one_fractional_step(
-        source,
-        destination,
-        &mut accumulator,
-        3,
-        0,
-        6,
-        9,
-        whole_weight,
-        fractional_weight,
-    );
-
-    for output_pixel in 2..width - 2 {
-        let output = output_pixel * 3;
-        blur_rgb_radius_one_fractional_step(
-            source,
-            destination,
-            &mut accumulator,
-            output,
-            output - 6,
-            output + 3,
-            output + 6,
+    for channel in 0..3 {
+        let first = u32::from(source[channel]);
+        store_radius_one_fractional_sample(
+            &mut destination[channel],
+            first * 2 + u32::from(source[3 + channel]),
+            first + u32::from(source[6 + channel]),
+            whole_weight,
+            fractional_weight,
+        );
+        store_radius_one_fractional_sample(
+            &mut destination[3 + channel],
+            first + u32::from(source[3 + channel]) + u32::from(source[6 + channel]),
+            first + u32::from(source[9 + channel]),
             whole_weight,
             fractional_weight,
         );
     }
 
-    let last_pixel = (width - 1) * 3;
-    let penultimate_pixel = last_pixel - 3;
-    blur_rgb_radius_one_fractional_step(
-        source,
-        destination,
-        &mut accumulator,
-        penultimate_pixel,
-        penultimate_pixel - 6,
-        last_pixel,
-        last_pixel,
-        whole_weight,
-        fractional_weight,
-    );
-    blur_rgb_radius_one_fractional_step(
-        source,
-        destination,
-        &mut accumulator,
-        last_pixel,
-        last_pixel - 6,
-        last_pixel,
-        last_pixel,
-        whole_weight,
-        fractional_weight,
-    );
+    let interior_destination = &mut destination[6..(width - 2) * 3];
+    let far_left_samples = &source[..(width - 4) * 3];
+    let left_samples = &source[3..(width - 3) * 3];
+    let center_samples = &source[6..(width - 2) * 3];
+    let right_samples = &source[9..(width - 1) * 3];
+    let far_right_samples = &source[12..];
+    for (((((output, &far_left), &left), &center), &right), &far_right) in interior_destination
+        .iter_mut()
+        .zip(far_left_samples)
+        .zip(left_samples)
+        .zip(center_samples)
+        .zip(right_samples)
+        .zip(far_right_samples)
+    {
+        let whole_sum = u32::from(left) + u32::from(center) + u32::from(right);
+        let far_sum = u32::from(far_left) + u32::from(far_right);
+        store_radius_one_fractional_sample(
+            output,
+            whole_sum,
+            far_sum,
+            whole_weight,
+            fractional_weight,
+        );
+    }
+
+    let penultimate = (width - 2) * 3;
+    let last = (width - 1) * 3;
+    for channel in 0..3 {
+        store_radius_one_fractional_sample(
+            &mut destination[penultimate + channel],
+            u32::from(source[penultimate - 3 + channel])
+                + u32::from(source[penultimate + channel])
+                + u32::from(source[last + channel]),
+            u32::from(source[penultimate - 6 + channel]) + u32::from(source[last + channel]),
+            whole_weight,
+            fractional_weight,
+        );
+        store_radius_one_fractional_sample(
+            &mut destination[last + channel],
+            u32::from(source[penultimate + channel]) + u32::from(source[last + channel]) * 2,
+            u32::from(source[penultimate - 3 + channel]) + u32::from(source[last + channel]),
+            whole_weight,
+            fractional_weight,
+        );
+    }
 }
 
 /// Run the three horizontal Gaussian box passes one interleaved row at a time.
@@ -2245,53 +2299,6 @@ fn blur_interleaved_rows_three_passes<const CHANNELS: usize>(
     }
 }
 
-/// Advance and store one two-channel sample for the fractional radius-one
-/// Gaussian path. Its left fractional tap is also the sample leaving the
-/// whole-radius window, so share that load while preserving Pillow's fixed
-/// point operations and rounding order.
-#[cfg(not(feature = "parallel"))]
-#[inline(always)]
-fn blur_la_radius_one_fractional_step(
-    source: &[u8],
-    destination: &mut [u8],
-    accumulator: &mut [u32; 2],
-    output_pixel: usize,
-    subtract_pixel: usize,
-    add_pixel: usize,
-    far_right_pixel: usize,
-    whole_weight: u32,
-    fractional_weight: u32,
-) {
-    let output = output_pixel * 2;
-    let subtract = subtract_pixel * 2;
-    let add = add_pixel * 2;
-    let far_right = far_right_pixel * 2;
-
-    let next_l = accumulator[0]
-        .wrapping_sub(u32::from(source[subtract]))
-        .wrapping_add(u32::from(source[add]));
-    let next_a = accumulator[1]
-        .wrapping_sub(u32::from(source[subtract + 1]))
-        .wrapping_add(u32::from(source[add + 1]));
-    accumulator[0] = next_l;
-    accumulator[1] = next_a;
-
-    let far_l = (u32::from(source[subtract]) + u32::from(source[far_right]))
-        .wrapping_mul(fractional_weight);
-    let far_a = (u32::from(source[subtract + 1]) + u32::from(source[far_right + 1]))
-        .wrapping_mul(fractional_weight);
-    destination[output] = (next_l
-        .wrapping_mul(whole_weight)
-        .wrapping_add(far_l)
-        .wrapping_add(BOX_BLUR_BIAS)
-        >> 24) as u8;
-    destination[output + 1] = (next_a
-        .wrapping_mul(whole_weight)
-        .wrapping_add(far_a)
-        .wrapping_add(BOX_BLUR_BIAS)
-        >> 24) as u8;
-}
-
 /// Apply one fractional radius-one Gaussian box pass to an LA row. The three
 /// regions keep the replicated edge indices out of the interior loop.
 #[cfg(not(feature = "parallel"))]
@@ -2307,67 +2314,72 @@ fn blur_la_radius_one_fractional_line(
     debug_assert!(destination.len() >= width * 2);
     debug_assert_ne!(fractional_weight, 0);
 
-    let mut accumulator = [u32::from(source[0]) * 3, u32::from(source[1]) * 3];
-    blur_la_radius_one_fractional_step(
-        source,
-        destination,
-        &mut accumulator,
-        0,
-        0,
-        1,
-        2,
-        whole_weight,
-        fractional_weight,
-    );
-    blur_la_radius_one_fractional_step(
-        source,
-        destination,
-        &mut accumulator,
-        1,
-        0,
-        2,
-        3,
-        whole_weight,
-        fractional_weight,
-    );
+    for channel in 0..2 {
+        let first = u32::from(source[channel]);
+        store_radius_one_fractional_sample(
+            &mut destination[channel],
+            first * 2 + u32::from(source[2 + channel]),
+            first + u32::from(source[4 + channel]),
+            whole_weight,
+            fractional_weight,
+        );
+        store_radius_one_fractional_sample(
+            &mut destination[2 + channel],
+            first + u32::from(source[2 + channel]) + u32::from(source[4 + channel]),
+            first + u32::from(source[6 + channel]),
+            whole_weight,
+            fractional_weight,
+        );
+    }
 
-    for output in 2..width - 2 {
-        blur_la_radius_one_fractional_step(
-            source,
-            destination,
-            &mut accumulator,
+    let interior_end = (width - 2) * 2;
+    let interior_destination = &mut destination[4..interior_end];
+    let far_left_samples = &source[..(width - 4) * 2];
+    let left_samples = &source[2..(width - 3) * 2];
+    let center_samples = &source[4..interior_end];
+    let right_samples = &source[6..(width - 1) * 2];
+    let far_right_samples = &source[8..];
+    for (((((output, &far_left), &left), &center), &right), &far_right) in interior_destination
+        .iter_mut()
+        .zip(far_left_samples)
+        .zip(left_samples)
+        .zip(center_samples)
+        .zip(right_samples)
+        .zip(far_right_samples)
+    {
+        let whole_sum = u32::from(left) + u32::from(center) + u32::from(right);
+        let far_sum = u32::from(far_left) + u32::from(far_right);
+        store_radius_one_fractional_sample(
             output,
-            output - 2,
-            output + 1,
-            output + 2,
+            whole_sum,
+            far_sum,
             whole_weight,
             fractional_weight,
         );
     }
 
     let last = width - 1;
-    blur_la_radius_one_fractional_step(
-        source,
-        destination,
-        &mut accumulator,
-        width - 2,
-        width - 4,
-        last,
-        last,
-        whole_weight,
-        fractional_weight,
-    );
-    blur_la_radius_one_fractional_step(
-        source,
-        destination,
-        &mut accumulator,
-        last,
-        width - 3,
-        last,
-        last,
-        whole_weight,
-        fractional_weight,
-    );
+    let penultimate = last - 1;
+    for channel in 0..2 {
+        let penultimate_base = penultimate * 2 + channel;
+        let last_base = last * 2 + channel;
+        store_radius_one_fractional_sample(
+            &mut destination[penultimate_base],
+            u32::from(source[penultimate_base - 2])
+                + u32::from(source[penultimate_base])
+                + u32::from(source[penultimate_base + 2]),
+            u32::from(source[penultimate_base - 4]) + u32::from(source[penultimate_base + 2]),
+            whole_weight,
+            fractional_weight,
+        );
+        store_radius_one_fractional_sample(
+            &mut destination[last_base],
+            u32::from(source[last_base - 2]) + u32::from(source[last_base]) * 2,
+            u32::from(source[last_base - 4]) + u32::from(source[last_base]),
+            whole_weight,
+            fractional_weight,
+        );
+    }
 }
 
 /// Keep the exact byte rounding between the three horizontal passes while
@@ -2432,44 +2444,135 @@ fn blur_luma_rows_three_passes(
     let mut first_intermediate = vec![0u8; width];
     let mut second_intermediate = vec![0u8; width];
     let mut accumulator = [0u32; 4];
+    let radius_one_fractional = radius == 1 && fractional_weight != 0 && width >= 5;
 
     for row in 0..height {
         let start = row * width;
         let source_row = &source[start..start + width];
         let destination_row = &mut destination[start..start + width];
-        blur_line(
-            source_row,
-            &mut first_intermediate,
-            0,
-            width,
-            1,
-            radius,
-            whole_weight,
-            fractional_weight,
-            &mut accumulator,
-        );
-        blur_line(
-            &first_intermediate,
-            &mut second_intermediate,
-            0,
-            width,
-            1,
-            radius,
-            whole_weight,
-            fractional_weight,
-            &mut accumulator,
-        );
-        blur_line(
-            &second_intermediate,
-            destination_row,
-            0,
-            width,
-            1,
-            radius,
-            whole_weight,
-            fractional_weight,
-            &mut accumulator,
-        );
+        if radius_one_fractional {
+            blur_luma_radius_one_fractional_line(
+                source_row,
+                &mut first_intermediate,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+            blur_luma_radius_one_fractional_line(
+                &first_intermediate,
+                &mut second_intermediate,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+            blur_luma_radius_one_fractional_line(
+                &second_intermediate,
+                destination_row,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+        } else {
+            blur_line(
+                source_row,
+                &mut first_intermediate,
+                0,
+                width,
+                1,
+                radius,
+                whole_weight,
+                fractional_weight,
+                &mut accumulator,
+            );
+            blur_line(
+                &first_intermediate,
+                &mut second_intermediate,
+                0,
+                width,
+                1,
+                radius,
+                whole_weight,
+                fractional_weight,
+                &mut accumulator,
+            );
+            blur_line(
+                &second_intermediate,
+                destination_row,
+                0,
+                width,
+                1,
+                radius,
+                whole_weight,
+                fractional_weight,
+                &mut accumulator,
+            );
+        }
+    }
+}
+
+/// Apply one L vertical Gaussian box pass with five replicated-edge taps.
+/// The direct row-major form keeps every source row contiguous and avoids the
+/// generic transposed-line accumulator for this common radius.
+#[cfg(not(feature = "parallel"))]
+fn blur_luma_vertical_radius_one_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    debug_assert_eq!(source.len(), width * height);
+    debug_assert_eq!(destination.len(), source.len());
+    if width == 0 || height == 0 {
+        return;
+    }
+
+    let last_y = height - 1;
+    for y in 0..height {
+        let top_two = y.saturating_sub(2) * width;
+        let top_one = y.saturating_sub(1) * width;
+        let center = y * width;
+        let bottom_one = y.saturating_add(1).min(last_y) * width;
+        let bottom_two = y.saturating_add(2).min(last_y) * width;
+        let top_two_row = &source[top_two..top_two + width];
+        let top_one_row = &source[top_one..top_one + width];
+        let center_row = &source[center..center + width];
+        let bottom_one_row = &source[bottom_one..bottom_one + width];
+        let bottom_two_row = &source[bottom_two..bottom_two + width];
+        let destination_row = &mut destination[center..center + width];
+
+        if fractional_weight == 0 {
+            for (((output, &top), &middle), &bottom) in destination_row
+                .iter_mut()
+                .zip(top_one_row)
+                .zip(center_row)
+                .zip(bottom_one_row)
+            {
+                let neighbors = u32::from(top) + u32::from(middle) + u32::from(bottom);
+                let weighted = neighbors
+                    .wrapping_mul(whole_weight)
+                    .wrapping_add(BOX_BLUR_BIAS);
+                *output = (weighted >> 24) as u8;
+            }
+        } else {
+            for (((((output, &far_top), &top), &middle), &bottom), &far_bottom) in destination_row
+                .iter_mut()
+                .zip(top_two_row)
+                .zip(top_one_row)
+                .zip(center_row)
+                .zip(bottom_one_row)
+                .zip(bottom_two_row)
+            {
+                let neighbors = u32::from(top) + u32::from(middle) + u32::from(bottom);
+                let far_edges = u32::from(far_top) + u32::from(far_bottom);
+                let weighted = neighbors
+                    .wrapping_mul(whole_weight)
+                    .wrapping_add(far_edges.wrapping_mul(fractional_weight))
+                    .wrapping_add(BOX_BLUR_BIAS);
+                *output = (weighted >> 24) as u8;
+            }
+        }
     }
 }
 
@@ -2503,6 +2606,80 @@ fn transpose_interleaved_rows(
     );
 }
 
+#[cfg(feature = "parallel")]
+fn blur_columns_radius_one_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    whole_weight: u32,
+) {
+    let row_stride = width * channels;
+    crate::par_rows_mut!(
+        destination,
+        row_stride,
+        height,
+        |_row_start, _row_end, y, row| {
+            let y = y as usize;
+            let above = y.saturating_sub(1) * row_stride;
+            let center = y * row_stride;
+            let below = y.saturating_add(1).min(height - 1) * row_stride;
+            for (index, output) in row.iter_mut().enumerate() {
+                let sum = u32::from(source[above + index])
+                    + u32::from(source[center + index])
+                    + u32::from(source[below + index]);
+                *output = (sum.wrapping_mul(whole_weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+            }
+        }
+    );
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod parallel_radius_one_vertical_tests {
+    use super::{blur_columns, blur_columns_radius_one_rows, blur_parameters};
+
+    #[test]
+    fn row_parallel_radius_one_matches_fixed_point_column_blur() {
+        let (radius, whole_weight, fractional_weight) = blur_parameters(1.0);
+        assert_eq!(radius, 1);
+        assert_eq!(fractional_weight, 0);
+
+        for (width, height) in [(1, 1), (1, 7), (2, 3), (17, 9), (65, 33)] {
+            for channels in [1, 2, 3, 4] {
+                let len = width * height * channels;
+                let source = (0..len)
+                    .map(|index| ((index * 73 + index / 11 * 29 + 37) % 256) as u8)
+                    .collect::<Vec<_>>();
+                let mut actual = vec![0; len];
+                let mut expected = vec![0; len];
+
+                blur_columns_radius_one_rows(
+                    &source,
+                    &mut actual,
+                    width,
+                    height,
+                    channels,
+                    whole_weight,
+                );
+                blur_columns(
+                    &source,
+                    &mut expected,
+                    width,
+                    height,
+                    channels,
+                    radius,
+                    whole_weight,
+                    fractional_weight,
+                    &mut vec![0; width * channels],
+                );
+
+                assert_eq!(actual, expected, "{width}x{height}, channels={channels}");
+            }
+        }
+    }
+}
+
 fn blur_columns(
     source: &[u8],
     destination: &mut [u8],
@@ -2529,6 +2706,178 @@ fn blur_columns(
         fractional_weight,
         accumulator,
     );
+}
+
+/// Apply a single native-byte BoxBlur(1) pass with a three-row horizontal
+/// scratch ring. This keeps the horizontal intermediate in cache and writes
+/// each final row directly, avoiding a full-frame source clone and vertical
+/// scratch buffer for the common one-pass case.
+#[cfg(not(feature = "parallel"))]
+#[inline]
+fn blur_box_radius_one_horizontal_row(
+    source: &[u8],
+    ring: &mut [u8],
+    row: usize,
+    row_bytes: usize,
+    width: usize,
+    channels: usize,
+    horizontal_weight: u32,
+) {
+    blur_one_row(
+        source,
+        ring,
+        row * row_bytes,
+        width,
+        channels,
+        1,
+        horizontal_weight,
+        0,
+    );
+}
+
+#[cfg(not(feature = "parallel"))]
+fn blur_box_radius_one_row_ring(
+    source: &[u8],
+    width: u32,
+    height: u32,
+    channels: usize,
+    horizontal_weight: u32,
+    vertical_weight: u32,
+) -> Result<Vec<u8>, PilError> {
+    let dimensions = CheckedDims::new(width, height, channels as u8)?;
+    if source.len() != dimensions.total_bytes() {
+        return Err(PilError::DimensionError(
+            "BoxBlur source byte length does not match its dimensions".into(),
+        ));
+    }
+    let ring_height = dimensions.height.min(3);
+    let ring_dimensions = CheckedDims::new(dimensions.width, ring_height, channels as u8)?;
+    let row_bytes = dimensions.row_stride();
+    let width = dimensions.width as usize;
+    let height = dimensions.height as usize;
+    let ring_slots = ring_height as usize;
+    let mut output = dimensions.alloc_buffer();
+    let mut ring = ring_dimensions.alloc_buffer();
+
+    for row in 0..height.min(2) {
+        let start = (row % ring_slots) * row_bytes;
+        blur_box_radius_one_horizontal_row(
+            source,
+            &mut ring[start..start + row_bytes],
+            row,
+            row_bytes,
+            width,
+            channels,
+            horizontal_weight,
+        );
+    }
+
+    for y in 0..height {
+        let center_slot = y % ring_slots;
+        let bottom_y = (y + 1).min(height - 1);
+        let bottom_slot = bottom_y % ring_slots;
+        let center_start = center_slot * row_bytes;
+        let top_y = y.saturating_sub(1);
+        let top_start = (top_y % ring_slots) * row_bytes;
+        let output_start = y * row_bytes;
+        let output_row = &mut output[output_start..output_start + row_bytes];
+        let top_row = &ring[top_start..top_start + row_bytes];
+        let center_row = &ring[center_start..center_start + row_bytes];
+        let bottom_start = bottom_slot * row_bytes;
+        let bottom_row = &ring[bottom_start..bottom_start + row_bytes];
+        for ((output, &top), (&center, &bottom)) in output_row
+            .iter_mut()
+            .zip(top_row)
+            .zip(center_row.iter().zip(bottom_row))
+        {
+            let sum = u32::from(top) + u32::from(center) + u32::from(bottom);
+            *output = (sum
+                .wrapping_mul(vertical_weight)
+                .wrapping_add(BOX_BLUR_BIAS)
+                >> 24) as u8;
+        }
+
+        let next_row = y + 2;
+        if next_row < height {
+            let next_start = (next_row % ring_slots) * row_bytes;
+            blur_box_radius_one_horizontal_row(
+                source,
+                &mut ring[next_start..next_start + row_bytes],
+                next_row,
+                row_bytes,
+                width,
+                channels,
+                horizontal_weight,
+            );
+        }
+    }
+
+    Ok(output)
+}
+
+#[cfg(all(test, not(feature = "parallel")))]
+mod serial_box_blur_radius_one_row_ring_tests {
+    use super::{
+        CheckedDims, blur_box_radius_one_row_ring, blur_columns, blur_parameters, blur_rows,
+    };
+
+    #[test]
+    fn row_ring_matches_fixed_point_two_passes_at_edges_and_tails() {
+        let (radius, weight, fractional_weight) = blur_parameters(1.0);
+        assert_eq!((radius, fractional_weight), (1, 0));
+
+        for (width, height) in [
+            (1, 1),
+            (1, 7),
+            (2, 3),
+            (3, 2),
+            (4, 5),
+            (5, 9),
+            (17, 9),
+            (65, 33),
+        ] {
+            for channels in [1, 2, 3, 4] {
+                let dimensions = CheckedDims::new(width, height, channels).unwrap();
+                let source = (0..dimensions.total_bytes())
+                    .map(|index| ((index * 73 + index / 11 * 29 + 37) % 256) as u8)
+                    .collect::<Vec<_>>();
+                let actual = blur_box_radius_one_row_ring(
+                    &source,
+                    width,
+                    height,
+                    channels as usize,
+                    weight,
+                    weight,
+                )
+                .unwrap();
+                let mut horizontal = dimensions.alloc_buffer();
+                let mut expected = dimensions.alloc_buffer();
+                blur_rows(
+                    &source,
+                    &mut horizontal,
+                    width as usize,
+                    height as usize,
+                    channels as usize,
+                    radius,
+                    weight,
+                    fractional_weight,
+                );
+                blur_columns(
+                    &horizontal,
+                    &mut expected,
+                    width as usize,
+                    height as usize,
+                    channels as usize,
+                    radius,
+                    weight,
+                    fractional_weight,
+                    &mut vec![0; dimensions.row_stride()],
+                );
+
+                assert_eq!(actual, expected, "{width}x{height}, channels={channels}");
+            }
+        }
+    }
 }
 
 #[inline]
@@ -2607,6 +2956,32 @@ fn pil_box_blur_xy_impl(
     let (horizontal_radius, horizontal_weight, horizontal_fractional_weight) =
         blur_parameters(radius_x);
     let (vertical_radius, vertical_weight, vertical_fractional_weight) = blur_parameters(radius_y);
+
+    #[cfg(not(feature = "parallel"))]
+    if passes == 1
+        && horizontal_radius == 1
+        && vertical_radius == 1
+        && horizontal_fractional_weight == 0
+        && vertical_fractional_weight == 0
+        && matches!(
+            img,
+            DynamicImage::ImageLuma8(_)
+                | DynamicImage::ImageLumaA8(_)
+                | DynamicImage::ImageRgb8(_)
+                | DynamicImage::ImageRgba8(_)
+        )
+    {
+        let output = blur_box_radius_one_row_ring(
+            img.as_bytes(),
+            w_u32,
+            h_u32,
+            channels,
+            horizontal_weight,
+            vertical_weight,
+        )?;
+        let result = raw_bytes_to_image(w_u32, h_u32, output, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
 
     #[cfg(not(feature = "parallel"))]
     let rgb_gaussian_row_fusion = passes == 3 && matches!(img, DynamicImage::ImageRgb8(_));
@@ -2697,12 +3072,34 @@ fn pil_box_blur_xy_impl(
     // serial/small-image path keeps the algebraically equivalent wide-row
     // recurrence and avoids paying for the extra data movement.
     #[cfg(feature = "parallel")]
-    let use_transposed_vertical =
-        width.saturating_mul(height) >= VERTICAL_BLUR_TRANSPOSE_THRESHOLD && passes > 0;
+    let use_parallel_radius_one_vertical = width.saturating_mul(height)
+        >= VERTICAL_BLUR_TRANSPOSE_THRESHOLD
+        && passes > 0
+        && vertical_radius == 1
+        && vertical_fractional_weight == 0;
+    #[cfg(not(feature = "parallel"))]
+    let use_parallel_radius_one_vertical = false;
+    #[cfg(feature = "parallel")]
+    let use_transposed_vertical = width.saturating_mul(height) >= VERTICAL_BLUR_TRANSPOSE_THRESHOLD
+        && passes > 0
+        && !use_parallel_radius_one_vertical;
     #[cfg(not(feature = "parallel"))]
     let use_transposed_vertical = false;
 
-    if use_transposed_vertical {
+    if use_parallel_radius_one_vertical {
+        #[cfg(feature = "parallel")]
+        for _ in 0..passes {
+            blur_columns_radius_one_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                channels,
+                vertical_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+    } else if use_transposed_vertical {
         #[cfg(feature = "parallel")]
         {
             transpose_interleaved_rows(&work, &mut scratch, width, height, channels);
@@ -2726,6 +3123,19 @@ fn pil_box_blur_xy_impl(
                 }
             }
             transpose_interleaved_rows(&work, &mut scratch, height, width, channels);
+        }
+    } else if luma_gaussian_row_fusion && vertical_radius == 1 {
+        #[cfg(not(feature = "parallel"))]
+        for _ in 0..passes {
+            blur_luma_vertical_radius_one_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                vertical_weight,
+                vertical_fractional_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
         }
     } else {
         let mut vertical_accumulator = vec![0u32; width * channels];
@@ -3380,6 +3790,31 @@ pub fn execute_filter3x3(
     let raw = img.as_bytes();
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
+    #[cfg(all(
+        not(feature = "parallel"),
+        target_arch = "aarch64",
+        target_feature = "neon"
+    ))]
+    if matches!(img, DynamicImage::ImageLumaA8(_))
+        && w_u32 >= 16
+        && h_u32 >= 3
+        && binomial3x3_parameters_match(kernel, scale, offset)
+    {
+        let mut out = raw.to_vec();
+        if let Some((vector_blocks, scalar_tail)) =
+            crate::compute::pool_simd::ops::adapters::native_filter_3x3_la_binomial_rows(
+                raw,
+                &mut out,
+                w_u32 as usize,
+                h_u32 as usize,
+            )
+        {
+            crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+            crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+            let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+            return Ok(preserve_mode(img, result));
+        }
+    }
     #[cfg(not(feature = "parallel"))]
     if matches!(img, DynamicImage::ImageLumaA8(_))
         && binomial3x3_parameters_match(kernel, scale, offset)
@@ -3598,8 +4033,9 @@ pub fn execute_rank_filter_with_mode(
 mod gaussian_blur_row_fusion_tests {
     use super::{
         blur_columns, blur_interleaved_rows_three_passes, blur_la_radius_one_fractional_line,
-        blur_line, blur_luma_rows_three_passes, blur_parameters,
-        blur_rgb_radius_one_fractional_line, blur_rows, execute_gaussian_blur,
+        blur_line, blur_luma_radius_one_fractional_line, blur_luma_rows_three_passes,
+        blur_luma_vertical_radius_one_rows, blur_parameters, blur_rgb_radius_one_fractional_line,
+        blur_rows, execute_gaussian_blur,
     };
     use crate::raster::{DynamicImage, GrayAlphaImage};
 
@@ -3730,6 +4166,41 @@ mod gaussian_blur_row_fusion_tests {
     }
 
     #[test]
+    fn luma_radius_one_fractional_line_matches_generic_fixed_point_blur() {
+        let (radius, whole_weight, fractional_weight) = blur_parameters(1.375);
+        assert_eq!(radius, 1);
+        assert_ne!(fractional_weight, 0);
+
+        for width in [1, 2, 3, 4, 5, 6, 7, 17, 65, 1024] {
+            let source = (0..width)
+                .map(|index| ((index * 73 + index / 7 * 19 + 31) % 256) as u8)
+                .collect::<Vec<_>>();
+            let mut actual = vec![0u8; width];
+            let mut expected = vec![0u8; width];
+            blur_luma_radius_one_fractional_line(
+                &source,
+                &mut actual,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+            blur_line(
+                &source,
+                &mut expected,
+                0,
+                width,
+                1,
+                radius,
+                whole_weight,
+                fractional_weight,
+                &mut [0u32; 4],
+            );
+
+            assert_eq!(actual, expected, "L row width={width}");
+        }
+    }
+
+    #[test]
     fn luma_three_pass_row_fusion_matches_full_frame_passes() {
         for (width, height, radius) in [
             (1, 1, 1.375),
@@ -3773,6 +4244,45 @@ mod gaussian_blur_row_fusion_tests {
                 fused, reference_a,
                 "L rows {width}x{height}, radius={radius}"
             );
+        }
+    }
+
+    #[test]
+    fn luma_vertical_radius_one_rows_match_fixed_point_column_reference() {
+        for (width, height) in [(1, 1), (1, 7), (2, 3), (17, 9), (65, 47)] {
+            for radius in [1.0, 1.375] {
+                let source = (0..width * height)
+                    .map(|index| ((index * 73 + index / 7 * 19 + 31) % 256) as u8)
+                    .collect::<Vec<_>>();
+                let mut actual = vec![0u8; source.len()];
+                let mut expected = vec![0u8; source.len()];
+                let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
+
+                blur_luma_vertical_radius_one_rows(
+                    &source,
+                    &mut actual,
+                    width,
+                    height,
+                    whole_weight,
+                    fractional_weight,
+                );
+                blur_columns(
+                    &source,
+                    &mut expected,
+                    width,
+                    height,
+                    1,
+                    integer_radius,
+                    whole_weight,
+                    fractional_weight,
+                    &mut vec![0u32; width],
+                );
+
+                assert_eq!(
+                    actual, expected,
+                    "L vertical {width}x{height}, radius={radius}"
+                );
+            }
         }
     }
 
