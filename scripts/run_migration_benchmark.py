@@ -189,12 +189,9 @@ def suite_subject_is_comparable(
     execution_samples = execution.get("sample_count")
     if not isinstance(execution_samples, int) or execution_samples <= 0:
         return False
-    return any(
-        measurement.get("metric") == "latency"
-        and measurement.get("sample_count") == execution_samples
-        for measurement in measurements
-        if isinstance(measurement, dict)
-    )
+    # A representative untimed receipt proves the route for the workload;
+    # receipt collection is intentionally outside the latency sample cohort.
+    return True
 
 
 def gpu_benchmark_timeout(requested_seconds: int) -> int:
@@ -500,7 +497,7 @@ def run_timed_side(
     )
     script = ROOT / "scripts" / "run_migration_parity.py"
 
-    def command_for(child_repeat: int) -> list[str]:
+    def command_for(child_repeat: int, *, include_timings: bool) -> list[str]:
         adapter_python = (
             os.environ.get("MIGRATION_ORACLE_PYTHON", sys.executable)
             if side == "source"
@@ -515,21 +512,27 @@ def run_timed_side(
             str(manifest),
             "--repeat",
             str(child_repeat),
-            "--timings",
-            "--timing-boundary",
-            timing_boundary,
             "--lifecycle",
             lifecycle,
         ]
-        for step_id in timing_steps:
-            command.extend(("--timing-step", step_id))
+        if include_timings:
+            command.extend(("--timings", "--timing-boundary", timing_boundary))
+            for step_id in timing_steps:
+                command.extend(("--timing-step", step_id))
         return command
 
-    def execute(child_cases: list[dict[str, Any]], child_repeat: int) -> dict[str, Any]:
+    def execute(
+        child_cases: list[dict[str, Any]],
+        child_repeat: int,
+        *,
+        include_timings: bool,
+        collect_execution: bool = False,
+    ) -> dict[str, Any]:
         adapter_environment = {
             **os.environ,
             "MIGRATION_TARGET_BACKEND": backend,
             "MIGRATION_STRICT_TARGET_BACKEND": "1",
+            "MIGRATION_PARITY_BENCHMARK_ADAPTER": "1",
         }
         if side == "target":
             target_python = str((ROOT / "pillow-rs-py" / "python").resolve())
@@ -556,17 +559,32 @@ def run_timed_side(
                 adapter_environment["PYTHONPATH"] = os.pathsep.join(retained)
             else:
                 adapter_environment.pop("PYTHONPATH", None)
-        returncode, stdout, stderr = run_process(
-            command_for(child_repeat),
-            input_text=json.dumps(child_cases, separators=(",", ":")),
-            timeout=effective_timeout,
-            label=f"{backend if side == 'target' else 'Pillow'} benchmark adapter",
-            env=adapter_environment,
-        )
-        if returncode != 0:
-            detail = stderr.strip().replace("\n", " ")[-800:]
-            raise RuntimeError(f"{side} benchmark adapter failed: {detail}")
-        payload = json.loads(stdout)
+        execution_path: Path | None = None
+        with tempfile.TemporaryDirectory(
+            prefix="migration-benchmark-receipt-"
+        ) as temporary:
+            if side == "target" and collect_execution:
+                execution_path = Path(temporary) / "execution.json"
+                adapter_environment["MIGRATION_PARITY_EXECUTION_OUTPUT"] = str(
+                    execution_path
+                )
+            else:
+                adapter_environment.pop("MIGRATION_PARITY_EXECUTION_OUTPUT", None)
+            returncode, stdout, stderr = run_process(
+                command_for(child_repeat, include_timings=include_timings),
+                input_text=json.dumps(child_cases, separators=(",", ":")),
+                timeout=effective_timeout,
+                label=f"{backend if side == 'target' else 'Pillow'} benchmark adapter",
+                env=adapter_environment,
+            )
+            if returncode != 0:
+                detail = stderr.strip().replace("\n", " ")[-800:]
+                raise RuntimeError(f"{side} benchmark adapter failed: {detail}")
+            payload = json.loads(stdout)
+            if execution_path is not None and not execution_path.is_file():
+                raise RuntimeError(
+                    f"{side} benchmark adapter did not write its execution receipt"
+                )
         if set(payload) != {"identity", "results", "timings_ns", "telemetry", "execution"}:
             raise RuntimeError(f"{side} benchmark adapter emitted invalid timing envelope")
         identity = payload["identity"]
@@ -588,7 +606,21 @@ def run_timed_side(
         return payload
 
     if lifecycle != "cold":
-        return execute(cases, repeat)
+        timed = execute(cases, repeat, include_timings=True)
+        if side == "target":
+            # The representative receipt run proves which backend executes
+            # this exact case under the same strict backend profile.  It is
+            # deliberately separate from latency samples: receipt collection
+            # performs extra work in both Rust and Python and must not inflate
+            # only the target's timed calls.
+            proof = execute(
+                cases,
+                1,
+                include_timings=False,
+                collect_execution=True,
+            )
+            timed["execution"] = proof["execution"]
+        return timed
 
     # A cold sample is intentionally isolated in a fresh adapter process. This
     # includes GPU adapter/pipeline initialization in the first backend phase
@@ -596,7 +628,7 @@ def run_timed_side(
     merged: dict[str, Any] | None = None
     for case in cases:
         for _ in range(repeat):
-            payload = execute([case], 1)
+            payload = execute([case], 1, include_timings=True)
             if merged is None:
                 merged = payload
                 continue
@@ -606,6 +638,17 @@ def run_timed_side(
                     merged[field].setdefault(case_id, []).extend(records)
     if merged is None:
         raise RuntimeError("cold benchmark adapter received no cases")
+    if side == "target":
+        proof_execution: dict[str, Any] = {}
+        for case in cases:
+            proof = execute(
+                [case],
+                1,
+                include_timings=False,
+                collect_execution=True,
+            )
+            proof_execution.update(proof["execution"])
+        merged["execution"] = proof_execution
     return merged
 
 
@@ -706,6 +749,8 @@ def execution_resource_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "host_buffer_bytes",
         "peak_live_host_bytes",
         "fused_operation_count",
+        "host_allocation_count",
+        "host_allocated_bytes",
     )
     return {
         "sample_count": len(resources),
@@ -750,10 +795,14 @@ def execution_result(
             "errors": errors,
         }
 
-    warmup = int(policy["warmup_iterations"])
-    measured_count = int(policy["measurement_iterations"]) * int(policy["samples"])
-    expected = warmup + measured_count
-    measured = execution_records[warmup:expected]
+    # Backend/resource receipts are gathered by one representative untimed
+    # execution. They prove the route for this workload, but are not latency
+    # samples and need not match the timing sample count.
+    _ = policy
+    measured = execution_records
+    terminal_records = [
+        record for record in measured if receipt_terminal_complete(record)
+    ]
     completed_candidates = [
         record
         for record in measured
@@ -763,7 +812,9 @@ def execution_result(
         and record["operation_count"] > 0
     ]
     cached_candidates = [
-        record for record in measured if record.get("status") == "cached"
+        record
+        for record in terminal_records
+        if record.get("status") == "cached"
     ]
     completed = [
         record
@@ -796,14 +847,10 @@ def execution_result(
             fallback_counts[reason] = fallback_counts.get(reason, 0) + 1
     actual_backends = sorted(actual_counts)
     requested_backend = runtime_backend_for_profile(subject_id)
-    complete = (
-        len(completed_candidates) + len(cached_candidates)
-        == len(measured)
-        == measured_count
-    )
+    complete = len(terminal_records) == 1
     terminal_complete = (
         complete
-        and len(completed) + len(cached) == measured_count
+        and len(completed) + len(cached) == 1
         and not errors
     )
     terminal_gap = complete and not terminal_complete

@@ -8,9 +8,10 @@ use super::{
     AuxiliaryImages, BufferPool, GPU_BUFFER_CAPACITY, GpuAuxiliaryCache, GpuInner, GpuPool,
     MAX_GPU_OPS_PER_SUBMISSION, MAX_GPU_SHADER_WORK_ITEMS, ReusableGpuBuffer, StagingBuffer,
     aligned_bytes, create_sized_buffer, gpu_buffer_capacity_exceeds_limits, gpu_dispatch_count,
-    gpu_dispatch_dimensions_require_cpu, gpu_operation_is_safe, gpu_shader_work_items,
-    gpu_working_set_bytes, op_has_explicit_output_dimensions, op_output_dims,
-    plan_extract_band_dispatch, plan_native_rgb_point_output,
+    gpu_dispatch_dimensions_require_cpu, gpu_f_resize_ordered_stage_resource_bytes,
+    gpu_operation_is_safe, gpu_shader_work_items, gpu_working_set_bytes,
+    op_has_explicit_output_dimensions, op_output_dims, plan_extract_band_dispatch,
+    plan_native_rgb_point_output,
 };
 use crate::Image;
 use crate::checked_dims::CheckedDims;
@@ -97,7 +98,7 @@ impl Default for GpuBatchConfig {
             gpu_bytes: 512 << 20,
             host_bytes: 256 << 20,
             max_jobs: 64,
-            max_in_flight: 2,
+            max_in_flight: 4,
         }
     }
 }
@@ -990,7 +991,8 @@ fn native_channels(mode: &str) -> Option<u8> {
         "L" => Some(1),
         "LA" => Some(2),
         "RGB" => Some(3),
-        "RGBA" | "CMYK" | "RGBX" => Some(4),
+        // F stores one opaque f32 word per pixel in the RGBA transport buffer.
+        "RGBA" | "CMYK" | "RGBX" | "F" => Some(4),
         _ => None,
     }
 }
@@ -1018,6 +1020,8 @@ struct Stage<'a> {
     flags: Flags,
     byte: bool,
     relocation: bool,
+    ordered_f_resize: bool,
+    arena_bytes: u64,
 }
 struct Plan<'a> {
     source: GpuPendingGraph<'a>,
@@ -1054,7 +1058,6 @@ impl GraphBounds {
         Ok(())
     }
 }
-static COPY_OP: PipelineOp = PipelineOp::Duplicate;
 static LUMA_BAND: PipelineOp = PipelineOp::ExtractBand { index: 0 };
 
 fn plan_graph<'a>(image: &'a Image, gpu: &GpuInner) -> Result<Plan<'a>, PilError> {
@@ -1087,12 +1090,20 @@ fn plan_graph_inner<'a>(
     let channels = native_channels(&mode)
         .ok_or_else(|| PilError::ValueError(format!("no native GPU graph layout for {mode}")))?;
     let source_bytes = CheckedDims::new(width, height, channels)?.total_bytes();
+    let source_pixels = CheckedDims::new(width, height, 1)?.total_pixels();
+    if width == 0 || height == 0 || source_pixels > GPU_BUFFER_CAPACITY as usize {
+        return Err(PilError::ValueError(
+            "GPU graph dimensions exceed native bounds".into(),
+        ));
+    }
     let ops = std::mem::take(&mut source.ops);
     let limits = gpu.device.limits();
-    let mut capacity = 1u32;
+    let mut capacity = u32::try_from(source_pixels)
+        .map_err(|_| PilError::ValueError("GPU shader index overflow".into()))?;
     let mut stages = Vec::new();
-    let ops = if ops.is_empty() { vec![&COPY_OP] } else { ops };
-    for op in ops {
+    let mut ops = ops.into_iter().peekable();
+    while let Some(op) = ops.next() {
+        let followed_by_mirror = matches!(ops.peek().copied(), Some(PipelineOp::Mirror));
         if !GpuPool::descriptor_supports(op)? || !gpu_operation_is_safe(op) {
             return Err(PilError::ValueError(format!(
                 "operation {} has no bounded exact GPU descriptor",
@@ -1115,6 +1126,8 @@ fn plan_graph_inner<'a>(
         let mut flags = Flags::default();
         let mut byte = false;
         let mut relocation = false;
+        let mut ordered_f_resize = false;
+        let mut arena_bytes = 64 << 10;
         let mut secondary = None;
         let channels = native_channels(&mode)
             .ok_or_else(|| PilError::ValueError("unproven mode transition".into()))?;
@@ -1133,6 +1146,23 @@ fn plan_graph_inner<'a>(
                 {
                     return Err(PilError::ValueError(
                         "GPU paste requires matching native modes and source region".into(),
+                    ));
+                }
+                secondary = Some(Box::new(child));
+            }
+            PipelineOp::AlphaComposite {
+                source,
+                dest: (0, 0),
+                src: (0, 0),
+            } if mode == "RGBA" && followed_by_mirror => {
+                let child = plan_graph_inner(source, gpu, depth + 1, bounds)?;
+                if child.mode != "RGBA"
+                    || (child.width, child.height) != (width, height)
+                    || source.size().ok() != Some((width, height))
+                {
+                    return Err(PilError::ValueError(
+                        "GPU alpha-composite mirror requires matching full-frame RGBA inputs"
+                            .into(),
                     ));
                 }
                 secondary = Some(Box::new(child));
@@ -1211,6 +1241,23 @@ fn plan_graph_inner<'a>(
                 w,
                 h,
             } if mode == "RGBA" && u64::from(*w) + u64::from(*h) <= 2048 => {}
+            PipelineOp::Resize { w, h, filter } if mode == "F" => {
+                let resource_bytes = gpu_f_resize_ordered_stage_resource_bytes(
+                    (width, height),
+                    (*w, *h),
+                    *filter,
+                    limits.min_uniform_buffer_offset_alignment as usize,
+                    limits.min_storage_buffer_offset_alignment as usize,
+                )
+                .ok_or_else(|| {
+                    PilError::ValueError(
+                        "GPU F resize lacks a bounded ordered-f64 shader/resource contract".into(),
+                    )
+                })?;
+                ordered_f_resize = true;
+                arena_bytes = u64::try_from(resource_bytes)
+                    .map_err(|_| PilError::ValueError("GPU stage resource size overflow".into()))?;
+            }
             PipelineOp::BoxBlur { radius: 1 } | PipelineOp::GaussianBlur { .. }
                 if matches!(mode.as_str(), "L" | "LA") =>
             {
@@ -1298,6 +1345,8 @@ fn plan_graph_inner<'a>(
             flags,
             byte,
             relocation,
+            ordered_f_resize,
+            arena_bytes,
         });
         mode = next_mode;
         (width, height) = output;
@@ -1314,7 +1363,11 @@ fn plan_graph_inner<'a>(
     // Exact main workspace + conservative per-stage arenas. Existing parameter
     // encoders can generate coefficient/LUT tables; all reservations precede
     // allocation, and actual retained bytes are checked during compilation.
-    let resource_bytes = stages.len() as u64 * (64 << 10);
+    let resource_bytes = stages.iter().try_fold(0u64, |total, stage| {
+        total
+            .checked_add(stage.arena_bytes)
+            .ok_or_else(|| PilError::ValueError("GPU graph resource byte count overflow".into()))
+    })?;
     let length = CheckedDims::new(width, height, planned_channels(&mode)?)?.total_bytes();
     let staging = aligned_bytes(length, 8) as u64;
     let mut gpu_bytes =
@@ -1482,21 +1535,36 @@ fn encode_graph(
             "decoded source does not match the admitted native layout".into(),
         ));
     }
-    let mut buffers = BufferPool::new(&gpu.device, plan.capacity, false);
+    let mapped_primary_input = gpu.direct_primary_readback
+        && plan.stages.len() == 1
+        && matches!(plan.stages[0].op, PipelineOp::BoxBlur { radius: 1 })
+        && matches!(plan.source.mode.as_str(), "L" | "RGB");
+    let mut buffers =
+        BufferPool::new_with_mapped_input(&gpu.device, plan.capacity, false, mapped_primary_input);
     let source_bytes = source.as_bytes();
     let aligned = aligned_bytes(source_bytes.len(), 4);
-    let mut upload = gpu
-        .queue
-        .write_buffer_with(
+    if mapped_primary_input {
+        gpu.upload_bytes_to_mapped_buffer(
             &buffers.buf_a,
-            0,
-            NonZeroU64::new(aligned as u64)
-                .ok_or_else(|| PilError::InternalError("GPU source upload is empty".into()))?,
-        )
-        .ok_or_else(|| PilError::InternalError("GPU source upload allocation failed".into()))?;
-    upload[..source_bytes.len()].copy_from_slice(source_bytes);
-    upload[source_bytes.len()..].fill(0);
-    drop(upload);
+            source_bytes,
+            source_bytes.len(),
+            aligned as u64,
+            "GPU stream mapped BoxBlur input",
+        )?;
+    } else {
+        let mut upload = gpu
+            .queue
+            .write_buffer_with(
+                &buffers.buf_a,
+                0,
+                NonZeroU64::new(aligned as u64)
+                    .ok_or_else(|| PilError::InternalError("GPU source upload is empty".into()))?,
+            )
+            .ok_or_else(|| PilError::InternalError("GPU source upload allocation failed".into()))?;
+        upload[..source_bytes.len()].copy_from_slice(source_bytes);
+        upload[source_bytes.len()..].fill(0);
+        drop(upload);
+    }
     let mut current_a = true;
     let mut retained = gpu_working_set_bytes(plan.capacity);
     let mut dispatches = 0;
@@ -1505,7 +1573,9 @@ fn encode_graph(
         second: None,
         third: None,
     }];
-    for stage in &plan.stages {
+    let mut stage_index = 0;
+    while stage_index < plan.stages.len() {
+        let stage = &plan.stages[stage_index];
         let secondary = stage
             .secondary
             .as_deref()
@@ -1516,7 +1586,23 @@ fn encode_graph(
             uploaded_bytes += child.upload;
             dispatches += child.dispatches;
         }
-        if stage.flags.rgb_blur {
+        if stage_index + 1 < plan.stages.len()
+            && can_fuse_batch_alpha_composite_mirror(stage, &plan.stages[stage_index + 1])
+        {
+            current_a = encode_alpha_composite_mirror_stage(
+                gpu,
+                encoder,
+                &buffers,
+                stage,
+                secondary.as_ref().ok_or_else(|| {
+                    PilError::InternalError("GPU alpha-composite source was not encoded".into())
+                })?,
+                current_a,
+            )?;
+            dispatches += 1;
+            stage_index += 2;
+            continue;
+        } else if stage.flags.rgb_blur {
             current_a = encode_rgb_blur_stage(gpu, encoder, &buffers, stage, current_a)?;
         } else if matches!(stage.op, PipelineOp::Paste { .. }) {
             current_a = encode_paste_stage(
@@ -1584,14 +1670,15 @@ fn encode_graph(
                     "L" => 0,
                     "LA" => 1,
                     "RGB" => 2,
+                    "F" => 8,
                     _ => 3,
                 },
                 false,
                 Some(&stage.mode),
                 false,
-                false,
+                stage.ordered_f_resize,
             )?;
-            if estimated > (64 << 10) {
+            if estimated as u64 > stage.arena_bytes {
                 return Err(PilError::ValueError(
                     "GPU stage arenas exceed their bounded admission reservation".into(),
                 ));
@@ -1603,6 +1690,7 @@ fn encode_graph(
                     "L" => 0,
                     "LA" => 1,
                     "RGB" => 2,
+                    "F" => 8,
                     _ => 3,
                 },
                 plan.capacity,
@@ -1618,6 +1706,7 @@ fn encode_graph(
                     "LA" => 1,
                     "RGB" => 2,
                     "CMYK" => 4,
+                    "F" => 8,
                     "RGBX" => 6,
                     _ => 3,
                 },
@@ -1629,7 +1718,7 @@ fn encode_graph(
                 false,
                 false,
                 false,
-                false,
+                stage.ordered_f_resize,
                 flags.luma_colorize,
                 flags.luma_convert,
                 false,
@@ -1677,11 +1766,18 @@ fn encode_graph(
                 + buffers.img3_arena.capacity_bytes
                 + buffers.lut_arena.capacity_bytes;
         }
-        dispatches += gpu_dispatch_count(
-            std::slice::from_ref(stage.op),
-            Some(&stage.mode),
-            (stage.width, stage.height),
-        );
+        dispatches += if matches!(stage.op, PipelineOp::BoxBlur { radius: 1 })
+            && matches!(stage.mode.as_str(), "L" | "RGB")
+        {
+            1
+        } else {
+            gpu_dispatch_count(
+                std::slice::from_ref(stage.op),
+                Some(&stage.mode),
+                (stage.width, stage.height),
+            )
+        };
+        stage_index += 1;
     }
     let output = if current_a {
         buffers.buf_a.clone()
@@ -1694,6 +1790,105 @@ fn encode_graph(
         upload: uploaded_bytes,
         retained,
     })
+}
+
+fn can_fuse_batch_alpha_composite_mirror(first: &Stage<'_>, second: &Stage<'_>) -> bool {
+    if first.mode != "RGBA"
+        || second.mode != "RGBA"
+        || (first.width, first.height) != (second.width, second.height)
+    {
+        return false;
+    }
+    match (&first.op, &second.op) {
+        (
+            PipelineOp::AlphaComposite {
+                source,
+                dest: (0, 0),
+                src: (0, 0),
+            },
+            PipelineOp::Mirror,
+        ) => {
+            source.size().ok() == Some((first.width, first.height))
+                && first.secondary.as_deref().is_some_and(|child| {
+                    child.mode == "RGBA"
+                        && (child.width, child.height) == (first.width, first.height)
+                })
+        }
+        _ => false,
+    }
+}
+
+fn encode_alpha_composite_mirror_stage(
+    gpu: &GpuInner,
+    encoder: &mut wgpu::CommandEncoder,
+    buffers: &BufferPool,
+    stage: &Stage<'_>,
+    secondary: &EncodedGraph,
+    current_a: bool,
+) -> Result<bool, PilError> {
+    let cached = gpu.resolve_pipeline(
+        "__internal_alpha_composite_mirror",
+        "alpha_composite_mirror.wgsl",
+        include_str!("shaders/alpha_composite_mirror.wgsl"),
+    )?;
+    let parameters = [stage.width, stage.height, 3, 0, stage.width, stage.height];
+    let uniform = create_sized_buffer(
+        &gpu.device,
+        "gpu_stream_alpha_composite_mirror_params",
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        std::mem::size_of_val(&parameters),
+        4,
+    );
+    gpu.queue
+        .write_buffer(&uniform, 0, bytemuck::cast_slice(&parameters));
+    let (destination, output) = if current_a {
+        (&buffers.buf_a, &buffers.buf_b)
+    } else {
+        (&buffers.buf_b, &buffers.buf_a)
+    };
+    let bind = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("gpu_stream_alpha_composite_mirror_bind"),
+        layout: &cached.bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: destination.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: secondary.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: output.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: uniform.as_entire_binding(),
+            },
+        ],
+    });
+    let groups_x = stage.width.div_ceil(16);
+    let groups_y = stage.height.div_ceil(16);
+    let maximum = gpu.device.limits().max_compute_workgroups_per_dimension;
+    if groups_x > maximum || groups_y > maximum {
+        return Err(PilError::ValueError(
+            "GPU alpha-composite mirror dispatch exceeds device limit".into(),
+        ));
+    }
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some("gpu_stream_alpha_composite_mirror"),
+        timestamp_writes: None,
+    });
+    pass.set_pipeline(&cached.pipeline);
+    pass.set_bind_group(0, &bind, &[]);
+    pass.dispatch_workgroups(groups_x, groups_y, 1);
+    crate::compute::record_gpu_shader_dispatch(
+        cached.variant_name,
+        cached.shader_file,
+        u64::from(groups_x) * u64::from(groups_y),
+    );
+    Ok(!current_a)
 }
 
 fn encode_byte_stage(
@@ -2114,6 +2309,52 @@ fn encode_rgb_blur_stage(
     );
     gpu.queue
         .write_buffer(&uniform, 0, bytemuck::cast_slice(&params));
+    if matches!(stage.op, PipelineOp::BoxBlur { radius: 1 }) {
+        // The eager GPU route already uses this one-dispatch shader for RGB
+        // BoxBlur(1). Keep explicit batches on the same exact two-rounding
+        // path instead of writing a full-frame horizontal intermediate.
+        let cached = gpu.resolve_pipeline(
+            "__internal_blur_hv_rgb_radius_one_packed",
+            "box_blur_hv_rgb_radius_one_packed.wgsl",
+            include_str!("shaders/box_blur_hv_rgb_radius_one_packed.wgsl"),
+        )?;
+        let (input, output) = if current_a {
+            (&buffers.buf_a, &buffers.buf_b)
+        } else {
+            (&buffers.buf_b, &buffers.buf_a)
+        };
+        let bind = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("gpu_stream_rgb_blur_fused_bind"),
+            layout: &cached.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: output.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: uniform.as_entire_binding(),
+                },
+            ],
+        });
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("gpu_stream_rgb_blur_fused"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&cached.pipeline);
+        pass.set_bind_group(0, &bind, &[]);
+        pass.dispatch_workgroups(plan.groups_x, plan.groups_y, 1);
+        crate::compute::record_gpu_shader_dispatch(
+            cached.variant_name,
+            cached.shader_file,
+            u64::from(plan.groups_x) * u64::from(plan.groups_y),
+        );
+        return Ok(!current_a);
+    }
     let passes = GpuInner::blur_pass_count(stage.op)
         .ok_or_else(|| PilError::InternalError("missing native RGB blur pass count".into()))?;
     for (key, file, source) in [
@@ -2174,11 +2415,18 @@ fn encode_rgb_blur_stage(
 #[cfg(test)]
 mod tests {
     use super::{
-        Credit, GraphBounds, MAX_GPU_OPS_PER_SUBMISSION, MAX_GPU_SHADER_WORK_ITEMS, Usage,
-        rgba_standalone_native,
+        Credit, GpuBatchConfig, GraphBounds, MAX_GPU_OPS_PER_SUBMISSION, MAX_GPU_SHADER_WORK_ITEMS,
+        Usage, rgba_standalone_native,
     };
     use crate::pipeline::PipelineOp;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn default_batch_configuration_uses_measured_in_flight_limit() {
+        let config = GpuBatchConfig::default();
+        assert_eq!(config.max_jobs, 64);
+        assert_eq!(config.max_in_flight, 4);
+    }
 
     #[test]
     fn rgba_point_admission_requires_all_four_channel_tables() {

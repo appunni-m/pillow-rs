@@ -693,10 +693,8 @@ migration-parity-benchmark: build-parity ## Build the checkout facade without re
 		$(MIGRATION_BENCHMARK_PROFILE_ARGS) \
 		$(MIGRATION_BENCHMARK_ARGS); \
 	status=$$?; \
-	$(PYTHON) scripts/validate_migration_parity_result.py benchmark $(MIGRATION_BENCHMARK_OUTPUT); \
-	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
-	exit $$validator
+	$(PYTHON) scripts/validate_migration_parity_result.py benchmark $(MIGRATION_BENCHMARK_OUTPUT)
 
 migration-parity-benchmark-parallel-cpu: MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/benchmark-result-parallel-cpu.json
 migration-parity-benchmark-parallel-cpu: MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/benchmark-parity-result-parallel-cpu.json
@@ -713,10 +711,8 @@ migration-parity-benchmark-parallel-cpu: build-parity-parallel-cpu ## Benchmark 
 		$(MIGRATION_BENCHMARK_PROFILE_ARGS) \
 		$(MIGRATION_BENCHMARK_ARGS); \
 	status=$$?; \
-	$(PYTHON) scripts/validate_migration_parity_result.py benchmark $(MIGRATION_BENCHMARK_OUTPUT); \
-	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
-	exit $$validator
+	$(PYTHON) scripts/validate_migration_parity_result.py benchmark $(MIGRATION_BENCHMARK_OUTPUT)
 
 migration-parity-benchmark-pillow-simd: build-parity ## Compare parity-gated Pillow-SIMD material workloads on x86
 	$(PYTHON) -m unittest discover -s scripts -p 'test_pillow_simd_benchmark.py' -v

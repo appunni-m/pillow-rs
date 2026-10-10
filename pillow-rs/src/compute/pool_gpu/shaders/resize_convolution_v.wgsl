@@ -1108,6 +1108,7 @@ fn filtered_i32_exact(output_x: u32, output_y: u32) -> u32 {
     let weight_base = 3u * params.dst_h + u32(coefficients[metadata + 2u]);
     var minimum_exponent: i32 = 0;
     var found = false;
+    var sum = SignedU128(U128(0u, 0u, 0u, 0u), false);
     for (var tap = 0u; tap < count; tap = tap + 1u) {
         let coeff = f64_coeff(weight_base + tap * 4u);
         let word = input[(source_y + tap) * params.dst_w + output_x];
@@ -1119,26 +1120,28 @@ fn filtered_i32_exact(output_x: u32, output_y: u32) -> u32 {
         if !found {
             minimum_exponent = coeff.exponent;
             found = true;
-        } else {
-            minimum_exponent = min(minimum_exponent, coeff.exponent);
+        } else if coeff.exponent < minimum_exponent {
+            // Lower the common binary scale without rereading this row. The
+            // host proof has checked that the corresponding signed i128
+            // rescale and sum fit before marker 11 is selected.
+            let rescale = u32(minimum_exponent - coeff.exponent);
+            if rescale >= 127u {
+                if sum.magnitude.a != 0u || sum.magnitude.b != 0u
+                    || sum.magnitude.c != 0u || sum.magnitude.d != 0u {
+                    return 0u;
+                }
+            } else {
+                sum = SignedU128(u128_shl(sum.magnitude, rescale), sum.negative);
+            }
+            minimum_exponent = coeff.exponent;
         }
+        let product = f64_product(magnitude, coeff);
+        let shift = u32(coeff.exponent - minimum_exponent);
+        let term = u128_shl(product, shift);
+        sum = signed_u128_add(sum, term, negative != coeff.negative);
     }
     if !found {
         return 0u;
-    }
-    var sum = SignedU128(U128(0u, 0u, 0u, 0u), false);
-    for (var tap = 0u; tap < count; tap = tap + 1u) {
-        let coeff = f64_coeff(weight_base + tap * 4u);
-        let word = input[(source_y + tap) * params.dst_w + output_x];
-        let sample_negative = (word & 0x80000000u) != 0u;
-        let sample_magnitude = select(word, 0u - word, sample_negative);
-        if coeff.mantissa_lo == 0u && coeff.mantissa_hi == 0u || sample_magnitude == 0u {
-            continue;
-        }
-        let product = f64_product(sample_magnitude, coeff);
-        let shift = u32(coeff.exponent - minimum_exponent);
-        let term = u128_shl(product, shift);
-        sum = signed_u128_add(sum, term, sample_negative != coeff.negative);
     }
     return integer_sum_to_i32(sum, minimum_exponent);
 }

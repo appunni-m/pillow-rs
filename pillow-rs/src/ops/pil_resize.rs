@@ -3309,13 +3309,70 @@ fn horizontal_pass_boxed_rows(
     intermediate: &mut [u8],
     premultiplied_alpha: bool,
     parallel_pixel_threshold: usize,
+    sparse_rgb_nonzero_rows: Option<&[bool]>,
 ) {
-    let _ = parallel_pixel_threshold;
     let source_stride = source_width as usize * channels;
     let output_stride = output_width as usize * channels;
     if source_row_count == 0 || output_stride == 0 {
         return;
     }
+
+    if let Some(nonzero_rows) = sparse_rgb_nonzero_rows {
+        #[cfg(feature = "parallel")]
+        if (source_row_count as usize).saturating_mul(output_width as usize)
+            >= parallel_pixel_threshold
+        {
+            crate::par_rows_mut!(
+                intermediate,
+                output_stride,
+                source_row_count as usize,
+                |_row_start, _row_end, row_index, row| {
+                    let source_y = first_source_row as usize + row_index as usize;
+                    let source_start = source_y * source_stride;
+                    let source_row = &work_bytes[source_start..source_start + source_stride];
+                    if !nonzero_rows.get(source_y).copied().unwrap_or(true) {
+                        row[..output_stride].fill(0);
+                    } else {
+                        horizontal_pass_row(
+                            source_row,
+                            source_width,
+                            channels,
+                            coeffs,
+                            output_width,
+                            &mut row[..output_stride],
+                        );
+                    }
+                }
+            );
+            return;
+        }
+
+        #[cfg(not(feature = "parallel"))]
+        let _ = parallel_pixel_threshold;
+
+        for row_index in 0..source_row_count as usize {
+            let source_y = first_source_row as usize + row_index;
+            let source_start = source_y * source_stride;
+            let output_start = row_index * output_stride;
+            let source_row = &work_bytes[source_start..source_start + source_stride];
+            let output_row = &mut intermediate[output_start..output_start + output_stride];
+            if !nonzero_rows.get(source_y).copied().unwrap_or(true) {
+                output_row.fill(0);
+            } else {
+                horizontal_pass_row(
+                    source_row,
+                    source_width,
+                    channels,
+                    coeffs,
+                    output_width,
+                    output_row,
+                );
+            }
+        }
+        return;
+    }
+
+    let _ = parallel_pixel_threshold;
 
     #[cfg(feature = "parallel")]
     if (source_row_count as usize).saturating_mul(output_width as usize) < parallel_pixel_threshold
@@ -3454,6 +3511,96 @@ fn vertical_pass_rgb_row(
         pixel[0] = fixed_point_to_u8(red);
         pixel[1] = fixed_point_to_u8(green);
         pixel[2] = fixed_point_to_u8(blue);
+    }
+}
+
+/// Return whether any source row referenced by a boxed vertical output is
+/// marked nonzero. Invalid spans are treated as active so an incomplete hint
+/// can only lose performance, never image contributions.
+fn sparse_vertical_row_has_nonzero_source(
+    coeffs: &FilterCoeffs,
+    first_source_row: u32,
+    nonzero_source_rows: &[bool],
+    output_y: usize,
+) -> bool {
+    let Some(&first_relative_row) = coeffs.xmin.get(output_y) else {
+        return true;
+    };
+    let Some(&tap_count) = coeffs.count.get(output_y) else {
+        return true;
+    };
+    let Ok(first_relative_row) = usize::try_from(first_relative_row) else {
+        return true;
+    };
+    let Some(first_absolute_row) = (first_source_row as usize).checked_add(first_relative_row)
+    else {
+        return true;
+    };
+    for tap in 0..tap_count {
+        let Some(source_y) = first_absolute_row.checked_add(tap) else {
+            return true;
+        };
+        let Some(&is_nonzero) = nonzero_source_rows.get(source_y) else {
+            return true;
+        };
+        if is_nonzero {
+            return true;
+        }
+    }
+    false
+}
+
+/// Resample only RGB output rows whose boxed vertical tap span intersects a
+/// nonzero source row. The output buffer is zero-initialized by the caller.
+fn vertical_pass_rows_sparse_rgb(
+    intermediate: &[u8],
+    output_width: u32,
+    output_height: u32,
+    coeffs: &FilterCoeffs,
+    first_source_row: u32,
+    nonzero_source_rows: &[bool],
+    output: &mut [u8],
+    parallel_pixel_threshold: usize,
+) {
+    let output_stride = output_width as usize * 3;
+    if output_height == 0 || output_stride == 0 {
+        return;
+    }
+
+    #[cfg(feature = "parallel")]
+    if (output_width as usize).saturating_mul(output_height as usize) >= parallel_pixel_threshold {
+        crate::par_rows_mut!(
+            output,
+            output_stride,
+            output_height as usize,
+            |_row_start, _row_end, y, row| {
+                if sparse_vertical_row_has_nonzero_source(
+                    coeffs,
+                    first_source_row,
+                    nonzero_source_rows,
+                    y as usize,
+                ) {
+                    vertical_pass_rgb_row(intermediate, output_width, coeffs, y as usize, row);
+                } else {
+                    row[..output_stride].fill(0);
+                }
+            }
+        );
+        return;
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    let _ = parallel_pixel_threshold;
+
+    for y in 0..output_height as usize {
+        let output_start = y * output_stride;
+        let row = &mut output[output_start..output_start + output_stride];
+        if sparse_vertical_row_has_nonzero_source(coeffs, first_source_row, nonzero_source_rows, y)
+        {
+            vertical_pass_rgb_row(intermediate, output_width, coeffs, y, row);
+        } else {
+            row.fill(0);
+        }
     }
 }
 
@@ -4696,6 +4843,64 @@ pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
     explicit_mode: Option<&str>,
     parallel_pixel_threshold: usize,
 ) -> DynamicImage {
+    pil_resize_boxed_with_hints(
+        img,
+        dst_w,
+        dst_h,
+        box_left,
+        box_top,
+        box_right,
+        box_bottom,
+        filter,
+        explicit_mode,
+        parallel_pixel_threshold,
+        None,
+    )
+}
+
+/// Boxed RGB resize for a sparse 2×2 thumbnail reduction. `nonzero_source_rows`
+/// is produced by the reducer while it visits active blocks, so the resize can
+/// skip zero rows without an additional whole-image scan.
+pub(crate) fn pil_resize_boxed_with_sparse_rgb_rows(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    filter: ResampleFilter,
+    explicit_mode: Option<&str>,
+    nonzero_source_rows: &[bool],
+) -> DynamicImage {
+    pil_resize_boxed_with_hints(
+        img,
+        dst_w,
+        dst_h,
+        box_left,
+        box_top,
+        box_right,
+        box_bottom,
+        filter,
+        explicit_mode,
+        0,
+        Some(nonzero_source_rows),
+    )
+}
+
+fn pil_resize_boxed_with_hints(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    filter: ResampleFilter,
+    explicit_mode: Option<&str>,
+    parallel_pixel_threshold: usize,
+    sparse_rgb_nonzero_rows: Option<&[bool]>,
+) -> DynamicImage {
     let orig_img = img;
     // Pillow narrows the source box to float32 before `_resize` sees it. Keep
     // those values for the crop and pass-elision decisions below so integer
@@ -4778,6 +4983,12 @@ pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
         crate::raster::ColorType::Rgb8 => 3usize,
         _ => 4usize,
     };
+    let sparse_rgb_nonzero_rows = sparse_rgb_nonzero_rows.filter(|rows| {
+        matches!(img, DynamicImage::ImageRgb8(_))
+            && matches!(explicit_mode, None | Some("RGB"))
+            && !needs_alpha
+            && rows.len() == sh as usize
+    });
 
     // A bounded all-zero byte source remains zero through every normalized
     // Pillow resampling filter, including alpha premultiplication. Boxed
@@ -4921,6 +5132,7 @@ pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
             &mut intermediate,
             needs_alpha,
             parallel_pixel_threshold,
+            sparse_rgb_nonzero_rows,
         );
     }
 
@@ -4947,6 +5159,17 @@ pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
             let output_len = out_bytes.len();
             out_bytes.copy_from_slice(&intermediate[..output_len]);
         }
+    } else if let Some(nonzero_rows) = sparse_rgb_nonzero_rows {
+        vertical_pass_rows_sparse_rgb(
+            &intermediate,
+            dst_w,
+            dst_h,
+            &v_coeffs,
+            first_source_row,
+            nonzero_rows,
+            &mut out_bytes,
+            parallel_pixel_threshold,
+        );
     } else if needs_alpha {
         vertical_pass_rows_alpha(
             &intermediate,

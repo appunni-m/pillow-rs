@@ -394,19 +394,31 @@ fn f_resize_vertical_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
         }
     );
     #[cfg(not(feature = "parallel"))]
-    for (destination_y, row) in output.chunks_mut(destination_width).enumerate() {
-        let source_y = coefficients.xmin[destination_y];
-        let weights = &coefficients.weights[destination_y];
-        for (source_x, output) in row.iter_mut().enumerate() {
-            // Keep the sign of zero, matching Pillow's scalar C path.
-            *output = f_resize_vertical_sample::<FINITE_OPERANDS, _>(
-                source,
-                destination_width,
-                source_y,
-                source_x,
-                weights,
-                fma,
-            );
+    {
+        // Keep one f64 accumulator per output column and visit source rows in
+        // tap order. Each column still receives the same ordered FMA sequence
+        // as the scalar sampler, while the source is read a row at a time.
+        let mut accumulators = vec![0.0f64; destination_width];
+        for (destination_y, row) in output.chunks_mut(destination_width).enumerate() {
+            let source_y = coefficients.xmin[destination_y];
+            let weights = &coefficients.weights[destination_y];
+            accumulators.fill(0.0);
+            for (offset, &weight) in weights.iter().enumerate() {
+                let source_row_start = (source_y + offset as i64) as usize * destination_width;
+                let source_row = &source[source_row_start..source_row_start + destination_width];
+                for (accumulator, &sample) in accumulators.iter_mut().zip(source_row) {
+                    *accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
+                        fma,
+                        weight,
+                        f64::from(sample),
+                        *accumulator,
+                    );
+                }
+            }
+            for (output, &accumulator) in row.iter_mut().zip(&accumulators) {
+                // Preserve Pillow's f32 pass boundary, including signed zero.
+                *output = accumulator as f32;
+            }
         }
     }
 }
@@ -818,6 +830,27 @@ fn resize_i_sum_eight<F: F64MulAdd>(
 
 #[inline(always)]
 #[cfg(not(feature = "parallel"))]
+fn resize_i_sum_eight_contiguous<F: F64MulAdd>(
+    weights: &[f64; 8],
+    source: &[i32],
+    first_sample: usize,
+    fma: &F,
+) -> f64 {
+    let samples: &[i32; 8] = source[first_sample..first_sample + 8]
+        .try_into()
+        .expect("eight-tap resize span must contain eight samples");
+    let mut accumulator = resize_i_mul_add(fma, weights[0], samples[0], 0.0);
+    accumulator = resize_i_mul_add(fma, weights[1], samples[1], accumulator);
+    accumulator = resize_i_mul_add(fma, weights[2], samples[2], accumulator);
+    accumulator = resize_i_mul_add(fma, weights[3], samples[3], accumulator);
+    accumulator = resize_i_mul_add(fma, weights[4], samples[4], accumulator);
+    accumulator = resize_i_mul_add(fma, weights[5], samples[5], accumulator);
+    accumulator = resize_i_mul_add(fma, weights[6], samples[6], accumulator);
+    resize_i_mul_add(fma, weights[7], samples[7], accumulator)
+}
+
+#[inline(always)]
+#[cfg(not(feature = "parallel"))]
 fn resize_i_sum_general<F: F64MulAdd>(
     weights: &[f64],
     first_sample: usize,
@@ -861,6 +894,170 @@ fn resize_i_contiguous_eight_tap_weights(
         fixed_width.push(*fixed);
     }
     Some((first, fixed_width))
+}
+
+#[cfg(not(feature = "parallel"))]
+fn resize_i_horizontal_row<F: F64MulAdd>(
+    source_row: &[i32],
+    output_row: &mut [i32],
+    coefficients: &FilterCoeffsF64,
+    fixed_weights: Option<&(usize, Vec<[f64; 8]>)>,
+    fma: &F,
+) {
+    if let Some((first_eight_tap, fixed_weights)) = fixed_weights {
+        for dx in 0..*first_eight_tap {
+            let x0 = coefficients.xmin[dx];
+            let accumulator = resize_i_sum_general(
+                &coefficients.weights[dx],
+                x0 as usize,
+                |sx| source_row[sx],
+                fma,
+            );
+            output_row[dx] = resize_i_round_up_to_i32(accumulator);
+        }
+
+        let eight_tap_end = first_eight_tap + fixed_weights.len();
+        for (dx, weights) in (*first_eight_tap..eight_tap_end).zip(fixed_weights) {
+            let accumulator = resize_i_sum_eight_contiguous(
+                weights,
+                source_row,
+                coefficients.xmin[dx] as usize,
+                fma,
+            );
+            output_row[dx] = resize_i_round_up_to_i32(accumulator);
+        }
+
+        for dx in eight_tap_end..output_row.len() {
+            let x0 = coefficients.xmin[dx];
+            let accumulator = resize_i_sum_general(
+                &coefficients.weights[dx],
+                x0 as usize,
+                |sx| source_row[sx],
+                fma,
+            );
+            output_row[dx] = resize_i_round_up_to_i32(accumulator);
+        }
+        return;
+    }
+
+    for (dx, output) in output_row.iter_mut().enumerate() {
+        let x0 = coefficients.xmin[dx];
+        let weights = &coefficients.weights[dx];
+        let accumulator = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
+            resize_i_sum_eight_contiguous(weights, source_row, x0 as usize, fma)
+        } else {
+            resize_i_sum_general(weights, x0 as usize, |sx| source_row[sx], fma)
+        };
+        *output = resize_i_round_up_to_i32(accumulator);
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn resize_i_streaming_vertical_pass<F: F64MulAdd>(
+    source: &[i32],
+    source_width: usize,
+    destination_width: usize,
+    vertical: &FilterCoeffsF64,
+    horizontal: &FilterCoeffsF64,
+    fixed_horizontal_weights: Option<&(usize, Vec<[f64; 8]>)>,
+    fma: &F,
+    ring: &mut [i32],
+    ring_mask: usize,
+    output_bytes: &mut [u8],
+    output_stride: usize,
+) {
+    let mut next_source_row = 0_usize;
+    for (dy, output_row) in output_bytes.chunks_mut(output_stride).enumerate() {
+        let y0 = vertical.xmin[dy] as usize;
+        let weights = &vertical.weights[dy];
+        let source_end = y0 + weights.len();
+        while next_source_row < source_end {
+            let source_start = next_source_row * source_width;
+            let source_row = &source[source_start..source_start + source_width];
+            let ring_start = (next_source_row & ring_mask) * destination_width;
+            let horizontal_row = &mut ring[ring_start..ring_start + destination_width];
+            resize_i_horizontal_row(
+                source_row,
+                horizontal_row,
+                horizontal,
+                fixed_horizontal_weights,
+                fma,
+            );
+            next_source_row += 1;
+        }
+
+        if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
+            for (dx, output) in output_row.chunks_exact_mut(4).enumerate() {
+                let accumulator = resize_i_sum_eight(
+                    weights,
+                    y0,
+                    |sy| ring[(sy & ring_mask) * destination_width + dx],
+                    fma,
+                );
+                output.copy_from_slice(&resize_i_round_up_to_i32(accumulator).to_le_bytes());
+            }
+        } else {
+            for (dx, output) in output_row.chunks_exact_mut(4).enumerate() {
+                let accumulator = resize_i_sum_general(
+                    weights,
+                    y0,
+                    |sy| ring[(sy & ring_mask) * destination_width + dx],
+                    fma,
+                );
+                output.copy_from_slice(&resize_i_round_up_to_i32(accumulator).to_le_bytes());
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn resize_i_streaming_with_fma<F: F64MulAdd>(
+    source: &[i32],
+    source_width: u32,
+    destination_width: u32,
+    destination_height: u32,
+    horizontal: &FilterCoeffsF64,
+    vertical: &FilterCoeffsF64,
+    fixed_horizontal_weights: Option<&(usize, Vec<[f64; 8]>)>,
+    fma: &F,
+) -> Result<DynamicImage, PilError> {
+    let max_vertical_taps = vertical
+        .weights
+        .iter()
+        .map(|weights| weights.len())
+        .max()
+        .unwrap_or(0);
+    let ring_rows = max_vertical_taps
+        .checked_next_power_of_two()
+        .ok_or_else(|| {
+            PilError::ValueError("resize_i: vertical coefficient span is too large".into())
+        })?;
+    let ring_samples = ring_rows
+        .checked_mul(destination_width as usize)
+        .ok_or_else(|| PilError::ValueError("resize_i: vertical ring is too large".into()))?;
+    let mut ring = vec![0_i32; ring_samples];
+    let output_dims = CheckedDims::new(destination_width, destination_height, 4)?;
+    let output_stride = output_dims.row_stride();
+    let mut output_bytes = output_dims.alloc_buffer();
+    resize_i_streaming_vertical_pass(
+        source,
+        source_width as usize,
+        destination_width as usize,
+        vertical,
+        horizontal,
+        fixed_horizontal_weights,
+        fma,
+        &mut ring,
+        ring_rows - 1,
+        &mut output_bytes,
+        output_stride,
+    );
+    let out =
+        crate::raster::RgbaImage::from_raw(destination_width, destination_height, output_bytes)
+            .ok_or_else(|| {
+                PilError::ValueError("resize_i: failed to create output buffer".into())
+            })?;
+    Ok(DynamicImage::ImageRgba8(out))
 }
 
 fn resize_i(
@@ -960,9 +1157,22 @@ fn resize_i_with_fma<F: F64MulAdd>(
     #[cfg(not(feature = "parallel"))]
     let h_eight_tap_weights = resize_i_contiguous_eight_tap_weights(&h_coeffs_f64.weights);
 
+    #[cfg(not(feature = "parallel"))]
+    return resize_i_streaming_with_fma(
+        &src_ints,
+        sw,
+        dst_w,
+        dst_h,
+        &h_coeffs_f64,
+        &v_coeffs_f64,
+        h_eight_tap_weights.as_ref(),
+        fma,
+    );
+
     // ImagingResample stores the horizontal INT32 pass in an INT32 image
     // before the vertical pass. Keeping this buffer as f64 changes overflow
     // cases (the C cast saturates to INT32_MIN on the supported platforms).
+    #[cfg(feature = "parallel")]
     let mut intermediate: Vec<i32> = vec![0; (sh * dst_w) as usize];
 
     // Horizontal pass: f64 accumulation, matching PIL's double-precision path
@@ -991,60 +1201,8 @@ fn resize_i_with_fma<F: F64MulAdd>(
             }
         }
     );
-    #[cfg(not(feature = "parallel"))]
-    for (sy, row) in intermediate.chunks_mut(dst_w as usize).enumerate() {
-        let src_row_base = sy * sw as usize;
-        if let Some((first_eight_tap, fixed_weights)) = &h_eight_tap_weights {
-            for dx in 0..*first_eight_tap {
-                let x0 = h_coeffs_f64.xmin[dx];
-                let weights = &h_coeffs_f64.weights[dx];
-                let accumulator = resize_i_sum_general(
-                    weights,
-                    x0 as usize,
-                    |sx| src_ints[src_row_base + sx],
-                    fma,
-                );
-                row[dx] = resize_i_round_up_to_i32(accumulator);
-            }
-
-            let eight_tap_end = first_eight_tap + fixed_weights.len();
-            for (dx, weights) in (*first_eight_tap..eight_tap_end).zip(fixed_weights) {
-                let accumulator = resize_i_sum_eight(
-                    weights,
-                    h_coeffs_f64.xmin[dx] as usize,
-                    |sx| src_ints[src_row_base + sx],
-                    fma,
-                );
-                row[dx] = resize_i_round_up_to_i32(accumulator);
-            }
-
-            for dx in eight_tap_end..dst_w as usize {
-                let x0 = h_coeffs_f64.xmin[dx];
-                let weights = &h_coeffs_f64.weights[dx];
-                let accumulator = resize_i_sum_general(
-                    weights,
-                    x0 as usize,
-                    |sx| src_ints[src_row_base + sx],
-                    fma,
-                );
-                row[dx] = resize_i_round_up_to_i32(accumulator);
-            }
-            continue;
-        }
-
-        for (dx, output) in row.iter_mut().enumerate() {
-            let x0 = h_coeffs_f64.xmin[dx];
-            let weights = &h_coeffs_f64.weights[dx];
-            let accumulator = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
-                resize_i_sum_eight(weights, x0 as usize, |sx| src_ints[src_row_base + sx], fma)
-            } else {
-                resize_i_sum_general(weights, x0 as usize, |sx| src_ints[src_row_base + sx], fma)
-            };
-            *output = resize_i_round_up_to_i32(accumulator);
-        }
-    }
-
     // Vertical pass
+    #[cfg(feature = "parallel")]
     let mut output_bytes = output_dims.alloc_buffer();
     #[cfg(feature = "parallel")]
     crate::par_rows_mut!(
@@ -1080,39 +1238,10 @@ fn resize_i_with_fma<F: F64MulAdd>(
             }
         }
     );
-    #[cfg(not(feature = "parallel"))]
-    for (dy, row) in output_bytes.chunks_mut(output_stride).enumerate() {
-        let y0 = v_coeffs_f64.xmin[dy];
-        let weights = &v_coeffs_f64.weights[dy];
-        if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
-            for (dx, output) in row.chunks_exact_mut(4).enumerate() {
-                let accumulator = resize_i_sum_eight(
-                    weights,
-                    y0 as usize,
-                    |sy| intermediate[sy * dst_w as usize + dx],
-                    fma,
-                );
-                output.copy_from_slice(&resize_i_round_up_to_i32(accumulator).to_le_bytes());
-            }
-        } else {
-            for (dx, output) in row.chunks_exact_mut(4).enumerate() {
-                let mut accumulator: f64 = 0.0;
-                for (cix, &weight) in weights.iter().enumerate() {
-                    let sy = (y0 + cix as i64) as usize;
-                    accumulator = resize_i_mul_add(
-                        fma,
-                        weight,
-                        intermediate[(sy * dst_w as usize) + dx],
-                        accumulator,
-                    );
-                }
-                output.copy_from_slice(&resize_i_round_up_to_i32(accumulator).to_le_bytes());
-            }
-        }
-    }
-
+    #[cfg(feature = "parallel")]
     let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, output_bytes)
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
+    #[cfg(feature = "parallel")]
     Ok(DynamicImage::ImageRgba8(out))
 }
 
@@ -2565,6 +2694,19 @@ pub fn execute_thumbnail(
                 Some("F") if matches!(img, DynamicImage::ImageRgba8(_)) => {
                     reduce_f_thumbnail(img, rw, rh, factor_x, factor_y)?
                 }
+                #[cfg(not(feature = "parallel"))]
+                Some("I")
+                    if matches!(img, DynamicImage::ImageRgba8(_))
+                        && factor_x == 2
+                        && factor_y == 2
+                        && cur_w % 2 == 0
+                        && cur_h % 2 == 0 =>
+                {
+                    return Ok(preserve_mode(
+                        img,
+                        resize_i_thumbnail_reduce2x2(img, new_w, new_h, effective_filter)?,
+                    ));
+                }
                 Some("I") if matches!(img, DynamicImage::ImageRgba8(_)) => {
                     reduce_i_thumbnail(img, rw, rh, factor_x, factor_y)?
                 }
@@ -2737,7 +2879,14 @@ pub(crate) fn execute_rgb_putpixel_thumbnail_fusion(
         pixel_overrides.insert(pixel_index, [color.0, color.1, color.2]);
     }
 
-    let mut reduced_bytes = match execute_reduce(img, 2, 2, Some("RGB"))? {
+    let Some((reduced_image, mut sparse_nonzero_rows)) =
+        execute_reduce_rgb_with_sparse_rows(img, 2, 2, Some("RGB"))?
+    else {
+        return Err(PilError::InternalError(
+            "RGB thumbnail reduction rejected its native source".into(),
+        ));
+    };
+    let mut reduced_bytes = match reduced_image {
         DynamicImage::ImageRgb8(reduced) => reduced.into_raw(),
         _ => {
             return Err(PilError::InternalError(
@@ -2783,23 +2932,48 @@ pub(crate) fn execute_rgb_putpixel_thumbnail_fusion(
         for channel in 0..3 {
             reduced_bytes[output_start + channel] = ((sums[channel] + 2) >> 2) as u8;
         }
+        if reduced_bytes[output_start..output_start + 3]
+            .iter()
+            .any(|&sample| sample != 0)
+        {
+            if let Some(nonzero_rows) = sparse_nonzero_rows.as_mut() {
+                nonzero_rows[block_index / reduced_width as usize] = true;
+            }
+        }
     }
 
     let reduced =
         crate::raster::RgbImage::from_raw(reduced_width, reduced_height, reduced_bytes)
             .ok_or_else(|| PilError::InternalError("RGB reduction buffer shape mismatch".into()))?;
     let reduced = DynamicImage::ImageRgb8(reduced);
-    let resized = pil_resize_boxed(
-        &reduced,
-        new_width,
-        new_height,
-        0.0,
-        0.0,
-        f64::from(source_width) / 2.0,
-        f64::from(source_height) / 2.0,
-        *filter,
-        Some("RGB"),
-    );
+    let box_right = f64::from(source_width) / 2.0;
+    let box_bottom = f64::from(source_height) / 2.0;
+    let resized = if let Some(nonzero_rows) = sparse_nonzero_rows.as_deref() {
+        crate::ops::pil_resize::pil_resize_boxed_with_sparse_rgb_rows(
+            &reduced,
+            new_width,
+            new_height,
+            0.0,
+            0.0,
+            box_right,
+            box_bottom,
+            *filter,
+            Some("RGB"),
+            nonzero_rows,
+        )
+    } else {
+        pil_resize_boxed(
+            &reduced,
+            new_width,
+            new_height,
+            0.0,
+            0.0,
+            box_right,
+            box_bottom,
+            *filter,
+            Some("RGB"),
+        )
+    };
     Ok(preserve_mode(img, resized))
 }
 
@@ -2960,6 +3134,123 @@ fn reduce_f_thumbnail(
     raw_bytes_to_image(dst_w, dst_h, out, 4)
 }
 
+#[cfg(not(feature = "parallel"))]
+fn resize_i_thumbnail_reduce2x2(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    filter: ResampleFilter,
+) -> Result<DynamicImage, PilError> {
+    #[cfg(target_arch = "x86_64")]
+    if let Some(fma) = X86FmaToken::detect() {
+        return resize_i_thumbnail_reduce2x2_with_fma(img, dst_w, dst_h, filter, &fma);
+    }
+    resize_i_thumbnail_reduce2x2_with_fma(img, dst_w, dst_h, filter, &PortableFma)
+}
+
+/// Stream native-I 2×2 reducing-gap rows directly into the existing serial
+/// resize ring. Pillow still rounds and stores each reduced sample and each
+/// horizontal intermediate as INT32; this only removes the full reduced image
+/// buffer between those exact stages.
+#[cfg(not(feature = "parallel"))]
+fn resize_i_thumbnail_reduce2x2_with_fma<F: F64MulAdd>(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    filter: ResampleFilter,
+    fma: &F,
+) -> Result<DynamicImage, PilError> {
+    let (source_width, source_height, source_bytes) = i32_sample_bytes_from_native_storage(img)?;
+    if source_width % 2 != 0 || source_height % 2 != 0 {
+        return Err(PilError::InternalError(
+            "streamed I thumbnail reduction requires even source dimensions".into(),
+        ));
+    }
+    let source_pixels =
+        CheckedDims::new_allow_empty(source_width, source_height, 4)?.total_pixels();
+    let source = i32_samples_from_le_bytes(source_bytes, source_pixels);
+    let reduced_width = source_width / 2;
+    let reduced_height = source_height / 2;
+    let (kernel, support) = resample_kernel(&filter);
+    let horizontal = precompute_coeffs_f64(dst_w, reduced_width, kernel, support);
+    let vertical = precompute_coeffs_f64(dst_h, reduced_height, kernel, support);
+    let fixed_horizontal_weights = resize_i_contiguous_eight_tap_weights(&horizontal.weights);
+    let max_vertical_taps = vertical.weights.iter().map(Vec::len).max().unwrap_or(0);
+    let ring_rows = max_vertical_taps
+        .checked_next_power_of_two()
+        .ok_or_else(|| {
+            PilError::ValueError("resize_i: vertical coefficient span is too large".into())
+        })?;
+    let ring_samples = ring_rows
+        .checked_mul(dst_w as usize)
+        .ok_or_else(|| PilError::ValueError("resize_i: vertical ring is too large".into()))?;
+    let mut ring = vec![0_i32; ring_samples];
+    let mut reduced_row = vec![0_i32; reduced_width as usize];
+    let output_dims = CheckedDims::new(dst_w, dst_h, 4)?;
+    let output_stride = output_dims.row_stride();
+    let mut output_bytes = output_dims.alloc_buffer();
+    let ring_mask = ring_rows - 1;
+    let source_width = source_width as usize;
+    let mut next_source_row = 0_usize;
+
+    for (output_y, output_row) in output_bytes.chunks_mut(output_stride).enumerate() {
+        let first_vertical_row = vertical.xmin[output_y] as usize;
+        let vertical_weights = &vertical.weights[output_y];
+        let source_end = first_vertical_row + vertical_weights.len();
+        while next_source_row < source_end {
+            let top_start = next_source_row * 2 * source_width;
+            let bottom_start = top_start + source_width;
+            let top = &source[top_start..top_start + source_width];
+            let bottom = &source[bottom_start..bottom_start + source_width];
+            for (output_x, reduced) in reduced_row.iter_mut().enumerate() {
+                let source_x = output_x * 2;
+                let quartet = top[source_x]
+                    .wrapping_add(top[source_x + 1])
+                    .wrapping_add(bottom[source_x])
+                    .wrapping_add(bottom[source_x + 1]);
+                *reduced = round_up(f64::from(quartet) / 4.0) as i32;
+            }
+
+            let ring_start = (next_source_row & ring_mask) * dst_w as usize;
+            let horizontal_row = &mut ring[ring_start..ring_start + dst_w as usize];
+            resize_i_horizontal_row(
+                &reduced_row,
+                horizontal_row,
+                &horizontal,
+                fixed_horizontal_weights.as_ref(),
+                fma,
+            );
+            next_source_row += 1;
+        }
+
+        if let Ok(weights) = <&[f64; 8]>::try_from(vertical_weights.as_slice()) {
+            for (output_x, output) in output_row.chunks_exact_mut(4).enumerate() {
+                let accumulator = resize_i_sum_eight(
+                    weights,
+                    first_vertical_row,
+                    |source_y| ring[(source_y & ring_mask) * dst_w as usize + output_x],
+                    fma,
+                );
+                output.copy_from_slice(&resize_i_round_up_to_i32(accumulator).to_le_bytes());
+            }
+        } else {
+            for (output_x, output) in output_row.chunks_exact_mut(4).enumerate() {
+                let accumulator = resize_i_sum_general(
+                    vertical_weights,
+                    first_vertical_row,
+                    |source_y| ring[(source_y & ring_mask) * dst_w as usize + output_x],
+                    fma,
+                );
+                output.copy_from_slice(&resize_i_round_up_to_i32(accumulator).to_le_bytes());
+            }
+        }
+    }
+
+    let output = crate::raster::RgbaImage::from_raw(dst_w, dst_h, output_bytes)
+        .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
+    Ok(DynamicImage::ImageRgba8(output))
+}
+
 fn reduce_i_thumbnail(
     img: &DynamicImage,
     dst_w: u32,
@@ -3079,6 +3370,19 @@ fn execute_reduce_rgb(
     y_factor: u32,
     explicit_mode: Option<&str>,
 ) -> Result<Option<DynamicImage>, PilError> {
+    execute_reduce_rgb_with_sparse_rows(img, x_factor, y_factor, explicit_mode)
+        .map(|reduced| reduced.map(|(image, _)| image))
+}
+
+/// Reduce RGB while retaining exact active rows when the sparse 2×2 path is
+/// selected. Thumbnail can use that proof to skip zero rows in both resample
+/// passes without rescanning the reduced image.
+fn execute_reduce_rgb_with_sparse_rows(
+    img: &DynamicImage,
+    x_factor: u32,
+    y_factor: u32,
+    explicit_mode: Option<&str>,
+) -> Result<Option<(DynamicImage, Option<Vec<bool>>)>, PilError> {
     if explicit_mode != Some("RGB") || !matches!(img, DynamicImage::ImageRgb8(_)) {
         return Ok(None);
     }
@@ -3104,14 +3408,17 @@ fn execute_reduce_rgb(
     }
 
     if fx == 2 && fy == 2 && width % 2 == 0 && height % 2 == 0 {
-        if let Some(output) = execute_reduce_rgb_sparse_2x2(img, new_width, new_height)? {
-            return Ok(Some(output));
+        if let Some((output, nonzero_rows)) =
+            execute_reduce_rgb_sparse_2x2_with_rows(img, new_width, new_height)?
+        {
+            return Ok(Some((output, Some(nonzero_rows))));
         }
     }
 
     let mut output = CheckedDims::new(new_width, new_height, 3)?.alloc_buffer();
     if new_width == 0 || new_height == 0 {
-        return raw_bytes_to_image(new_width, new_height, output, 3).map(Some);
+        return raw_bytes_to_image(new_width, new_height, output, 3)
+            .map(|image| Some((image, None)));
     }
 
     let division_multiplier = |divider: u32| -> u32 {
@@ -3199,7 +3506,8 @@ fn execute_reduce_rgb(
             process_row(y, &mut output[start..start + output_stride]);
         }
 
-        return raw_bytes_to_image(new_width, new_height, output, 3).map(Some);
+        return raw_bytes_to_image(new_width, new_height, output, 3)
+            .map(|image| Some((image, None)));
     }
 
     let write_rgb_block = |row: &mut [u8],
@@ -3343,16 +3651,16 @@ fn execute_reduce_rgb(
         process_row(y, &mut output[start..start + output_stride]);
     }
 
-    raw_bytes_to_image(new_width, new_height, output, 3).map(Some)
+    raw_bytes_to_image(new_width, new_height, output, 3).map(|image| Some((image, None)))
 }
 
 /// Reduce large sparse RGB sources by updating only blocks with nonzero input.
 /// Dense sources stop at the density bound and use the ordinary row kernel.
-fn execute_reduce_rgb_sparse_2x2(
+fn execute_reduce_rgb_sparse_2x2_with_rows(
     img: &DynamicImage,
     new_width: u32,
     new_height: u32,
-) -> Result<Option<DynamicImage>, PilError> {
+) -> Result<Option<(DynamicImage, Vec<bool>)>, PilError> {
     let (width, height) = img.dimensions();
     let source = img.as_bytes();
     let source_pixels = source.len() / 3;
@@ -3417,14 +3725,31 @@ fn execute_reduce_rgb_sparse_2x2(
     }
 
     let mut output = CheckedDims::new(new_width, new_height, 3)?.alloc_buffer();
+    let mut nonzero_rows = vec![false; new_height as usize];
     for (block_index, sums) in block_sums {
         let output_index = block_index * 3;
-        output[output_index] = ((sums[0] + 2) >> 2) as u8;
-        output[output_index + 1] = ((sums[1] + 2) >> 2) as u8;
-        output[output_index + 2] = ((sums[2] + 2) >> 2) as u8;
+        let pixel = [
+            ((sums[0] + 2) >> 2) as u8,
+            ((sums[1] + 2) >> 2) as u8,
+            ((sums[2] + 2) >> 2) as u8,
+        ];
+        output[output_index..output_index + 3].copy_from_slice(&pixel);
+        if pixel != [0; 3] {
+            nonzero_rows[block_index / new_width as usize] = true;
+        }
     }
 
-    raw_bytes_to_image(new_width, new_height, output, 3).map(Some)
+    raw_bytes_to_image(new_width, new_height, output, 3).map(|image| Some((image, nonzero_rows)))
+}
+
+#[cfg(test)]
+fn execute_reduce_rgb_sparse_2x2(
+    img: &DynamicImage,
+    new_width: u32,
+    new_height: u32,
+) -> Result<Option<DynamicImage>, PilError> {
+    execute_reduce_rgb_sparse_2x2_with_rows(img, new_width, new_height)
+        .map(|reduced| reduced.map(|(image, _)| image))
 }
 
 /// Sum one RGBA reduction block after Pillow's per-input premultiplication.
@@ -3644,6 +3969,8 @@ pub fn execute_reduce(
 #[cfg(test)]
 mod tests {
     use super::PortableFma;
+    #[cfg(not(feature = "parallel"))]
+    use super::resize_i;
     #[cfg(not(feature = "parallel"))]
     use super::resize_i_contiguous_eight_tap_weights;
     use super::resize_i_sum_eight;
@@ -4499,6 +4826,64 @@ mod tests {
             }
         }
         assert_eq!(output.as_bytes(), expected);
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[test]
+    fn i_thumbnail_streaming_2x2_matches_materialized_reduce_and_resize() {
+        let samples: Vec<i32> = (0..32 * 24)
+            .map(|index| match index % 8 {
+                0 => i32::MAX,
+                1 => i32::MIN,
+                2 => -1,
+                3 => 1,
+                4 => index * 7919,
+                5 => -(index * 3571),
+                6 => 0,
+                _ => i32::MAX / 2,
+            })
+            .collect();
+        let source_bytes: Vec<u8> = samples
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(32, 24, source_bytes).expect("source shape must be valid"),
+        );
+        let filters = [
+            ResampleFilter::Box,
+            ResampleFilter::Bilinear,
+            ResampleFilter::Hamming,
+            ResampleFilter::Bicubic,
+            ResampleFilter::Lanczos,
+        ];
+
+        for filter in filters {
+            let reduced = reduce_i_thumbnail(&source, 16, 12, 2, 2)
+                .expect("I-mode 2x2 reduction must succeed");
+            for (destination_width, destination_height) in [(8, 6), (7, 5)] {
+                let expected = resize_i(&reduced, destination_width, destination_height, &filter)
+                    .expect("materialized I-mode resize must succeed");
+                let actual = execute_thumbnail(
+                    &source,
+                    destination_width,
+                    destination_height,
+                    &filter,
+                    Some("I"),
+                )
+                .expect("I-mode thumbnail must succeed");
+                let (DynamicImage::ImageRgba8(actual), DynamicImage::ImageRgba8(expected)) =
+                    (actual, expected)
+                else {
+                    panic!("I-mode thumbnail must retain packed integer storage");
+                };
+                assert_eq!(
+                    actual.as_raw(),
+                    expected.as_raw(),
+                    "filter={filter:?}, size={destination_width}x{destination_height}"
+                );
+            }
+        }
     }
 
     #[cfg(target_endian = "little")]

@@ -297,6 +297,56 @@ impl BackendImpl for SimdPool {
                     }
                 }
             }
+            if index + 1 < ops.len()
+                && let (
+                    PipelineOp::AlphaComposite {
+                        source,
+                        dest: (0, 0),
+                        src: (0, 0),
+                    },
+                    PipelineOp::Mirror,
+                ) = (&ops[index], &ops[index + 1])
+                && matches!(input, DynamicImage::ImageRgba8(_))
+                && matches!(op_mode, None | Some("RGBA"))
+                && input.width() >= 8
+                && input.height() != 0
+                && source.size().ok() == Some((input.width(), input.height()))
+            {
+                if !ops::adapters::simd_supports_for_image(input, &ops[index + 1], op_mode) {
+                    let key = registry::variant_key(&ops[index + 1]);
+                    crate::compute::record_pipeline_operation_unsupported(key);
+                    return Err(PilError::NotImplementedError(format!(
+                        "SIMD does not support {key} for the current image layout/mode"
+                    )));
+                }
+                crate::compute::begin_pipeline_operation_telemetry("AlphaComposite");
+                crate::compute::begin_pipeline_operation_telemetry("Mirror");
+                let (fused, composite_blocks, composite_tail, mirror_blocks, mirror_tail) =
+                    match ops::adapters::simd_alpha_composite_mirror(input, source, op_mode) {
+                        Ok(result) => result,
+                        Err(error) => {
+                            for _ in 0..2 {
+                                crate::compute::record_pipeline_operation_path("unsupported");
+                                crate::compute::finish_pipeline_operation_telemetry();
+                            }
+                            return Err(error);
+                        }
+                    };
+                crate::compute::record_pipeline_operation_vector_blocks(composite_blocks);
+                crate::compute::record_pipeline_operation_scalar_tail(composite_tail);
+                crate::compute::record_pipeline_operation_path("vector");
+                crate::compute::finish_pipeline_operation_telemetry();
+                crate::compute::record_pipeline_operation_vector_blocks(mirror_blocks);
+                crate::compute::record_pipeline_operation_scalar_tail(mirror_tail);
+                crate::compute::record_pipeline_operation_path("native-copy");
+                crate::compute::finish_pipeline_operation_telemetry();
+                crate::compute::account_host_buffer_boundary(&mut resources, input, &fused);
+                resources.fused_operation_count = resources.fused_operation_count.saturating_add(2);
+                current = Some(fused);
+                current_mode = ops::adapters::simd_mode_after_op(&ops[index + 1], op_mode);
+                index += 2;
+                continue;
+            }
             if let PipelineOp::Transpose { method } = &ops[index] {
                 let mut combined = TransposeTransform::Method(method.clone());
                 let mut consumed = 1usize;
@@ -862,5 +912,78 @@ mod palette_normalization_tests {
             };
             assert_eq!(actual.as_raw(), &expected, "PA channel {index}");
         }
+    }
+}
+
+#[cfg(test)]
+mod alpha_composite_mirror_tests {
+    use super::SimdPool;
+    use crate::compute::BackendImpl;
+    use crate::error::PilError;
+    use crate::image::Image;
+    use crate::image_utils::raw_bytes_to_image;
+    use crate::pipeline::PipelineOp;
+    use std::sync::Arc;
+
+    #[test]
+    fn rgba_alpha_composite_mirror_fusion_matches_sequential_with_tails() -> Result<(), PilError> {
+        for (width, height, uniform) in [
+            (64u32, 3u32, true),
+            (17, 5, false),
+            (9, 2, false),
+            (8, 1, false),
+            (1, 8, false),
+        ] {
+            let pixel_count = width as usize * height as usize;
+            let mut destination_bytes = if uniform {
+                [30, 60, 90, 64].repeat(pixel_count)
+            } else {
+                (0..pixel_count * 4)
+                    .map(|index| (index.wrapping_mul(71).wrapping_add(19)) as u8)
+                    .collect::<Vec<_>>()
+            };
+            let mut source_bytes = if uniform {
+                [200, 150, 100, 192].repeat(pixel_count)
+            } else {
+                (0..pixel_count * 4)
+                    .map(|index| (index.wrapping_mul(37).wrapping_add(83)) as u8)
+                    .collect::<Vec<_>>()
+            };
+            if !uniform {
+                for (pixel, alpha) in source_bytes
+                    .chunks_exact_mut(4)
+                    .zip([0, 1, 64, 128, 255].into_iter().cycle())
+                {
+                    pixel[3] = alpha;
+                }
+                for (pixel, alpha) in destination_bytes
+                    .chunks_exact_mut(4)
+                    .zip([0, 63, 127, 192, 255].into_iter().cycle())
+                {
+                    pixel[3] = alpha;
+                }
+            }
+
+            let destination = raw_bytes_to_image(width, height, destination_bytes, 4)?;
+            let source_image = raw_bytes_to_image(width, height, source_bytes, 4)?;
+            let source = Arc::new(Image::from_dynamic(source_image, Some("RGBA".to_owned())));
+            let operations = [
+                PipelineOp::AlphaComposite {
+                    source,
+                    dest: (0, 0),
+                    src: (0, 0),
+                },
+                PipelineOp::Mirror,
+            ];
+            let composite = SimdPool.execute_batch(&operations[..1], &destination, Some("RGBA"))?;
+            let expected = SimdPool.execute_batch(&operations[1..], &composite, Some("RGBA"))?;
+            let actual = SimdPool.execute_batch(&operations, &destination, Some("RGBA"))?;
+            assert_eq!(
+                (actual.width(), actual.height()),
+                (expected.width(), expected.height())
+            );
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
+        }
+        Ok(())
     }
 }

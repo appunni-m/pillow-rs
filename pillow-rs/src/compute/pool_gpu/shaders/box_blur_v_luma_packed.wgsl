@@ -100,6 +100,20 @@ fn blur_aligned_word(word_index: u32) -> u32 {
     return fixed_weighted_average_word(sum, edge);
 }
 
+fn blur_radius_one_aligned_word(word_index: u32) -> u32 {
+    let words_per_row = params.width >> 2u;
+    let x_word = word_index % words_per_row;
+    let y = word_index / words_per_row;
+    let top_y = clamp_offset(y, params.height, -1);
+    let bottom_y = clamp_offset(y, params.height, 1);
+    let top = unpack_luma_word(input[top_y * words_per_row + x_word]);
+    let center = unpack_luma_word(input[word_index]);
+    let bottom = unpack_luma_word(input[bottom_y * words_per_row + x_word]);
+    let sum = top + center + bottom;
+    let average = ((sum + vec4<u32>(1u)) * vec4<u32>(21846u)) >> vec4<u32>(16u);
+    return average.x | (average.y << 8u) | (average.z << 16u) | (average.w << 24u);
+}
+
 fn blur_pixel(pixel_index: u32) -> u32 {
     let width = params.width;
     let height = params.height;
@@ -135,6 +149,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     if (params.width & 3u) == 0u {
+        if params.radius_y == 1u && params.edge_weight_y == 0u {
+            output[word_index] = blur_radius_one_aligned_word(word_index);
+            return;
+        }
         output[word_index] = blur_aligned_word(word_index);
         return;
     }

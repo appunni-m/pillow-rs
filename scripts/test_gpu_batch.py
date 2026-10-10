@@ -19,6 +19,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CHANNELS = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "CMYK": 4, "RGBX": 4}
+GRAPH_CHANNELS = {**CHANNELS, "F": 4}
 
 
 def inputs(large=True):
@@ -59,12 +60,19 @@ def inputs(large=True):
     if large:
         for mode in ("LA", "RGBA"):
             yield mode, (4096, 4096), ("channel", 1 if mode == "LA" else 3)
+    # F graphs are admitted only for the statically proven ordered-f64 resize
+    # geometry; keep them out of the generic native-byte operation sweep above.
+    yield "F", (19, 17), ("resize", (13, 11), "bicubic")
+    yield "F", (19, 17), ("resize", (15, 13), "lanczos")
+    # This geometry needs more than the generic per-stage arena reservation
+    # and exercises input-independent ordered-f64 resource sizing at admission.
+    yield "F", (2048, 1536), ("resize", (1024, 768), "bicubic")
 
 
 def graph(case):
     from PIL import Image, ImageChops, ImageOps, ImageFilter
     mode, size, *ops = case
-    length = size[0] * size[1] * CHANNELS[mode]
+    length = size[0] * size[1] * GRAPH_CHANNELS[mode]
     seed = bytes((i * 47 + 23) % 256 for i in range(256))
     im = Image.frombytes(mode, size, seed * (length // 256) + seed[:length % 256])
     for name, *args in ops:
@@ -76,7 +84,9 @@ def graph(case):
         elif name == "box": im = im.filter(ImageFilter.BoxBlur(args[0]))
         elif name == "gaussian": im = im.filter(ImageFilter.GaussianBlur(args[0]))
         elif name == "transpose": im = im.transpose(args[0])
-        elif name == "resize": im = im.resize(args[0], Image.Resampling.NEAREST)
+        elif name == "resize":
+            resampling = getattr(Image.Resampling, args[1].upper()) if len(args) > 1 else Image.Resampling.NEAREST
+            im = im.resize(args[0], resampling)
         elif name == "crop": im = im.crop(args[0])
         elif name == "flip": im = ImageOps.flip(im)
         elif name == "mirror": im = ImageOps.mirror(im)
@@ -88,7 +98,7 @@ def graph(case):
         elif name == "grayscale": im = ImageOps.grayscale(im)
         elif name == "convert": im = im.convert(args[0])
         elif name == "paste":
-            other = Image.frombytes(mode, (7, 5), bytes([37]) * (7 * 5 * CHANNELS[mode]))
+            other = Image.frombytes(mode, (7, 5), bytes([37]) * (7 * 5 * GRAPH_CHANNELS[mode]))
             other = ImageChops.invert(other)  # auxiliary remains a lazy graph on target
             im.paste(other, args[0])
         else:

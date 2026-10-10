@@ -47,7 +47,7 @@ from PIL import Image, ImageOps, GpuBatchExecutor
 paths = iter(["a-gray.png", "b-gray.png"])
 jobs = ((path, ImageOps.invert(Image.open(path))) for path in paths)
 with GpuBatchExecutor(gpu_bytes=512 << 20, host_bytes=256 << 20,
-                      max_jobs=64, max_in_flight=2) as executor:
+                      max_jobs=64, max_in_flight=4) as executor:
     with executor.run(jobs) as results:
         for result in results:
             result.image.save(result.input_key + ".inverted.png")

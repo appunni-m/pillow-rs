@@ -487,6 +487,68 @@ pub fn pil_grayscale_truncate(img: &DynamicImage) -> Result<crate::raster::GrayI
     pil_grayscale_inner(img, false)
 }
 
+/// Gather the first byte from native YCbCr triples using SSSE3 when present.
+///
+/// The returned counters describe sixteen-pixel vector blocks and scalar-tail
+/// pixels. Callers must still validate that the source length matches the
+/// image dimensions before constructing an image from the output.
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+pub(crate) fn ycbcr_luma_ssse3_bytes(source: &[u8]) -> Option<(Vec<u8>, u64, u64)> {
+    if source.len() % 3 != 0 || !std::is_x86_feature_detected!("ssse3") {
+        return None;
+    }
+    // SAFETY: the runtime feature check above proves SSSE3 is available.
+    Some(unsafe { gather_ycbcr_luma_ssse3(source) })
+}
+
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+#[target_feature(enable = "ssse3")]
+unsafe fn gather_ycbcr_luma_ssse3(source: &[u8]) -> (Vec<u8>, u64, u64) {
+    use core::arch::x86_64::{
+        _mm_loadu_si128, _mm_or_si128, _mm_setr_epi8, _mm_shuffle_epi8, _mm_storeu_si128,
+    };
+
+    const LANES: usize = 16;
+    let pixel_count = source.len() / 3;
+    let vector_pixels = pixel_count / LANES * LANES;
+    let mut output = Vec::<u8>::with_capacity(pixel_count);
+
+    // SAFETY: the caller checked SSSE3. Each loop reads three consecutive
+    // sixteen-byte ranges for sixteen complete three-byte pixels. The final
+    // load ends at or before source.len(), and the store initializes exactly
+    // sixteen bytes within the output capacity.
+    unsafe {
+        let from_first = _mm_setr_epi8(0, 3, 6, 9, 12, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+        let from_second =
+            _mm_setr_epi8(-1, -1, -1, -1, -1, -1, 2, 5, 8, 11, 14, -1, -1, -1, -1, -1);
+        let from_third = _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 4, 7, 10, 13);
+        for pixel in (0..vector_pixels).step_by(LANES) {
+            let offset = pixel * 3;
+            let first = _mm_loadu_si128(source.as_ptr().add(offset).cast());
+            let second = _mm_loadu_si128(source.as_ptr().add(offset + 16).cast());
+            let third = _mm_loadu_si128(source.as_ptr().add(offset + 32).cast());
+            let y0 = _mm_shuffle_epi8(first, from_first);
+            let y1 = _mm_shuffle_epi8(second, from_second);
+            let y2 = _mm_shuffle_epi8(third, from_third);
+            let y = _mm_or_si128(_mm_or_si128(y0, y1), y2);
+            _mm_storeu_si128(output.as_mut_ptr().add(pixel).cast(), y);
+        }
+        output.set_len(vector_pixels);
+    }
+
+    for pixel in vector_pixels..pixel_count {
+        output.push(source[pixel * 3]);
+    }
+    debug_assert_eq!(output.len(), pixel_count);
+    (
+        output,
+        (vector_pixels / LANES) as u64,
+        (pixel_count - vector_pixels) as u64,
+    )
+}
+
 fn pil_grayscale_inner(
     img: &DynamicImage,
     round: bool,
@@ -527,6 +589,7 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
     rounding: u32,
 ) -> Vec<u8> {
     let expected_pixels = dims.total_pixels();
+
     #[cfg(target_arch = "x86_64")]
     // The same AVX2 kernel is used by strict SIMD on AVX-512 hosts. Try it in
     // the CPU path too; runtime AVX2 detection retains the exact scalar fallback.
@@ -567,6 +630,19 @@ fn grayscale_rgb_pixel(pixel: &[u8], rounding: u32) -> u8 {
     {
         grayscale_rgb_pixel_lookup(pixel, rounding)
     }
+    #[cfg(target_arch = "aarch64")]
+    if rounding == 32768 {
+        let red = u16::from(pixel[0]);
+        let green = u16::from(pixel[1]);
+        let blue = u16::from(pixel[2]);
+        // Split the exact Pillow coefficients at bit 8:
+        // 19595=77*256-117, 38470=150*256+70, 7471=29*256+47.
+        // With the rounding bias, residual is 2,933..62,603; base is at most
+        // 65,280 and base plus carry at most 65,524, so u16 is exact.
+        let base = red * 77 + green * 150 + blue * 29;
+        let residual = green * 70 + blue * 47 + 32768 - red * 117;
+        return ((base + (residual >> 8)) >> 8) as u8;
+    }
     #[cfg(not(target_arch = "x86_64"))]
     {
         ((19595 * u32::from(pixel[0])
@@ -600,6 +676,14 @@ fn grayscale_rgb_pixel_delta(pixel: &[u8], rounding: u32) -> u8 {
     (green + (correction >> 16)) as u8
 }
 
+#[inline(always)]
+fn cmyk_muldiv255_byte(channel: u8, ink: u8) -> u8 {
+    // For byte inputs, t <= 65,153 and t + (t >> 8) <= 65,407, so Pillow's
+    // exact MULDIV255 identity fits entirely in u16.
+    let t = u16::from(channel) * u16::from(ink) + 128;
+    (((t >> 8) + t) >> 8) as u8
+}
+
 /// Converts a CMYK image to Pillow-compatible grayscale.
 ///
 /// The input is stored as RGBA where channels mean `C`, `M`, `Y`, and `K`.
@@ -627,18 +711,27 @@ pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage,
             "cmyk_to_grayscale source buffer mismatch".to_string(),
         ));
     }
-    let mut gray = dims.alloc_buffer();
-    for (i, p) in cmyk.chunks_exact(4).enumerate() {
-        let c = u32::from(p[0]);
-        let m = u32::from(p[1]);
-        let y_ = u32::from(p[2]);
-        let k = u32::from(p[3]);
-        let nk = 255u32.saturating_sub(k);
-        let r = (nk as i32 - muldiv255(c, nk) as i32).clamp(0, 255) as u8;
-        let g = (nk as i32 - muldiv255(m, nk) as i32).clamp(0, 255) as u8;
-        let b = (nk as i32 - muldiv255(y_, nk) as i32).clamp(0, 255) as u8;
-        gray[i] = rgb_to_luma_u8(r, g, b);
-    }
+    // The validated source contains exactly one four-byte sample per output
+    // pixel. Collecting writes the final grayscale bytes once and avoids
+    // zero-initializing a buffer that is immediately overwritten.
+    let gray: Vec<u8> = cmyk
+        .chunks_exact(4)
+        .map(|p| {
+            let c = p[0];
+            let m = p[1];
+            let y_ = p[2];
+            let nk = u8::MAX - p[3];
+            // For byte inks, rounded `muldiv255(ink, nk)` is bounded by `nk`, so
+            // reconstructed RGB channels remain in [0, 255]. Pillow's luma
+            // weights sum to 65,536; substituting the channel conversions fuses
+            // three rounded CMYK components into one exact luma subtraction.
+            let weighted_ink = 19_595 * u32::from(cmyk_muldiv255_byte(c, nk))
+                + 38_470 * u32::from(cmyk_muldiv255_byte(m, nk))
+                + 7_471 * u32::from(cmyk_muldiv255_byte(y_, nk));
+            let luma_ink = (weighted_ink + 32_767) >> 16;
+            (u32::from(nk) - luma_ink) as u8
+        })
+        .collect();
     crate::raster::GrayImage::from_raw(w, h, gray)
         .ok_or_else(|| PilError::InternalError("cmyk_to_grayscale buffer mismatch".to_string()))
 }
@@ -1809,8 +1902,9 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     use super::grayscale_rgb_avx2;
     use super::{
-        ColorValue, f_to_i, f_to_l, getcolor, grayscale_rgb_bytes, grayscale_rgb_pixel_delta,
-        grayscale_rgb_pixel_lookup, i_to_f, i_to_l, muldiv255, rgb_to_hsv, rgb_to_luma_u8,
+        ColorValue, cmyk_muldiv255_byte, f_to_i, f_to_l, getcolor, grayscale_rgb_bytes,
+        grayscale_rgb_pixel, grayscale_rgb_pixel_delta, grayscale_rgb_pixel_lookup, i_to_f, i_to_l,
+        muldiv255, rgb_to_hsv, rgb_to_luma_u8,
     };
     use crate::checked_dims::CheckedDims;
     use crate::error::PilError;
@@ -1847,6 +1941,19 @@ mod tests {
                 assert_eq!(
                     native, pillow,
                     "channel={channel} inverse_black={inverse_black}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cmyk_byte_muldiv255_matches_shared_exact_formula() {
+        for channel in 0..=u8::MAX {
+            for ink in 0..=u8::MAX {
+                assert_eq!(
+                    cmyk_muldiv255_byte(channel, ink),
+                    muldiv255(u32::from(channel), u32::from(ink)) as u8,
+                    "channel={channel} ink={ink}"
                 );
             }
         }
@@ -1942,6 +2049,7 @@ mod tests {
                             >> 16) as u8;
                         assert_eq!(grayscale_rgb_pixel_delta(&pixel, rounding), expected);
                         assert_eq!(grayscale_rgb_pixel_lookup(&pixel, rounding), expected);
+                        assert_eq!(grayscale_rgb_pixel(&pixel, rounding), expected);
                     }
                 }
             }

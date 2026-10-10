@@ -820,6 +820,48 @@ fn putpixel_value_from_python(
     Ok(PutPixelValue::Components(components))
 }
 
+fn exact_rgb_tuple_from_python(value: &Bound<'_, PyAny>) -> Option<[u8; 3]> {
+    let tuple = value.cast_exact::<PyTuple>().ok()?;
+    if tuple.len() != 3 {
+        return None;
+    }
+    let mut rgb = [0u8; 3];
+    for (index, channel) in rgb.iter_mut().enumerate() {
+        let value = tuple.get_item(index).ok()?;
+        if value.cast_exact::<PyInt>().is_err() {
+            return None;
+        }
+        *channel = value.extract::<u8>().ok()?;
+    }
+    Some(rgb)
+}
+
+fn new_color_input_from_python(color: Option<&Bound<'_, PyAny>>) -> pillow_rs::PythonNewColorInput {
+    let (hex, single, rgb, rgba, la, int32_val, float_val) = if let Some(value) = color {
+        (
+            value.extract::<String>().ok(),
+            value.extract::<u8>().ok(),
+            value.extract::<(u8, u8, u8)>().ok(),
+            value.extract::<(u8, u8, u8, u8)>().ok(),
+            value.extract::<(u8, u8)>().ok(),
+            value.extract::<i32>().ok(),
+            value.extract::<f64>().ok(),
+        )
+    } else {
+        (None, None, None, None, None, None, None)
+    };
+    pillow_rs::PythonNewColorInput::from_parts(
+        hex,
+        single,
+        rgb,
+        rgba,
+        la,
+        int32_val,
+        float_val,
+        color.is_some(),
+    )
+}
+
 fn putpixel_coordinates_from_python(xy: &Bound<'_, PyAny>) -> PyResult<(i32, i32)> {
     let sequence = xy.cast::<pyo3::types::PySequence>().map_err(|_| {
         let name = if xy.is_none() {
@@ -861,29 +903,24 @@ impl PyImage {
         size: (u32, u32),
         color: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
-        let (hex, single, rgb, rgba, la, int32_val, float_val) = if let Some(val) = color {
-            (
-                val.extract::<String>().ok(),
-                val.extract::<u8>().ok(),
-                val.extract::<(u8, u8, u8)>().ok(),
-                val.extract::<(u8, u8, u8, u8)>().ok(),
-                val.extract::<(u8, u8)>().ok(),
-                val.extract::<i32>().ok(),
-                val.extract::<f64>().ok(),
-            )
-        } else {
-            (None, None, None, None, None, None, None)
+        let input = match color {
+            Some(value) if mode == "RGB" && value.is_exact_instance_of::<PyTuple>() => {
+                match value.extract::<(u8, u8, u8)>() {
+                    Ok(rgb) => pillow_rs::PythonNewColorInput::from_parts(
+                        None,
+                        None,
+                        Some(rgb),
+                        None,
+                        None,
+                        None,
+                        None,
+                        true,
+                    ),
+                    Err(_) => new_color_input_from_python(color),
+                }
+            }
+            _ => new_color_input_from_python(color),
         };
-        let input = pillow_rs::PythonNewColorInput::from_parts(
-            hex,
-            single,
-            rgb,
-            rgba,
-            la,
-            int32_val,
-            float_val,
-            color.is_some(),
-        );
         let img = RsImage::new_with_input(size.0, size.1, mode, input).map_err(map_error)?;
         Ok(PyImage { inner: img })
     }
@@ -2010,6 +2047,19 @@ impl PyImage {
                 "image index out of range",
             ));
         }
+        // `putpixel_value_from_python` must retain flexible coercion and error
+        // ordering for arbitrary sequences. Ordinary RGB byte tuples contain
+        // exact built-in ints, so write those native channels directly and
+        // skip constructing a temporary component vector.
+        if mode == "RGB"
+            && prepared.is_none()
+            && let Some([r, g, b]) = exact_rgb_tuple_from_python(value)
+        {
+            return self
+                .inner
+                .putpixel(x as u32, y as u32, r, g, b, 255)
+                .map_err(map_error);
+        }
         let value = match prepared {
             Some(pillow_rs::PutPixelValue::Components(mut values)) if deferred_alpha.is_some() => {
                 if let Some(alpha) = deferred_alpha {
@@ -2333,6 +2383,8 @@ fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         resource_dict.set_item("host_buffer_bytes", resource.host_buffer_bytes)?;
         resource_dict.set_item("peak_live_host_bytes", resource.peak_live_host_bytes)?;
         resource_dict.set_item("fused_operation_count", resource.fused_operation_count)?;
+        resource_dict.set_item("host_allocation_count", resource.host_allocation_count)?;
+        resource_dict.set_item("host_allocated_bytes", resource.host_allocated_bytes)?;
         result.set_item("resource", resource_dict)?;
     } else {
         result.set_item("resource", py.None())?;

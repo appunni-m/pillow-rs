@@ -417,6 +417,7 @@ impl Image {
                 image: std::sync::Arc::new(DynamicImage::ImageLuma8(
                     self.materialized_shared()?.to_luma8(),
                 )),
+                known_zero_fill: false,
                 explicit_mode: Some("P".to_owned()),
                 decoded_mode: crate::raster::ColorType::L8.into(),
                 palette: self.palette(),
@@ -922,6 +923,7 @@ impl Image {
             // orientation tag after transposing the palette indices.
             let source = crate::image::LoadedData {
                 image: Arc::new(DynamicImage::ImageLuma8(out)),
+                known_zero_fill: false,
                 explicit_mode: Some("P".to_string()),
                 decoded_mode: crate::raster::ColorType::L8.into(),
                 palette: None,
@@ -1177,6 +1179,7 @@ fn convert_to_palette_alpha(
 
     Ok(Image::Loaded(crate::image::LoadedData {
         image: std::sync::Arc::new(DynamicImage::ImageLumaA8(pa)),
+        known_zero_fill: false,
         explicit_mode: Some("PA".to_owned()),
         decoded_mode: crate::raster::ColorType::La8.into(),
         palette,

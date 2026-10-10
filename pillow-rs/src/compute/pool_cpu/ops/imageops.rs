@@ -989,12 +989,13 @@ fn native_ycbcr_luma(img: &DynamicImage) -> Option<crate::raster::GrayImage> {
     if pixels == 0 || source.as_raw().len() != dims.total_bytes() {
         return None;
     }
-    // This CPU path only needs the first byte of each triple. On x86, pack
-    // four Y samples from three native words and store them together. Keep
-    // the portable loop on other targets; the explicit sixteen-lane
-    // deinterleave remains in the SIMD adapter.
+    // This CPU path only needs the first byte of each triple. Reuse the
+    // sixteen-pixel SSSE3 deinterleave when supported; keep the packed-word
+    // x86 fallback and the portable loop on other targets.
     #[cfg(target_arch = "x86_64")]
-    let output = native_ycbcr_luma_packed_blocks(source.as_raw(), pixels);
+    let output = crate::color::ycbcr_luma_ssse3_bytes(source.as_raw())
+        .map(|(output, _, _)| output)
+        .unwrap_or_else(|| native_ycbcr_luma_packed_blocks(source.as_raw(), pixels));
     #[cfg(not(target_arch = "x86_64"))]
     let output: Vec<u8> = source
         .as_raw()

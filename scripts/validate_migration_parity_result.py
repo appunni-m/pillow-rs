@@ -189,24 +189,29 @@ def execution_receipt(value: dict[str, Any], label: str) -> None:
     exact(value["phase_timings_ns"], {"route_ns", "validation_ns", "backend_ns"}, f"{label}.phase_timings_ns")
     for phase, phase_summary in value["phase_timings_ns"].items():
         summary(phase_summary, f"{label}.phase_timings_ns.{phase}")
-    exact(
-        value["resource"],
-        {
-            "sample_count",
-            "upload_bytes",
-            "readback_bytes",
-            "auxiliary_bytes",
-            "parameter_bytes",
-            "retained_cache_bytes",
-            "full_frame_copy_count",
-            "mode_conversion_count",
-            "host_buffer_count",
-            "host_buffer_bytes",
-            "peak_live_host_bytes",
-            "fused_operation_count",
-        },
-        f"{label}.resource",
-    )
+    legacy_resource_fields = {
+        "sample_count",
+        "upload_bytes",
+        "readback_bytes",
+        "auxiliary_bytes",
+        "parameter_bytes",
+        "retained_cache_bytes",
+        "full_frame_copy_count",
+        "mode_conversion_count",
+        "host_buffer_count",
+        "host_buffer_bytes",
+        "peak_live_host_bytes",
+        "fused_operation_count",
+    }
+    checked_allocation_fields = {"host_allocation_count", "host_allocated_bytes"}
+    resource_keys = set(value["resource"]) if isinstance(value["resource"], dict) else set()
+    if checked_allocation_fields.intersection(resource_keys):
+        resource_fields = legacy_resource_fields | checked_allocation_fields
+    else:
+        # Receipts written before checked host-allocation counters were exposed
+        # remain readable; new benchmark runs always include both fields.
+        resource_fields = legacy_resource_fields
+    exact(value["resource"], resource_fields, f"{label}.resource")
     non_negative_int(value["resource"]["sample_count"], f"{label}.resource.sample_count")
     for field in (
         "upload_bytes",
@@ -220,6 +225,7 @@ def execution_receipt(value: dict[str, Any], label: str) -> None:
         "host_buffer_bytes",
         "peak_live_host_bytes",
         "fused_operation_count",
+        *(sorted(checked_allocation_fields) if checked_allocation_fields <= resource_keys else ()),
     ):
         summary(value["resource"][field], f"{label}.resource.{field}")
     non_negative_int(value["sample_count"], f"{label}.sample_count")

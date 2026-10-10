@@ -71,6 +71,45 @@ fn blur_pixel(pixel_index: u32) -> u32 {
     return fixed_weighted_average(sum, edge);
 }
 
+fn unpack_luma_word(word: u32) -> vec4<u32> {
+    return vec4<u32>(
+        word & 0xffu,
+        (word >> 8u) & 0xffu,
+        (word >> 16u) & 0xffu,
+        (word >> 24u) & 0xffu,
+    );
+}
+
+// An aligned word contains four consecutive pixels in one row. Neighboring
+// words supply the two horizontal samples; the outer lanes replicate the
+// first or last pixel at each image edge.
+fn blur_radius_one_aligned_word(word_index: u32) -> u32 {
+    let words_per_row = params.width >> 2u;
+    let x_word = word_index % words_per_row;
+    let current = unpack_luma_word(input[word_index]);
+    var previous = current;
+    var next = current;
+    if x_word > 0u {
+        previous = unpack_luma_word(input[word_index - 1u]);
+    }
+    if x_word + 1u < words_per_row {
+        next = unpack_luma_word(input[word_index + 1u]);
+    }
+
+    var left = vec4<u32>(previous.w, current.x, current.y, current.z);
+    var right = vec4<u32>(current.y, current.z, current.w, next.x);
+    if x_word == 0u {
+        left.x = current.x;
+    }
+    if x_word + 1u == words_per_row {
+        right.w = current.w;
+    }
+
+    let sum = left + current + right;
+    let average = ((sum + vec4<u32>(1u)) * vec4<u32>(21846u)) >> vec4<u32>(16u);
+    return average.x | (average.y << 8u) | (average.z << 16u) | (average.w << 24u);
+}
+
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let pixel_count = params.width * params.height;
@@ -80,6 +119,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let word_count = pixel_count / 4u + select(0u, 1u, (pixel_count & 3u) != 0u);
     let word_index = gid.x;
     if word_index >= word_count {
+        return;
+    }
+
+    if (params.width & 3u) == 0u
+        && params.radius_x == 1u
+        && params.edge_weight_x == 0u
+    {
+        output[word_index] = blur_radius_one_aligned_word(word_index);
         return;
     }
 
