@@ -50221,7 +50221,7 @@ def build_pipeline_benchmark_document(
     ]
 
     getprojection_cmyk_case_id = (
-        "PIL.Image.Image.getprojection.nuanced.material-cmyk-1024x768"
+        "PIL.Image.Image.getprojection.parity.material-cmyk-1024x768"
     )
     getprojection_cmyk_case = cases_by_id.get(getprojection_cmyk_case_id)
     if getprojection_cmyk_case is None:
@@ -50244,8 +50244,8 @@ def build_pipeline_benchmark_document(
         "subjects": benchmark_subjects(),
         "input": {"kind": "parity_case", "case_id": getprojection_cmyk_case_id},
         "measurement": {
-            "boundary": "observed_steps",
-            "step_ids": ["call"],
+            "boundary": "whole_workflow",
+            "step_ids": [],
             "metrics": ["latency", "throughput"],
             "warmup_iterations": 5,
             "measurement_iterations": 20,
@@ -50258,7 +50258,7 @@ def build_pipeline_benchmark_document(
     }
 
     getprojection_cmyk_sparse_case_id = (
-        "PIL.Image.Image.getprojection.nuanced.sparse-cmyk-1024x768"
+        "PIL.Image.Image.getprojection.parity.sparse-cmyk-1024x768"
     )
     getprojection_cmyk_sparse_case = cases_by_id.get(getprojection_cmyk_sparse_case_id)
     if getprojection_cmyk_sparse_case is None:
@@ -50282,7 +50282,7 @@ def build_pipeline_benchmark_document(
         "input": {"kind": "parity_case", "case_id": getprojection_cmyk_sparse_case_id},
         "measurement": {
             "boundary": "whole_workflow",
-            "step_ids": ["call"],
+            "step_ids": [],
             "metrics": ["latency", "throughput"],
             "warmup_iterations": 5,
             "measurement_iterations": 20,
@@ -50293,6 +50293,48 @@ def build_pipeline_benchmark_document(
         },
         "context": getprojection_cmyk_sparse_context,
     }
+
+    getprojection_edge_workloads: list[dict[str, Any]] = []
+    for suffix in (
+        "rgb-sparse-tail-17x4",
+        "rgb-dense-tail-17x4",
+        "rgb-dense-scalar-tail-15x3",
+    ):
+        case_id = f"PIL.Image.Image.getprojection.parity.{suffix}"
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(
+                f"RGB getprojection edge benchmark references missing case: {case_id}"
+            )
+        getprojection_edge_workloads.append(
+            {
+                "workload_id": f"pil-image-image.getprojection.edge-{suffix}",
+                "covers": [
+                    _performance_requirement(
+                        operations, "PIL.Image.Image", "getprojection"
+                    )
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": {
+                    "boundary": "whole_workflow",
+                    "step_ids": [],
+                    "metrics": ["latency", "throughput"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "concurrency": 1,
+                    "cache_state": "warm",
+                    "correctness_gate": "parity_pass",
+                },
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant=f"getprojection-edge-{suffix}",
+                    surface="PIL.Image.Image",
+                    operation="getprojection",
+                ),
+            }
+        )
 
     cmyk_to_rgb_case_id = (
         "PIL.Image.Image.convert.nuanced.material-cmyk-to-rgb-1024x768"
@@ -52542,6 +52584,7 @@ def build_pipeline_benchmark_document(
             *terminal_analysis_workloads,
             getprojection_cmyk_workload,
             getprojection_cmyk_sparse_workload,
+            *getprojection_edge_workloads,
         cmyk_to_rgb_workload,
         cmyk_to_1_workload,
         cmyk_grayscale_workload,
