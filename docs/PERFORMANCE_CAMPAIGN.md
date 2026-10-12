@@ -25877,3 +25877,48 @@ The five benchmark reports and parity receipts use the `convert-cmyk-chain-audit
 `migration-benchmark-461f884de9a447bca4eaf598c112d2b1`,
 `migration-benchmark-cc34b7569fd545fa81558e5a1c65db40`, and
 `migration-benchmark-773921fdf00e4697abfe7fd20c72456e`.
+
+
+### Reject AArch64 Grayscale RGB exact delta formula — 2026-10-13
+
+I tested replacing the six coefficient products in the scalar RGB grayscale
+formula with the exact delta expression `G + (((R-G)*19595 + (B-G)*7471 +
+32768) >> 16)`. The arithmetic remains exact, and the full selected grayscale
+case passed exact Pillow parity 3/3 for CPU, SIMD, and GPU in both candidate
+cohorts and both clean controls. Each cohort measured the complete 1024×768 RGB
+public call plus result observation with five warmups, 20×5 samples, and
+concurrency 1. Backend receipts named CPU, SIMD, and GPU with no fallback.
+
+| Cohort | Pillow µs | Serial CPU µs | CPU/Pillow | SIMD µs | GPU µs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Clean control before | 498.375 | 279.854 | 1.780× | 261.312 | 3,623.083 |
+| Candidate 1 | 602.417 | 541.834 | 1.112× | 306.438 | 3,679.083 |
+| Candidate repeat | 615.979 | 603.980 | 1.020× | 304.563 | 3,776.625 |
+| Clean control after revert | 548.251 | 287.771 | 1.906× | 348.292 | 3,959.854 |
+
+The candidate CPU medians were 1.94× and 2.10× their nearest clean control
+medians (0.280 and 0.288 ms). The candidate's apparent Pillow ratios are
+confounded by host-wide shifts in Pillow timing; neither run demonstrated a
+repeatable CPU gain over the controls. The edit was reverted. The exact formula
+and exhaustive RGB-domain check do not establish that the expression is a
+faster scalar implementation; keep the original coefficient path unless a new
+end-to-end bracket proves otherwise.
+
+The SIMD path was untouched. Its candidate values fall between the two control
+values and do not establish a SIMD regression or neutrality. GPU ran one
+dispatch and transferred 2,359,296 bytes to the device and 786,432 bytes back;
+sustained throughput was not measured. Do not attribute either backend's
+movement to the scalar edit. Parallel CPU was not measured, and this result does
+not update the published cross-runner operation matrix. No operation completion
+credit is due, no genuine test defect was found, and no coverage was run.
+
+The 16 profile rows for all four cohorts are in
+`docs/evidence/performance-optimization-local-runs.csv`; the ledger now has
+6,672 data rows. Reports and parity receipts use the `grayscale-rgb-delta-control-before-20261013`,
+`grayscale-rgb-delta-candidate-1-20261013`,
+`grayscale-rgb-delta-candidate-2-20261013`, and
+`grayscale-rgb-delta-control-after-revert-20261013` stems under
+`build/migration-parity/`. Run IDs are `migration-benchmark-0d390a5f068945feb9c7b6d23d231e8d`,
+`migration-benchmark-62c4a02a44f1477e93a371b603c457b6`,
+`migration-benchmark-b5f5cca93c3c4df4a7b4644370b9a0bc`, and
+`migration-benchmark-1d0dea8d2a1b460b9e8e70f0f923d80c`.
