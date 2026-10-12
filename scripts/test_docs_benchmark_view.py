@@ -167,7 +167,8 @@ class BenchmarkViewTests(unittest.TestCase):
         rows = [
             row("pillow", 20, workload="pipeline-op.blur", machine_id=machine, correctness=checked,
                 requested_backend="pillow", actual_backend="pillow"),
-            row("pillow-simd", 10, workload="pipeline-op.blur", machine_id=machine, correctness=checked,
+            row("pillow-simd", 10, workload="pipeline-op.blur", machine_id=machine,
+                correctness="Pillow-SIMD compatibility: pass",
                 requested_backend="pillow-simd", actual_backend="pillow-simd"),
             row("python-simd", 5, workload="pipeline-op.blur", machine_id=machine, correctness=checked,
                 requested_backend="simd", actual_backend="simd"),
@@ -179,6 +180,32 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn(("python-simd", "pillow", 4), pairs)
         self.assertIn(("python-simd", "pillow-simd", 2), pairs)
         self.assertIn(("pillow-simd", "pillow", 2), pairs)
+
+    def test_pillow_simd_mismatch_withholds_only_that_baseline_ratio(self):
+        machine = "linux-pillow-simd"
+        rows = [
+            row("pillow", 20, workload="pipeline-op.filter", machine_id=machine,
+                correctness="parity_pass: pass", requested_backend="pillow", actual_backend="pillow"),
+            row("pillow-simd", 10, workload="pipeline-op.filter", machine_id=machine,
+                correctness="Pillow-SIMD compatibility: fail", requested_backend="pillow-simd",
+                actual_backend="pillow-simd"),
+            row("python-simd", 5, workload="pipeline-op.filter", machine_id=machine,
+                correctness="parity_pass: pass", requested_backend="simd", actual_backend="simd"),
+        ]
+        machines = {machine: {"id": machine, "label": "Ubuntu x86_64"}}
+        grouped = {(machine, "pipeline-op.filter"): rows}
+        comparisons = workload_comparisons(
+            grouped, machines, ["python-simd", "pillow-simd"], "pillow"
+        )
+        self.assertNotIn(
+            ("python-simd", "pillow-simd"),
+            {(item["subject"], item["baseline"]) for item in comparisons},
+        )
+        ordinary_pair = next(
+            item for item in comparisons
+            if item["subject"] == "python-simd" and item["baseline"] == "pillow"
+        )
+        self.assertEqual(ordinary_pair["ratio"], 4)
 
     def test_workload_plot_shows_native_mode_and_slower_workloads_first(self):
         machine = "ubuntu-x64"
@@ -313,10 +340,11 @@ class BenchmarkViewTests(unittest.TestCase):
         # keep both public benchmark tables current. These counts match the
         # checked-in generated input catalog.
         # The native L uniform 5x5 row and four native F/I Thumbnail sizes are
-        # additional operation rows in the checked-in generated catalog.
-        self.assertEqual(len(workloads), 662)
+        # additional operation rows. The GetData mode/size matrix and three
+        # GetProjection edge workloads expand the checked-in pipeline catalog.
+        self.assertEqual(len(workloads), 684)
         self.assertEqual(categories.count("operations"), 200)
-        self.assertEqual(categories.count("pipelines"), 462)
+        self.assertEqual(categories.count("pipelines"), 484)
 
     def test_all_observations_retained_without_mutating_snapshot(self):
         snapshot=dict(rows=[row('FreeType',20),row(),row('unknown',None)],environment={'os':'Test'},measured_at='2026-09-16')

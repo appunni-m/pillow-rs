@@ -207,7 +207,11 @@ class BenchmarkIdentityTests(unittest.TestCase):
 
     def test_source_adapter_does_not_prepend_target_pythonpath(self) -> None:
         payload = {
-            "identity": {"side": "source", "implementation": "Pillow"},
+            "identity": {
+                "side": "source",
+                "implementation": benchmark_runner.BENCHMARK_SOURCE_NAME,
+                "version": benchmark_runner.BENCHMARK_SOURCE_VERSION,
+            },
             "results": [],
             "timings_ns": [],
             "telemetry": {},
@@ -2388,6 +2392,247 @@ class ReceiptStateTests(unittest.TestCase):
                 expected_backend="simd",
             )
             self.assertEqual(evidence["status"], "measured")
+
+
+    def test_whole_workflow_timer_includes_lazy_observation_materialization(self) -> None:
+        """Timed workflows must include lazy output work without JSON encoding."""
+
+        class LazyImage:
+            mode = "L"
+            size = (16, 16)
+
+            def tobytes(self) -> bytes:
+                time.sleep(0.05)
+                return bytes(256)
+
+        case = {
+            "case_id": "lazy-observation-timing",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "call",
+                    "surface": "PIL.ImageOps",
+                    "operation": "grayscale",
+                    "arguments": {},
+                }
+            ],
+            "observations": ["call"],
+        }
+        timings: list[int] = []
+        phases: list[dict[str, int]] = []
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch(
+                    "scripts.run_migration_parity.operation_definition",
+                    return_value={"source": {"result": {"shape": "image"}}},
+                ),
+                patch(
+                    "scripts.run_migration_parity.call_workflow_step",
+                    return_value=LazyImage(),
+                ),
+            ):
+                result = run_case(
+                    "target",
+                    case,
+                    {},
+                    Path(directory),
+                    timing_steps={"call"},
+                    timing_sink=timings,
+                    telemetry_sink=phases,
+                    timing_boundary="whole_workflow",
+                    serialize_observations=False,
+                )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(len(timings), 1)
+        self.assertGreaterEqual(timings[0], 40_000_000)
+        self.assertGreaterEqual(phases[0]["terminal_ns"], 40_000_000)
+
+    def test_timed_observation_materialization_failure_is_not_a_success(self) -> None:
+        class FailingLazyImage:
+            mode = "L"
+            size = (16, 16)
+
+            def tobytes(self) -> bytes:
+                raise RuntimeError("materialization failed")
+
+        case = {
+            "case_id": "failed-lazy-observation-timing",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "call",
+                    "surface": "PIL.ImageOps",
+                    "operation": "grayscale",
+                    "arguments": {},
+                }
+            ],
+            "observations": ["call"],
+        }
+        timings: list[int] = []
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch(
+                    "scripts.run_migration_parity.operation_definition",
+                    return_value={"source": {"result": {"shape": "image"}}},
+                ),
+                patch(
+                    "scripts.run_migration_parity.call_workflow_step",
+                    return_value=FailingLazyImage(),
+                ),
+            ):
+                result = run_case(
+                    "target",
+                    case,
+                    {},
+                    Path(directory),
+                    timing_steps={"call"},
+                    timing_sink=timings,
+                    timing_boundary="whole_workflow",
+                    serialize_observations=False,
+                )
+
+        self.assertEqual(result["status"], "not_run")
+        self.assertEqual(len(result["execution_errors"]), 1)
+        self.assertEqual(result["execution_errors"][0]["step_id"], "call")
+        self.assertEqual(len(timings), 1)
+
+    def test_whole_workflow_does_not_reexport_intermediate_image(self) -> None:
+        class LazyImage:
+            mode = "L"
+            size = (16, 16)
+
+            def __init__(self) -> None:
+                self.materializations = 0
+
+            def tobytes(self) -> bytes:
+                self.materializations += 1
+                return bytes(256)
+
+        image = LazyImage()
+        case = {
+            "case_id": "terminal-step-consumes-lazy-image",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "call",
+                    "surface": "PIL.ImageOps",
+                    "operation": "grayscale",
+                    "arguments": {},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": {"kind": "binding", "step_id": "call"},
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+
+        def call_step(_side, step, _opdef, _bindings, _assets):
+            if step["operation"] == "grayscale":
+                return image
+            return image.tobytes()
+
+        timings: list[int] = []
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch(
+                    "scripts.run_migration_parity.operation_definition",
+                    side_effect=lambda *_args: {
+                        "source": {
+                            "result": {
+                                "shape": "image"
+                                if _args[-1] == "grayscale"
+                                else "bytes"
+                            }
+                        }
+                    },
+                ),
+                patch(
+                    "scripts.run_migration_parity.call_workflow_step",
+                    side_effect=call_step,
+                ),
+            ):
+                result = run_case(
+                    "target",
+                    case,
+                    {},
+                    Path(directory),
+                    timing_steps={"call", "materialize"},
+                    timing_sink=timings,
+                    timing_boundary="whole_workflow",
+                    serialize_observations=False,
+                )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(len(timings), 1)
+        self.assertEqual(image.materializations, 1)
+
+    def test_observed_steps_timer_stops_before_unselected_following_work(self) -> None:
+        class LazyImage:
+            mode = "L"
+            size = (16, 16)
+
+            def tobytes(self) -> bytes:
+                time.sleep(0.05)
+                return bytes(256)
+
+        case = {
+            "case_id": "observed-steps-stop-at-observation",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "call",
+                    "surface": "PIL.ImageOps",
+                    "operation": "grayscale",
+                    "arguments": {},
+                },
+                {
+                    "step_id": "unselected-wait",
+                    "surface": "PIL.ImageOps",
+                    "operation": "wait",
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call"],
+        }
+
+        def call_step(_side, step, _opdef, _bindings, _assets):
+            if step["operation"] == "grayscale":
+                return LazyImage()
+            time.sleep(0.05)
+            return None
+
+        timings: list[int] = []
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch(
+                    "scripts.run_migration_parity.operation_definition",
+                    return_value={"source": {"result": {"shape": "image"}}},
+                ),
+                patch(
+                    "scripts.run_migration_parity.call_workflow_step",
+                    side_effect=call_step,
+                ),
+            ):
+                result = run_case(
+                    "target",
+                    case,
+                    {},
+                    Path(directory),
+                    timing_steps={"call"},
+                    timing_sink=timings,
+                    timing_boundary="observed_steps",
+                    serialize_observations=False,
+                )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(len(timings), 1)
+        self.assertGreaterEqual(timings[0], 40_000_000)
+        self.assertLess(timings[0], 90_000_000)
 
 
 class AdapterProfileTests(unittest.TestCase):

@@ -1663,15 +1663,39 @@ impl PyImage {
 
     /// Return getdata formatted as PIL expects.
     fn getdata_formatted(&mut self, band: Option<i32>, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        if band.is_none() {
-            let mode = self.inner.mode().map_err(map_error)?;
-            if !matches!(
-                mode.as_str(),
-                "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N"
-            ) {
-                let values = py.detach(|| self.inner.getdata(None)).map_err(map_error)?;
-                return Ok(PyBytes::new(py, &values).into());
+        if let Some(band) = band {
+            if let Some(values) = self.inner.getdata_band_view(band).map_err(map_error)? {
+                // Copy owned P/L storage directly into the immutable Python
+                // snapshot, avoiding a Rust-side buffer and extra detach.
+                return Ok(PyBytes::new(py, values).into());
             }
+
+            if matches!(&self.inner, RsImage::Loaded(_) | RsImage::Paletted(_)) {
+                let output_len = self.inner.getdata_band_len(band).map_err(map_error)?;
+                let bytes = PyBytes::new_with(py, output_len, |output| {
+                    py.detach(|| self.inner.getdata_band_into(band, output))
+                        .map_err(map_error)
+                })?;
+                return Ok(bytes.into());
+            }
+
+            let output_len = py
+                .detach(|| self.inner.getdata_band_len(band))
+                .map_err(map_error)?;
+            let bytes = PyBytes::new_with(py, output_len, |output| {
+                py.detach(|| self.inner.getdata_band_into(band, output))
+                    .map_err(map_error)
+            })?;
+            return Ok(bytes.into());
+        }
+
+        let mode = self.inner.mode().map_err(map_error)?;
+        if !matches!(
+            mode.as_str(),
+            "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+        ) {
+            let values = py.detach(|| self.inner.getdata(None)).map_err(map_error)?;
+            return Ok(PyBytes::new(py, &values).into());
         }
 
         let formatted = py
@@ -4238,9 +4262,10 @@ fn ops_solarize(image: &Bound<'_, PyImage>, threshold: &Bound<'_, PyAny>) -> PyR
 }
 
 #[pyfunction]
-fn ops_grayscale(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+fn ops_grayscale(image: &Bound<'_, PyImage>, py: Python<'_>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::attach(|py| py.detach(|| pillow_rs::imageops_grayscale(&inner)))
+    let rs = py
+        .detach(|| pillow_rs::imageops_grayscale(&inner))
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }

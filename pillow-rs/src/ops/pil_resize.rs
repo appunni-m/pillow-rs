@@ -53,20 +53,35 @@ pub(crate) fn f32_samples_from_le_bytes(bytes: &[u8], sample_count: usize) -> Co
     )
 }
 
+/// Borrow little-endian I-mode sample bytes as native `i32` values when their
+/// length and alignment permit a checked cast.
+#[must_use]
+pub(crate) fn i32_samples_borrowed_from_le_bytes(
+    bytes: &[u8],
+    sample_count: usize,
+) -> Option<&[i32]> {
+    #[cfg(target_endian = "little")]
+    {
+        let sample_bytes = bytes.get(..sample_count.saturating_mul(4)).unwrap_or(bytes);
+        if let Ok(samples) = bytemuck::try_cast_slice::<u8, i32>(sample_bytes)
+            && samples.len() == sample_count
+        {
+            return Some(samples);
+        }
+    }
+    None
+}
+
 /// View little-endian I-mode sample bytes as native `i32` values when the
 /// storage is aligned; otherwise decode them without changing sample bits.
 /// Select at most `sample_count` words and ignore incomplete trailing bytes,
 /// matching the existing four-byte scalar-carrier readers.
 #[must_use]
 pub(crate) fn i32_samples_from_le_bytes(bytes: &[u8], sample_count: usize) -> Cow<'_, [i32]> {
-    let sample_bytes = bytes.get(..sample_count.saturating_mul(4)).unwrap_or(bytes);
-    #[cfg(target_endian = "little")]
-    if let Ok(samples) = bytemuck::try_cast_slice::<u8, i32>(sample_bytes)
-        && samples.len() == sample_count
-    {
+    if let Some(samples) = i32_samples_borrowed_from_le_bytes(bytes, sample_count) {
         return Cow::Borrowed(samples);
     }
-
+    let sample_bytes = bytes.get(..sample_count.saturating_mul(4)).unwrap_or(bytes);
     Cow::Owned(
         sample_bytes
             .chunks_exact(4)
@@ -137,7 +152,7 @@ mod f32_sample_view_tests {
 
 #[cfg(test)]
 mod i32_sample_view_tests {
-    use super::i32_samples_from_le_bytes;
+    use super::{i32_samples_borrowed_from_le_bytes, i32_samples_from_le_bytes};
     use std::borrow::Cow;
 
     #[test]
@@ -153,8 +168,16 @@ mod i32_sample_view_tests {
             && (bytes.as_ptr() as usize).is_multiple_of(std::mem::align_of::<i32>())
         {
             assert!(matches!(samples, Cow::Borrowed(_)));
+            assert_eq!(
+                i32_samples_borrowed_from_le_bytes(&bytes, expected.len()),
+                Some(&expected[..])
+            );
         } else {
             assert!(matches!(samples, Cow::Owned(_)));
+            assert_eq!(
+                i32_samples_borrowed_from_le_bytes(&bytes, expected.len()),
+                None
+            );
         }
         assert_eq!(samples.as_ref(), expected);
     }
@@ -176,6 +199,10 @@ mod i32_sample_view_tests {
 
         let samples = i32_samples_from_le_bytes(&storage[offset..], expected.len());
         assert!(matches!(samples, Cow::Owned(_)));
+        assert_eq!(
+            i32_samples_borrowed_from_le_bytes(&storage[offset..], expected.len()),
+            None
+        );
         assert_eq!(samples.as_ref(), expected);
     }
 }

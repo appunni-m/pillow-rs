@@ -133,6 +133,8 @@ def facets(row: dict, kind: str) -> tuple[str, str, str, str, str]:
 
 def evidence(row: dict) -> tuple[str, str]:
     correctness = row["correctness"]
+    if correctness == "Pillow-SIMD compatibility: pass":
+        return "checked", "Pillow-SIMD output matched regular Pillow"
     if correctness in {"timing_only", "successful_execution: pass"}:
         return "timing", "Timing only · equal output not established"
     if correctness == "output hash match: True; byte length match: True":

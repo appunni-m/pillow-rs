@@ -14,6 +14,10 @@ The report command joins this complete index with benchmark evidence and
 rejects missing, duplicate, or unexpected IDs. Changes to a status require
 reviewed implementation and measurement evidence.
 
+The cross-backend execution-planner proposal and its 84-operation source
+inventory are in the [Kata pipeline execution plan](KATA_PIPELINE_EXECUTION_PLAN.md).
+That plan groups existing FIL items; it does not change their status.
+
 | ID | Work item | Priority | Status |
 | --- | --- | --- | --- |
 | FIL-01 | Expand the benchmark matrix | P0 | closed |

@@ -4725,6 +4725,14 @@ mod tests {
         source_words[1] = (-0.0f32).to_bits();
         source_words[width as usize] = (-0.0f32).to_bits();
         source_words[width as usize + 1] = (-0.0f32).to_bits();
+        source_words[6] = 0x8000_0001; // Negative minimum subnormal scales to -0.
+        source_words[7] = 0;
+        source_words[width as usize + 6] = 0;
+        source_words[width as usize + 7] = 0;
+        source_words[8] = 1; // Three minimum subnormals scale to one minimum subnormal.
+        source_words[9] = 1;
+        source_words[width as usize + 8] = 1;
+        source_words[width as usize + 9] = 0;
         source_words[4] = f32::from_bits(0x7fc1_2345).to_bits();
         source_words[width as usize * 2 + 7] = f32::INFINITY.to_bits();
         source_words[width as usize * 4 + 13] = f32::NEG_INFINITY.to_bits();

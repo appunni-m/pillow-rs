@@ -15,7 +15,6 @@ import argparse
 import datetime as dt
 import io
 import json
-import os
 from pathlib import Path
 import platform
 import pstats
@@ -26,6 +25,7 @@ import time
 from typing import Any
 
 try:
+    import migration_benchmark_adapter as adapter
     import run_migration_benchmark as benchmark
     from run_migration_parity import (
         git_dirty,
@@ -34,6 +34,7 @@ try:
         reap_timed_out_process,
     )
 except ModuleNotFoundError:  # imported as scripts.profile_migration_benchmark
+    from scripts import migration_benchmark_adapter as adapter
     from scripts import run_migration_benchmark as benchmark
     from scripts.run_migration_parity import (
         git_dirty,
@@ -60,6 +61,23 @@ def rss_delta_bytes(before: resource.struct_rusage, after: resource.struct_rusag
 
 def safe_slug(value: str) -> str:
     return "".join(character if character.isalnum() or character in "-_." else "_" for character in value)
+
+
+def profile_environment(
+    backend: str,
+    inherited_environment: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Match the managed benchmark's backend-proof and adapter policy."""
+
+    if backend not in {"pillow", "cpu", "simd", "gpu"}:
+        raise ValueError("backend must be pillow, cpu, simd, or gpu")
+    side = "source" if backend == "pillow" else "target"
+    runtime_backend = "cpu" if backend == "pillow" else backend
+    return adapter.benchmark_adapter_environment(
+        side,
+        runtime_backend,
+        inherited_environment,
+    )
 
 
 def write_text(path: Path, value: str) -> str:
@@ -144,7 +162,7 @@ def profile(args: argparse.Namespace) -> int:
     heap_path = output_dir / f"{slug}.heap.txt"
     result_path = output_dir / f"{slug}.profile.json"
 
-    command = [sys.executable]
+    command = [adapter.benchmark_adapter_python(side)]
     if args.python_profile:
         python_profile_path.unlink(missing_ok=True)
         command.extend(["-m", "cProfile", "-o", str(python_profile_path)])
@@ -164,14 +182,7 @@ def profile(args: argparse.Namespace) -> int:
         "--timeout",
         str(args.timeout),
     ])
-    environment = {
-        **os.environ,
-        "MIGRATION_TARGET_BACKEND": "cpu" if args.backend == "pillow" else args.backend,
-        "MIGRATION_STRICT_TARGET_BACKEND": "1",
-        "PYTHONPATH": str(ROOT / "pillow-rs-py" / "python")
-        + os.pathsep
-        + os.environ.get("PYTHONPATH", ""),
-    }
+    environment = profile_environment(args.backend)
     started_at = now()
     before_rusage = resource.getrusage(resource.RUSAGE_CHILDREN)
     started = time.monotonic()
@@ -327,6 +338,17 @@ def profile(args: argparse.Namespace) -> int:
             "envelope": str(envelope_path.relative_to(ROOT)) if envelope is not None else None,
             "parse_error": parse_error,
             "stderr": stderr[-2000:] if stderr else None,
+            "benchmark_policy": {
+                "target_backend": environment["MIGRATION_TARGET_BACKEND"],
+                "strict_target_backend": environment[
+                    "MIGRATION_STRICT_TARGET_BACKEND"
+                ]
+                == "1",
+                "benchmark_adapter": environment[
+                    "MIGRATION_PARITY_BENCHMARK_ADAPTER"
+                ]
+                == "1",
+            },
             "timings_ns": envelope.get("timings_ns") if envelope else None,
             "telemetry": envelope.get("telemetry") if envelope else None,
             "execution": envelope.get("execution") if envelope else None,

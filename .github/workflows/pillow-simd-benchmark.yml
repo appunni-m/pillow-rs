@@ -100,6 +100,9 @@ jobs:
           path: |
             build/migration-parity/benchmark-result-pillow.json
             build/migration-parity/benchmark-result-pillow-simd.json
+            build/migration-parity/benchmark-source-compatibility-pillow-simd.json
+            build/migration-parity/benchmark-source-compatibility-python-cpu.json.gz
+            build/migration-parity/benchmark-source-compatibility-python-simd.json.gz
             build/migration-parity/pillow-simd-public-snapshot.json
           if-no-files-found: ignore
           retention-days: 3

@@ -60,6 +60,20 @@ or bindings made no allocations. A result is usable only when its manifest/input
 hashes, runtime identity, requested/actual backend, and terminal receipts are
 compatible with the comparison.
 
+`whole_workflow` timing includes the terminal result observation needed to
+realize the measured workflow. For a lazy final image result, the timing adapter
+must call its public materialization boundary (for example, `tobytes()`) before
+stopping the clock so kernel work, allocation, transfers, and synchronization
+are included on both sides. Do not export an intermediate image separately if
+a later measured terminal step already consumes that pipeline. Keep JSON/base64
+result serialization outside the timed interval, and do not consume a
+single-pass result a second time when its measured operation already drained
+it. Exact parity from a separate untimed serialization pass does not repair an
+incomplete timing boundary; mark affected historical rows invalid and rerun
+them after fixing the adapter. The 2026-10-12 grayscale audit found this defect
+in `pil-imageops.grayscale.standard`; those earlier timing ratios are withheld
+in the local evidence ledger.
+
 Backend timing adapters activate one requested backend before measurement.
 Keep target-only backend locking, telemetry, receipt retrieval, and JSON output
 outside timed samples. An untimed proof run must execute the same case with the
@@ -159,9 +173,12 @@ summary and plot. Workload, mode, runner, and comparison filters update the
 summary, plot, and both tables. Ratios are paired inside one runner cohort;
 absolute timing across macOS and Linux is not compared.
 
-The x86 Pillow-SIMD run is an independently parity-gated cohort covering all
-29 current full-size `pipeline-op` workloads, the established RGB GaussianBlur
-case, and getchannel in four modes (34 individual-operation cases total).
+The x86 Pillow-SIMD run covers all 29 current full-size `pipeline-op`
+workloads, the established RGB GaussianBlur case, and getchannel in four modes
+(34 individual-operation cases total). pillow-rs CPU/SIMD parity stays pinned
+to regular Pillow. The timed Pillow-SIMD source is compared directly with
+regular Pillow on the same cases; incompatible source rows remain visible and
+cannot produce verified Pillow-SIMD speed ratios.
 The main results plot includes it only when the Pillow-SIMD and full benchmark
 artifacts identify the same source revision and the same Ubuntu runner class,
 OS, architecture, CPU model, Rust toolchain, and image version. Its own run
@@ -282,8 +299,9 @@ make migration-parity-benchmark
 The runner applies the workload filter inside the pipeline selection and tests
 that behavior before each benchmark run.
 
-To retain every declared public operation against the CPU ≤ Pillow, SIMD ≥ 5×
-Pillow, and GPU ≤ SIMD latency goals, generate the diagnostic matrix:
+To retain every declared public operation against the CPU ≤ Pillow, single-
+thread SIMD ≤ half of Pillow latency, and GPU ≤ SIMD latency goals, generate the
+diagnostic matrix:
 
 ```sh
 .venv/bin/python scripts/report_optimization_goals.py \
@@ -293,7 +311,9 @@ Pillow, and GPU ≤ SIMD latency goals, generate the diagnostic matrix:
 
 This writes `build/migration-parity/optimization-goals.json` and `.md`. Missing
 workloads, missing backend-specific parity, fallback, and dirty provenance stay
-visible. Successful execution alone does not establish matching output. The
+visible. The matrix also reports a separate 5× SIMD diagnostic; do not treat it
+as the active 2× goal or relax any existing test threshold. Successful
+execution alone does not establish matching output. The
 benchmark runner's reciprocal-latency throughput values do not establish
 sustained concurrent throughput; that goal requires separate completed-work
 windows with changing inputs. The matrix retains all manifest rows, while
@@ -323,6 +343,22 @@ Use `--operation getchannel` to measure band 0 from fresh L images and the
 green band from fresh RGB images. The output is an L image, and every request
 is compared byte-for-byte with live Pillow. This reports independent host
 requests sharing the backend queue; it is not a multi-image GPU batch.
+
+To compare completed GetChannel batches on Pillow, serial CPU, SIMD, eager GPU,
+and queued GPU, use the explicit GPU batch diagnostic. Its timed window includes
+fresh image and graph construction, submission, device work, readback,
+materialization, and byte export; exact output digests are checked after each
+window. The batch counters report actual GPU jobs, dispatches, transfer bytes,
+and largest submission size.
+
+```sh
+.venv/bin/python scripts/benchmark_gpu_batch.py \
+  --operation getchannel --modes L RGB --sizes 256 1024 \
+  --images 32 --samples 5 --json
+```
+
+This measures batched throughput. It does not replace single-request latency
+rows or assert simultaneous GPU kernels.
 
 ```sh
 .venv/bin/python scripts/run_transpose_throughput.py \
@@ -472,32 +508,33 @@ python3 scripts/build_performance_optimization_matrix.py \
   --public-api-inventory docs/evidence/performance-optimization-public-api.csv
 ```
 
-The latest published workload matrix records 8,655 rows total: 8,619 full-
-benchmark rows across 663 workloads and 36 Pillow-SIMD rows across 9 workloads.
+The latest published workload matrix records 8,707 rows total: 8,671 full-
+benchmark rows across 667 workloads and 36 Pillow-SIMD rows across 9 workloads.
 The full snapshot is clean at revision
-`ff0009b71755d6f1cebae63c96b96d39aa183797`, measured
-`2026-10-09T07:20:52.003305Z`, with JSON SHA-256
-`f34d8cff7d36fb1a605da4d382b2cb5818becb200057410cfc749d97df516c00`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
-It contains 201 `pipeline-op` workload IDs. The operation matrix has 1,320 rows
-for 330 public paths and four profiles; 209 paths map to the benchmark manifest
-and 121 remain explicit inventory gaps. Only rows with exact parity and
-completed backend receipts are eligible for speed claims.
+`88d414bdbe6bd31b531271324094e041a9fece8a`, measured
+`2026-10-10T13:39:05.910204Z`, with JSON SHA-256
+`72574ed44afee99c59a5fe2a6479003d90e11e6f60f4f318ea5dbc231cdb2955`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
+The operation matrix has 1,320 rows for 330 public paths and four profiles;
+209 paths map to the benchmark manifest and 121 remain explicit inventory
+gaps. Only rows with exact parity and completed backend receipts are eligible
+for speed claims.
 
-Across the 120 verified serial CPU workload-runner pairs, none is slower than
-Pillow and 53 are below 2×. The corresponding SIMD counts are 22 slower than
-Pillow, 37 below 2×, and 81 below 5×. The separately built Parallel CPU profile
-uses the opt-in Cargo `parallel` feature; 15 of its 120 verified pairs are
-slower than Pillow, 39 are below 2×, and 83 are below 5×. GPU latency is slower
-than SIMD in 22 of its 38 verified pairs; sustained GPU throughput remains
-unmeasured. The operation matrix's GPU latency baseline is SIMD; its GPU
+Across the 135 verified serial CPU workload-runner pairs, one is slower than
+Pillow and 38 are below 2×. The corresponding SIMD counts are 2 slower than
+Pillow, 31 below 2×, and 96 below 5×. The separately built Parallel CPU profile
+uses the opt-in Cargo `parallel` feature; 15 of its 135 verified pairs are
+slower than Pillow and 46 are below 2×. GPU latency is slower than SIMD in 23
+of its 38 verified pairs; sustained GPU throughput remains unmeasured. The
+operation matrix's GPU latency baseline is SIMD; its GPU
 `below_baseline_comparisons` field and per-operation ratios must not be read as
 Pillow comparisons.
 
-The clean ff0009 hosted snapshot confirms the pre-sized native-F thumbnail
-reducer and leaves no verified serial CPU pair below Pillow. The weakest CPU
-result is the 1024×768 YCbCr grayscale pipeline on Ubuntu x86_64 at 1.000848×
-Pillow. The Pillow-SIMD snapshot remains dirty and partial (9 of 34 declared
-cases), so its ratios are excluded from the optimization ranking.
+The clean 88d414b hosted snapshot reveals one serial-CPU regression:
+`PIL.Image.Image.getdata` is 0.725603× Pillow for the RGB-band terminal-read
+workload on macOS arm64. Fix this before the seven other CPU operations below
+2×: Thumbnail, MedianFilter, Filter, Grayscale, Resize, Posterize, and BoxBlur.
+The Pillow-SIMD snapshot remains dirty and partial (9 of 34 declared cases), so
+its ratios are excluded from the optimization ranking.
 
 ### Rejected CPU alpha-composite-plus-mirror fusion trial
 
@@ -3335,3 +3372,122 @@ covers the boundary. The original one-dispatch assertion remains unchanged;
 after the fix, the normal parallel 49-test luma filter passes. This was a test
 isolation defect, not an affine-transform parity defect. No code-coverage tool
 or coverage suite was run.
+
+### I-mode GPU Resize exactness preflight — 2026-10-12
+
+The live public Docs snapshot was refreshed from `assets/benchmark.json`
+(revision `88d414bdbe6bd31b531271324094e041a9fece8a`, clean, measured
+2026-10-12 11:06 UTC, 8,671 rows across 667 workloads). The public API inventory
+contains 330 entries; 121 remain outside the selected benchmark manifest and
+therefore have no benchmark mapping. The Pillow-SIMD asset is still dirty and
+partial (9 of 34 declared workloads), with no valid Resize comparisons.
+
+The selected 1024×768 I-mode Bicubic resize to 512×384 measures the complete
+public call and materialization, with five warmups, 20 iterations across five
+samples, and concurrency one. Exact Pillow parity passed for all three target
+profiles in each cohort. The candidate changed only the GPU I-mode host proof;
+the shader and CPU/SIMD resize kernels stayed unchanged.
+
+| Trial | Pillow ms | CPU ms | SIMD ms | GPU ms | GPU/SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 2.083 | 1.071 | 2.067 | 32.516 | 0.064× |
+| Decoded coefficient-parts cache | 2.113 | 1.129 | 2.075 | 32.593 | 0.064× |
+| Pre-aligned coefficient rows A/B | 2.115 / 2.066 | 1.093 / 1.098 | 2.118 / 2.061 | 12.582 / 12.407 | 0.168 / 0.166× |
+| Borrowed signed-sample view A/B | 2.327 / 2.019 | 1.091 / 1.065 | 2.137 / 2.096 | 11.709 / 11.794 | 0.183 / 0.178× |
+
+The coefficient-parts cache was rejected for no gain. Aligning each coefficient
+row once reduced GPU latency by about 2.6× against the baseline. Borrowing the
+aligned little-endian input as `i32` and retaining signed `i32` intermediates
+gave a further 5% median reduction across two runs by removing the unconditional
+decoded `u32` source copy. The unused-terminal-buffer variant measured 11.906
+ms versus 11.794 ms for the sample-view candidate and was reverted. It added no
+repeatable end-to-end gain.
+
+The accepted partial path completed on actual GPU with two dispatches, no
+fallback, 3,145,728 uploaded bytes, and 786,432 read-back bytes. GPU remains
+about 5.5–5.6× slower than SIMD on this workload, so Resize stays open. One
+sample-view run had a 22.589 ms GPU p95 against an 11.794 ms median; GPU tail
+latency varies, and sustained throughput was not measured. The SIMD medians
+(2.137 and 2.096 ms) were close to the prior 2.061 ms control, but these cohorts
+do not establish a small SIMD change either way; keep a matched same-source
+control before claiming neutrality. The adjacent F-mode workload passed parity
+and remains a regression guard, not evidence for the I-mode optimization.
+
+The focused reducer and I-proof tests passed, both rebuilt benchmark cohorts
+passed their strict Pillow gates, and benchmark-result schema validation
+passed. No genuine test defect was found and no coverage was run. The local
+evidence ledger now has 6,540 rows. Resize remains open across its modes,
+geometries, SIMD acceleration target, GPU latency, and sustained-throughput
+target. The local dirty-worktree results remain separate from the refreshed
+published matrix.
+
+#### Rejected source-span address-hoist candidate — 2026-10-12
+
+A follow-up trial moved checked source-pixel address updates out of each tap
+iteration in the I-mode host proof. It preserved the same ordered scalar FMA
+and exact integer reduction, passed the three-profile Pillow parity preflight,
+and executed on the real GPU with two dispatches, no fallback, 3,145,728
+uploaded bytes, and 786,432 read-back bytes. The full public call and
+materialization medians were 11.662 and 11.872 ms across two candidate runs.
+The borrowed-sample control runs measured 11.709 and 11.794 ms, and a
+post-revert control measured 11.969 ms. These overlapping results do not
+establish an end-to-end gain, so the address-hoist candidate was removed.
+
+CPU and SIMD ran in the same cohorts: candidate medians were 1.064/1.099 ms
+and 2.097/2.072 ms; Pillow was 2.024/2.074 ms. The SIMD path was not changed,
+and this small, variable cohort is not evidence of a SIMD regression or gain.
+GPU remained about 5.6–5.7× slower than SIMD. The local ledger now has 6,552
+rows, including both candidate runs and the post-revert control. The
+`wide::f64x8::mul_add` implementation was also inspected before considering
+proof vectorization: its AVX-512F-without-FMA path uses separate multiply and
+add roundings, unlike the scalar fused `f64::mul_add`. Therefore it cannot
+replace the ordered proof operation without architecture-specific guards and
+bit-level equivalence evidence. No genuine test defect was found, and no
+coverage was run.
+
+### Grayscale SIMD adapter structure trial — 2026-10-12
+
+The Grayscale SIMD implementation now has a small family adapter that owns
+layout/shape admission, mode selection, evidence recording, and final `L` image
+materialization. RGB/LA/RGBA, CMYK, and YCbCr loops live in separate kernel
+files. The packed lane-gather helper used by alpha and CMYK paths lives in the
+shared `native_channel` module. The operation router stays a facade; no generic
+pixel loop or runtime kernel dispatch was introduced. The YCbCr arithmetic and
+its specialized loop were not changed by this extraction.
+
+The 1024×768 YCbCr pipeline workload used a full public call and result
+observation, warm cache, five warmups, 20 iterations across five samples, and
+concurrency one. Strict Pillow parity passed 3/3 for CPU, SIMD, and GPU in all
+three post-change cohorts. All requested backends executed without fallback.
+The current-source control and its parity gate are
+`migration-benchmark-b716965e58864577874727f474bd7bf5` /
+`migration-parity-benchmark-gate-7938840ddc534eb183ba5a214e28b01c`; the
+family-split run and gate are
+`migration-benchmark-912565a48c8c447dac240c3c59d551fb` /
+`migration-parity-benchmark-gate-17dc42f6ad8d4fc89c8e894969c9fc01`; the final
+layout run and gate are
+`migration-benchmark-fcef7f226e7d4c5f84640785e52785d9` /
+`migration-parity-benchmark-gate-4ba85935249247138c2605776fc07892`; the
+final-source repeat and gate are
+`migration-benchmark-fa357f64100446db9cc50acfbd7886c0` /
+`migration-parity-benchmark-gate-5cc8a7337f034c119bbd002a944cd8ef`.
+
+| Cohort | Pillow µs | CPU µs | SIMD µs | GPU µs | SIMD / Pillow | GPU / SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Current-source control | 116.146 | 47.063 | 47.479 | 372.917 | 2.45× | 0.127× |
+| Family adapter split | 87.542 | 47.563 | 47.750 | 364.604 | 1.83× | 0.131× |
+| Final shared-helper placement | 104.625 | 45.542 | 44.875 | 346.313 | 2.33× | 0.130× |
+| Final layout repeat | 106.417 | 44.583 | 44.875 | 330.105 | 2.37× | 0.136× |
+
+The changing Pillow medians show these are variable cohorts. No SIMD
+regression was observed: the two final-source SIMD medians were both 44.875 µs
+against 47.479 µs in the control. The cohorts do not establish a speedup because
+Pillow timing moved. GPU receipts show one dispatch, 2,359,296 uploaded bytes,
+and 786,432 bytes read back; the final GPU runs are about 7.4–7.7× slower than
+SIMD. CPU and SIMD each materialized a 786,432-byte output allocation.
+Sustained GPU throughput was not measured.
+These dirty-worktree ARM64 measurements do not replace the clean published
+matrix or its different host rows. The focused Grayscale Rust suite passed
+16/16, and the benchmark-selection checks passed 17/17 for each benchmark run.
+No genuine test defect was found, no coverage was run, and this structure trial
+earns no completed operation credit (commit/push batch remains 0/33).

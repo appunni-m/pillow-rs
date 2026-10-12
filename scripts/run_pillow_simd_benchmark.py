@@ -9,6 +9,7 @@ timing as a separate Pillow-SIMD subject.
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
@@ -26,10 +27,26 @@ if _script_dir not in sys.path:
 
 try:
     from docs_evidence import project_pillow, validate
-    from run_migration_benchmark import DEFAULT_MANIFEST, load_benchmarks, load_manifest
+    from run_migration_benchmark import (
+        DEFAULT_MANIFEST,
+        load_benchmarks,
+        load_manifest,
+        load_parity_cases,
+        profile_applies_to_case,
+        target_profile_for_backend,
+    )
+    from run_migration_parity import build_operation_index, compare_case
 except ModuleNotFoundError:  # imported as ``scripts.run_pillow_simd_benchmark`` in tests
     from scripts.docs_evidence import project_pillow, validate
-    from scripts.run_migration_benchmark import DEFAULT_MANIFEST, load_benchmarks, load_manifest
+    from scripts.run_migration_benchmark import (
+        DEFAULT_MANIFEST,
+        load_benchmarks,
+        load_manifest,
+        load_parity_cases,
+        profile_applies_to_case,
+        target_profile_for_backend,
+    )
+    from scripts.run_migration_parity import build_operation_index, compare_case
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -101,18 +118,23 @@ def run_source_cohort(
     source_python: str,
     source_name: str,
     source_version: str,
+    oracle_python: str,
     output: Path,
     parity_output: Path,
     workload_ids: list[str],
+    reuse_parity: Path | None = None,
 ) -> tuple[dict[str, Any], str]:
     env = os.environ.copy()
     env.update(
         {
             "MIGRATION_BENCHMARK_COHORT": "pillow-simd",
             "MIGRATION_BENCHMARK_BACKENDS": "cpu,simd",
-            "MIGRATION_ORACLE_PYTHON": source_python,
-            "MIGRATION_ORACLE_NAME": source_name,
-            "MIGRATION_ORACLE_VERSION": source_version,
+            "MIGRATION_ORACLE_PYTHON": oracle_python,
+            "MIGRATION_ORACLE_NAME": "Pillow",
+            "MIGRATION_ORACLE_VERSION": PILLOW_VERSION,
+            "MIGRATION_BENCHMARK_SOURCE_PYTHON": source_python,
+            "MIGRATION_BENCHMARK_SOURCE_NAME": source_name,
+            "MIGRATION_BENCHMARK_SOURCE_VERSION": source_version,
         }
     )
     command = [
@@ -127,6 +149,8 @@ def run_source_cohort(
     ]
     for workload_id in workload_ids:
         command.extend(("--workload-id", workload_id))
+    if reuse_parity is not None:
+        command.extend(("--reuse-parity", str(reuse_parity)))
     completed = subprocess.run(
         command,
         cwd=ROOT,
@@ -140,7 +164,15 @@ def run_source_cohort(
         raise RuntimeError(f"{source_name} benchmark run failed: {detail}")
     result = json.loads(output.read_text(encoding="utf-8"))
     parity = json.loads(parity_output.read_text(encoding="utf-8"))
-    validate_run(result, parity, source_name, source_version, workload_ids)
+    validate_run(
+        result,
+        parity,
+        source_name,
+        source_version,
+        workload_ids,
+        oracle_name="Pillow",
+        oracle_version=PILLOW_VERSION,
+    )
     return result, str(parity["identity"]["run_id"])
 
 
@@ -150,6 +182,9 @@ def validate_run(
     source_name: str,
     source_version: str,
     workload_ids: list[str],
+    *,
+    oracle_name: str = "Pillow",
+    oracle_version: str = PILLOW_VERSION,
 ) -> None:
     identity = result.get("identity", {})
     oracles = identity.get("oracles", [])
@@ -157,8 +192,11 @@ def validate_run(
         raise ValueError(f"{source_name} result has an unknown benchmark schema")
     if result.get("status") != "completed" or not oracles or (
         oracles[0].get("name"), oracles[0].get("version")
-    ) != (source_name, source_version):
-        raise ValueError(f"{source_name} result identity/status is invalid")
+    ) != (oracle_name, oracle_version):
+        raise ValueError(
+            f"{source_name} result identity/status is invalid: expected parity oracle "
+            f"{oracle_name} {oracle_version}"
+        )
     if [item.get("workload_id") for item in result.get("workloads", [])] != workload_ids:
         raise ValueError(f"{source_name} result changed the selected workload set")
     if parity.get("status") != "completed":
@@ -179,18 +217,236 @@ def validate_run(
         )
     if parity.get("infrastructure_errors"):
         raise ValueError(f"{source_name} parity preflight has infrastructure errors")
+    timed_source_id = "pillow-simd" if source_name == "Pillow-SIMD" else "pillow"
     for workload in result["workloads"]:
         if workload["correctness"].get("outcome") != "pass":
             raise ValueError(
                 f"{source_name} parity gate failed for {workload['workload_id']}"
             )
         subjects = {item["id"]: item for item in workload["subjects"]}
-        if set(subjects) != {"pillow", "python-cpu", "python-simd"}:
+        if set(subjects) != {timed_source_id, "python-cpu", "python-simd"}:
             raise ValueError(f"{source_name} result has an unexpected subject set")
         if any(subjects[name]["status"] != "completed" for name in subjects):
             raise ValueError(
                 f"{source_name} has an incomplete subject for {workload['workload_id']}"
             )
+
+
+def read_parity_artifact(path: Path) -> dict[str, Any]:
+    if path.name.endswith(".gz"):
+        with gzip.open(path, "rt", encoding="utf-8") as stream:
+            return json.load(stream)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def compare_source_compatibility(
+    case: dict[str, Any],
+    pillow_source: dict[str, Any],
+    pillow_simd_source: dict[str, Any],
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+) -> tuple[str, list[dict[str, Any]]]:
+    """Apply the declared observation comparator to the two source outputs."""
+
+    return compare_case(case, pillow_source, pillow_simd_source, operation_index)
+
+
+def run_source_compatibility(
+    *,
+    pillow_python: str,
+    pillow_simd_python: str,
+    pillow_parity_path: Path,
+    workload_ids: list[str],
+    output: Path,
+) -> tuple[dict[str, dict[str, Any]], list[Path]]:
+    """Compare Pillow-SIMD's outputs directly with Pillow before using its times."""
+
+    manifest_data = load_manifest(DEFAULT_MANIFEST)
+    cases_by_id, _ = load_parity_cases(manifest_data)
+    workloads = workload_contracts()
+    selected_case_ids = list(
+        dict.fromkeys(workloads[item]["input"]["case_id"] for item in workload_ids)
+    )
+    cases = {case_id: cases_by_id[case_id] for case_id in selected_case_ids}
+    operation_index = build_operation_index(manifest_data)
+    pillow_parity = read_parity_artifact(pillow_parity_path)
+    pillow_comparisons = {
+        (item["case_id"], item["target_profile"]): item
+        for item in pillow_parity.get("comparisons", [])
+    }
+
+    compatibility_by_case: dict[str, dict[str, Any]] = {}
+    run_ids: list[dict[str, str]] = []
+    artifacts: list[Path] = []
+    for backend in ("cpu", "simd"):
+        profile = target_profile_for_backend(backend)
+        backend_cases = [
+            cases[case_id]
+            for case_id in selected_case_ids
+            if profile_applies_to_case(profile, cases[case_id])
+        ]
+        if not backend_cases:
+            continue
+        artifact_path = output.parent / (
+            f"benchmark-source-compatibility-{profile}.json.gz"
+        )
+        artifacts.append(artifact_path)
+        command = [
+            sys.executable,
+            str(ROOT / "scripts" / "run_migration_parity.py"),
+            "--manifest",
+            str(DEFAULT_MANIFEST),
+            "--output",
+            str(artifact_path),
+            "--timeout",
+            "7200",
+        ]
+        for case in backend_cases:
+            command.extend(("--case-id", case["case_id"]))
+        env = os.environ.copy()
+        env.update(
+            {
+                "MIGRATION_ORACLE_PYTHON": pillow_simd_python,
+                "MIGRATION_ORACLE_NAME": "Pillow-SIMD",
+                "MIGRATION_ORACLE_VERSION": PILLOW_SIMD_VERSION,
+                "MIGRATION_TARGET_BACKEND": backend,
+                "MIGRATION_STRICT_TARGET_BACKEND": "1",
+            }
+        )
+        env.pop("MIGRATION_PARITY_TIMED_SOURCE", None)
+        target_python = str((ROOT / "pillow-rs-py" / "python").resolve())
+        inherited_pythonpath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            target_python + os.pathsep + inherited_pythonpath
+            if inherited_pythonpath
+            else target_python
+        )
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            env=env,
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=7200,
+        )
+        if not artifact_path.is_file():
+            detail = (completed.stderr or completed.stdout)[-3000:]
+            raise RuntimeError(
+                f"Pillow-SIMD compatibility parity did not emit {profile}: {detail}"
+            )
+        parity = read_parity_artifact(artifact_path)
+        if (
+            parity.get("status") != "completed"
+            or parity.get("infrastructure_errors")
+            or completed.returncode not in {0, 1}
+        ):
+            raise RuntimeError(
+                f"Pillow-SIMD compatibility parity infrastructure failed for {profile}: "
+                f"{parity.get('infrastructure_errors', [])}"
+            )
+        identity = parity.get("identity", {})
+        oracle = (identity.get("oracles") or [{}])[0]
+        if (oracle.get("name"), oracle.get("version")) != (
+            "Pillow-SIMD",
+            PILLOW_SIMD_VERSION,
+        ):
+            raise ValueError(f"{profile} compatibility run used the wrong source")
+        run_ids.append({"target_profile": profile, "run_id": identity.get("run_id", "")})
+
+        expected_keys = {
+            (case["case_id"], profile) for case in backend_cases
+        }
+        actual_keys = {
+            (item.get("case_id"), item.get("target_profile"))
+            for item in parity.get("comparisons", [])
+        }
+        if actual_keys != expected_keys:
+            raise ValueError(
+                f"Pillow-SIMD compatibility receipt has the wrong case set for {profile}"
+            )
+
+        for item in parity.get("comparisons", []):
+            case_id = item["case_id"]
+            reference = pillow_comparisons.get((case_id, profile))
+            if reference is None:
+                raise ValueError(
+                    f"Pillow parity receipt is missing {case_id} for {profile}"
+                )
+            if reference.get("outcome") != "pass":
+                raise ValueError(
+                    f"regular Pillow parity did not pass for {case_id} on {profile}"
+                )
+            stable_target, stable_diffs = compare_case(
+                cases[case_id], reference["target"], item["target"], operation_index
+            )
+            if stable_target != "pass":
+                raise RuntimeError(
+                    f"target output changed between parity cohorts for {case_id} on "
+                    f"{profile}: {stable_diffs[:3]}"
+                )
+            outcome, diffs = compare_source_compatibility(
+                cases[case_id], reference["source"], item["source"], operation_index
+            )
+            if (outcome == "pass") != (item.get("outcome") == "pass"):
+                raise RuntimeError(
+                    f"Pillow-SIMD source compatibility conflicts with target comparison "
+                    f"for {case_id} on {profile}"
+                )
+            compact_diffs = [
+                {
+                    key: diff[key]
+                    for key in ("path", "kind", "message")
+                    if key in diff
+                }
+                for diff in diffs
+            ]
+            previous = compatibility_by_case.get(case_id)
+            current = {"outcome": outcome, "differences": compact_diffs}
+            if previous is not None and previous != current:
+                raise RuntimeError(
+                    f"Pillow-SIMD compatibility changed across target profiles for {case_id}"
+                )
+            compatibility_by_case[case_id] = current
+
+    report = {
+        "schema": "pillow-simd/source-compatibility@1",
+        "reference": {"name": "Pillow", "version": PILLOW_VERSION},
+        "subject": {"name": "Pillow-SIMD", "version": PILLOW_SIMD_VERSION},
+        "status": "completed",
+        "parity_runs": run_ids,
+        "workloads": [
+            {
+                "workload_id": workload_id,
+                "case_id": workloads[workload_id]["input"]["case_id"],
+                **compatibility_by_case.get(
+                    workloads[workload_id]["input"]["case_id"],
+                    {"outcome": "not_proven", "differences": []},
+                ),
+            }
+            for workload_id in workload_ids
+        ],
+    }
+    missing = [
+        workload_id
+        for workload_id in workload_ids
+        if workloads[workload_id]["input"]["case_id"] not in compatibility_by_case
+    ]
+    if missing:
+        raise ValueError(
+            f"Pillow-SIMD compatibility is unproven for selected workloads: {missing}"
+        )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    return (
+        {
+            item["workload_id"]: {
+                "outcome": item["outcome"],
+                "differences": item["differences"],
+            }
+            for item in report["workloads"]
+        },
+        [*artifacts, output],
+    )
 
 
 def append_github_failure_summary(source_name: str, detail: object) -> None:
@@ -203,16 +459,46 @@ def append_github_failure_summary(source_name: str, detail: object) -> None:
         summary.write(f"### {source_name} benchmark failed\n\n```text\n{text}\n```\n")
 
 
+def append_github_source_compatibility_summary(
+    source_compatibility: dict[str, dict[str, Any]],
+) -> None:
+    """Show baseline output incompatibilities without turning them into target failures."""
+
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    incompatible = [
+        (workload, result.get("outcome", "not_proven"))
+        for workload, result in sorted(source_compatibility.items())
+        if result.get("outcome") != "pass"
+    ]
+    with Path(summary_path).open("a", encoding="utf-8") as summary:
+        summary.write(
+            "### Pillow-SIMD source compatibility\n\n"
+            "pillow-rs correctness remains gated against regular Pillow. "
+            "Pillow-SIMD speed ratios require exact source-output compatibility.\n\n"
+        )
+        if incompatible:
+            summary.write("| Workload | Pillow-SIMD compatibility |\n| --- | --- |\n")
+            for workload, outcome in incompatible:
+                summary.write(f"| {workload} | {outcome} |\n")
+        else:
+            summary.write("All selected Pillow-SIMD outputs matched regular Pillow.\n")
+
+
 def combine_results(
     pillow: dict[str, Any],
     pillow_simd: dict[str, Any],
     source_digest: str,
     *,
     parity_run_ids: tuple[str, str] = ("", ""),
+    source_compatibility: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build one x86 comparison snapshot with a version-matched Pillow baseline."""
     first_identity = pillow["identity"]
     simd_identity = pillow_simd["identity"]
+    if source_compatibility is None:
+        raise ValueError("Pillow-SIMD source compatibility evidence is required")
     if first_identity["targets"] != simd_identity["targets"]:
         raise ValueError("Pillow and Pillow-SIMD target identities differ")
     for key in ("manifest", "inputs", "assets"):
@@ -234,7 +520,9 @@ def combine_results(
         simd_workload = next(w for w in pillow_simd["workloads"] if w["workload_id"] == workload)
         if normal_workload["context"] != simd_workload["context"] or normal_workload["measurement_policy"] != simd_workload["measurement_policy"]:
             raise ValueError(f"comparison conditions differ for {workload}")
-        row = simd_rows.get((workload, "pillow"))
+        row = simd_rows.get((workload, "pillow-simd")) or simd_rows.get(
+            (workload, "pillow")
+        )
         if row is None:
             raise ValueError(f"Pillow-SIMD timing is missing for {workload}")
         normal_baseline = normal_rows.get((workload, "pillow"))
@@ -243,18 +531,59 @@ def combine_results(
         for field in ("policy", "context", "sample_unit", "sample_count"):
             if normal_baseline[field] != row[field]:
                 raise ValueError(f"Pillow and Pillow-SIMD {field} differ for {workload}")
-        row = dict(row, subject="pillow-simd", comparison_group="default")
+        compatibility = source_compatibility.get(workload)
+        if compatibility is None:
+            raise ValueError(f"Pillow-SIMD compatibility is missing for {workload}")
+        outcome = compatibility.get("outcome", "not_proven")
+        if outcome not in {"pass", "fail", "not_proven"}:
+            raise ValueError(
+                f"invalid Pillow-SIMD compatibility outcome for {workload}: {outcome}"
+            )
+        row = dict(
+            row,
+            subject="pillow-simd",
+            comparison_group="default",
+            correctness=f"Pillow-SIMD compatibility: {outcome}",
+        )
         snapshot["rows"].append(row)
 
     snapshot["measured_at"] = max(snapshot["measured_at"], simd_snapshot["measured_at"])
     snapshot["run_id"] = f"{first_identity['run_id']}+{simd_identity['run_id']}"
     snapshot["source_sha256"] = source_digest
-    snapshot["policy_status"] = "Paired x86 cohort; Pillow 12.1.1 and Pillow-SIMD 12.1.1.post0 are separately parity-gated against pillow-rs."
+    incompatible = sorted(
+        workload
+        for workload, compatibility in source_compatibility.items()
+        if compatibility.get("outcome") == "fail"
+    )
+    not_proven = sorted(
+        workload
+        for workload, compatibility in source_compatibility.items()
+        if compatibility.get("outcome") == "not_proven"
+    )
+    snapshot["policy_status"] = (
+        "Paired x86 cohort; pillow-rs CPU/SIMD correctness is gated against regular "
+        "Pillow 12.1.1. Pillow-SIMD timings are compared only where its outputs also "
+        "match regular Pillow."
+    )
     snapshot["notes"] = [
         "This x86-only cohort compares pillow-rs CPU/SIMD, ordinary Pillow 12.1.1, and Pillow-SIMD 12.1.1.post0 on identical workloads and measurement policies.",
-        "Pillow-SIMD and Pillow were run in separate virtual environments because both install the PIL namespace. Each source was independently parity-gated against pillow-rs before timings were accepted.",
+        "Pillow-SIMD and Pillow were run in separate virtual environments because both install the PIL namespace. pillow-rs CPU/SIMD parity uses regular Pillow; Pillow-SIMD compatibility is checked separately and incompatible baseline cells remain visible with their speed ratios withheld.",
         f"The matched cohort covers {len(WORKLOAD_IDS)} full-size, parity-backed individual-operation cases: all 29 current pipeline-op cases, the established RGB GaussianBlur case, and getchannel in L, LA, RGB, and RGBA. Every workload uses identical inputs and measurement policy across the three sources.",
         "This cohort uses the Pillow-SIMD default SSE4 build. It is not comparable with the Apple ARM measurements on the main benchmark page.",
+        *(
+            [
+                f"Pillow-SIMD output differed from regular Pillow on {len(incompatible)} workload(s); those baseline cells are retained and no Pillow-SIMD speed ratio is accepted: {', '.join(incompatible)}."
+            ]
+            if incompatible
+            else ["Pillow-SIMD outputs matched regular Pillow on every selected workload."]
+        ),
+        *(
+            [
+                f"Pillow-SIMD compatibility was not proven on {len(not_proven)} workload(s); those baseline cells remain visible and no speed ratio is accepted: {', '.join(not_proven)}."
+            ]
+            if not_proven
+            else []
+        ),
     ]
     snapshot["cohorts"] = [
         {
@@ -268,6 +597,9 @@ def combine_results(
             "run_id": simd_identity["run_id"],
             "parity_run_id": parity_run_ids[1],
             "version": PILLOW_SIMD_VERSION,
+            "compatibility_outcome": (
+                "not_proven" if not_proven else "fail" if incompatible else "pass"
+            ),
         },
     ]
     snapshot.update(
@@ -294,6 +626,7 @@ def main() -> int:
     root = ROOT / "build" / "migration-parity"
     results = []
     parity_run_ids = []
+    pillow_parity_path = root / "benchmark-parity-result-pillow.json"
     for name, version, python_path, suffix in (
         ("Pillow", PILLOW_VERSION, args.pillow_python, "pillow"),
         ("Pillow-SIMD", PILLOW_SIMD_VERSION, args.pillow_simd_python, "pillow-simd"),
@@ -305,15 +638,25 @@ def main() -> int:
                 source_python=python_path,
                 source_name=name,
                 source_version=version,
+                oracle_python=args.pillow_python,
                 output=result_path,
                 parity_output=parity_path,
                 workload_ids=ids,
+                reuse_parity=(pillow_parity_path if suffix == "pillow-simd" else None),
             )
         except Exception as error:
             append_github_failure_summary(name, error)
             raise
         results.append(result)
         parity_run_ids.append(parity_run_id)
+    source_compatibility, compatibility_files = run_source_compatibility(
+        pillow_python=args.pillow_python,
+        pillow_simd_python=args.pillow_simd_python,
+        pillow_parity_path=pillow_parity_path,
+        workload_ids=ids,
+        output=root / "benchmark-source-compatibility-pillow-simd.json",
+    )
+    append_github_source_compatibility_summary(source_compatibility)
     source_files = [
         root / filename
         for filename in (
@@ -322,16 +665,36 @@ def main() -> int:
             "benchmark-result-pillow-simd.json",
             "benchmark-parity-result-pillow-simd.json",
         )
-    ]
+    ] + compatibility_files
     digest = hashlib.sha256(
         b"".join(path.name.encode() + path.read_bytes() for path in source_files)
     ).hexdigest()
     snapshot = combine_results(
-        results[0], results[1], digest, parity_run_ids=tuple(parity_run_ids)
+        results[0],
+        results[1],
+        digest,
+        parity_run_ids=tuple(parity_run_ids),
+        source_compatibility=source_compatibility,
     )
     validate(snapshot, "appunni-m/pillow-rs")
     args.output.write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"status": "completed", "workloads": len(ids), "subjects": 4}))
+    print(
+        json.dumps(
+            {
+                "status": "completed",
+                "workloads": len(ids),
+                "subjects": 4,
+                "pillow_simd_compatible": sum(
+                    result["outcome"] == "pass"
+                    for result in source_compatibility.values()
+                ),
+                "pillow_simd_incompatible": sum(
+                    result["outcome"] == "fail"
+                    for result in source_compatibility.values()
+                ),
+            }
+        )
+    )
     return 0
 
 

@@ -119,6 +119,8 @@ OPERATION_FIELDS = (
     "not_run_rows",
     "fallback_rows",
     "wrong_backend_rows",
+    "pillow_simd_incompatible_rows",
+    "pillow_simd_unproven_rows",
     "pillow_simd_snapshot_workloads",
     "verified_pillow_simd_comparisons",
     "worst_verified_speedup_vs_pillow_simd",
@@ -219,6 +221,15 @@ def classify(row: dict[str, Any], source_clean: bool) -> str:
         return "not_compared"
     if row.get("status") != "completed" or row.get("median_us") is None:
         return row.get("status") or "not_measured"
+    if row.get("subject") == "pillow-simd":
+        compatibility = row.get("correctness")
+        if compatibility == "Pillow-SIMD compatibility: fail":
+            return "pillow_simd_incompatible"
+        if compatibility != "Pillow-SIMD compatibility: pass":
+            return "pillow_simd_compatibility_not_proven"
+        if not source_clean:
+            return "dirty_pillow_reference"
+        return "pillow-simd_reference"
     if row.get("correctness") != "parity_pass: pass":
         if str(row.get("correctness", "")).endswith("not_proven"):
             return "parity_not_proven"
@@ -227,10 +238,10 @@ def classify(row: dict[str, Any], source_clean: bool) -> str:
         return "correctness_not_proven"
     if row.get("policy", {}).get("correctness_gate") != "parity_pass":
         return "parity_gate_mismatch"
-    if row.get("subject") in {"pillow", "pillow-simd"}:
+    if row.get("subject") == "pillow":
         if not source_clean:
             return "dirty_pillow_reference"
-        return "pillow-simd_reference" if row.get("subject") == "pillow-simd" else "pillow_reference"
+        return "pillow_reference"
     if not source_clean:
         return "dirty_snapshot"
     if row.get("fallback_reasons"):
@@ -341,6 +352,10 @@ def pick_rows(snapshots: list[dict[str, Any]]) -> dict[tuple[str, str, str, str]
 def goal_status(speedup: float | None, evidence: str, threshold: float) -> str:
     if speedup is not None:
         return "pass" if speedup >= threshold else "below_target"
+    if evidence == "pillow_simd_incompatible":
+        return "baseline_incompatible"
+    if evidence == "pillow_simd_compatibility_not_proven":
+        return "parity_not_proven"
     if evidence in {"execution_only", "parity_not_proven", "fallback", "dirty_snapshot"}:
         return evidence
     if evidence == "parity_backend_verified":
@@ -598,6 +613,16 @@ def operation_matrix_rows(
                 "not_run_rows": str(evidence_counts["not_run"]),
                 "fallback_rows": str(evidence_counts["fallback"]),
                 "wrong_backend_rows": str(evidence_counts["wrong_or_unconfirmed_backend"]),
+                "pillow_simd_incompatible_rows": str(sum(
+                    classify(row, pillow_simd_metadata.get("source_clean") == "true")
+                    == "pillow_simd_incompatible"
+                    for row in simd_rows
+                )),
+                "pillow_simd_unproven_rows": str(sum(
+                    classify(row, pillow_simd_metadata.get("source_clean") == "true")
+                    == "pillow_simd_compatibility_not_proven"
+                    for row in simd_rows
+                )),
                 "pillow_simd_snapshot_workloads": str(len({row["workload"] for row in simd_rows})),
                 "verified_pillow_simd_comparisons": str(len(simd_verified)),
                 "worst_verified_speedup_vs_pillow_simd": fmt(worst_simd[0] if worst_simd else None),
@@ -660,6 +685,8 @@ def operation_matrix_rows(
                 "not_run_rows": "0",
                 "fallback_rows": "0",
                 "wrong_backend_rows": "0",
+                "pillow_simd_incompatible_rows": "0",
+                "pillow_simd_unproven_rows": "0",
                 "pillow_simd_snapshot_workloads": "0",
                 "verified_pillow_simd_comparisons": "0",
                 "worst_verified_speedup_vs_pillow_simd": "",

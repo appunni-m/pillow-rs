@@ -31,6 +31,25 @@ def observe_from(sequence, index):
 def observe(index):
     return observe_from(data, index)
 
+def observe_banded_mode(mode, color, band):
+    image = Image.new(mode, (2, 1), color)
+    if mode == "P":
+        image.putpalette([((index * 17) + 9) % 256 for index in range(768)])
+    values = image.getdata(band)
+    return {
+        "image_mode": image.mode,
+        "mode": values.mode,
+        "size": values.size,
+        "values": list(values),
+    }
+
+def observe_paletted_snapshot_after_mutation():
+    image = Image.new("P", (2, 1), 23)
+    image.putpalette([((index * 17) + 9) % 256 for index in range(768)])
+    values = image.getdata(0)
+    image.putpixel((0, 0), 91)
+    return {"retained": list(values), "current": list(image.getdata(0))}
+
 print(json.dumps({
     "first": observe(0),
     "last": observe(-1),
@@ -40,6 +59,14 @@ print(json.dumps({
     "banded_first": observe_from(banded, 0),
     "banded_past_end": observe_from(banded, 2),
     "banded_slice": observe_from(banded, slice(None)),
+    "banded_modes": [
+        observe_banded_mode("1", 1, 0),
+        observe_banded_mode("L", 137, 0),
+        observe_banded_mode("P", 23, 0),
+        observe_banded_mode("LA", (73, 209), 1),
+        observe_banded_mode("RGB", (31, 109, 197), 2),
+    ],
+    "paletted_snapshot": observe_paletted_snapshot_after_mutation(),
 }))
 '''
 
@@ -77,6 +104,15 @@ class GetdataSequenceParityTests(unittest.TestCase):
             {"error": "IndexError", "message": "image index out of range"},
         )
         self.assertEqual(pillow["banded_first"], {"value": 10})
+        self.assertEqual(
+            [item["mode"] for item in pillow["banded_modes"]],
+            ["1", "L", "P", "L", "L"],
+        )
+        self.assertEqual(pillow["banded_modes"][2]["values"], [23, 23])
+        self.assertEqual(
+            pillow["paletted_snapshot"],
+            {"retained": [23, 23], "current": [91, 23]},
+        )
         self.assertEqual(
             pillow["banded_past_end"],
             {"error": "IndexError", "message": "image index out of range"},

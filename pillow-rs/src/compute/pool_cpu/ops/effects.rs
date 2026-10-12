@@ -1656,6 +1656,7 @@ pub fn op_merge(
                     };
                     #[cfg(not(feature = "parallel"))]
                     let rgb = interleave_rgb_luma_bands(red, green, blue)?;
+                    crate::compute::record_pipeline_allocation(rgb.len());
                     let image = RgbImage::from_raw(w, h, rgb)
                         .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
                     return Ok(DynamicImage::ImageRgb8(image));
@@ -4877,7 +4878,7 @@ mod tests {
     #[cfg(not(feature = "parallel"))]
     #[test]
     fn native_rgb_luma_merge_interleave_writes_exact_samples() {
-        for length in [0usize, 1, 2, 15, 16, 17, 31, 32, 33] {
+        for length in [0usize, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33] {
             let red = (0..length).map(|i| (i * 7 + 1) as u8).collect::<Vec<_>>();
             let green = (0..length).map(|i| (i * 11 + 3) as u8).collect::<Vec<_>>();
             let blue = (0..length).map(|i| (i * 13 + 5) as u8).collect::<Vec<_>>();
