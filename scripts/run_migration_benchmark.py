@@ -29,12 +29,17 @@ import uuid
 from typing import Any
 
 try:
+    from migration_benchmark_adapter import (
+        benchmark_adapter_environment,
+        benchmark_adapter_python,
+    )
     from run_migration_parity import (
         ORACLE_ID,
         ORACLE_NAME,
         ORACLE_VERSION,
         TARGET_ID,
         TARGET_FEATURES,
+        TIMED_SOURCE_FLAG,
         git_dirty,
         git_revision,
         process_group_options,
@@ -42,12 +47,17 @@ try:
         receipt_terminal_complete,
     )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` in tests
+    from scripts.migration_benchmark_adapter import (
+        benchmark_adapter_environment,
+        benchmark_adapter_python,
+    )
     from scripts.run_migration_parity import (
         ORACLE_ID,
         ORACLE_NAME,
         ORACLE_VERSION,
         TARGET_ID,
         TARGET_FEATURES,
+        TIMED_SOURCE_FLAG,
         git_dirty,
         git_revision,
         process_group_options,
@@ -60,6 +70,10 @@ FIXTURE_ROOT = ROOT / "pillow-rs" / "tests" / "fixtures"
 DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_RESULT = ROOT / "build" / "migration-parity" / "benchmark-result.json"
 DEFAULT_PARITY_RESULT = ROOT / "build" / "migration-parity" / "parity-result.json"
+BENCHMARK_SOURCE_NAME = os.environ.get("MIGRATION_BENCHMARK_SOURCE_NAME", ORACLE_NAME)
+BENCHMARK_SOURCE_VERSION = os.environ.get(
+    "MIGRATION_BENCHMARK_SOURCE_VERSION", ORACLE_VERSION
+)
 PARALLEL_CPU_PROFILE = (
     os.environ.get("MIGRATION_TARGET_PROFILE", "").strip().lower()
     == "parallel-cpu"
@@ -118,8 +132,9 @@ def benchmark_subjects() -> list[tuple[str, str]]:
         # Keep this run's timed cohort to the Rayon-enabled target only; the
         # parity preflight still compares it with Pillow before timing.
         return [("target_profile", "python-parallel-cpu")]
+    baseline_id = "pillow-simd" if PILLOW_SIMD_COMPARISON else "pillow"
     return [
-        ("oracle", "pillow"),
+        ("oracle", baseline_id),
         *(
             ("target_profile", target_profile_for_backend(backend))
             for backend in TARGET_BACKENDS
@@ -160,15 +175,15 @@ def suite_subject_is_comparable(
     ):
         return False
 
-    expected_backend = (
-        "pillow" if subject_id == "pillow" else runtime_backend_for_profile(subject_id)
-    )
-    if subject_id == "pillow":
+    if subject_id in {"pillow", "pillow-simd"}:
+        expected_backend = subject_id
         return (
             execution.get("status") == "not_applicable"
-            and execution.get("requested_backend") == "pillow"
-            and execution.get("actual_backend") == "pillow"
+            and execution.get("requested_backend") == expected_backend
+            and execution.get("actual_backend") == expected_backend
         )
+
+    expected_backend = runtime_backend_for_profile(subject_id)
 
     if execution.get("status") != "completed":
         return False
@@ -385,6 +400,69 @@ def read_and_remove_backend_parity(path: Path) -> dict[str, Any]:
         path.unlink(missing_ok=True)
 
 
+def read_parity_artifact(path: Path) -> dict[str, Any]:
+    """Read a parity receipt without consuming its source artifact."""
+
+    if path.name.endswith(".gz"):
+        with gzip.open(path, "rt", encoding="utf-8") as stream:
+            return json.load(stream)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def validate_reused_parity(
+    parity: dict[str, Any],
+    manifest: Path,
+    cases: list[dict[str, Any]],
+) -> None:
+    """Require a reused parity gate to cover these exact inputs and profiles."""
+
+    if (
+        parity.get("schema") != "migration-parity/parity-result@1"
+        or parity.get("status") != "completed"
+        or parity.get("summary", {}).get("failed") != 0
+        or parity.get("summary", {}).get("not_run") != 0
+        or parity.get("infrastructure_errors")
+    ):
+        raise ValueError("reused parity receipt is not a complete passing run")
+    identity = parity.get("identity", {})
+    if identity.get("manifest", {}).get("sha256") != sha256(manifest):
+        raise ValueError("reused parity receipt has a different manifest")
+    oracles = identity.get("oracles", [])
+    if not oracles or (
+        oracles[0].get("name"), oracles[0].get("version")
+    ) != (ORACLE_NAME, ORACLE_VERSION):
+        raise ValueError("reused parity receipt has a different oracle")
+
+    expected: set[tuple[str, str]] = set()
+    for case in cases:
+        declared = set(case.get("target_profiles", []))
+        for profile in TARGET_PROFILES:
+            if not declared or profile_applies_to_case(profile, case):
+                expected.add((case["case_id"], profile))
+    expected_profiles = {profile for _case_id, profile in expected}
+    targets = identity.get("targets", [])
+    if {item.get("target_profile") for item in targets} != expected_profiles:
+        raise ValueError("reused parity receipt has different target profiles")
+    for target in targets:
+        profile = target.get("target_profile")
+        if (
+            target.get("target_id") != TARGET_ID
+            or target.get("revision") != git_revision()
+            or target.get("dirty") is not git_dirty()
+            or target.get("backend") != runtime_backend_for_profile(profile)
+            or target.get("features") != TARGET_FEATURES
+        ):
+            raise ValueError("reused parity receipt has different target identity")
+    actual = {
+        (item.get("case_id"), item.get("target_profile"))
+        for item in parity.get("comparisons", [])
+    }
+    if actual != expected:
+        raise ValueError("reused parity receipt does not cover the selected cases/profiles")
+    if any(item.get("outcome") != "pass" for item in parity["comparisons"]):
+        raise ValueError("reused parity receipt contains a non-passing comparison")
+
+
 def run_parity(
     manifest: Path,
     output: Path,
@@ -417,6 +495,20 @@ def run_parity(
             backend_timeout = (
                 min(timeout, 300) if backend == "gpu" else timeout
             )
+            parity_environment = os.environ.copy()
+            # The parity oracle is always the configured Pillow source. The
+            # timed benchmark may use a distinct source such as Pillow-SIMD;
+            # do not let its source-selection flag leak into this preflight.
+            parity_environment.pop(TIMED_SOURCE_FLAG, None)
+            parity_environment.update(
+                {
+                    "MIGRATION_TARGET_BACKEND": backend,
+                    "MIGRATION_STRICT_TARGET_BACKEND": "1",
+                    "PYTHONPATH": str(ROOT / "pillow-rs-py" / "python")
+                    + os.pathsep
+                    + os.environ.get("PYTHONPATH", ""),
+                }
+            )
             returncode, stdout, stderr = run_process(
                 [
                     sys.executable,
@@ -433,14 +525,7 @@ def run_parity(
                         for argument in ("--case-id", case["case_id"])
                     ],
                 ],
-                env={
-                    **os.environ,
-                    "MIGRATION_TARGET_BACKEND": backend,
-                    "MIGRATION_STRICT_TARGET_BACKEND": "1",
-                    "PYTHONPATH": str(ROOT / "pillow-rs-py" / "python")
-                    + os.pathsep
-                    + os.environ.get("PYTHONPATH", ""),
-                },
+                env=parity_environment,
                 timeout=backend_timeout,
                 label=f"{backend} parity preflight",
             )
@@ -498,11 +583,7 @@ def run_timed_side(
     script = ROOT / "scripts" / "run_migration_parity.py"
 
     def command_for(child_repeat: int, *, include_timings: bool) -> list[str]:
-        adapter_python = (
-            os.environ.get("MIGRATION_ORACLE_PYTHON", sys.executable)
-            if side == "source"
-            else sys.executable
-        )
+        adapter_python = benchmark_adapter_python(side)
         command = [
             adapter_python,
             str(script),
@@ -528,37 +609,7 @@ def run_timed_side(
         include_timings: bool,
         collect_execution: bool = False,
     ) -> dict[str, Any]:
-        adapter_environment = {
-            **os.environ,
-            "MIGRATION_TARGET_BACKEND": backend,
-            "MIGRATION_STRICT_TARGET_BACKEND": "1",
-            "MIGRATION_PARITY_BENCHMARK_ADAPTER": "1",
-        }
-        if side == "target":
-            target_python = str((ROOT / "pillow-rs-py" / "python").resolve())
-            inherited_pythonpath = adapter_environment.get("PYTHONPATH", "")
-            adapter_environment["PYTHONPATH"] = (
-                target_python
-                + os.pathsep
-                + inherited_pythonpath
-                if inherited_pythonpath
-                else target_python
-            )
-        else:
-            # Keep the source adapter on the separately installed Pillow
-            # oracle.  Supplying the checkout's ``python`` directory here
-            # makes ``import PIL`` resolve to the target facade instead.
-            target_python = str((ROOT / "pillow-rs-py" / "python").resolve())
-            inherited_pythonpath = adapter_environment.get("PYTHONPATH", "")
-            retained = [
-                item
-                for item in inherited_pythonpath.split(os.pathsep)
-                if item and str(Path(item).resolve()) != target_python
-            ]
-            if retained:
-                adapter_environment["PYTHONPATH"] = os.pathsep.join(retained)
-            else:
-                adapter_environment.pop("PYTHONPATH", None)
+        adapter_environment = benchmark_adapter_environment(side, backend)
         execution_path: Path | None = None
         with tempfile.TemporaryDirectory(
             prefix="migration-benchmark-receipt-"
@@ -574,7 +625,11 @@ def run_timed_side(
                 command_for(child_repeat, include_timings=include_timings),
                 input_text=json.dumps(child_cases, separators=(",", ":")),
                 timeout=effective_timeout,
-                label=f"{backend if side == 'target' else 'Pillow'} benchmark adapter",
+                label=(
+                    f"{backend} benchmark adapter"
+                    if side == "target"
+                    else f"{BENCHMARK_SOURCE_NAME} benchmark adapter"
+                ),
                 env=adapter_environment,
             )
             if returncode != 0:
@@ -589,8 +644,14 @@ def run_timed_side(
             raise RuntimeError(f"{side} benchmark adapter emitted invalid timing envelope")
         identity = payload["identity"]
         if side == "source":
-            if identity.get("side") != "source" or identity.get("implementation") != ORACLE_NAME:
-                raise RuntimeError("Pillow benchmark adapter emitted the wrong identity")
+            if (
+                identity.get("side") != "source"
+                or identity.get("implementation") != BENCHMARK_SOURCE_NAME
+                or identity.get("version") != BENCHMARK_SOURCE_VERSION
+            ):
+                raise RuntimeError(
+                    f"{BENCHMARK_SOURCE_NAME} benchmark adapter emitted the wrong identity"
+                )
         else:
             backend_state = identity.get("backend_state", {})
             if (
@@ -770,12 +831,13 @@ def execution_result(
 ) -> dict[str, Any]:
     errors = list(errors or [])
     if subject_kind == "oracle":
+        source_backend = subject_id if subject_id in {"pillow", "pillow-simd"} else "pillow"
         return {
             "status": "not_applicable",
             "terminal_complete": False,
-            "requested_backend": "pillow",
-            "actual_backend": "pillow",
-            "actual_backend_counts": {"pillow": 1},
+            "requested_backend": source_backend,
+            "actual_backend": source_backend,
+            "actual_backend_counts": {source_backend: 1},
             "fallback_reason_counts": {},
             "operation_count": execution_numeric_summary([], "operation_count"),
             "dispatch_count": execution_numeric_summary([], "dispatch_count"),
@@ -1160,9 +1222,10 @@ def workload_subjects_for_profile(
     The manifest's standard cohort contains Pillow, serial CPU, SIMD, and GPU.
     Runners without a GPU retain Pillow and only the requested target backends.
     Parallel CPU reuses the same inputs and parity preflight, but times only its
-    own feature-identified CPU profile. The x86 Pillow-SIMD cohort retains the
-    ordinary Pillow baseline and times only serial CPU and architecture-specific
-    SIMD; it is exported separately because it uses a different host/version.
+    own feature-identified CPU profile. The x86 Pillow-SIMD cohort measures a
+    distinct Pillow-SIMD source subject plus serial CPU and architecture-specific
+    SIMD, while its correctness receipt remains pinned to ordinary Pillow. It
+    is exported separately because it uses a different host/version.
     """
 
     if not PARALLEL_CPU_PROFILE and not PILLOW_SIMD_COMPARISON and TARGET_BACKENDS == ("cpu", "simd", "gpu"):
@@ -1181,7 +1244,8 @@ def workload_subjects_for_profile(
         )
     if PARALLEL_CPU_PROFILE:
         return [{"kind": "target_profile", "id": "python-parallel-cpu"}]
-    return default_subjects[:1] + [
+    baseline_id = "pillow-simd" if PILLOW_SIMD_COMPARISON else "pillow"
+    return [{"kind": "oracle", "id": baseline_id}] + [
         {"kind": "target_profile", "id": target_profile_for_backend(backend)}
         for backend in TARGET_BACKENDS
     ]
@@ -1269,7 +1333,11 @@ def run(args: argparse.Namespace) -> int:
     parity_case_ids = list(dict.fromkeys(parity_case_ids))
     measured_cases = [cases_by_id[case_id] for case_id in parity_case_ids]
     parity_output = args.parity_output.resolve()
-    if measured_cases:
+    if args.reuse_parity is not None:
+        parity = read_parity_artifact(args.reuse_parity.resolve())
+        validate_reused_parity(parity, manifest, measured_cases)
+        write_parity_artifact(parity_output, parity)
+    elif measured_cases:
         parity = run_parity(manifest, parity_output, args.timeout, measured_cases)
     else:
         started = now()
@@ -1624,7 +1692,10 @@ def run(args: argparse.Namespace) -> int:
                 "comparisons": [],
             })
             continue
-        oracle_subject = next(item for item in suite_subjects if item["id"] == "pillow")
+        baseline_subject_id = "pillow-simd" if PILLOW_SIMD_COMPARISON else "pillow"
+        oracle_subject = next(
+            item for item in suite_subjects if item["id"] == baseline_subject_id
+        )
         oracle_values = {
             item["metric"]: item["weighted_mean"]
             for item in oracle_subject["measurements"]
@@ -1655,14 +1726,14 @@ def run(args: argparse.Namespace) -> int:
                 subjects_by_id = {
                     item["id"]: item for item in workload["subjects"]
                 }
-                baseline_subject = subjects_by_id.get("pillow", {})
+                baseline_subject = subjects_by_id.get(baseline_subject_id, {})
                 target_member_subject = subjects_by_id.get(target_profile, {})
                 # Keep the timing summary independent from the performance
                 # cohort.  Only a value-complete Pillow row and a target row
                 # with a terminal requested=actual, no-fallback receipt may
                 # contribute to a paired suite ratio.
                 if suite_subject_is_comparable(
-                    baseline_subject, "pillow"
+                    baseline_subject, baseline_subject_id
                 ) and suite_subject_is_comparable(
                     target_member_subject, target_profile
                 ):
@@ -1685,13 +1756,13 @@ def run(args: argparse.Namespace) -> int:
             # remain useful for coverage, but may not be used as a speed
             # comparison when backend execution was not proven.
             pair_values: dict[str, dict[str, list[tuple[float, int]]]] = {
-                "pillow": {},
+                baseline_subject_id: {},
                 target_profile: {},
             }
             for member in common_members:
                 workload = workload_by_id[member["workload_id"]]
                 weight = int(member["weight"])
-                for subject_id in ("pillow", target_profile):
+                for subject_id in (baseline_subject_id, target_profile):
                     subject = next(
                         item
                         for item in workload["subjects"]
@@ -1705,10 +1776,11 @@ def run(args: argparse.Namespace) -> int:
                             ).append((float(mean), weight))
 
             pair_metrics = sorted(
-                set(pair_values["pillow"]) & set(pair_values[target_profile])
+                set(pair_values[baseline_subject_id])
+                & set(pair_values[target_profile])
             )
             for metric in pair_metrics:
-                baseline_values = pair_values["pillow"][metric]
+                baseline_values = pair_values[baseline_subject_id][metric]
                 target_metric_values = pair_values[target_profile][metric]
                 baseline_weight = sum(weight for _, weight in baseline_values)
                 target_weight = sum(weight for _, weight in target_metric_values)
@@ -1725,7 +1797,7 @@ def run(args: argparse.Namespace) -> int:
                     else None
                 )
                 comparisons.append({
-                    "baseline_subject": "pillow",
+                    "baseline_subject": baseline_subject_id,
                     "subject_id": target_profile,
                     "metric": metric,
                     "baseline_value": baseline,
@@ -1748,7 +1820,7 @@ def run(args: argparse.Namespace) -> int:
                 # would silently disappear from the comparison denominator.
                 for metric in sorted(set(oracle_values) | set(target_values) | {"latency"}):
                     comparisons.append({
-                        "baseline_subject": "pillow",
+                        "baseline_subject": baseline_subject_id,
                         "subject_id": target_profile,
                         "metric": metric,
                         "baseline_value": None,
@@ -1826,6 +1898,11 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULT)
     parser.add_argument("--parity-output", type=Path, default=DEFAULT_PARITY_RESULT)
+    parser.add_argument(
+        "--reuse-parity",
+        type=Path,
+        help="reuse an exact passing Pillow parity receipt for matching selected cases",
+    )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--workload-id", action="append")
     parser.add_argument(

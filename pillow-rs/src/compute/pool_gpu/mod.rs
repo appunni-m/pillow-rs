@@ -16,8 +16,9 @@ use crate::compute::{Backend, BackendImpl, PipelineResourceTelemetry};
 use crate::error::PilError;
 use crate::ops::pil_resize::{
     FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, filter_from_resample,
-    luma16_resample_big_endian, luma16_resample_read, luma16_resample_write, precompute_coeffs,
-    precompute_coeffs_boxed_for_filter, precompute_coeffs_f64, round_up,
+    i32_samples_from_le_bytes, luma16_resample_big_endian, luma16_resample_read,
+    luma16_resample_write, precompute_coeffs, precompute_coeffs_boxed_for_filter,
+    precompute_coeffs_f64, round_up,
 };
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
@@ -2332,23 +2333,168 @@ fn gpu_i_f64_integer_to_i32(sum: i128, scale_exp: i32) -> Option<i32> {
     }
 }
 
-/// Evaluate one I-mode f64-coefficient row with an exact integer reducer.
+#[derive(Clone, Copy)]
+struct GpuIResizeOutputPlan {
+    source_start: usize,
+    tap_start: usize,
+    tap_count: usize,
+    minimum_exponent: Option<i32>,
+    aligned: bool,
+}
+
+struct GpuIResizePassPlan {
+    outputs: Vec<GpuIResizeOutputPlan>,
+    aligned_coefficients: Vec<i64>,
+}
+
+/// Align each row's dyadic weights once for the complete pass. The plan is
+/// local to the I-mode proof and leaves the GPU kernel's coefficient table
+/// and arithmetic unchanged.
+fn gpu_i_resize_f64_pass_plan(
+    coeffs: &FilterCoeffsF64,
+    source_axis: usize,
+) -> Option<GpuIResizePassPlan> {
+    if coeffs.xmin.len() != coeffs.count.len() || coeffs.xmin.len() != coeffs.weights.len() {
+        return None;
+    }
+    let total_taps = coeffs
+        .count
+        .iter()
+        .try_fold(0usize, |total, count| total.checked_add(*count))?;
+    let mut outputs = Vec::new();
+    outputs.try_reserve_exact(coeffs.xmin.len()).ok()?;
+    let mut aligned_coefficients = Vec::new();
+    aligned_coefficients.try_reserve_exact(total_taps).ok()?;
+
+    for output_index in 0..coeffs.xmin.len() {
+        let source_start = usize::try_from(coeffs.xmin[output_index]).ok()?;
+        let weights = &coeffs.weights[output_index];
+        let tap_count = coeffs.count[output_index];
+        if tap_count != weights.len() || source_start.checked_add(tap_count)? > source_axis {
+            return None;
+        }
+        let mut minimum_exponent = None;
+        for &weight in weights {
+            let parts = gpu_f64_integer_parts(weight)?;
+            if parts.mantissa != 0 {
+                minimum_exponent = Some(
+                    minimum_exponent
+                        .map_or(parts.exponent, |minimum: i32| minimum.min(parts.exponent)),
+                );
+            }
+        }
+        let tap_start = aligned_coefficients.len();
+        let mut aligned = true;
+        for &weight in weights {
+            let parts = gpu_f64_integer_parts(weight)?;
+            let coefficient = if parts.mantissa == 0 {
+                Some(0)
+            } else {
+                minimum_exponent.and_then(|minimum| {
+                    let shift = u32::try_from(parts.exponent.checked_sub(minimum)?).ok()?;
+                    let factor = if shift >= 127 {
+                        None
+                    } else {
+                        Some(1i128 << shift)
+                    }?;
+                    let magnitude = i128::from(parts.mantissa).checked_mul(factor)?;
+                    let signed = if parts.negative {
+                        magnitude.checked_neg()?
+                    } else {
+                        magnitude
+                    };
+                    i64::try_from(signed).ok()
+                })
+            };
+            match coefficient {
+                Some(coefficient) => aligned_coefficients.push(coefficient),
+                None => {
+                    aligned = false;
+                    aligned_coefficients.push(0);
+                }
+            }
+        }
+        if !aligned {
+            aligned_coefficients[tap_start..].fill(0);
+        }
+        outputs.push(GpuIResizeOutputPlan {
+            source_start,
+            tap_start,
+            tap_count,
+            minimum_exponent,
+            aligned,
+        });
+    }
+    Some(GpuIResizePassPlan {
+        outputs,
+        aligned_coefficients,
+    })
+}
+
+/// Evaluate an aligned I-mode coefficient row with an exact integer reducer.
 ///
-/// I samples are exact signed i32 values, while each Pillow coefficient is a
-/// finite binary f64.  Multiplying the integer sample by the coefficient's
-/// 53-bit mantissa and aligning all terms at the smallest exponent gives an
-/// exact rational sum in the same U128 representation used by the WGSL
-/// marker-9 reducer.  The host proof compares that sum's away-from-zero i32
-/// rounding with Pillow's ordered f64 FMA accumulation; rows where the two
-/// boundaries differ are rejected.
-fn gpu_i_resize_f64_sample_bits(
-    samples: &[u32],
+/// Each integer coefficient is the original dyadic f64 coefficient scaled to
+/// the row's minimum binary exponent. This keeps the exact sum unchanged while
+/// removing per-pixel exponent alignment from the admission proof.
+fn gpu_i_resize_f64_sample_aligned(
+    samples: &[i32],
+    source_width: usize,
+    source_start: usize,
+    weights: &[f64],
+    aligned_coefficients: &[i64],
+    minimum_exponent: Option<i32>,
+    horizontal: bool,
+    line: usize,
+) -> Option<i32> {
+    if weights.len() != aligned_coefficients.len() {
+        return None;
+    }
+    let Some(minimum_exponent) = minimum_exponent else {
+        return Some(0);
+    };
+    let mut pixel = if horizontal {
+        line.checked_mul(source_width)?.checked_add(source_start)?
+    } else {
+        source_start.checked_mul(source_width)?.checked_add(line)?
+    };
+    let pixel_step = if horizontal { 1 } else { source_width };
+
+    let mut exact_sum = 0i128;
+    let mut ordered_f64 = 0.0f64;
+    for (tap_index, (&weight, &coefficient)) in weights.iter().zip(aligned_coefficients).enumerate()
+    {
+        let sample = *samples.get(pixel)?;
+        ordered_f64 = weight.mul_add(f64::from(sample), ordered_f64);
+        if coefficient != 0 && sample != 0 {
+            let term = i128::from(sample).checked_mul(i128::from(coefficient))?;
+            exact_sum = exact_sum.checked_add(term)?;
+        }
+        if tap_index + 1 < weights.len() {
+            pixel = pixel.checked_add(pixel_step)?;
+        }
+    }
+    if !ordered_f64.is_finite() {
+        return None;
+    }
+    let expected = round_up(ordered_f64);
+    if !expected.is_finite() {
+        return None;
+    }
+    let expected = i32::try_from(expected as i64).ok()?;
+    let actual = gpu_i_f64_integer_to_i32(exact_sum, minimum_exponent)?;
+    (actual == expected).then_some(actual)
+}
+
+/// Keep the general exact reducer for coefficient rows whose common integer
+/// scale does not fit in the compact aligned plan.
+fn gpu_i_resize_f64_sample_slow(
+    samples: &[i32],
     source_dimensions: (u32, u32),
     coeffs: &FilterCoeffsF64,
     output_index: usize,
     horizontal: bool,
     line: usize,
-) -> Option<u32> {
+) -> Option<i32> {
     let source_w = usize::try_from(source_dimensions.0).ok()?;
     let source_h = usize::try_from(source_dimensions.1).ok()?;
     let source_start = usize::try_from(*coeffs.xmin.get(output_index)?).ok()?;
@@ -2368,7 +2514,7 @@ fn gpu_i_resize_f64_sample_bits(
     };
     let sample_at = |tap: usize| -> Option<i32> {
         let pixel = source_pixel(tap)?;
-        Some(samples.get(pixel).copied()? as i32)
+        Some(*samples.get(pixel)?)
     };
 
     let mut minimum_exponent = None;
@@ -2437,20 +2583,81 @@ fn gpu_i_resize_f64_sample_bits(
     }
     let expected = i32::try_from(expected as i64).ok()?;
     let actual = gpu_i_f64_integer_to_i32(exact_sum, minimum_exponent)?;
-    (actual == expected).then_some(actual as u32)
+    (actual == expected).then_some(actual)
+}
+
+fn gpu_i_resize_f64_sample(
+    samples: &[i32],
+    source_dimensions: (u32, u32),
+    coeffs: &FilterCoeffsF64,
+    output_index: usize,
+    plan: &GpuIResizePassPlan,
+    horizontal: bool,
+    line: usize,
+) -> Option<i32> {
+    let source_width = usize::try_from(source_dimensions.0).ok()?;
+    let source_height = usize::try_from(source_dimensions.1).ok()?;
+    if line
+        >= if horizontal {
+            source_height
+        } else {
+            source_width
+        }
+    {
+        return None;
+    }
+    let output = *plan.outputs.get(output_index)?;
+    if !output.aligned {
+        return gpu_i_resize_f64_sample_slow(
+            samples,
+            source_dimensions,
+            coeffs,
+            output_index,
+            horizontal,
+            line,
+        );
+    }
+    let weights = coeffs.weights.get(output_index)?;
+    if weights.len() != output.tap_count {
+        return None;
+    }
+    let tap_end = output.tap_start.checked_add(output.tap_count)?;
+    let aligned_coefficients = plan.aligned_coefficients.get(output.tap_start..tap_end)?;
+    let fast = gpu_i_resize_f64_sample_aligned(
+        samples,
+        source_width,
+        output.source_start,
+        weights,
+        aligned_coefficients,
+        output.minimum_exponent,
+        horizontal,
+        line,
+    );
+    fast.or_else(|| {
+        gpu_i_resize_f64_sample_slow(
+            samples,
+            source_dimensions,
+            coeffs,
+            output_index,
+            horizontal,
+            line,
+        )
+    })
 }
 
 /// Evaluate every word produced by one exact I-mode resize pass. The result
 /// order matches the packed image rows consumed by the next shader pass.
-fn gpu_i_resize_f64_pass_bits(
-    samples: &[u32],
+fn gpu_i_resize_f64_pass_values(
+    samples: &[i32],
     source_dimensions: (u32, u32),
     coeffs: &FilterCoeffsF64,
+    plan: &GpuIResizePassPlan,
     horizontal: bool,
-) -> Option<Vec<u32>> {
-    let output_count = coeffs.xmin.len();
+) -> Option<Vec<i32>> {
+    let output_count = plan.outputs.len();
+    let source_w = usize::try_from(source_dimensions.0).ok()?;
     let source_axis = if horizontal {
-        usize::try_from(source_dimensions.0).ok()?
+        source_w
     } else {
         usize::try_from(source_dimensions.1).ok()?
     };
@@ -2474,11 +2681,12 @@ fn gpu_i_resize_f64_pass_bits(
     if horizontal {
         for line in 0..line_count {
             for output_index in 0..output_count {
-                result.push(gpu_i_resize_f64_sample_bits(
+                result.push(gpu_i_resize_f64_sample(
                     samples,
                     source_dimensions,
                     coeffs,
                     output_index,
+                    plan,
                     true,
                     line,
                 )?);
@@ -2487,11 +2695,12 @@ fn gpu_i_resize_f64_pass_bits(
     } else {
         for output_index in 0..output_count {
             for line in 0..line_count {
-                result.push(gpu_i_resize_f64_sample_bits(
+                result.push(gpu_i_resize_f64_sample(
                     samples,
                     source_dimensions,
                     coeffs,
                     output_index,
+                    plan,
                     false,
                     line,
                 )?);
@@ -2523,6 +2732,12 @@ fn gpu_i_resize_f64_is_exact(
     if source_dimensions.0 == 0 || source_dimensions.1 == 0 {
         return false;
     }
+    let Ok(source_width) = usize::try_from(source_dimensions.0) else {
+        return false;
+    };
+    let Ok(source_height) = usize::try_from(source_dimensions.1) else {
+        return false;
+    };
     let DynamicImage::ImageRgba8(pixels) = image else {
         return false;
     };
@@ -2541,35 +2756,33 @@ fn gpu_i_resize_f64_is_exact(
     let (kernel, support) = filter_from_resample(*filter);
     let horizontal = precompute_coeffs_f64(*w, source_dimensions.0, kernel, support);
     let vertical = precompute_coeffs_f64(*h, source_dimensions.1, kernel, support);
-    for coeffs in [&horizontal, &vertical] {
-        if coeffs.xmin.len() != coeffs.count.len()
-            || coeffs.xmin.len() != coeffs.weights.len()
-            || coeffs.weights.iter().any(|row| {
-                row.iter()
-                    .any(|&weight| gpu_f64_integer_parts(weight).is_none())
-            })
-        {
-            return false;
-        }
-    }
+    let Some(horizontal_plan) = gpu_i_resize_f64_pass_plan(&horizontal, source_width) else {
+        return false;
+    };
+    let Some(vertical_plan) = gpu_i_resize_f64_pass_plan(&vertical, source_height) else {
+        return false;
+    };
 
     let bytes = pixels.as_raw();
-    let samples = bytes
-        .chunks_exact(4)
-        .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
-        .collect::<Vec<_>>();
+    let samples = i32_samples_from_le_bytes(bytes, bytes.len() / 4);
     if samples.len().checked_mul(4) != Some(bytes.len()) {
         return false;
     }
-    let horizontal_words =
-        gpu_i_resize_f64_pass_bits(&samples, source_dimensions, &horizontal, true);
-    let Some(horizontal_words) = horizontal_words else {
+    let horizontal_values = gpu_i_resize_f64_pass_values(
+        &samples,
+        source_dimensions,
+        &horizontal,
+        &horizontal_plan,
+        true,
+    );
+    let Some(horizontal_values) = horizontal_values else {
         return false;
     };
-    gpu_i_resize_f64_pass_bits(
-        &horizontal_words,
+    gpu_i_resize_f64_pass_values(
+        &horizontal_values,
         (*w, source_dimensions.1),
         &vertical,
+        &vertical_plan,
         false,
     )
     .is_some()
@@ -2798,17 +3011,6 @@ fn gpu_luma16_resize_f64_is_exact(
     let (kernel, support) = filter_from_resample(*filter);
     let horizontal = precompute_coeffs_f64(*w, source_dimensions.0, kernel, support);
     let vertical = precompute_coeffs_f64(*h, source_dimensions.1, kernel, support);
-    for coeffs in [&horizontal, &vertical] {
-        if coeffs.xmin.len() != coeffs.count.len()
-            || coeffs.xmin.len() != coeffs.weights.len()
-            || coeffs.weights.iter().any(|row| {
-                row.iter()
-                    .any(|&weight| gpu_f64_integer_parts(weight).is_none())
-            })
-        {
-            return false;
-        }
-    }
 
     let big_endian = luma16_resample_big_endian(logical_mode);
     let Some(horizontal_samples) = gpu_luma16_f64_pass(
@@ -11804,6 +12006,87 @@ impl GpuInner {
 
     /// Merge three native L planes into packed RGB bytes without RGBA staging.
     #[cfg(target_endian = "little")]
+    fn upload_native_rgb_luma_merge_mapped(
+        &self,
+        red: &[u8],
+        green: &[u8],
+        blue: &[u8],
+        dispatch: &NativeRgbMergeDispatch,
+        auxiliary_offset: u64,
+        transfer_bytes: u64,
+        buffers: &mut BufferPool,
+    ) -> Result<(), PilError> {
+        if !self.direct_primary_readback
+            || red.len() != dispatch.input_bytes
+            || green.len().checked_add(blue.len()) != Some(dispatch.auxiliary_bytes)
+            || auxiliary_offset < dispatch.input_transfer_bytes
+            || auxiliary_offset.checked_add(dispatch.auxiliary_transfer_bytes)
+                != Some(transfer_bytes)
+        {
+            return Err(PilError::InternalError(
+                "GPU mapped RGB Merge input layout mismatch".into(),
+            ));
+        }
+
+        let transfer_len = usize::try_from(transfer_bytes)
+            .map_err(|_| PilError::ValueError("GPU mapped RGB Merge input is too large".into()))?;
+        let auxiliary_start = usize::try_from(auxiliary_offset)
+            .map_err(|_| PilError::ValueError("GPU mapped RGB Merge offset is too large".into()))?;
+        let green_end = auxiliary_start
+            .checked_add(green.len())
+            .ok_or_else(|| PilError::ValueError("GPU mapped RGB Merge input overflow".into()))?;
+        let blue_end = green_end
+            .checked_add(blue.len())
+            .ok_or_else(|| PilError::ValueError("GPU mapped RGB Merge input overflow".into()))?;
+        if blue_end > transfer_len {
+            return Err(PilError::InternalError(
+                "GPU mapped RGB Merge bands exceed their checked buffer".into(),
+            ));
+        }
+
+        let usage = wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::STORAGE;
+        let input = buffers.mapped_native_input.get_or_insert_with(|| {
+            ReusableGpuBuffer::new(
+                &self.device,
+                "gpu_mapped_native_rgb_merge_input",
+                usage,
+                transfer_len,
+                4,
+            )
+        });
+        input.ensure_capacity(
+            &self.device,
+            "gpu_mapped_native_rgb_merge_input",
+            usage,
+            transfer_len,
+            4,
+        );
+        self.wait_for_buffer_mapping(
+            transfer_bytes,
+            &input.buffer,
+            wgpu::MapMode::Write,
+            "GPU mapped RGB Merge input",
+        )?;
+        let result = {
+            let mut view = input.buffer.slice(..transfer_bytes).get_mapped_range_mut();
+            let mapped = view.as_mut();
+            if mapped.len() != transfer_len {
+                Err(PilError::InternalError(
+                    "GPU mapped RGB Merge input has an unexpected length".into(),
+                ))
+            } else {
+                mapped.fill(0);
+                mapped[..red.len()].copy_from_slice(red);
+                mapped[auxiliary_start..auxiliary_start + green.len()].copy_from_slice(green);
+                mapped[green_end..blue_end].copy_from_slice(blue);
+                Ok(())
+            }
+        };
+        input.buffer.unmap();
+        result
+    }
+
+    #[cfg(target_endian = "little")]
     fn execute_native_rgb_luma_merge(
         &self,
         image: &DynamicImage,
@@ -11869,13 +12152,21 @@ impl GpuInner {
             ));
         }
 
-        buffers.img2_arena.ensure_capacity(
-            &self.device,
-            "gpu_merge_native_rgb_luma_auxiliary",
-            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            dispatch.auxiliary_transfer_bytes as usize,
-            limits.min_storage_buffer_offset_alignment as usize,
-        );
+        let auxiliary_offset_alignment =
+            u64::from(limits.min_storage_buffer_offset_alignment.max(1));
+        let mapped_auxiliary_offset = dispatch
+            .input_transfer_bytes
+            .checked_add(auxiliary_offset_alignment - 1)
+            .map(|aligned| aligned / auxiliary_offset_alignment * auxiliary_offset_alignment);
+        let mapped_input_layout = mapped_auxiliary_offset
+            .and_then(|offset| {
+                offset
+                    .checked_add(dispatch.auxiliary_transfer_bytes)
+                    .map(|end| (offset, end))
+            })
+            .filter(|(_, total)| *total <= limits.max_buffer_size)
+            .filter(|(_, total)| usize::try_from(*total).is_ok());
+        let mapped_input = self.direct_primary_readback && mapped_input_layout.is_some();
         buffers.params_arena.ensure_capacity(
             &self.device,
             "gpu_merge_native_rgb_luma_params",
@@ -11884,40 +12175,65 @@ impl GpuInner {
             limits.min_uniform_buffer_offset_alignment as usize,
         );
 
-        let write_luma = |buffer: &wgpu::Buffer,
-                          transfer_bytes: u64,
-                          copy_samples: &mut dyn FnMut(&mut [u8])|
-         -> Result<(), PilError> {
-            let size = NonZeroU64::new(transfer_bytes).ok_or_else(|| {
-                PilError::InternalError("GPU native RGB Merge upload is empty".into())
-            })?;
-            let mut upload = self
-                .queue
-                .write_buffer_with(buffer, 0, size)
-                .ok_or_else(|| {
-                    PilError::InternalError("GPU native RGB Merge staging allocation failed".into())
+        let mapped_auxiliary_offset = if mapped_input {
+            let (offset, total) = mapped_input_layout.expect("mapped layout was admitted");
+            self.upload_native_rgb_luma_merge_mapped(
+                red.as_raw(),
+                green.as_raw(),
+                blue.as_raw(),
+                &dispatch,
+                offset,
+                total,
+                buffers,
+            )?;
+            Some(offset)
+        } else {
+            buffers.img2_arena.ensure_capacity(
+                &self.device,
+                "gpu_merge_native_rgb_luma_auxiliary",
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                dispatch.auxiliary_transfer_bytes as usize,
+                limits.min_storage_buffer_offset_alignment as usize,
+            );
+            let write_luma = |buffer: &wgpu::Buffer,
+                              transfer_bytes: u64,
+                              copy_samples: &mut dyn FnMut(&mut [u8])|
+             -> Result<(), PilError> {
+                let size = NonZeroU64::new(transfer_bytes).ok_or_else(|| {
+                    PilError::InternalError("GPU native RGB Merge upload is empty".into())
                 })?;
-            let mapped = upload.as_mut();
-            mapped.fill(0);
-            copy_samples(mapped);
-            Ok(())
+                let mut upload =
+                    self.queue
+                        .write_buffer_with(buffer, 0, size)
+                        .ok_or_else(|| {
+                            PilError::InternalError(
+                                "GPU native RGB Merge staging allocation failed".into(),
+                            )
+                        })?;
+                let mapped = upload.as_mut();
+                mapped.fill(0);
+                copy_samples(mapped);
+                Ok(())
+            };
+            write_luma(
+                &buffers.buf_a,
+                dispatch.input_transfer_bytes,
+                &mut |mapped| {
+                    mapped[..dispatch.input_bytes].copy_from_slice(red.as_raw());
+                },
+            )?;
+            write_luma(
+                &buffers.img2_arena.buffer,
+                dispatch.auxiliary_transfer_bytes,
+                &mut |mapped| {
+                    let green_len = green.as_raw().len();
+                    mapped[..green_len].copy_from_slice(green.as_raw());
+                    mapped[green_len..green_len + blue.as_raw().len()]
+                        .copy_from_slice(blue.as_raw());
+                },
+            )?;
+            None
         };
-        write_luma(
-            &buffers.buf_a,
-            dispatch.input_transfer_bytes,
-            &mut |mapped| {
-                mapped[..dispatch.input_bytes].copy_from_slice(red.as_raw());
-            },
-        )?;
-        write_luma(
-            &buffers.img2_arena.buffer,
-            dispatch.auxiliary_transfer_bytes,
-            &mut |mapped| {
-                let green_len = green.as_raw().len();
-                mapped[..green_len].copy_from_slice(green.as_raw());
-                mapped[green_len..green_len + blue.as_raw().len()].copy_from_slice(blue.as_raw());
-            },
-        )?;
 
         let parameters = [
             dispatch.invocation_row_width,
@@ -11929,6 +12245,39 @@ impl GpuInner {
             0,
             0,
         ];
+        let (input_buffer, auxiliary_buffer, input_range, auxiliary_range) =
+            if let Some(auxiliary_offset) = mapped_auxiliary_offset {
+                let input = &buffers
+                    .mapped_native_input
+                    .as_ref()
+                    .expect("mapped RGB Merge upload owns its input buffer")
+                    .buffer;
+                (
+                    input,
+                    input,
+                    BufferRange {
+                        offset: 0,
+                        size: dispatch.input_transfer_bytes,
+                    },
+                    BufferRange {
+                        offset: auxiliary_offset,
+                        size: dispatch.auxiliary_transfer_bytes,
+                    },
+                )
+            } else {
+                (
+                    &buffers.buf_a,
+                    &buffers.img2_arena.buffer,
+                    BufferRange {
+                        offset: 0,
+                        size: dispatch.input_transfer_bytes,
+                    },
+                    BufferRange {
+                        offset: 0,
+                        size: dispatch.auxiliary_transfer_bytes,
+                    },
+                )
+            };
         self.queue.write_buffer(
             &buffers.params_arena.buffer,
             0,
@@ -11945,23 +12294,11 @@ impl GpuInner {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: ranged_binding(
-                        &buffers.buf_a,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.input_transfer_bytes,
-                        }),
-                    )?,
+                    resource: ranged_binding(input_buffer, Some(input_range))?,
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: ranged_binding(
-                        &buffers.img2_arena.buffer,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.auxiliary_transfer_bytes,
-                        }),
-                    )?,
+                    resource: ranged_binding(auxiliary_buffer, Some(auxiliary_range))?,
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -12027,7 +12364,8 @@ impl GpuInner {
             readback_bytes: dispatch.output_transfer_bytes,
             parameter_bytes: 32,
             retained_cache_bytes: buffers.retained_bytes(),
-            full_frame_copy_count: 3 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
+            full_frame_copy_count: u64::from(!mapped_input) * 3
+                + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
             mode_conversion_count: 0,
             ..PipelineResourceTelemetry::default()
         });
@@ -14352,6 +14690,7 @@ impl GpuInner {
                 )));
             }
             let samples = bytes[..pixel_count].to_vec();
+            crate::compute::record_pipeline_allocation(samples.len());
             crate::raster::GrayImage::from_raw(w, h, samples)
                 .map(DynamicImage::ImageLuma8)
                 .ok_or_else(|| PilError::ValueError("bad luma readback buffer".into()))
@@ -19882,19 +20221,19 @@ fn gpu_batch_capacity(
             None => (cur_w, cur_h),
         };
         high_water = high_water.max(pixels((out_w, out_h))?);
-        let uses_separable_resize = matches!(
-            op,
-            PipelineOp::Resize { filter, .. }
-                if !matches!(filter, ResampleFilter::Nearest)
-                    || gpu_resize_nearest_uses_coefficients(logical_mode)
-        );
+        let uses_separable_resize = matches!(op, PipelineOp::ResizeBoxed { .. })
+            || matches!(
+                op,
+                PipelineOp::Resize { filter, .. }
+                    if !matches!(filter, ResampleFilter::Nearest)
+                        || gpu_resize_nearest_uses_coefficients(logical_mode)
+            );
         if uses_separable_resize {
-            // The separable resize plan materializes an intermediate frame
-            // with the destination width and source height before its
-            // vertical pass.  A wide, short resize can therefore need more
-            // storage than either endpoint; account for that frame before
-            // the device buffers are allocated.  This applies to byte,
-            // I/F, and typed I;16 paths alike.
+            // Both resize plans materialize a horizontal intermediate before
+            // the vertical pass. ResizeBoxed may compact the source rows, but
+            // the full source height is a safe upper bound for that span.
+            // A wide resize can therefore need more storage than either
+            // endpoint; account for the intermediate before allocating.
             high_water = high_water.max(pixels((out_w, cur_h))?);
         }
         if let PipelineOp::PutData { data, mode } = op {
@@ -19985,7 +20324,7 @@ fn gpu_dispatch_dimensions_require_cpu(
             PipelineOp::ExtractBand { .. } | PipelineOp::Constant { .. }
         ) {
             plan_extract_band_dispatch(next.0, next.1, max_workgroups_per_dimension).is_err()
-        } else if matches!(op, PipelineOp::Fit { .. })
+        } else if matches!(op, PipelineOp::Fit { .. } | PipelineOp::ResizeBoxed { .. })
             || matches!(op, PipelineOp::Resize { filter, .. }
             if !matches!(filter, ResampleFilter::Nearest)
                 || gpu_resize_nearest_uses_coefficients(logical_mode))
@@ -20036,7 +20375,7 @@ fn gpu_shader_work_items(
     // not the kernel radius, determines their safety.
     let output_pixels = u64::from(output_dimensions.0) * u64::from(output_dimensions.1);
     let (source_w, source_h) = source_dimensions;
-    if matches!(op, PipelineOp::Fit { .. })
+    if matches!(op, PipelineOp::Fit { .. } | PipelineOp::ResizeBoxed { .. })
         || matches!(op, PipelineOp::Resize { filter, .. } | PipelineOp::Scale { filter, .. }
         if !matches!(filter, ResampleFilter::Nearest)
             || gpu_resize_nearest_uses_coefficients(logical_mode))
@@ -25648,10 +25987,10 @@ mod tests {
         BLUR_WORKGROUP_SIZE, F64OrderedKind, F64OrderedState, F64SignedMagnitude,
         GPU_BUFFER_CAPACITY, GPU_MASKED_RGBA_WORKGROUP_SIZE, GPU_POLL_BACKOFF,
         GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, encode_resize_compact_box_axis,
-        gpu_buffer_capacity_exceeds_limits, gpu_buffer_reuse_allowed, gpu_byte_point_mode_allowed,
-        gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix, gpu_dimensions_require_cpu,
-        gpu_dispatch_count, gpu_dispatch_dimensions_require_cpu, gpu_f_pad_f64_is_exact,
-        gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
+        filter_from_resample, gpu_buffer_capacity_exceeds_limits, gpu_buffer_reuse_allowed,
+        gpu_byte_point_mode_allowed, gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix,
+        gpu_dimensions_require_cpu, gpu_dispatch_count, gpu_dispatch_dimensions_require_cpu,
+        gpu_f_pad_f64_is_exact, gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
         gpu_f_resize_compact_box_axis, gpu_f_resize_compact_box_is_exact,
         gpu_f_resize_compact_box_vertical_only_geometry, gpu_f_resize_constant_bits,
         gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact, gpu_f_resize_f64_ordered_is_exact,
@@ -25659,7 +25998,8 @@ mod tests {
         gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_f64_ordered_add_product,
         gpu_f64_ordered_round, gpu_f64_ordered_state_to_f32, gpu_float_filter_is_supported,
-        gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
+        gpu_i_resize_f64_is_exact, gpu_i_resize_f64_pass_plan, gpu_i_resize_f64_sample,
+        gpu_i_resize_f64_sample_slow, gpu_i_resize_identity_is_exact,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
         gpu_native_masked_byte_paste_layout, gpu_native_masked_byte_paste_shader,
         gpu_native_rgb_luma_merge_bands, gpu_nearest_affine_is_exact,
@@ -25676,7 +26016,7 @@ mod tests {
         plan_native_rgb_put_alpha_data_dispatch, plan_native_rgb_put_alpha_dispatch,
         plan_native_rgba_put_alpha_data_dispatch, plan_packed_la_dispatch,
         plan_packed_luma_dispatch, plan_packed_point_luma_dispatch, plan_sharpness_l_dispatch,
-        putdata_auxiliary_words, readback_poll_backoff,
+        precompute_coeffs_f64, putdata_auxiliary_words, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -29063,6 +29403,102 @@ mod tests {
             Some("exact host semantic control: GPU logical-mode operation contract is not proven")
         );
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn ycbcr_grayscale_matches_cpu_for_complete_groups_and_pixel_tails() {
+        use crate::compute::BackendImpl;
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+
+        match super::GpuPool::ensure_init() {
+            Ok(_) => {}
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                return;
+            }
+            Err(error) => panic!("GPU YCbCr grayscale initialization failed: {error}"),
+        }
+
+        let operation = PipelineOp::Grayscale;
+        for (width, height) in [(1u32, 1u32), (2, 1), (3, 1), (4, 1), (5, 1), (3, 3)] {
+            let pixel_count = width as usize * height as usize;
+            let bytes = (0..pixel_count)
+                .flat_map(|pixel| {
+                    [
+                        pixel.wrapping_mul(47).wrapping_add(13) as u8,
+                        pixel.wrapping_mul(29).wrapping_add(71) as u8,
+                        pixel.wrapping_mul(83).wrapping_add(19) as u8,
+                    ]
+                })
+                .collect();
+            let source = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, bytes).expect("YCbCr grayscale source"),
+            );
+            let expected =
+                crate::compute::registry::execute_cpu(&operation, &source, Some("YCbCr"))
+                    .unwrap_or_else(|error| {
+                        panic!("CPU YCbCr grayscale {width}x{height}: {error}")
+                    });
+            let _ = Backend::take_pipeline_allocation_telemetry();
+            let actual = super::GpuPool
+                .execute_batch_strict(std::slice::from_ref(&operation), &source, Some("YCbCr"))
+                .unwrap_or_else(|error| panic!("GPU YCbCr grayscale {width}x{height}: {error}"));
+            assert!(matches!(&actual, DynamicImage::ImageLuma8(_)));
+            assert_eq!(
+                actual.as_bytes(),
+                expected.as_bytes(),
+                "{width}x{height} pixels"
+            );
+
+            let resources = crate::compute::take_pipeline_resource_telemetry()
+                .unwrap_or_else(|| panic!("{width}x{height} resource receipt"));
+            let allocations = Backend::take_pipeline_allocation_telemetry();
+            let upload_bytes = (pixel_count * 3).div_ceil(4) * 4;
+            let readback_bytes = pixel_count.div_ceil(4) * 4;
+            assert_eq!(
+                resources.upload_bytes, upload_bytes as u64,
+                "{width}x{height} upload"
+            );
+            assert_eq!(
+                resources.readback_bytes, readback_bytes as u64,
+                "{width}x{height} readback"
+            );
+            assert_eq!(
+                resources.mode_conversion_count, 0,
+                "{width}x{height} conversion"
+            );
+            assert_eq!(
+                allocations.allocation_count, 1,
+                "{width}x{height} allocations"
+            );
+            assert_eq!(
+                allocations.allocated_bytes, pixel_count as u64,
+                "{width}x{height} allocated bytes"
+            );
+            assert_eq!(
+                crate::compute::take_pipeline_dispatch_count(),
+                Some(1),
+                "{width}x{height} dispatch"
+            );
+            assert_eq!(
+                crate::compute::take_pipeline_backend_override(),
+                None,
+                "{width}x{height} must execute on GPU without fallback"
+            );
+        }
     }
 
     // Use a private instance of the production pool on the shared test device.
@@ -32526,47 +32962,71 @@ mod tests {
     #[test]
     #[cfg(target_endian = "little")]
     fn native_rgb_luma_merge_gpu_preserves_odd_tail_and_compact_transfer() {
-        let red = Image::frombytes("L", (3, 2), &[1, 2, 3, 4, 5, 6]).expect("R band");
-        let green = Image::frombytes("L", (3, 2), &[11, 12, 13, 14, 15, 16]).expect("G band");
-        let blue = Image::frombytes("L", (3, 2), &[21, 22, 23, 24, 25, 26]).expect("B band");
-        let merged = crate::image_merge("RGB", &[red, green, blue]).expect("RGB merge");
-        let expected = merged
-            .clone()
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU RGB merge");
+        let mapped_input = primary_readback_test_gpu().is_some();
         let previous = Backend::set_pipeline_telemetry_enabled(true);
-        let actual = match merged.use_backend(Backend::Gpu).tobytes() {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
+        for (width, height) in [(1, 1), (3, 2), (17, 17)] {
+            let pixels = width * height;
+            let red = (0..pixels)
+                .map(|index| (index * 31 + 1) as u8)
+                .collect::<Vec<_>>();
+            let green = (0..pixels)
+                .map(|index| (index * 47 + 11) as u8)
+                .collect::<Vec<_>>();
+            let blue = (0..pixels)
+                .map(|index| (index * 59 + 21) as u8)
+                .collect::<Vec<_>>();
+            let red_image = Image::frombytes("L", (width, height), &red).expect("R band");
+            let green_image = Image::frombytes("L", (width, height), &green).expect("G band");
+            let blue_image = Image::frombytes("L", (width, height), &blue).expect("B band");
+            let merged = crate::image_merge("RGB", &[red_image, green_image, blue_image])
+                .expect("RGB merge");
+            let expected = merged
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU RGB merge");
+            let actual = match merged.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU RGB/L merge failed for {width}x{height}: {error}"),
+            };
+            assert_eq!(actual, expected, "native RGB/L merge {width}x{height}");
+            if (width, height) == (3, 2) {
+                assert_eq!(
+                    actual,
+                    [
+                        1, 11, 21, 32, 58, 80, 63, 105, 139, 94, 152, 198, 125, 199, 1, 156, 246,
+                        60,
+                    ]
+                );
             }
-            Err(error) => panic!("native GPU RGB/L merge failed: {error}"),
-        };
-        assert_eq!(actual, expected);
-        assert_eq!(
-            actual,
-            [
-                1, 11, 21, 2, 12, 22, 3, 13, 23, 4, 14, 24, 5, 15, 25, 6, 16, 26
-            ]
-        );
-        let receipt = Backend::take_pipeline_telemetry()
-            .expect("native GPU RGB/L merge must publish a receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native GPU RGB/L merge resources");
-        assert_eq!(resources.upload_bytes, 20);
-        assert_eq!(resources.auxiliary_bytes, 12);
-        assert_eq!(resources.readback_bytes, 20);
-        assert_eq!(resources.mode_conversion_count, 0);
+            let receipt = Backend::take_pipeline_telemetry()
+                .expect("native GPU RGB/L merge must publish a receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native GPU RGB/L merge resources");
+            let input_transfer = u64::from(pixels.div_ceil(4) * 4);
+            let auxiliary_transfer = u64::from((pixels * 2).div_ceil(4) * 4);
+            let output_transfer = u64::from((pixels * 3).div_ceil(4) * 4);
+            assert_eq!(resources.upload_bytes, input_transfer + auxiliary_transfer);
+            assert_eq!(resources.auxiliary_bytes, auxiliary_transfer);
+            assert_eq!(resources.readback_bytes, output_transfer);
+            assert_eq!(
+                resources.full_frame_copy_count,
+                if mapped_input { 0 } else { 4 }
+            );
+            assert_eq!(resources.mode_conversion_count, 0);
+        }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
@@ -32690,11 +33150,18 @@ mod tests {
                 .expect("CPU channel extraction");
             assert_eq!(expected, expected_bytes);
             let _ = crate::compute::take_pipeline_resource_telemetry();
-            let actual = match source
-                .getchannel(channel)
-                .expect("channel operation")
-                .use_backend(Backend::Gpu)
-                .tobytes()
+            // `use_backend` only locks deferred work. The public getchannel
+            // fast paths for single-band L and tiny RGB can execute eagerly
+            // before a lock on the returned image is applied, so construct
+            // the same ExtractBand pipeline directly for this GPU-kernel test.
+            let actual = match Image::push_op(
+                &source,
+                PipelineOp::ExtractBand {
+                    index: u8::try_from(channel).expect("valid channel index"),
+                },
+            )
+            .use_backend(Backend::Gpu)
+            .tobytes()
             {
                 Ok(actual) => actual,
                 Err(error)
@@ -37802,6 +38269,71 @@ mod tests {
             &image,
             Some("I")
         ));
+    }
+
+    #[test]
+    fn i_resize_aligned_reducer_matches_general_exact_reducer() {
+        let source_dimensions = (9, 8);
+        let values = [
+            i32::MIN,
+            i32::MAX,
+            -100_000,
+            -1,
+            0,
+            1,
+            100_000,
+            i32::MIN + 1,
+            i32::MAX - 1,
+        ];
+        let samples = (0..source_dimensions.0 * source_dimensions.1)
+            .map(|index| values[((index * 17 + 3) % values.len() as u32) as usize])
+            .collect::<Vec<_>>();
+
+        for filter in [
+            ResampleFilter::Bilinear,
+            ResampleFilter::Bicubic,
+            ResampleFilter::Lanczos,
+            ResampleFilter::Box,
+        ] {
+            let (kernel, support) = filter_from_resample(filter);
+            for (horizontal, source_axis, output_axis, line_count) in [
+                (true, source_dimensions.0, 5, source_dimensions.1),
+                (false, source_dimensions.1, 4, source_dimensions.0),
+            ] {
+                let coeffs = precompute_coeffs_f64(output_axis, source_axis, kernel, support);
+                let plan = gpu_i_resize_f64_pass_plan(&coeffs, source_axis as usize)
+                    .unwrap_or_else(|| panic!("{filter:?} coefficient plan"));
+                assert!(
+                    plan.outputs.iter().any(|output| output.aligned),
+                    "{filter:?} produced no aligned coefficient rows"
+                );
+                for output_index in 0..plan.outputs.len() {
+                    for line in 0..line_count as usize {
+                        let aligned = gpu_i_resize_f64_sample(
+                            &samples,
+                            source_dimensions,
+                            &coeffs,
+                            output_index,
+                            &plan,
+                            horizontal,
+                            line,
+                        );
+                        let general = gpu_i_resize_f64_sample_slow(
+                            &samples,
+                            source_dimensions,
+                            &coeffs,
+                            output_index,
+                            horizontal,
+                            line,
+                        );
+                        assert_eq!(
+                            aligned, general,
+                            "{filter:?} output {output_index}, line {line}, horizontal={horizontal}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]

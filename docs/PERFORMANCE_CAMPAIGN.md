@@ -9,12 +9,15 @@ prototype. Its scripts and Make hooks have been removed and are not current
 reproduction commands. The current executor has its own
 [validation targets and measurements](GPU_BATCH_VALIDATION.md).
 
-The goals are per operation: CPU latency at or below Pillow, SIMD latency at
-least 5× faster than Pillow, and GPU latency no slower than SIMD with higher
-throughput. Every comparison requires equal output, the same timing boundary,
-and a receipt naming the backend that actually ran. Pipeline latency,
-materialized-operation latency, and changing-input throughput are separate
-measures. A pass at one boundary does not substitute for another.
+The active per-operation goals are CPU latency at or below Pillow, single-thread
+SIMD latency at or below half of Pillow (at least 2× faster), and GPU latency no
+slower than SIMD with higher sustained throughput. Keep existing test and
+workflow thresholds intact. Older dated snapshots and labels may report a 5×
+SIMD target; treat those figures as historical until they are recalculated for
+the active 2× target. Every comparison requires equal output, the same timing
+boundary, and a receipt naming the backend that actually ran. Pipeline
+latency, materialized-operation latency, and changing-input throughput are
+separate measures. A pass at one boundary does not substitute for another.
 
 Priority sequencing is stricter than the final CPU floor: first bring each
 verified CPU workload currently slower than Pillow to at least 2× Pillow. Once
@@ -49,6 +52,9 @@ classification; this count does not establish an exhaustive public API audit.
 | SIMD ≤ Pillow / 5 | 740 | 768 |
 | GPU ≤ SIMD | 609 | 768 |
 
+The September 2026 SIMD diagnostic row used a 5× threshold. It is a historical
+count and does not represent the active 2× SIMD completion gate.
+
 These are observed workload ratios, including rows without native-backend
 proof. They are not counts of completed operations. Backend receipts, exact
 parity on the measured inputs, and build provenance must also agree. The run
@@ -62,7 +68,7 @@ current local outputs are `build/migration-parity/optimization-goals.json` and
 `build/migration-parity/optimization-goals.md`. See
 [the reporting command](BENCHMARKING.md#correctness-gate-and-budget-gate).
 
-## Published cross-runner inventory — 2026-10-08
+## Published cross-runner inventory — 2026-10-10
 
 The committed [full per-workload matrix](evidence/performance-optimization-matrix.csv),
 [public API census](evidence/performance-optimization-public-api.csv), and
@@ -72,9 +78,9 @@ and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-s
 The full benchmark now runs when core or Python binding source changes, keeping
 backend implementation checkpoints tied to the complete cross-runner suite.
 The latest published full snapshot is clean at revision
-`c84fb100ee7948bb17b9d5ef1a5cbd18c22d066b`, measured
-`2026-10-08T16:24:56.527113Z`. It contains 8,619 rows across 663 workloads,
-including 201 `pipeline-op` workload IDs. The CSV retains every row and source
+`88d414bdbe6bd31b531271324094e041a9fece8a`, measured
+`2026-10-10T13:39:05.910204Z`. It contains 8,671 rows across 667 workloads,
+including 205 `pipeline-op` workload IDs. The CSV retains every row and source
 hash. Only exact parity with the expected backend, complete terminal
 observation, no fallback, clean provenance, and matching workload policy
 produces an eligible speed ratio. Sustained GPU throughput remains unmeasured
@@ -82,76 +88,64 @@ in these one-request snapshots. The API census contains 330 paths: all 209
 selected-manifest paths plus 121 paths outside that contract. Those 121 are
 explicit unmeasured gaps in the per-operation matrix; they do not count as
 benchmark coverage. Across verified workload-runner pairs, serial CPU is slower
-than Pillow in 10 of 120, below 2× Pillow in 61 of 120, and below 5× in 98 of
-120. SIMD is slower than Pillow in 24 of 120, below 2× in 42, and below 5× in
-87. GPU latency is slower than SIMD in 22 of its 38 verified pairs; sustained
-GPU throughput is not measured. Parallel CPU remains a separate profile built
-with the opt-in Cargo `parallel` feature: 19 of its 120 verified pairs are
-slower than Pillow, 51 are below 2×, and 83 are below 5×.
+than Pillow in 1 of 135, below 2× Pillow in 38 of 135, and below 5× in 107 of
+135. SIMD is slower than Pillow in 2 of 135, below 2× in 31 of 135, and below
+5× in 96. GPU latency is slower than SIMD in 23 of its 38 verified pairs;
+sustained GPU throughput is not measured. Parallel CPU remains a separate
+profile built with the opt-in Cargo `parallel` feature: 15 of its 135 verified
+pairs are slower than Pillow, 46 are below 2×, and 92 are below 5×.
 
 The immediate CPU priority remains every verified workload slower than Pillow,
 with a sequencing gate of at least 2× Pillow before attention shifts to
 workloads that lose to Pillow-SIMD. The eventual per-operation goals remain CPU
-at or below Pillow, SIMD at least 5× faster than Pillow, and GPU latency no
+at or below Pillow, single-thread SIMD at least 2× faster than Pillow, and GPU latency no
 slower than SIMD with higher sustained throughput. The latest runners are Apple
 M1 virtual, Ubuntu ARM64 (Neoverse-N2), and Ubuntu x86_64 (AMD EPYC 7763). Hosted
 x86 models vary across snapshots; use each run's paired Pillow ratio, and treat
 cross-snapshot timing changes as uncontrolled unless the host model matches.
 
-The latest snapshot's verified serial CPU rows slower than Pillow are:
+The latest snapshot's only verified serial CPU row slower than Pillow is:
 
 | Workload | Runner | Pillow speedup | Existing checkpoint |
 | --- | --- | ---: | --- |
-| RGB material grayscale | Ubuntu x86_64 | 0.413× | Direct output collection is retained; CPU≤Pillow remains open |
-| YCbCr material grayscale | Ubuntu x86_64 | 0.574× | CPU≤Pillow remains open |
-| LA material GaussianBlur | macOS arm64 | 0.690× | CPU≤Pillow remains open |
-| I-mode bicubic resize composed pipeline | Ubuntu x86_64 | 0.807× | Signed-offset typed-I conversion; local Apple arm64 candidate is 1.614–1.615× Pillow |
-| RGB material UnsharpMask | macOS arm64 | 0.841× | CPU≤Pillow remains open |
-| RGB material BoxBlur | macOS arm64 | 0.881× | CPU≤Pillow remains open |
-| YCbCr material grayscale | macOS arm64 | 0.911× | CPU≤Pillow remains open |
-| I-mode thumbnail | Ubuntu x86_64 | 0.920× | Native-I reduction and resize; CPU≤Pillow remains open |
-| RGB material thumbnail | macOS arm64 | 0.927× | PutPixel fusion and row-specialized boxed resize; CPU≤Pillow remains open |
-| RGB material thumbnail | Ubuntu ARM64 | 0.942× | PutPixel fusion and row-specialized boxed resize; CPU≤Pillow remains open |
+| RGB band-zero terminal read (`getdata`) | macOS arm64 | 0.726× | The dirty local correction passes 19/19 CPU comparisons at 1.78–2.44×; the clean published snapshot predates it |
 
-The speedup is Pillow median latency divided by target median latency; each
-listed workload is slower than Pillow on the shown runner. The finite-only x86
-FMA boxed-thumbnail candidate completed its clean hosted full-call benchmark
-with exact parity and 100/100 actual CPU samples without fallback. In that
-snapshot, Pillow and CPU medians were 1.976 and 1.926 ms (1.026×), while SIMD
-was 2.337 ms. This clears CPU≤Pillow but remains below the 2× sequencing gate.
-The prior snapshot measured 1.173 ms Pillow and 1.854 ms CPU (0.633×), but its
-x86 runner reported a different CPU model; the new Pillow reference is 68%
-slower while the Rust median is only 4% higher. The cross-snapshot ratio change
-does not demonstrate a candidate speedup. Keep the passing parity change, make
-no performance claim for it, and revisit it only with a same-model paired
-comparison. The local Apple arm64 full-call run passed parity at 1.053/0.480 ms
-Pillow/CPU but does not exercise the x86-specific path. Continue through every
-verified CPU workload below Pillow and raise all below-2× rows to at least 2×
-before shifting the main queue to workloads that only lose to Pillow-SIMD.
-
-The latest RGB material UnsharpMask workload measures 0.841× on macOS arm64,
-1.843× on Ubuntu ARM64, and 2.571× on Ubuntu x86_64. It is another verified
-CPU miss on macOS; its ARM row remains below the 2× sequencing gate.
+The speedup is Pillow median latency divided by target median latency. The lone
+published CPU miss is a stale GetData row relative to the current dirty local
+implementation. It is now reconciled against the same 512×512 RGB whole
+workflow: current-source CPU is 2.556× Pillow with exact parity 3/3, and the
+direct sequence-materialized CPU cohort passes 19/19 with 1.78×–2.44× speedups.
+No current local GetData CPU row is slower than Pillow, although four 32×32 rows
+remain below 2×. The operation matrix lists eight CPU APIs with verified rows
+below 2×: GetData, thumbnail, MedianFilter, Filter, grayscale, resize, posterize,
+and BoxBlur. Continue with the remaining below-2× workloads before
+Pillow-SIMD-only gaps.
+The latest runners are Apple M1 virtual, Ubuntu ARM64 (Neoverse-N2), and Ubuntu
+x86_64 (AMD EPYC 7763). Use each paired Pillow ratio; cross-snapshot timing
+changes remain uncontrolled unless the host model matches.
 
 The latest published Pillow-SIMD asset remains dirty and contains only 9 of the
-34 declared cases, from revision
-`101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`. The latest version-matched
+34 declared workloads, from revision
+`101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`. Its speed ratios remain diagnostic
+until a complete clean matched cohort is published. The
 [Pillow-SIMD workflow 37802856387](https://github.com/appunni-m/pillow-rs/actions/runs/37802856387)
-for candidate revision `67728573c` failed in its parity-gated benchmark step.
-Its public annotation only reports exit code 2; no failing case or test defect
-is confirmed. The F-mode thumbnail candidate is outside the Pillow-SIMD
-workload allowlist, so this failure does not diagnose the candidate. Until a
-complete clean asset is published, the existing JSON is diagnostic only. A
-newer Pillow-SIMD run for `c84fb100e` is shown in progress at
-[workflow 37805854242](https://github.com/appunni-m/pillow-rs/actions/runs/37805854242);
-the public asset has not advanced to a clean matched cohort. The latest full
-benchmark [JSON snapshot](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-reports `status: completed`, a clean c84 revision, and all 8,619 rows across
-three runner cohorts. Its [Actions summary page](https://github.com/appunni-m/pillow-rs/actions/runs/37805854317)
-still displays an active run, so the raw snapshot is the evidence used here.
-Rows retain actual-backend, parity, workload-policy, and terminal receipts.
-Use the separate operation matrix to inspect execution-only, not-run, fallback,
-and dirty Pillow-SIMD evidence without treating those rows as speed claims.
+reported four failed parity comparisons: the 1024×768 L-mode 5×5 Filter and
+large RGB Grayscale cases, each under CPU and SIMD. This was a benchmark oracle
+defect, not evidence of a Pillow implementation mismatch: the runner selected
+the timed source cohort as `MIGRATION_ORACLE_PYTHON`, so the Pillow-SIMD cohort
+changed the expected output from regular Pillow to Pillow-SIMD. The runner now
+keeps regular Pillow as the target oracle for both source cohorts and measures
+Pillow-SIMD compatibility separately, withholding ratios for incompatible
+rows. Focused CPU and SIMD reproductions pass 2/2 on arm64; the original x86
+behavior remains unverified. The F-mode thumbnail candidate is outside the
+Pillow-SIMD workload allowlist and is not diagnosed by that failure.
+
+The current full benchmark [JSON snapshot](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+reports `status: completed`, a clean 88d414 revision, and 8,671 rows across
+three runner cohorts. Rows retain actual-backend, parity, workload-policy, and
+terminal receipts. Use the separate operation matrix to inspect execution-only,
+not-run, fallback, and dirty Pillow-SIMD evidence without treating those rows
+as speed claims.
 
 ## Grayscale CPU checkpoint — 2026-10-08
 
@@ -383,6 +377,7 @@ cohort covering unmasked L, materialized and empty L images, and masked-L
 controls passed on CPU, strict SIMD, and strict GPU (10/10 each). The
 benchmark independently checks each completed result against live Pillow. No
 coverage was run.
+
 
 The same release request-boundary throughput diagnostic was run before and
 after the native-L path with 1024 × 768 L and RGB inputs. It used queue depths
@@ -21463,3 +21458,4317 @@ parity-test defect and no coverage was run. The paired rows are in
 parity receipts are
 `build/migration-parity/thumbnail-native-i-{stride-gather,no-stride-gather,final}-20261010.json`
 and their `-parity` sidecars.
+
+
+## Published matrix refresh after 88d414b — 2026-10-10
+
+The pushed benchmark batch completed on all three runner architectures, and the
+follow-up Docs deployment published the current full snapshot:
+[benchmark run](https://github.com/appunni-m/pillow-rs/actions/runs/38055331048),
+[Docs deployment](https://github.com/appunni-m/pillow-rs/actions/runs/38057004912).
+The public JSON is clean at revision `88d414bdbe6bd31b531271324094e041a9fece8a`,
+measured `2026-10-10T13:39:05.910204Z`, 8,671 rows across 667 workloads, and
+SHA-256 `72574ed44afee99c59a5fe2a6479003d90e11e6f60f4f318ea5dbc231cdb2955`.
+The per-workload and per-operation CSVs were regenerated from that JSON and the
+published Pillow-SIMD JSON.
+
+The serial-CPU matrix now has 135 verified comparisons: one is slower than
+Pillow and 38 are below 2×. The slow comparison is
+`PIL.Image.Image.getdata`, at 0.725603× Pillow for
+`pipeline-chain.terminal-read.rgb-band0` on macOS arm64. It is the first
+operation to work on in this push batch. The other seven serial-CPU operations
+below 2× are Thumbnail (1.104340×), MedianFilter (1.118780×), Filter
+(1.219782×), Grayscale (1.257275×), Resize (1.378308×), Posterize
+(1.420922×), and BoxBlur (1.693154×). These ratios are the weakest verified
+workload per operation; compare each workload and mode separately and do not
+collapse runner cohorts.
+
+SIMD has 135 verified comparisons, with 2 below Pillow, 31 below 2×, and 96
+below 5×. Parallel CPU remains a separate profile with 15/135 comparisons
+below Pillow and 46/135 below 2×. GPU has 23/38 verified comparisons slower
+than SIMD; seven GPU operation rows are fallbacks and sustained throughput is
+still unmeasured. No parity failures or parity-unproven rows are present in the
+published target comparisons. Nonmatching-backend rows remain unverified.
+
+The separate [Pillow-SIMD benchmark run](https://github.com/appunni-m/pillow-rs/actions/runs/38055331119)
+failed after building the wheel and passing its six runner tests. The supplied
+job log identifies four failed target comparisons: L-mode 5×5 Filter and
+RGB Grayscale, each on CPU and SIMD. The regular-Pillow cohort had completed
+before the Pillow-SIMD cohort ran. The harness had used the timed source as
+both benchmark subject and parity oracle, so a Pillow-SIMD output difference
+was reported as a pillow-rs parity failure. The working tree now keeps regular
+Pillow as the target oracle, times Pillow-SIMD under its own subject identity,
+and checks Pillow-SIMD output against Pillow separately. If those outputs
+differ, the measured row remains visible and its speed ratio is withheld.
+
+Focused Python 3.12 tests pass for source/oracle separation, exact source
+comparison, mismatch reporting, workload retention, and ratio withholding.
+The full x86 workflow must still confirm the changed runner. The published
+Pillow-SIMD snapshot remains dirty and partial (9 of 34 declared workloads),
+so it is excluded from ranking. The push batch is at 0/33 completed operation
+items; this parity-harness correction does not count as an optimized
+operation.
+
+## GetData direct-to-Python-buffer follow-up — 2026-10-10
+
+The packed band snapshot still created an intermediate Rust `Vec<u8>` and then
+copied it into Python `bytes`. Add a core length query and caller-buffer writer
+so the binding allocates the final Python bytes object once and the core fills
+it directly. The core resolves output length and mode/band errors before
+allocation; it reuses the materialized image when needed, while the `P` fast
+path reads its already-owned index plane without cloning it into another
+image. The fill runs with the GIL detached. Unbanded live-view behavior and
+mode-specific fallback paths remain unchanged.
+
+All 329 indexed `PIL.Image.Image.getdata` parity cases passed against Pillow
+12.1.1 on the CPU profile. This includes supported banded modes, invalid-band
+errors, and snapshot-after-mutation behavior. The matched 512 × 512 RGB
+`Invert` plus `getdata(band=0)` whole-workflow run also passed exact parity on
+CPU, SIMD, and GPU. The local Apple arm64 medians were:
+
+| Profile | Pillow | pillow-rs | Speedup vs Pillow | Actual backend / fallback |
+| --- | ---: | ---: | ---: | --- |
+| CPU | 385.938 µs | 102.708 µs | 3.76× | CPU / none |
+| SIMD | 385.938 µs | 168.167 µs | 2.29× | SIMD / none |
+| GPU | 385.938 µs | 567.708 µs | 0.68× | GPU / none |
+
+The CPU and SIMD rows meet the active 2× sequencing tier locally; SIMD remains
+below the repository's 5× campaign goal. GPU was slower than SIMD (0.30×
+latency speedup, 1,889 versus 5,946 whole-workflow operations per second). Its
+receipt confirms one GPU dispatch with no fallback, while the workflow uploads
+and reads back the full 786,432-byte RGB frame. This is a small one-dispatch
+case; sustained GPU throughput was not measured, and the GPU latency target is
+not met. Keep GetData open pending x86 and broader size/mode measurements and a
+GPU path that accounts for the terminal band projection. The public operation
+matrix remains based on its published pre-candidate snapshot until a later
+benchmark/docs deployment. No coverage was run. The paired rows and complete
+receipts are in `docs/evidence/performance-optimization-local-runs.csv` and
+`build/migration-parity/getdata-direct-buffer-all-backends{,-parity}.json`.
+
+## GetData banded mode cohort and storage fast paths — 2026-10-10
+
+The 2026-10-10 GetData campaign found and corrected a measurement-boundary defect. Direct GetData rows previously timed `Image.new` together with `getdata(band=...)`, obscuring the per-operation cost with receiver setup. Direct rows now use `observed_steps` with `step_ids=["band-data"]`: receiver construction still runs for each parity-backed sample, while the timed step includes `getdata` and allocation/materialization of its returned immutable bytes. The three Invert→GetData cases remain `whole_workflow` measurements, including image creation, the image operation, backend transfers, synchronization, and the GetData result.
+
+The implementation now reads P indices from the owned index plane without materializing a duplicate `DynamicImage`; reads logical LAB channels from the existing RGB storage while applying the Pillow a/b byte offset; and borrows directly stored P/L/1 planes for one copy into the final Python bytes object. Interleaved channel reads use a simple stepped iterator. A manual eight-pixel unroll was rejected after it slowed the cohort. The mode-1 `ImagingCore` label bug and the custom-palette detached-snapshot behavior remain covered by exact parity cases.
+
+The regenerated catalog has 968 benchmark workloads, 15,875 nuanced parity cases, and 17,138 total parity cases. The pinned public table catalog is 664 workloads: 200 operations and 464 pipelines. Direct GetData rows use 5 warmups and 5 samples of 20 measurements; composed rows retain the same count. Source Pillow is 12.2.0 on this Apple arm64 host.
+
+Exact parity passed all 60 standard comparisons (20 workloads across CPU, SIMD, and GPU). The separate Parallel CPU run passed 20/20. The focused single-band snapshot suite also passed after the P/L/1 view change. Current median latency in microseconds is:
+
+| Workload | Mode and size | Timed boundary | Pillow | Serial CPU | SIMD | GPU | Parallel CPU |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `getdata.1-band0-1024x768` | 1, 1024 × 768 | GetData step† | 19.71 | 12.04 | 12.00 | 11.79 | 11.75 |
+| `getdata.cmyk-band3-1024x768` | CMYK, 1024 × 768 | GetData step† | 132.52 | 83.77 | 102.79 | 82.83 | 82.17 |
+| `getdata.hsv-band2-1024x768` | HSV, 1024 × 768 | GetData step† | 104.04 | 80.50 | 91.98 | 80.04 | 80.46 |
+| `getdata.invert-rgb-band0-1024x768` | RGB, 1024 × 768 | whole workflow‡ | 1075.65 | 285.62 | 442.06 | 601.04 | 314.67 |
+| `getdata.invert-rgb-band0-2048x1536` | RGB, 2048 × 1536 | whole workflow‡ | 4056.94 | 682.12 | 1473.50 | 1293.98 | 741.44 |
+| `getdata.l-band0-1024x768` | L, 1024 × 768 | GetData step† | 14.90 | 11.92 | 12.85 | 11.83 | 11.75 |
+| `getdata.l-band0-32x32` | L, 32 × 32 | GetData step† | 2.88 | 1.67 | 1.75 | 1.67 | 1.65 |
+| `getdata.la-band1-1024x768` | LA, 1024 × 768 | GetData step† | 104.08 | 82.10 | 90.60 | 80.08 | 79.83 |
+| `getdata.la-band1-32x32` | LA, 32 × 32 | GetData step† | 2.92 | 1.96 | 2.08 | 1.88 | 1.92 |
+| `getdata.la-premultiplied-band1-1024x768` | La, 1024 × 768 | GetData step† | 106.46 | 83.54 | 85.38 | 80.06 | 79.83 |
+| `getdata.lab-band2-1024x768` | LAB, 1024 × 768 | GetData step† | 102.33 | 36.25 | 37.00 | 34.00 | 33.92 |
+| `getdata.p-band0-1024x768` | P, 1024 × 768 | GetData step† | 14.54 | 12.38 | 12.12 | 11.79 | 11.75 |
+| `getdata.pa-band1-1024x768` | PA, 1024 × 768 | GetData step† | 101.71 | 83.27 | 84.58 | 80.04 | 79.83 |
+| `getdata.rgb-band0-1024x768` | RGB, 1024 × 768 | GetData step† | 101.67 | 84.12 | 84.77 | 80.04 | 80.46 |
+| `getdata.rgb-band0-32x32` | RGB, 32 × 32 | GetData step† | 2.92 | 2.04 | 1.96 | 1.90 | 1.88 |
+| `rgb-band0` | RGB, 512 × 512 | whole workflow‡ | 399.29 | 100.50 | 131.33 | 313.67 | 111.04 |
+| `getdata.rgb-band2-1024x768` | RGB, 1024 × 768 | GetData step† | 101.75 | 84.00 | 81.96 | 80.00 | 80.50 |
+| `getdata.rgba-band3-1024x768` | RGBA, 1024 × 768 | GetData step† | 101.75 | 85.90 | 82.67 | 82.75 | 82.17 |
+| `getdata.rgba-band3-32x32` | RGBA, 32 × 32 | GetData step† | 2.96 | 2.04 | 1.88 | 1.92 | 1.92 |
+| `getdata.ycbcr-band2-1024x768` | YCbCr, 1024 × 768 | GetData step† | 101.67 | 83.79 | 80.17 | 80.00 | 80.50 |
+
+† In the 2026-10-10 run, these 17 direct rows had `execution.status=not_proven` because the terminal API did not emit a backend receipt. Those rows are historical timing diagnostics: they do not show direct SIMD or GPU execution. The 2026-10-11 section below records the later receipt-backed direct candidate. Parallel CPU remains a separately built profile with `pillow-rs-py/parallel` and `pillow-rs/parallel`; its direct GetData rows do not prove Rayon execution.
+
+‡ The three composed workflows have complete requested-backend receipts and no fallback. At RGB 512 × 512, Pillow/CPU/SIMD/GPU/Parallel CPU measured 399.29/100.50/131.33/313.67/111.04 µs. The 1024 × 768 Invert→GetData case measured 1075.65/285.62/442.06/601.04/314.67 µs; the 2048 × 1536 case measured 4056.94/682.12/1473.50/1293.98/741.44 µs. GPU is slower than SIMD at 512 × 512 and 1024 × 768, and faster at 2048 × 1536. Sustained GPU throughput remains unmeasured, so no size demonstrates the complete GPU target.
+
+The Parallel CPU profile remains separate: its three proven composed-workflow results are 111.04 µs at 512 × 512, 314.67 µs at 1024 × 768, and 741.44 µs at 2048 × 1536, with the opt-in feature identity recorded in the run JSON. Do not combine these rows with serial CPU or SIMD.
+
+At this 2026-10-10 checkpoint GetData remained open pending direct terminal receipts, broad single-thread SIMD evidence, GPU latency/throughput, and x86 confirmation. The 2026-10-11 section below supplies the direct receipts; it does not complete the operation targets. No fallback is credited as accelerated execution.
+
+Running the Parallel CPU Make target exposed a real selection-test fixture defect: the synthetic input used resolved `python-parallel-cpu` as an input capability even though the manifest declares `python-cpu`. The fixture now declares manifest capabilities and derives active profiles through the production applicability function. The selection suite passes in both standard and Parallel CPU environments, and still fails if any selected profile is omitted. No thresholds or workloads were weakened. No coverage was run.
+
+The local receipts are `build/migration-parity/getdata-all-modes-cpu-candidate-final.json`, `build/migration-parity/getdata-all-modes-cpu-candidate-final-parity.json`, `build/migration-parity/getdata-all-modes-cpu-candidate-final-parallel-cpu.json`, and `build/migration-parity/getdata-all-modes-cpu-candidate-final-parallel-cpu-parity.json`; the per-workload rows are in `docs/evidence/performance-optimization-local-runs.csv`. The published operation matrix remains pinned to its previous snapshot until the 33-item push batch is ready.
+
+
+## GetChannel CPU and Pillow-SIMD gap — 2026-10-10
+
+The GitHub Pages Pillow-SIMD benchmark snapshot ranks Image.getchannel as the
+next CPU regression after the local GetData candidate. It is an Ubuntu 24.04
+x86_64 run on AMD EPYC 7763, source revision
+101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d, measured 2026-10-07. Its four direct
+materialized workloads use the same observed_steps call;observe-result
+boundary, 5 warmups, 20 iterations, 5 samples, and parity_pass correctness:
+
+| Mode | Pillow | pillow-rs CPU | pillow-rs SIMD | Pillow-SIMD | CPU/Pillow | SIMD/Pillow-SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| L | 103.90 | 73.41 | 76.46 | 126.67 | 1.42x | 1.66x |
+| RGB | 287.91 | 391.70 | 1691.24 | 224.42 | 0.74x | 0.13x |
+| LA | 284.21 | 405.59 | 1280.95 | 226.81 | 0.70x | 0.18x |
+| RGBA | 285.73 | 402.60 | 2210.44 | 222.04 | 0.71x | 0.10x |
+
+This is prioritization evidence from the published x86 cohort. The current
+working tree is a different revision and has not been benchmarked on x86, so
+these measurements do not establish that the local change fixes those rows.
+The saved JSON is build/migration-parity/github-pages-pillow-simd.json.
+
+The CPU executor already handled RGB with a direct byte scan. LA and RGBA
+created a zero-filled GrayImage and then overwrote each output sample through
+image-pixel iterators. I changed those cases to fill one capacity-reserved
+output vector using contiguous chunks, and routed RGB through the same helper.
+The measurement includes getchannel plus output materialization.
+
+The first candidate used iter().skip(channel).step_by(bands). It was rejected:
+on the local macOS 15.7.7 arm64 host, its RGB median rose from 59.15 to
+108.62 microseconds; LA rose from 92.31 to 107.98 microseconds; and RGBA rose
+from 78.38 to 92.79 microseconds. The second candidate uses chunks_exact()
+with one output allocation. Its CPU medians were 46.44 microseconds for L,
+55.00 for RGB, 85.81 for LA, and 85.98 for RGBA. Relative to the separately
+measured baseline medians, that was neutral on L, about 7% faster on RGB and
+LA, and about 10% slower on RGBA. Treat the small differences as provisional:
+the same-host Pillow medians varied between sequential runs, and the candidate
+has not yet been confirmed on x86.
+
+The expanded 2026-10-10 standard cohort is the pre-NEON control. It includes a
+matched 16 × 16 RGB case and the four 1024 × 768 materialized cases. Its
+full-size same-run medians and ratios are:
+
+| Mode | Pillow | Serial CPU | SIMD | GPU | CPU/Pillow | SIMD/Pillow | GPU slower than SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| L | 71.29 | 43.46 | 42.83 | 304.10 | 1.64x | 1.66x | 7.10x |
+| RGB | 161.73 | 54.88 | 82.67 | 571.00 | 2.95x | 1.96x | 6.91x |
+| LA | 157.48 | 84.08 | 95.17 | 491.52 | 1.87x | 1.65x | 5.16x |
+| RGBA | 161.31 | 67.25 | 94.44 | 624.31 | 2.40x | 1.71x | 6.61x |
+
+The 16 × 16 RGB workload measured 4.67/4.21/4.60/208.33 µs for
+Pillow/CPU/SIMD/GPU respectively. Its CPU speedup was 1.11x, SIMD speedup was
+1.02x, and GPU latency was 45.3x slower than SIMD. This small direct workload
+keeps Python and allocation overhead visible; retain it alongside the
+full-size cases.
+
+The separately built Parallel CPU profile includes the `parallel` feature in
+both the binding and core, but the four direct GetChannel receipts report
+`requested_backend=cpu`, `actual_backend=cpu`, and `actual_backend_counts={"cpu":1}`.
+Its medians were 46.42 µs (L), 58.77 µs (RGB), 72.60 µs (LA), and 70.17 µs
+(RGBA). The parity preflight passed 4/4. No Rayon execution receipt was
+present, so record these only as Parallel CPU profile controls and do not claim
+Parallel CPU acceleration or a Pillow speedup ratio for them.
+
+The expanded standard cohort has actual backend receipts with no fallback and
+passed exact parity 15/15 (five workloads against CPU, SIMD, and GPU). The
+maintained GetChannel input corpus passed 136/136 comparisons against Pillow
+12.2.0 on CPU. Strict SIMD and GPU parity also passed on LA, RGBA, CMYK, and
+YCbCr (4/4 each), plus P, PA, and HSV (3/3 each). Invalid negative-index,
+out-of-range, and selector-type cases passed 3/3 on each profile; these
+validation cases do not execute image kernels. The first corpus invocation used
+system Python 3.9/Pillow 11.3.0 and failed the oracle identity handshake before
+executing any case. The corrected project-venv run is the only corpus result
+counted.
+
+The four 16 × 16 whole-workflow cases cover LA, RGBA, CMYK, and YCbCr. They ran
+with one warmup, three iterations, and two samples; actual backend receipts
+include GPU dispatch and transfers, with no fallback. The workload itself uses
+`successful_execution`, and its benchmark parity report selected zero cases.
+Separate strict mode-case gates passed for CPU, SIMD, and GPU, but keep these
+low-sample workflow timings as diagnostics and do not use their speed ratios as
+target evidence.
+
+In the pre-NEON control, CPU met or beat Pillow on all five expanded arm64
+direct workloads, but L, LA, and 16 × 16 RGB were below the 2x sequencing tier.
+The public x86 CPU RGB/LA/RGBA regressions remain unverified after the change.
+Every pre-NEON SIMD row was below the repository 5x target; the L profile copied
+the existing one-channel raster and reported no vector blocks. The full-size
+pre-NEON GPU rows were 5.16-7.10x slower than SIMD, and 16 × 16 GPU latency was
+45.3x slower. Sustained GPU throughput was not measured. The newer NEON
+structure-load results and remaining gaps follow below.
+
+The generic `wide::u8x16` shuffle compiles to scalar work on baseline x86_64
+when SSSE3 is not a compile-time target feature. I added a runtime-checked
+SSSE3 channel gather for x86_64 and report its path as `ssse3-gather`; systems
+without SSSE3 use a scalar gather and publish scalar telemetry. A focused
+37-pixel test requires two SSSE3 blocks plus a five-pixel tail. The x86_64
+Apple target cross-compiles, but this Apple Silicon host cannot execute the
+Intel test or measure the kernel. Do not count the cross-compile as parity or
+performance evidence; x86 runtime verification remains open.
+
+### AArch64 NEON structure-load candidate — 2026-10-10
+
+I added `vld2q_u8` and `vld4q_u8` structure-load gathers for LA and four-byte
+native modes. The gather stores the selected vector directly into one reserved
+output buffer and handles only the final partial group with scalar code. A
+37-pixel adapter test asserts exact output, the `neon-deinterleave` execution
+receipt, two vector blocks, and five tail pixels for every LA and RGBA channel.
+Strict SIMD and GPU parity passed 8/8 selected cases each for CMYK, YCbCr,
+HSV, P, PA, and invalid selectors; the exact five-workload CPU/SIMD/GPU
+benchmark preflight passed 15/15 twice with no fallback. The standard
+measurement includes the public call and result observation/materialization.
+
+Two candidate runs used the same 5-warmup, 20-iteration, 5-sample policy on
+the same macOS 15.7.7 arm64 host. Full-size materialized medians and paired
+speedups were:
+
+| Run | Mode | Pillow | CPU | SIMD | GPU | CPU/Pillow | SIMD/Pillow | GPU slower than SIMD |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| first | L | 99.67 | 59.73 | 56.17 | 437.21 | 1.67x | 1.77x | 7.78x |
+| first | RGB | 208.67 | 65.58 | 80.00 | 699.04 | 3.18x | 2.61x | 8.74x |
+| first | LA | 207.27 | 95.52 | 68.38 | 633.31 | 2.17x | 3.03x | 9.26x |
+| first | RGBA | 212.10 | 96.94 | 52.40 | 911.08 | 2.19x | 4.05x | 17.39x |
+| repeat | L | 98.96 | 55.69 | 54.90 | 436.44 | 1.78x | 1.80x | 7.95x |
+| repeat | RGB | 203.31 | 50.38 | 91.81 | 685.29 | 4.04x | 2.21x | 7.46x |
+| repeat | LA | 210.15 | 87.44 | 43.75 | 554.04 | 2.40x | 4.80x | 12.66x |
+| repeat | RGBA | 198.54 | 84.75 | 62.33 | 806.08 | 2.34x | 3.19x | 12.93x |
+
+All values are microseconds. The target SIMD medians improved from the
+pre-NEON 95.17 to 68.38 and 43.75 µs for LA, and from 94.44 to 52.40 and
+62.33 µs for RGBA. The same-run Pillow and CPU medians also shifted, so retain
+the paired ratios and the observed run-to-run spread. The NEON path is a
+material gain, but no full-size SIMD mode has yet reached the repository 5×
+Pillow target. CPU remains below 2× for L in both runs, and the 16 × 16 RGB
+case stays near parity: first-run Pillow/CPU/SIMD/GPU was 4.79/4.63/4.90/210.25
+µs; repeat was 4.96/4.79/4.96/222.65 µs.
+
+I also tested an explicit `vld1q_u8`/`vst1q_u8` copy for one-channel L. It
+passed the same 15/15 benchmark parity gate, but its L SIMD median was 48.17
+µs versus 42.83 µs in the pre-NEON control; this did not demonstrate an
+end-to-end gain over `source.to_vec()`. I reverted that copy candidate and kept
+the one-channel path uncredited as SIMD. The finding is recorded as a rejected
+candidate, not as current implementation evidence.
+
+Every direct GPU row used the requested GPU backend with no fallback, but
+full-size GPU latency remained 7.46×-12.93× slower than SIMD in the repeat
+cohort. The 16 × 16 GPU row was 44.9× slower than SIMD. Sustained GPU
+throughput is still unmeasured. The earlier GitHub Pillow-SIMD artifact remains
+dirty/partial ranking evidence only; current x86 runtime parity and timings are
+still open. The focused ARM Rust tests pass 9/9 after reverting the copy
+candidate; no coverage was run.
+
+The local ledger contains 148 GetChannel rows: the prior 88 rows, 40 rows for
+the two structure-load cohorts, and 20 rows for the rejected L-copy cohort.
+The total local-run ledger contains 2,807 data rows. The records are in
+docs/evidence/performance-optimization-local-runs.csv:
+migration-benchmark-4a1996dfcda94d9493ab8d82d176e47c (baseline),
+migration-benchmark-55f0f6d4b5cb4702a65f9b8c1c0ce8f5 (rejected strided
+candidate), and migration-benchmark-0693d106d9844f2492b9c939f0c6c750
+(chunked candidate); the Parallel CPU control is
+migration-benchmark-c8994397b2e44d99a2f849184aaf149a; the expanded standard
+and pipeline runs are migration-benchmark-756dc239aad043cd87b738ebc7919729
+and migration-benchmark-4a1e189cb0374dfc9dbf2e662a9f9481. The NEON structure
+load runs are migration-benchmark-1a6f79b6e3d04e05b9f88cd735255103 and
+migration-benchmark-4d7d69affb474a0e805d66fd5fa7322e; the rejected L-copy run
+is migration-benchmark-3e0128f8f4d949fc9d5d868a6a0bc53a. Their exact benchmark
+gates are migration-parity-benchmark-gate-a3e4aafa6b6740648fd3012ad1b3f3a6,
+migration-parity-benchmark-gate-329140561afb458ea56b1fd9bd0254e3, and
+migration-parity-benchmark-gate-f53671217a6048ffa19784c22facc5d2. Strict mode
+parity receipts include build/migration-parity/getchannel-neon-strict-simd.json
+and build/migration-parity/getchannel-neon-strict-gpu.json, alongside
+build/migration-parity/getchannel-small-modes-simd-parity.json,
+build/migration-parity/getchannel-small-modes-gpu-parity.json,
+build/migration-parity/getchannel-p-pa-hsv-simd-parity.json, and
+build/migration-parity/getchannel-p-pa-hsv-gpu-parity.json. The full 136-case
+receipt is build/migration-parity/getchannel-all-cases-candidate2-parity.json.
+The operation remains open, its local CPU/SIMD/GPU target matrix is incomplete,
+and the 33-item commit/push batch remains at 0/33.
+
+
+## GetChannel GPU batch throughput and shader fast-path checkpoint — 2026-10-10
+
+The direct changing-input diagnostic now covers GetChannel with a bounded host
+worker queue at depths 1, 2, and 4. At each depth it ran five warmup windows and five
+samples of 20 measured windows, with 16 fresh images per window. Image
+construction, `getchannel`, full output materialization, request scheduling,
+and receipt capture were inside the window; every result was compared with
+live Pillow. The source tree and runtime binaries were stable during the run.
+There were 5,040 requests per subject and mode, each with an actual backend
+receipt and no fallback. GPU receipts show one dispatch per request, including
+786,432 input and output bytes for L, and 2,359,296 input plus 786,432 output
+bytes for RGB.
+
+Completed images per second on the local macOS 15.7.7 arm64 host were:
+
+| Mode, 1024 × 768 | Host queue depth | Serial CPU | SIMD | GPU | GPU / SIMD throughput |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 15,177 | 16,049 | 2,870 | 0.18× |
+| L | 2 | 18,210 | 16,651 | 4,127 | 0.25× |
+| L | 4 | 19,077 | 17,603 | 5,724 | 0.33× |
+| RGB | 1 | 9,808 | 7,264 | 1,464 | 0.20× |
+| RGB | 2 | 9,647 | 8,550 | 2,297 | 0.27× |
+| RGB | 4 | 10,891 | 10,279 | 2,878 | 0.28× |
+
+This diagnostic submits independent API requests on a host worker queue; it is
+not the explicit multi-image GPU batch API. I extended
+`scripts/benchmark_gpu_batch.py` with a GetChannel case to measure that path
+separately. It materializes every L result, checks exact output digests across
+Pillow, CPU, SIMD, eager GPU, and queued GPU, and records device jobs,
+dispatches, transfer bytes, and the largest submission. Every 256² and 1024²
+workload passed 32/32 exact output comparisons. Eager and queued GPU subjects
+each counted 224 actual GPU jobs and 224 dispatches per workload, with no fallback;
+the selected modes and sizes transfer the full input and read back the full L
+output.
+
+Changing `max_jobs` and `max_in_flight` changes the scheduler's per-submission
+chunk limit (`ceil(max_jobs / max_in_flight)`), so a larger `max_in_flight` does
+not imply a larger batch. The completed-work throughput results were:
+
+| `max_jobs` / `max_in_flight` | Mode | GPU queued, 256² | SIMD, 256² | GPU queued, 1024² | SIMD, 1024² | Largest submission at 1024² |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 16 / 4 | L | 4,728 | 98,122 | 1,753 | 12,658 | 4 |
+| 16 / 4 | RGB | 4,065 | 62,827 | 1,144 | 6,541 | 4 |
+| 32 / 16 | L | 5,434 | 114,032 | 1,527 | 13,750 | 2 |
+| 32 / 16 | RGB | 5,091 | 66,065 | 1,112 | 6,706 | 2 |
+| 32 / 1 | L | 4,597 | 112,676 | 1,366 | 13,914 | 32 |
+| 32 / 1 | RGB | 4,419 | 66,139 | 962 | 6,247 | 23 |
+
+Rates are completed output images per second. At 1024², the best queued GPU
+result was 0.14× SIMD for L and 0.17× for RGB; at 256², it was 0.05× and
+0.08× respectively. Eager GPU throughput was lower again. Batch submission
+amortizes some host synchronization, but it does not meet the required GPU
+throughput target.
+
+I also tested a native packed-byte WGSL fast path that replaces the four-pixel
+loop with explicit 1/2/3/4-channel word gathers for complete groups, leaving
+the existing bounds-checked path for the partial tail. The 5-workload
+CPU/SIMD/GPU parity gate passed 15/15 for the control and each of two candidate
+cohorts with actual requested-backend receipts. Relative to the control GPU
+medians of 355.00/540.44/409.92/595.69 µs for L/RGB/LA/RGBA, the two-candidate
+median was 369.96/487.11/410.72/600.11 µs. Only RGB showed an apparent change;
+the other modes were flat or slower, while same-run Pillow and CPU baselines
+also moved. This did not establish an end-to-end gain, so I reverted the WGSL
+candidate. These benchmark workloads use dimensions divisible by four; the
+candidate did not receive a partial-group-specific parity run and is not
+retained.
+
+The explicit batch reports are
+`build/migration-parity/getchannel-gpu-batch-20261010.json`,
+`getchannel-gpu-batch16-20261010.json`, and
+`getchannel-gpu-batch32-20261010.json`; the per-request throughput report is
+`build/migration-parity/getchannel-throughput-20261010.json`. The native shader
+control/candidate reports are `getchannel-native-gpu-control.json`,
+`getchannel-native-gpu-fastpath.json`, and
+`getchannel-native-gpu-fastpath-repeat.json`. Local rows are in
+`docs/evidence/performance-optimization-local-runs.csv`. GetChannel remains
+open: CPU and SIMD thresholds are still unmet for some sizes/modes, GPU latency
+is slower than SIMD, measured GPU throughput remains below SIMD, and x86
+runtime parity/timing is still missing. No coverage was run.
+
+
+## GetData direct SIMD output-buffer checkpoint — 2026-10-11
+
+The direct terminal path now reports the executor that actually ran. For a
+materialized `Image::Loaded` requested on SIMD, `simd_extract_band_into`
+deinterleaves supported 8-bit bands into Python's final `bytes` allocation.
+On AArch64 the RGB/LA/RGBA kernels use NEON structure loads and store directly
+to that destination, avoiding the intermediate one-band `DynamicImage` and its
+copy. Other architectures retain their own gather implementation and still
+need runtime evidence. Pending lazy pipelines remain in the backend graph so
+the terminal projection can be fused or measured with preceding operations.
+P and LAB semantics continue through the host path where raw palette indices or
+Pillow's signed-byte offset require special handling. Unsupported backend
+requests record CPU fallback receipts and earn no acceleration credit.
+
+The 19-workload screen used Pillow 12.2.0 and the same macOS 15.7.7 arm64 host
+for all subjects. Direct reads time the `getdata(band=...)` step, including
+allocation and materialization of its immutable bytes result; the two
+Invert→GetData workloads time the complete workflow. Each workload used five
+warmups and five samples of 20 iterations. Pillow parity passed 57/57 selected
+comparisons. The 4-workload repeat passed 12/12. The pre-change 3-workload
+receipt check passed 9/9.
+
+| Workload | Pillow µs | CPU µs (speedup) | SIMD µs (actual backend) | GPU µs (actual backend) | GPU latency vs SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `1-band0-1024x768` | 15.1 | 11.0 (1.38×) | 16.9 (CPU fallback) | 352.3 (CPU fallback) | — |
+| `cmyk-band3-1024x768` | 102.0 | 76.8 (1.33×) | 45.1 (SIMD) | 744.4 (GPU) | 16.5× slower |
+| `hsv-band2-1024x768` | 96.3 | 80.4 (1.20×) | 37.5 (SIMD) | 602.6 (GPU) | 16.1× slower |
+| `invert-rgb-band0-1024x768` | 1057.4 | 258.9 (4.08×) | 400.2 (SIMD) | 1064.4 (GPU) | 2.7× slower |
+| `invert-rgb-band0-2048x1536` | 4096.2 | 700.6 (5.85×) | 1375.8 (SIMD) | 3520.9 (GPU) | 2.6× slower |
+| `l-band0-1024x768` | 14.3 | 11.8 (1.21×) | 17.9 (CPU fallback) | 390.3 (GPU) | — |
+| `l-band0-32x32` | 2.7 | 1.7 (1.56×) | 2.0 (CPU fallback) | 193.7 (GPU) | — |
+| `la-band1-1024x768` | 99.6 | 79.8 (1.25×) | 28.3 (SIMD) | 493.6 (GPU) | 17.4× slower |
+| `la-band1-32x32` | 2.8 | 1.9 (1.46×) | 2.0 (SIMD) | 193.9 (GPU) | 96.9× slower |
+| `la-premultiplied-band1-1024x768` | 96.5 | 79.9 (1.21×) | 90.4 (CPU fallback) | 306.2 (CPU fallback) | — |
+| `lab-band2-1024x768` | 98.9 | 33.8 (2.93×) | 40.1 (CPU fallback) | 34.0 (CPU fallback) | — |
+| `p-band0-1024x768` | 13.8 | 11.8 (1.16×) | 19.5 (CPU fallback) | 15.3 (CPU fallback) | — |
+| `pa-band1-1024x768` | 96.6 | 79.8 (1.21×) | 28.2 (SIMD) | 509.5 (GPU) | 18.0× slower |
+| `rgb-band0-1024x768` | 98.3 | 80.5 (1.22×) | 40.1 (SIMD) | 567.0 (GPU) | 14.1× slower |
+| `rgb-band0-32x32` | 2.7 | 2.0 (1.37×) | 2.2 (SIMD) | 192.6 (GPU) | 85.6× slower |
+| `rgb-band2-1024x768` | 96.7 | 80.4 (1.20×) | 37.9 (SIMD) | 548.1 (GPU) | 14.5× slower |
+| `rgba-band3-1024x768` | 98.9 | 82.1 (1.21×) | 44.6 (SIMD) | 624.7 (GPU) | 14.0× slower |
+| `rgba-band3-32x32` | 2.8 | 1.9 (1.51×) | 2.0 (SIMD) | 192.4 (GPU) | 98.2× slower |
+| `ycbcr-band2-1024x768` | 96.8 | 80.4 (1.20×) | 35.9 (SIMD) | 548.3 (GPU) | 15.3× slower |
+
+The direct SIMD write candidate repeated at 31.19 µs for RGB and 23.08 µs for
+LA (Pillow 96.46 and 96.52 µs respectively), or 3.09× and 4.18× faster.
+The broader cohort measured 40.1 µs for RGB and 28.3 µs for LA, so keep both
+same-run ratios and the observed run-to-run spread. Small RGB/LA/RGBA SIMD
+reads remain 1.19×–1.52× faster than Pillow across the two runs, below the 2×
+target. Simple large direct CPU reads are generally 1.20×–1.33× faster; CPU meets the
+no-slower-than-Pillow gate in all 19 rows but not the current all-operations
+2× sequencing tier. Unsupported SIMD receipts for `1`, `L`, `La`, `LAB`, and
+`P` remain CPU results, not accelerated evidence.
+
+GPU receipts prove execution without fallback on the supported GPU modes, but
+single-read GPU latency is still 14.0×–18.0× slower than SIMD for the larger
+direct RGB-family workloads and about 86×–98× slower for the tested small
+RGB/LA/RGBA images. A direct 1024×768 RGB run uploaded 2,359,296 bytes, read
+back 786,432 bytes, and dispatched once. Sustained multi-request throughput
+has not been measured; single-call operations-per-second is not a substitute.
+Do not advance to Pillow-SIMD ranking until the remaining CPU/SIMD workload
+rows meet the active 2× sequencing gate. x86 execution remains unverified.
+
+The benchmark run IDs are `migration-benchmark-dbbf7bda24b048d6bee8a67ad5392ec8`
+and repeat `migration-benchmark-4d6b7d52750e42679c507c57ca821702`; their parity
+gates are `migration-parity-benchmark-gate-22c1a3d4c6e249d4b9b0b0ad320b55d0`
+and `migration-parity-benchmark-gate-702695689b4c440687369aae1ea1e0dc`.
+Rows for both plus the pre-change receipt run are in
+`docs/evidence/performance-optimization-local-runs.csv`. At that checkpoint,
+the ledger had 3,055 data rows; the rejected-candidate section below brings it
+to 3,131. The public operation matrix remains pinned while the 33-item
+commit/push batch is at 0/33. No new test defect was found; no coverage was run.
+
+
+## GetData CPU interleaved-scan candidate — rejected — 2026-10-11
+
+I replaced the direct CPU `iter().skip(band).step_by(bands)` selection with a
+`chunks_exact(bands)` loop and measured the same 19 workloads, modes, sizes,
+boundaries, and backend settings as the retained direct-SIMD candidate. Exact
+Pillow parity passed 57/57, but the CPU timing regressed: 1024×768 RGB rose
+from 80.46 to 112.08 µs, LA from 79.83 to 111.54 µs, RGBA from 82.08 to
+112.46 µs, HSV from 80.40 to 112.00 µs, and CMYK from 76.77 to 112.46 µs.
+The other larger interleaved modes showed the same 37%–47% slowdown. The
+composed Invert→GetData CPU workflows were 12%–16% slower. Across 19 rows, the
+median paired CPU/Pillow speedup fell by 13.3%. I reverted this scan and kept
+the existing strided iterator; the final-buffer SIMD candidate is unaffected.
+
+This rejects `chunks_exact` for this GetData caller only. The GetChannel scan
+measurements do not predict the cost of GetData's boundary, result allocation,
+or caller. The run is
+`migration-benchmark-614350ae16af41068aeff27f38b5443d`, with exact parity gate
+`migration-parity-benchmark-gate-08b87e1e31b94978a220ffc7ace6be4e`; its 76
+rows remain in the local-run ledger as `rejected_cpu_candidate`. No test defect
+was found and no coverage was run.
+
+
+## I-mode SIMD resize follow-up — 2026-10-11
+
+The current matrix still ranks the 1024×768 I-mode Bicubic resize below Pillow
+for SIMD on the published arm64 row, and the local control remains far short of
+the 2× sequencing tier. The workload resizes to 512×384 and times the complete
+public call plus materialization. Each run used five warmups, 20 iterations in
+five samples, concurrency one, and the strict Pillow parity gate.
+
+A full-active-lane fast branch was added to the horizontal gather helper to
+skip per-lane mask tests. The candidate passed exact parity 3/3 and recorded
+100/100 actual CPU, SIMD, and GPU calls with no fallback. Two same-host
+candidate runs measured Pillow/CPU/SIMD/GPU medians of 1.9778/1.0458/2.8783/
+32.8303 ms and 1.9778/1.0392/2.8781/31.8370 ms. The rebuilt no-candidate
+control measured 2.0052/1.0414/1.9808/31.5737 ms. SIMD/Pillow moved from
+1.012× in the control to 0.687× in both candidate runs; the helper change
+increased SIMD latency by about 45% while the Pillow and CPU medians stayed
+stable. Revert the branch. This is a confirmed optimization regression, not a
+parity defect.
+
+A separate vertical-row plan candidate precomputed each output row's source
+row offsets and broadcast weights. Its benchmark parity gates passed 3/3, and
+CPU/SIMD/GPU execution receipts had no fallback. Its timing runs, however,
+overlapped an independent high-load HTTP benchmark on the shared host that
+started at 2026-10-10T19:33:54Z and was still active at 19:44:11Z. Exclude both
+candidate timing runs and their post-revert control from performance ranking;
+retain their exact parity and backend receipts. Re-run this candidate and a
+matched control after the host is idle before deciding whether it helps.
+
+The source and loaded extension are back on the no-candidate path. The local
+results ledger now contains 3,155 data rows, including the rejected full-mask
+candidate and the environmentally excluded vertical-plan cohort. The operation
+remains open: this arm64 control is about 1.01× SIMD/Pillow, while the
+published x86 execution is still unverified locally. The public operation
+matrix remains pinned and the 33-item commit/push batch is still 0/33. The
+benchmark-selection suite passed 16/16 for each benchmark invocation. A full
+`cargo fmt --all -- --check` remains blocked by formatting diffs in the
+pre-existing dirty workspace; it also reports formatting in unrelated files.
+No genuine test defect was found and no coverage was run.
+
+## I-mode `Image.filter` 5×5 current-code control — 2026-10-11
+
+The CPU queue still contains below-2× Filter workloads, so I refreshed the
+I-mode 5×5 binomial control before trying another change. The source input is
+seeded signed-I noise at 1024×768 with the normalized outer product of
+`[1, 4, 6, 4, 1]`, scale 256 and offset zero. The bounded input uses the same
+kernel with magnitudes capped at 65,535. Direct workloads measure `filter`
+through `tobytes`; the composed row measures the whole convolution workflow.
+Each used five warmups, 20 iterations in five samples, concurrency one, and
+live Pillow 12.2.0 parity.
+
+The matched control run `migration-benchmark-6242985e86b74aa78794031349f07409`
+passed all nine parity comparisons. CPU, SIMD, and GPU receipts recorded their
+requested backend as the actual backend with no fallback. Current macOS 15.7.7
+arm64 medians were:
+
+| I-mode 5×5 workload | Pillow ms | CPU ms | CPU/Pillow | SIMD ms | SIMD/Pillow | GPU ms | GPU/SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Arbitrary-range material filter | 5.480 | 3.460 | 1.584× | 1.842 | 2.975× | 1.197 | 1.539× |
+| Bounded material filter | 5.614 | 3.914 | 1.434× | 1.837 | 3.055× | 1.171 | 1.568× |
+| Convolution plus materialization | 6.057 | 3.780 | 1.603× | 2.163 | 2.800× | 1.526 | 1.418× |
+
+The selected CPU rows meet Pillow latency but remain below the 2× sequencing
+tier. SIMD also remains below the repository's 5× target. GPU latency is below
+SIMD in these rows; each call used one dispatch with a 3,145,728-byte upload
+and readback. This is single-request latency only. Sustained GPU throughput is
+unmeasured, so the GPU target remains open. The 12 per-workload/profile records
+are in `docs/evidence/performance-optimization-local-runs.csv`; the published
+operation matrix remains pinned to its previous clean snapshot.
+
+The same-input A/B and the follow-up serial-only routing experiment are
+recorded below. The arbitrary and bounded controls use different pixels, so
+their latency difference does not establish which bounded-input implementation
+is faster.
+
+## I-mode `Image.filter` bounded 5×5 serial CPU path — 2026-10-11
+
+The I-mode 5×5 kernel eligibility proof admits signed samples whose magnitude
+is at most 65,535. On that exact bounded workload, the current integer
+factorization was slower than the general f32 ring. A first prototype skipped
+both the proof and integer path. It improved the bounded row, but two
+arbitrary-range candidate runs were slower than the matched control, so that
+broad change was rejected. The accepted implementation keeps the proof,
+routes only admitted inputs to the f32 ring on serial CPU, and leaves the
+integer factorization in the opt-in Parallel CPU profile.
+
+The profile-aware candidate was rebuilt from source and measured twice on the
+same macOS 15.7.7 arm64 host as the current-code control. Each direct workload
+used five warmups, 20 iterations in five samples, concurrency one, and measured
+the public call plus materialization. Exact parity passed 6/6 comparisons in
+each candidate run. CPU, SIMD, and GPU receipts all reported their requested
+backend as the actual backend with no fallback.
+
+| I-mode 5×5 direct workload | Control CPU ms | Candidate CPU ms, runs 1 / 2 | Candidate Pillow ms, runs 1 / 2 | Candidate CPU/Pillow, runs 1 / 2 | End-to-end total CPU ms, runs 1 / 2 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Arbitrary-range noise | 3.460 | 3.098 / 3.044 | 5.501 / 5.440 | 1.776× / 1.787× | 3.449 / 3.335 |
+| Bounded noise | 3.914 | 3.583 / 3.607 | 5.599 / 5.594 | 1.563× / 1.551× | 3.903 / 3.966 |
+
+Using the full-workflow phase totals, the arbitrary-range CPU/Pillow ratios were
+1.721× and 1.746×; bounded-input ratios were 1.540× and 1.508×. The candidate
+reduced the CPU full-workflow total against its matched control by 8.6–11.7%
+for arbitrary-range noise and 6.1–7.6% for bounded noise. These rows still
+miss the 2× CPU sequencing tier.
+
+SIMD remained near 1.83 ms (about 3× Pillow) and remains below the repository's
+5× target. GPU remained faster than SIMD in single-request latency: 1.351–1.371
+ms versus 1.829–1.834 ms, with one dispatch and 3,145,728-byte upload and
+readback. Sustained GPU throughput is unmeasured. The two candidate run IDs are
+`migration-benchmark-a4280f1fb7b24639940ae27b9c6e5a4d` and
+`migration-benchmark-5c6f36c6134d463b978f4506c9458b98`; their parity gates are
+`migration-parity-benchmark-gate-ee15ff7b9fa848588144b9dfab51e73d` and
+`migration-parity-benchmark-gate-a0ebc27412a846f4b3aad1d46421e91f`.
+Their per-workload/profile records are in
+`docs/evidence/performance-optimization-local-runs.csv`. The published
+operation matrix remains pinned; Filter is still open.
+
+## MedianFilter 3×3 byte median selection network — 2026-10-11
+
+The current 3×3 byte rank-filter path gathered nine samples and called
+`select_nth_unstable` independently for each output channel. For the exact
+middle rank, I tested a fixed 19-comparator median-of-nine network in
+`rank_filter_bytes_3x3_row`; all other ranks and the F-mode path keep their
+existing selectors. The compare-and-swap network preserves the existing
+clamped-edge samples and native channel layout.
+
+The same-host 1024×768 controls and candidates measured the public filter plus
+result materialization (`apply-filter` and `observe-filter-result`), with five
+warmups, 20 iterations in five samples, warm cache, and concurrency one. The
+control passed all nine backend parity comparisons. Each candidate run passed
+the same 9/9 gate, and the post-build CPU run passed all 70 MedianFilter parity
+cases, including tiny images, replicated borders, ranks/sizes, and L/LA/RGB/
+RGBA cases. CPU, SIMD, and GPU receipts named the requested actual backend with
+no fallback.
+
+| 1024×768 3×3 median workload | Pillow control ms | CPU control ms | CPU candidate ms, runs 1 / 2 | Candidate CPU/Pillow, runs 1 / 2 | CPU speedup vs control, runs 1 / 2 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 37.940 | 33.802 | 5.346 / 5.315 | 7.09× / 7.18× | 6.32× / 6.36× |
+| LA | 76.540 | 67.566 | 9.635 / 9.608 | 8.00× / 8.07× | 7.01× / 7.03× |
+| RGB | 115.079 | 92.919 | 14.256 / 14.636 | 8.09× / 7.90× | 6.52× / 6.35× |
+
+The selected CPU rows now exceed the user’s 2× sequencing tier by a wide
+margin. SIMD measured 4.94–5.04× Pillow across these modes; it exceeds the
+requested 2× SIMD threshold. GPU single-request latency measured 0.95–1.92 ms
+versus 7.65–23.20 ms for SIMD, with one real GPU dispatch and no fallback.
+Each GPU call uploaded and read back one full frame: 786,432 bytes for L,
+1,572,864 for LA, and 2,359,296 for RGB. The repeated LA GPU measurement ranged
+from 1.36 to 1.92 ms, and an explicit sustained GPU batch was not measured, so
+the throughput target remains open.
+
+The source optimization is accepted for the measured 3×3 middle-rank byte
+workloads. MedianFilter stays open: not every declared workload/profile has a
+new matched candidate result, the published operation matrix remains pinned to
+its clean snapshot, and sustained GPU throughput is unproven. The local ledger
+adds 36 control/candidate rows for the three workloads and four subjects per
+run. The control, candidate, and repeat run IDs are
+`migration-benchmark-f73f617b21db48bebad2192b01d5170a`,
+`migration-benchmark-b109c7da0a0b4130871378921d6567be`, and
+`migration-benchmark-9a66d5bfa58d4524b2eac34ee4c9ef72`; their benchmark parity
+gates are `migration-parity-benchmark-gate-bd0eee24fb15474992605227a73dd1e9`,
+`migration-parity-benchmark-gate-7b978a2b2d3541aaa67e4f041cda6baa`, and
+`migration-parity-benchmark-gate-498e12fadfb14f7fbe38542593a13642`. The
+70-case CPU parity receipt is
+`migration-parity-f7716a5ae0c1497fbe050553f86884a9`. The 33-item commit/push
+batch remains below threshold. No genuine test defect was found and no
+coverage was run.
+
+## GetData four-pixel extraction unroll — rejected 2026-10-11
+
+After the earlier `chunks_exact` experiment regressed multiband reads, I tested
+a different CPU-only idea: process four selected channel bytes per loop for
+3- and 4-channel rasters, retaining the existing stride iterator for other
+band counts and tails. A fresh current-code control and candidate used the same
+19 GetData workloads, each with five warmups, 20 iterations in five samples,
+warm cache, and concurrency one. Both benchmark runs passed exact parity 57/57.
+
+The unroll was rejected. Fourteen of 19 CPU rows regressed by more than 2%,
+including 6–8% regressions on large RGB, LA, RGBA, CMYK, HSV, YCbCr, and PA
+band extraction. One tiny LA row improved by about 2%; the other four rows
+were nearly flat. CPU reported actual execution for all 19 rows; SIMD reported
+actual execution for 13 and GPU for 15. Any fallback rows remain excluded from
+acceleration credit. Restore the direct `iter().skip(band).step_by(bands)`
+path and require a different hypothesis before revisiting this kernel.
+
+Control and rejected-candidate runs are
+`migration-benchmark-376d7a6eadc94146a990a05cfb513723` and
+`migration-benchmark-945f7c82ddb549188c5b1ba603e0b141`; the parity gate is
+`migration-parity-benchmark-gate-a4d0f95979204862bdfbafbea1289404`. All 152
+per-workload/profile records are in
+`docs/evidence/performance-optimization-local-runs.csv`. This result does not
+change GetData's open status: 16 of the 19 current arm64 CPU rows are still
+below 2× Pillow, GPU remains slower than SIMD on comparable rows, sustained GPU
+throughput is unmeasured, and x86 evidence is missing.
+
+## GetData packed-word channel extraction — rejected 2026-10-11
+
+A second GetData CPU hypothesis packed four selected bytes into one `u32` from
+little-endian 3- or 4-channel source words. It passed the same exact benchmark
+parity gate 57/57, but was much slower: the large 3/4-channel CPU rows took
+about 214 μs versus 75–77 μs for the matched stride-iterator control. The
+largest inverted-RGB pipeline rows also regressed. Keep the direct stride
+iterator; do not retain packed scalar word assembly for this path.
+
+The rejected run is `migration-benchmark-218ae106aa164869b677f9288c5b83f3`;
+its parity gate is `migration-parity-benchmark-gate-6629d64947d14686a3b6e99ea9475987`.
+The control rows are shared with the previous four-pixel experiment. Candidate
+per-workload/profile measurements are in
+`docs/evidence/performance-optimization-local-runs.csv`. The issue stays open:
+GetData CPU is faster than Pillow in the current arm64 cohort but remains below
+2× on most rows, with other profiles and architectures still unresolved.
+
+## I-mode Filter5x5 border initialization — retained narrow gain — 2026-10-11
+
+The serial I-mode 5×5 f32 ring writes only the interior; Pillow preserves the
+input's two-pixel border. The prior result buffer cloned the full source frame.
+This candidate zero-initializes the destination and copies only the untouched
+border, with a full copy for dimensions smaller than the kernel. The kernel and
+its accumulation order are unchanged.
+
+The fresh control and two candidate cohorts measured three 1024×768 I-mode
+workloads with five warmups, 20 iterations in five samples, warm cache, and
+concurrency one. Direct calls included result materialization; the composed
+convolution used the whole-workflow boundary. Each benchmark parity gate
+passed 9/9 comparisons. The additional I-mode Filter parity run passed all 17
+selected CPU cases, including negative kernels, 4×7/width-small/height-small
+guards, fused-row cases, and large noise inputs. No parity assertion or
+threshold was changed.
+
+| Workload | CPU control ms | CPU candidate runs 1 / 2 ms | Repeat CPU/Pillow | Repeat SIMD/Pillow | Repeat GPU vs SIMD | Repeat CPU change vs control |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Direct 5×5 noise | 3.100 | 3.086 / 3.041 | 1.805× | 2.994× | 1.374× faster | 1.9% faster |
+| Direct bounded 5×5 noise | 3.627 | 3.609 / 3.635 | 1.493× | 2.954× | 1.272× faster | 0.2% slower |
+| Convolution workflow | 3.455 | 3.307 / 3.318 | 1.773× | 2.642× | 1.353× faster | 4.1% faster |
+
+The direct timings are effectively flat across the control and repeat. The
+composed-workflow improvement repeated at about 4%, so the border-only copy is
+retained for this path; it does not establish a 2× CPU result. CPU, SIMD, and
+GPU receipts each identified the requested backend with no fallback. GPU used
+one dispatch and uploaded and read back 3,145,728 bytes per call without mode
+conversion. GPU single-call latency beat SIMD on these rows, but sustained GPU
+throughput was not measured. Filter remains open pending the 2× CPU target,
+complete workload and architecture coverage, and GPU throughput evidence.
+
+The control, candidate, and repeat benchmark run IDs are
+`migration-benchmark-0fffbedd1c0f4eb081a7d39acc70e25a`,
+`migration-benchmark-a636c9bce7824b0cac12389a1868e7b0`, and
+`migration-benchmark-79f4ec7909774113a897136482f224a1`; their parity gates are
+`migration-parity-benchmark-gate-d38d96ca8e5a483f8cd23ae9cf4d9f92`,
+`migration-parity-benchmark-gate-be7a27e7b22d40229e1cee074205298e`, and
+`migration-parity-benchmark-gate-772f3a3dece24861bd6cf46049b30a09`. The
+17-case CPU parity run is `migration-parity-a31404dfbfab48628a91959790d3c697`.
+All 36 control/candidate subject rows are in the local ledger. No genuine test
+defect was found and no coverage was run.
+
+## I-mode Filter5x5 identical-row horizontal-sum ring — retained — 2026-10-11
+
+The f32 ring was recalculating five horizontal dot products for every output
+pixel even when all five normalized kernel rows had identical coefficients.
+This candidate checks exact row equality, computes each source row's horizontal
+FMA sum once, and keeps those sums in a five-row ring. It reuses them for the
+five output rows that consume that source row. The per-row FMA sequence and
+vertical addition order remain unchanged; kernels with any unequal row keep
+the general ring.
+
+A fresh same-source control and two candidate cohorts measured the same three
+1024×768 I-mode workloads with five warmups, 20 iterations in five samples,
+warm cache, and concurrency one. Direct calls included result materialization;
+the convolution used the whole-workflow boundary. Both candidate benchmark
+gates passed 9/9 comparisons, and the additional I-mode CPU parity run passed
+17/17 cases, including small-dimension guards, negative kernels, and fused-row
+cases.
+
+| Workload | CPU control ms | CPU candidate runs 1 / 2 ms | Repeat CPU/Pillow | Repeat SIMD/Pillow | Repeat GPU vs SIMD | CPU improvement vs control, runs 1 / 2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Direct 5×5 noise | 3.092 | 2.998 / 2.988 | 1.843× | 3.003× | 1.362× faster | 3.1% / 3.5% |
+| Direct bounded 5×5 noise | 3.616 | 3.532 / 3.484 | 1.612× | 3.061× | 1.378× faster | 2.4% / 3.8% |
+| Convolution workflow | 3.454 | 3.334 / 3.276 | 1.827× | 2.820× | 1.215× faster | 3.6% / 5.4% |
+
+Each CPU, SIMD, and GPU receipt named the requested backend and reported no
+fallback. GPU single-call latency remained below SIMD for these rows, with one
+dispatch and 3,145,728-byte upload and readback per call. Sustained GPU
+throughput remains unmeasured. Retain this candidate for identical-row
+kernels: the repeat showed a 2.4–5.4% CPU improvement without changing the
+arithmetic order. Filter remains open because the current CPU rows are only
+1.61–1.84× Pillow, full workload/architecture coverage is incomplete, and the
+GPU throughput target is unproven.
+
+The fresh control, candidate, and repeat run IDs are
+`migration-benchmark-57ccf086ba3d470f8135741f3e9ff5e3`,
+`migration-benchmark-372d1f246bd04ee080b52d68578c80c1`, and
+`migration-benchmark-c95f75f64a544a4aa5130cc0ae2de127`; their gates are
+`migration-parity-benchmark-gate-d886ca66df9646f4a6f0045789e3fcdd`,
+`migration-parity-benchmark-gate-46802f961fbf4ed8b1e7ec628c70c144`, and
+`migration-parity-benchmark-gate-e4636d2f0b8a4164be766f6d53e1976e`. The
+17-case CPU parity run is
+`migration-parity-c6e78523c66c4147a0f94831a417c63f`. The local ledger adds 36
+control/candidate subject rows. No genuine test defect was found and no
+coverage was run.
+
+## I-mode Filter5x5 adjacent-output FMA unroll — rejected — 2026-10-11
+
+After retaining the identical-row sum ring, I tried computing two adjacent
+horizontal outputs together to expose independent FMA chains. Each output kept
+the same five-tap FMA order. The matched 1024×768 control and candidate used
+five warmups, 20 iterations in five samples, warm cache, and concurrency one;
+direct calls included result materialization and the composed workflow used
+the whole-workflow boundary. Both benchmark parity gates passed 9/9, and the
+17-case I-mode CPU parity selection passed, including small dimensions and
+negative kernels.
+
+The candidate did not produce a consistent CPU gain: direct noise moved from
+2.946 to 2.949 ms (0.1% slower), bounded noise from 3.499 to 3.458 ms (1.2%
+faster), and the convolution workflow from 3.261 to 3.247 ms (0.4% faster).
+These deltas are within noise, so the two-output unroll was reverted. The
+retained equal-row ring remains in source; the final `make build-parity`
+rebuilt that source. No parity assertion or threshold changed.
+
+Control and rejected-candidate runs are
+`migration-benchmark-148f9c79e72b4e2089bd25d846ea8227` and
+`migration-benchmark-2193bfedd6ed4b99bac28c4f57c027e9`; their gates are
+`migration-parity-benchmark-gate-38d5677e7e2648e4aa62ee72c3ab39ac` and
+`migration-parity-benchmark-gate-c4735aa68d3248b08e8f7675243aab4e`. The
+17-case CPU parity run is
+`migration-parity-ce48834636964b4ab1f8d341c0b401a5`. The ledger adds 24
+control/rejected subject rows. Filter remains open: current CPU rows are still
+below 2× Pillow and GPU sustained throughput is unmeasured. No genuine test
+defect was found and no coverage was run.
+
+## I-mode Filter5x5 bounded-proof byte scan — rejected — 2026-10-11
+
+The serial bounded-binomial admission proof decoded each four-byte sample to
+`i32` and called `unsigned_abs`. I tried recognizing the same ±65,535 interval
+from the little-endian high and low words. A boundary and seeded-random check
+matched the original predicate for 100,012 `i32` values, and exact parity
+passed 3/3 benchmark comparisons plus the 17-case I-mode CPU selection.
+
+The byte predicate regressed the bounded 1024×768 CPU workload from 3.476 ms
+to 5.051 ms, a 45% latency increase. Pillow moved 5.321 to 5.449 ms, while
+SIMD stayed at 1.833 ms; actual CPU/SIMD/GPU receipts had no fallback. I
+reverted the predicate and rebuilt the retained equal-row path. Do not assume
+that fewer arithmetic operations make a full-frame proof scan cheaper; the
+branch and byte access pattern also need matched measurement.
+
+Control and rejected-candidate runs are
+`migration-benchmark-f0282b20b9634e899281fc5729af4c07` and
+`migration-benchmark-06027b81017e4958a2dfc38b92f8375b`; their parity gates are
+`migration-parity-benchmark-gate-a243bd80cc7c4a5a82156d3a891e21cb` and
+`migration-parity-benchmark-gate-92a4d60b6b8b4358831fcfe81823fcf3`. The
+17-case CPU parity run is
+`migration-parity-bbdc2a31688e4b0ab8103ab2491fc949`. The ledger adds eight
+control/rejected subject rows. Filter remains open. No genuine test defect was
+found and no coverage was run.
+
+## I-mode Filter5x5 serial bounded-proof scan — rejected — 2026-10-11
+
+The serial path calls the same f32 ring whether the bounded-binomial proof
+passes or fails; only the opt-in Parallel CPU profile selects the integer
+factorization. I tried compiling the proof only for Parallel CPU and going
+directly to the serial ring. A fresh bounded 1024×768 control and two
+candidate cohorts used five warmups, 20 iterations in five samples, warm cache,
+and concurrency one. Each candidate passed its 3/3 backend parity gate, and
+the additional 17-case I-mode CPU parity selection passed.
+
+The CPU measurements were flat: 3.476 ms for control, 3.489 ms and 3.497 ms
+for the two candidates. The skip-proof edit was reverted because it did not
+demonstrate a speedup. The previously retained border initialization and
+identical-row horizontal-sum ring remain. `make build-parity` rebuilt the
+restored source; no assertion or threshold changed.
+
+The control is
+`migration-benchmark-f0282b20b9634e899281fc5729af4c07`; the candidates are
+`migration-benchmark-f776187cc02a4e64a7c428d8e4f7de12` and
+`migration-benchmark-b748352dd4014f00ab3f5ca625fcccd3`. Their parity gates
+are `migration-parity-benchmark-gate-a243bd80cc7c4a5a82156d3a891e21cb`,
+`migration-parity-benchmark-gate-5daf8a5c19264a239cfe1831c8ae96fe`, and
+`migration-parity-benchmark-gate-d32796780e8040208345e9a4c3ebca77`. The
+17-case CPU parity run is
+`migration-parity-b61123a806bc4c9991d5684229c23eac`. The local ledger reuses
+the control's four subject rows and adds eight candidate rows. Filter remains
+open. No genuine test defect was found and no coverage was run.
+
+## GetData call-only timing diagnostic — 2026-10-11 — excluded
+
+The first current-source rerun of
+`pipeline-chain.terminal-read.rgb-band0` passed parity 3/3 and reported
+Pillow/CPU/SIMD/GPU medians of 389.084/73.292/122.229/407.938 µs. Do not use
+those ratios for ranking. The benchmark timer stopped after `getdata` returned
+and before the returned pixel sequence was consumed. Pillow's `ImagingCore`
+is lazy, while the target's bytes-backed result is eager, so the two subjects
+performed different work inside the timed boundary. The four rows remain in
+the local ledger as `timing_boundary_diagnostic_excluded`; their speedup fields
+are cleared. The published matrix also uses the former call-only boundary for
+GetData and must be refreshed after this harness correction.
+
+The timed adapter now iterates each returned GetData sequence on both source
+and target before stopping the clock. It consumes values without creating a
+second list; the separate parity serialization remains unchanged. The matched
+re-runs below replace the excluded ratios.
+
+## GetData sequence-materialized timing refresh — 2026-10-11
+
+The GitHub Pages JSON still identifies the exact `512×512` RGB
+`pipeline-chain.terminal-read.rgb-band0` workflow; its checked-in snapshot hash
+is `72574ed44afee99c59a5fe2a6479003d90e11e6f60f4f318ea5dbc231cdb2955` at
+revision `88d414bdbe6bd31b531271324094e041a9fece8a`. I reran that workload on
+the current dirty arm64 source with full sequence consumption inside the
+whole-workflow timer. Exact parity passed 3/3.
+
+| Subject | Median µs | Speedup vs Pillow | Actual backend | Fallback | Additional execution cost |
+| --- | ---: | ---: | --- | --- | --- |
+| Pillow | 2,151.479 | — | Pillow | — | — |
+| Serial CPU | 841.854 | 2.556× | CPU | none | 1 operation |
+| SIMD | 896.396 | 2.400× | SIMD | none | 2 operations; one mode conversion |
+| GPU | 1,149.521 | 0.780× vs SIMD | GPU | none | 2 operations and dispatches; 1,048,576 bytes uploaded, 262,144 read back, 512 parameter bytes, one mode conversion |
+
+I then reran all 19 direct GetData workloads with the `band-data` result
+consumed inside its observed-step timer. Five warmups, 20 iterations, five
+samples, concurrency one, and exact Pillow parity were used throughout. The
+gate passed 57/57 comparisons. CPU executed on all 19 rows with no fallback;
+all were at least as fast as Pillow (1.78×–2.44×), while the four 32×32 cases
+remain below the 2× sequencing tier. SIMD executed on 13 rows; its verified
+speedups were 1.86×–2.20×, with three below 2× and all below the repository's
+5× target. Six CPU fallback rows are excluded. GPU executed on 15 rows; four
+CPU fallback rows are excluded. All 13 rows comparable to an actual SIMD run
+had slower GPU latency, by 1.15×–39.6×. Sustained GPU throughput was not
+measured. Parallel CPU, x86 execution, and a clean complete Pillow-SIMD
+comparison remain open.
+
+The exact workflow run is
+`migration-benchmark-5e89b003eb4e4a90bad10b82925623be` with parity gate
+`migration-parity-benchmark-gate-d1d12212a92447719ad029b20f7e7863`. The
+19-workload run is `migration-benchmark-a85b79010bf34d689c5bca27a27b36e7`
+with gate `migration-parity-benchmark-gate-e2b6c59fec8f4979ab39d046c2fb1d0b`.
+All per-workload profiles, actual-backend receipts, allocation and transfer
+telemetry, and fallback reasons are in
+`docs/evidence/performance-optimization-local-runs.csv`. Keep the published
+matrix pinned to its source snapshot until the batch is ready; the corrected
+local rows do not complete GetData. No coverage was run.
+
+## I-mode Bicubic resize fresh current-source baseline — 2026-10-11
+
+After the SIMD gather experiments were reverted, I rebuilt the current dirty
+arm64 checkout and reran the matched
+`pipeline-chain.resize-native-i32.bicubic-noise-1024x768` workflow. This is a
+1024 × 768 mode-I Bicubic resize to 512 × 384; the timed boundary is the public
+call plus result materialization. Five warmups, 20 iterations in five samples,
+and concurrency one were used. Exact Pillow parity passed 3/3.
+
+| Subject | Median ms | Speedup vs Pillow | Actual backend / fallback |
+| --- | ---: | ---: | --- |
+| Pillow | 2.079 | — | Pillow |
+| Serial CPU | 1.010 | 2.059× | CPU / none |
+| SIMD | 1.973 | 1.054× | SIMD / none |
+| GPU | 30.987 | 0.064× vs SIMD | GPU / none |
+
+The current local serial CPU result clears the 2× sequencing gate for this
+workload. It does not close the Resize operation: this is one mode, size, and
+workflow on arm64, and the other declared resize rows remain open. SIMD still
+misses its 5× target. GPU latency is about 15.7× slower than SIMD; the receipt
+records two dispatches, 3,145,728 uploaded bytes, 786,432 readback bytes, and
+125,440 auxiliary bytes. Its one-request reciprocal latency is not sustained
+throughput. Parallel CPU, x86, and clean Pillow-SIMD evidence remain open.
+
+The current-source report is
+`build/migration-parity/i32-resize-current-campaign-baseline.json`, run
+`migration-benchmark-bfe914bcdc90497c8d64d3dde5d5d03f`; parity report
+`build/migration-parity/i32-resize-current-campaign-baseline-parity.json`
+records `migration-parity-benchmark-gate-47b311ac10914e0bb710e855231d40e3`.
+The four profile rows were appended to the local evidence ledger. This is a
+dirty-worktree local refresh and does not change the published matrix or the
+33-item push batch. No coverage was run.
+
+## Posterize contiguous-byte CPU candidate — 2026-10-11
+
+The published RGB Posterize row is one of the weaker serial-CPU rows, at
+1.421× Pillow on x86_64. This host is arm64, so I measured a current-source
+1024 × 768 RGB workload rather than treating that x86 result as reproducible
+here. The candidate removes the per-pixel three-byte chunk loop from the
+serial CPU branch and applies the same bit mask over the contiguous RGB byte
+slice. The parallel-feature path still assigns disjoint rows; the SIMD and GPU
+dispatch paths are unchanged. The existing exhaustive byte-domain Posterize
+test passed for L and RGB over bit depths 1–8.
+
+Each report used the public call plus result observation, warm cache, five
+warmups, 20 iterations in five samples, concurrency one, and an exact parity
+gate of 3/3. The table shows median microseconds; every row had actual CPU,
+SIMD, or GPU backend receipts with no fallback.
+
+| Run | Pillow | Serial CPU | SIMD | GPU | CPU / Pillow | GPU / SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Current-source baseline | 1,058.562 | 211.938 | 197.792 | 485.666 | 4.996× | 0.407× |
+| Candidate, first noisy run | 1,209.125 | 253.792 | 241.375 | 628.541 | 4.764× | 0.384× |
+| Candidate repeat 1 | 1,102.146 | 204.041 | 217.895 | 540.542 | 5.402× | 0.403× |
+| Nested-loop matched control | 1,110.250 | 234.291 | 214.167 | 548.000 | 4.739× | 0.391× |
+| Candidate repeat 2 | 1,120.438 | 214.145 | 209.854 | 534.145 | 5.233× | 0.393× |
+
+The two repeat candidates lowered CPU median latency by 12.9% and 8.6% against
+the matched nested-loop control. Their median was 209.093 µs, 10.8% below that
+control. Keep the small serial-loop change. The first candidate run is retained
+as evidence: its wide tail and slower median show why one timing sample cannot
+select a candidate. SIMD timing stayed near the control, and GPU remained much
+slower than SIMD. GPU ran one dispatch and moved 2,359,296 bytes in each
+direction; the reported reciprocal single-request rate is not sustained
+throughput. This result covers one large RGB workload on arm64 only; it does
+not demonstrate an x86 win, other modes or sizes, or completion of the
+Posterize operation target. Keep the Kata item open.
+
+The baseline is run
+`migration-benchmark-d4c704c704134d4eb03a9f105d7e603f`; candidate runs are
+`migration-benchmark-665701f863144c8e8f4f12b0a317ceca`,
+`migration-benchmark-534676330ff84bd595d17153ad98afaa`, and
+`migration-benchmark-a8d80e5ac6024284bd4c50272f921054`; the matched control is
+`migration-benchmark-25eb2cb3d3d148e49ce50d8dfa3d37a0`. Every parity gate
+passed 3/3. All 20 profile rows, backend receipts, resource counters, and
+fallback reasons are in
+`docs/evidence/performance-optimization-local-runs.csv`. This local result
+does not refresh the published operation matrix or count toward the 33-item
+commit batch. No coverage was run.
+
+## Pillow-SIMD parity-oracle defect — 2026-10-11
+
+The earlier Pillow-SIMD workflow selected the measured `source_python` as
+`MIGRATION_ORACLE_PYTHON` for each cohort. Its ordinary Pillow cohort therefore
+checked pillow-rs against Pillow, while the Pillow-SIMD cohort checked the
+same targets against Pillow-SIMD. That cohort reported four failures:
+`PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-noise-1024x768` and
+`PIL.ImageOps.grayscale.nuanced.performance-large-rgb-noise-1024x768`, each for
+`python-cpu` and `python-simd`. This changed the conformance reference between
+cohorts and made the failures ambiguous between a target defect and a source
+compatibility difference.
+
+The current local runner pins ordinary Pillow as the target parity oracle in
+both cohorts, reuses the same exact parity receipt for Pillow-SIMD timing, and
+checks Pillow-SIMD output against Pillow in a separate source-compatibility
+pass. It retains the strict target parity gate and withholds a verified
+Pillow-SIMD ratio whenever the timed source produces different output. The
+parity preflight also removes the timed-source override from its subprocess
+environment; a focused regression test covers an inherited override. The
+focused target reports for both cases pass 2/2 against Pillow on this arm64
+host. On 2026-10-12, I also installed the official Pillow 12.1.1 arm64 wheel in
+an isolated CPython 3.12 environment and reran both cases: CPU passed 2/2 and
+SIMD passed 2/2. This verifies the pinned regular-Pillow target oracle for
+those cases locally; it does not establish Pillow-SIMD source compatibility or
+replace an x86 rerun. No x86 source-compatibility result is available locally,
+so the original x86 behavior and published Pillow-SIMD ratios remain open.
+On 2026-10-12, the full focused `test_pillow_simd_benchmark.py` suite passed
+13/13, and the two cases were rerun against that isolated Pillow 12.1.1 oracle:
+CPU passed 2/2 in `pillow-simd-oracle-fix-cpu-20261012.json` and SIMD passed
+2/2 in `pillow-simd-oracle-fix-simd-20261012.json` (run IDs
+`migration-parity-ca59e914b2da488394efebdc53ebf8aa` and
+`migration-parity-bcb0b3f3e9734d989309f07ddf7ec355`). These reports confirm
+the current target-oracle path on arm64; they do not certify Pillow-SIMD output
+compatibility or the x86 benchmark workflow.
+
+The earlier oracle selection is present at baseline revision
+`88d414bdbe6bd31b531271324094e041a9fece8a`; the correction is in the current
+uncommitted `scripts/run_pillow_simd_benchmark.py` and
+`scripts/run_migration_benchmark.py`, and is guarded by the focused Pillow-SIMD
+and benchmark-selection tests. This benchmark defect does not establish an
+optimization or parity completion for Filter or Grayscale. No coverage was
+run.
+
+## BoxBlur RGB radius-one horizontal row specialization — 2026-10-11
+
+The current published BoxBlur matrix's weakest serial-CPU row was the
+1024 × 768 RGB radius-one materialized pipeline, at 1.693× Pillow. I tested a
+serial-CPU specialization that replaces the generic horizontal `blur_one_row`
+call with rolling per-channel RGB sums. It preserves the same fixed-point
+weight and rounding, edge replication, and the existing three-row scratch
+ring. The focused row-ring Rust test passed, and each full-workload benchmark
+passed exact Pillow parity 3/3.
+
+The benchmark included filter application and result materialization, with
+five warmups, 20 iterations in five samples, warm cache, and concurrency one.
+All target rows had actual backend receipts and no fallback. Medians are
+microseconds; the CPU/Pillow ratio is taken within each run.
+
+| Run | Pillow | Serial CPU | SIMD | GPU | CPU / Pillow | GPU latency / SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pre-candidate baseline | 2,667.188 | 1,689.500 | 1,189.604 | 1,001.730 | 1.579× | 0.842× |
+| Specialized candidate 1 | 3,453.313 | 1,753.834 | 1,505.125 | 1,128.667 | 1.969× | 0.750× |
+| Generic-loop control | 3,057.792 | 1,807.459 | 1,310.021 | 1,009.917 | 1.692× | 0.771× |
+| Specialized candidate 2 | 2,924.771 | 1,475.625 | 1,251.479 | 1,057.917 | 1.982× | 0.845× |
+
+The two candidate CPU medians average 1.615 ms; the pre-candidate baseline and
+generic control average 1.748 ms. The paired CPU/Pillow ratios also repeated
+closely for the candidate (1.969× and 1.982×), above the generic runs
+(1.579× and 1.692×). The absolute medians shifted substantially between runs,
+so keep the specialization as a local arm64 candidate and retain every run in
+the ledger rather than claiming a platform-wide gain. This single RGB row now
+exceeds 1.9× Pillow but remains just below the campaign's 2× sequencing
+threshold. No improvement is attributed to SIMD: its implementation was not
+changed.
+
+CPU and SIMD each reported two checked host buffers totaling 4,718,592 bytes.
+The actual GPU path used one dispatch, uploaded and read back 2,359,296 bytes,
+and recorded 256 parameter bytes. GPU latency beat SIMD in these single-request
+runs, but sustained GPU throughput remains unmeasured. The operation stays
+open for other modes, sizes, radii, edge cases, composed pipelines, Parallel
+CPU, x86, and a clean matched Pillow-SIMD cohort.
+
+Reports are `boxblur-rgb-current-campaign-baseline.json`,
+`boxblur-rgb-radius-one-specialized-candidate.json`,
+`boxblur-rgb-radius-one-generic-control.json`, and
+`boxblur-rgb-radius-one-specialized-candidate-repeat.json` under
+`build/migration-parity/`, each with a parity companion. Their 16 profile rows
+bring the local-run ledger to 3,695 data rows. This local checkpoint does not
+refresh the published matrix or count toward the 33-item commit batch. No
+coverage was run.
+
+## I-mode Filter5x5 checked sample view — retained — 2026-10-11
+
+The serial I-mode 5×5 ring repeatedly read little-endian samples from four
+bytes in its horizontal passes. I reused the checked `i32` sample view used by
+the resize paths: aligned little-endian storage is borrowed as `&[i32]`, while
+unaligned storage and other-endian targets keep the exact byte decoder. The
+ring still converts each `i32` sample to `f32` at the same point and keeps
+Pillow's FMA, vertical accumulation, rounding, clipping, and copied-border
+order. SIMD and GPU implementations were not changed.
+
+The current-source baseline and two candidate runs measured two direct
+1024×768 I-mode Filter5x5 inputs and the composed convolution workflow. Direct
+calls include result materialization; the composed row measures the whole
+workflow. Each cohort used five warmups, 20 iterations in five samples, warm
+cache, and concurrency one. Every exact Pillow parity gate passed 9/9. All CPU,
+SIMD, and GPU rows identified their requested backend, with no fallback.
+
+| Workload | CPU baseline | CPU candidate 1 | CPU repeat | CPU/Pillow baseline | CPU/Pillow candidates |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Direct I noise | 2.980 ms | 2.826 ms | 2.824 ms | 1.818× | 1.923× / 1.951× |
+| Direct bounded I noise | 3.481 ms | 3.330 ms | 3.329 ms | 1.604× | 1.683× / 1.631× |
+| Convolution workflow | 3.276 ms | 3.146 ms | 3.121 ms | 1.778× | 1.900× / 1.869× |
+
+CPU latency fell by 4.0–5.2% in both candidate runs. The SIMD medians stayed
+within about 1.2% of the control, so no SIMD gain is attributed to this CPU
+change. CPU remains below the 2× sequencing tier on all three rows. GPU ran one
+actual dispatch, moved 3,145,728 bytes in each direction, and was faster than
+SIMD in single-call latency; sustained GPU throughput remains unmeasured. CPU
+and SIMD reported two checked buffers totaling 6,291,456 bytes per call.
+
+The sample-view tests passed 2/2, including signed extrema, alignment checks,
+trailing-byte handling, and unaligned decoding. The Filter5x5 ring tests passed
+2/2, including an unaligned source compared byte-for-byte with the scalar
+reference. The published matrix remains pinned, and the Filter item stays open
+for remaining modes, sizes, kernels, architectures, Parallel CPU, SIMD's 5×
+target, GPU sustained throughput, and Pillow-SIMD comparison.
+
+Reports are `filter-i-typed-view-baseline-20261011.json`,
+`filter-i-typed-view-candidate-20261011.json`, and
+`filter-i-typed-view-candidate-repeat-20261011.json` under
+`build/migration-parity/`, each with a parity companion. Their 36 profile rows
+bring the local-run ledger to 3,731 data rows. This local checkpoint does not
+refresh the published matrix or count toward the 33-item commit batch. No
+coverage was run.
+
+## I-mode Filter5x5 constant coefficients and four-output unroll — rejected — 2026-10-11
+
+A fresh current-source control measured the same three 1024×768 I-mode
+workloads before two serial-CPU hot-loop candidates. Each run used the public
+call plus result materialization, five warmups, 20 iterations in five samples,
+warm cache, and concurrency one. All baseline and candidate parity gates
+passed 9/9. CPU, SIMD, and GPU receipts identified the requested backend with
+no fallback.
+
+The first candidate dispatched only for the exact normalized `[1,4,6,4,1]`
+outer-product kernel and replaced dynamic coefficient reads with compile-time
+constants while keeping each multiply/FMA and accumulation in the same order.
+It increased serial CPU latency by 1.9–2.1% on all three workloads. The second
+candidate calculated four adjacent outputs per block with separate FMA chains
+and a scalar tail; it increased CPU latency by 6.8–7.8%. Reject both. Their
+SIMD medians stayed within 0.8% of the control, and GPU latency remained below
+SIMD, so neither change improved those profiles.
+
+| Workload | Control CPU | Constant-kernel CPU | CPU change | Four-output CPU | CPU change | Control CPU/Pillow | Four-output CPU/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Direct I noise | 2.824 ms | 2.885 ms | 2.1% slower | 3.045 ms | 7.8% slower | 1.948× | 1.820× |
+| Direct bounded I noise | 3.327 ms | 3.390 ms | 1.9% slower | 3.552 ms | 6.8% slower | 1.634× | 1.542× |
+| Convolution workflow | 3.122 ms | 3.189 ms | 2.1% slower | 3.350 ms | 7.3% slower | 1.865× | 1.767× |
+
+The benchmark timer covered `call` and `materialize` for direct operations and
+the complete composed convolution workflow. GPU executed one dispatch and
+transferred 3,145,728 bytes in each direction. Its measured latency was below
+SIMD, but sustained throughput remains unmeasured. The focused ring tests
+caught an actual width-six out-of-bounds error in the four-output tail; the
+candidate was corrected, then both tests passed. This was an implementation
+defect, not a test defect.
+
+The reports are `filter-i-constant-kernel-control-20261011.json`,
+`filter-i-constant-kernel-candidate-20261011.json`, and
+`filter-i-four-output-unroll-candidate-20261011.json` under
+`build/migration-parity/`. Their three gates are
+`migration-parity-benchmark-gate-eb051ff4b2084e04bf709d7432a9c4bc`,
+`migration-parity-benchmark-gate-e8f14ebd049d47c8a1d0239f08835bf2`, and
+`migration-parity-benchmark-gate-d7176ee2901e42edb0b48fd0f0373b10`.
+The 36 profile rows bring the local-run ledger to 3,767 data rows. The source
+is restored to the existing rolling-window implementation with the checked
+I32 sample view; Filter remains open below the 2× CPU tier. The published
+matrix stays pinned, and this checkpoint does not count toward the 33-item
+commit batch. No coverage was run.
+
+## I-mode Filter5x5 bounded integer ring — retained — 2026-10-11
+
+For the exact normalized 5×5 binomial kernel, an I-mode input bounded by
+`abs(sample) <= 65,535` can use an integer row ring: the sum of absolute kernel
+weights is 256, so every weighted partial stays below 2²⁴ and is exactly
+representable as `f32`. The serial CPU path uses the checked little-endian I32
+view for the bound proof and ring, copies only the output border, and keeps the
+existing FMA ring for inputs outside the bound. A first-sample bound check
+avoids setting up the typed view when the first sample is already out of range.
+The Parallel CPU path, SIMD, and GPU implementations were not changed.
+
+The full candidate workload measured two direct 1024×768 I-mode filters and a
+composed convolution. Direct timings include call and result materialization;
+the composed timing covers the whole workflow. Each run used five warmups, 20
+iterations in five samples, warm cache, and concurrency one. The current
+candidate passed exact parity 9/9 with CPU, SIMD, and GPU receipts showing the
+requested backend and no fallback. A CPU-only confirmation passed 3/3.
+
+| Workload | Pillow | Guarded CPU candidate | CPU / Pillow | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Direct noise | 5.510 ms | 2.871 ms | 1.918× | 1.893 ms | 1.371 ms |
+| Direct bounded noise | 5.614 ms | 3.175 ms | 1.767× | 1.896 ms | 1.346 ms |
+| Convolution workflow | 6.009 ms | 3.267 ms | 1.840× | 2.235 ms | 1.698 ms |
+
+Against the mean of the matched before/after controls, the full candidate was
+1.36% slower on direct noise, 4.86% faster on bounded noise, and 4.35% slower
+on the composed workflow. The CPU-only confirmation was 0.55% slower, 7.44%
+faster, and 0.44% slower on those respective rows. The bounded improvement
+repeated; the two unbounded differences are small and not a demonstrated
+regression. The bounded CPU row nevertheless remains below the 2× Pillow tier.
+SIMD speedups were 2.69×–3.05× Pillow across these three rows, meeting the
+current 2× single-thread target here; broader mode and size coverage remains
+open. GPU latency was below SIMD in these single-request runs; it used one
+dispatch, transferred 3,145,728 bytes in each direction, and recorded 256
+parameter bytes. Sustained GPU throughput remains unmeasured.
+
+The rejected raw-byte proof variant passed exact parity but made the bounded
+CPU row 6.8% slower than its matched controls. The checked typed view was kept.
+Focused tests passed on 5×5, 6×6, and odd dimensions, including ±65,535 and
+rejection at 65,536. No genuine test defect was found in this candidate work;
+no coverage was run.
+
+Matched controls are `filter-i-constant-kernel-control-20261011.json` (run
+`migration-benchmark-4bd994f6bec24657b100a0af96dd131e`, parity gate
+`migration-parity-benchmark-gate-eb051ff4b2084e04bf709d7432a9c4bc`) and
+`filter-i-typed-integer-control-after-20261011.json` (run
+`migration-benchmark-be31f7fd59aa4d429921c6226355c5b4`, gate
+`migration-parity-benchmark-gate-583bd243536b48fc8c727120c73a9343`). The
+guarded full candidate is run
+`migration-benchmark-55d3e56f62b84d79b1f3944f4858978c`, gate
+`migration-parity-benchmark-gate-26f4ea05a97e4301985270fee1377c31`; the
+CPU-only confirmation is run
+`migration-benchmark-60bcd09070bd4ec38ed0d858b4a1cb3a`, gate
+`migration-parity-benchmark-gate-f1255d145f434f6f82be27a6d264c3fa`. The
+rejected raw-proof run is `migration-benchmark-0036c5ac85574acd9261f69e8471ef6c`,
+gate `migration-parity-benchmark-gate-2babc5ddf7da481db9597eea0897c0d3`.
+Their 66 profile rows bring the local-run ledger to 3,833 data rows. The
+published matrix remains pinned and Filter remains open for other modes,
+kernels, sizes, architectures, Parallel CPU, SIMD's 5× target, GPU sustained
+throughput, and clean Pillow-SIMD comparison. This checkpoint does not count
+toward the 33-item commit batch. No coverage was run.
+
+## I-mode Filter5x5 fused bound proof and rejected output/clamp variants — 2026-10-11
+
+The serial bounded binomial path previously scanned the typed I32 view to
+prove `abs(sample) <= 65,535`, then read the same samples again to build the
+integer row ring. The retained candidate moves the range check into the ring's
+sample loads. It computes into private ring/output state while checking each
+sample; if any value is out of range, it discards that attempt and continues
+through the established FMA ring. The first-sample guard still rejects common
+high-range inputs before allocating the typed view. The parallel, SIMD, and
+GPU paths are unchanged.
+
+Two matched control/candidate pairs used the same three 1024 × 768 I-mode
+workloads, five warmups, 20 iterations in five samples, warm cache, and
+concurrency one. Direct Filter includes the public call and result
+materialization; the composed row measures the complete convolution workflow.
+Both candidate cohorts passed exact parity 9/9 across Pillow, CPU, SIMD, and
+GPU. The focused ring test passed for 5 × 5, 6 × 6, and odd dimensions; it
+checks that out-of-bound samples at the first, middle, and last positions
+discard the integer attempt and that the FMA result remains exact.
+
+| Workload | CPU control 1 | CPU candidate 1 | CPU control 2 | CPU candidate 2 | Candidate change per pair |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Direct I noise | 2.857 ms | 2.883 ms | 2.857 ms | 2.887 ms | +0.9%, +1.1% |
+| Direct bounded I noise | 3.155 ms | 3.017 ms | 3.148 ms | 3.025 ms | −4.4%, −3.9% |
+| Convolution workflow | 3.140 ms | 3.175 ms | 3.355 ms | 3.167 ms | +1.1%, −5.6% |
+
+Keep the fused proof. The bounded row improved in both pairs, averaging 4.1%
+against the two control medians. Direct high-range noise changed by about 1%,
+and the composed row's controls varied, so do not credit either small change
+to this specialization. The bounded row remains below 2× Pillow. In the latest
+candidate repeat, serial CPU speedups were 1.90×, 1.84×, and 1.85× for the
+three rows. SIMD speedups were 2.77×–3.05× Pillow and GPU single-request
+latency was below SIMD. GPU used one dispatch and transferred 3,145,728 bytes
+in each direction; sustained throughput remains unmeasured.
+
+Two exact-parity alternatives were rejected. Writing the result by appending
+border and computed pixels into reserved output capacity changed CPU latency by
+−0.3% on noise, −0.5% on bounded noise, and +1.0% on the composed workflow
+relative to the fused-proof candidate; it did not establish an end-to-end
+win. Replacing the nonnegative check with `sum.max(0)` made the bounded CPU row
+3.4% slower and did not improve the other rows. Keep neither variant.
+
+Control runs are `filter-i-single-pass-control-20261011.json`
+(`migration-benchmark-d3e926ae76f5414ea23729eeb9810999`, gate
+`migration-parity-benchmark-gate-68f8f1ebe85347bdba5f7bce630a58e0`) and
+`filter-i-single-pass-control-after-20261011.json`
+(`migration-benchmark-f28e10c671e64f4d9374f44c44c7a356`, gate
+`migration-parity-benchmark-gate-64bd9a4b54c94ce18d66425dff367bea`). Fused
+proof candidates are
+`migration-benchmark-23718299c59c411f8a50c4793e3bdf5e` (gate
+`migration-parity-benchmark-gate-67c7bda0df4c413585065527b54571c3`) and
+`migration-benchmark-d31f5a19244145d88882d17a89e87e18` (gate
+`migration-parity-benchmark-gate-09dbfb7665f7450cb8d180cfce45e447`). The
+reserved-output candidate is
+`migration-benchmark-b05ca4196fb046b99beca559a77fa562` (gate
+`migration-parity-benchmark-gate-fe82a48619054e678218d6a7f914f341`); the
+branchless-clamp candidate is
+`migration-benchmark-ebdfebe033a849128bdbbeaaabe72be1` (gate
+`migration-parity-benchmark-gate-30d58a7df29a4c518ca18550126e60db`). These
+72 profile rows bring the local ledger to 3,905 data rows. Filter remains open
+for other modes, sizes, kernels, architectures, remaining CPU-under-2×
+workloads, and GPU sustained-throughput evidence. No genuine test defect was
+found; no coverage was run. The published matrix remains pinned and the push
+batch remains 0/33.
+
+## I-mode Filter5x5 source-copy output candidate rejected — 2026-10-11
+
+Tested replacing the serial I-mode 5×5 output's zero-fill and border-copy
+steps with a copy of the full source buffer, then overwriting interior pixels.
+The focused bounded-ring test passed 1/1 and the full three-workload backend
+parity gate passed 9/9. Against the latest retained fused-bound candidate
+repeat, CPU medians changed by −0.27% for direct high-range noise, −0.06% for
+bounded noise, and +0.25% for the composed convolution. This is no measurable
+end-to-end improvement, so the source-copy variant was rejected and the
+zeroed-output plus copied-border implementation restored.
+
+The candidate run measured serial CPU speedups of 1.905×, 1.794×, and 1.782×
+Pillow for those rows. SIMD was 2.69×–3.01× Pillow. GPU used the actual backend
+with one dispatch; single-request latency was 1.25×–1.37× faster than SIMD,
+with 3,145,728 bytes uploaded and read back per workload. Sustained GPU
+throughput remains unmeasured. The call workloads include materialization and
+the composed row times the whole workflow. Run
+`migration-benchmark-6bb56b8a25164a9eb868237932371a80` passed gate
+`migration-parity-benchmark-gate-7b97b9539a704159a9331ef3977757da`; its 12
+profile rows bring the local ledger to 3,917 data rows. Filter remains open,
+the published matrix stays pinned, the push batch remains 0/33, no genuine test
+defect was found, and no coverage was run.
+## I-mode Filter5x5 early-prefix range probe rejected — 2026-10-11
+
+To avoid constructing an output before a high-range sample forced the existing
+FMA fallback, tested checking the first 32 typed I-mode samples before output
+allocation. The focused ring test passed 1/1; the CPU-only benchmark parity
+gate passed 3/3. Two fresh retained-path controls bracketed the candidate. CPU
+medians versus their mean were 2.52% slower for direct noise, 2.66% slower for
+bounded noise, and 1.26% slower for the composed workflow. The prefix probe
+therefore has no gain and adds work to the bounded path; it was removed, leaving
+the fused row-ring proof unchanged.
+
+The control-before run is
+`migration-benchmark-1a1b3dc8fb5a4c7d8b2744fb3bb13eca` (gate
+`migration-parity-benchmark-gate-e460ffe722214b169ee54b80704327ce`), the
+candidate is `migration-benchmark-ba88bd506e6044ea861b2f72ab3097a7` (gate
+`migration-parity-benchmark-gate-7a9a687874e7453eb2f4d845084f26ea`), and the
+control-after run is
+`migration-benchmark-cf0a553d2fc544539744368f04bf52f5` (gate
+`migration-parity-benchmark-gate-004a6b8d1e274f2aa86a5ddc935b4c2e`). These
+CPU-only cohorts add 18 rows, bringing the local ledger to 3,935. The broader
+Filter item remains open; its published matrix is unchanged, push batch is
+0/33, no genuine test defect was found, and no coverage was run.
+## I-mode Filter5x5 two-sample CPU range guard rejected — 2026-10-11
+
+After the 32-sample probe regressed, tested a narrower top-level guard that
+checks only the first two I-mode samples before creating the typed view. The
+focused ring test passed 1/1 and the CPU-only parity gate passed 3/3. Against
+the fresh retained-path control, CPU medians changed by +0.16% for direct
+high-range noise, +1.25% for bounded noise, and +0.08% for the composed
+workflow. No end-to-end gain was demonstrated, so the guard was removed and
+the retained fused in-ring proof restored. This run measured only Pillow and
+serial CPU; it adds no new SIMD or GPU evidence.
+
+The candidate is `migration-benchmark-a4664f32edf04297b2b06be45576201b`
+(gate `migration-parity-benchmark-gate-4ac6d7e352b5495e91d9df84deec3b4e`);
+its control is `migration-benchmark-cf0a553d2fc544539744368f04bf52f5`
+(gate `migration-parity-benchmark-gate-004a6b8d1e274f2aa86a5ddc935b4c2e`).
+The six profile rows bring the local ledger to 3,941. Filter stays open, the
+published matrix remains pinned, the push batch is 0/33, no genuine test defect
+was found, and no coverage was run.
+## I-mode Filter5x5 symmetric integer taps rejected — 2026-10-11
+
+Grouped the symmetric neighbors in the exact bounded integer 5-tap sums so
+each row used one fewer multiply. The focused integer-ring test passed 1/1 and
+all three CPU parity comparisons passed. Two fresh retained-path controls
+bracketed the candidate. CPU medians versus their mean were 0.66% slower on
+direct high-range noise, 0.97% slower on bounded noise, and 4.69% slower on the
+composed workflow. Reject the regrouping and keep the original ordered integer
+expressions. The candidate run measured only Pillow and serial CPU.
+
+The control-before run is
+`migration-benchmark-2f53ef64ae1a499081b113c8d5c05ddc` (gate
+`migration-parity-benchmark-gate-255760e9fb3541f4953346a327213fb7`); the
+candidate is `migration-benchmark-9cdd1cc1a1a8407abadb9a72128589ff` (gate
+`migration-parity-benchmark-gate-31ae60f70d664469814e32182c4904b5`); the
+control-after run is
+`migration-benchmark-336aa5c511004bfb89be8f1f4764d57b` (gate
+`migration-parity-benchmark-gate-d1d164619c6a4cf2a02e07542a4cbd9c`). These
+CPU-only cohorts add 18 rows, bringing the local ledger to 3,959. Filter
+remains open, the published matrix stays pinned, the push batch remains 0/33,
+no genuine test defect was found, and no coverage was run.
+
+## GetChannel small-image CPU check and copy candidates — 2026-10-11
+
+Refreshed the five-workload arm64 cohort: 16×16 RGB plus 1024×768 L, RGB, LA,
+and RGBA. The timing policy remained five warmups, 20 iterations in five
+samples, warm cache, concurrency one, with the public call and result
+observation in the measured boundary. All five cohorts below passed exact
+parity 15/15. CPU, SIMD, and GPU each reported its requested actual backend,
+terminal completion, and no fallback. These are dirty local results; they do
+not replace the pinned published matrix. The 100 subject rows are appended to
+the local ledger, which now contains 4,059 data rows.
+
+Tested a PyO3 branch that calls `getchannel_selector` while holding the GIL
+only when the source is already materialized, retaining `detach` for lazy
+inputs. Its CPU/Pillow ratios fell between the two retained-path controls on
+the four large modes, and the 16×16 ratio was effectively unchanged. It was
+reverted. A second candidate cloned the raw L buffer when its length exactly
+matched the logical pixel count, keeping the old truncation path for oversized
+buffers. Its parity cohort showed broad timing shifts on unaffected modes and
+profiles; the following retained control shifted again. This candidate was
+also reverted because the host variation did not separate its effect from
+noise. No genuine test defect was found.
+
+| Workload | Control before GIL branch | GIL candidate | Control after GIL branch | Exact-length L-copy candidate | Retained control after L-copy |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 16×16 RGB | 1.019× | 1.029× | 1.055× | 0.852× | 0.856× |
+| 1024×768 L | 1.410× | 1.559× | 1.746× | 2.070× | 2.747× |
+| 1024×768 RGB | 2.604× | 2.562× | 3.033× | 3.275× | 3.268× |
+| 1024×768 LA | 1.740× | 1.629× | 1.984× | 2.004× | 1.899× |
+| 1024×768 RGBA | 2.139× | 1.972× | 2.428× | 1.895× | 2.059× |
+
+The values are same-run serial CPU speedups versus Pillow. Their variation
+across controls is too large to accept either candidate or claim a stable
+large-image CPU margin. The 16×16 CPU case was slower than Pillow in two of
+five runs and near parity in the others. SIMD still misses the active 2× goal
+on several modes, and direct GPU latency remains much slower than SIMD; this
+cohort does not measure sustained GPU throughput. GetChannel remains open.
+
+The control-before run is
+`migration-benchmark-60ab4d765e33473bb1e6e2d900022bae` (gate
+`migration-parity-benchmark-gate-66c4f125cbd34c87abcf6b653e35a445`); the GIL
+candidate is `migration-benchmark-0a28ad24ba2c49aaaeac30a0c70a9b36` (gate
+`migration-parity-benchmark-gate-80c8a7064a574b28833ead5ca8a1a494`); and the
+control-after run is
+`migration-benchmark-f1ebf5b9f83e4021957bdb516c831163` (gate
+`migration-parity-benchmark-gate-e3384aff5ec44a18ae0629b23f99e12c`). The
+L-copy candidate is
+`migration-benchmark-5bd61811e7004426b769b834272852f0` (gate
+`migration-parity-benchmark-gate-3e23116790a6478c954a90ec8a2d81c6`); the
+retained control after it is
+`migration-benchmark-d6a279dccecb4cbb9bfa68e0c85a9786` (gate
+`migration-parity-benchmark-gate-aea32dbb2ffd456788a97bd5130498da`). The
+published matrix remains pinned, GetChannel stays open, the push batch remains
+0/33, and no coverage was run.
+
+## MedianFilter arm64 current-source control — 2026-10-11
+
+Rechecked the retained current source on the three 1024×768 materialized
+L/LA/RGB workloads. The measured boundary includes `apply-filter` and
+`observe-filter-result`, with five warmups, 20 iterations in five samples,
+warm cache, concurrency one. Exact parity passed 9/9. Each target receipt
+reported the requested actual CPU, SIMD, or GPU backend, terminal completion,
+and no fallback.
+
+| Mode | Pillow µs | CPU µs | CPU/Pillow | SIMD µs | SIMD/Pillow | GPU µs | GPU speedup vs SIMD | GPU upload/readback bytes | Dispatches |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| L | 48,913.771 | 5,664.896 | 8.63× | 8,179.437 | 5.98× | 1,000.688 | 8.17× | 786,432 / 786,432 | 1 |
+| LA | 86,186.563 | 10,394.771 | 8.29× | 16,455.230 | 5.24× | 1,566.645 | 10.50× | 1,572,864 / 1,572,864 | 1 |
+| RGB | 151,798.104 | 15,146.750 | 10.02× | 25,089.916 | 6.05× | 1,605.750 | 15.63× | 2,359,296 / 2,359,296 | 1 |
+
+These local rows meet the CPU, single-thread SIMD, and GPU latency goals for
+these modes and size. The GPU bytes include the full input upload and output
+readback. This one-request cohort does not prove sustained GPU throughput; the
+operation also remains open for other sizes, modes, and architecture cohorts.
+No implementation change was made, no genuine test defect was found, and no
+coverage was run. The 12 subject rows bring the local ledger to 4,071; the
+published matrix stays pinned, the commit/push batch remains 0/33, and the
+MedianFilter Kata item remains open.
+
+The run is `migration-benchmark-351c4efe771a42f491651b27732b0f48`; its exact
+parity gate is
+`migration-parity-benchmark-gate-d28ad67d2ec549df9cda1126ba6b209b`.
+
+## Grayscale arm64 current-source control — 2026-10-11
+
+Rechecked Grayscale on the current dirty arm64 source with a small RGB public
+workflow, large RGB and YCbCr pipeline operations, and a CMYK call-plus-
+materialization chain. The small case uses the whole workflow; the large cases
+measure the public call and result observation (or materialization for CMYK).
+Each workload used five warmups and 20 iterations in five samples. Exact
+Pillow parity passed 10/10. CPU, SIMD, and GPU receipts named the requested
+actual backend, completed terminal observation, and reported no fallback.
+
+| Workload | Pillow µs | CPU µs (vs Pillow) | SIMD µs (vs Pillow) | GPU µs (GPU speedup vs SIMD) |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 16×16, whole workflow | invalid boundary | invalid | invalid | invalid |
+| RGB 1024×768, call + observe | 204.646 | 111.042 (1.843×) | 111.563 (1.834×) | 389.979 (0.286×) |
+| YCbCr 1024×768, call + observe | 116.938 | 54.271 (2.155×) | 64.875 (1.803×) | 406.500 (0.160×) |
+| CMYK 1024×768, call + materialize | 668.730 | 205.916 (3.248×) | 234.021 (2.858×) | 332.084 (0.705×) |
+
+The RGB 16×16 row is invalid: its `whole_workflow` clock stopped when the lazy
+`ImageOps.grayscale` call returned, before observation called `tobytes()` and
+forced target execution. Keep its raw receipt for audit only; it cannot support
+latency or speedup claims. The later corrected control below replaces it. Large
+RGB CPU remains below the 2× sequencing gate; large RGB and YCbCr SIMD remain
+below the active 2× goal. GPU latency is slower than SIMD on each large
+workload. GPU uploads/readbacks were 768/256 bytes for the tiny route receipt,
+2,359,296/786,432 bytes for RGB and YCbCr, and 3,145,728/786,432 bytes for
+CMYK. The tiny receipt proves the transfer sizes, not timed latency. The other
+end-to-end rows include result observation; this single-request cohort does not
+establish sustained GPU throughput.
+
+No candidate was changed in this control. Grayscale remains open across the
+other modes and sizes, Parallel CPU, additional hosts, GPU latency, and
+sustained throughput. These 16 dirty local rows bring the local ledger to
+4,087 rows and do not replace the published operation matrix. No genuine test
+defect was found and no coverage was run.
+
+The run is `migration-benchmark-8de925054ec84681a3d73ea78d2b33e1`; its exact
+parity gate is
+`migration-parity-benchmark-gate-0ec64d44bc614d28ac12268322835f12`.
+
+### Rejected AArch64 scalar RGB contribution tables — 2026-10-11
+
+Tried the existing x86 scalar optimization on AArch64: three 256-entry exact
+coefficient tables replace the rounded RGB path's split integer arithmetic.
+The exhaustive production-pixel test passed all 16,777,216 RGB triples under
+both rounding modes. Two four-workload, all-backend benchmark runs each passed
+exact parity 10/10; CPU, SIMD, and GPU executed on their requested backend,
+completed terminal observation, and reported no fallback.
+
+| RGB 1024×768 CPU | Pillow µs | CPU µs | CPU/Pillow |
+| --- | ---: | ---: | ---: |
+| Retained control before candidate | 204.646 | 111.042 | 1.843× |
+| Candidate run 1 | 192.020 | 453.000 | 0.424× |
+| Candidate repeat | 192.146 | 453.500 | 0.424× |
+| Retained control after revert | 191.312 | 91.959 | 2.080× |
+| Retained control repeat | 190.812 | 91.875 | 2.077× |
+
+The candidate's large RGB CPU regression repeated, then disappeared after the
+lookup path was reverted. The tiny RGB workload was also present in these
+cohorts, but its `whole_workflow` timer ended before result observation and its
+timings are invalid; do not use the small-workflow entries to infer candidate
+effects. The unchanged SIMD RGB latency moved from 111.563 µs
+in the first control to 92.062/91.917 µs during the candidate runs, and the
+unchanged GPU latency moved from 389.979 µs to 248.041/249.854 µs. Those broad
+shifts show that the large-workload cross-profile changes are not candidate
+gains. Reject the AArch64 table path. Two immediate
+post-revert controls put RGB CPU at 2.080×/2.077× Pillow, but the pre-candidate
+control was 1.843×. In those same post-revert controls, unchanged RGB SIMD
+moved from 2.076× to 1.295× Pillow, and YCbCr SIMD measured 1.994× then 1.888×.
+Treat the current CPU ratios as local evidence, not a cross-host completion;
+the SIMD 2× target remains unmet. Large GPU latency remains slower than SIMD
+(0.375× for RGB, 0.162× for YCbCr, and 0.705× for CMYK).
+
+The rejected candidate's 32 rows and both 16-row post-revert controls were
+added to the local ledger. The append audit also found 16 exact duplicate
+records from four earlier Resize runs; only the identical copies were removed,
+leaving all unique measurements intact. The ledger now has 4,135 unique data
+rows. The published operation matrix remains pinned; Grayscale stays open. No
+genuine test defect was found and no coverage was run.
+Run/gate pairs: candidate
+`migration-benchmark-76a7be12027a4d07b9f0c0e25b5194bd` /
+`migration-parity-benchmark-gate-49068b6d445d4ce0a875fae7f9a65f15`; repeat
+`migration-benchmark-5403b5ab4f414a69851f77e377e9574c` /
+`migration-parity-benchmark-gate-7512ec4ee8c244849eb6bc9316a3b328`; post-revert
+control `migration-benchmark-7811d84588854fd5a76748a1be72aca8` /
+`migration-parity-benchmark-gate-7a36d1a2c725431bb393ce2b103c3760`; repeat
+control `migration-benchmark-f63c2dc7774c45c4a0fc4399e44492b0` /
+`migration-parity-benchmark-gate-1d1b582ef5c0410bacf06d1a4c1cf196`.
+
+### Retain direct-output YCbCr NEON extraction — 2026-10-11
+
+The AArch64 SIMD YCbCr path already deinterleaved the Y byte with NEON, but it
+allocated a zero-filled output vector before overwriting every output byte.
+The retained candidate now writes full `vld3q_u8` blocks directly into reserved
+output capacity and appends the exact scalar tail. The existing x86 SSSE3 path
+and all other modes are unchanged. The focused tail test passed 1/1 for 3×1,
+15×3, 16×3, 17×3, and 1024×768 images. Both four-workload live-Pillow runs
+passed exact parity 10/10, used actual CPU/SIMD/GPU backends, completed terminal
+observation, and reported no fallback.
+
+| 1024×768 YCbCr | Pillow µs | CPU µs | SIMD µs | SIMD/Pillow |
+| --- | ---: | ---: | ---: | ---: |
+| Retained control A | 104.459 | 43.875 | 52.395 | 1.994× |
+| Retained control B | 106.334 | 44.125 | 56.333 | 1.888× |
+| Direct-output candidate | 124.875 | 43.875 | 44.375 | 2.814× |
+| Candidate repeat | 128.958 | 44.063 | 44.125 | 2.923× |
+
+The candidate SIMD median improved about 15–22% against the two preceding
+controls and landed near the unchanged CPU extraction cost in both runs. The
+paired Pillow medians shifted, but both target medians and the independent CPU
+medians are retained here. Keep this AArch64 YCbCr candidate for the measured
+path; this does not prove other hosts or modes. GPU latency remained slower
+than SIMD (0.118× and 0.115× for YCbCr), with 2,359,296 input bytes uploaded,
+786,432 output bytes read back, and one dispatch. Sustained GPU throughput is
+not measured by these single-request calls.
+
+The two candidate runs add 32 rows, bringing the local ledger to 4,167 unique
+data rows. The published matrix remains pinned and Grayscale stays open for
+other sizes and modes, Parallel CPU, x86, and GPU latency/throughput. No genuine
+test defect was found and no coverage was run. Candidate run/gate pairs:
+`migration-benchmark-e6cf6869300141c5b652b945ab6a403d` /
+`migration-parity-benchmark-gate-d1cd9a8411cc40d88e97b6d83ddd02f2` and
+`migration-benchmark-5728f357f5144c7fbc2a66f4ed332b9e` /
+`migration-parity-benchmark-gate-b07b3c7ce3c54bae89f86b7435fbba20`.
+
+## Thumbnail F32 direct-byte vertical output candidate rejected — 2026-10-11
+
+The next weak non-stale published CPU row is F-mode `Image.thumbnail` at
+2048×1536. Its published x86 CPU result remains slower than Pillow; this
+macOS arm64 experiment does not close that gap. I tested replacing the serial
+vertical pass's `Vec<f32>` output plus full byte repack with direct writes into
+a checked little-endian byte buffer. The candidate preserved Pillow's F32
+pass boundary and passed exact parity.
+
+Each run timed the public thumbnail call and receiver observation with five
+warmups, 20 iterations across five samples, warm cache, and concurrency one.
+The benchmark selected Pillow, CPU, and SIMD; both target profiles reported
+their requested actual backend, no fallback, and the parity receipt passed 2/2.
+
+| Run | Pillow median (ms) | CPU median (ms) | CPU/Pillow | SIMD median (ms) | SIMD/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Candidate 1 | 4.211937 | 1.547562 | 2.722× | 2.418021 | 1.742× |
+| Reverted-source control | 4.257770 | 1.447271 | 2.942× | 2.308980 | 1.844× |
+| Candidate 2 | 4.243834 | 1.461458 | 2.904× | 2.350958 | 1.805× |
+
+Neither candidate run improved on the matched CPU control; the second was
+0.98% slower, and the first was 6.9% slower. SIMD also did not improve in these
+runs. The extra per-sample float-to-byte encoding may have offset the saved
+buffer movement, but this mechanism was not isolated. I reverted the change.
+GPU was not requested in these runs, so they add no GPU result; sustained GPU
+throughput remains unmeasured. A broad Rust `f_resize` test selector was
+interrupted after it entered an unrelated very large GPU test; this was not a
+test defect and is not reported as a passing test. The live Pillow benchmark
+parity gate passed for all measured profiles.
+
+The three runs are `migration-benchmark-7298c50f75a443c39af652dd8651eb0b`,
+`migration-benchmark-61ac8176d6ac404eb32a234960c03df8`, and
+`migration-benchmark-ea5a9e17e75c4d7992b9feafe7501a8c`; each report and parity
+companion is under `build/migration-parity/thumbnail-f32-*.json`. Their nine profile rows bring the local-run
+ledger to 4,176 unique rows. The published operation matrix stays pinned,
+Thumbnail remains open, the commit/push batch remains 0/33, and no coverage
+was run.
+
+## Thumbnail F32 reduction SIMD quarter-scale candidate rejected — 2026-10-11
+
+The restored SIMD profile attributed similar time to `simd_thumbnail_reduce_f`
+and the following boxed resize. In the full 2×2 reduction blocks, the eight
+F32 quartets were already summed in vectors, but each lane was widened to F64
+and scaled separately. I tested scaling normal results with one F32 vector
+multiply, preserving the original widened route for NaNs, signed zero, and
+underflow-sensitive values. The focused reduction test matched the scalar
+Pillow-order reference, including NaNs, infinities, signed zeros, and
+subnormals; it passed 1/1.
+
+The public 2048×1536 F thumbnail benchmark used `call` plus `observe-receiver`,
+five warmups, 20 iterations across five samples, warm cache, and concurrency
+one. Each of the four Pillow/CPU/SIMD cohorts passed exact parity 2/2; CPU and
+SIMD executed their requested backends with no fallback.
+
+| Run | Pillow median (ms) | CPU median (ms) | CPU/Pillow | SIMD median (ms) | SIMD/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Reverted control 1 | 4.267729 | 1.585125 | 2.692× | 2.371583 | 1.800× |
+| Candidate 1 | 4.508125 | 1.661396 | 2.713× | 2.782291 | 1.620× |
+| Reverted control 2 | 4.249729 | 1.578979 | 2.691× | 2.330146 | 1.824× |
+| Candidate 2 | 4.349104 | 1.580375 | 2.752× | 2.765750 | 1.572× |
+
+Both candidate runs made SIMD about 18% slower than the nearby reverted-source
+controls; the CPU path stayed effectively unchanged in candidate 2. The result
+rejects this arithmetic change for the measured arm64 SIMD backend. The cause
+was not isolated beyond the candidate's vector scale and per-lane exceptional
+value checks. GPU was not requested, so this adds no GPU evidence; sustained
+GPU throughput remains unmeasured. No genuine test defect was found and no
+coverage was run.
+
+Runs: `migration-benchmark-06770e30b9c14cd390c52b3a3c0ed143`,
+`migration-benchmark-b760ddf633914cb89341903d5a0d4b46`,
+`migration-benchmark-fce3f3ae4d29449c83b9d58a7d7b2093`, and
+`migration-benchmark-053b0d25e431478ab0ead615ea4ef9e3`; parity companions are
+the correspondingly named `*-parity.json` reports. Their 12 profile rows bring
+the local-run ledger to 4,188 unique rows. Thumbnail remains open, the
+published matrix stays pinned, the commit/push batch remains 0/33, and no
+coverage was run.
+
+## Thumbnail F32 reduction SIMD batched byte-store candidate retained — 2026-10-11
+
+After rejecting the F32 quarter-scale arithmetic change, I kept its exact F64
+per-lane scaling and changed only how each eight-value SIMD block is appended
+to the little-endian output buffer. On little-endian hosts, one safe
+`bytemuck::cast_slice` append replaces eight `to_le_bytes` plus append pairs;
+big-endian hosts keep the original per-value little-endian encoding. The
+focused scalar-order/exceptional-value reduction test passed 1/1. Each live
+Pillow benchmark included the public `thumbnail` call and receiver observation,
+five warmups, 20 iterations across five samples, warm cache, and concurrency
+one. Each benchmark cohort passed the exact live CPU/SIMD parity gate 3/3,
+with Pillow as the reference.
+
+| Run | Pillow median (ms) | CPU median (ms) | SIMD median (ms) | CPU backend | SIMD backend |
+| --- | ---: | ---: | ---: | --- | --- |
+| Reverted control before candidate 1 | 4.249729 | 1.578979 | 2.330146 | CPU | SIMD |
+| Candidate 1 | 4.480729 | 1.620958 | 2.265146 | CPU | SIMD |
+| Reverted control before candidate 2 | 4.521271 | 1.681521 | 2.533063 | CPU | SIMD |
+| Candidate 2 | 4.489729 | 1.728480 | 2.483854 | CPU | SIMD |
+
+The SIMD median was 2.8% below its preceding control in the first pair and
+1.9% below its preceding control in the second. CPU medians shifted 2.7–2.8%
+slower in the same candidate runs, although this SIMD-only edit does not change
+the CPU implementation. Within-run SIMD/CPU ratios improved by 5.3% and 4.6%
+against the corresponding controls, consistent with a small repeatable SIMD
+gain despite host timing drift. Keep this narrow little-endian output-store
+change, but do not claim the SIMD target is met: the two candidate SIMD runs
+were only 1.98× and 1.81× faster than Pillow, below the 2× user target and the
+stricter 5× repository target. The weakest published x86 CPU row is unchanged.
+
+The requested GPU profile fell back to CPU with the existing typed-thumbnail
+semantic-control reason in every run. Those fallback timings are excluded from
+GPU latency and throughput comparisons. No actual GPU execution or sustained
+throughput was measured. Exact parity passed, and no genuine test defect was
+found; no coverage was run. The 12 Pillow/CPU/SIMD/requested-GPU rows from the
+three new cohorts bring the local ledger to 4,200 unique rows. The published
+matrix remains pinned, Thumbnail stays open at priority 1, and the
+commit/push batch remains 0/33.
+
+Run and parity pairs:
+
+- control before candidate 1: `migration-benchmark-fce3f3ae4d29449c83b9d58a7d7b2093` / `migration-parity-benchmark-gate-05a9fc97817b4908a9e48fc166ba5b29`
+- candidate 1: `migration-benchmark-cfe2d37d048949c0b2b8b0e6ac643441` / `migration-parity-benchmark-gate-e44a8b6129714594b6201c19a4b41207`
+- control before candidate 2: `migration-benchmark-fab29ca9d3624bad93e4d6ddc1427130` / `migration-parity-benchmark-gate-174403988fe0477b8d8a7f4c824920fe`
+- candidate 2: `migration-benchmark-de05f397baa440d9829ce6967d8fee1a` / `migration-parity-benchmark-gate-84f1e94aa97d4a638fb3742119f193e8`
+
+## Thumbnail F32 finiteness-scan hint — rejected — 2026-10-11
+
+I tested carrying the reducer's exact “all output samples are finite” result
+into F-mode boxed resize, then deriving intermediate finiteness while writing
+the horizontal pass. This was intended to remove full scans of the reduced
+source and intermediate buffers while preserving the generic arithmetic for
+NaNs, infinities, and finite inputs that overflow during the pass. Focused
+tests compared hinted and scanned output for those cases and checked the
+reducer's result (8 F-thumbnail tests and the hint-specific test passed).
+Release builds succeeded for both candidate and control, and every live
+benchmark parity gate passed 3/3.
+
+The public `thumbnail` call and receiver observation were measured with five
+warmups, 20 iterations across five samples, warm cache, and concurrency one.
+CPU and SIMD executed their requested backends. The requested GPU profile
+fell back to CPU because the typed-thumbnail semantic control is unproven; its
+timings are excluded from GPU comparisons.
+
+| Cohort | Pillow median (ms) | CPU median (ms) | CPU/Pillow | SIMD median (ms) | SIMD/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Control 1 | 4.473792 | 1.784375 | 2.507× | 2.326604 | 1.923× |
+| Control 2 | 4.355437 | 1.713167 | 2.542× | 2.324292 | 1.874× |
+| Control 3 | 4.357833 | 1.698605 | 2.566× | 2.235583 | 1.949× |
+| Candidate 1 | 4.426645 | 1.700875 | 2.603× | 2.317896 | 1.910× |
+| Candidate 2 | 4.390458 | 1.764563 | 2.488× | 2.312105 | 1.899× |
+| Candidate 3 | 4.184646 | 1.640937 | 2.550× | 2.185812 | 1.914× |
+| Candidate 4 | 4.431438 | 1.722605 | 2.573× | 2.273354 | 1.949× |
+
+The three-control median was 1.713167 ms CPU and 2.324292 ms SIMD. Candidate
+medians were 1.711740 ms CPU and 2.292729 ms SIMD: effectively flat CPU and a
+1.4% SIMD difference, both within the observed cohort spread. Candidate 3
+also lowered Pillow's median versus the controls, showing that its cross-
+profile speedup was not evidence of a code-only improvement. I reverted the
+hint and kept the previous resize path. No repeatable end-to-end gain was
+established, despite exact parity. No genuine test defect was found and no
+coverage was run.
+
+The seven benchmark/parity pairs are:
+
+- control 1: `migration-benchmark-0f2cf9d8228048b8a3ca7156a7497b1c` / `migration-parity-benchmark-gate-3ed424817d8a4b2781ad6215970d8f6a`
+- control 2: `migration-benchmark-c6a4f42dcd9e4e4db61bed2ace68f9e9` / `migration-parity-benchmark-gate-ebe6e688090f43d385381d7d970bdafe`
+- control 3: `migration-benchmark-e30e1fe530ca4117bad004fa15b115f7` / `migration-parity-benchmark-gate-50e23e53b82e4b6c8e34f579bd3ec5db`
+- candidate 1: `migration-benchmark-a725b65d3e17489e83bd4da79d0f1f9a` / `migration-parity-benchmark-gate-1d319a0fffcb49d8830f5d032ebd53f3`
+- candidate 2: `migration-benchmark-79456c0c4dff4d099affd207a32c99c4` / `migration-parity-benchmark-gate-bb55aa1d0e8a4c8e94d08057065721fa`
+- candidate 3: `migration-benchmark-eabfe3b0d9f74f8490c4c5728be86dc2` / `migration-parity-benchmark-gate-7cd04ea55e194396bbc8b4993af0da10`
+- candidate 4: `migration-benchmark-2f12f3c127ee4d1c8f4690636da8b973` / `migration-parity-benchmark-gate-c92d7dfc75b141e29ff6efd15518c388`
+
+All 28 subject rows are in `docs/evidence/performance-optimization-local-runs.csv`,
+which now has 4,228 unique rows. GPU fallback rows are explicitly excluded.
+The published operation matrix remains pinned; Thumbnail stays open at
+priority 1, the commit/push batch remains 0/33, and no coverage was run.
+
+## Thumbnail F32 AArch64 NEON interleaved reduction — retained after source audit — 2026-10-11
+
+An audit caught a provenance error in the first record of this candidate: the
+working tree then contained the portable lane-gather reducer, not the claimed
+`vld2q_f32` helper. The old candidate reports recorded the Git revision and a
+dirty bit but no working-tree patch identity, so their timings remain in the
+ledger as `unverified_candidate` and are excluded from explicit-NEON
+attribution. The helper has now been added to the current source and measured
+again against its recorded fresh control.
+
+For an even 2×2 F-mode reducing-gap block whose output width is a multiple of
+eight, the AArch64 path uses two `vld2q_f32` structure loads per source row to
+deinterleave eight output neighborhoods. It preserves Pillow's left-to-right
+f32 quartet additions, f64 quarter-scale, and little-endian output. Odd
+dimensions, partial blocks, and other factors keep the general route. The
+focused test checks widths 16, 32, and 48 with subnormals, signed zero, finite
+extremes, infinities, and quiet/signaling NaNs; the AArch64 SIMD dispatch
+matched the scalar Pillow-order reference, 1/1. This host reports
+`target_arch="aarch64"` and `target_feature="neon"`; the release build compiled
+the guarded helper. The 2048×1536 F benchmark meets its dispatch conditions,
+and its receipt reports actual `cpu` and `simd` backends for those profiles.
+
+| Cohort | Pillow median (ms) | CPU median (ms) | CPU/Pillow | SIMD median (ms) | SIMD/Pillow | SIMD/CPU |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Fresh control | 4.486105 | 1.793042 | 2.502× | 2.306479 | 1.945× | 1.286× |
+| Verified candidate 1 | 4.310229 | 1.659251 | 2.598× | 1.838375 | 2.345× | 1.108× |
+| Verified candidate 2 | 4.329229 | 1.512000 | 2.863× | 1.783750 | 2.427× | 1.180× |
+
+Each run measured the public call plus receiver observation with five warmups,
+20 iterations across five samples, warm cache, and concurrency one. SIMD
+latency was 20.3% and 22.7% below the fresh control. CPU also moved faster
+between cohorts, so use the paired SIMD/CPU ratio as a conservative check: it
+fell from 1.286 in the control to a 1.144 candidate median. The earlier four
+controls had a median ratio of 1.310. Keep this narrow, repeated AArch64 path;
+do not attribute the cross-cohort CPU movement to it. Both measured SIMD rows
+exceed the user's 2× threshold but remain below the repository's 5× target.
+The published x86 CPU/SIMD gaps remain open.
+
+The GPU request fell back to CPU in both candidate runs (2.533 and 2.610 ms);
+those rows carry no GPU latency credit, and sustained GPU throughput was not
+measured. No genuine test defect was found and no coverage was run.
+
+Verified run/parity pairs:
+
+- fresh control: `migration-benchmark-b655dd82ee294876a7e676677f890410` / `migration-parity-benchmark-gate-2611b30f7f664dca9fcb2bcb7ab49e13`
+- candidate 1: `migration-benchmark-443efe1be7a5471fada7ff556739a780` / `migration-parity-benchmark-gate-c3dbc10d6886473f8cd775a54719448b`
+- candidate 2: `migration-benchmark-e991d606fa194e17a34013771ef60a91` / `migration-parity-benchmark-gate-864c75b7c9f2432bb59fe036c1ffcb86`
+
+Earlier reports `migration-benchmark-9edc095182a94ea1819fa83234b4b1a2` and
+`migration-benchmark-7d7f768b2dda471d82391fed05ab6411` remain recorded but
+unverified for NEON attribution. The two new verified cohorts add eight
+subject rows, bringing the local ledger to 4,248 unique rows. The published
+operation matrix remains pinned, Thumbnail stays open at priority 1, the
+commit/push batch remains 0/33, and no coverage was run.
+
+## GetChannel — tiny materialized RGB eager CPU/SIMD dispatch (2026-10-11)
+
+Kept a narrow eager path for already-loaded RGB images of at most 256 pixels.
+It dispatches to the currently selected CPU or SIMD backend, allocates the
+final L image once, and preserves image information and EXIF metadata. Pending
+pipelines, larger inputs, GPU routing, and opt-in Parallel CPU retain their
+existing execution paths. A broad eager variant was not retained because the
+full-frame timings did not establish a repeatable end-to-end gain.
+
+The final five-workload candidate run and a repeat of the 16×16 RGB workload
+passed the benchmark's exact parity gates: 15/15 and 3/3 comparisons. Separate
+full-corpus gates passed 136/136 cases each for CPU, SIMD, and GPU (408/408
+total). These are dirty-tree local results on macOS arm64; the public
+operation-matrix snapshot remains pinned to its clean revision.
+
+| Input | Pillow µs | CPU µs (vs Pillow) | SIMD µs (vs Pillow) | GPU µs (vs SIMD) |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 16×16 | 4.375 | 3.208 (1.36×) | 3.375 (1.30×) | 195.375 (0.02×) |
+| L 1024×768 | 79.229 | 45.500 (1.74×) | 50.792 (1.56×) | 379.167 (0.13×) |
+| RGB 1024×768 | 169.499 | 53.541 (3.17×) | 90.979 (1.86×) | 539.104 (0.17×) |
+| LA 1024×768 | 177.791 | 87.499 (2.03×) | 55.979 (3.18×) | 407.729 (0.14×) |
+| RGBA 1024×768 | 170.230 | 71.917 (2.37×) | 61.438 (2.77×) | 592.188 (0.10×) |
+
+The repeat measured 16×16 RGB CPU/SIMD at 3.167/3.250 µs against Pillow at
+4.792 µs. Thus the direct path improves the tiny workload in these two runs,
+but it is still below the requested 2× SIMD tier. Only full-size LA and RGBA
+reach 2× SIMD in this cohort; L, RGB, and tiny RGB remain below. The CPU is at
+or faster than Pillow in all five sampled workloads, with tiny RGB and L still
+below 2×.
+
+Every target returned the requested actual backend with terminal completion
+and no fallback. The tiny GPU case uploaded/read back 768/256 bytes. At
+1024×768, GPU input uploads ranged from 786,432 to 3,145,728 bytes and each
+read back 786,432 bytes. GPU latency remained slower than SIMD in all five
+cases. Sustained throughput was not measured in this rerun; earlier local
+queue and explicit-batch diagnostics remain below SIMD. Parallel CPU still has
+no Rayon execution receipt, x86 SIMD runtime remains unverified, and the
+Pillow-SIMD GitHub JSON is dirty/partial ranking evidence only. No genuine
+test defect was found; a double-count in the new SIMD allocation telemetry was
+corrected before the retained run, and its focused telemetry test passed. No
+coverage was run.
+
+Reports: `build/migration-parity/getchannel-tiny-eager-final-20261011.json`,
+`build/migration-parity/getchannel-tiny-eager-final-repeat-20261011.json`, and
+the matching `*-parity-20261011.json` reports. The local ledger now has 4,272
+rows, including 416 GetChannel rows. Keep GetChannel open; the clean published
+matrix is unchanged, commit/push remains 0/33, and no coverage was run.
+
+## PIL.Image.merge — x86 SSSE3 RGB interleave candidate (2026-10-11)
+
+The clean published matrix has a severe x86_64 single-thread SIMD regression
+for `pipeline-op.merge.material-rgb-l-1024x768`: actual SIMD was 6,445.233 µs
+against Pillow at 2,148.444 µs (0.333339× Pillow). The serial CPU row is
+2.238091× Pillow. The arm64 implementation already has a fast NEON path, so
+the candidate targets three planar L bands merged into RGB on x86_64.
+
+Added an SSSE3 path that loads 16 bytes from each band, uses three
+architecture-specific `pshufb` masks to interleave 16 RGB pixels, writes 48
+bytes, and handles the remainder with the exact scalar tail. Runtime dispatch
+checks SSSE3. The x86_64 macOS release assembly contains `pshufb` instructions
+inside `native_merge_interleave`, and the x86_64 test target cross-compiles
+with tests enabled. A host-independent mask-mapping test passed on arm64. The
+host cannot execute x86_64 binaries, so the SSSE3 branch has not had runtime
+parity or performance verification and receives no acceleration credit.
+
+The corrected arm64 control confirms parity and accounts for the result
+allocation, but does not select the new x86 path:
+
+| 1024×768 RGB, three L inputs | Median (µs) | Speedup | Host allocation | Transfer |
+| --- | ---: | ---: | ---: | ---: |
+| Pillow | 811.583 | 1.000× | — | — |
+| Serial CPU | 216.041 | 3.757× Pillow | 1 × 2,359,296 B | — |
+| SIMD (arm64 control) | 237.855 | 3.412× Pillow | 1 × 2,359,296 B | — |
+| GPU | 957.708 | 0.248× SIMD | 1 × 2,359,296 B | 2,359,296 B upload + readback |
+
+The selected benchmark gate passed 3/3 exact comparisons for each target
+backend. All requested profiles reported their actual backend with no
+fallback. These are public-call-plus-result-observation timings with warm
+cache, five warmups, 20 iterations across five samples, and concurrency one.
+GPU sustained throughput was not measured; its single-image latency is slower
+than SIMD. The initial control omitted direct `Vec` output allocation from
+CPU/SIMD allocation telemetry; the allocation was included in the timed call,
+and the counter was fixed to report it once before retaining this control.
+This was a telemetry defect, not a parity-test defect. No genuine test defect
+was found and no coverage was run.
+
+Reports: `build/migration-parity/merge-ssse3-arm-allocation-control.json` and
+`build/migration-parity/merge-ssse3-arm-allocation-control-parity.json`;
+benchmark/parity ID `migration-benchmark-9bbb8663d9b142d1baad855b3b198923` /
+`migration-parity-benchmark-gate-1bdcc5dd369a459d97fb163e5093fbd6`. The local
+ledger has 4,280 rows total and 16 merge rows. Keep the merge issue open until
+x86 runtime parity and benchmarking establish the SSSE3 candidate and the GPU
+latency/throughput targets are measured. The commit/push batch remains 0/33.
+No coverage was run.
+
+## PIL.Image.merge — direct GPU throughput and parity checkpoint (2026-10-12)
+
+The retained direct-mapped GPU input route was remeasured from the exact dirty
+source tree. The public-call benchmark for RGB from three L bands at 1024×768
+measured Pillow 804.333 µs, CPU 193.625 µs, SIMD 190.271 µs, and GPU 653.104
+µs. CPU and SIMD selected their requested backends; GPU selected GPU, performed
+one dispatch, transferred 2,359,296 bytes in each direction, allocated one
+2,359,296-byte output, made zero full-frame copies, and did not fall back. The
+GPU latency is still 3.43× SIMD latency. The SIMD result is 4.23× Pillow in
+this run: it clears the campaign's original 2× requirement but remains below
+the repository's stricter 5× SIMD target.
+
+An additional completed-work throughput diagnostic used fresh public graphs
+for 16 images per window, two warmups, and five measured windows. Timing
+includes graph construction, execution, GPU synchronization, materialization,
+and terminal byte export. Exact output bytes matched Pillow for all 16 images
+at each size:
+
+| RGB merge workload | Pillow images/s | CPU images/s | SIMD images/s | Direct GPU images/s | GPU / SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 256×256 | 13,544.5 | 46,829.4 | 46,472.2 | 3,975.9 | 0.086× |
+| 1024×1024 | 1,018.2 | 4,194.4 | 3,981.0 | 1,019.2 | 0.256× |
+
+The direct GPU windows completed 112 merge operations including both warmup
+windows. They contained 112 dispatches and 22,020,096/352,321,536 upload and
+readback bytes at 256²/1024², respectively, with one output allocation per
+operation and zero full-frame copies. GPU direct throughput is near Pillow at
+1024² but remains far below SIMD; the 256² lane is also slower than Pillow.
+This diagnostic is serialized normal GPU execution, not GPU batching. The
+explicit `GpuBatchExecutor` preflight rejected Merge before submission because
+the graph has no composed native L layout. That is the current admission
+contract working as designed, not a parity failure, and earns no batch
+throughput credit.
+
+After the mapped-input change, the full 70-case Merge corpus passed on CPU,
+SIMD, and GPU (70/70 each, with no failed, skipped, or infrastructure-error
+cases). The packed-word shader experiment passed parity but measured 700.125
+and 649.229 µs against 641.063 and 666.292 µs for mapped-input controls, so it
+had no repeatable whole-call gain and remains reverted. No genuine test defect
+was found. The x86 SSSE3 implementation still has compile/codegen evidence only
+and no x86 runtime parity or performance evidence.
+
+A source trace ruled out an avoidable intermediate Rust byte-vector clone at
+the `tobytes()` observation boundary: the default binding retains the shared
+materialized image through `tobytes_encoded_shared()` and passes its byte slice
+directly to `PyBytes::new`. Returning an independent immutable Python `bytes`
+still requires its host allocation and copy. This does not change Merge's
+public-call benchmark boundary or justify a zero-copy API change.
+
+Reports: `build/migration-parity/merge-gpu-mapped-input-final-20261011.json`,
+`build/migration-parity/merge-gpu-mapped-input-final-parity-20261011.json`,
+`build/migration-parity/merge-gpu-batch-20261012.json`, and
+`build/migration-parity/merge-full-{cpu,simd,gpu}-20261012.json`. The local
+ledger now has 4,288 rows total and 24 Merge rows. Keep the Kata item open:
+GPU latency and direct throughput miss the SIMD targets, explicit GPU batching
+does not admit Merge, SIMD remains below the repository's 5× threshold in the
+fresh end-to-end result, and x86 runtime evidence is absent. The published
+matrix remains pinned, the commit/push batch remains 0/33, and no coverage was
+run.
+
+## PIL.ImageOps.grayscale — queued GPU throughput checkpoint (2026-10-12)
+
+The 1024×768 YCbCr single-call result is exact (10/10 parity), with one actual
+GPU dispatch, no fallback, 2,359,296 bytes uploaded, and 786,432 bytes read
+back. Its 384.084 µs median remains far above SIMD at 44.125 µs and Pillow at
+128.958 µs. The full upload/readback boundary makes transfer and completion
+costs the leading hypothesis; stage timing is still needed to rule out a
+material kernel cost.
+
+A separate 1024×768 RGB Grayscale batch measured 64 completed images per window,
+including graph construction, submission, execution, synchronization,
+materialization, and byte export. Exact output bytes passed; all 320 GPU
+operations selected the GPU with no fallback. In the first matched window set,
+SIMD sustained 6,436 images/s and queued GPU 1,204 images/s. A deeper-queue
+repeat remained below its same-run SIMD rate (1,667 versus 787 images/s). The
+GPU run transferred 754,974,720 input bytes and 251,658,240 output bytes across
+the 320 operations. Queueing did not satisfy the throughput target; any next
+Grayscale GPU attempt needs evidence of reduced transfer/completion cost or a
+GPU-resident composed pipeline, not another workgroup-size-only change.
+
+Reports: `build/performance-optimization/grayscale-gpu-mapped-upload-queued.json`
+and `build/performance-optimization/grayscale-gpu-mapped-upload-queued-max8.json`;
+run IDs `gpu-batch-1791563381159129000` and
+`gpu-batch-1791563554339972000`. The YCbCr call is from
+`migration-benchmark-5728f357f5144c7fbc2a66f4ed332b9e` and its exact parity gate
+`migration-parity-benchmark-gate-b07b3c7ce3c54bae89f86b7435fbba20`. Keep the
+Grayscale Kata item open: single-call GPU latency and batched GPU throughput
+both remain below SIMD, and broader mode, x86, and Parallel CPU evidence is
+incomplete. No coverage was run; the commit/push batch remains 0/33.
+
+### YCbCr grayscale shader and allocation-accounting follow-up (2026-10-12)
+
+On the same 1024×768 workload, a fresh instrumented current-source control
+passed exact Pillow parity for all 3 selected backend comparisons. Medians were
+Pillow 410.354 µs, CPU 181.646 µs, SIMD 174.084 µs, and GPU 3,940.729 µs.
+The selected GPU executed one dispatch without fallback, uploaded 2,359,296
+bytes, read back 786,432 bytes, reported one full-frame copy, and allocated
+one 786,432-byte host output. CPU and SIMD exceed 2× Pillow in this local
+sample; the repository's SIMD 5× target and GPU-vs-SIMD latency target remain
+unmet.
+
+A candidate shader packed four Y outputs from three aligned YCbCr words. It
+passed the same exact 3/3 parity gate but measured 3,890.834 µs on GPU against
+3,866.459 µs in its adjacent control with unchanged transfer sizes and one
+dispatch. The shader edit was reverted. A focused Rust GPU test remains for
+exact output across widths 1–5 and a multirow tail case, with transfer,
+allocation, dispatch, and no-fallback assertions.
+
+The first resource receipt exposed an instrumentation defect: GPU
+`readback_to_luma8()` copied the mapped output into a `Vec` but did not record
+that allocation. It now records the returned buffer exactly once; the focused
+test checks one output allocation of `width × height` bytes after clearing the
+CPU reference's telemetry. The earlier candidate/control allocation counts
+for this path are unknown, not zero. Their elapsed timings still included the
+allocation. No parity defect or coverage run was found. The local ledger now
+has 4,308 data rows; the published matrix remains pinned. The Grayscale Kata
+item stays open, and the commit/push batch remains 0/33.
+
+Reports: `build/migration-parity/grayscale-ycbcr-gpu-control-20261012.json`,
+`build/migration-parity/grayscale-ycbcr-packed-kernel-candidate-20261012.json`,
+`build/migration-parity/grayscale-ycbcr-gpu-instrumented-control-20261012.json`,
+and their matching `*-parity-20261012.json` files. I-mode resize control and
+rejected-candidate reports are in `build/migration-parity/i32-resize-vertical-preplan-*-20261012.json`.
+
+### YCbCr grayscale Parallel CPU investigation (2026-10-12)
+
+A fresh full-call control on the same 1024×768 YCbCr workload measured Pillow at
+360.625 µs and serial CPU at 173.875 µs (2.074×). The exact Pillow parity gate
+passed 1/1. The feature-enabled Parallel CPU profile timed only its target as
+designed; two controls measured 466.771 and 454.396 µs, against the same-host,
+same-source Pillow result at 360.625 µs (0.773× and 0.794×). Both gates passed
+1/1, execution selected CPU, and no fallback occurred. The original arm64
+YCbCr implementation contained no Rayon call despite the Parallel CPU build.
+
+Two exact-parity Rayon candidates were tried in the Parallel CPU profile. A
+per-pixel `par_chunks_exact(3).collect()` path measured 1,314.854 µs. A
+row-parallel output-buffer path measured 789.084 and 791.250 µs on repeat.
+Each selected actual CPU with no fallback and passed its 1/1 parity gate; both
+were slower than the serial-path control and Pillow and have been reverted.
+Do not treat the `parallel` feature identity alone as evidence that a given
+operation used Rayon or gained throughput. This operation remains open for a
+different measured strategy and broader host/mode coverage.
+
+The feature build also exposed an unconditional import of the I-mode resize
+helper even though all its uses are excluded by `feature = "parallel"`. The
+import now has the same `not(feature = "parallel")` gate as its call sites;
+strict parallel release compilation succeeds without weakening lints.
+
+The local ledger now has 4,315 data rows, including the fresh Pillow/CPU
+control, two Parallel CPU controls, and all three rejected Rayon measurements.
+The published matrix remains pinned, the Kata item remains open, and the
+commit/push batch remains 0/33. No coverage was run. Reports are
+`build/migration-parity/grayscale-ycbcr-default-cpu-control-20261012.json`,
+`build/migration-parity/grayscale-ycbcr-parallel-cpu-20261012.json`,
+`build/migration-parity/grayscale-ycbcr-parallel-cpu-repeat-20261012.json`,
+`build/migration-parity/grayscale-ycbcr-parallel-cpu-rayon-candidate-20261012.json`,
+`build/migration-parity/grayscale-ycbcr-parallel-cpu-row-rayon-candidate-20261012.json`,
+`build/migration-parity/grayscale-ycbcr-parallel-cpu-row-rayon-repeat-20261012.json`,
+and their matching parity reports.
+
+## GetData small inline-GIL candidate rejected — 2026-10-12
+
+I tested keeping the GIL while filling the final Python `bytes` object for
+eager band reads of at most 1 KiB. The matched control and all three candidate
+runs used the complete `getdata(band=...)` step, including immutable result
+materialization, with 5 warmups and 20 iterations across 5 samples at
+concurrency 1. Each run passed all 15 selected Pillow comparisons. The reports
+and per-profile receipts are retained in the local evidence ledger.
+
+For 32×32 LA, RGB, and RGBA, serial CPU medians stayed around 5 µs in the
+control and candidates; the single lower SIMD repeat did not recur. For the
+1024×768 RGB read, the control measured 2,378.584 µs CPU and 2,328.083 µs SIMD;
+the candidate plus two repeats measured 2,374.042/2,332.979,
+2,376.791/2,326.146, and 2,393.999/2,339.062 µs. That spread does not show a
+repeatable end-to-end improvement, so I removed the inline-GIL branch and kept
+the detached fill path. Requested SIMD for L mode executed on CPU in all four
+runs and receives no SIMD credit. No genuine test defect was found and no
+coverage was run. The local ledger now has 4,395 data rows; the published
+matrix remains pinned and the commit/push batch remains 0/33.
+
+## Grayscale RGB16 corrected materialization control — 2026-10-12
+
+An audit found a benchmark-harness defect in every `pil-imageops.grayscale.standard`
+`whole_workflow` run: `run_case()` stopped its timer after the public call but
+before processing declared observations. Pillow produced an eager result, but
+pillow-rs returned a lazy image whose grayscale work, GPU transfer/sync, and
+output-byte allocation occurred later in `.tobytes()`. The parity preflight
+still serialized and compared both outputs, so parity remained valid; the
+timing comparison did not. All 36 historical subject rows for this workload
+are retained as archival raw data in the local ledger with disposition
+`invalid_measurement_boundary`, and their speedup/throughput fields are
+withheld.
+
+The timing adapter now materializes declared image and buffer observations
+inside the timed boundary while omitting JSON/base64 encoding. A failed timed
+materialization reports `not_run`. Two corrected 16×16 RGB runs passed exact
+Pillow parity (1/1/1/0 selected/executed/passed/failed) and proved actual CPU,
+SIMD, and GPU execution with terminal-complete receipts and no fallbacks. Each
+run used 5 warmups and 20 iterations × 5 samples at concurrency 1.
+
+| Run | Pillow µs | CPU µs / speedup | SIMD µs / speedup | GPU µs / GPU-to-SIMD latency |
+| --- | ---: | ---: | ---: | ---: |
+| Corrected control | 9.333 | 8.417 / 1.109× | 8.667 / 1.077× | 189.749 / 0.046× |
+| Repeat | 10.000 | 8.416 / 1.188× | 8.708 / 1.148× | 188.208 / 0.046× |
+
+The tiny RGB CPU workload is below Pillow in both corrected runs. SIMD is only
+about 1.1× Pillow, below the 2× sequencing gate. GPU latency is about 21.8×
+SIMD latency; its completed route used one dispatch, 768 input bytes, and 256
+readback bytes. These single-request results do not establish sustained GPU
+throughput. Grayscale remains open for its broader mode/size matrix, Pillow-SIMD
+comparison, and backend targets. The local ledger now has 4,411 data rows; the
+published matrix remains pinned and the commit/push batch remains 0/33. The
+regression tests for included materialization and failed observation handling
+passed; no parity test defect was found, and no coverage was run.
+
+Reports: `grayscale-standard-materialization-final-20261012.json` and
+`grayscale-standard-materialization-final-repeat1-20261012.json`, with parity
+gates `migration-parity-benchmark-gate-0d130b39dc2e429284fdb444a49dc4f2` and
+`migration-parity-benchmark-gate-8d13e768ba74473da87205130af71585`.
+
+## GetData direct-band-view eligibility probe — rejected — 2026-10-12
+
+I tested moving the CPU-backend check in `getdata_band_view()` after an early
+check for the only layouts that can expose a direct view (owned P and loaded
+1/L). The intent was to avoid resolving the active backend and allocating a
+mode string for interleaved RGB/LA/RGBA reads, which immediately fall through
+to the normal writer. The candidate was rebuilt and measured on the current
+arm64 source against the existing matched current-source control.
+
+The five selected workloads covered L, LA, RGB, and RGBA at 32×32 plus RGB at
+1024×768. Each used five warmups and 20 iterations in five samples at
+concurrency one. Exact Pillow parity passed 15/15 comparisons. The CPU path
+executed on CPU for all five workloads. SIMD executed for LA/RGB/RGBA and fell
+back to CPU for L; that L row receives no SIMD credit. GPU ran natively without
+fallback on all selected workloads.
+
+| Mode / size | Control Pillow / CPU µs | Candidate Pillow / CPU µs | CPU change | Candidate CPU speedup |
+| --- | ---: | ---: | ---: | ---: |
+| L 32×32 | 9.500 / 4.625 | 9.958 / 5.084 | +9.92% | 1.959× |
+| LA 32×32 | 9.542 / 5.000 | 9.916 / 5.292 | +5.84% | 1.874× |
+| RGB 32×32 | 9.542 / 5.042 | 9.917 / 5.250 | +4.13% | 1.889× |
+| RGBA 32×32 | 9.542 / 5.000 | 9.917 / 5.333 | +6.66% | 1.860× |
+| RGB 1024×768 | 5,117.292 / 2,378.584 | 5,147.604 / 2,378.062 | −0.02% | 2.165× |
+
+The eligibility reorder regressed all four tiny CPU reads and was effectively
+flat on the large row, so I reverted it. Keep the current ordering and require
+a different measured hypothesis before revisiting the remaining GetData
+sub-2× small rows. The release binding built, the existing 16 benchmark
+selection tests passed, and the correctness-gated report validated. Run
+`migration-benchmark-0d11d240faf94e92a8490b4cbf17a96f` used parity gate
+`migration-parity-benchmark-gate-f01c98212da74ef3870dc6299ef5135f`; all 20
+subject records are in the local evidence ledger. The local ledger now has
+4,431 data rows; the public matrix stays pinned and the commit/push batch stays
+0/33. No genuine test defect was found and no coverage was run.
+
+## Thumbnail F32 reducer output zero-fill candidate — rejected — 2026-10-12
+
+The native-F32 Thumbnail reducer allocated a zero-filled byte vector and then
+overwrote every output byte. I tested reserving capacity and appending each
+little-endian f32 result, leaving the four-sample arithmetic and public
+call-plus-materialization boundary unchanged. This was a CPU reducer change;
+the separate SIMD implementation was not edited.
+
+The current arm64-source control and candidate each used the
+`pipeline-op.thumbnail.native-f32-2048x1536` workload with five warmups, 20
+iterations in five samples, warm cache, and concurrency one. Both passed exact
+Pillow parity 3/3; CPU and SIMD executed with their requested backends and no
+fallback. The GPU request used the CPU semantic fallback in both runs and is
+not GPU evidence.
+
+| Run | Pillow µs | CPU µs / speedup | SIMD µs / speedup | GPU request µs / actual route |
+| --- | ---: | ---: | ---: | ---: |
+| Current-source control | 4,155.146 | 1,395.563 / 2.977× | 1,746.855 / 2.379× | 2,375.146 / CPU fallback |
+| Reserve-and-append candidate | 4,174.146 | 1,961.876 / 2.128× | 1,702.646 / 2.452× | 2,887.542 / CPU fallback |
+
+The candidate increased CPU median latency by 40.58% while Pillow changed by
+0.46%; it was reverted. The SIMD median moved 2.53% even though its code was
+unchanged, so that movement is host variation, not a SIMD gain. The matching
+current-source arm64 control still clears the local 2× CPU tier, but it does
+not resolve the published x86 F-mode CPU gap (1.104× Pillow). The release
+binding built, the 16 benchmark-selection tests passed, and the report schema
+validated. The control and candidate runs are
+`migration-benchmark-2cd449fd9d2e483fa015e008697bdb56` /
+`migration-parity-benchmark-gate-c66ee5ef6d194efeaf0b3735c6b28a1d` and
+`migration-benchmark-e0d9cb1531064ca3bc56873a96f4a8a5` /
+`migration-parity-benchmark-gate-02c0aae863d648ecb54e7fc171851a0f`.
+The local ledger now has 4,439 data rows; the public matrix remains pinned and
+the commit/push batch is 0/33. No genuine test defect was found and no coverage
+was run.
+## Thumbnail F32 direct typed-row store candidate — rejected — 2026-10-12
+
+The F32 2×2 Thumbnail reducer writes its output into a byte buffer. I tested
+writing each computed `f32` directly through a checked `bytemuck` mutable slice
+on little-endian hosts, retaining the byte-encoding path for other layouts and
+endianness. The operation, four-sample accumulation order, allocation, and
+whole public call-plus-materialization boundary stayed the same.
+
+The candidate and the current-source control used the 2048×1536 native-F
+workload, five warmups, 20 iterations in five samples, warm cache, and
+concurrency one. Both passed exact Pillow parity 3/3. CPU and SIMD executed
+their requested backends without fallback; the GPU request fell back to CPU
+because typed reducing-gap semantics are not proven and is excluded.
+
+| Run | Pillow µs | CPU µs / speedup | SIMD µs / speedup | GPU request µs / actual route |
+| --- | ---: | ---: | ---: | ---: |
+| Current-source control | 4,155.146 | 1,395.563 / 2.977× | 1,746.855 / 2.379× | 2,375.146 / CPU fallback |
+| Direct typed-row candidate | 4,207.646 | 1,392.271 / 3.023× | 1,725.437 / 2.439× | 2,481.937 / CPU fallback |
+
+The CPU median moved only 0.24% while its per-sample standard deviation was
+about 2.1–2.4%; Pillow itself moved 1.26% between runs. The small change does
+not establish a gain, so the candidate was reverted. The SIMD movement also
+does not establish a gain from this CPU-only edit. This arm64 probe does not
+resolve the published x86 F32 CPU gap (1.104× Pillow). Reports are
+`build/migration-parity/thumbnail-f32-direct-cast-candidate-20261012.json` and
+its `-parity-20261012.json.gz` sidecar; run/gate IDs are
+`migration-benchmark-4f3fb0c30de14227b161cca1315d7246` /
+`migration-parity-benchmark-gate-3e58d9df42bd42d2988ec6160fbc158d`.
+The local ledger now has 4,443 data rows; the public matrix remains pinned and
+the commit/push batch is 0/33. No coverage was run.
+
+## Thumbnail F32 quarter-scale arithmetic candidate — rejected — 2026-10-12
+
+The reducer currently adds each 2×2 quartet in `f32`, promotes that result
+into a zero-initialized `f64` accumulator, multiplies by one quarter, then casts
+back to `f32`. A shortcut that scaled the quartet directly in `f32` failed the
+existing bit-exact test: an all-negative-zero quartet produced `-0`, while the
+reference accumulator produces `+0`. That failed candidate was not benchmarked.
+
+I tried a corrected variant that maps exactly negative-zero quartets to
+positive zero before using the direct `f32` quarter-scale for other values. The
+focused exact-bits test passed after extending its inputs with negative and
+positive minimum-subnormal groups; it already covered signed zero, NaN, and
+infinities. Three parity-gated public-call cohorts each passed exact parity
+3/3, with actual CPU and SIMD execution and no fallback. GPU requests all fell
+back to CPU under the unproven typed reducing-gap semantic guard and receive no
+GPU credit.
+
+| Run | Pillow µs | CPU µs | SIMD µs | GPU request µs / actual route |
+| --- | ---: | ---: | ---: | ---: |
+| Current-source control | 4,141.833 | 1,398.626 | 1,736.479 | 2,469.354 / CPU fallback |
+| Candidate 1 | 4,166.771 | 1,389.583 | 1,703.104 | 2,605.083 / CPU fallback |
+| Candidate 2 | 4,292.584 | 1,362.667 | 1,775.417 | 2,447.251 / CPU fallback |
+| Candidate 3 | 4,162.313 | 1,394.980 | 1,694.271 | 2,437.375 / CPU fallback |
+
+The CPU shifts versus the fresh control were −0.65%, −2.57%, and −0.26%. The
+largest apparent gain coincided with Pillow 3.64% slower and SIMD 2.24% slower
+than their control medians. The other two CPU changes were below 0.7%, within
+run variation. No repeatable whole-call benefit was demonstrated, so the
+arithmetic shortcut was reverted. The expanded edge test stays to guard the
+reference signed-zero and subnormal behavior. The published x86 F32 CPU gap
+(1.104× Pillow) remains open.
+
+Run/gate pairs: control `migration-benchmark-b0fb88d2185e4ceab9174be0c10f34cd` /
+`migration-parity-benchmark-gate-c9cd8ba4de7a4fd8bd68c0a1e96d2c5f`; candidate
+1 `migration-benchmark-251d1da03083401d960176ecbbb72b39` /
+`migration-parity-benchmark-gate-71fe07cfac8842e897f951675e0a55e7`; candidate
+2 `migration-benchmark-caaf15313b854e62bdec6fd1b057002b` /
+`migration-parity-benchmark-gate-a037d60bf5f144d6ad0969f3108188dd`; candidate
+3 `migration-benchmark-e966e194e0d8462c911df2dd069dad89` /
+`migration-parity-benchmark-gate-a7c6ab7007124d8fa4ac55e733b714d2`.
+The release binding built, the 16 benchmark-selection tests passed in each
+cohort, and all four report schemas validated. The local ledger now has 4,459
+data rows; the public matrix remains pinned and the commit/push batch remains
+0/33. The focused candidate test exposed a behavior constraint, not a defect
+in the test. No coverage was run.
+
+## I-mode Filter5x5 copied-source output remeasurement — narrow bounded gain — 2026-10-12
+
+I remeasured using the same 1024×768 I-mode direct noise, bounded noise, and
+composed convolution workloads. The candidate initializes the output from the
+input bytes, then overwrites the filtered interior. This avoids zero-filling a
+full frame and separately copying the two-pixel border. It preserves copied
+border bytes and the existing filter arithmetic.
+
+Both candidate cohorts were bracketed with current-source controls: each run
+used five warmups, 20 iterations in five samples, warm cache, and concurrency
+one. Direct calls included materialization; convolution used the complete
+workflow boundary. All four gates passed 9/9 exact Pillow comparisons. CPU,
+SIMD, and GPU receipts reported their requested backend with no fallback.
+
+| Workload | CPU control before µs | Candidate run 1 µs | Candidate run 2 µs | CPU control after µs |
+| --- | ---: | ---: | ---: | ---: |
+| Direct high-range I noise | 2,879.646 | 2,834.271 | 2,840.479 | 2,875.729 |
+| Direct bounded I noise | 3,143.479 | 3,051.479 | 3,039.771 | 3,148.917 |
+| Convolution workflow | 3,381.021 | 3,169.291 | 3,181.729 | 3,193.104 |
+
+The bounded-input CPU medians improved 2.93% and 3.47% versus the adjacent
+controls. The high-range direct shifts were only 1.58% and 1.23%, below the
+observed sample spread. The convolution's first control was 5.6% slower than
+the control after the candidate; its repeat was only 0.36% faster than that
+post-control. Do not attribute the earlier convolution difference to the
+candidate. I retain the shared output-copy path for the repeatable bounded-I
+gain, while recording the other two rows as flat. This is a narrow incremental
+optimization, not a completed Filter result.
+
+On the second candidate run, CPU measured 1.913×, 1.767×, and 1.907× Pillow;
+SIMD measured 2.923×, 2.904×, and 2.800× Pillow. GPU latency was 1.235×–1.386×
+faster than SIMD with actual GPU execution, one dispatch, 3,145,728 bytes each
+way, 256 parameter bytes, and no mode conversion. This is single-request
+latency only; sustained GPU throughput remains unmeasured. CPU therefore still
+misses the 2× sequencing threshold, SIMD misses 5×, and GPU throughput is
+unproven. Other modes, sizes, kernels, and architectures remain open.
+
+The source-copy idea had an earlier flat-result trial; that record remains
+intact. This remeasurement adds a fresh before/after control around the current
+candidate. Run/gate pairs: before `migration-benchmark-0d2e48ecac2d4843b2b13782bd262af8` /
+`migration-parity-benchmark-gate-615ed92a24a9468d92c0fea7bacb81ce`; candidate 1
+`migration-benchmark-4619123c12fd4299ab6ea22e5aebc81c` /
+`migration-parity-benchmark-gate-f68eb1870e4e4a1f9c5eee00c4fcb440`; candidate 2
+`migration-benchmark-454f3961b57b4b7c8f874d96506bcb48` /
+`migration-parity-benchmark-gate-82b8ab7e67544785b21c80b763b940b8`; after
+`migration-benchmark-6396410865aa481fb5ccb2e16cba272d` /
+`migration-parity-benchmark-gate-331a5b6b78994ddf91cd741b639e2512`. The local
+ledger contains 4,507 data rows including all 48 subject rows from these four
+cohorts. The public matrix remains pinned and the commit/push batch remains
+0/33. No genuine test defect was found; no coverage was run.
+
+## I-mode Filter5x5 bounded integer rounding shift — retained — 2026-10-12
+
+In the bounded-I binomial kernel, each input sample is proven to have magnitude
+at most 65,535 before its row is evaluated. The accumulated sum is therefore
+within range. For nonnegative sums, Pillow-compatible `(sum + 128) / 256` is
+exactly `((sum as u32 + 128) >> 8)`. I kept the nonnegative guard and replaced
+only the signed division in the serial bounded path.
+
+The focused bounded-ring test passed 1/1, including signed extrema and odd
+dimensions. A fresh current-source control and two candidates measured the
+same three 1024×768 I-mode workloads, with five warmups, 20 iterations in five
+samples, warm cache, concurrency one, and exact whole-call/materialization
+boundaries. All three gates passed 9/9 exact Pillow comparisons. The release
+binding built; the benchmark-selection checks passed 16/16 in both candidate
+cohorts. CPU, SIMD, and GPU receipts each showed their requested backend and no
+fallback.
+
+| Workload | Control Pillow / CPU µs | Candidate 1 Pillow / CPU µs | Candidate 2 Pillow / CPU µs | CPU change vs control |
+| --- | ---: | ---: | ---: | ---: |
+| Direct high-range noise | 5,495.584 / 2,839.834 | 5,399.042 / 2,835.938 | 5,472.896 / 2,864.188 | −0.14%, +0.86% |
+| Direct bounded noise | 5,436.979 / 3,039.250 | 5,506.146 / 1,787.562 | 5,386.229 / 1,766.146 | −41.18%, −41.89% |
+| Convolution workflow | 5,675.042 / 3,171.979 | 5,909.999 / 3,161.979 | 5,836.916 / 3,165.812 | −0.32%, −0.19% |
+
+The output-copy candidate is also present in the current-source control and both
+candidate runs. The unsigned shift is therefore the only code difference in
+this comparison. The bounded route repeated a 3.05×–3.08× CPU/Pillow result;
+the other two CPU rows were flat within their sample spread. Retain the change
+for the bounded route, but keep the Filter item open: direct high-range CPU is
+1.90×–1.91× Pillow and the composed workflow is 1.84×–1.87×, so not every
+selected CPU workload has reached 2×.
+
+Candidate SIMD ranged from 2.69× to 2.94× Pillow, below the 5× target. GPU
+latency was 1.29×–1.40× faster than SIMD with actual GPU execution, one
+dispatch, 3,145,728-byte upload and readback, and no mode conversion. Sustained
+GPU throughput remains unmeasured. The shift edits serial CPU arithmetic only;
+it does not claim a SIMD improvement.
+
+Run/gate pairs: control `migration-benchmark-aafb16f0b46f4cd79787838c4585ff33` /
+`migration-parity-benchmark-gate-e00aad8dd2124594898029483492e8d3`; candidate 1
+`migration-benchmark-94684334e4644931b110c10df3a2265e` /
+`migration-parity-benchmark-gate-fbedf3a3ec2f4f8281048010a9677f53`; candidate 2
+`migration-benchmark-77897c5814e9457693d755f3edd2e496` /
+`migration-parity-benchmark-gate-6da27b54076749b88a359ee3884f5572`. These add
+36 subject rows to the local ledger (4,543 total). The canonical matrix remains
+pinned, item categories remain based on that matrix, and push batch remains
+0/33. No genuine test defect was found; no coverage was run.
+
+## I-mode Filter5x5 binomial scaled-row F32 ring — retained — 2026-10-12
+
+High-range I-mode input does not qualify for the exact bounded-integer route,
+so the generic F32 kernel previously performed 25 fused multiply-adds per
+output. For the exact normalized binomial kernel, horizontal rows with
+vertical weights 4 and 6 are exact power-of-two scalings of the weight-1 and
+weight-3 horizontal rows. The serial CPU ring now computes those two horizontal
+rows and reuses the scaled values while retaining Pillow's FMA order, vertical
+accumulation order, border bytes, and final clipping.
+
+The focused exact-bytes test passed for `i32::MIN`, `i32::MAX`, the benchmark's
+high-range endpoints, deterministic full-range samples, dimensions 5×5, 6×7,
+and 19×13, and offsets 0, 0.5, and −17.25. It also checked public dispatch.
+The fresh control and both candidate cohorts passed exact benchmark parity 9/9
+for all three selected workloads. Candidate builds passed the 16 benchmark
+selection checks and all report schemas validated. CPU, SIMD, and GPU receipts
+showed their requested backend with no fallback.
+
+| Workload | Pillow control µs | CPU control µs | Candidate 1 CPU µs | Candidate 2 CPU µs | Candidate 2 CPU/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Direct high-range noise, 1024×768 | 5,400.250 | 2,837.834 | 1,842.105 | 1,836.771 | 2.99× |
+| Direct bounded noise, 1024×768 | 5,550.917 | 1,789.146 | 1,775.813 | 1,763.521 | 3.08× |
+| Convolution workflow, 1024×768 | 5,841.250 | 3,148.146 | 2,171.083 | 2,165.042 | 2.66× |
+
+The candidate reduced high-range direct CPU latency by 35.1% and 35.3% in
+repeat runs, and convolution CPU latency by 31.0% and 31.2%. The bounded route
+is unchanged within measurement variation. Candidate 1's convolution SIMD and
+GPU rows drifted slower together; candidate 2 returned close to the control,
+so those candidate-1 movements are treated as host noise. On candidate 2,
+SIMD was 2.64×–2.97× Pillow, short of 5×; GPU latency was 1.29×–1.40× faster
+than SIMD with actual GPU execution and no fallback. GPU measurements used
+one dispatch and 3,145,728-byte upload and readback, but concurrency-one
+latency does not establish sustained throughput.
+
+This is a serial CPU optimization for one exact 5×5 kernel, not a SIMD claim.
+Other modes, dimensions, kernels, Parallel CPU, supported architectures, the
+5× SIMD target, and sustained GPU throughput remain open; Filter stays open.
+Runs/gates: control `migration-benchmark-635a8c72fc124ed48df77d25ae8e52e0` /
+`migration-parity-benchmark-gate-49896925495a4aabbfb07702f94b1017`; candidate 1
+`migration-benchmark-b8a1a77d5a2e48a49c29bb70a35fa23b` /
+`migration-parity-benchmark-gate-3e4fd9ca3b284e748f00ea5f5fc1570b`; candidate 2
+`migration-benchmark-c3b9781be0d14c2494bc31aa50aa7d62` /
+`migration-parity-benchmark-gate-b208f5dfb3054884b27804d5642f745c`. The 36
+subject rows bring the local evidence ledger to 4,579 data rows. The published
+matrix and Kata category counts remain pinned; push batch remains 0/33. No
+test defect was found, and no coverage was run.
+
+## F32 Thumbnail typed row-pair reducer — rejected — 2026-10-12
+
+I replaced callback-based sample indexing with paired top/bottom source-row
+slices in the native-F 2×2 reducing-gap pass, keeping Pillow's float addition
+order and whole-call allocation/materialization boundary. The focused exact-bit
+test passed 1/1, and both fresh control cohorts plus the candidate passed exact
+parity 9/9 at 512×384, 1024×768, and 2048×1536. The release builds, 16
+benchmark-selection checks, and report-schema validations passed.
+
+| Size | CPU before µs | Candidate CPU µs | CPU after revert µs | Pillow before / candidate / after µs |
+| --- | ---: | ---: | ---: | ---: |
+| 512×384 | 92.562 | 98.375 | 98.479 | 244.646 / 267.062 / 262.479 |
+| 1024×768 | 322.209 | 353.355 | 358.687 | 980.667 / 1,037.271 / 1,036.604 |
+| 2048×1536 | 1,382.105 | 1,384.208 | 1,385.917 | 3,917.833 / 4,099.146 / 4,165.791 |
+
+The largest CPU row was flat against both controls (+0.15% versus the control
+before). On the two smaller sizes the candidate tracked the slower post-run
+control while Pillow and other profiles also drifted; no repeatable public-call
+gain was shown. I reverted the duplicate row-slice path. GPU requests fell
+back to CPU under the typed/reducing-gap semantic guard and receive no GPU
+credit; CPU and SIMD ran their requested backends. The clean published x86
+2048×1536 CPU row remains 1.104× Pillow and unverified by this ARM64 run; no
+cross-architecture claim is made.
+
+Runs/gates: control before `migration-benchmark-247f63c33b2245c48d9a0bb50f694a2d` /
+`migration-parity-benchmark-gate-32272d25751142f28169c1c5b55387e6`; candidate
+`migration-benchmark-5715f7783fdf43cda6a80c1eba4a42eb` /
+`migration-parity-benchmark-gate-3655fd328eae4e38af497892edd0ce97`; control after
+`migration-benchmark-1afb2ef095804970b601475908dab277` /
+`migration-parity-benchmark-gate-a3b2fc7369ef44acb345f39df27c55d1`. The 36
+subject rows bring the local evidence ledger to 4,615 rows. Thumbnail remains
+open; the clean public matrix and Kata category counts stay pinned. No genuine
+test defect was found; no coverage was run.
+
+## GetData small CPU GIL-detach threshold — rejected — 2026-10-12
+
+I tried keeping the GIL while filling a final GetData bytes buffer of at most
+4 KiB, only when the serial CPU backend was explicitly selected. The idea was
+to avoid detach/reattach overhead on tiny reads. Four 32×32 band reads and four
+1024×768 reads/workflows were measured in a pre-candidate control, two candidate
+cohorts, and a post-revert control. Each cohort passed exact benchmark parity
+24/24 across Pillow, CPU, SIMD, and GPU; release builds and all 16 benchmark
+selection checks passed. The whole `band-data` step, including returned buffer
+materialization, was timed with warm cache, five warmups, 20 iterations in five
+samples, and concurrency one.
+
+| 32×32 mode/band | CPU control µs | Candidate 1 µs | Candidate 2 µs | CPU after revert µs | Reverted CPU/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L / 0 | 5.083 | 5.083 | 5.250 | 5.083 | 1.95× |
+| LA / 1 | 5.333 | 5.291 | 5.458 | 5.291 | 1.88× |
+| RGB / 0 | 5.334 | 5.333 | 5.500 | 5.333 | 1.86× |
+| RGBA / 3 | 5.292 | 5.333 | 5.459 | 5.292 | 1.87× |
+
+Candidate 1 was within measurement variation. Candidate 2 was 2.3–3.3% slower
+than the control on all four small CPU reads. The post-revert results returned
+to the control range. On the four 1024×768 reads/workflow, both candidates were
+flat against control (CPU shifts stayed within 0.25%). I reverted the GIL
+branch; no stable whole-call benefit was shown. The direct L band view also
+bypasses the output-buffer copy path, so that mode cannot benefit from this
+particular change.
+
+After revert, CPU was 2.15× Pillow for large RGB, LA, and RGBA band reads and
+2.37× for the complete RGB invert-plus-band workflow. The four tiny CPU rows
+remain just under 2×. SIMD ran on seven workloads and fell back to CPU for the
+32×32 L read; that fallback receives no SIMD credit. GPU executed on all eight
+workloads but remained slower than CPU/SIMD, and the single-concurrency run does
+not measure sustained throughput. No acceleration target is demonstrated by
+this rejected change.
+
+Runs/gates: control `migration-benchmark-510b649fea3b481cb71f591e6c6ca8a9` /
+`migration-parity-benchmark-gate-2116409e97cb4014894a3873f5b27ceb`; candidate 1
+`migration-benchmark-307f3a8bb7f1455ea039b6cb32fe0112` /
+`migration-parity-benchmark-gate-00d9cfa71af34b949d6303f42499cdcb`; candidate 2
+`migration-benchmark-39692e3dafab4fbf9d832c1ebee599e1` /
+`migration-parity-benchmark-gate-f983ae6d2ad948e9916766795ba7d4de`; post-revert
+control `migration-benchmark-a62892a5d683483ca48f4c1125166e14` /
+`migration-parity-benchmark-gate-2298be35ef7e43a5b63bb30510cac97c`. The 128
+subject rows bring the local ledger to 4,743 data rows. GetData remains open;
+published matrix categories stay pinned and push-batch progress remains 0/33.
+No genuine test defect was found; no coverage was run.
+
+## GetData interleaved-band chunk iterator — rejected — 2026-10-12
+
+I tried replacing `iter().skip(band).step_by(channels)` in the serial CPU
+interleaved-band copy with `chunks_exact(channels)`, leaving the output buffer,
+channel selection, and whole `band-data` boundary unchanged. The pre-candidate
+control reused the immediately preceding post-revert GIL probe control, where
+the source was identical. Two candidates and a fresh post-revert control each
+measured the same eight workloads; every gate passed exact parity 24/24, and
+each benchmark build passed all 16 selection checks.
+
+| Workload | CPU control µs | Candidate 1 µs | Candidate 2 µs | CPU after revert µs |
+| --- | ---: | ---: | ---: | ---: |
+| 32×32 LA band 1 | 5.291 | 5.334 | 5.416 | 5.333 |
+| 32×32 RGB band 0 | 5.333 | 5.375 | 5.416 | 5.333 |
+| 32×32 RGBA band 3 | 5.292 | 5.375 | 5.416 | 5.333 |
+| 1024×768 RGB band 0 | 2,379.896 | 2,410.500 | 2,410.521 | 2,392.604 |
+| 1024×768 LA band 1 | 2,380.937 | 2,405.104 | 2,405.042 | 2,377.126 |
+| 1024×768 RGBA band 3 | 2,384.771 | 2,406.021 | 2,407.729 | 2,376.875 |
+| 1024×768 RGB invert plus band 0 | 2,566.791 | 2,596.958 | 2,611.209 | 2,566.021 |
+
+The changed helper made CPU 0.8–1.6% slower on the small interleaved reads,
+0.9–1.3% slower on the large direct reads, and 1.2–1.7% slower on the full
+workflow. The after-revert measurements returned close to the before control.
+The 32×32 L row uses the separate direct-view route and is unaffected; its
+apparent −4.9% candidate-1 movement and +2.5% candidate-2 movement show the
+shared timing noise. I restored the original iterator. SIMD and GPU ran their
+requested paths except for the documented 32×32 L SIMD fallback, which receives
+no SIMD credit. GPU latency still exceeds CPU/SIMD, and sustained throughput is
+unmeasured.
+
+After revert, CPU/Pillow was 1.86–1.94× for these 32×32 reads and 2.14–2.37×
+for large reads and the composed workflow. Thus the GetData small-call gap
+remains below the 2× tier, while no selected CPU row is slower than Pillow.
+Runs/gates: reused pre-control `migration-benchmark-a62892a5d683483ca48f4c1125166e14` /
+`migration-parity-benchmark-gate-2298be35ef7e43a5b63bb30510cac97c`; candidate 1
+`migration-benchmark-208fa59277ba4e5d96d94458464aca72` /
+`migration-parity-benchmark-gate-44dfc56a400c47348a49f943c2daf02d`; candidate 2
+`migration-benchmark-2cfa382d985a47d8aee80d3f8264d5cb` /
+`migration-parity-benchmark-gate-d6e2c4254b1a4193b6716c9a348752bc`; post-revert
+control `migration-benchmark-c546ced4ec1f4d7096a91f50da5caf08` /
+`migration-parity-benchmark-gate-6339bb399d364ceaaec6f1efbaa66729`. These three
+new reports add 96 subject rows and bring the local ledger to 4,839. The issue
+remains open; published categories remain pinned; push-batch progress remains
+0/33. No genuine test defect was found; no coverage was run.
+
+## GetData published-row current-source refresh — 2026-10-12
+
+I reran the exact published `pipeline-chain.terminal-read.rgb-band0` workload
+on the current dirty arm64 checkout. The benchmark-selection checks passed
+16/16 and its parity preflight passed all three target comparisons. The whole
+workflow boundary used five warmups and 20 iterations across five samples;
+the timed work includes the returned result materialization.
+
+| Profile | Median µs | Speedup vs Pillow | Execution evidence |
+| --- | ---: | ---: | --- |
+| Pillow | 2,064.708 | — | Oracle |
+| Serial CPU | 841.292 | 2.454× | Actual CPU, terminal complete, no fallback |
+| SIMD | 894.709 | 2.307× | Actual SIMD, terminal complete, no fallback |
+| GPU | 1,235.292 | 1.671× | Actual GPU, terminal complete, no fallback |
+
+The GPU latency was 0.724× SIMD latency. Its completed call used two dispatches,
+uploaded 1,048,576 bytes, read back 262,144 bytes, and recorded 512 parameter
+bytes plus one host allocation and one mode conversion. Sustained GPU throughput
+remains unmeasured. This current-source run does not reproduce the pinned public
+matrix's 0.725603× CPU result, but its dirty source cannot replace that clean
+published evidence. The direct 32×32 GetData CPU rows also remain below 2×
+Pillow, so GetData stays open and its published category is unchanged.
+
+Run `migration-benchmark-3ecf9d43b5354cc7996cc17bdb47a4a7`; exact parity gate
+`migration-parity-benchmark-gate-f672c68b73cc43288c3ff7d79655b198`. The four
+subject rows bring the local ledger to 4,843. No source optimization was made,
+no item is completed, push-batch progress remains 0/33, no genuine test defect
+was found, and no coverage was run.
+
+## GetData backend-selection reuse — rejected — 2026-10-12
+
+I tested resolving the selected backend once in the Python binding and reusing
+it for both the band-view probe and the output-buffer fill. This can remove a
+second backend lookup for band 0 when the direct-view probe declines a
+multiband image. Six matched cohorts measured the same five public workloads:
+four 32×32 band reads and the complete 512×512 RGB terminal workflow. Every
+cohort passed all 15 Pillow/CPU/SIMD/GPU parity comparisons, the benchmark
+selection checks passed 16/16 on every build, and backend receipts were
+captured. Timing included the observed `band-data` result materialization,
+with warm cache, five warmups, 20 iterations per sample, five samples, and
+concurrency one.
+
+| Workload | Control before | Candidate 1 | Candidate 2 | Control after | Candidate 3 | Control after 2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 32×32 L band 0 CPU µs | 4.854 | 4.917 | 4.896 | 5.125 | 5.375 | 5.375 |
+| 32×32 LA band 1 CPU µs | 5.292 | 5.479 | 5.291 | 5.250 | 5.542 | 5.542 |
+| 32×32 RGB band 0 CPU µs | 5.375 | 5.542 | 5.333 | 5.375 | 5.542 | 5.500 |
+| 32×32 RGBA band 3 CPU µs | 5.375 | 5.333 | 5.292 | 5.333 | 5.541 | 5.458 |
+| 512×512 RGB workflow CPU µs | 870.980 | 846.854 | 839.937 | 897.666 | 876.937 | 862.062 |
+| 512×512 RGB workflow Pillow µs | 2,074.041 | 2,106.896 | 2,123.438 | 2,206.292 | 2,180.625 | 2,126.708 |
+
+The apparent 512×512 CPU improvement in the first two candidates did not
+repeat: candidate 3 measured 876.937 µs between the fresh no-reuse controls at
+862.062 and 897.666 µs. The corresponding CPU/Pillow ratios were 2.381×,
+2.488×, 2.528×, 2.458×, 2.487×, and 2.467×. The small-read candidate results
+also overlapped their controls or regressed. Pillow's 32×32 medians rose from
+about 10 µs to 14–27 µs in candidate 3 while target medians stayed near 5.4–5.5
+µs, confirming substantial cohort drift. I removed the binding reuse and its
+backend-passing APIs; no repeatable end-to-end gain was established.
+
+In every cohort, requested SIMD for the L32 direct-view row executed on CPU and
+is excluded from SIMD claims. Other SIMD rows executed SIMD. All GPU rows
+executed on GPU, but GPU latency remained well above CPU/SIMD and sustained
+throughput was not measured. After the last control, CPU was 1.82–1.88× Pillow
+on the 32×32 rows; GetData remains open. These runs do not replace the clean
+published matrix or prove x86 or Parallel CPU behavior.
+
+Runs/parity gates: control before
+`migration-benchmark-5d765a62f8584cb8935395edecf483bc` /
+`migration-parity-benchmark-gate-6c79b6720d7b46e4864516caa3b0c4cf`; candidate 1
+`migration-benchmark-7264b9bfc26642599dde205d2eff6611` /
+`migration-parity-benchmark-gate-99a40b8c4a2c486dadad751b99e00bc7`; candidate 2
+`migration-benchmark-bd6545e6630f4f9abee6d5af81f94c9f` /
+`migration-parity-benchmark-gate-0b6b6726a57741fca59dee0453b6a96c`; control
+after `migration-benchmark-6075a54ec1a94a1491dd9f29b5da76f4` /
+`migration-parity-benchmark-gate-9e4eb772730c4598a734e072125a7e20`; candidate 3
+`migration-benchmark-1218296fcf694d4595595e98ded61c99` /
+`migration-parity-benchmark-gate-1d36c2753f9648ce8b815ef4fe2a2990`; control
+after 2 `migration-benchmark-123c2e9b15c04f898abb861c33c973a6` /
+`migration-parity-benchmark-gate-0114c30a31804f82852fa41589ea83fc`. The 120
+subject rows bring the local ledger to 4,963. The issue remains open; published
+categories remain pinned; push-batch progress remains 0/33. No genuine test
+defect was found; no coverage was run.
+
+## GetData prepared band writer — rejected — 2026-10-12
+
+After rejecting backend-selection reuse alone, I tried one prepared writer for
+materialized GetData images. It kept the image borrowed while validating the
+band, storing the mode and output length, and later filling the final Python
+buffer. This avoided repeating mode and size validation between
+`getdata_band_len` and `getdata_band_into`. The pre-control was the previous
+GetData post-revert run; three candidates and a fresh post-revert control
+measured the same five workloads. Each cohort passed exact parity 15/15 and
+all 16 benchmark-selection checks. Timing included the final result bytes,
+with warm cache, five warmups, 20 iterations per sample, five samples, and
+concurrency one.
+
+| Workload | Control before | Candidate 1 | Candidate 2 | Candidate 3 | Control after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 32×32 L band 0 CPU µs | 5.375 | 5.083 | 5.125 | 5.291 | 5.312 |
+| 32×32 LA band 1 CPU µs | 5.542 | 5.291 | 5.291 | 5.417 | 5.479 |
+| 32×32 RGB band 0 CPU µs | 5.500 | 5.292 | 5.250 | 5.458 | 5.458 |
+| 32×32 RGBA band 3 CPU µs | 5.458 | 5.292 | 5.250 | 5.458 | 5.416 |
+| 512×512 RGB workflow CPU µs | 862.062 | 848.188 | 852.688 | 861.520 | 866.458 |
+
+The first two candidate cohorts reduced LA/RGB/RGBA medians by about 3–4%,
+but candidate 3 returned to the post-revert controls. The 512×512 lazy workflow
+does not use this loaded-image writer and stayed within control variation. The
+observed small-read differences are not repeatable enough to retain a new
+binding/core API, so I removed the prepared writer. The broader 349-case
+GetData parity corpus was not run for this rejected candidate; no change is
+retained. L32 requested SIMD ran on CPU in each cohort and is excluded from
+SIMD claims. Other SIMD and all GPU requests executed their named backend; GPU
+latency remained slower and sustained throughput remains unmeasured.
+
+Runs/parity gates: control before (reused)
+`migration-benchmark-123c2e9b15c04f898abb861c33c973a6` /
+`migration-parity-benchmark-gate-0114c30a31804f82852fa41589ea83fc`; candidate 1
+`migration-benchmark-90bd151da5ff4fbeaf02c3bb74870a5a` /
+`migration-parity-benchmark-gate-5c5033bbed584b86a981c3012c63a327`; candidate 2
+`migration-benchmark-9f1901a8cc464de9ab94b6525ea7e9c9` /
+`migration-parity-benchmark-gate-ae9181c004854a7f849d771d316fcd2e`; candidate 3
+`migration-benchmark-0070f2bec22d4a908b4bf6461e146f6d` /
+`migration-parity-benchmark-gate-59eac19482b34ade8ba7ea226b38d0ad`; control
+after `migration-benchmark-a58b90e564c64e07b277b9bc9c2b63e8` /
+`migration-parity-benchmark-gate-4a8faa7c78914e60b9a6229bad591072`. The four
+new cohorts add 80 subject rows and bring the local ledger to 5,043. GetData
+remains open; the published matrix stays pinned and push-batch progress stays
+0/33. No genuine test defect was found; no coverage was run.
+
+## GetData no-candidate rebaseline after helper rollback — 2026-10-12
+
+I removed the prepared writer and the support helpers from both rejected
+GetData experiments, then rebuilt the original band-view/length/fill path. The
+release build succeeded, the benchmark-selection suite passed 16/16, and this
+five-workload control passed exact parity 15/15.
+
+| Workload | Pillow µs | CPU µs | CPU/Pillow | SIMD µs / actual backend | GPU µs / actual backend |
+| --- | ---: | ---: | ---: | --- | --- |
+| 32×32 L band 0 | 9.958 | 5.250 | 1.897× | 5.250 / CPU fallback | 200.271 / GPU |
+| 32×32 LA band 1 | 10.042 | 5.541 | 1.812× | 5.208 / SIMD | 181.730 / GPU |
+| 32×32 RGB band 0 | 10.250 | 5.583 | 1.836× | 5.250 / SIMD | 172.938 / GPU |
+| 32×32 RGBA band 3 | 9.916 | 5.458 | 1.817× | 5.208 / SIMD | 171.416 / GPU |
+| 512×512 RGB workflow | 2,091.771 | 844.167 | 2.478× | 942.104 / SIMD | 1,240.063 / GPU |
+
+This is the current dirty-source ARM64 baseline; it does not replace the clean
+published matrix. The three direct CPU rows remain below 2× Pillow, SIMD is
+below the 2× target, and GPU latency is slower than SIMD. GPU throughput is
+unmeasured. The 20 subject rows bring the local ledger to 5,063. GetData
+remains open; the published matrix is unchanged, push progress is 0/33, no
+genuine test defect was found, and no coverage was run.
+
+Run `migration-benchmark-3fd3426f37e94f5f8074caeb450978fd`; parity gate
+`migration-parity-benchmark-gate-d358c8f164374e95a9564125350aacd8`.
+
+## GetData band-view eligibility precheck — rejected — 2026-10-12
+
+I tried rejecting image representations that cannot supply a contiguous band-0
+view before resolving the active backend. The candidate passed exact parity in
+both five-workload cohorts (15/15 each); benchmark-selection checks passed
+16/16 for the first candidate build and the post-revert build. The second
+candidate measurement reused the first candidate's exact passing parity receipt.
+The change was reverted after the post-revert control.
+
+| Cohort | L32 CPU µs | LA32 CPU µs | RGB32 CPU µs | RGBA32 CPU µs | RGB512 workflow CPU µs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Pre-control | 5.250 | 5.541 | 5.583 | 5.458 | 844.167 |
+| Candidate 1 | 5.334 | 5.438 | 5.458 | 5.459 | 905.479 |
+| Candidate 2 | 5.334 | 5.500 | 5.458 | 5.583 | 937.895 |
+| Post-revert control | 5.438 | 5.584 | 5.667 | 5.625 | 849.958 |
+
+The affected RGB32 direct read improved about 2.2% in both candidates, but L32
+was 1.6% slower and the composed RGB512 workflow was 7.3% and 11.1% slower than
+the pre-control. LA32 and RGBA32 are unaffected by the band-0 precheck and
+moved within cohort variation. The post-revert result returned the workflow to
+within 0.7% of control. This does not provide a repeatable per-operation gain,
+so the eligibility branch is removed. CPU rows remain below 2x Pillow on all
+four small inputs. L32 requested SIMD executed on CPU and is excluded; all
+other SIMD requests and all GPU requests ran their named backend. GPU throughput
+was not measured.
+
+Runs and parity gates: pre-control
+`migration-benchmark-3fd3426f37e94f5f8074caeb450978fd` /
+`migration-parity-benchmark-gate-d358c8f164374e95a9564125350aacd8`; candidate 1
+`migration-benchmark-98b69cebc882419f8e7f7605d06bba6f` /
+`migration-parity-benchmark-gate-9c8359404ca84c829bbfcbda8f1defe0`; candidate 2
+`migration-benchmark-8e537dc2ae284e6883b92bd20a542745` (reused the same exact
+parity gate); post-revert control
+`migration-benchmark-2ff065ff9101400d92c553a992add9b3` /
+`migration-parity-benchmark-gate-93eebe9025fa42febad3b6a89c3b9368`. The three
+new cohorts add 60 subject rows and bring the local ledger to 5,123 data rows.
+The clean published category snapshot remains unchanged; GetData stays open and
+push-batch progress remains 0/33. No genuine test defect was found and no
+coverage was run.
+
+## GetProjection positive-write fast path — rejected; CMYK parity selection fixed — 2026-10-12
+
+I added persistent whole-workflow workloads for sparse RGB 17×4, dense RGB
+17×4, and dense scalar-tail RGB 15×3, reusing the existing exact-parity input
+cases. The three cases now appear in
+`pillow-rs/tests/fixtures/inputs/benchmark/pipeline-operations.json` so future
+measurements cannot silently omit these edge sizes.
+
+The first run also exposed a benchmark-input defect: the material and sparse
+CMYK workloads timed CPU, SIMD, and GPU, but referenced parity cases restricted
+to CPU. Those `nuanced.*` and `parity.*` inputs have identical steps; I
+redirected both workloads to the all-backend `parity.*` cases. This changed the
+focused control gate from 10 to 15 exact comparisons. The corrected control
+passed 15/15 and the benchmark-selection checks passed 16/16. The old CMYK SIMD
+and GPU measurements remain marked unproven in their earlier ledger rows; they
+receive no acceleration credit.
+
+The CPU candidate detected a zero-filled source followed only by positive
+`putpixel` writes, then wrote projection bits directly without allocating and
+sorting two temporary write lists. It preserved last-write behavior by only
+admitting monotonic positive writes. Three candidate cohorts reused an exact
+10/10 passing parity receipt, but the sparse RGB CPU medians were 11.771 µs
+against 11.646 µs across three pre-controls; the post-revert control measured
+11.000 µs. On the 1024×768 sparse-CMYK guard, candidate CPU medians also failed
+to show a repeatable improvement. The apparent CMYK slowdown coincided with
+similar SIMD and GPU timing drift, so it is not attributed to the candidate.
+The code change was removed.
+
+The corrected five-workload post-revert cohort measured whole-workflow latency
+for the three RGB cases and sparse CMYK, and the `call` step for material
+CMYK. Each reported median is from 100 timed samples:
+
+| Workload | Pillow µs | CPU µs (× Pillow) | SIMD µs (× Pillow) | GPU µs / actual route |
+| --- | ---: | ---: | ---: | ---: |
+| RGB sparse 17×4 | 11.791 | 11.583 (1.018×) | 11.792 (1.000×) | 284.667 / GPU |
+| RGB dense 17×4 | 6.458 | 5.750 (1.123×) | 5.833 (1.107×) | 191.020 / GPU |
+| RGB dense scalar tail 15×3 | 6.417 | 5.750 (1.116×) | 5.792 (1.108×) | 5.938 / CPU fallback |
+| CMYK material 1024×768, `call` step | 337.979 | 8.000 (42.247×) | 9.062 (37.296×) | 8.958 / CPU fallback |
+| CMYK sparse 1024×768 | 410.583 | 135.145 (3.038×) | 131.709 (3.117×) | 432.480 / GPU |
+
+CPU and SIMD executed on every RGB case. GPU actually executed on both 17×4
+RGB cases and the sparse-CMYK case; the two fallback rows above are excluded
+from GPU comparisons. Sparse-CMYK GPU used one dispatch, uploaded 0 bytes,
+read back 224 bytes, and used 24 auxiliary plus 32 parameter bytes. On sparse
+RGB 17×4, GPU read back 8 bytes with 16 auxiliary and 32 parameter bytes. GPU
+latency remains slower than SIMD, and sustained throughput remains unmeasured.
+SIMD is only 1.00–1.11× Pillow on the RGB edge cases, short of the 2× target.
+Keep GetProjection open; the clean published category snapshot remains
+unchanged.
+
+The seven candidate/control cohorts added 112 subject rows, and the corrected
+five-workload cohort added 20. The local evidence ledger now has 5,375 data
+rows. Completed optimization items remain 0/33; no commit or push was made. No
+coverage was run. The backend parity applicability defect and the rejected
+optimization are recorded in the reusable performance skill.
+
+## GetProjection Python coordinate tuple shortcut — rejected — 2026-10-12
+
+I tried an early path in `putpixel_coordinates_from_python` for exact built-in
+two-item tuples containing exact Python integers that fit in `i32`. It returned
+those coordinates directly and kept every other input on the existing
+Pillow-compatible sequence path. Three candidate cohorts and the post-revert
+control each measured the same five workloads. The candidate reused a live
+Pillow parity receipt and passed 15/15 CPU/SIMD/GPU comparisons; the
+post-revert benchmark also passed 15/15 and the benchmark-selection checks
+passed 16/16.
+
+The mean of three candidate CPU medians versus six no-candidate control medians
+was 11.708 vs 11.611 µs for sparse RGB 17×4, 5.875 vs 5.882 µs for dense RGB
+17×4, 5.819 vs 5.882 µs for the scalar-tail RGB 15×3 case, and 138.799 vs
+140.087 µs for sparse CMYK 1024×768. The sub-1% differences were not
+repeatable across workloads and overlap run-to-run variation. I removed the
+shortcut and rebuilt before the post-revert control.
+
+The two GPU-fallback workloads remain excluded from GPU comparisons. Actual
+GPU execution on the other three cases was recorded; sustained GPU throughput
+was not measured. The coordinate shortcut is rejected, GetProjection remains
+open, and no completed optimization item was added to the 33-item push batch.
+The 60 candidate subject rows and 20 post-revert subject rows bring the local
+evidence ledger to 5,455 rows. No coverage was run and no genuine test defect
+was found.
+
+## GetData cached result-mode lookup — rejected — 2026-10-12
+
+The banded `Image.getdata` wrapper queried `self.mode` twice when the returned
+core kept the original `1`, `L`, or `P` mode. I tried reading that property once
+and reusing the value. Both five-workload candidate cohorts passed exact parity
+15/15; the candidate and post-revert builds passed benchmark-selection checks
+16/16. Candidate 2 reused candidate 1's exact passing parity receipt. The
+post-revert control also passed exact parity 15/15.
+
+| Cohort | L32 CPU µs | LA32 CPU µs | RGB32 CPU µs | RGBA32 CPU µs | RGB512 workflow CPU µs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Pre-control | 5.438 | 5.584 | 5.667 | 5.625 | 849.958 |
+| Candidate 1 | 5.166 | 5.458 | 5.458 | 5.458 | 858.542 |
+| Candidate 2 | 5.312 | 5.542 | 5.666 | 5.542 | 906.583 |
+| Post-revert control | 5.250 | 5.417 | 5.458 | 5.458 | 861.042 |
+
+L32 is the only selected workload that removes a Python-to-Rust mode getter.
+Its two candidate measurements and the pre/post controls overlap: the
+post-revert result returned to 5.250 µs, while the previous no-candidate
+control had measured 5.250 µs as well. The other direct rows and the composed
+RGB workflow changed by similar amounts even though their property-lookup
+count did not change, confirming enough host timing variation to make a small
+gain unproven. I restored the original expression. L32 remains below 2×
+Pillow. L32 requested SIMD executed on CPU and is excluded; other SIMD and GPU
+requests ran their named backend. GPU throughput was not measured.
+
+Candidate 1 `migration-benchmark-fffdd2e3ee4a4cc19349a0a78d006e39` /
+`migration-parity-benchmark-gate-8ebc89b535db4cf4b680bcb4cc6cb673`; candidate 2
+`migration-benchmark-2bfda90218e94c34b0ab787fdf14b0de` (reused that exact gate);
+post-revert control `migration-benchmark-f95a64a586eb4773ab5570d642be704c` /
+`migration-parity-benchmark-gate-19089c8ba6164a189f1631f53718ca32`. These
+three cohorts add 60 subject rows and bring the local ledger to 5,183 data
+rows. The clean published category snapshot remains unchanged; GetData stays
+open and push-batch progress remains 0/33. No genuine test defect was found and
+no coverage was run.
+
+## GetData combined data and metadata snapshot — rejected — 2026-10-12
+
+To cut two extra Python-to-Rust property calls after a banded read, I added a
+binding path that returned the bytes, result mode, and size together for the
+existing `ImagingCore` wrapper. Both five-workload candidates passed exact
+parity 15/15; candidate 1 and post-revert builds passed benchmark-selection
+checks 16/16. Candidate 2 reused candidate 1's exact passing parity receipt.
+The post-revert control passed exact parity 15/15.
+
+| Cohort | L32 CPU µs | LA32 CPU µs | RGB32 CPU µs | RGBA32 CPU µs | RGB512 workflow CPU µs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Pre-control | 5.250 | 5.417 | 5.458 | 5.458 | 861.042 |
+| Candidate 1 | 5.041 | 5.292 | 5.333 | 5.292 | 855.812 |
+| Candidate 2 | 5.125 | 5.417 | 5.583 | 5.500 | 859.792 |
+| Post-revert control | 5.125 | 5.333 | 5.333 | 5.292 | 851.541 |
+
+Candidate 1 improved all four small CPU medians by 2–4%, but candidate 2
+repeated that improvement only for L32. The two candidates averaged 5.083 µs on
+L32 against 5.188 µs across the pre/post controls, while LA/RGB/RGBA medians
+were effectively flat or slower and the whole workflow was flat. The small
+L32 difference is not enough to justify a new binding method without a
+repeatable gain across modes. I removed the helper and restored the original
+three-call wrapper. L32 requested SIMD ran on CPU and receives no SIMD credit;
+other SIMD and GPU calls ran their named backend. GPU timing moved substantially
+between cohorts and sustained throughput remains unmeasured.
+
+Candidate 1 `migration-benchmark-a5119425c96145d0af37c62b599eaa00` /
+`migration-parity-benchmark-gate-e6bb56e07f694266a5f681e4a36177de`; candidate 2
+`migration-benchmark-7be6bf82af9f48d9a4f79fac839c0b00` (same exact parity
+gate); post-revert control `migration-benchmark-2dfc843ad2ef489a9b754eccd4caaf21` /
+`migration-parity-benchmark-gate-4bc9b169837142a381b55e39413c6a60`. These
+three cohorts add 60 subject rows and bring the local ledger to 5,243 data
+rows. The clean published category snapshot remains unchanged; GetData stays
+open and push-batch progress remains 0/33. No genuine test defect was found and
+no coverage was run.
+
+## GetChannel loaded-L copy-on-write CPU identity — retained; incomplete — 2026-10-12
+
+For an already-loaded `L` image with exactly one byte per logical pixel,
+`getchannel(0)` is an identity. I retained a serial-CPU fast path that returns
+`Image::copy()`, sharing the immutable pixel buffer through the core's
+copy-on-write ownership. It runs only when the active backend is CPU and the
+`parallel` feature is off. SIMD, GPU, Parallel CPU, pending graphs, and storage
+with trailing samples stay on their prior extraction paths. The exact-length
+guard preserves `ExtractBand`'s truncation behavior.
+
+The control and two candidate cohorts each measured the same five workflows
+with the public `call` and `observe-result` boundary. Each benchmark gate
+passed 15/15 exact Pillow comparisons; all builds passed 16/16
+benchmark-selection checks. The L CPU result repeated below:
+
+| Cohort | Pillow µs | CPU µs | CPU speedup | Host pixel buffers / bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Current-source control | 107.396 | 69.000 | 1.56× | 2 / 1,572,864 |
+| Candidate 1 | 109.729 | 15.125 | 7.26× | 1 / 786,432 |
+| Candidate 2 | 102.959 | 14.792 | 6.96× | 1 / 786,432 |
+
+Both candidate receipts show actual CPU execution, one operation, zero pixel
+buffer allocations, and no full-frame copy. The returned image owns the shared
+786,432-byte buffer independently through copy-on-write. The candidate branch
+did not change other workload routes; local CPU remains below 2× Pillow for
+the 16×16 RGB workload (about 1.4×) and 1024×768 LA (1.62× in candidate 2).
+Those rows and the remaining SIMD/GPU gaps keep GetChannel open.
+
+The maintained GetChannel corpus also passed 136/136 exact comparisons on
+each CPU, SIMD, and GPU lane. Each lane recorded its requested backend for all
+112 pipeline-applicable cases with no fallback; the other 24 cases were not
+pipeline-applicable. Actual GPU execution on the five timed workloads was
+recorded, but these cohorts did not measure sustained GPU throughput. Parallel
+CPU and x86 SIMD were not measured. The published operation matrix remains
+pinned to its clean snapshot; the local evidence ledger now contains 5,515
+rows. No coverage was run.
+
+Control `migration-benchmark-f3ded9288ffd475d8fdd4f7558a841d4`; candidate 1
+`migration-benchmark-8da8e79f7b4d404db73b366d88a20c4e`; candidate 2
+`migration-benchmark-bf0d4116088f417b8196e51f4e1516d6`; shared benchmark gate
+`migration-parity-benchmark-gate-ffb1247e94314951a2302dae44a2fe14`. Full
+corpus evidence is in
+`build/migration-parity/getchannel-loaded-l-alias-full-parity.json`.
+
+Tracker correction: the published 0.725603× CPU/Pillow regression belongs to
+`PIL.Image.Image.getdata`, not GetChannel. Its GetData child remains open while
+the local result ledger and pending push batch are reconciled. This correction
+was added to the Kata parent tracker. GetChannel remains incomplete and the
+33-item push batch remains 0/33.
+
+## GetProjection bounded known-zero write fold — rejected — 2026-10-12
+
+The current local CPU miss was sparse RGB 17×4: four recent controls were near
+Pillow, with the post-revert median at 12.208 µs versus Pillow's 11.875 µs.
+The CPU receipt named the CPU backend with no fallback. I tried replacing the
+sorted/compacted temporary write vectors with a reverse scan for at most eight
+queued writes on a known-zero source. Walking backward and applying only the
+last write at each coordinate preserves `putpixel` overwrite order, including
+a final zero write, while still allocating the two required projection axes.
+
+The first candidate looked better on sparse RGB (10.917 µs versus its paired
+Pillow 11.458 µs, or 1.050×), but candidate 2 measured 12.084 µs against
+Pillow's 11.917 µs (0.986×). The same candidate movement failed to repeat on
+the 1024×768 sparse-CMYK guard: candidate 1 CPU was 139.062 µs and candidate
+2 was 156.229 µs, compared with 153.728 µs in the pre-control. The post-revert
+RGB control measured 12.208 µs versus Pillow's 11.875 µs (0.973×). The code
+was removed; this small-workload CPU gap remains open and the candidate is not
+credited as an optimization.
+
+The control, both candidates, and post-revert control each measured the same
+five workloads and passed the all-backend exact gate 15/15. Each build passed
+the workload-selection checks 16/16. CPU and SIMD executed the requested
+backend without fallback on all five cases. GPU actually executed without
+fallback on the sparse RGB, dense RGB, and sparse CMYK cases; its requests for
+the 15×3 scalar-tail RGB and material CMYK cases fell back to CPU and receive
+no GPU credit. This cohort measured single-request latency, not sustained GPU
+throughput. The four runs added 80 rows to the local evidence ledger (5,595
+rows total). No coverage was run and no genuine test defect was found. The
+published cross-runner matrices remain pinned; GetProjection stays open and
+the 33-item commit/push batch remains 0/33.
+
+Run IDs: control `migration-benchmark-6d78accf73fe4117bc13407d0d00e227`,
+candidate 1 `migration-benchmark-aa6f7450e43345bba251f6d99fd5a6fd`, candidate
+2 `migration-benchmark-afdf0a27b80c478ba177b596b36fc4f7`, and post-revert
+control `migration-benchmark-c5af64f3c2a349f2b90c7827f6bf582c`. The per-run
+JSON and exact parity receipts are under
+`build/migration-parity/getprojection-small-knownzero-*`.
+
+## GetProjection low-load confirmation — 2026-10-12
+
+The five-workload bounded-write post-revert run showed sparse RGB CPU at
+0.973× Pillow, but that small miss did not reproduce under the low-load
+whole-workflow runner. The 100-sample low-load control passed all 15 exact
+backend comparisons; the scalar-tail follow-up passed 3/3. CPU/Pillow speedups
+were 1.055× on sparse RGB 17×4, 1.124× on dense RGB 17×4, 0.990× on scalar-tail
+RGB 15×3 in the first run and 1.107× in an unchanged repeat, 42.948× on
+material CMYK, and 3.269× on sparse CMYK. Treat the lone 0.990× scalar-tail
+measurement as host variation, not a confirmed CPU regression.
+
+| RGB edge workload | Pillow µs | CPU µs | CPU/Pillow | SIMD µs | SIMD/Pillow | GPU result |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Sparse 17×4 | 32.792 | 31.083 | 1.055× | 31.375 | 1.045× | 3,555.125 µs, actual GPU |
+| Dense 17×4 | 18.083 | 16.084 | 1.124× | 16.480 | 1.097× | 3,410.999 µs, actual GPU |
+| Dense scalar-tail 15×3 | 17.917 | 18.104 / 16.104 repeat | 0.990× / 1.107× | 16.292 | 1.100× | CPU fallback; excluded |
+
+The small RGB paths remain below the 2× SIMD goal and actual GPU latency is
+far slower than SIMD. GPU requests for scalar-tail RGB and material CMYK fell
+back to CPU; sparse/dense RGB and sparse CMYK used GPU. This was a single-call
+latency cohort, so GPU sustained throughput remains unmeasured. The phase split
+shows setup dominating the tiny workloads, and the unchanged repeat shifted CPU
+latency by about 11% while Pillow stayed within 1%; retain paired controls before
+another fixed-overhead candidate. No test defect was found.
+
+The receipts are `migration-benchmark-66fe46a8631d486d81113a76210c5057` with
+parity gate `migration-parity-benchmark-gate-c8fa8b68563246ba892a05612892ce1f`,
+and `migration-benchmark-3c8999fc74d54fff8c04b3a928aca931` with gate
+`migration-parity-benchmark-gate-fa71ceaa85264a4a813aaf6b514547ab`. The local
+ledger now contains 5,619 rows. The published matrix remains pinned; no
+candidate code was retained, no coverage was run, and the completed-item
+commit/push batch remains 0/33.
+
+
+## Filter LA 3×3 explicit GPU batch — admission fixed, throughput below target — 2026-10-12
+
+The single-image GPU path already supported the native LA binomial 3×3 kernel,
+but the composed batch planner omitted that exact LA case and rejected the
+otherwise supported graph. `plan_graph_inner` now admits only LA Filter3x3
+operations whose kernel, scale, and offset match the existing binomial shader;
+other LA kernels remain rejected. The GPU batch diagnostic now measures this
+filter with Pillow, serial CPU, SIMD, direct GPU, and queued GPU subjects.
+
+Each completed-window sample constructs 32 fresh deterministic 1024×768 LA
+images and filter graphs, executes the work, waits for completion, materializes
+results, and exports their bytes. It uses two warmup windows and five timed
+windows. The 32 outputs matched byte-for-byte across all five subjects. GPU
+receipts show the GPU backend for every job with no fallback. Each of the 224
+jobs (including warmup) uploaded and read back its native LA image, for
+352,321,536 bytes in each direction. Source image and graph allocation is inside
+the timed boundary; Python-side allocation telemetry is unavailable.
+
+| Subject | Completed-window rate (images/s) | Relative to Pillow | Actual backend |
+| --- | ---: | ---: | --- |
+| Pillow | 291.4 | 1.00× | Pillow |
+| CPU | 2,281.2 | 7.83× | CPU |
+| SIMD | 2,238.8 | 7.68× | SIMD |
+| GPU eager | 474.0 | 1.63× | GPU |
+| GPU queued, group size 4 | 1,267.1 | 4.35× | GPU |
+
+This queued GPU result is only 0.566× SIMD throughput, so the GPU sustained
+throughput target remains unmet. Queue tuning did not close the gap: raising
+`max_jobs` to 64 with `max_in_flight=16` yielded 1,216.0 images/s (0.533× its
+SIMD control); grouping 16 yielded 1,074.6 images/s (0.542×); grouping 8 yielded
+1,062.9 images/s (0.472×). A later default group-4 control measured 1,275.0
+images/s versus SIMD's 2,276.9 (0.560×), confirming that the lower candidate
+rates were not a control improvement. These completed-window results establish
+throughput only; use separate single-operation samples for the GPU latency
+comparison. No tuning candidate is credited as a speedup.
+
+All five runs and all five subjects are in the local ledger (25 rows; 5,644
+total) under `pipeline-batch.filter.la-1024x768`; their JSON reports are under
+`build/migration-parity/filter-la-gpu-batch-*-20261012.json`. The published
+cross-runner matrix remains pinned. No genuine test defect was found: this was
+an omission in composed GPU admission, not a faulty parity assertion. No
+coverage was run; the completed-item commit/push batch remains 0/33.
+
+
+## Grayscale 16×16 metadata fast path — rejected after bracket controls — 2026-10-12
+
+The corrected whole-workflow RGB 16×16 grayscale workload remains the local
+SIMD gap: two prior matched controls measured SIMD at 8.667/8.708 µs against
+Pillow at 9.333/10.000 µs (1.08×/1.15×), below the 2× target. I tested a
+Python-wrapper fast path that skipped the generic derived-image metadata copy
+for an `Image.new` source known to have empty metadata. It preserved the
+ordinary `_new` path for inputs with metadata and passed the selected exact
+Pillow case 1/1 with CPU, SIMD, and GPU actual receipts and no fallback. The
+candidate was removed after it did not show a repeatable improvement.
+
+| Run | Pillow µs | CPU µs | SIMD µs | GPU µs |
+| --- | ---: | ---: | ---: | ---: |
+| Control before 1 | 9.333 | 8.417 | 8.667 | 189.750 |
+| Control before 2 | 10.000 | 8.416 | 8.708 | 188.208 |
+| Metadata candidate | 10.167 | 9.146 | 8.584 | 191.250 |
+| Control after revert | 10.250 | 9.333 | 9.791 | 190.667 |
+
+The candidate CPU result was 8.7% slower than the two earlier controls. Its
+small SIMD movement (about 1%) did not repeat cleanly: the reversion control
+shifted CPU, SIMD, and Pillow latency by 6–13%, while GPU stayed within 1%.
+Treat this cohort as host drift around a rejected wrapper hypothesis, not an
+optimization or a product regression. Exact parity passed 1/1 in the candidate
+and post-revert runs. GPU completed one actual dispatch per operation, with
+768 uploaded and 256 readback bytes; its latency remained about 190 µs, over
+20× the SIMD result. This single-request benchmark does not establish GPU
+throughput. No genuine test defect was found.
+
+The candidate and bracket control add eight rows to the local ledger (5,652
+total); the two prior matched controls remain recorded. Reports are
+`grayscale-rgb16-knownempty-metadata-candidate-20261012.json` and
+`grayscale-rgb16-knownempty-metadata-control-after-20261012.json`, each with a
+separate passing parity receipt. The wrapper returned to its original
+`image._new(...)` route. Grayscale stays open for the 16×16 SIMD 2× gap, GPU
+latency and throughput, other modes and sizes, and broader profile coverage.
+No coverage was run; the 33-item commit/push batch remains 0/33.
+
+
+## Grayscale GPU batch queue groups, matched 1024×768 and 256×768 — 2026-10-12
+
+Added a fresh default group-4 batch control and matched repeats at effective
+groups 4, 8, and 16. Each cohort constructs 64 fresh images and lazy grayscale
+graphs in each of five measured windows, with two warmup windows; its timed
+boundary includes submission, execution, synchronization, materialization, and
+byte export. All 64 outputs per workload passed exact-byte parity for Pillow,
+serial CPU, SIMD, eager GPU, and queued GPU. Every GPU job used the GPU without
+fallback; live queued jobs and bytes were zero after completion. Source-image
+construction is timed, but host allocation telemetry is unavailable.
+
+| Workload | Pillow img/s | CPU img/s | SIMD img/s | Eager GPU img/s | Group-4 queued GPU img/s (GPU/SIMD) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L 256×768 | 31,066 | 42,149 | 47,870 | 591 | 4,671 (0.098×) |
+| L 1024×768 | 9,777 | 13,965 | 14,716 | 533 | 2,282 (0.155×) |
+| RGB 256×768 | 7,871 | 22,876 | 22,931 | 574 | 3,827 (0.167×) |
+| RGB 1024×768 | 2,028 | 5,768 | 6,112 | 479 | 1,343 (0.220×) |
+
+The matched group-4 repeat moved in both directions across workloads and did not
+establish a consistent gain. Groups 8 and 16 reduced the number of submissions,
+but each group-8 and group-16 queued rate was below this fresh control on all
+four workloads. Across the three matched queue variants, queued GPU throughput
+was only 0.081–0.220× the same-run SIMD rate. Larger batches therefore did not
+address Grayscale's GPU bottleneck. The separate square-size max-jobs-32,
+max-in-flight-8 run is recorded as a diagnostic and is not compared with the
+1024×768-height cohort.
+
+These are batch-throughput results, not singleton-latency measurements. The
+serial CPU exceeded Pillow on all four workloads, while SIMD exceeded Pillow
+but remained below 2× on L workloads. Grayscale stays open; no implementation
+candidate changed. The five JSON reports are
+`grayscale-batch-rgb-1024x768-current-control-20261012.json`,
+`grayscale-batch-deeper-queue-20261012.json`,
+`grayscale-batch-deeper-queue-matched-20261012.json`,
+`grayscale-batch-group8-matched-20261012.json`, and
+`grayscale-batch-group16-matched-20261012.json` under
+`build/migration-parity/`. Together they add 100 subject rows, bringing the
+local ledger to 5,752. No test defect was found; no coverage was run; the
+33-item commit/push batch remains 0/33.
+
+
+## Grayscale RGB eager path and allocation-accounting checkpoint — 2026-10-12
+
+The bounded eager path for an already-loaded native RGB image remains enabled
+for serial CPU and SIMD. A matched 16×16 whole-workflow control took 9.542 µs
+CPU and 9.625 µs SIMD against Pillow at 10.375 µs. Three parity-gated candidate
+runs took 7.208–7.875 µs CPU and 7.354–7.667 µs SIMD, with one 256-byte output
+allocation and actual backend receipts without fallback in every run. This is
+about a 17–18% gain over the lazy-path control, but only 1.28–1.37× Pillow;
+the small RGB item remains open and misses the 2× target. The GPU route stayed
+on the ordinary pipeline, completed one dispatch without fallback, and took
+189.520–276.271 µs for the same 16×16 public workflow.
+
+The corresponding 1024×768 materialized workflows pass the benchmark's exact
+Pillow gate and have valid output-allocation receipts in corrected report
+`migration-benchmark-6cff6d63d7e14ce49162187bb5faeeae`:
+
+| Workload | Pillow µs | CPU µs (× Pillow) | SIMD µs (× Pillow) | GPU µs (× Pillow) | GPU upload/readback bytes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| RGB | 197.458 | 92.416 (2.137×) | 92.709 (2.130×) | 335.625 (0.588×) | 2,359,296 / 786,432 |
+| YCbCr | 108.042 | 44.292 (2.439×) | 44.730 (2.415×) | 334.333 (0.323×) | 2,359,296 / 786,432 |
+| CMYK | 642.146 | 188.458 (3.407×) | 232.313 (2.764×) | 334.167 (1.922×) | 3,145,728 / 786,432 |
+
+Each GPU subject reports one actual dispatch, one 786,432-byte host output
+allocation, a completed terminal observation, and no fallback. GPU latency is
+still 1.44–7.47× SIMD latency, depending on mode. These single-operation
+latency samples do not establish GPU throughput; the separate completed-work
+queue runs above remain far below SIMD throughput.
+
+An earlier report, `migration-benchmark-5195cc1b532a489fb56857bff7087ca9`,
+reported zero CPU host allocations for the CMYK output even though the public
+operation produced the output buffer. That report is superseded for resource
+accounting. Recording the final allocation in `cmyk_to_grayscale` and adding
+`cmyk_grayscale_records_the_final_output_allocation` fixed the telemetry gap;
+the corrected report records one allocation of 786,432 bytes. This was a
+measurement-accounting defect, not a parity-test defect. No output assertion
+or performance threshold changed.
+
+The eager-path admission must compare the logical mode, not only the backing
+`DynamicImage` variant: YCbCr uses RGB8 storage. A missing logical-mode guard
+made the odd-byte-tail YCbCr case return `7c9d19` in Pillow and `cdaeb5` in the
+target. Strict parity caught the bug; checking `explicit_mode`/decoded mode
+before entering the RGB eager path restored exact behavior. The current
+focused strict cohort passes 11/11 cases on each of CPU, SIMD, and GPU,
+including the direct RGB case, ten `La` rejection edges, and YCbCr's odd-byte
+tail.
+
+A follow-up that moved `mode()` behind the eager-path check passed the same
+strict cohort, but its whole-workflow RGB16 results (8.000 µs CPU, 7.917 µs
+SIMD) did not improve on the preceding eager candidate (7.875 µs for both).
+It was reverted and receives no speedup credit. The current Python wrapper and
+GPU pipeline admission order are unchanged by that trial.
+
+These seven reports add 44 subject rows to
+`docs/evidence/performance-optimization-local-runs.csv` (5,796 rows total).
+The published operation matrix remains pinned to the last clean snapshot until
+the authorized 33-item batch is ready; this local evidence is not presented as
+a published clean-runner result. Grayscale stays open for the small-image
+threshold, the GPU latency/throughput target, remaining modes/sizes, and
+Pillow-SIMD comparison. No coverage was run, no genuine test defect was found,
+and the commit/push batch remains 0/33.
+
+
+## GetData next-priority reconciliation — 2026-10-12
+
+The published clean matrix still has one serial CPU row below Pillow: RGB
+band-zero GetData at 0.726×. A newer dirty-source refresh already measures the
+same 512×512 RGB whole workflow at 2.556× Pillow with exact parity 3/3, and the
+direct sequence-materialized CPU cohort passed 19/19 at 1.78–2.44×. The
+published regression is stale against that local source; no current local CPU
+GetData row is below Pillow. Four 32×32 L/LA/RGB/RGBA rows remain below the 2×
+sequencing threshold, so GetData remains the next operation visit before
+Pillow-SIMD-only gaps.
+
+A 100-repeat cProfile diagnostic for RGB32 GetData spent 2.335 of 3.275 seconds
+parsing the YAML manifest; the native PyO3/Rust method is not exposed as Python
+frames. It does not isolate the operation's 5–6 µs call/materialization path
+and is not latency evidence. The diagnostic was retained under
+`build/migration-parity/getdata-rgb32-profile-20261012/`; all earlier small-call
+candidate changes remain rejected as recorded above. No source optimization is
+credited from this profile, no current parity or performance test defect was
+found, the local result ledger remains at 5,796 rows, no coverage was run, and
+the completed-item commit/push batch remains 0/33.
+
+
+## LA 5×5 Filter packed-vector serial CPU checkpoint — 2026-10-12
+
+The next ranked Filter visit targeted the 1024×768 native LA binomial 5×5
+workload, whose prior serial CPU median was 3.588 ms against Pillow at 6.983
+ms (1.95×). The SIMD backend already had an exact packed-LA `u16x16` kernel
+covering eight interleaved pixels. The serial CPU path now reuses it only on
+AArch64 with NEON, without the opt-in `parallel` feature, for exact native LA,
+matching binomial parameters, and dimensions at least 13×5. Other inputs retain
+the scalar path. The output begins as a source copy so Pillow's two-pixel
+border remains unchanged.
+
+To keep the central SIMD adapter module from accumulating per-kernel code, the
+shared packed implementation now lives in
+[`native_filter.rs`](../pillow-rs/src/compute/pool_simd/ops/native_filter.rs).
+The registry adapter and serial CPU dispatch call that family module directly.
+The focused vector/tail test passed on 5×5, 13×7, 19×11, 20×13, and 31×17
+inputs, comparing every byte against the ordered-float kernel.
+
+The full call-plus-materialization cohorts used 5 warmups and 20 iterations in
+5 single-thread samples per subject. All measured subjects completed on their
+requested backend with no fallback. The final post-extraction cohort passed
+all 9 selected exact Pillow comparisons (three workloads on CPU, SIMD, and
+GPU). On native LA 5×5, the paired medians were:
+
+| Cohort | Pillow | Serial CPU | CPU/Pillow | SIMD | SIMD/Pillow | GPU | SIMD/GPU latency ratio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Control before candidate | 6.983 ms | 3.588 ms | 1.946× | 1.687 ms | 4.140× | 1.446 ms | 1.166× |
+| Candidate run 1 | 7.268 ms | 1.802 ms | 4.034× | 1.722 ms | 4.221× | 1.490 ms | 1.156× |
+| Candidate repeat | 6.997 ms | 1.721 ms | 4.065× | 1.717 ms | 4.075× | 1.462 ms | 1.174× |
+| Candidate after module extraction | 7.043 ms | 1.766 ms | 3.988× | 1.716 ms | 4.103× | 1.445 ms | 1.188× |
+
+The repeatable serial CPU improvement is about 51% in raw median latency; the
+final run remains near the two earlier candidate runs after the module-only
+refactor. The run records two host buffers totaling 3,145,728 bytes for CPU
+and SIMD. GPU performed one real dispatch and transferred 1,572,864 bytes in
+each direction. Singleton GPU latency beats SIMD on this row, but sustained
+throughput for the 5×5 workload was not measured; the separate LA 3×3 batch
+checkpoint remains below SIMD throughput. SIMD is about 4.1× Pillow here and
+does not yet reach the stricter 5× project target. Parallel CPU, other Filter
+modes and sizes, composed pipelines, the full per-operation matrix, and a
+clean complete Pillow-SIMD JSON cohort remain open. Keep the Kata Filter item
+open and do not count the operation toward the 33-item commit/push batch.
+
+Reports and parity gates are under `build/migration-parity/filter-first-*`;
+the four cohorts add 48 subject rows to
+`docs/evidence/performance-optimization-local-runs.csv` (5,844 rows total).
+The published operation matrix remains pinned to the clean cross-runner
+snapshot. No genuine test defect was found, no coverage was run, and the
+completed-item commit/push batch remains 0/33.
+
+
+## GetData scalar-mode wrapper shortcut — rejected — 2026-10-12
+
+I tested a small Python-side shortcut that skipped `_image_data_bands()` during
+`ImagingCore` construction for known scalar modes. The change was confined to
+the wrapper and was removed after two candidate cohorts. The control, both
+candidates, and the post-revert control each passed the five selected
+workloads' exact Pillow gate (15/15) and the benchmark-selection checks
+(16/16). Timings used five warmups and 20 iterations across five single-thread
+samples; four 32×32 band reads measured `band-data`, and the 512×512 RGB case
+measured the full terminal workflow.
+
+CPU/Pillow speedups varied between candidates rather than repeating:
+
+| Workload | Control | Candidate 1 | Candidate 2 | Post-revert |
+| --- | ---: | ---: | ---: | ---: |
+| L band 0, 32×32 | 1.929× | 1.984× | 1.925× | 1.945× |
+| LA band 1, 32×32 | 1.855× | 1.893× | 1.861× | 1.885× |
+| RGB band 0, 32×32 | 1.855× | 1.908× | 1.841× | 1.857× |
+| RGBA band 3, 32×32 | 1.855× | 1.908× | 1.855× | 1.885× |
+| RGB terminal workflow, 512×512 | 2.356× | 2.491× | 2.456× | 2.400× |
+
+The apparent gains did not repeat across the small modes or the full workflow.
+The direct CPU rows still need work to clear the 2× sequencing tier. SIMD ran
+on LA/RGB/RGBA; requested SIMD on L used CPU fallback and receives no SIMD
+credit. GPU ran without fallback but was slower than SIMD, and sustained GPU
+throughput was not measured. The reports are
+`build/migration-parity/getdata-imagingcore-scalar-mode-{control,candidate-1,candidate-2,post-revert}.json`
+with matching parity sidecars.
+
+
+## GetData loaded-storage CPU shortcut — rejected — 2026-10-12
+
+I then tried filling the final band buffer directly from `LoadedData.image`,
+avoiding `materialized_shared()`'s `Arc` reference-count operation and a second
+logical-mode reconstruction. The transient helper lived in a small
+GetData-family module; the central SIMD adapter registry was not changed. I
+removed the helper after two candidates and a post-revert control failed to
+show a repeatable improvement in the public CPU/Pillow ratio.
+
+Each cohort passed exact Pillow parity 15/15 and benchmark selection 16/16.
+The prior GetData post-revert report served as the before-control. Candidate 1,
+candidate 2, and the new post-revert CPU/Pillow ratios were:
+
+| Workload | Candidate 1 | Candidate 2 | Post-revert |
+| --- | ---: | ---: | ---: |
+| L band 0, 32×32 | 2.008× | 1.943× | 1.951× |
+| LA band 1, 32×32 | 1.836× | 1.866× | 1.846× |
+| RGB band 0, 32×32 | 1.830× | 1.881× | 1.854× |
+| RGBA band 3, 32×32 | 1.844× | 1.889× | 1.854× |
+| RGB terminal workflow, 512×512 | 2.524× | 2.450× | 2.389× |
+
+The L direct band-view case and the composed 512×512 pipeline did not depend on
+the loaded-image branch. Their timing shifts show why the small absolute
+latency changes are insufficient evidence by themselves. Candidate 1 moved
+the ratios down on three of the four direct multiband reads, while candidate 2
+showed only 1–2% gains there; the result was not stable enough to retain. No
+change remains. Reports are
+`build/migration-parity/getdata-loaded-storage-{candidate-1,candidate-2,post-revert}.json`
+with matching parity sidecars.
+
+CPU executed on all rows. SIMD executed on LA/RGB/RGBA; the L request used CPU
+fallback and receives no SIMD credit. GPU executed without fallback; on the
+tiny direct reads its latency was about 0.025–0.027× SIMD, while the 512×512
+workflow was about 0.75× SIMD. Sustained throughput is unmeasured. The
+scalar-mode and loaded-storage cohorts add 140 subject rows, bringing
+`docs/evidence/performance-optimization-local-runs.csv` to 6,296 data rows.
+The published operation matrix remains pinned to its clean snapshot. No
+genuine test defect was found, no coverage was run, and the completed-item
+commit/push batch remains 0/33.
+
+
+## Grayscale small-call adapter diagnostics — 2026-10-12
+
+A five-second arm64 CPU profile of the 16×16 RGB public workflow sampled 4,272
+stacks. The color parser and its failed extraction cleanup appeared in roughly
+5–6% of sampled stacks; grayscale conversion itself was about 1% and registry
+lookup under 1%. This made a kernel rewrite a poor first bet for this fixed-cost
+gap.
+
+I moved exact built-in color conversion into a focused Python input adapter and
+tried selecting only the applicable exact-type extraction, preserving the
+ordered parser for custom objects. Two matched controls measured Pillow/CPU at
+10.458/7.792 µs and 10.333/8.146 µs. The candidate runs measured
+10.167/7.708 µs and 10.500/7.541 µs. Their CPU/Pillow ratios crossed in
+opposite directions (1.319× and 1.392× against controls at 1.342× and
+1.269×), so the small absolute CPU reductions did not establish a repeatable
+paired gain. I reverted the adapter. It did not make the SIMD dispatcher
+larger.
+
+A second candidate routed derived-image construction through a private wrapper
+initializer, bypassing `Image.__init__` and its default fields that `_new`
+immediately replaces. Its single CPU result was 7.917 µs against Pillow at
+9.875 µs (1.247×), with SIMD at 8.167 µs and GPU at 275.917 µs. It showed no
+gain over the control range, so I reverted it as well.
+
+All five benchmark invocations passed their 16 benchmark-selection checks and
+the selected CPU Pillow preflight. Because this workload declares CPU-only
+parity, I also ran separate strict parity for the current source on the same
+16×16 RGB case: SIMD passed 1/1 and GPU passed 1/1, with the CPU preflight
+passing 1/1. The two control cohorts therefore have parity-backed SIMD ratios
+of 1.459× and 1.337× Pillow; GPU was 0.043× and 0.050× Pillow, or 0.029× and
+0.037× SIMD latency. Each requested backend ran with no fallback. The temporary
+parser and wrapper candidates were not separately parity-gated on SIMD/GPU, so
+their SIMD/GPU timings remain raw diagnostics without acceleration credit.
+GPU sustained throughput was not measured. No test defect was established: the
+benchmark followed the workload's declared CPU-only parity applicability, and
+strict evidence was collected separately where needed.
+The additional parity receipts are
+`build/migration-parity/grayscale-small-strict-simd.json` and
+`build/migration-parity/grayscale-small-strict-gpu.json`.
+
+The five reports and parity receipts add 20 raw subject rows to
+`docs/evidence/performance-optimization-local-runs.csv`. Three final control /
+candidate reports add 12 more, bringing the ledger to 6,156 data rows. The
+newly paired baseline control measured Pillow/CPU at 9.9375/7.2295 µs; the
+candidate measured 9.9795/7.2500 µs. CPU latency was 0.0205 µs slower in the
+candidate, with CPU/Pillow ratios of 1.3746× and 1.3765×. That is flat within
+the observed run variation, not a repeatable gain. The rebuilt post-revert
+baseline later measured 10.0205/7.7915 µs; its CPU timing was 7.8% above the
+pre-build control, so it demonstrates run-to-run movement rather than a
+candidate effect. The candidate's SIMD/GPU timings (7.1665/187.9165 µs) did
+execute those backends, but lack candidate-specific strict parity and receive
+no acceleration credit. The baseline runs use the existing strict SIMD/GPU
+case receipts; GPU sustained throughput remains unmeasured.
+
+Reports are `build/migration-parity/grayscale-small-16x16-current-control.json`,
+`grayscale-small-16x16-current-control-repeat.json`,
+`grayscale-small-16x16-color-adapter-candidate.json`,
+`grayscale-small-16x16-color-adapter-candidate-repeat.json`,
+`grayscale-small-16x16-wrapper-adapter-candidate.json`,
+`grayscale-small-16x16-color-adapter-control-after-revert.json`,
+`grayscale-small-16x16-color-adapter-final-candidate.json`, and
+`grayscale-small-16x16-final-post-revert.json`. No runtime change was retained,
+and the central SIMD adapter was not expanded. Grayscale remains open below
+the 2× CPU goal and well outside the SIMD/GPU latency goals. No coverage was
+run; the completed-item commit/push batch remains 0/33.
+
+
+## I-mode 5×5 Filter shared-vector CPU trial — 2026-10-12
+
+After the LA kernel extraction, I-mode was the next weak Filter CPU workload in
+the published x86_64 snapshot. I tested routing serial CPU I-mode binomial
+noise through the existing packed vector kernel, after the identity and bounded
+integer paths. The implementation lived in the focused Filter kernel module;
+the central SIMD adapter kept only the import and dispatch call.
+
+The candidate passed the fresh exact Pillow gate 9/9 across CPU, SIMD, and GPU
+for LA noise, I noise, and bounded I noise. It measured the public call plus
+materialization with 5 warmups and 20 iterations × 5 single-thread samples.
+Every subject completed on its requested backend with zero fallback. The I-mode
+CPU results did not justify the dispatch change:
+
+| Workload | CPU control → candidate | Candidate CPU/Pillow | SIMD/Pillow | GPU/SIMD latency |
+| --- | ---: | ---: | ---: | ---: |
+| I noise 1024×768 | 1.999541 → 1.999625 ms | 3.017× | 2.984× | 0.819× |
+| I bounded noise 1024×768 | 1.888917 → 1.926188 ms | 3.180× | 3.067× | 0.781× |
+
+The I-noise CPU result is effectively unchanged; bounded noise is 1.97% slower
+and already takes the earlier exact-integer path. I removed the serial CPU
+dispatch candidate. The shared I-mode kernel stays in `native_filter.rs` for
+the existing SIMD adapter, and the focused vector/tail test still covers it.
+The LA row in this cohort remained on its accepted path: CPU 1.778 ms, SIMD
+1.713 ms, and GPU 1.398 ms against Pillow at 7.047 ms.
+
+GPU performed one real dispatch with no fallback and transferred 1,572,864
+bytes each way for LA and 3,145,728 bytes each way for I. GPU singleton latency
+was below SIMD for these rows; sustained GPU throughput was not measured. SIMD
+cleared 2× Pillow on these local arm64 rows but remained below the repository's
+5× final target. The published x86_64 gap and the rest of Filter's modes,
+sizes, and composed pipelines remain open. The Kata Filter item stays open and
+its published category counts remain pinned to the clean snapshot.
+
+Reports are `build/migration-parity/filter-i-vector-candidate.json` and its
+parity companion. The rejected trial adds 12 subject rows to the local ledger
+(5,856 rows total); the published operation matrix remains unchanged. No test
+defect was found, no coverage was run, and the completed-item commit/push batch
+remains 0/33.
+
+
+## GetData `chunks_exact` loop repeated in error — 2026-10-12
+
+I reran a four-workload 32×32 GetData cohort with the interleaved-band copy
+changed from `iter().skip(band).step_by(channels)` to `chunks_exact(channels)`.
+The campaign already contained an equivalent rejected candidate covering eight
+workloads, two candidate runs, and a post-revert control. I missed that record
+before starting this run; this was redundant work, not a new optimization
+hypothesis. The helper was restored immediately after the comparison, and no
+kernel or adapter change remains.
+
+Both the current-source control and the redundant candidate measured the full
+`band-data` step, including immutable result materialization, with warm cache,
+five warmups, 20 iterations across five samples, and concurrency one. Each
+passed 12/12 selected Pillow comparisons; benchmark workload selection passed
+16/16. The CPU used CPU on all four workloads. SIMD used SIMD for LA/RGB/RGBA,
+but the L request fell back to CPU and is excluded from SIMD credit. GPU used
+GPU with one dispatch for each workload; transfer and synchronization are
+included in the measured step, while sustained throughput remains unmeasured.
+
+| Mode / band | Control Pillow / CPU µs | Candidate Pillow / CPU µs | CPU change | Candidate CPU/Pillow |
+| --- | ---: | ---: | ---: | ---: |
+| L band 0 | 10.250 / 5.375 | 10.458 / 5.375 | 0.00% | 1.946× |
+| LA band 1 | 10.292 / 5.542 | 10.459 / 5.584 | +0.76% | 1.873× |
+| RGB band 0 | 10.291 / 5.583 | 10.375 / 5.625 | +0.75% | 1.844× |
+| RGBA band 3 | 10.291 / 5.583 | 10.500 / 5.645 | +1.11% | 1.860× |
+
+The candidate left L flat and regressed the other CPU rows slightly. It does not
+change the earlier rejection or close the four small-read gaps below the 2×
+sequencing tier. The published cross-runner matrix stays pinned; GetData remains
+open. The two cohorts add 32 subject records and bring
+`docs/evidence/performance-optimization-local-runs.csv` to 5,888 rows. Reports
+are `build/migration-parity/getdata-small-current-control-20261012.json` and
+`build/migration-parity/getdata-small-chunks-candidate-20261012.json`, with
+their matching parity sidecars. No genuine test defect was found, no coverage
+was run, and the completed-item commit/push batch remains 0/33.
+
+### Const-specialized confirmation — 2026-10-12
+
+A later four-workload rerun tried routing LA/RGB/RGBA through one const-generic
+`chunks_exact(BANDS)` helper, with L left on the general path. This duplicated
+the same iterator-rewrite hypothesis already rejected above. The helper was
+reverted immediately; no source, kernel, or adapter change remains, and the
+rerun does not count as a completed optimization item.
+
+The current-source control, candidate, and post-revert control each passed
+12/12 exact Pillow comparisons and 16/16 workload-selection checks. Each timed
+the full `band-data` step, including immutable result materialization, with
+warm cache, five warmups, 20 iterations across five samples, and concurrency
+one. Candidate CPU medians regressed against its paired control by 1.59% for
+L, 0.75% for LA, 0.75% for RGB, and 1.51% for RGBA. The low-load diagnostic
+cohort shifted Pillow medians from 10 µs to 24–91 µs and is excluded from
+acceptance. The post-revert RGB Pillow median also shifted to 11.729 µs, so its
+apparent 2.149× ratio is host variation, not evidence of an optimization.
+
+CPU executed on all four rows. SIMD executed on LA/RGB/RGBA; L fell back to CPU
+and receives no SIMD credit. GPU executed on all four rows, but its latency was
+roughly 33–46× the corresponding SIMD latency, and sustained throughput was
+not measured. The four cohorts add 64 subject rows, bringing
+`docs/evidence/performance-optimization-local-runs.csv` to 6,064 data rows.
+Reports are `build/migration-parity/getdata-const-loop-control.json`,
+`build/migration-parity/getdata-const-loop-native-control.json`,
+`build/migration-parity/getdata-const-loop-candidate-1.json`, and
+`build/migration-parity/getdata-const-loop-post-revert.json`, each with its
+parity sidecar. No genuine test defect was found, no coverage was run, and the
+completed-item commit/push batch remains 0/33.
+
+
+## Grayscale PyO3 attach guard and native channel family boundary — 2026-10-12
+
+The small eager `ImageOps.grayscale` binding entered through an already
+attached PyO3 callback, then called `Python::attach` before detaching the Rust
+kernel. Passing the callback's existing `Python<'_>` token directly to
+`py.detach` removes that redundant attach guard without changing backend
+selection or image semantics. The matched release cohorts used five warmups,
+20 iterations, five single-thread samples, and 100 measured observations per
+subject on macOS 15.7.7 arm64. The 16×16 case measures the complete public
+workflow; the 1024×768 case measures `call` plus `observe-result`.
+
+| Cohort | 16×16 Pillow / CPU / SIMD / GPU (µs) | 1024×768 Pillow / CPU / SIMD / GPU (µs) |
+| --- | --- | --- |
+| Control | 10.458 / 8.417 / 8.250 / 219.354 | 186.208 / 94.125 / 97.812 / 357.584 |
+| Candidate | 10.458 / 7.917 / 8.000 / 212.438 | 206.270 / 95.146 / 95.021 / 362.896 |
+| Candidate repeat | 10.833 / 7.917 / 8.083 / 240.125 | 211.167 / 97.417 / 97.625 / 352.812 |
+
+The CPU small-image median improved by 5.9% in both candidate runs; SIMD
+improved by 3.0% and 2.0%. Across the candidates, the small case measured
+1.32–1.37× Pillow on CPU and 1.31–1.34× on SIMD, so Grayscale stays open.
+Large RGB CPU and SIMD results did not show a repeatable gain. GPU receipts
+confirm actual GPU execution with one dispatch and no fallback, but GPU latency
+remains far above SIMD. These single-call cohorts do not establish sustained
+GPU throughput.
+
+Each benchmark's exact Pillow preflight passed 4/4 comparisons across CPU,
+SIMD, and GPU. After the adapter-family extraction below, the full fixed
+Grayscale input set passed 36/36 on strict CPU. The binding change remains a
+small wrapper-only optimization; it adds no hand-coded backend branches.
+
+To keep the central SIMD adapter from collecting channel-specific kernels,
+the packed LA/RGB/RGBA gather kernels and channel-index dispatch now live in
+[`native_channel.rs`](../pillow-rs/src/compute/pool_simd/ops/native_channel.rs).
+The central adapter keeps image admission and operation evidence, then
+delegates channel movement to that family module. At the end of this move,
+`adapters.rs` is 255 lines shorter; this organization boundary carries no
+separate performance claim. `make build-parity` compiled the release
+extension, and the 36-case strict CPU parity run passed without infrastructure
+errors.
+
+The three cohorts add 24 subject rows to the local run ledger (5,912 total).
+Reports are `build/migration-parity/grayscale-attach-control-20261012.json`,
+`build/migration-parity/grayscale-attach-candidate-20261012.json`, and
+`build/migration-parity/grayscale-attach-candidate-repeat-20261012.json`, with
+matching parity sidecars. No genuine test defect was found, no coverage was
+run, and the completed-item commit/push batch remains 0/33.
+
+## GetData core mode reuse confirmation — 2026-10-12
+
+`getdata_band_into` obtains the mode to choose its backend and then calls
+`getdata_band_len`, which obtains that mode again. I briefly tested a private
+core helper that reused the first mode string for the band and output-length
+checks. The helper stayed in `image.rs`; this experiment made no adapter or
+kernel changes. I removed it after the matched end-to-end result showed no
+repeatable CPU gain, confirming the earlier rejection of GetData mode caching.
+
+The control and candidate each passed 15/15 exact Pillow 12.2.0 comparisons
+across CPU, SIMD, and GPU, with no infrastructure errors. Benchmark selection
+passed 16/16 checks in both builds. Four 32×32 reads used the `band-data`
+measurement boundary; the 512×512 RGB read measured the full workflow. Each
+cohort used five warmups, 20 iterations in five single-thread samples, and
+included result materialization. CPU medians were:
+
+| Workload | Control CPU | Candidate CPU | Candidate change | Candidate CPU/Pillow |
+| --- | ---: | ---: | ---: | ---: |
+| L, band 0, 32×32 | 5.334 µs | 5.334 µs | 0.00% | 1.941× |
+| LA, band 1, 32×32 | 5.542 µs | 5.500 µs | −0.76% | 1.879× |
+| RGB, band 0, 32×32 | 5.542 µs | 5.583 µs | +0.74% | 1.858× |
+| RGBA, band 3, 32×32 | 5.583 µs | 5.584 µs | +0.02% | 1.858× |
+| RGB, band 0, 512×512 | 879.626 µs | 879.584 µs | −0.005% | 2.512× |
+
+The small apparent LA gain was offset by an RGB regression, while L, RGBA,
+and the composed RGB workflow were effectively flat. Pillow medians also moved
+between cohorts, consistent with host noise rather than a stable core change.
+The L-mode requested-SIMD row fell back to CPU in both cohorts and is excluded
+from SIMD credit. The remaining small CPU reads are still below the 2×
+sequencing tier. GPU ran without fallback, but remained slower than CPU/SIMD
+for these reads; sustained throughput was not measured.
+
+The two cohorts add 40 subject rows to
+`docs/evidence/performance-optimization-local-runs.csv` (5,952 rows total).
+Reports are `build/migration-parity/getdata-reuse-mode-control-20261012.json`
+and `build/migration-parity/getdata-reuse-mode-candidate-20261012.json`, with
+their matching parity sidecars. The published operation matrix remains pinned
+to its clean snapshot. No genuine test defect was found, no coverage was run,
+and the completed-item commit/push batch remains 0/33.
+
+
+## F32 Thumbnail reduced-row streaming candidate rejected — 2026-10-12
+
+The 2048×1536 F-mode Thumbnail path materializes a full 2×2 reduced image,
+then performs Pillow's boxed F32 resize. I tested streaming each exact rounded
+reduced row into a bounded horizontal-intermediate ring, keeping the Reduce.c
+float quartet order, the F32 reduced-sample boundary, boxed coefficient tables,
+the horizontal F32 boundary, and the boxed resampler's exact-zero handling.
+The focused Rust comparison matched materialized reduce-plus-resize byte for
+byte for five filters, two output sizes, and inputs containing signed zero,
+subnormals, infinities, NaNs, and large finite values. Live Pillow parity also
+passed 3/3 selected CPU/SIMD/GPU-profile comparisons.
+
+Each live benchmark measured the full `thumbnail` call plus receiver
+observation with five warmups, 20 iterations across five samples, and
+concurrency one. Pillow medians stayed within 2.5% across the three adjacent
+cohorts, while the CPU candidate regressed against both controls:
+
+| Cohort | Pillow (µs) | CPU (µs) | SIMD (µs) | GPU request (µs) |
+| --- | ---: | ---: | ---: | ---: |
+| Before control | 4,165.791 | 1,385.917 | 1,643.438 | 2,496.355 (CPU fallback) |
+| Streaming candidate | 4,159.938 | 2,192.105 | 1,723.688 | 2,994.292 (CPU fallback) |
+| Reverted control | 4,263.104 | 1,487.084 | 1,747.187 | 2,493.604 (CPU fallback) |
+
+Candidate CPU latency was 47.4% above the reverted control and only 1.90×
+Pillow, compared with 2.87× for the post-candidate control. The SIMD change was
+not a repeatable effect of this CPU-only path. GPU requests used CPU fallback
+because the typed reducing-gap path is not admitted by the GPU executor; those
+times are excluded from GPU comparisons. The benchmark's resource receipt
+reported the same two host buffers and 13,369,344 bytes for candidate and
+control, so it did not expose internal temporary `Vec` allocations or prove a
+memory reduction. The full timed call included allocation and materialization;
+the candidate is removed because its public latency regressed.
+
+This operation-family extraction is organizational only. The registry keeps
+one Thumbnail SIMD entry point in `adapters.rs`; checked admission and dispatch
+stay in `adapters/native_thumbnail.rs`, with F32 and I32 kernels in focused
+`native_thumbnail/float.rs` and `native_thumbnail/integer.rs` modules. It adds
+no per-operation branch or pixel loop to the central adapter.
+
+The published matrix remains pinned to the clean full snapshot; it still ranks
+the x86 F32 CPU row at 1.104× Pillow and keeps Thumbnail open. The current
+Pillow-SIMD snapshot is dirty and partial with no Thumbnail row, so it supplies
+no comparison for this candidate. Candidate and reverted-control reports and
+parity sidecars are under `build/migration-parity/thumbnail-f32-ring-*.json`;
+the eight subject rows bring the local-run ledger to 5,960 rows. No genuine
+test defect was found, no coverage was run, and the commit/push batch remains
+0/33.
+
+## ExtractBand family adapter boundary — 2026-10-12
+
+Moved ExtractBand/GetChannel's mode and layout admission, registry-facing
+wrapper, direct output-buffer adapter, and focused vector/tail tests into
+`pillow-rs/src/compute/pool_simd/ops/adapters/extract_band.rs`. The adapter
+reuses the shared channel kernels in `ops/native_channel.rs` and the existing
+shape channel-count helper; the central `adapters.rs` retains one image and one
+shape admission dispatch, plus the public re-export used by the registry and
+core output-buffer route. This keeps the operation contract and its backend
+interaction together without duplicating kernels or channel counts.
+
+The move changes no pixel behavior and makes no performance claim. The focused
+Rust suite passed 4/4 on macOS arm64, including NEON dispatch and scalar-tail
+checks. GetChannel remains open for its remaining CPU, SIMD, Parallel CPU, GPU
+throughput, and cross-runner gaps. No coverage or full CI run was performed;
+the 33-item commit/push batch remains 0/33.
+
+## GetProjection family adapter boundary — 2026-10-12
+
+Moved the SIMD RGB projection scanner and the CMYK scanner/positive-write
+adapter into `pillow-rs/src/compute/pool_simd/ops/adapters/projection.rs`.
+`adapters.rs` retains the internal dispatch surface through re-exports; the
+existing `Image::getprojection` selection, kernels, and Pillow-visible behavior
+are unchanged. The family module is 244 lines and owns three related terminal
+routes instead of adding another implementation block to the central facade.
+
+The focused Rust suite passed 14/14 projection tests. A fresh five-workload
+`build-parity` run passed all 15 selected Pillow comparisons. CPU and SIMD ran
+their requested backends on every workload. GPU ran on sparse RGB 17×4, dense
+RGB 17×4, and sparse CMYK 1024×768; material CMYK and scalar-tail RGB requests
+fell back to CPU and are excluded from GPU results. Sustained GPU throughput
+was not measured.
+
+The standard-scheduler cohort measured sparse RGB CPU at 0.986× Pillow, while
+the low-load repeat measured 0.977×. The other low-load RGB rows were 1.053× and
+1.039×; the two low-load CMYK rows were 46.092× and 3.952×. Sparse RGB is a
+marginal CPU/Pillow miss in both current-source cohorts, though an earlier
+low-load control reached 1.055×. Keep it explicitly open and do not treat the
+adapter-only move as a performance fix. The tiny-workload spread is close to
+measurement variation, so retain paired controls before accepting a narrow
+optimization. SIMD on the three low-load RGB rows measured 0.985×, 1.072×, and
+1.078× Pillow. The low-load GPU route was actual on sparse/dense RGB and sparse
+CMYK, but its latency remained far above SIMD; scalar-tail RGB and material
+CMYK fell back. No sustained GPU throughput was measured.
+
+The low-load report is
+`build/migration-parity/getprojection-adapter-lowload-20261012.json`, with
+receipt `build/migration-parity/getprojection-adapter-lowload-20261012-parity.json`.
+The two structural revalidation cohorts add 40 subject rows and bring the
+local-run ledger to 6,000 rows. They do not count as optimization items; the
+33-item commit/push batch remains 0/33. No coverage was run.
+
+
+## GetProjection unordered positive-write shortcut — rejected — 2026-10-12
+
+The 17×4 sparse RGB workflow queues two nonzero writes in descending x order.
+On a known-zero source, these writes can only add rows and columns to the
+projection, so order and duplicates do not affect the result. I tried
+broadening the prior monotonic-write shortcut to mark axes directly for any
+all-nonzero write sequence, avoiding its two temporary write vectors and sort.
+The change lived in the existing shared core projection helper; the SIMD
+family adapter and backend dispatch were untouched. I removed it after two
+candidate cohorts failed to improve the public call.
+
+Each candidate and the post-revert control measured the same five workloads
+with five warmups and 100 timed samples per subject. Each exact Pillow gate
+passed 15/15 comparisons, and each benchmark-selection check passed 16/16.
+Sparse RGB CPU/Pillow medians were 12.375/11.916 µs (0.963×) and
+12.292/12.042 µs (0.980×); the post-revert control was 12.209/11.917 µs
+(0.976×). The candidate CPU mean was 1.0% slower than the post-revert row and
+remained below Pillow. Earlier same-source controls ranged from 0.977× to
+1.055×, so the change did not separate from the tiny-call variation. Other
+workloads showed no stable end-to-end gain.
+
+CPU and SIMD executed on all five workloads. GPU executed on sparse RGB,
+dense RGB, and sparse CMYK; material CMYK and scalar-tail RGB fell back to CPU
+and receive no GPU credit. GPU throughput was not measured. The two candidate
+cohorts and the post-revert control add 60 subject rows, bringing
+`docs/evidence/performance-optimization-local-runs.csv` to 6,124 data rows.
+Reports are `build/migration-parity/getprojection-positive-unordered-candidate-1.json`,
+`build/migration-parity/getprojection-positive-unordered-candidate-2.json`,
+and `build/migration-parity/getprojection-positive-unordered-post-revert.json`,
+with matching parity sidecars. No source change or optimization item was
+retained, no genuine test defect was found, no coverage was run, and the
+completed-item commit/push batch remains 0/33.
+
+## GetProjection profiler adapter defect and fixed-cost finding — 2026-10-12
+
+The first native profile was not representative of managed benchmark execution:
+it set strict target routing but omitted
+`MIGRATION_PARITY_BENCHMARK_ADAPTER=1`, so strict mode recursively locked the
+image backend. Inspection also found that a Pillow source profile prepended the
+target `PIL` checkout and used the target interpreter. These were profiler
+harness defects; they do not invalidate the existing parity or benchmark
+results.
+
+Moved source/target environment construction and interpreter selection into
+shared benchmark helpers used by both the managed runner and profiler. Target
+profiles add the target Python path; source profiles strip it and select the
+configured benchmark/oracle interpreter. The profile artifact records the
+backend policy. Focused adapter tests pass 5/5, and the existing benchmark
+selection suite passes 16/16.
+
+A corrected 100,000-repeat arm64 CPU profile records a 12.208 µs median for the
+sparse RGB 17×4 workflow's measured call. The accepted benchmark cohort remains
+12.209 µs CPU versus 11.917 µs Pillow (0.976×). The native sample is dominated
+by the Python workflow loop and does not identify a new kernel hotspot; the
+operation's setup and call phases are already recorded above. No algorithm or
+backend adapter change was retained. Keep GetProjection open and continue to
+rank measured per-workload misses before selecting another candidate. The
+local-run ledger stood at 6,296 data rows at this experiment; later cohorts
+are recorded in their own dated sections below. The commit/push batch remains
+0/33, and no coverage was run.
+
+## GetData metadata tuple binding — rejected — 2026-10-12
+
+Tried returning the band bytes, mode, and size from one PyO3 call to avoid two
+metadata property crossings in the Python wrapper. This was a narrow binding
+experiment; it added no central backend-adapter cases and was reverted after
+the matched control. The candidate and post-revert reports each passed their
+exact Pillow preflight, 15/15 comparisons, with five workloads selected and
+measured. Each timing includes the returned band buffer and its public result
+boundary.
+
+| Workflow | Candidate Pillow / CPU (µs) | Post-revert Pillow / CPU (µs) | CPU speedup, candidate / control |
+| --- | ---: | ---: | ---: |
+| 32×32 L band 0 | 10.333 / 5.250 | 10.167 / 5.250 | 1.968× / 1.937× |
+| 32×32 LA band 1 | 10.250 / 5.500 | 10.125 / 5.416 | 1.864× / 1.869× |
+| 32×32 RGB band 0 | 10.291 / 5.500 | 10.125 / 5.458 | 1.871× / 1.855× |
+| 32×32 RGBA band 3 | 10.292 / 5.520 | 10.146 / 5.416 | 1.864× / 1.873× |
+| 512×512 composed RGB read | 2152.021 / 877.604 | 2107.708 / 843.042 | 2.452× / 2.500× |
+
+The candidate does not show a stable target-side gain: three small modes are
+within a few hundredths of a microsecond of the reverted control, RGBA is
+slower, and the 512×512 CPU read is about 4.1% slower. Pillow moved between
+cohorts too, so the apparent speedup changes on tiny reads are host variation,
+not evidence of an adapter win. The implementation remains reverted.
+
+CPU receipts were actual CPU routes. SIMD was actual on LA, RGB, and RGBA;
+the requested SIMD L band read fell back to CPU and earns no SIMD credit. GPU
+receipts were actual GPU routes with no fallback, but latency remained roughly
+197–203 µs on tiny reads and 1.217–1.221 ms on the 512×512 read. Sustained GPU
+throughput was not measured. Reports and parity sidecars are
+`build/migration-parity/getdata-metadata-candidate-2.json`,
+`build/migration-parity/getdata-metadata-candidate-2-parity.json`,
+`build/migration-parity/getdata-metadata-control-after.json`, and
+`build/migration-parity/getdata-metadata-control-after-parity.json`. The two
+retained cohorts add 40 rows and bring the local-run ledger to 6,336 rows.
+
+The first candidate repeat reused the default output path and overwrote its raw
+report. Its console summary is excluded from the evidence ledger; each repeat
+must receive a unique report path and matching parity sidecar before execution.
+No genuine parity-test defect was found, no coverage was run, and the completed
+item commit/push batch remains 0/33.
+
+## Pillow-SIMD published JSON audit — partial snapshot — 2026-10-12
+
+Fetched the JSON linked from the published x86 comparison page. It is schema
+`public-docs/benchmark-snapshot@1`, measured 2026-10-07 on Ubuntu 24.04 x86_64
+(AMD EPYC 7763), source revision `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`,
+with `clean=false`. It contains 36 rows for 9 workload IDs and four subjects
+per workload: Pillow, Pillow-SIMD, pillow-rs CPU, and pillow-rs SIMD. The
+repository's declared benchmark set is 34 workload IDs. All 36 rows report
+completed status, exact parity pass, requested backend matching actual backend,
+and no fallback; the limiting issue is missing workload coverage and dirty
+source provenance, not those row-level comparisons.
+
+The latest successful Pillow-SIMD Actions run is 37626656891 from October 7.
+The later October 10 run 38055331119 failed its parity preflight and did not
+publish a replacement JSON. The source-side oracle/profile correction is
+present in this local worktree, but it is uncommitted and has no successful
+hosted result yet. Keep all Pillow-SIMD categories open until a clean successful
+cohort covers the declared workload set. Do not mix its x86 timings with the
+current macOS arm64 GetData or GetProjection measurements.
+
+The downloaded page JSON is retained locally at
+`build/migration-parity/pillow-simd-docs-current.json` for this audit. No
+Pillow-SIMD ratio was used to accept or reject the GetData tuple candidate; it
+remains a separate cross-runner diagnostic. The published snapshot and its
+workload-count gap do not change the corresponding Kata status: the operation
+items already carry `pillow-simd-dirty-partial`, and the published operation
+matrix remains pinned to the identified clean-source baseline where available.
+
+
+## GetProjection nonallocating mode comparison — rejected — 2026-10-12
+
+Tried replacing the owned mode string in `try_getprojection_putpixel_pipeline`
+with a boolean mode comparison. This did not add operation-specific logic to
+the shared SIMD adapter. The mode helper was removed after two candidate runs;
+the source is back to the original implementation. Each before-control,
+candidate, repeat, and post-revert cohort selected five workloads, completed
+all measurements, and passed all 15 exact Pillow comparisons. The benchmark
+selection checks passed 16/16 for each cohort.
+
+The sparse 17×4 RGB workflow is still the marginal row to watch. Its CPU/Pillow
+ratios were 1.003× before, 0.987× and 0.969× in the two candidates, and 1.010×
+after revert. The candidate made this target-side ratio worse. Other workloads
+did not establish a stable whole-call gain across modes; sparse-CMYK numbers
+also shifted substantially between matched runs. Reject the candidate and
+retain no optimization credit.
+
+Actual CPU, SIMD, and GPU routes were observed for the sparse/dense RGB and
+sparse-CMYK workloads. The dense RGB scalar-tail and materialized CMYK GPU
+requests ran on CPU, so those rows earn no GPU credit. GPU sustained throughput
+was not measured. Reports and parity sidecars are
+`build/migration-parity/getprojection-mode-match-control-before.json`,
+`build/migration-parity/getprojection-mode-match-candidate-1.json`,
+`build/migration-parity/getprojection-mode-match-candidate-2.json`, and
+`build/migration-parity/getprojection-mode-match-control-after.json`, each
+with a matching `-parity.json` sidecar. These four cohorts add 80 rows; the
+local-run ledger now contains 6,416 data rows.
+
+The SIMD adapter implementation remains a legacy 37,298-line root module, with
+several operation-family modules already extracted. Keep new kernels and
+checked mode/layout admission in focused family modules, and move a cohesive
+family out when extending the old root. Do not grow it with copied per-operation
+interaction branches. No genuine parity-test defect was found, no coverage was
+run, and the completed-item commit/push batch remains 0/33.
+
+
+## I-mode Bicubic resize fresh current-source confirmation — 2026-10-12
+
+Rebuilt the dirty arm64 checkout and reran the same 1024×768 mode-I Bicubic
+resize-to-512×384 workflow after the October 11 baseline. The timed boundary
+remains the public call plus output materialization, with five warmups, 20
+iterations in five samples, and concurrency one. Exact Pillow parity passed
+3/3. CPU, SIMD, and GPU each reported its requested backend as the actual
+backend with no fallback.
+
+| Subject | Median ms | P95 ms | Speedup vs Pillow | Actual backend |
+| --- | ---: | ---: | ---: | --- |
+| Pillow | 2.0768 | 2.2365 | — | Pillow |
+| Serial CPU | 1.0875 | 1.0962 | 1.910× | CPU |
+| SIMD | 2.0679 | 2.0827 | 1.004× | SIMD |
+| GPU | 32.7018 | 33.2682 | 0.064× | GPU |
+
+The serial CPU remains faster than Pillow but below the 2× sequencing tier;
+SIMD is effectively at Pillow latency and far below its 2× tier. This confirms
+that the older clean snapshot's 0.935× SIMD row is no longer a current-host
+regression; rank this dirty current-source result for follow-up instead of
+carrying the stale ratio forward. GPU executed two dispatches, uploaded
+3,145,728 bytes, read back 786,432 bytes, and used 125,440 auxiliary bytes.
+Its single-call latency is about 31.9× SIMD, and sustained throughput remains
+unmeasured. Resource allocation counters are explicit instrumentation rather
+than a total process allocation trace; all allocations remain inside the timed
+call/materialization boundary.
+
+The report is `build/migration-parity/i32-resize-current-control-20261012.json`
+(`migration-benchmark-9d8272b717584912add97d929cd721fa`) with parity sidecar
+`build/migration-parity/i32-resize-current-control-20261012-parity.json`
+(`migration-parity-benchmark-gate-f2a4e20bb04243e3affa0f25b1e2431e`). The four
+profile rows bring `docs/evidence/performance-optimization-local-runs.csv` to
+6,420 data rows. Keep Resize open across remaining sizes, modes, host profiles,
+and GPU throughput. No optimization was retained, no test defect was found,
+no coverage was run, and the commit/push batch remains 0/33.
+
+
+## I-mode resize adapter family extraction — 2026-10-12
+
+Moved the direct and boxed signed-32-bit resize adapters into the focused
+[`resize_i32.rs`](../pillow-rs/src/compute/pool_simd/ops/adapters/resize_i32.rs)
+family module. The family imports only its resize planners, I-sample decoder,
+filter coefficients, and SIMD lane types. The root adapter keeps the dispatch
+entry point; the native-thumbnail family imports the boxed resize route it
+uses. No operation-specific benchmark interactions or algorithm changes were
+added to the root module.
+
+`cargo check -p pillow-rs --lib` passed. The parity-gated `pipeline` benchmark
+ran direct I-mode Bicubic resize and I-mode thumbnail: both workloads passed
+all three CPU, SIMD, and GPU parity comparisons. Each requested CPU and SIMD
+route executed on that backend. Resize GPU executed on GPU; thumbnail GPU was
+rejected at admission and ran on CPU with the existing “reducing-gap or typed
+arithmetic is not proven” fallback, so it is not counted as accelerated GPU
+execution.
+Each workload used its declared public-workflow boundary: `call` plus
+`materialize` for Resize and `call` plus `observe-receiver` for Thumbnail, with
+five warmups and 20 iterations in five samples at concurrency one. The timing
+therefore includes the workflow's allocations and any backend transfers and
+synchronization; reported resource counters are instrumented values rather
+than a total process-allocation trace.
+
+| Workload | Pillow ms | CPU ms | SIMD ms | GPU request ms | GPU actual backend |
+| --- | ---: | ---: | ---: | ---: | --- |
+| I Bicubic resize, 1024×768 → 512×384 | 2.0375 | 1.0694 | 2.2454 | 32.6475 | GPU |
+| I thumbnail, 1024×768 | 0.9182 | 0.4175 | 0.6096 | 0.7225 | CPU fallback |
+
+This is a structural refactor, not a performance candidate. The resize SIMD
+sample had a 7.205 ms p95 and was slower than Pillow in this run, while the
+preceding same-host control measured 2.068 ms against Pillow's 2.077 ms. Do not
+attribute that shift to the module move; repeat under a stable host load before
+changing the optimization ranking. Thumbnail GPU remains an admission gap.
+The benchmark rows are in
+[`performance-optimization-local-runs.csv`](evidence/performance-optimization-local-runs.csv),
+which now has 6,428 data rows.
+
+The legacy `adapters.rs` is still roughly 37,000 lines. This extraction keeps
+the I-mode resize implementation focused and establishes the family-module
+pattern, but does not complete the legacy module split. Add future operation
+implementations to their family modules rather than expanding the root file.
+No optimization item is credited; the completed-item commit/push batch remains
+0/33. No coverage was run.
+
+
+### I-mode resize low-load backend check — 2026-10-12
+
+To resolve the SIMD resize miss without mixing scheduler conditions, reran the
+same single workload through `migration-parity-benchmark-low-load`. All four
+subjects shared the taskpolicy utility/background scheduler, and the public
+call plus materialization remained inside the timed boundary. Exact parity
+passed 3/3; CPU, SIMD, and GPU all executed on their requested backend with no
+fallback.
+
+| Subject | Median ms | P95 ms | Speedup vs Pillow |
+| --- | ---: | ---: | ---: |
+| Pillow | 18.6570 | 19.2468 | — |
+| Serial CPU | 14.8456 | 15.2086 | 1.257× |
+| SIMD | 19.1237 | 19.5984 | 0.976× |
+| GPU | 135.5531 | 225.5749 | 0.138× |
+
+The background scheduler raised absolute latency substantially for every
+subject, so do not combine these values with native-scheduler runs. The
+matched within-run comparison still puts SIMD just slower than Pillow; CPU
+meets the Pillow-latency requirement. Resize remains a priority gap, and the
+SIMD path should be profiled before choosing another kernel change. GPU used
+two dispatches; its latency was 7.1× SIMD and sustained throughput remains
+unmeasured. The four low-load profile rows are in the local run ledger, which
+now has 6,432 data rows. No optimization item is credited and the batch remains
+0/33.
+
+
+### I-mode SIMD output append packing candidate — rejected — 2026-10-12
+
+The macOS sample profile placed 2,565 of 4,214 active process samples in
+`simd_resize_i32`; sampled allocation clearing and memory copy frames were a
+smaller share. I tested one narrow change in the I-mode family adapter: reserve
+the final byte buffer without zero-initializing it, then append each packed
+SIMD output block in row-major order. The accumulation and rounding sequence
+did not change.
+
+Both normal-scheduler runs passed exact parity 3/3. CPU, SIMD, and GPU each
+reported its requested backend with no fallback. The timed steps were the
+public Resize call and materialization, with five warmups, 20 iterations in
+five samples, and concurrency one.
+
+| Run | Pillow ms | CPU ms | SIMD ms | GPU ms | SIMD/Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Output append candidate | 2.0309 | 1.0525 | 1.9560 | 32.1104 | 1.038× |
+| Output append repeat | 2.0335 | 1.1013 | 2.2021 | 36.9000 | 0.923× |
+
+The two SIMD runs cross Pillow in opposite directions, so they do not show a
+repeatable improvement over the pre-change controls. I reverted the candidate;
+the resize family extraction remains. Do not credit this as an optimization.
+The run records are in the local ledger, now at 6,440 rows. I-mode Resize stays
+open, with SIMD still below the 2× sequencing tier and GPU sustained throughput
+unmeasured. The completed-item push batch remains 0/33; no coverage was run.
+
+
+### I-mode SIMD bounded row-cache candidate — rejected — 2026-10-12
+
+After profiling showed the I-mode resize kernel dominated active samples, I
+tested retaining only horizontal intermediate rows needed by the vertical
+filter in a bounded ring. This removed the full-frame INT32 intermediate
+allocation, while preserving the horizontal rounding and vertical accumulation
+order. The first implementation duplicated the horizontal pass; I then
+streamlined row-start calculation and reran the same workload. Both revisions
+were measured against the same warm, single-concurrency workflow with the
+public call and materialization timed.
+
+Both runs passed exact parity for direct I-mode Resize and the I-mode Thumbnail
+guard workload (3/3 comparisons each). CPU and SIMD requests ran on their named
+backends. Direct Resize ran on GPU; Thumbnail's GPU request was rejected at
+admission and ran on CPU, so that observation is not GPU acceleration.
+
+| Run | Pillow ms | CPU ms | SIMD ms | GPU ms | Pillow/SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Row cache | 2.0570 | 1.0730 | 2.0917 | 30.2518 | 0.983× |
+| Row cache repeat | 2.0182 | 1.0592 | 2.0138 | 33.8924 | 1.002× |
+
+The SIMD comparison crosses Pillow between runs and has no repeatable gain over
+the current control. The Thumbnail timings are parity guards: its boxed adapter
+was unchanged by this direct-resize experiment and those timings do not score
+the candidate. I reverted the ring implementation and kept the focused I-mode
+adapter module. `cargo check -p pillow-rs --lib` passed after the revert. These
+measurements do not meet the SIMD target; direct GPU latency remains far above
+SIMD and sustained GPU throughput is unmeasured. The two run records add 16
+rows, bringing the local ledger to 6,456. No optimization item is credited; the
+commit/push batch remains 0/33, and no coverage was run.
+
+
+### I-mode SIMD vertical row-address hoist — inconclusive, reverted — 2026-10-12
+
+The vertical resize inner loop recomputes checked source-row addition and
+stride multiplication for every output block. I tested computing those row
+starts once per output row and reusing them across blocks. The accumulation
+order and sample arithmetic were unchanged. Direct I-mode Resize passed exact
+parity 3/3 in all six runs. CPU, SIMD, and GPU each executed on the requested
+backend, with no fallback.
+
+| Scheduler | Run | Pillow ms | CPU ms | SIMD ms | GPU ms | Pillow/SIMD |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Native | Matched control | 2.0997 | 1.1140 | 2.0983 | 33.0860 | 1.001× |
+| Native | Matched control repeat | 2.1257 | 1.1133 | 4.0646 | 34.0064 | 0.523× |
+| Native | Address hoist | 2.1723 | 1.0999 | 2.1204 | 33.5886 | 1.024× |
+| Native | Address hoist repeat | 2.1079 | 1.0830 | 2.0406 | 32.6030 | 1.033× |
+| Low-load | Matched control | 8.8215 | 6.4778 | 10.1253 | 125.6878 | 0.871× |
+| Low-load | Address hoist | 9.6894 | 7.1291 | 10.3899 | 145.3630 | 0.933× |
+
+The native control repeat had a severe SIMD scheduler outlier (12.030 ms p95);
+it remains visible in the ledger and is excluded from acceptance. Candidate
+runs beat Pillow's latency in both native-scheduler samples, but not in the
+low-load sample. The controls show the same scheduler sensitivity, and the
+low-load run made every subject substantially slower. These results do not
+establish a repeatable gain or meet the SIMD target, so I reverted the address
+hoist. GPU sustained throughput was not measured; its resize latency remains
+far above SIMD. The six runs add 24 rows to the local ledger, now at 6,480. No
+optimization item is credited; the commit/push batch remains 0/33. No coverage
+was run.
+
+
+### I-mode SIMD full-active-lane gather — reproduced rejection — 2026-10-12
+
+I briefly repeated the fast branch that skips the eight per-lane active-mask
+checks and indexes all eight source samples directly. The earlier October 11
+paired experiment had already rejected this branch; this repeat confirms that
+result. The 1024×768 I-mode Bicubic workflow passed its focused Pillow parity
+gate 1/1, and telemetry proved actual SIMD execution with no fallback. The
+measurement covered the complete public call and materialization with five
+warmups, 20 iterations in five samples, and concurrency one.
+
+| Source | Pillow ms | SIMD ms | SIMD speedup vs Pillow |
+| --- | ---: | ---: | ---: |
+| Full-active-lane candidate | 2.0173 | 2.6758 | 0.754× |
+| Rebuilt post-revert control | 2.0169 | 1.9963 | 1.010× |
+
+The candidate regressed SIMD latency by about 34% while Pillow stayed at the
+same latency. I removed it and rebuilt the extension from the masked, checked
+gather source; the post-revert receipt confirms the earlier current-source
+control. The horizontal planner remains in the focused I-resize family and is
+shared by I-mode Thumbnail, so the root adapter gains no per-operation route.
+The candidate and post-revert runs add four rows to
+[`performance-optimization-local-runs.csv`](evidence/performance-optimization-local-runs.csv),
+bringing it to 6,484 data rows. This is not a completed optimization item; the
+commit/push batch remains 0/33. No test defect was found and no coverage ran.
+
+### 2026-10-12 Grayscale adapter ownership checkpoint
+
+The Grayscale SIMD family adapter is now a thin orchestrator for layout and
+shape admission, mode selection, backend evidence, and output materialization.
+Specialized RGB/LA/RGBA, CMYK, and YCbCr loops are in separate kernel files; the
+shared packed-channel gather remains in `native_channel`. Kernel arithmetic was
+not changed. The 1024×768 YCbCr whole-call workload passed exact Pillow parity
+3/3 for CPU, SIMD, and GPU in all three post-change cohorts. Actual backend
+receipts showed no fallback. The two final-source SIMD medians were both
+44.875 µs against the 47.479 µs same-host current-source control; no SIMD
+regression was observed, but changing Pillow medians mean the structural change
+receives no speedup claim. GPU latency was 7.4–7.7× SIMD with one dispatch and
+full input/output transfer accounting; sustained throughput remains unmeasured.
+Focused Rust Grayscale tests passed 16/16. No genuine test defect or coverage
+run. Twelve subject rows were added for the three structure cohorts; the local evidence ledger now has
+6,568 data rows, including 510 Grayscale rows. No operation item is completed;
+the commit/push batch remains 0/33. The clean published per-operation matrix is
+unchanged. The family-split and final-layout receipts are recorded in
+`docs/evidence/performance-optimization-local-runs.csv` under run IDs
+`migration-benchmark-912565a48c8c447dac240c3c59d551fb`,
+`migration-benchmark-fcef7f226e7d4c5f84640785e52785d9`, and the repeated
+final-layout run `migration-benchmark-fa357f64100446db9cc50acfbd7886c0`.
+
+### 2026-10-12 Merge family adapter boundary check
+
+Moved Merge admission, band-owner handling, execution receipts, and result
+construction from the large SIMD adapter file into
+`pillow-rs/src/compute/pool_simd/ops/adapters/merge.rs`. The root adapter now
+re-exports the family entry point and delegates image/shape preflight to the
+same Merge contract. The SSSE3/NEON kernels remain in `native_merge`; the CPU
+scalar and opt-in parallel paths remain in `pool_cpu/ops/effects.rs`. This is a
+structure-only change: it adds no generic dispatch or shared pixel loop.
+
+The 1024×768 RGB-from-three-L public call passed exact Pillow parity on CPU,
+SIMD, and GPU in both ARM64 cohorts. Each requested profile reported its actual
+backend with no fallback. Medians in the first and repeated cohorts were:
+
+| Backend | First cohort (µs) | Repeat (µs) | Host output allocation | GPU transfer/dispatch |
+| --- | ---: | ---: | ---: | --- |
+| Pillow | 891.709 | 866.104 | — | — |
+| Serial CPU | 267.916 | 199.417 | 1 × 2,359,296 B | — |
+| SIMD (NEON) | 218.730 | 197.750 | 1 × 2,359,296 B | — |
+| GPU | 673.229 | 592.083 | 1 × 2,359,296 B | 1 dispatch; 2,359,296 B upload + readback |
+
+The prior same-host control measured CPU at 216.041 µs and SIMD at 237.855 µs.
+Both post-extraction SIMD medians are lower; CPU moved from 24% slower in the
+first cohort to 8% faster in the repeat, showing timing variance. The split
+receives no optimization credit. GPU latency remained 3.0–3.1× SIMD; sustained
+throughput was not measured. Focused Merge Rust tests passed 14/14.
+
+This host cannot execute x86_64 binaries (Rosetta is unavailable), so the
+SSSE3 branch has no runtime parity or performance evidence. The current clean
+GitHub Docs snapshot still shows the x86 1024×768 row at 0.923015× Pillow for
+CPU and 0.314926× Pillow for SIMD. Those are the remaining CPU-first and SIMD
+gaps; the local ARM result does not close either x86 obligation. The benchmark
+snapshot is clean at revision `88d414bdbe6bd31b531271324094e041a9fece8a`,
+measured 2026-10-12T11:06:24.700180Z, with downloaded JSON SHA-256
+`02f85f112f812172b2ff2443f9cbf674beda97ec39d07dd3b6dd5e83701477fe`.
+
+The two new runs are
+`migration-benchmark-0ead2a61574d4ebdb880769998c7a4dd` and
+`migration-benchmark-516d2644c1394d19bc3a69925fe82f37`; the local evidence
+ledger now has 6,576 rows. No operation item is completed; commit/push remains
+0/33. No genuine test defect was found and no coverage was run.
+
+
+### 2026-10-12 Merge scalar word-packing candidate — rejected
+
+I tested packing four planar L samples into three scalar `u32` stores in the
+serial CPU Merge helper. The operation-specific SIMD adapter and its native
+SSSE3/NEON kernels were untouched. The exact-byte unit test covers zero-length,
+single-sample, block-boundary, and tail cases and passed. The complete
+1024×768 RGB-from-three-L public call and materialization passed Pillow parity
+for CPU, SIMD, and GPU in both candidate cohorts and both restored-loop
+controls; each requested backend executed without fallback.
+
+| Cohort | Pillow µs | CPU µs | SIMD µs | GPU µs |
+| --- | ---: | ---: | ---: | ---: |
+| Packed scalar candidate | 1,011.062 | 278.479 | 242.437 | 700.459 |
+| Packed scalar repeat | 902.979 | 283.313 | 237.292 | 720.980 |
+| Restored byte-loop control | 1,104.000 | 247.958 | 191.792 | 665.251 |
+| Restored byte-loop repeat | 883.230 | 216.417 | 212.458 | 755.208 |
+
+The packed CPU loop lost to both restored-loop controls by 12–31%; it has been
+removed. The SIMD kernel was unchanged, yet candidate-build SIMD medians were
+237–242 µs versus 192–212 µs in the restored controls. This cohort spread does
+not isolate host variation from build/code-layout effects, so it cannot prove
+SIMD neutrality for the discarded scalar change. The current source is back on
+the original byte-store loop; any later CPU loop change must keep SIMD cohorts
+in the same measurement and investigate a repeatable movement before
+acceptance. The earlier adapter extraction remains a separate structure-only
+change, with ARM SIMD medians of 218.730 and 197.750 µs against its 237.855 µs
+control. GPU used one dispatch and transferred 2,359,296 bytes each way;
+sustained throughput was not measured.
+
+The candidate run IDs are
+`migration-benchmark-3ddfaff428fa42b088cdd57837bb2837` and
+`migration-benchmark-adbb0565610b413cb92e55925ccbff94`; the restored controls
+are `migration-benchmark-ef1cb19071e641078d8e7748eb6eda29` and
+`migration-benchmark-ee720df9974b410e9d2077e6027f73cb`. Their reports and
+parity receipts are under `build/migration-parity/`; the local ledger now has
+6,592 rows. No operation item is completed; the commit/push batch remains
+0/33. No genuine test defect was found and no coverage was run.
+
+
+### Reject BoxBlur output and packed-accumulator candidates — 2026-10-12
+
+Profile samples pointed to the serial RGB BoxBlur horizontal row recurrence.
+I tried two operation-local changes without changing the SIMD kernel or its
+adapter: append computed rows into reserved output storage to skip the output
+zero-fill, then pack the three channel sums into independent fields of a `u64`
+to reduce rolling add/subtract instructions. Both candidates were measured at
+the complete 1024×768 RGB public-call boundary, including filter application,
+allocation, and result observation. Each candidate and restored control passed
+all three exact Pillow comparisons; CPU, SIMD, and GPU receipts named the
+requested backend and reported no fallback.
+
+| Cohort | Pillow µs | Serial CPU µs | SIMD µs | GPU µs |
+| --- | ---: | ---: | ---: | ---: |
+| Output-init control | 2,442.480 | 1,403.583 | 1,092.688 | 966.584 |
+| Output-append candidate | 3,203.146 | 1,410.958 | 1,176.271 | 984.167 |
+| Output-append repeat | 2,663.605 | 1,407.354 | 1,184.000 | 1,042.563 |
+| Output-init restored control | 2,750.188 | 1,401.542 | 1,207.521 | 1,013.729 |
+| Packed-channel candidate | 2,596.688 | 1,659.604 | 1,174.063 | 967.542 |
+| Packed-channel repeat | 2,562.479 | 1,578.209 | 1,173.625 | 969.375 |
+| Packed-channel restored control | 2,631.584 | 1,394.104 | 1,193.417 | 1,012.271 |
+
+The append-output change did not produce a repeatable CPU gain: its 1.411 and
+1.407 ms medians were effectively the same as 1.404 and 1.402 ms controls, and
+allocation telemetry remained two host buffers, 2,368,512 allocated bytes, and
+4,718,592 peak live bytes. The packed recurrence regressed CPU latency in both
+runs to 1.660 and 1.578 ms against 1.404 and 1.394 ms restored controls, so it
+was removed. Fewer apparent accumulator instructions did not make the complete
+row path faster; retain the original scalar RGB loop unless a new profile-backed
+candidate demonstrates an end-to-end gain.
+
+The SIMD kernel was untouched. Its candidate medians were 1.174 ms in both
+runs, between the earlier 1.093 ms and final 1.193 ms controls. These cohorts do
+not prove a SIMD regression or neutrality; keep backend timings visible and do
+not attribute a SIMD gain to a CPU-only edit. GPU used one dispatch and
+transferred 2,359,296 bytes each way; sustained throughput was not measured.
+The final restored CPU control is still below the 2× Pillow sequencing target
+(2,631.584 / 1,394.104 = 1.887×). No BoxBlur completion credit is due.
+
+The complete local evidence ledger now has 6,620 data rows. Reports and parity
+receipts for all seven cohorts are under `build/migration-parity/`. The
+output-append candidates are `migration-benchmark-70a1bbe612b04077bf0d9520b48e2837`
+and `migration-benchmark-1ca9ac05e0c04c1196643f67b0fb82ee`; their controls are
+`migration-benchmark-823990852f55460c96468a0aa8ed1ea9` and
+`migration-benchmark-bdd4f4bf8a6c4b739459cda1af1db780`. The packed candidates
+are `migration-benchmark-87f7c5bdfbcf4659b5d0bfc7cd463eac` and
+`migration-benchmark-7d8bfaf1e8dc408eaa14da13c6981a24`; the restored control is
+`migration-benchmark-7c9657c3782c4693b996373f12aa96e7`. Kata issue `7gmy`
+remains open with its published categories unchanged. Commit/push batch remains
+0/33. No genuine test defect was found and no coverage was run.
+
+### Reject BoxBlur exact-average shortcut — 2026-10-12
+
+I tested replacing the serial RGB radius-one fixed-point normalization with the
+exact integer expression `(sum + 1) / 3`. The formula matches Pillow rounding
+for all 766 possible three-channel sums, and the focused Rust checks passed.
+The complete materialized 1024×768 workload passed exact Pillow parity 3/3 on
+CPU, SIMD, and GPU in both candidate runs and the post-revert control. Receipts
+confirmed the requested backend ran without fallback. CPU candidate medians
+were 1,349.021 and 1,400.209 µs against Pillow at 2,657.729 and 2,789.501 µs;
+the rebuilt post-revert control was 1,416.396 µs against Pillow at 2,670.334
+µs. This does not establish a repeatable candidate gain, so the shortcut was
+removed and earns no speedup credit. The production fixed-point path remains.
+
+The CPU-only edit's SIMD medians (1,195.938 and 1,229.334 µs) and restored
+control (1,211.334 µs) do not isolate host noise from code-layout effects; make
+no SIMD neutrality claim. GPU medians were 1,000.855, 1,049.292, and 1,014.729
+µs, each with one dispatch and 2,359,296-byte upload/readback; sustained
+throughput remains unmeasured. Run IDs are candidate
+`migration-benchmark-a00d98eb9fee4b6b9e141138ffae5696`, repeat
+`migration-benchmark-de68c29f73944af29e99f8a1b421dc3d`, and restored control
+`migration-benchmark-fffc2e8b7de44cd2b1657fc48443fa1a`. The local ledger has
+6,632 unique data rows. Kata issue `7gmy` remains open; published matrix
+categories are unchanged. Commit/push batch remains 0/33. No coverage was run.
+
+### Refresh stale benchmark test fixtures — 2026-10-12
+
+Pre-push script tests found two stale test fixtures, not runtime parity failures.
+The benchmark-view test pinned 664 workloads while the checked-in generated
+catalog now has 684 unique IDs: 200 operation rows and 484 pipeline rows after
+the GetData mode/size cases and three GetProjection edge workloads were added.
+The test counts were updated while preserving its assertion that every entry
+maps to a table. A receipt-state mock also omitted the source adapter's required
+version identity; the production check correctly rejected the incomplete
+envelope, so the mock now uses the declared source name and version without
+relaxing that check. All six affected script suites then passed (117 tests).
+No coverage was run.

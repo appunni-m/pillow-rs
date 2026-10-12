@@ -56,6 +56,7 @@ TARGET_ID = "pillow-rs-python"
 ORACLE_ID = "pillow"
 ORACLE_VERSION = os.environ.get("MIGRATION_ORACLE_VERSION", "12.2.0")
 ORACLE_NAME = os.environ.get("MIGRATION_ORACLE_NAME", "Pillow")
+TIMED_SOURCE_FLAG = "MIGRATION_PARITY_TIMED_SOURCE"
 TARGET_BACKEND = os.environ.get("MIGRATION_TARGET_BACKEND", "cpu").strip().lower()
 TARGET_PROFILE_OVERRIDE = os.environ.get("MIGRATION_TARGET_PROFILE", "").strip().lower()
 TARGET_FEATURES = ["pillow-rs-py/default", "pillow-rs/default"]
@@ -64,6 +65,19 @@ if TARGET_PROFILE_OVERRIDE == "parallel-cpu":
 STRICT_TARGET_BACKEND = os.environ.get(
     "MIGRATION_STRICT_TARGET_BACKEND", "0"
 ).strip().lower() in {"1", "true", "yes"}
+
+
+def timed_source_identity() -> tuple[str, str]:
+    """Return the measured source identity when distinct from the parity oracle."""
+
+    if os.environ.get(TIMED_SOURCE_FLAG) != "1":
+        return ORACLE_NAME, ORACLE_VERSION
+    return (
+        os.environ.get("MIGRATION_BENCHMARK_SOURCE_NAME", ORACLE_NAME),
+        os.environ.get("MIGRATION_BENCHMARK_SOURCE_VERSION", ORACLE_VERSION),
+    )
+
+
 # The benchmark adapter activates exactly one backend and checks an untimed
 # execution receipt from the same case using the same no-lock dispatch policy.
 # Do not call the target-only locking helper in timed or proof runs: eager
@@ -1057,6 +1071,54 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
     return json_safe(value)
 
 
+def materialize_value_for_timing(value: Any, shape: str) -> None:
+    """Force lazy public results without JSON or base64 serialization.
+
+    The benchmark adapter does not serialize observations on its timed path.
+    It must still perform the consumer work that makes a lazy image result
+    comparable to Pillow's eager result, including output-buffer allocation,
+    transfers, synchronization, and materialization.
+    """
+
+    if shape == "image":
+        if isinstance(value, (list, tuple)) and (
+            not value or all(_is_public_image(item) for item in value)
+        ):
+            for item in value:
+                if item is not None:
+                    item.tobytes()
+            return
+        if value is not None:
+            value.tobytes()
+        return
+    if shape == "mask":
+        try:
+            bytes(value)
+        except Exception:
+            try:
+                bytes(value.tobytes())
+            except Exception:
+                list(value)
+        return
+    if shape == "mask_with_offset":
+        mask, _offset = value
+        if str(getattr(mask, "mode", "")) == "RGBA":
+            list(mask)
+        else:
+            materialize_value_for_timing(mask, "mask")
+        return
+    if shape == "bytes":
+        if value is not None:
+            bytes(value)
+        return
+    if shape in {"sequence", "ordered", "metrics"}:
+        if isinstance(value, (str, bytes, bytearray)):
+            return
+        for item in value:
+            if _is_public_image(item):
+                item.tobytes()
+
+
 def public_error(exc: BaseException) -> dict[str, Any]:
     if isinstance(exc, (FileNotFoundError, PermissionError, IsADirectoryError, OSError)):
         kind = "io_error"
@@ -1322,6 +1384,90 @@ def _observation_materializes_pipeline(step: dict[str, Any]) -> bool:
     if key in _TERMINAL_OBSERVATION_OPS:
         return True
     return key in _PIPELINE_RESULT_OPS and key not in _PIPELINE_MUTATING_OPS
+
+
+def _descriptor_binding_steps(value: Any) -> set[str]:
+    """Collect workflow step references from an input descriptor tree."""
+
+    if isinstance(value, dict):
+        if value.get("kind") == "binding":
+            step_id = value.get("step_id")
+            return {step_id} if isinstance(step_id, str) else set()
+        return set().union(
+            *(_descriptor_binding_steps(item) for item in value.values())
+        )
+    if isinstance(value, (list, tuple)):
+        return set().union(*(_descriptor_binding_steps(item) for item in value))
+    return set()
+
+
+def _observation_needs_timed_materialization(
+    case: dict[str, Any],
+    step: dict[str, Any],
+    result_shape: str,
+    *,
+    timed_through_index: int,
+) -> bool:
+    """Whether this observed result still needs a timed public consumer.
+
+    A later terminal operation in the measured workflow can already consume
+    this result, possibly through a chain of lazy pipeline steps. Avoid adding
+    an extra intermediate image export in that case; materialize the final
+    observed image only when the selected boundary has no such consumer.
+    """
+
+    materialized_shapes = {
+        "image",
+        "mask",
+        "mask_with_offset",
+        "bytes",
+        "sequence",
+        "ordered",
+        "metrics",
+    }
+    if result_shape not in materialized_shapes:
+        return False
+    if step["operation"] in _TERMINAL_OBSERVATION_OPS:
+        return False
+
+    steps = case.get("steps", [])
+    try:
+        observed_index = next(
+            index
+            for index, candidate in enumerate(steps)
+            if candidate["step_id"] == step["step_id"]
+        )
+    except StopIteration:
+        return False
+    timed_through_index = min(timed_through_index, len(steps) - 1)
+    if timed_through_index <= observed_index:
+        return True
+
+    dependencies = {
+        candidate["step_id"]: (
+            _descriptor_binding_steps(candidate.get("receiver"))
+            | _descriptor_binding_steps(candidate.get("arguments", {}))
+        )
+        for candidate in steps
+    }
+
+    def depends_on(step_id: str, target: str, seen: set[str]) -> bool:
+        if step_id == target:
+            return True
+        if step_id in seen:
+            return False
+        seen.add(step_id)
+        return any(
+            depends_on(dependency, target, seen)
+            for dependency in dependencies.get(step_id, set())
+        )
+
+    for candidate in steps[observed_index + 1 : timed_through_index + 1]:
+        if candidate["operation"] in _TERMINAL_OBSERVATION_OPS and depends_on(
+            candidate["step_id"], step["step_id"], set()
+        ):
+            return False
+    return True
 
 
 _IMMEDIATE_SCALAR_MODES = {
@@ -2348,6 +2494,7 @@ def run_case(
         if timing_sink is not None and timing_boundary == "whole_workflow"
         else None
     )
+    timed_materialized_observation_ids: set[str] = set()
     for step_index, step in enumerate(case["steps"]):
         step_id = step["step_id"]
         if blocked_reason is not None:
@@ -2371,6 +2518,24 @@ def run_case(
             value = call_workflow_step(
                 side, step, opdef, bindings, assets
             )
+            if (
+                timing_sink is not None
+                and step["surface"] == "PIL.Image.Image"
+                and step["operation"] == "getdata"
+                and (
+                    timing_boundary == "whole_workflow"
+                    or step_id in (timing_steps or set())
+                )
+            ):
+                # Pillow returns a lazy ImagingCore sequence here, while a
+                # target may eagerly allocate its result buffer during the
+                # call. Consume the same public sequence on both sides before
+                # stopping the timer so the benchmark includes equivalent
+                # result materialization rather than comparing eager work to
+                # a lazy view. Do not build a second list: iteration is the
+                # consumer boundary and parity serialization remains separate.
+                for _ in value:
+                    pass
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()
                 if receipt is not None:
@@ -2408,6 +2573,45 @@ def run_case(
                 and timing_boundary == "observed_steps"
                 and step_index == last_timed_index
             ):
+                result_shape = opdef["source"]["result"]["shape"]
+                observation_requires_materialization = (
+                    step_id in case.get("observations", [])
+                    and _observation_needs_timed_materialization(
+                        case,
+                        step,
+                        result_shape,
+                        timed_through_index=(
+                            last_timed_index if last_timed_index is not None else -1
+                        ),
+                    )
+                )
+                if observation_requires_materialization:
+                    observation_started_ns = time.perf_counter_ns()
+                    materialize_value_for_timing(value, result_shape)
+                    timed_materialized_observation_ids.add(step_id)
+                    step_receipts.append(
+                        {
+                            "step_id": "__observation__",
+                            "duration_ns": time.perf_counter_ns()
+                            - observation_started_ns,
+                        }
+                    )
+                    if (
+                        pipeline_execution_api is not None
+                        and pipeline_execution_sink is not None
+                    ):
+                        receipt = pipeline_execution_api.take_pipeline_telemetry()
+                        if receipt is not None:
+                            append_execution_receipt(
+                                receipt, status="completed", step_id=step_id
+                            )
+                        if (
+                            terminal_receipt_index is not None
+                            and _observation_materializes_pipeline(step)
+                        ):
+                            set_receipt_terminal_complete(
+                                pipeline_execution_sink[terminal_receipt_index], True
+                            )
                 timing_sink.append(time.perf_counter_ns() - group_started_ns)
                 group_started_ns = None
             bindings[step_id] = value
@@ -2431,17 +2635,6 @@ def run_case(
             }
             blocked_reason = f"dependency step {step_id} failed"
 
-    if (
-        group_started_ns is not None
-        and timing_sink is not None
-        and timing_boundary == "whole_workflow"
-    ):
-        timing_sink.append(time.perf_counter_ns() - group_started_ns)
-
-    phase_totals = _phase_totals(case, step_receipts, case_started_ns)
-    if telemetry_sink is not None:
-        telemetry_sink.append(phase_totals)
-
     if not serialize_observations:
         execution_errors = [
             {
@@ -2451,6 +2644,99 @@ def run_case(
             for step_id, result in step_results.items()
             if result.get("status") == "error"
         ]
+        observation_ids = list(case.get("observations", []))
+        timed_observation_errors: list[dict[str, Any]] = []
+        for observation_index, observation_id in enumerate(observation_ids):
+            result = step_results.get(observation_id)
+            if result is None or result.get("status") != "ok":
+                continue
+            step = next(
+                (item for item in case["steps"] if item["step_id"] == observation_id),
+                None,
+            )
+            if step is None:
+                continue
+            if observation_id in timed_materialized_observation_ids:
+                continue
+            # GetData's public sequence is consumed in the measured call above.
+            # Reiterating a sequence here would do duplicate work and would be
+            # incorrect for a single-pass public iterator.
+            if step["surface"] == "PIL.Image.Image" and step["operation"] == "getdata":
+                continue
+            if (
+                timing_boundary == "observed_steps"
+                and observation_id not in (timing_steps or set())
+            ):
+                continue
+            opdef = operation_definition(
+                operation_index, step["surface"], step["operation"]
+            )
+            shape = opdef["source"]["result"]["shape"]
+            timed_through_index = (
+                len(case["steps"]) - 1
+                if timing_boundary == "whole_workflow"
+                else last_timed_index
+                if last_timed_index is not None
+                else -1
+            )
+            if not _observation_needs_timed_materialization(
+                case,
+                step,
+                shape,
+                timed_through_index=timed_through_index,
+            ):
+                continue
+            observation_started_ns = time.perf_counter_ns()
+            try:
+                materialize_value_for_timing(result["_value"], shape)
+                if pipeline_execution_api is not None and pipeline_execution_sink is not None:
+                    receipt = pipeline_execution_api.take_pipeline_telemetry()
+                    if receipt is not None:
+                        append_execution_receipt(
+                            receipt, status="completed", step_id=observation_id
+                        )
+                    if (
+                        terminal_receipt_index is not None
+                        and _observation_materializes_pipeline(step)
+                    ):
+                        set_receipt_terminal_complete(
+                            pipeline_execution_sink[terminal_receipt_index], True
+                        )
+            except BaseException as exc:  # materialization is a public observation
+                if pipeline_execution_api is not None and pipeline_execution_sink is not None:
+                    receipt = pipeline_execution_api.take_pipeline_telemetry()
+                    if receipt is not None:
+                        append_execution_receipt(
+                            receipt, status="partial", step_id=observation_id
+                        )
+                    if observation_index == len(observation_ids) - 1:
+                        terminal_receipt_index = None
+                timed_observation_errors.append(
+                    {
+                        "step_id": observation_id,
+                        "error": normalized_public_error(
+                            exc, side=side, step=step, tempdir=tempdir
+                        ),
+                    }
+                )
+            finally:
+                step_receipts.append(
+                    {
+                        "step_id": "__observation__",
+                        "duration_ns": time.perf_counter_ns() - observation_started_ns,
+                    }
+                )
+        execution_errors.extend(timed_observation_errors)
+        if (
+            group_started_ns is not None
+            and timing_sink is not None
+            and timing_boundary in {"whole_workflow", "observed_steps"}
+        ):
+            timing_sink.append(time.perf_counter_ns() - group_started_ns)
+            group_started_ns = None
+        phase_totals = _phase_totals(case, step_receipts, case_started_ns)
+        if telemetry_sink is not None:
+            telemetry_sink.append(phase_totals)
         if blocked_reason is None and terminal_receipt_index is not None:
             if pipeline_execution_sink is not None:
                 set_receipt_terminal_complete(
@@ -2461,7 +2747,11 @@ def run_case(
             # Timing receipts are also the execution gate for benchmark-only
             # workflows.  Keep parity result serialization unchanged while
             # exposing a bounded failure state to the benchmark runner.
-            "status": "completed" if blocked_reason is None else "not_run",
+            "status": (
+                "completed"
+                if blocked_reason is None and not timed_observation_errors
+                else "not_run"
+            ),
             "observations": [],
             "execution_errors": execution_errors,
             "phase_totals_ns": phase_totals,
@@ -2550,6 +2840,16 @@ def run_case(
         set_receipt_terminal_complete(
             pipeline_execution_sink[terminal_receipt_index], True
         )
+    if (
+        group_started_ns is not None
+        and timing_sink is not None
+        and timing_boundary in {"whole_workflow", "observed_steps"}
+    ):
+        timing_sink.append(time.perf_counter_ns() - group_started_ns)
+        group_started_ns = None
+    phase_totals = _phase_totals(case, step_receipts, case_started_ns)
+    if telemetry_sink is not None:
+        telemetry_sink.append(phase_totals)
     execution_errors = [
         {
             "step_id": step_id,
@@ -2595,6 +2895,11 @@ def _phase_totals(
             setup += duration
         else:
             pipeline += duration
+    terminal += sum(
+        int(item["duration_ns"])
+        for item in (step_receipts or [])
+        if item["step_id"] == "__observation__"
+    )
     return {
         "setup_ns": setup,
         "pipeline_ns": pipeline,
@@ -2677,9 +2982,10 @@ def side_identity(side: str) -> dict[str, Any]:
     if side == "source":
         pil = importlib.import_module("PIL")
         version = str(getattr(pil, "__version__", ""))
-        if version != ORACLE_VERSION:
+        implementation, expected_version = timed_source_identity()
+        if version != expected_version:
             raise RuntimeError(
-                f"{ORACLE_NAME} oracle version {version!r}, expected {ORACLE_VERSION}"
+                f"{implementation} source version {version!r}, expected {expected_version}"
             )
         oracle_path = Path(pil.__file__).resolve()
         expected_root = (ROOT / "pillow-rs-py" / "python").resolve()
@@ -2687,7 +2993,7 @@ def side_identity(side: str) -> dict[str, Any]:
             raise RuntimeError(f"Pillow oracle imported from target checkout: {oracle_path}")
         return {
             "side": "source",
-            "implementation": ORACLE_NAME,
+            "implementation": implementation,
             "version": version,
             "path": str(oracle_path),
             "public_module": "PIL",
@@ -2730,11 +3036,17 @@ def _run_side_subprocess_batch(
     environment: dict[str, str | None] | None = None,
 ) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     payload = json.dumps(cases, separators=(",", ":"))
-    adapter_python = (
-        os.environ.get("MIGRATION_ORACLE_PYTHON", sys.executable)
-        if side == "source"
-        else sys.executable
-    )
+    if side == "source" and os.environ.get(TIMED_SOURCE_FLAG) == "1":
+        adapter_python = os.environ.get(
+            "MIGRATION_BENCHMARK_SOURCE_PYTHON",
+            os.environ.get("MIGRATION_ORACLE_PYTHON", sys.executable),
+        )
+    else:
+        adapter_python = (
+            os.environ.get("MIGRATION_ORACLE_PYTHON", sys.executable)
+            if side == "source"
+            else sys.executable
+        )
     command = [
         adapter_python,
         str(Path(__file__).resolve()),

@@ -7,10 +7,16 @@ Reference construction, timing aggregation and exact byte comparisons are outsid
 measured windows. No host thread pools or JSON evidence files are created. The
 BoxBlur lane measures an explicit one-operation GPU batch against strict serial
 CPU/SIMD execution and Pillow. The grayscale lane measures
-ImageOps.grayscale as a one-operation graph. The alpha-composite-mirror lane
-measures the fused RGBA public pipeline against all five subjects. JSON evidence
+ImageOps.grayscale as a one-operation graph. The GetChannel lane measures
+materialized L and RGB extraction as a one-operation graph. The
+alpha-composite-mirror lane measures the fused RGBA public pipeline against all
+five subjects. JSON evidence
 is emitted to stdout only when requested with --json. The F Resize lane measures
 one native F bicubic resize with exact output comparison and CPU materialization.
+The Filter lane measures the exact native-LA binomial 3x3 Kernel operation.
+The Merge lane measures three materialized L bands composed into RGB. Its
+direct GPU lane includes per-image synchronization and materialization; the
+current GpuBatchExecutor admission contract rejects this graph.
 """
 from __future__ import annotations
 import argparse
@@ -26,14 +32,16 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 SUBJECTS = ("Pillow", "CPU", "SIMD", "GPU eager", "GPU queued")
+FILTER_3X3_BINOMIAL = (1, 2, 1, 2, 4, 2, 1, 2, 1)
 
 
 def child(subject, size, height, mode, images, samples, operation="median", max_jobs=16, max_in_flight=4, alpha_input_pattern="uniform"):
     from importlib.metadata import version as distribution_version
     import PIL
     from PIL import Image, ImageOps, ImageFilter
-    channels = {"L": 1, "RGB": 3, "CMYK": 4, "RGBA": 4, "F": 4}[mode]
-    length = size * height * channels
+    channels = {"L": 1, "LA": 2, "RGB": 3, "CMYK": 4, "RGBA": 4, "F": 4}[mode]
+    source_channels = 1 if operation == "merge" else channels
+    length = size * height * source_channels
     import random
     if operation == "alpha-composite-mirror" and alpha_input_pattern == "noise":
         sources = [
@@ -55,6 +63,14 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
             if sys.byteorder != "little":
                 values.byteswap()
             sources.append(values.tobytes())
+    elif operation == "merge":
+        sources = [
+            tuple(
+                random.Random(index + size * 31 + height * 17 + band * 101).randbytes(length)
+                for band in range(3)
+            )
+            for index in range(images)
+        ]
     else:
         sources = [
             random.Random(index + size * 31 + height * 17 + channels).randbytes(length)
@@ -62,7 +78,13 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
         ]
 
     def graph(index):
-        if operation == "alpha-composite-mirror":
+        if operation == "merge":
+            bands = tuple(
+                Image.frombytes("L", (size, height), pixels)
+                for pixels in sources[index]
+            )
+            result = Image.merge("RGB", bands)
+        elif operation == "alpha-composite-mirror":
             if alpha_input_pattern == "uniform":
                 destination = Image.new("RGBA", (size, height), (30, 60, 90, 64))
                 source = Image.new("RGBA", (size, height), (200, 150, 100, 192))
@@ -77,11 +99,17 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
             result = result.filter(ImageFilter.BoxBlur(1))
         elif operation == "grayscale":
             result = ImageOps.grayscale(result)
+        elif operation == "getchannel":
+            result = result.getchannel(0 if mode == "L" else "G")
         elif operation == "resize":
             result = result.resize((max(1, size // 2), max(1, height // 2)), Image.Resampling.BICUBIC)
         elif operation == "median":
             result = ImageOps.invert(result).filter(ImageFilter.MedianFilter(3))
-        if subject in ("CPU", "SIMD"):
+        elif operation == "filter":
+            result = result.filter(
+                ImageFilter.Kernel((3, 3), FILTER_3X3_BINOMIAL, scale=16, offset=0)
+            )
+        if subject in ("CPU", "SIMD") or (operation == "merge" and subject == "GPU eager"):
             # A single active backend plus a per-image lock makes unsupported
             # contexts fail instead of silently entering CPU fallback.
             rust = __import__("pillow_rs")
@@ -89,15 +117,16 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
         return result
 
     core = None
-    if subject in ("CPU", "SIMD"):
+    if subject in ("CPU", "SIMD") or (operation == "merge" and subject == "GPU eager"):
         import pillow_rs
         core = pillow_rs._core
         for backend in ("cpu", "simd", "gpu"):
             pillow_rs.disable_backend(backend)
-        pillow_rs.enable_backend(subject.lower())
+        active_backend = "gpu" if subject == "GPU eager" else subject.lower()
+        pillow_rs.enable_backend(active_backend)
 
     executor = None
-    if subject.startswith("GPU"):
+    if subject.startswith("GPU") and not (operation == "merge" and subject == "GPU eager"):
         from PIL import GpuBatchExecutor
         executor = GpuBatchExecutor(queue=subject == "GPU queued", max_jobs=max_jobs, max_in_flight=max_in_flight)
 
@@ -117,8 +146,9 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
             proof = graph(0).tobytes()
             receipt = core.take_pipeline_telemetry()
             core.set_pipeline_telemetry(False)
-            assert receipt and receipt["actual_backend"] == subject.lower(), receipt
-            assert receipt["requested_backend"] == subject.lower(), receipt
+            expected_backend = "gpu" if subject == "GPU eager" else subject.lower()
+            assert receipt and receipt["actual_backend"] == expected_backend, receipt
+            assert receipt["requested_backend"] == expected_backend, receipt
             assert receipt["fallback_reason"] is None, receipt
             assert proof, "backend proof materialized no bytes"
 
@@ -135,13 +165,13 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
         if stats:
             assert stats["gpu_bytes"] == stats["host_bytes"] == stats["live_jobs"] == 0, stats
             assert stats["submitted_jobs"] == (samples + 2) * images, stats
-            dispatches_per_job = 1 if operation in ("boxblur", "grayscale", "alpha-composite-mirror") else 2
+            dispatches_per_job = 1 if operation in ("boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "filter", "merge") else 2
             assert stats["dispatches"] == dispatches_per_job * stats["submitted_jobs"], stats
-            inputs_per_job = 2 if operation == "alpha-composite-mirror" else 1
+            inputs_per_job = 3 if operation == "merge" else 2 if operation == "alpha-composite-mirror" else 1
             upload_bytes_per_job = length * inputs_per_job
             expected_bytes = stats["submitted_jobs"] * upload_bytes_per_job
             assert stats["upload_bytes"] == expected_bytes, stats
-            output_channels = 1 if operation == "grayscale" else channels
+            output_channels = 1 if operation in ("grayscale", "getchannel") else channels
             output_size = (
                 (max(1, size // 2), max(1, height // 2))
                 if operation == "resize"
@@ -162,10 +192,21 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
                 "workload": {"operation": operation, "mode": mode, "size": [size, height],
                              "images_per_window": images, "samples": samples,
                              "parameters": (
+                                 {"output_mode": "RGB", "band_mode": "L", "bands": 3}
+                                 if operation == "merge" else
                                  {"filter": "BICUBIC",
                                   "destination_size": [max(1, size // 2), max(1, height // 2)],
                                   "input_pattern": "deterministic finite f32 noise"}
-                                 if operation == "resize" else None
+                                 if operation == "resize" else
+                                 {"filter": "Kernel",
+                                  "kernel_size": [3, 3],
+                                  "kernel": FILTER_3X3_BINOMIAL,
+                                  "scale": 16,
+                                  "offset": 0,
+                                  "input_pattern": "deterministic native-LA noise"}
+                                 if operation == "filter" else
+                                 {"channel": 0 if mode == "L" else "G"}
+                                 if operation == "getchannel" else None
                              ),
                              "alpha_input_pattern": (
                                  alpha_input_pattern if operation == "alpha-composite-mirror" else None
@@ -203,15 +244,15 @@ def main():
     parser.add_argument("--subject", choices=SUBJECTS)
     parser.add_argument(
         "--operation",
-        choices=("median", "boxblur", "grayscale", "alpha-composite-mirror", "resize"),
+        choices=("median", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "resize", "filter", "merge"),
         default="median",
     )
     parser.add_argument("--size", type=int, default=256)
     parser.add_argument("--height", type=int)
-    parser.add_argument("--mode", choices=("L", "RGB", "CMYK", "RGBA", "F"), default="L")
+    parser.add_argument("--mode", choices=("L", "LA", "RGB", "CMYK", "RGBA", "F"), default="L")
     parser.add_argument("--images", type=int, default=32)
     parser.add_argument("--samples", type=int, default=5)
-    parser.add_argument("--modes", nargs="+", choices=("L", "RGB", "CMYK", "RGBA", "F"))
+    parser.add_argument("--modes", nargs="+", choices=("L", "LA", "RGB", "CMYK", "RGBA", "F"))
     parser.add_argument("--sizes", nargs="+", type=int, default=(256, 1024))
     parser.add_argument("--max-jobs", type=int, default=16)
     parser.add_argument("--max-in-flight", type=int, default=4)
@@ -228,6 +269,8 @@ def main():
     default_modes = (
         ("RGBA",) if args.operation == "alpha-composite-mirror"
         else ("F",) if args.operation == "resize"
+        else ("L", "LA") if args.operation == "filter"
+        else ("RGB",) if args.operation == "merge"
         else ("L", "RGB")
     )
     selected_modes = (
@@ -237,20 +280,30 @@ def main():
     )
     if args.operation == "alpha-composite-mirror" and selected_modes != ("RGBA",):
         parser.error("alpha-composite-mirror requires RGBA")
+    if args.operation == "merge" and selected_modes != ("RGB",):
+        parser.error("merge batching currently measures three L bands into RGB")
     if "RGBA" in selected_modes and args.operation != "alpha-composite-mirror":
         parser.error("RGBA is reserved for --operation alpha-composite-mirror")
     if args.operation == "resize" and selected_modes != ("F",):
         parser.error("F resize batching currently measures mode F only")
+    if args.operation == "filter" and any(mode not in ("L", "LA") for mode in selected_modes):
+        parser.error("Kernel filter batching currently supports native L/LA inputs")
+    if args.operation != "filter" and "LA" in selected_modes:
+        parser.error("LA is currently supported only by Kernel filter batching")
     if "F" in selected_modes and args.operation != "resize":
         parser.error("mode F is currently supported only by --operation resize")
-    if args.operation != "grayscale" and "CMYK" in selected_modes:
+    if args.operation not in ("grayscale", "getchannel") and "CMYK" in selected_modes:
         parser.error("CMYK batching is currently supported only for grayscale")
+    if args.operation == "getchannel" and any(mode not in ("L", "RGB") for mode in selected_modes):
+        parser.error("GetChannel batching currently supports L/RGB inputs")
     if args.subject:
         print(json.dumps(child(args.subject, args.size, args.height or args.size, args.mode, args.images, args.samples, args.operation, args.max_jobs, args.max_in_flight, args.alpha_input_pattern)))
         return
     subjects = (
         ("Pillow", "GPU eager", "GPU queued")
         if args.operation == "median"
+        else ("Pillow", "CPU", "SIMD", "GPU eager")
+        if args.operation == "merge"
         else SUBJECTS
     )
     identities = {subject: pillow_identity(subject) for subject in subjects}
@@ -288,14 +341,32 @@ def main():
             },
             "operation": args.operation,
             "measurement_policy": {
-                "boundary": "completed_batch_window",
-                "steps": ["construct-image-and-graph", "submit", "execute", "materialize", "export-bytes"],
+                "boundary": (
+                    "completed_direct_gpu_window"
+                    if args.operation == "merge"
+                    else "completed_batch_window"
+                ),
+                "steps": (
+                    ["construct-image-and-graph", "execute", "synchronize", "materialize", "export-bytes"]
+                    if args.operation == "merge"
+                    else ["construct-image-and-graph", "submit", "execute", "materialize", "export-bytes"]
+                ),
                 "warmup_windows": 2,
                 "sample_windows": args.samples,
                 "images_per_window": args.images,
-                "max_jobs": args.max_jobs,
-                "max_in_flight": args.max_in_flight,
+                "max_jobs": args.max_jobs if args.operation != "merge" else None,
+                "max_in_flight": args.max_in_flight if args.operation != "merge" else None,
                 "gpu_batch_submission_proves_concurrent_kernels": False,
+                "gpu_batch_merge_admission": (
+                    "unsupported: operation Merge has no composed native L layout"
+                    if args.operation == "merge"
+                    else None
+                ),
+                "merge_input": (
+                    "three materialized native L images composed to RGB"
+                    if args.operation == "merge"
+                    else None
+                ),
                 "alpha_composite_mirror_input": (
                     f"two {args.alpha_input_pattern} native RGBA images"
                     if args.operation == "alpha-composite-mirror"
@@ -308,9 +379,12 @@ def main():
         print(f"Warm completed-work diagnostic: {args.operation}; two warmup windows; "
               f"{args.samples} median samples; no host threads. GPU batch submission is not proof of concurrent kernels.")
     if not args.json:
-        if args.operation in ("boxblur", "grayscale", "alpha-composite-mirror"):
+        if args.operation in ("boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "filter"):
             print("| Mode/size | Pillow img/s | CPU img/s | SIMD img/s | Eager GPU img/s | Queued GPU img/s | Queued / SIMD | Queued / Pillow | Jobs/submission | Dispatches/job |")
             print("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+        elif args.operation == "merge":
+            print("| Mode/size | Pillow img/s | CPU img/s | SIMD img/s | Direct GPU img/s | GPU / SIMD | GPU batch |")
+            print("| --- | ---: | ---: | ---: | ---: | ---: | --- |")
         else:
             print("| Mode/size | Pillow images/s | Eager GPU images/s | Queued GPU images/s | Queued / Pillow | Queued / eager | Max jobs/submission |")
             print("| --- | ---: | ---: | ---: | ---: | ---: | ---: |")
@@ -325,8 +399,17 @@ def main():
                 assert run["pillow_distribution_version"] == identity["distribution_version"], identity
             assert all(run["digests"] == runs[0]["digests"] for run in runs), f"exact parity failed: {mode} {size}x{height}"
             rates = [args.images / run["seconds"] for run in runs]
+            operation_count = args.images * (args.samples + 2)
+
+            def total_receipt_resource(run, key):
+                receipt = run["backend_receipt"]
+                resource = receipt.get("resource") if receipt else None
+                value = resource.get(key) if resource else None
+                if value is None:
+                    return None
+                return value if key == "peak_live_host_bytes" else value * operation_count
+
             if args.json:
-                operation_count = args.images * (args.samples + 2)
                 report["workloads"].append({
                     "workload_id": (
                         f"pipeline-batch.{args.operation}.{mode.lower()}-{size}x{height}"
@@ -335,10 +418,21 @@ def main():
                     "mode": mode,
                     "size": [size, height],
                     "parameters": (
+                        {"output_mode": "RGB", "band_mode": "L", "bands": 3}
+                        if args.operation == "merge" else
                         {"filter": "BICUBIC",
                          "destination_size": [max(1, size // 2), max(1, height // 2)],
                          "input_pattern": "deterministic finite f32 noise"}
-                        if args.operation == "resize" else None
+                        if args.operation == "resize" else
+                        {"filter": "Kernel",
+                         "kernel_size": [3, 3],
+                         "kernel": FILTER_3X3_BINOMIAL,
+                         "scale": 16,
+                         "offset": 0,
+                         "input_pattern": "deterministic native-LA noise"}
+                        if args.operation == "filter" else
+                        {"channel": 0 if mode == "L" else "G"}
+                        if args.operation == "getchannel" else None
                     ),
                     "parity_status": "exact_bytes_pass",
                     "parity_comparison_count": args.images,
@@ -386,15 +480,32 @@ def main():
                             "dispatch_count": (
                                 run["stats"]["dispatches"]
                                 if run["stats"] else None
+                                if not (args.operation == "merge" and run["workload"]["subject"] == "GPU eager")
+                                else operation_count
                             ),
                             "upload_bytes": (
                                 run["stats"]["upload_bytes"]
-                                if run["stats"] else None
+                                if run["stats"] else
+                                operation_count * size * height * 3
+                                if args.operation == "merge" and run["workload"]["subject"] == "GPU eager"
+                                else None
                             ),
                             "readback_bytes": (
                                 run["stats"]["readback_bytes"]
-                                if run["stats"] else None
+                                if run["stats"] else
+                                operation_count * size * height * 3
+                                if args.operation == "merge" and run["workload"]["subject"] == "GPU eager"
+                                else None
                             ),
+                            "parameter_bytes": total_receipt_resource(run, "parameter_bytes"),
+                            "host_allocation_count": total_receipt_resource(run, "host_allocation_count"),
+                            "host_allocated_bytes": total_receipt_resource(run, "host_allocated_bytes"),
+                            "peak_live_host_bytes": total_receipt_resource(run, "peak_live_host_bytes"),
+                            "host_buffer_count": total_receipt_resource(run, "host_buffer_count"),
+                            "host_buffer_bytes": total_receipt_resource(run, "host_buffer_bytes"),
+                            "full_frame_copy_count": total_receipt_resource(run, "full_frame_copy_count"),
+                            "mode_conversion_count": total_receipt_resource(run, "mode_conversion_count"),
+                            "fused_operation_count": total_receipt_resource(run, "fused_operation_count"),
                             "output_sha256": run["digests"],
                             "backend_receipt": run["backend_receipt"],
                             "batch_stats": run["stats"],
@@ -403,7 +514,11 @@ def main():
                     ],
                 })
                 continue
-            if args.operation in ("boxblur", "grayscale"):
+            if args.operation == "merge":
+                print(f"| {mode} {size}×{height} | {rates[0]:.1f} | {rates[1]:.1f} | {rates[2]:.1f} | {rates[3]:.1f} | "
+                      f"{rates[3]/rates[2]:.2f}× | unsupported at admission |", flush=True)
+                continue
+            if args.operation in ("boxblur", "grayscale", "getchannel", "filter"):
                 queued_stats = runs[4]["stats"]
                 print(f"| {mode} {size}×{height} | {rates[0]:.1f} | {rates[1]:.1f} | {rates[2]:.1f} | {rates[3]:.1f} | {rates[4]:.1f} | "
                       f"{rates[4]/rates[2]:.2f}× | {rates[4]/rates[0]:.2f}× | {queued_stats['largest_submission']} | "

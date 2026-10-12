@@ -680,6 +680,67 @@ pub(crate) fn record_pipeline_operation_unsupported(operation: &'static str) {
 
 /// Records one checked host pixel-buffer allocation for the active managed
 /// benchmark sample.
+/// Execute a synchronous SIMD terminal read directly into its caller-owned
+/// result buffer and publish an honest receipt for the actual SIMD kernel.
+/// Internal kernel allocations are intentionally not inferred from the final
+/// host buffer accounting.
+pub(crate) fn execute_eager_simd_bytes(
+    operation: &'static str,
+    input: &DynamicImage,
+    output: &mut [u8],
+    execute: impl FnOnce(&mut [u8]) -> Result<(u64, u64, &'static str), PilError>,
+) -> Result<(), PilError> {
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let (vector_blocks, scalar_tail, path) = execute(output)?;
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        begin_pipeline_operation_telemetry(operation);
+        record_pipeline_operation_vector_blocks(vector_blocks);
+        record_pipeline_operation_scalar_tail(scalar_tail);
+        record_pipeline_operation_path(path);
+        finish_pipeline_operation_telemetry();
+
+        let mut resource = host_resource_telemetry(input);
+        let output_bytes = output.len() as u64;
+        resource.host_buffer_count = resource
+            .host_buffer_count
+            .saturating_add(u64::from(output_bytes != 0));
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
+        record_pipeline_resource_telemetry(resource);
+        let resource = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let dispatch_count = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: Some(Backend::Simd),
+            actual_backend: Backend::Simd,
+            operation_count: 1,
+            route_ns: 0,
+            validation_ns: 0,
+            backend_ns,
+            dispatch_count,
+            fallback_reason: None,
+            resource,
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok(())
+}
+
 pub(crate) fn record_pipeline_allocation(bytes: usize) {
     if !pipeline_telemetry_enabled() {
         return;
@@ -831,6 +892,117 @@ fn elapsed_ns(start: Option<Instant>) -> u64 {
         .unwrap_or(0)
 }
 
+/// Timer and requested backend for a terminal byte read that executes on the
+/// host rather than through an image pipeline.
+pub(crate) struct EagerCpuOperationTelemetry {
+    timed: bool,
+    backend_start: Option<Instant>,
+    requested_backend: Option<Backend>,
+    fallback_reason: Option<String>,
+}
+
+/// Begin an execution receipt for a terminal operation whose data path is
+/// implemented on the host. The caller supplies the backend requested by the
+/// active image or process so a host path selected under SIMD/GPU is recorded
+/// as a fallback instead of being credited as accelerated execution.
+pub(crate) fn begin_eager_cpu_operation_telemetry(
+    operation: &'static str,
+    requested_backend: Option<Backend>,
+) -> EagerCpuOperationTelemetry {
+    let timed = pipeline_telemetry_enabled();
+    if !timed {
+        return EagerCpuOperationTelemetry {
+            timed,
+            backend_start: None,
+            requested_backend,
+            fallback_reason: None,
+        };
+    }
+
+    reset_pipeline_allocation_telemetry();
+    reset_pipeline_operation_telemetry();
+    let _ = take_pipeline_resource_telemetry();
+    let _ = take_pipeline_backend_override();
+    let _ = take_pipeline_dispatch_count();
+    let _ = take_pipeline_resize_coeff_cache_stats();
+    begin_pipeline_operation_telemetry(operation);
+
+    EagerCpuOperationTelemetry {
+        timed,
+        backend_start: pipeline_timestamp(),
+        requested_backend,
+        fallback_reason: requested_backend
+            .filter(|backend| *backend != Backend::Cpu)
+            .map(|backend| {
+                format!(
+                    "{operation} terminal read used the host CPU while {backend:?} was requested"
+                )
+            }),
+    }
+}
+
+/// Record a host-owned data view that the binding copies into its final
+/// language-level bytes object after this core method returns.
+pub(crate) fn record_eager_cpu_operation_receipt(
+    operation: &'static str,
+    requested_backend: Option<Backend>,
+    output_bytes: usize,
+) {
+    let telemetry = begin_eager_cpu_operation_telemetry(operation, requested_backend);
+    finish_eager_cpu_operation_telemetry(telemetry, output_bytes);
+}
+
+/// Finish a host terminal-read receipt after the caller has filled its final
+/// output buffer. The timing report still covers the complete Python call and
+/// result materialization; this receipt identifies the executor and accounts
+/// for the caller-owned output buffer without claiming a core allocation.
+pub(crate) fn finish_eager_cpu_operation_telemetry(
+    telemetry: EagerCpuOperationTelemetry,
+    output_bytes: usize,
+) {
+    if !telemetry.timed {
+        return;
+    }
+
+    record_pipeline_operation_path("cpu");
+    finish_pipeline_operation_telemetry();
+    let output_bytes = output_bytes as u64;
+    record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+        host_buffer_count: u64::from(output_bytes != 0),
+        host_buffer_bytes: output_bytes,
+        peak_live_host_bytes: output_bytes,
+        ..PipelineResourceTelemetry::default()
+    });
+    record_pipeline_telemetry(PipelineTelemetry {
+        requested_backend: telemetry.requested_backend,
+        actual_backend: Backend::Cpu,
+        operation_count: 1,
+        route_ns: 0,
+        validation_ns: 0,
+        backend_ns: elapsed_ns(telemetry.backend_start),
+        dispatch_count: None,
+        fallback_reason: telemetry.fallback_reason,
+        resource: take_pipeline_resource_telemetry(),
+        resize_coeff_cache_hits: 0,
+        resize_coeff_cache_misses: 0,
+    });
+}
+
+/// Discard a failed host terminal read without leaving a live operation frame
+/// or a partial execution receipt for the next measured operation.
+pub(crate) fn cancel_eager_cpu_operation_telemetry(telemetry: EagerCpuOperationTelemetry) {
+    if !telemetry.timed {
+        return;
+    }
+    reset_pipeline_allocation_telemetry();
+    reset_pipeline_operation_telemetry();
+    let _ = take_pipeline_resource_telemetry();
+    let _ = take_pipeline_backend_override();
+    let _ = take_pipeline_dispatch_count();
+    let _ = take_pipeline_resize_coeff_cache_stats();
+    let _ = take_pipeline_telemetry();
+}
+
 // ``std::time::Instant`` is not implemented by the bare wasm32 target used
 // by the browser package.  Backend identity and dispatch receipts remain
 // useful there, so keep telemetry available while reporting zero for its
@@ -912,6 +1084,8 @@ pub use pool_gpu::stream::{
     GpuBatchExecutor, GpuBatchStats, GpuImage,
 };
 mod pool_simd;
+pub(crate) use pool_simd::ops::adapters::simd_extract_band_into;
+pub(crate) use pool_simd::ops::adapters::simd_grayscale_with_evidence;
 
 /// Ask the CPU execution path whether an RGB PutPixel prefix can be folded
 /// into a non-nearest 2×2 thumbnail reduction without materializing the prefix.
@@ -1128,6 +1302,226 @@ pub(crate) fn execute_eager_gpu_rgb_getprojection(
         });
     }
     Ok((horizontal, vertical))
+}
+
+/// Execute one CPU image operation directly for a loaded source while
+/// retaining the same backend and host-buffer evidence as pipeline dispatch.
+/// Set `manual_output_allocation` when the closure does not record its result
+/// buffer through the normal allocation telemetry hook.
+pub(crate) fn execute_eager_cpu_image_operation(
+    operation: &'static str,
+    input: &DynamicImage,
+    manual_output_allocation: bool,
+    execute: impl FnOnce() -> Result<DynamicImage, PilError>,
+) -> Result<DynamicImage, PilError> {
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let result = match execute() {
+        Ok(result) => result,
+        Err(error) => {
+            if timed {
+                reset_pipeline_allocation_telemetry();
+                reset_pipeline_operation_telemetry();
+                let _ = take_pipeline_resource_telemetry();
+                let _ = take_pipeline_backend_override();
+                let _ = take_pipeline_dispatch_count();
+                let _ = take_pipeline_resize_coeff_cache_stats();
+                let _ = take_pipeline_telemetry();
+            }
+            return Err(error);
+        }
+    };
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        begin_pipeline_operation_telemetry(operation);
+        record_pipeline_operation_path("cpu");
+        finish_pipeline_operation_telemetry();
+
+        let mut resource = host_resource_telemetry(input);
+        let output_bytes = result.as_bytes().len();
+        let output_bytes_u64 = output_bytes as u64;
+        resource.host_buffer_count = resource
+            .host_buffer_count
+            .saturating_add(u64::from(output_bytes != 0));
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes_u64);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes_u64));
+        if manual_output_allocation {
+            record_pipeline_allocation(output_bytes);
+        }
+        let allocation = take_pipeline_allocation_telemetry();
+        resource.host_allocation_count = allocation.allocation_count;
+        resource.host_allocated_bytes = allocation.allocated_bytes;
+        record_pipeline_resource_telemetry(resource);
+        let resource = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let dispatch_count = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: Some(Backend::Cpu),
+            actual_backend: Backend::Cpu,
+            operation_count: 1,
+            route_ns: 0,
+            validation_ns: 0,
+            backend_ns,
+            dispatch_count,
+            fallback_reason: None,
+            resource,
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok(result)
+}
+
+/// Execute a CPU operation whose independent result shares immutable pixels
+/// with its input until either image is mutated.
+pub(crate) fn execute_eager_cpu_shared_result<T>(
+    operation: &'static str,
+    input: &DynamicImage,
+    execute: impl FnOnce() -> Result<T, PilError>,
+) -> Result<T, PilError> {
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let result = match execute() {
+        Ok(result) => result,
+        Err(error) => {
+            if timed {
+                reset_pipeline_allocation_telemetry();
+                reset_pipeline_operation_telemetry();
+                let _ = take_pipeline_resource_telemetry();
+                let _ = take_pipeline_backend_override();
+                let _ = take_pipeline_dispatch_count();
+                let _ = take_pipeline_resize_coeff_cache_stats();
+                let _ = take_pipeline_telemetry();
+            }
+            return Err(error);
+        }
+    };
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        begin_pipeline_operation_telemetry(operation);
+        record_pipeline_operation_path("cpu");
+        finish_pipeline_operation_telemetry();
+
+        // The returned image retains this existing pixel buffer by Arc; do
+        // not count a second buffer or a full-frame copy.
+        record_pipeline_resource_telemetry(host_resource_telemetry(input));
+        let resource = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let dispatch_count = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: Some(Backend::Cpu),
+            actual_backend: Backend::Cpu,
+            operation_count: 1,
+            route_ns: 0,
+            validation_ns: 0,
+            backend_ns,
+            dispatch_count,
+            fallback_reason: None,
+            resource,
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok(result)
+}
+
+/// Execute one SIMD image operation directly for a loaded source and publish
+/// the vector and buffer evidence for its native kernel. The closure accounts
+/// its checked image-buffer allocations through the normal allocation hooks.
+pub(crate) fn execute_eager_simd_image_operation(
+    operation: &'static str,
+    input: &DynamicImage,
+    execute: impl FnOnce() -> Result<(DynamicImage, u64, u64, &'static str), PilError>,
+) -> Result<DynamicImage, PilError> {
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
+        let _ = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let _ = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+    }
+
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let (result, vector_blocks, scalar_tail, path) = match execute() {
+        Ok(result) => result,
+        Err(error) => {
+            if timed {
+                reset_pipeline_allocation_telemetry();
+                reset_pipeline_operation_telemetry();
+                let _ = take_pipeline_resource_telemetry();
+                let _ = take_pipeline_backend_override();
+                let _ = take_pipeline_dispatch_count();
+                let _ = take_pipeline_resize_coeff_cache_stats();
+                let _ = take_pipeline_telemetry();
+            }
+            return Err(error);
+        }
+    };
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        begin_pipeline_operation_telemetry(operation);
+        record_pipeline_operation_vector_blocks(vector_blocks);
+        record_pipeline_operation_scalar_tail(scalar_tail);
+        record_pipeline_operation_path(path);
+        finish_pipeline_operation_telemetry();
+
+        let mut resource = host_resource_telemetry(input);
+        let output_bytes = result.as_bytes().len();
+        let output_bytes_u64 = output_bytes as u64;
+        resource.host_buffer_count = resource
+            .host_buffer_count
+            .saturating_add(u64::from(output_bytes != 0));
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes_u64);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes_u64));
+        let allocation = take_pipeline_allocation_telemetry();
+        resource.host_allocation_count = allocation.allocation_count;
+        resource.host_allocated_bytes = allocation.allocated_bytes;
+        record_pipeline_resource_telemetry(resource);
+        let resource = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let dispatch_count = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: Some(Backend::Simd),
+            actual_backend: Backend::Simd,
+            operation_count: 1,
+            route_ns: 0,
+            validation_ns: 0,
+            backend_ns,
+            dispatch_count,
+            fallback_reason: None,
+            resource,
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok(result)
 }
 
 #[cfg(feature = "gpu")]
@@ -2518,7 +2912,10 @@ pub(crate) fn execute_prepared_gpu_rgb_projection_terminal(
 
 #[cfg(test)]
 mod tests {
-    use super::{Backend, execute_automatic_simd_segments};
+    use super::{
+        Backend, PilError, execute_automatic_simd_segments, execute_eager_simd_image_operation,
+        simd_extract_band_into,
+    };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
     use crate::raster::{DynamicImage, Rgb, RgbImage};
 
@@ -2534,6 +2931,61 @@ mod tests {
         assert!(Backend::pipeline_telemetry_enabled());
 
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn eager_simd_image_operation_records_vector_and_allocation_evidence() {
+        let raw: Vec<u8> = (0..37 * 3)
+            .map(|index| u8::try_from((index * 73 + 19) % 256).expect("sample byte fits"))
+            .collect();
+        let image = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(37, 1, raw).expect("RGB source shape must be valid"),
+        );
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let result = execute_eager_simd_image_operation("ExtractBand", &image, || {
+            let mut output = crate::checked_dims::CheckedDims::new(37, 1, 1)?.alloc_buffer();
+            let (vector_blocks, scalar_tail, path) =
+                simd_extract_band_into(&image, 1, Some("RGB"), &mut output)?;
+            let output = crate::raster::GrayImage::from_raw(37, 1, output).ok_or_else(|| {
+                PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into())
+            })?;
+            Ok((
+                DynamicImage::ImageLuma8(output),
+                vector_blocks,
+                scalar_tail,
+                path,
+            ))
+        });
+        let receipt = Backend::take_pipeline_telemetry().expect("SIMD execution receipt");
+        let operations = Backend::take_pipeline_operation_telemetry();
+        Backend::set_pipeline_telemetry_enabled(previous);
+
+        let result = result.expect("eager SIMD ExtractBand must succeed");
+        assert_eq!(
+            result.as_bytes(),
+            image
+                .as_bytes()
+                .chunks_exact(3)
+                .map(|pixel| pixel[1])
+                .collect::<Vec<_>>()
+                .as_slice()
+        );
+        assert_eq!(receipt.0, Some(Backend::Simd));
+        assert_eq!(receipt.1, Backend::Simd);
+        assert_eq!(receipt.2, 1);
+        assert_eq!(receipt.7, None);
+        let resource = receipt.8.expect("SIMD host-buffer receipt");
+        assert_eq!(resource.host_allocation_count, 1);
+        assert_eq!(resource.host_allocated_bytes, 37);
+        let operation = operations
+            .first()
+            .expect("SIMD ExtractBand operation receipt");
+        assert!(operation.vector_block_count > 0);
+        assert_eq!(operation.scalar_tail_count, 5);
+        assert!(matches!(
+            operation.path,
+            "neon-deinterleave" | "ssse3-gather" | "vector-gather"
+        ));
     }
 
     #[test]

@@ -487,6 +487,86 @@ pub fn pil_grayscale_truncate(img: &DynamicImage) -> Result<crate::raster::GrayI
     pil_grayscale_inner(img, false)
 }
 
+/// Gather a selected byte from tightly packed 2-, 3-, or 4-channel pixels
+/// with SSSE3 when available. The counters report complete sixteen-pixel
+/// vector blocks and any scalar tail.
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+pub(crate) fn gather_interleaved_channel_ssse3_bytes(
+    source: &[u8],
+    channels: usize,
+    channel: usize,
+) -> Option<(Vec<u8>, u64, u64)> {
+    if !(2..=4).contains(&channels)
+        || channel >= channels
+        || source.len() % channels != 0
+        || !std::is_x86_feature_detected!("ssse3")
+    {
+        return None;
+    }
+
+    // SAFETY: the wrapper validates the packed channel layout and checks that
+    // the running CPU supports SSSE3 before entering the target-feature loop.
+    Some(unsafe { gather_interleaved_channel_ssse3(source, channels, channel) })
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "ssse3")]
+#[allow(unsafe_code)]
+unsafe fn gather_interleaved_channel_ssse3(
+    source: &[u8],
+    channels: usize,
+    channel: usize,
+) -> (Vec<u8>, u64, u64) {
+    use core::arch::x86_64::{
+        _mm_loadu_si128, _mm_or_si128, _mm_setzero_si128, _mm_shuffle_epi8, _mm_storeu_si128,
+    };
+
+    const LANES: usize = 16;
+    let pixel_count = source.len() / channels;
+    let vector_pixels = pixel_count / LANES * LANES;
+    let selectors: [[i8; LANES]; 4] = std::array::from_fn(|block| {
+        std::array::from_fn(|lane| {
+            let source_index = lane * channels + channel;
+            if source_index / LANES == block {
+                (source_index % LANES) as i8
+            } else {
+                i8::MIN
+            }
+        })
+    });
+    let mut output = Vec::<u8>::with_capacity(pixel_count);
+
+    // SAFETY: runtime dispatch established SSSE3. For each complete group of
+    // sixteen output pixels, `channels * 16` source bytes are available; each
+    // unaligned load stays in that range, each selector is a readable 16-byte
+    // stack array, and the 16-byte store fits the output capacity. `set_len`
+    // is called only after every vector output byte has been initialized.
+    unsafe {
+        for pixel in (0..vector_pixels).step_by(LANES) {
+            let source_ptr = source.as_ptr().add(pixel * channels);
+            let mut selected = _mm_setzero_si128();
+            for block in 0..channels {
+                let input = _mm_loadu_si128(source_ptr.add(block * LANES).cast());
+                let selector = _mm_loadu_si128(selectors[block].as_ptr().cast());
+                selected = _mm_or_si128(selected, _mm_shuffle_epi8(input, selector));
+            }
+            _mm_storeu_si128(output.as_mut_ptr().add(pixel).cast(), selected);
+        }
+        output.set_len(vector_pixels);
+    }
+
+    for pixel in vector_pixels..pixel_count {
+        output.push(source[pixel * channels + channel]);
+    }
+    debug_assert_eq!(output.len(), pixel_count);
+    (
+        output,
+        (vector_pixels / LANES) as u64,
+        (pixel_count - vector_pixels) as u64,
+    )
+}
+
 /// Gather the first byte from native YCbCr triples using SSSE3 when present.
 ///
 /// The returned counters describe sixteen-pixel vector blocks and scalar-tail
@@ -732,6 +812,9 @@ pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage,
             (u32::from(nk) - luma_ink) as u8
         })
         .collect();
+    if !gray.is_empty() {
+        crate::compute::record_pipeline_allocation(gray.len());
+    }
     crate::raster::GrayImage::from_raw(w, h, gray)
         .ok_or_else(|| PilError::InternalError("cmyk_to_grayscale buffer mismatch".to_string()))
 }
@@ -1902,11 +1985,12 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     use super::grayscale_rgb_avx2;
     use super::{
-        ColorValue, cmyk_muldiv255_byte, f_to_i, f_to_l, getcolor, grayscale_rgb_bytes,
-        grayscale_rgb_pixel, grayscale_rgb_pixel_delta, grayscale_rgb_pixel_lookup, i_to_f, i_to_l,
-        muldiv255, rgb_to_hsv, rgb_to_luma_u8,
+        ColorValue, cmyk_muldiv255_byte, cmyk_to_grayscale, f_to_i, f_to_l, getcolor,
+        grayscale_rgb_bytes, grayscale_rgb_pixel, grayscale_rgb_pixel_delta,
+        grayscale_rgb_pixel_lookup, i_to_f, i_to_l, muldiv255, rgb_to_hsv, rgb_to_luma_u8,
     };
     use crate::checked_dims::CheckedDims;
+    use crate::compute::Backend;
     use crate::error::PilError;
     use crate::raster::{DynamicImage, RgbaImage};
 
@@ -1957,6 +2041,30 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn cmyk_grayscale_records_the_final_output_allocation() {
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 1, vec![0, 0, 0, 0, 255, 255, 255, 255])
+                .expect("valid CMYK samples"),
+        );
+        let _restore = RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
+        Backend::reset_pipeline_allocation_telemetry();
+
+        let actual = cmyk_to_grayscale(&source).expect("CMYK grayscale");
+        let allocation = Backend::take_pipeline_allocation_telemetry();
+
+        assert_eq!(actual.as_raw(), &[255, 0]);
+        assert_eq!(allocation.allocation_count, 1);
+        assert_eq!(allocation.allocated_bytes, 2);
     }
 
     #[test]

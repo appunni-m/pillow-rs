@@ -1351,13 +1351,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     // ResizeBoxed stores only rows referenced by its vertical table. `_pad`
     // carries the first original source row; output rows remain zero-based so
-    // the rebased vertical table addresses this compact intermediate.
+    // the rebased vertical table addresses this compact intermediate. The
+    // dispatch bound above checks the compact row index; checking `source_y`
+    // against that row count would reject valid rows after the source offset.
     var source_y = gid.y + params._pad;
     if params._pad == 0xffffffffu || params._pad == NATIVE_COVER_PACKED_OUTPUT {
         source_y = gid.y;
-    }
-    if source_y >= params.height {
-        return;
     }
     if params._pad == NATIVE_COVER_PACKED_OUTPUT {
         // Singleton native L/LA Cover packs four exact horizontal channel

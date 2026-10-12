@@ -705,6 +705,9 @@ pub fn grayscale(image: &Image) -> Result<Image, PilError> {
             "conversion from La to L not supported".into(),
         ));
     }
+    if let Some(result) = image.try_grayscale_eager_rgb()? {
+        return Ok(result);
+    }
     Ok(Image::push_op(image, PipelineOp::Grayscale))
 }
 

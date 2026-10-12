@@ -501,9 +501,10 @@ class Image:
         """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
         if band is not None:
             values = self._rust_image.getdata_formatted(band)
-            # Pillow preserves the palette mode for a banded P read; other
-            # public band selections are exposed as a single L channel.
-            return ImagingCore(values, "P" if self.mode == "P" else "L", self.size)
+            # Pillow keeps the original mode for single-band 1/L/P images;
+            # selecting a channel from a multiband image produces an L core.
+            result_mode = self.mode if self.mode in ("1", "L", "P") else "L"
+            return ImagingCore(values, result_mode, self.size)
         self.load()
         mode, size = self.mode, self.size
         self._has_getdata_views = True

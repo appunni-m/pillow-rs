@@ -14,6 +14,16 @@
   as `1`, `L`, `LA`, `P`, `PA`, `RGB`, and `RGBA` directly where their
   semantics allow it. Do not convert everything to RGBA merely to share an
   implementation.
+- Keep `pool_simd/ops/adapters.rs` a dispatch and re-export facade. Make each
+  family adapter a fine orchestrator whose validation, mode selection, backend
+  receipt, and result materialization are clear at a glance. Put mode-specific
+  hot loops in focused kernel modules and shared low-level helpers in the
+  shared native layer. Reuse must preserve specialized loops, inlining, and
+  direct backend selection; do not add generic or dynamic dispatch to pixel
+  paths merely to reduce source duplication. When a reuse change affects the
+  executed path, compare full public-call latency and reject regressions.
+  Prefer one adapter per coherent family, not one file per operation unless
+  their contracts require it.
 - The `parallel` Cargo feature is opt-in and must stay out of default features
   in both `pillow-rs` and its bindings. A normal Python build must not silently
   enable Rayon.

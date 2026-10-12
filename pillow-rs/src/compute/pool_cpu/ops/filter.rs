@@ -9,6 +9,8 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
+#[cfg(not(feature = "parallel"))]
+use crate::ops::pil_resize::i32_samples_from_le_bytes;
 use crate::raster::DynamicImage;
 use std::borrow::Cow;
 
@@ -671,9 +673,22 @@ const I32_UNIFORM_FILTER5X5_MAX_PIXELS: usize = 1024 * 1024;
 const I32_BINOMIAL_FILTER5X5_WEIGHTS: [i32; 5] = [1, 4, 6, 4, 1];
 const I32_BINOMIAL_FILTER5X5_MAX_ABS_SAMPLE: u32 = 65_535;
 
+fn i32_filter5x5_binomial_kernel_is_applicable(kernel: &[f32; 25]) -> bool {
+    for (y, vertical) in I32_BINOMIAL_FILTER5X5_WEIGHTS.iter().enumerate() {
+        for (x, horizontal) in I32_BINOMIAL_FILTER5X5_WEIGHTS.iter().enumerate() {
+            let expected = (*vertical * *horizontal) as f32 / 256.0;
+            if kernel[y * 5 + x] != expected {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 /// Whether an I-mode input can use the exact integer form of the normalized
 /// binomial 5x5 kernel. The 16-bit magnitude bound keeps every weighted
 /// partial sum below 2^24, so Pillow's f32 path is exact before its +0.5 cast.
+#[cfg(feature = "parallel")]
 pub(crate) fn i32_filter5x5_bounded_binomial_is_applicable(
     raw: &[u8],
     width: usize,
@@ -693,13 +708,8 @@ pub(crate) fn i32_filter5x5_bounded_binomial_is_applicable(
     if raw.len() != byte_count {
         return false;
     }
-    for (y, vertical) in I32_BINOMIAL_FILTER5X5_WEIGHTS.iter().enumerate() {
-        for (x, horizontal) in I32_BINOMIAL_FILTER5X5_WEIGHTS.iter().enumerate() {
-            let expected = (*vertical * *horizontal) as f32 / 256.0;
-            if kernel[y * 5 + x] != expected {
-                return false;
-            }
-        }
+    if !i32_filter5x5_binomial_kernel_is_applicable(kernel) {
+        return false;
     }
     raw.chunks_exact(4).all(|pixel| {
         let value = i32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]);
@@ -707,10 +717,31 @@ pub(crate) fn i32_filter5x5_bounded_binomial_is_applicable(
     })
 }
 
+#[cfg(not(feature = "parallel"))]
+fn i32_filter5x5_bounded_binomial_kernel_is_applicable(
+    sample_count: usize,
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    offset: f32,
+) -> bool {
+    if width < 5 || height < 5 || offset != 0.0 {
+        return false;
+    }
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    if sample_count != pixel_count {
+        return false;
+    }
+    i32_filter5x5_binomial_kernel_is_applicable(kernel)
+}
+
 /// Evaluate the exact integer factorization of the binomial I-mode kernel.
 /// Five horizontal rows form a ring buffer; each source row is filtered once
 /// and reused by the five vertical contributions. The returned bytes preserve
 /// Pillow's copied two-pixel border and positive-only I-mode clipping.
+#[cfg(feature = "parallel")]
 fn filter_5x5_i32_bounded_binomial(raw: &[u8], width: usize, height: usize) -> Option<Vec<u8>> {
     let ring_len = width.checked_mul(5)?;
     let mut horizontal_rows = vec![0_i32; ring_len];
@@ -800,6 +831,284 @@ fn filter_5x5_i32_f32_ring(
 }
 
 #[cfg(not(feature = "parallel"))]
+fn filter_5x5_i32_output_with_copied_border(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+) -> Option<Vec<u8>> {
+    let expected_len = width.checked_mul(height)?.checked_mul(4)?;
+    if raw.len() != expected_len {
+        return None;
+    }
+
+    // Every interior sample is replaced by the filter, while border bytes
+    // must preserve the input exactly. Start from those input bytes rather
+    // than zero-filling a destination whose full frame is then overwritten.
+    let output = raw.to_vec();
+    if width < 5 || height < 5 {
+        return Some(output);
+    }
+    Some(output)
+}
+
+/// Reuse the exact horizontal FMA rows of the binomial kernel. Its vertical
+/// weights are `[1, 4, 6, 4, 1]`: rows weighted by four are exact power-of-two
+/// scalings of the weight-one row, and the weight-six row is twice a row
+/// weighted by three. Power-of-two scaling commutes with these finite normal
+/// f32 FMA results, while preserving Pillow's horizontal and vertical order.
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_i32_f32_binomial_scaled_rows_ring_with_fma<F: F32MulAdd>(
+    raw: &[u8],
+    samples: &[i32],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    offset: f32,
+    fma: &F,
+) -> Option<Vec<u8>> {
+    let pixel_count = width.checked_mul(height)?;
+    if samples.len() != pixel_count || raw.len() != pixel_count.checked_mul(4)? {
+        return None;
+    }
+    if !i32_filter5x5_binomial_kernel_is_applicable(kernel) {
+        return None;
+    }
+
+    let mut output = filter_5x5_i32_output_with_copied_border(raw, width, height)?;
+    if width < 5 || height < 5 {
+        return Some(output);
+    }
+
+    let ring_len = width.checked_mul(5)?;
+    let row_stride = width.checked_mul(4)?;
+    let mut horizontal_one_rows = vec![0.0f32; ring_len];
+    let mut horizontal_three_rows = vec![0.0f32; ring_len];
+    let horizontal_one_kernel = &kernel[0..5];
+    let horizontal_three_kernel: [f32; 5] = std::array::from_fn(|tap| kernel[10 + tap] * 0.5);
+
+    for source_y in 0..height {
+        let input_row_start = source_y * width;
+        let ring_row_start = source_y % 5 * width;
+        let mut window = [0.0f32; 5];
+        for (tap, value) in window.iter_mut().enumerate() {
+            *value = samples[input_row_start + tap] as f32;
+        }
+
+        for x in 2..width - 2 {
+            let index = ring_row_start + x;
+            horizontal_one_rows[index] =
+                pillow_kernel_row_5_with_fma(window, horizontal_one_kernel, fma);
+            horizontal_three_rows[index] =
+                pillow_kernel_row_5_with_fma(window, &horizontal_three_kernel, fma);
+
+            if x + 1 < width - 2 {
+                window = [
+                    window[1],
+                    window[2],
+                    window[3],
+                    window[4],
+                    samples[input_row_start + x + 3] as f32,
+                ];
+            }
+        }
+
+        if source_y < 4 {
+            continue;
+        }
+
+        let bottom = source_y % 5 * width;
+        let lower = (source_y - 1) % 5 * width;
+        let center = (source_y - 2) % 5 * width;
+        let upper = (source_y - 3) % 5 * width;
+        let top = (source_y - 4) % 5 * width;
+        let output_row_start = (source_y - 2) * row_stride;
+        for x in 2..width - 2 {
+            let mut value = offset + 0.5;
+            value += horizontal_one_rows[bottom + x];
+            value += horizontal_one_rows[lower + x] * 4.0;
+            value += horizontal_three_rows[center + x] * 2.0;
+            value += horizontal_one_rows[upper + x] * 4.0;
+            value += horizontal_one_rows[top + x];
+            let result = if value >= 0.0 { value as i32 } else { 0 };
+            let output_pixel = output_row_start + x * 4;
+            output[output_pixel..output_pixel + 4].copy_from_slice(&result.to_le_bytes());
+        }
+    }
+
+    Some(output)
+}
+
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_i32_bounded_binomial_from_samples(
+    raw: &[u8],
+    samples: &[i32],
+    width: usize,
+    height: usize,
+) -> Option<Vec<u8>> {
+    let pixel_count = width.checked_mul(height)?;
+    if samples.len() != pixel_count || raw.len() != pixel_count.checked_mul(4)? {
+        return None;
+    }
+
+    let ring_len = width.checked_mul(5)?;
+    let mut horizontal_rows = vec![0_i32; ring_len];
+    let mut output = filter_5x5_i32_output_with_copied_border(raw, width, height)?;
+    if width < 5 || height < 5 {
+        return Some(output);
+    }
+
+    let horizontal_row = |source_y: usize, row: &mut [i32]| {
+        let row_start = source_y * width;
+        let mut window = [
+            samples[row_start],
+            samples[row_start + 1],
+            samples[row_start + 2],
+            samples[row_start + 3],
+            samples[row_start + 4],
+        ];
+        if window
+            .iter()
+            .any(|sample| sample.unsigned_abs() > I32_BINOMIAL_FILTER5X5_MAX_ABS_SAMPLE)
+        {
+            return false;
+        }
+        for x in 2..width - 2 {
+            row[x] = window[0] + window[1] * 4 + window[2] * 6 + window[3] * 4 + window[4];
+            if x + 1 < width - 2 {
+                let entering = samples[row_start + x + 3];
+                if entering.unsigned_abs() > I32_BINOMIAL_FILTER5X5_MAX_ABS_SAMPLE {
+                    return false;
+                }
+                window[0] = window[1];
+                window[1] = window[2];
+                window[2] = window[3];
+                window[3] = window[4];
+                window[4] = entering;
+            }
+        }
+        true
+    };
+
+    for source_y in 0..5 {
+        let slot = source_y % 5;
+        if !horizontal_row(
+            source_y,
+            &mut horizontal_rows[slot * width..(slot + 1) * width],
+        ) {
+            return None;
+        }
+    }
+    for y in 2..height - 2 {
+        let bottom = (y + 2) % 5 * width;
+        let lower = (y + 1) % 5 * width;
+        let center = y % 5 * width;
+        let upper = (y - 1) % 5 * width;
+        let top = (y - 2) % 5 * width;
+        let output_row_start = y * width * 4;
+        for x in 2..width - 2 {
+            let sum = horizontal_rows[bottom + x]
+                + horizontal_rows[lower + x] * 4
+                + horizontal_rows[center + x] * 6
+                + horizontal_rows[upper + x] * 4
+                + horizontal_rows[top + x];
+            let filtered = if sum >= 0 {
+                // The bounded-input proof keeps this rounded sum in range; for
+                // nonnegative values, division by 256 is an exact eight-bit shift.
+                ((sum as u32 + 128) >> 8) as i32
+            } else {
+                0
+            };
+            let output_pixel = output_row_start + x * 4;
+            output[output_pixel..output_pixel + 4].copy_from_slice(&filtered.to_le_bytes());
+        }
+
+        let next_source_y = y + 3;
+        if next_source_y < height {
+            let slot = next_source_y % 5;
+            if !horizontal_row(
+                next_source_y,
+                &mut horizontal_rows[slot * width..(slot + 1) * width],
+            ) {
+                return None;
+            }
+        }
+    }
+    Some(output)
+}
+
+/// Reuse horizontal sums when every kernel row has identical coefficients.
+/// This preserves Pillow's per-row FMA and vertical accumulation order while
+/// avoiding four repeated horizontal dot products for each output pixel.
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_i32_f32_equal_rows_ring_with_fma<F: F32MulAdd>(
+    raw: &[u8],
+    samples: &[i32],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    offset: f32,
+    fma: &F,
+) -> Option<Vec<u8>> {
+    let mut output = filter_5x5_i32_output_with_copied_border(raw, width, height)?;
+    if width < 5 || height < 5 {
+        return Some(output);
+    }
+
+    let ring_len = width.checked_mul(5)?;
+    let row_stride = width.checked_mul(4)?;
+    let mut horizontal_rows = vec![0.0f32; ring_len];
+
+    for source_y in 0..height {
+        let input_row_start = source_y * width;
+        let output_slot_start = source_y % 5 * width;
+        let mut window = [0.0f32; 5];
+        for (x, value) in window.iter_mut().enumerate() {
+            *value = samples[input_row_start + x] as f32;
+        }
+
+        for x in 2..width - 2 {
+            horizontal_rows[output_slot_start + x] =
+                pillow_kernel_row_5_with_fma(window, &kernel[0..5], fma);
+            if x + 1 < width - 2 {
+                window = [
+                    window[1],
+                    window[2],
+                    window[3],
+                    window[4],
+                    samples[input_row_start + x + 3] as f32,
+                ];
+            }
+        }
+
+        if source_y < 4 {
+            continue;
+        }
+
+        let source_row_slots = [
+            source_y % 5 * width,
+            (source_y - 1) % 5 * width,
+            (source_y - 2) % 5 * width,
+            (source_y - 3) % 5 * width,
+            (source_y - 4) % 5 * width,
+        ];
+        let output_row_start = (source_y - 2) * row_stride;
+        for x in 2..width - 2 {
+            let mut value = offset + 0.5;
+            value += horizontal_rows[source_row_slots[0] + x];
+            value += horizontal_rows[source_row_slots[1] + x];
+            value += horizontal_rows[source_row_slots[2] + x];
+            value += horizontal_rows[source_row_slots[3] + x];
+            value += horizontal_rows[source_row_slots[4] + x];
+            let result = if value >= 0.0 { value as i32 } else { 0 };
+            let output_pixel = output_row_start + x * 4;
+            output[output_pixel..output_pixel + 4].copy_from_slice(&result.to_le_bytes());
+        }
+    }
+
+    Some(output)
+}
+
+#[cfg(not(feature = "parallel"))]
 fn filter_5x5_i32_f32_ring_with_fma<F: F32MulAdd>(
     raw: &[u8],
     width: usize,
@@ -812,16 +1121,47 @@ fn filter_5x5_i32_f32_ring_with_fma<F: F32MulAdd>(
     if raw.len() != pixel_count.checked_mul(4)? {
         return None;
     }
+    let samples = i32_samples_from_le_bytes(raw, pixel_count);
+    if samples.len() != pixel_count {
+        return None;
+    }
+    if i32_filter5x5_binomial_kernel_is_applicable(kernel) {
+        return filter_5x5_i32_f32_binomial_scaled_rows_ring_with_fma(
+            raw,
+            samples.as_ref(),
+            width,
+            height,
+            kernel,
+            offset,
+            fma,
+        );
+    }
+    if kernel[0..5] == kernel[5..10]
+        && kernel[0..5] == kernel[10..15]
+        && kernel[0..5] == kernel[15..20]
+        && kernel[0..5] == kernel[20..25]
+    {
+        return filter_5x5_i32_f32_equal_rows_ring_with_fma(
+            raw,
+            samples.as_ref(),
+            width,
+            height,
+            kernel,
+            offset,
+            fma,
+        );
+    }
+
     let ring_len = width.checked_mul(5)?;
     let mut source_rows = vec![0.0f32; ring_len];
-    let mut output = raw.to_vec();
     let row_stride = width.checked_mul(4)?;
+    let mut output = filter_5x5_i32_output_with_copied_border(raw, width, height)?;
 
     for source_y in 0..height {
         let slot_start = source_y % 5 * width;
         let input_row_start = source_y * width;
         for x in 0..width {
-            source_rows[slot_start + x] = read_i32_pixel_le(raw, input_row_start + x) as f32;
+            source_rows[slot_start + x] = samples[input_row_start + x] as f32;
         }
         if source_y < 4 || width < 5 {
             continue;
@@ -950,6 +1290,11 @@ fn filter_5x5_i32(
         ));
     }
 
+    // Keep the bounded-input proof on both CPU profiles. Parallel CPU uses its
+    // integer factorization below; serial CPU checks an aligned sample view
+    // and only selects the integer factorization when every sample is proven
+    // to preserve Pillow's f32 arithmetic exactly.
+    #[cfg(feature = "parallel")]
     if i32_filter5x5_bounded_binomial_is_applicable(
         raw,
         w_u32 as usize,
@@ -963,6 +1308,40 @@ fn filter_5x5_i32(
             crate::raster::RgbaImage::from_raw(w_u32, h_u32, output)
                 .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
         ));
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    {
+        let first_sample_is_bounded = raw.get(..4).is_some_and(|sample| {
+            i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]).unsigned_abs()
+                <= I32_BINOMIAL_FILTER5X5_MAX_ABS_SAMPLE
+        });
+        if first_sample_is_bounded {
+            let pixel_count = (w_u32 as usize).checked_mul(h_u32 as usize);
+            if let Some(pixel_count) = pixel_count {
+                let samples = i32_samples_from_le_bytes(raw, pixel_count);
+                if i32_filter5x5_bounded_binomial_kernel_is_applicable(
+                    samples.len(),
+                    w_u32 as usize,
+                    h_u32 as usize,
+                    &kd,
+                    offset,
+                ) {
+                    if let Some(output) = filter_5x5_i32_bounded_binomial_from_samples(
+                        raw,
+                        samples.as_ref(),
+                        w_u32 as usize,
+                        h_u32 as usize,
+                    ) {
+                        return Ok(DynamicImage::ImageRgba8(
+                            crate::raster::RgbaImage::from_raw(w_u32, h_u32, output).ok_or_else(
+                                || PilError::ValueError("filter_5x5_i32: buffer error".into()),
+                            )?,
+                        ));
+                    }
+                }
+            }
+        }
     }
 
     #[cfg(not(feature = "parallel"))]
@@ -2723,6 +3102,16 @@ fn blur_box_radius_one_horizontal_row(
     channels: usize,
     horizontal_weight: u32,
 ) {
+    if channels == 3 {
+        let source_start = row * row_bytes;
+        blur_box_radius_one_horizontal_rgb_row(
+            &source[source_start..source_start + row_bytes],
+            ring,
+            width,
+            horizontal_weight,
+        );
+        return;
+    }
     blur_one_row(
         source,
         ring,
@@ -2733,6 +3122,94 @@ fn blur_box_radius_one_horizontal_row(
         horizontal_weight,
         0,
     );
+}
+
+#[cfg(not(feature = "parallel"))]
+#[inline]
+fn blur_box_radius_one_horizontal_rgb_row(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    weight: u32,
+) {
+    debug_assert!(width > 0);
+    debug_assert_eq!(source.len(), width * 3);
+    debug_assert_eq!(destination.len(), width * 3);
+
+    let last = width - 1;
+    let last_base = last * 3;
+    let first_right = usize::from(width > 1) * 3;
+    let mut red = u32::from(source[0]) * 2 + u32::from(source[first_right]);
+    let mut green = u32::from(source[1]) * 2 + u32::from(source[first_right + 1]);
+    let mut blue = u32::from(source[2]) * 2 + u32::from(source[first_right + 2]);
+
+    destination[0] = (red.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    destination[1] = (green.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    destination[2] = (blue.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    if width == 1 {
+        return;
+    }
+
+    let first_entering = (2.min(last)) * 3;
+    red = red
+        .wrapping_sub(u32::from(source[0]))
+        .wrapping_add(u32::from(source[first_entering]));
+    green = green
+        .wrapping_sub(u32::from(source[1]))
+        .wrapping_add(u32::from(source[first_entering + 1]));
+    blue = blue
+        .wrapping_sub(u32::from(source[2]))
+        .wrapping_add(u32::from(source[first_entering + 2]));
+
+    if width > 2 {
+        for center in 1..width - 2 {
+            let output_base = center * 3;
+            destination[output_base] =
+                (red.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+            destination[output_base + 1] =
+                (green.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+            destination[output_base + 2] =
+                (blue.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+
+            let leaving_base = (center - 1) * 3;
+            let entering_base = (center + 2) * 3;
+            red = red
+                .wrapping_sub(u32::from(source[leaving_base]))
+                .wrapping_add(u32::from(source[entering_base]));
+            green = green
+                .wrapping_sub(u32::from(source[leaving_base + 1]))
+                .wrapping_add(u32::from(source[entering_base + 1]));
+            blue = blue
+                .wrapping_sub(u32::from(source[leaving_base + 2]))
+                .wrapping_add(u32::from(source[entering_base + 2]));
+        }
+
+        let penultimate = width - 2;
+        let output_base = penultimate * 3;
+        destination[output_base] =
+            (red.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+        destination[output_base + 1] =
+            (green.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+        destination[output_base + 2] =
+            (blue.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+
+        let leaving_base = (width - 3) * 3;
+        red = red
+            .wrapping_sub(u32::from(source[leaving_base]))
+            .wrapping_add(u32::from(source[last_base]));
+        green = green
+            .wrapping_sub(u32::from(source[leaving_base + 1]))
+            .wrapping_add(u32::from(source[last_base + 1]));
+        blue = blue
+            .wrapping_sub(u32::from(source[leaving_base + 2]))
+            .wrapping_add(u32::from(source[last_base + 2]));
+    }
+
+    destination[last_base] = (red.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    destination[last_base + 1] =
+        (green.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    destination[last_base + 2] =
+        (blue.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
 }
 
 #[cfg(not(feature = "parallel"))]
@@ -3400,6 +3877,39 @@ fn rank_filter_bytes_small(
 /// 7x7 scratch array for every output pixel. The clamped coordinates preserve
 /// Pillow's replicated-edge window, and only the requested order statistic is
 /// selected from the nine samples per channel.
+#[inline(always)]
+fn compare_swap_median9(values: &mut [u8; 9], left: usize, right: usize) {
+    let a = values[left];
+    let b = values[right];
+    values[left] = a.min(b);
+    values[right] = a.max(b);
+}
+
+#[inline(always)]
+fn median9_u8(mut values: [u8; 9]) -> u8 {
+    // A fixed 19-comparator selection network leaves the median at index 4.
+    compare_swap_median9(&mut values, 1, 2);
+    compare_swap_median9(&mut values, 4, 5);
+    compare_swap_median9(&mut values, 7, 8);
+    compare_swap_median9(&mut values, 0, 1);
+    compare_swap_median9(&mut values, 3, 4);
+    compare_swap_median9(&mut values, 6, 7);
+    compare_swap_median9(&mut values, 0, 3);
+    compare_swap_median9(&mut values, 1, 2);
+    compare_swap_median9(&mut values, 4, 5);
+    compare_swap_median9(&mut values, 7, 8);
+    compare_swap_median9(&mut values, 3, 6);
+    compare_swap_median9(&mut values, 4, 7);
+    compare_swap_median9(&mut values, 5, 8);
+    compare_swap_median9(&mut values, 1, 4);
+    compare_swap_median9(&mut values, 2, 5);
+    compare_swap_median9(&mut values, 4, 7);
+    compare_swap_median9(&mut values, 4, 2);
+    compare_swap_median9(&mut values, 6, 4);
+    compare_swap_median9(&mut values, 4, 2);
+    values[4]
+}
+
 fn rank_filter_bytes_3x3_row(
     raw: &[u8],
     row: &mut [u8],
@@ -3431,7 +3941,9 @@ fn rank_filter_bytes_3x3_row(
                 raw[bottom + center + channel],
                 raw[bottom + right + channel],
             ];
-            row[output + channel] = if matches!(channels, 1 | 2) && rank == 1 {
+            row[output + channel] = if rank == 4 {
+                median9_u8(values)
+            } else if matches!(channels, 1 | 2) && rank == 1 {
                 // Native L/LA rank 1 only needs the two smallest samples, not
                 // a complete introselect partition. This min/max reduction
                 // keeps duplicate minima exact and avoids data-dependent
@@ -3924,6 +4436,31 @@ pub fn execute_filter5x5(
     {
         let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
         return Ok(preserve_mode(img, result));
+    }
+    #[cfg(not(feature = "parallel"))]
+    #[cfg(target_arch = "aarch64")]
+    #[cfg(target_feature = "neon")]
+    if matches!(img, DynamicImage::ImageLumaA8(_))
+        && w_u32 >= 13
+        && h_u32 >= 5
+        && binomial5x5_parameters_match(kernel, scale, offset)
+    {
+        // Reuse the exact packed-LA vector kernel for serial CPU on AArch64.
+        // Keep this out of Parallel CPU so Rayon remains a separate profile.
+        let mut out = raw.to_vec();
+        if let Some((vector_blocks, scalar_tail)) =
+            crate::compute::pool_simd::ops::native_filter::native_filter_5x5_binomial_la_rows(
+                raw,
+                &mut out,
+                w_u32 as usize,
+                h_u32 as usize,
+            )
+        {
+            crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+            crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+            let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+            return Ok(preserve_mode(img, result));
+        }
     }
     #[cfg(not(feature = "parallel"))]
     if matches!(explicit_mode, None | Some("LA"))
@@ -4530,9 +5067,13 @@ mod i32_filter5x5_uniform_tests {
 
 #[cfg(all(test, not(feature = "parallel")))]
 mod i32_filter5x5_sliding_window_tests {
-    #[cfg(target_arch = "x86_64")]
     use super::PortableF32Fma;
-    use super::{filter_5x5_i32_f32_ring, pillow_kernel_row_5};
+    use super::{
+        DynamicImage, filter_5x5_i32, filter_5x5_i32_bounded_binomial_from_samples,
+        filter_5x5_i32_f32_binomial_scaled_rows_ring_with_fma, filter_5x5_i32_f32_ring,
+        i32_filter5x5_binomial_kernel_is_applicable,
+        i32_filter5x5_bounded_binomial_kernel_is_applicable, pillow_kernel_row_5,
+    };
 
     fn scalar_reference_row(
         raw: &[u8],
@@ -4611,6 +5152,196 @@ mod i32_filter5x5_sliding_window_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn bounded_binomial_integer_ring_matches_f32_at_minimum_and_odd_dimensions() {
+        let weights = [1i32, 4, 6, 4, 1];
+        let kernel =
+            std::array::from_fn(|index| (weights[index / 5] * weights[index % 5]) as f32 / 256.0);
+        let values: [i32; 7] = [-65_535, -32_768, -1, 0, 1, 32_767, 65_535];
+
+        for (width, height) in [(5usize, 5usize), (6, 6), (7, 8), (8, 5)] {
+            let samples = (0..width * height)
+                .map(|index| values[(index * 5 + index / width) % values.len()])
+                .collect::<Vec<_>>();
+            let raw = samples
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect::<Vec<_>>();
+            assert!(i32_filter5x5_bounded_binomial_kernel_is_applicable(
+                samples.len(),
+                width,
+                height,
+                &kernel,
+                0.0,
+            ));
+
+            let actual =
+                filter_5x5_i32_bounded_binomial_from_samples(&raw, &samples, width, height)
+                    .unwrap();
+            let reference = filter_5x5_i32_f32_ring(&raw, width, height, &kernel, 0.0).unwrap();
+            assert_eq!(
+                actual, reference,
+                "bounded kernel mismatch at {width}×{height}"
+            );
+
+            for out_of_bound_index in [0, samples.len() / 2, samples.len() - 1] {
+                let mut out_of_bound = samples.clone();
+                out_of_bound[out_of_bound_index] = 65_536;
+                let out_of_bound_raw = out_of_bound
+                    .iter()
+                    .flat_map(|sample| sample.to_le_bytes())
+                    .collect::<Vec<_>>();
+                assert!(i32_filter5x5_bounded_binomial_kernel_is_applicable(
+                    out_of_bound.len(),
+                    width,
+                    height,
+                    &kernel,
+                    0.0,
+                ));
+                assert!(
+                    filter_5x5_i32_bounded_binomial_from_samples(
+                        &out_of_bound_raw,
+                        &out_of_bound,
+                        width,
+                        height,
+                    )
+                    .is_none()
+                );
+
+                let image = DynamicImage::ImageRgba8(
+                    crate::raster::RgbaImage::from_raw(
+                        width as u32,
+                        height as u32,
+                        out_of_bound_raw.clone(),
+                    )
+                    .unwrap(),
+                );
+                let actual = filter_5x5_i32(&image, &kernel, 1.0, 0.0).unwrap();
+                let DynamicImage::ImageRgba8(actual) = actual else {
+                    panic!("I-mode filter must preserve its scalar carrier");
+                };
+                let reference =
+                    filter_5x5_i32_f32_ring(&out_of_bound_raw, width, height, &kernel, 0.0)
+                        .unwrap();
+                assert_eq!(actual.as_raw(), &reference);
+            }
+        }
+    }
+
+    #[test]
+    fn binomial_scaled_rows_ring_matches_pillow_fma_for_full_i32_range() {
+        let weights = [1i32, 4, 6, 4, 1];
+        let kernel =
+            std::array::from_fn(|index| (weights[index / 5] * weights[index % 5]) as f32 / 256.0);
+        assert!(i32_filter5x5_binomial_kernel_is_applicable(&kernel));
+
+        let mut state = 0x6a09_e667_f3bc_c909u64;
+        let mut values = vec![i32::MIN, i32::MAX, -999_997, 999_996, -1, 0, 1];
+        for _ in values.len()..19 * 13 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            values.push(state as u32 as i32);
+        }
+
+        for (width, height) in [(5usize, 5usize), (6, 7), (19, 13)] {
+            let samples = (0..width * height)
+                .map(|index| values[index])
+                .collect::<Vec<_>>();
+            let raw = samples
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect::<Vec<_>>();
+            for offset in [0.0f32, 0.5, -17.25] {
+                let mut expected = raw.clone();
+                let row_stride = width * 4;
+                for y in 0..height {
+                    let row_start = y * row_stride;
+                    scalar_reference_row(
+                        &raw,
+                        &mut expected[row_start..row_start + row_stride],
+                        y as i32,
+                        width as i32,
+                        height as i32,
+                        &kernel,
+                        offset,
+                    );
+                }
+
+                let actual = filter_5x5_i32_f32_binomial_scaled_rows_ring_with_fma(
+                    &raw,
+                    &samples,
+                    width,
+                    height,
+                    &kernel,
+                    offset,
+                    &PortableF32Fma,
+                )
+                .unwrap();
+                assert_eq!(
+                    actual, expected,
+                    "FMA mismatch at {width}×{height}, offset {offset}"
+                );
+
+                let image = DynamicImage::ImageRgba8(
+                    crate::raster::RgbaImage::from_raw(width as u32, height as u32, raw.clone())
+                        .unwrap(),
+                );
+                let DynamicImage::ImageRgba8(actual) = filter_5x5_i32(
+                    &image,
+                    &kernel.map(|coefficient| coefficient * 256.0),
+                    256.0,
+                    offset,
+                )
+                .unwrap() else {
+                    panic!("I-mode filter must preserve its scalar carrier");
+                };
+                assert_eq!(
+                    actual.as_raw(),
+                    &expected,
+                    "dispatch mismatch at {width}×{height}, offset {offset}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unaligned_i32_source_preserves_filter_output() {
+        let width = 9usize;
+        let height = 7usize;
+        let values = [i32::MIN, -16_777_217, -1, 0, 1, 65_535, 65_536, i32::MAX];
+        let mut raw = Vec::with_capacity(width * height * 4);
+        for index in 0..width * height {
+            raw.extend_from_slice(&values[index % values.len()].to_le_bytes());
+        }
+        let mut storage = vec![0; raw.len() + std::mem::align_of::<i32>()];
+        let base = storage.as_ptr() as usize;
+        let offset = (0..std::mem::align_of::<i32>())
+            .find(|offset| (base + offset) % std::mem::align_of::<i32>() != 0)
+            .expect("an unaligned byte offset must exist");
+        storage[offset..offset + raw.len()].copy_from_slice(&raw);
+        let unaligned = &storage[offset..offset + raw.len()];
+
+        let kernel = std::array::from_fn(|index| ((index as i32 * 13 % 19) - 9) as f32 / 8.0);
+        let offset = -3.25f32;
+        let row_stride = width * 4;
+        let mut expected = raw.clone();
+        for y in 0..height {
+            let row_start = y * row_stride;
+            scalar_reference_row(
+                &raw,
+                &mut expected[row_start..row_start + row_stride],
+                y as i32,
+                width as i32,
+                height as i32,
+                &kernel,
+                offset,
+            );
+        }
+        let actual = filter_5x5_i32_f32_ring(unaligned, width, height, &kernel, offset).unwrap();
+        assert_eq!(actual, expected);
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -4921,6 +5652,47 @@ mod binomial5x5_native_byte_tests {
             assert_eq!(actual, expected, "native LA {width}x{height}");
         }
     }
+
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[test]
+    fn native_la_vector_ring_matches_ordered_float_kernel_across_vector_tails() {
+        let weights = [1.0, 4.0, 6.0, 4.0, 1.0];
+        let kernel: [f32; 25] =
+            std::array::from_fn(|index| weights[index / 5] * weights[index % 5]);
+        let normalized = std::array::from_fn(|index| kernel[index] / 256.0);
+        for (width, height) in [(5usize, 5usize), (13, 7), (19, 11), (20, 13), (31, 17)] {
+            let raw: Vec<u8> = (0..width * height * 2)
+                .map(|index| ((index * 73 + index / (width * 2) * 29 + 17) % 256) as u8)
+                .collect();
+            let mut expected = raw.clone();
+            filter_5x5_byte_rows(
+                &raw,
+                &mut expected,
+                width as i32,
+                height as i32,
+                2,
+                &normalized,
+                0.5,
+            );
+
+            let mut actual = raw.clone();
+            let (vector_blocks, scalar_tail) =
+                crate::compute::pool_simd::ops::native_filter::native_filter_5x5_binomial_la_rows(
+                    &raw,
+                    &mut actual,
+                    width,
+                    height,
+                )
+                .expect("valid native LA vector dimensions");
+            if width >= 13 && height >= 5 {
+                assert!(vector_blocks > 0, "{width}x{height} should vectorize");
+            }
+            if width == 13 || width == 19 || width == 31 {
+                assert!(scalar_tail > 0, "{width}x{height} should have a tail");
+            }
+            assert_eq!(actual, expected, "native LA {width}x{height}");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -4999,6 +5771,76 @@ mod native_l_rank_filter_second_min_tests {
             rank_filter_bytes_small(&raw, &mut selected, width as i32, height as i32, 1, 1, 9, 1);
 
             assert_eq!(actual, selected, "native L {width}x{height}");
+        }
+    }
+}
+
+#[cfg(all(
+    test,
+    not(feature = "parallel"),
+    any(
+        all(target_arch = "aarch64", target_feature = "neon"),
+        all(target_arch = "x86_64", target_feature = "sse2")
+    )
+))]
+mod native_i32_vector_filter_tests {
+    use super::filter_5x5_i32_row;
+
+    #[test]
+    fn vector_i32_kernel_matches_ordered_f32_across_width_tails_and_borders() {
+        let factors = [1i32, 4, 6, 4, 1];
+        let kernel =
+            std::array::from_fn(|index| (factors[index / 5] * factors[index % 5]) as f32 / 256.0);
+        let patterns = [
+            i32::MIN,
+            i32::MAX,
+            -16_777_217,
+            -65_536,
+            -1,
+            0,
+            1,
+            65_535,
+            65_536,
+            16_777_219,
+        ];
+
+        for (width, height) in [(5usize, 5usize), (13, 7), (19, 11), (20, 13), (31, 17)] {
+            let raw = (0..width * height)
+                .flat_map(|index| {
+                    patterns[(index * 7 + index / width * 3) % patterns.len()].to_le_bytes()
+                })
+                .collect::<Vec<_>>();
+            for offset in [0.0f32, 0.5, -17.25] {
+                let mut expected = raw.clone();
+                let row_stride = width * 4;
+                for y in 0..height {
+                    let row_start = y * row_stride;
+                    filter_5x5_i32_row(
+                        &raw,
+                        &mut expected[row_start..row_start + row_stride],
+                        y as i32,
+                        width as i32,
+                        height as i32,
+                        &kernel,
+                        offset,
+                    );
+                }
+
+                let mut actual = raw.clone();
+                let (vector_blocks, scalar_tail) =
+                    crate::compute::pool_simd::ops::native_filter::native_filter_5x5_i32_rows(
+                        &raw,
+                        &mut actual,
+                        width,
+                        height,
+                        &kernel,
+                        offset + 0.5,
+                    )
+                    .expect("valid native I-mode vector dimensions");
+                assert!(vector_blocks > 0);
+                assert_eq!(scalar_tail, 0);
+                assert_eq!(actual, expected, "I-mode {width}x{height}, offset {offset}");
+            }
         }
     }
 }

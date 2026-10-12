@@ -19,9 +19,13 @@ from run_migration_benchmark import (
     profile_applies_to_case,
     runtime_backend_for_profile,
     read_and_remove_backend_parity,
+    run_timed_side,
     select_workloads,
+    sha256,
+    validate_reused_parity,
     write_parity_artifact,
 )
+import run_migration_benchmark
 import run_migration_parity
 from run_migration_parity import TARGET_FEATURES, target_profile_for_backend
 
@@ -102,6 +106,89 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
 
         self.assertEqual(workload["measurement"]["boundary"], "whole_workflow")
         self.assertEqual(workload["measurement"]["step_ids"], [])
+
+    def test_getdata_workloads_cover_banded_modes_and_sizes_with_parity(self) -> None:
+        inputs = (
+            Path(__file__).resolve().parents[1]
+            / "pillow-rs"
+            / "tests"
+            / "fixtures"
+            / "inputs"
+            / "benchmark"
+            / "pipeline-operations.json"
+        )
+        workloads = json.loads(inputs.read_text(encoding="utf-8"))["workloads"]
+        getdata = [
+            workload
+            for workload in workloads
+            if "PIL.Image.Image.getdata.performance.standard"
+            in workload.get("covers", [])
+        ]
+
+        expected_modes = {
+            "1",
+            "L",
+            "LA",
+            "La",
+            "P",
+            "PA",
+            "RGB",
+            "RGBA",
+            "CMYK",
+            "YCbCr",
+            "HSV",
+            "LAB",
+        }
+        mode_sizes = {
+            (workload["context"]["mode"], tuple(workload["context"]["size"]))
+            for workload in getdata
+        }
+        self.assertEqual({mode for mode, _ in mode_sizes}, expected_modes)
+        self.assertIn(("RGB", (2048, 1536)), mode_sizes)
+        composed_workloads = {
+            workload["workload_id"]
+            for workload in getdata
+            if "material-invert-rgb-band0" in workload["input"]["case_id"]
+            or workload["workload_id"] == "pipeline-chain.terminal-read.rgb-band0"
+        }
+        self.assertEqual(
+            composed_workloads,
+            {
+                "pipeline-chain.terminal-read.rgb-band0",
+                "pipeline-chain.terminal-read.getdata.invert-rgb-band0-1024x768",
+                "pipeline-chain.terminal-read.getdata.invert-rgb-band0-2048x1536",
+            },
+        )
+        for mode in {"L", "LA", "RGB", "RGBA"}:
+            self.assertIn((mode, (32, 32)), mode_sizes)
+            self.assertIn((mode, (1024, 768)), mode_sizes)
+        for workload in getdata:
+            with self.subTest(workload=workload["workload_id"]):
+                self.assertEqual(workload["input"]["kind"], "parity_case")
+                if (
+                    "material-invert-rgb-band0" in workload["input"]["case_id"]
+                    or workload["workload_id"]
+                    == "pipeline-chain.terminal-read.rgb-band0"
+                ):
+                    self.assertEqual(
+                        workload["measurement"]["boundary"], "whole_workflow"
+                    )
+                    self.assertEqual(workload["measurement"]["step_ids"], [])
+                else:
+                    self.assertEqual(
+                        workload["measurement"]["boundary"], "observed_steps"
+                    )
+                    self.assertEqual(
+                        workload["measurement"]["step_ids"], ["band-data"]
+                    )
+                self.assertEqual(
+                    workload["measurement"]["correctness_gate"], "parity_pass"
+                )
+                self.assertGreaterEqual(workload["measurement"]["warmup_iterations"], 5)
+                self.assertGreaterEqual(
+                    workload["measurement"]["measurement_iterations"], 20
+                )
+                self.assertGreaterEqual(workload["measurement"]["samples"], 5)
 
     def test_backend_parity_receipt_is_removed_after_loading(self) -> None:
         expected = {"status": "completed", "comparisons": [{"case_id": "case"}]}
@@ -229,7 +316,7 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
             )
         self.assertEqual(workload["subjects"], standard_subjects)
 
-    def test_pillow_simd_profile_keeps_ordinary_pillow_and_cpu_simd_subjects(self) -> None:
+    def test_pillow_simd_profile_keeps_a_distinct_source_and_cpu_simd_targets(self) -> None:
         standard_subjects = [
             {"kind": "oracle", "id": "pillow"},
             {"kind": "target_profile", "id": "python-cpu"},
@@ -241,19 +328,183 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
             "run_migration_benchmark.PILLOW_SIMD_COMPARISON", True
         ), patch("run_migration_benchmark.TARGET_BACKENDS", ("cpu", "simd")):
             profiled = apply_profile_to_workloads([workload])
+            pillow_simd_subjects = [
+                {"kind": "oracle", "id": "pillow-simd"},
+                *standard_subjects[1:3],
+            ]
             self.assertEqual(
                 profiled[0]["subjects"],
-                standard_subjects[:3],
+                pillow_simd_subjects,
             )
             self.assertEqual(
                 benchmark_subjects(),
                 [
-                    ("oracle", "pillow"),
+                    ("oracle", "pillow-simd"),
                     ("target_profile", "python-cpu"),
                     ("target_profile", "python-simd"),
                 ],
             )
         self.assertEqual(workload["subjects"], standard_subjects)
+
+    def test_timed_source_can_be_distinct_from_the_parity_oracle(self) -> None:
+        payload = {
+            "identity": {
+                "side": "source",
+                "implementation": "Pillow-SIMD",
+                "version": "12.1.1.post0",
+            },
+            "results": [],
+            "timings_ns": {},
+            "telemetry": {},
+            "execution": {},
+        }
+
+        def fake_run_process(command, *, env, **_kwargs):
+            self.assertEqual(command[0], "/opt/pillow-simd/bin/python")
+            self.assertEqual(env["MIGRATION_ORACLE_PYTHON"], "/opt/pillow/bin/python")
+            self.assertEqual(env["MIGRATION_BENCHMARK_SOURCE_PYTHON"], command[0])
+            self.assertEqual(env["MIGRATION_PARITY_TIMED_SOURCE"], "1")
+            return 0, json.dumps(payload), ""
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "MIGRATION_ORACLE_PYTHON": "/opt/pillow/bin/python",
+                    "MIGRATION_BENCHMARK_SOURCE_PYTHON": "/opt/pillow-simd/bin/python",
+                },
+                clear=False,
+            ),
+            patch.object(run_migration_benchmark, "BENCHMARK_SOURCE_NAME", "Pillow-SIMD"),
+            patch.object(
+                run_migration_benchmark, "BENCHMARK_SOURCE_VERSION", "12.1.1.post0"
+            ),
+            patch("run_migration_benchmark.run_process", side_effect=fake_run_process),
+        ):
+            result = run_timed_side(
+                "source",
+                run_migration_benchmark.DEFAULT_MANIFEST,
+                [{"case_id": "fixture"}],
+                1,
+                30,
+                backend="cpu",
+                timing_boundary="observed_steps",
+                timing_steps=["operation"],
+            )
+
+        self.assertEqual(result["identity"]["implementation"], "Pillow-SIMD")
+
+    def test_parity_preflight_does_not_inherit_timed_source_selection(self) -> None:
+        observed = {}
+        parity_result = {
+            "status": "completed",
+            "identity": {"run_id": "regular-pillow-preflight"},
+            "comparisons": [],
+            "infrastructure_errors": [],
+        }
+        merged_result = {"status": "merged"}
+
+        def fake_run_process(command, *, env, **_kwargs):
+            observed.update(env)
+            output_path = Path(command[command.index("--output") + 1])
+            output_path.write_bytes(b"stub parity receipt")
+            return 0, "{}", ""
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "parity.json"
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "MIGRATION_ORACLE_PYTHON": "/oracle/pillow/bin/python",
+                        "MIGRATION_BENCHMARK_SOURCE_PYTHON": "/oracle/pillow-simd/bin/python",
+                        "MIGRATION_PARITY_TIMED_SOURCE": "1",
+                    },
+                    clear=False,
+                ),
+                patch.object(run_migration_benchmark, "TARGET_BACKENDS", ("cpu",)),
+                patch("run_migration_benchmark.run_process", side_effect=fake_run_process),
+                patch(
+                    "run_migration_benchmark.read_and_remove_backend_parity",
+                    return_value=parity_result,
+                ),
+                patch(
+                    "run_migration_benchmark.merge_parity_results",
+                    return_value=merged_result,
+                ),
+                patch("run_migration_benchmark.write_parity_artifact") as write_artifact,
+            ):
+                result = run_migration_benchmark.run_parity(
+                    run_migration_benchmark.DEFAULT_MANIFEST,
+                    output,
+                    30,
+                    [{"case_id": "fixture", "target_profiles": ["python-cpu"]}],
+                )
+
+        self.assertIs(result, merged_result)
+        self.assertEqual(observed["MIGRATION_ORACLE_PYTHON"], "/oracle/pillow/bin/python")
+        self.assertEqual(
+            observed["MIGRATION_BENCHMARK_SOURCE_PYTHON"],
+            "/oracle/pillow-simd/bin/python",
+        )
+        self.assertNotIn("MIGRATION_PARITY_TIMED_SOURCE", observed)
+        write_artifact.assert_called_once_with(output, merged_result)
+
+    def test_reused_parity_receipt_must_cover_every_selected_profile(self) -> None:
+        case = {
+            "case_id": "fixture",
+            # Inputs declare capability applicability: Parallel CPU reuses
+            # the CPU declaration while keeping its own selected profile ID.
+            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+        }
+        selected_profiles = [
+            profile
+            for profile in TARGET_PROFILES
+            if profile_applies_to_case(profile, case)
+        ]
+        parity = {
+            "schema": "migration-parity/parity-result@1",
+            "status": "completed",
+            "identity": {
+                "manifest": {"sha256": sha256(run_migration_benchmark.DEFAULT_MANIFEST)},
+                "oracles": [
+                    {
+                        "name": run_migration_parity.ORACLE_NAME,
+                        "version": run_migration_parity.ORACLE_VERSION,
+                    }
+                ],
+                "targets": [
+                    {
+                        "target_profile": profile,
+                        "target_id": run_migration_parity.TARGET_ID,
+                        "revision": run_migration_parity.git_revision(),
+                        "dirty": run_migration_parity.git_dirty(),
+                        "backend": runtime_backend_for_profile(profile),
+                        "features": TARGET_FEATURES.copy(),
+                    }
+                    for profile in selected_profiles
+                ],
+            },
+            "summary": {"failed": 0, "not_run": 0},
+            "comparisons": [
+                {
+                    "case_id": "fixture",
+                    "target_profile": profile,
+                    "outcome": "pass",
+                }
+                for profile in selected_profiles
+            ],
+            "infrastructure_errors": [],
+        }
+        validate_reused_parity(
+            parity, run_migration_benchmark.DEFAULT_MANIFEST, [case]
+        )
+        incomplete = dict(parity)
+        incomplete["comparisons"] = parity["comparisons"][:-1]
+        with self.assertRaisesRegex(ValueError, "does not cover"):
+            validate_reused_parity(
+                incomplete, run_migration_benchmark.DEFAULT_MANIFEST, [case]
+            )
 
 
 if __name__ == "__main__":

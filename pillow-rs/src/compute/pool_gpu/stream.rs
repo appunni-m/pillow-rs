@@ -1204,6 +1204,20 @@ fn plan_graph_inner<'a>(
             PipelineOp::Eval { lut } if lut.len() == usize::from(channels) * 256 && mode == "L" => {
                 flags.luma_point = true
             }
+            PipelineOp::Filter3x3 {
+                kernel,
+                scale,
+                offset,
+            } if mode == "LA"
+                && crate::compute::pool_cpu::ops::filter::binomial3x3_parameters_match(
+                    kernel, *scale, *offset,
+                ) =>
+            {
+                // The packed-LA shader preserves the exact native two-band
+                // binomial filter; other LA kernels stay outside composed
+                // GPU batch admission.
+                flags.byte_filter = true
+            }
             PipelineOp::Eval { lut }
                 if lut.len() == usize::from(channels) * 256 && mode == "RGB" =>
             {

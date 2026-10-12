@@ -1275,6 +1275,39 @@ fn pillow_band_count(mode: &str) -> usize {
     }
 }
 
+/// Copy one channel from a tightly packed interleaved byte raster.
+#[inline]
+fn select_interleaved_band(data: &[u8], bands: usize, band: usize) -> Vec<u8> {
+    data.chunks_exact(bands).map(|pixel| pixel[band]).collect()
+}
+
+#[inline]
+fn select_interleaved_band_into(data: &[u8], bands: usize, band: usize, output: &mut [u8]) {
+    let selected = data.iter().skip(band).step_by(bands);
+    for (destination, source) in output.iter_mut().zip(selected) {
+        *destination = *source;
+    }
+}
+
+#[inline]
+fn select_lab_band(data: &[u8], band: usize) -> Vec<u8> {
+    let mut output = vec![0; data.len() / 3];
+    select_lab_band_into(data, band, &mut output);
+    output
+}
+
+#[inline]
+fn select_lab_band_into(data: &[u8], band: usize, output: &mut [u8]) {
+    for (destination, pixel) in output.iter_mut().zip(data.chunks_exact(3)) {
+        *destination = match band {
+            0 => pixel[0],
+            1 => pixel[1].wrapping_sub(128),
+            2 => pixel[2].wrapping_sub(128),
+            _ => unreachable!("LAB has exactly three bands"),
+        };
+    }
+}
+
 /// Host-neutral selector for `Image.getchannel`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChannelSelector {
@@ -6004,16 +6037,10 @@ impl Image {
             }
             let band = band as usize;
             if mode == "LAB" {
-                return Ok(img
-                    .to_rgb8()
-                    .pixels()
-                    .map(|pixel| match band {
-                        0 => pixel[0],
-                        1 => pixel[1].wrapping_sub(128),
-                        2 => pixel[2].wrapping_sub(128),
-                        _ => unreachable!("LAB has exactly three bands"),
-                    })
-                    .collect());
+                if let DynamicImage::ImageRgb8(image) = img.as_ref() {
+                    return Ok(select_lab_band(image.as_raw(), band));
+                }
+                return Ok(select_lab_band(img.to_rgb8().as_raw(), band));
             }
             // Keep ordinary byte layouts narrow for banded reads. The old
             // fallback widened the complete frame to RGBA before selecting a
@@ -6021,16 +6048,16 @@ impl Image {
             // for an avoidable full-frame allocation and conversion.
             match img.as_ref() {
                 DynamicImage::ImageLuma8(image) if band == 0 => {
-                    return Ok(image.pixels().map(|pixel| pixel[0]).collect());
+                    return Ok(image.as_raw().clone());
                 }
                 DynamicImage::ImageLumaA8(image) if band < 2 => {
-                    return Ok(image.pixels().map(|pixel| pixel[band]).collect());
+                    return Ok(select_interleaved_band(image.as_raw(), 2, band));
                 }
                 DynamicImage::ImageRgb8(image) if band < 3 => {
-                    return Ok(image.pixels().map(|pixel| pixel[band]).collect());
+                    return Ok(select_interleaved_band(image.as_raw(), 3, band));
                 }
                 DynamicImage::ImageRgba8(image) if band < 4 => {
-                    return Ok(image.pixels().map(|pixel| pixel[band]).collect());
+                    return Ok(select_interleaved_band(image.as_raw(), 4, band));
                 }
                 _ => {}
             }
@@ -6071,6 +6098,207 @@ impl Image {
                 Ok(rgba.into_raw())
             }
         }
+    }
+
+    /// Return the number of samples produced by Pillow's formatted band read.
+    ///
+    /// This validates the same mode and band constraints as
+    /// [`Image::getdata_formatted`]. For indexed `P` images, it reads the size
+    /// from image metadata without materializing an image when its dimensions
+    /// are already known. Callers can allocate the final host-owned byte buffer
+    /// before asking the core to fill it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when band selection is unsupported for
+    /// the mode or the requested band is out of range. Other errors can occur
+    /// while loading or materializing the image.
+    pub fn getdata_band_len(&self, band: i32) -> Result<usize, PilError> {
+        let mode = self.mode()?;
+        if is_l16_mode(&mode) || mode == "I" || mode == "F" {
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
+        let band_count = pillow_band_count(&mode);
+        if band < 0 || band as usize >= band_count {
+            return Err(PilError::ValueError("band index out of range".into()));
+        }
+        let (width, height) = self.size()?;
+        Ok(crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?.total_pixels())
+    }
+
+    /// Borrow a directly stored single-band byte plane for a host binding to
+    /// copy into its final immutable result object.
+    ///
+    /// This avoids materialization and a Rust-side copy for owned P, 1, and L
+    /// images. The returned slice is a view of the image; bindings must copy
+    /// it before returning so later image mutation cannot change a GetData
+    /// snapshot.
+    pub fn getdata_band_view(&self, band: i32) -> Result<Option<&[u8]>, PilError> {
+        if band != 0 {
+            return Ok(None);
+        }
+        let requested_backend = match self.backend() {
+            Some(backend) => Some(backend),
+            None => crate::compute::preferred_active_backend()?.map(|(backend, _)| backend),
+        };
+        if requested_backend.is_some_and(|backend| backend != crate::compute::Backend::Cpu) {
+            return Ok(None);
+        }
+        match self {
+            Image::Paletted(data) => {
+                crate::compute::record_eager_cpu_operation_receipt(
+                    "GetData",
+                    requested_backend,
+                    data.indices.as_raw().len(),
+                );
+                Ok(Some(data.indices.as_raw()))
+            }
+            Image::Loaded(data) if matches!(self.mode()?.as_str(), "1" | "L") => {
+                let values: Option<&[u8]> = match data.image.as_ref() {
+                    DynamicImage::ImageLuma8(image) => Some(image.as_raw().as_slice()),
+                    _ => None,
+                };
+                if let Some(values) = values {
+                    crate::compute::record_eager_cpu_operation_receipt(
+                        "GetData",
+                        requested_backend,
+                        values.len(),
+                    );
+                }
+                Ok(values)
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Fill a caller-owned buffer with Pillow's formatted band-read bytes.
+    ///
+    /// The buffer length must equal [`Image::getdata_band_len`] for the same
+    /// band. This form lets host bindings write directly into their final
+    /// bytes object without an intermediate Rust `Vec`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when band selection is unsupported for
+    /// the mode or the requested band is out of range, and
+    /// [`PilError::InternalError`] when the output length is incorrect. Other
+    /// errors can occur while loading or materializing the image.
+    pub fn getdata_band_into(&self, band: i32, output: &mut [u8]) -> Result<(), PilError> {
+        let mode_name = self.mode()?;
+        let mode = mode_name.as_str();
+        let expected = self.getdata_band_len(band)?;
+        if output.len() != expected {
+            return Err(PilError::InternalError(
+                "getdata band output length mismatch".into(),
+            ));
+        }
+        let selected_backend = match self.backend() {
+            Some(backend) => Some(backend),
+            None => crate::compute::preferred_active_backend()?.map(|(backend, _)| backend),
+        };
+        let backend_native = match selected_backend {
+            Some(crate::compute::Backend::Simd) => matches!(
+                mode,
+                "LA" | "PA" | "RGB" | "RGBA" | "RGBa" | "RGBX" | "CMYK" | "HSV" | "YCbCr"
+            ),
+            Some(crate::compute::Backend::Gpu) => !matches!(mode, "P" | "LAB" | "I" | "F"),
+            Some(crate::compute::Backend::Cpu) | None => false,
+        };
+        if backend_native
+            && let Some(backend @ (crate::compute::Backend::Simd | crate::compute::Backend::Gpu)) =
+                selected_backend
+        {
+            if backend == crate::compute::Backend::Simd && matches!(self, Image::Loaded(_)) {
+                // A materialized image needs no deferred pipeline boundary.
+                // Write SIMD channel extraction into Python's final bytes
+                // allocation instead of allocating an intermediate L image
+                // and copying that image back into the binding buffer.
+                let image = self.materialized_shared()?;
+                return crate::compute::execute_eager_simd_bytes(
+                    "GetData",
+                    image.as_ref(),
+                    output,
+                    |output| {
+                        crate::compute::simd_extract_band_into(
+                            image.as_ref(),
+                            band as u8,
+                            Some(mode),
+                            output,
+                        )
+                    },
+                );
+            }
+
+            // Keep terminal projection in the lazy graph so the selected
+            // backend can fuse it with pending image work and report its real
+            // execution receipt. P and LAB stay on the exact host path below:
+            // P must expose raw indices, while LAB's a/b samples use Pillow's
+            // signed-byte offset rather than ExtractBand's raw channel value.
+            let extracted = Image::push_op(self, PipelineOp::ExtractBand { index: band as u8 })
+                .use_backend(backend);
+            let image = extracted.materialized_shared()?;
+            let values = image.as_bytes();
+            if values.len() != output.len() {
+                return Err(PilError::InternalError(
+                    "getdata band backend output length mismatch".into(),
+                ));
+            }
+            output.copy_from_slice(values);
+            return Ok(());
+        }
+
+        let telemetry =
+            crate::compute::begin_eager_cpu_operation_telemetry("GetData", selected_backend);
+        let result = (|| {
+            if let Image::Paletted(data) = self {
+                output.copy_from_slice(data.indices.as_raw());
+                return Ok(());
+            }
+
+            let img = self.materialized_shared()?;
+            let materialized_mode = self.mode_from_materialized(&img);
+            let band = band as usize;
+            if materialized_mode == "LAB" {
+                if let DynamicImage::ImageRgb8(image) = img.as_ref() {
+                    select_lab_band_into(image.as_raw(), band, output);
+                } else {
+                    select_lab_band_into(img.to_rgb8().as_raw(), band, output);
+                }
+                return Ok(());
+            }
+
+            match img.as_ref() {
+                DynamicImage::ImageLuma8(image) if band == 0 => {
+                    output.copy_from_slice(image.as_raw());
+                    return Ok(());
+                }
+                DynamicImage::ImageLumaA8(image) if band < 2 => {
+                    select_interleaved_band_into(image.as_raw(), 2, band, output);
+                    return Ok(());
+                }
+                DynamicImage::ImageRgb8(image) if band < 3 => {
+                    select_interleaved_band_into(image.as_raw(), 3, band, output);
+                    return Ok(());
+                }
+                DynamicImage::ImageRgba8(image) if band < 4 => {
+                    select_interleaved_band_into(image.as_raw(), 4, band, output);
+                    return Ok(());
+                }
+                _ => {}
+            }
+
+            let rgba = img.to_rgba8();
+            for (destination, pixel) in output.iter_mut().zip(rgba.pixels()) {
+                *destination = pixel[band];
+            }
+            Ok(())
+        })();
+        if result.is_ok() {
+            crate::compute::finish_eager_cpu_operation_telemetry(telemetry, output.len());
+        } else {
+            crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+        }
+        result
     }
 
     /// Returns `getdata` values with Pillow's scalar/multiband shape applied.
@@ -6535,6 +6763,67 @@ impl Image {
         Ok(())
     }
 
+    /// Try applying ImageOps.grayscale immediately for the bounded native-RGB
+    /// CPU/SIMD path. Other inputs keep the ordinary lazy pipeline semantics.
+    pub(crate) fn try_grayscale_eager_rgb(&self) -> Result<Option<Image>, PilError> {
+        if cfg!(feature = "parallel") {
+            return Ok(None);
+        }
+        let Image::Loaded(data) = self else {
+            return Ok(None);
+        };
+        let logical_mode = data
+            .explicit_mode
+            .as_deref()
+            .unwrap_or_else(|| image_mode_name(data.decoded_mode));
+        if logical_mode != "RGB" {
+            return Ok(None);
+        }
+
+        let image = self.materialized_shared()?;
+        if !matches!(image.as_ref(), DynamicImage::ImageRgb8(_)) {
+            return Ok(None);
+        }
+        let dims =
+            crate::checked_dims::CheckedDims::new_allow_empty(image.width(), image.height(), 3)?;
+        let pixels = dims.total_pixels();
+        if pixels == 0 || pixels > 256 || image.as_bytes().len() != dims.total_bytes() {
+            return Ok(None);
+        }
+
+        let Some((backend, _)) = crate::compute::preferred_active_backend()? else {
+            return Ok(None);
+        };
+        let operation = PipelineOp::Grayscale;
+        let grayscale = match backend {
+            crate::compute::Backend::Cpu => crate::compute::execute_eager_cpu_image_operation(
+                "Grayscale",
+                image.as_ref(),
+                false,
+                || crate::compute::registry::execute_cpu(&operation, image.as_ref(), Some("RGB")),
+            )?,
+            crate::compute::Backend::Simd => crate::compute::execute_eager_simd_image_operation(
+                "Grayscale",
+                image.as_ref(),
+                || {
+                    crate::compute::simd_grayscale_with_evidence(
+                        image.as_ref(),
+                        &operation,
+                        Some("RGB"),
+                    )
+                },
+            )?,
+            crate::compute::Backend::Gpu => return Ok(None),
+        };
+
+        let mut result = Image::from_dynamic(grayscale, None);
+        if let Image::Loaded(data) = &mut result {
+            data.info = self.image_info();
+            data.exif = self.exif_metadata();
+        }
+        Ok(Some(result))
+    }
+
     /// Extracts one channel as an `L` image.
     ///
     /// # Errors
@@ -6564,6 +6853,103 @@ impl Image {
         // channel, so a valid selector is always 0.
         if self.has_palette_mode() {
             return Ok(self.copy());
+        }
+        // Extracting the sole byte band from an exact-sized, already-loaded
+        // L image is an identity. Share its immutable pixel buffer through
+        // Image::copy's copy-on-write semantics rather than scanning and
+        // allocating a second full-frame buffer. Keep other backends and
+        // non-exact storage on the normal extraction path so their execution
+        // and trailing-sample behavior remain unchanged.
+        if mode == "L" && ch == 0 && matches!(self, Image::Loaded(_)) && !cfg!(feature = "parallel")
+        {
+            if let Some((crate::compute::Backend::Cpu, _)) =
+                crate::compute::preferred_active_backend()?
+            {
+                let pixel_count = crate::checked_dims::CheckedDims::new_allow_empty(
+                    img.width(),
+                    img.height(),
+                    1,
+                )?
+                .total_pixels();
+                if img.as_bytes().len() == pixel_count {
+                    return crate::compute::execute_eager_cpu_shared_result(
+                        "ExtractBand",
+                        img.as_ref(),
+                        || Ok(self.copy()),
+                    );
+                }
+            }
+        }
+        // Tiny RGB images can extract their band directly instead of paying
+        // for a one-operation pipeline and its later materialization. Keep
+        // full-frame work on the pipeline path, and retain lazy execution for
+        // pending graphs, SIMD, GPU, and opt-in Parallel CPU profiles.
+        if matches!(self, Image::Loaded(_))
+            && !cfg!(feature = "parallel")
+            && mode == "RGB"
+            && u64::from(img.width()) * u64::from(img.height()) <= 256
+        {
+            if let Some((backend, _)) = crate::compute::preferred_active_backend()? {
+                let operation = PipelineOp::ExtractBand { index: ch as u8 };
+                let extracted = match backend {
+                    crate::compute::Backend::Cpu => {
+                        Some(crate::compute::execute_eager_cpu_image_operation(
+                            "ExtractBand",
+                            img.as_ref(),
+                            true,
+                            || {
+                                crate::compute::registry::execute_cpu(
+                                    &operation,
+                                    img.as_ref(),
+                                    Some(&mode),
+                                )
+                            },
+                        )?)
+                    }
+                    crate::compute::Backend::Simd => {
+                        Some(crate::compute::execute_eager_simd_image_operation(
+                            "ExtractBand",
+                            img.as_ref(),
+                            || {
+                                let (width, height) = img.dimensions();
+                                let mut output = crate::checked_dims::CheckedDims::new_allow_empty(
+                                    width, height, 1,
+                                )?
+                                .alloc_buffer();
+                                let (vector_blocks, scalar_tail, path) =
+                                    crate::compute::simd_extract_band_into(
+                                        img.as_ref(),
+                                        ch as u8,
+                                        Some(&mode),
+                                        &mut output,
+                                    )?;
+                                let output =
+                                    crate::raster::GrayImage::from_raw(width, height, output)
+                                        .ok_or_else(|| {
+                                            PilError::InternalError(
+                                                "SIMD ExtractBand buffer shape mismatch".into(),
+                                            )
+                                        })?;
+                                Ok((
+                                    DynamicImage::ImageLuma8(output),
+                                    vector_blocks,
+                                    scalar_tail,
+                                    path,
+                                ))
+                            },
+                        )?)
+                    }
+                    crate::compute::Backend::Gpu => None,
+                };
+                if let Some(extracted) = extracted {
+                    let mut result = Image::from_dynamic(extracted, None);
+                    if let Image::Loaded(data) = &mut result {
+                        data.info = self.image_info();
+                        data.exif = self.exif_metadata();
+                    }
+                    return Ok(result);
+                }
+            }
         }
         // Defer extraction via pipeline
         Ok(Image::push_op(

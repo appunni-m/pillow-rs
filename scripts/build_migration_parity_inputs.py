@@ -7802,48 +7802,95 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
         },
     ]
     if surface_id == "PIL.Image.Image":
-        # Keep the large banded terminal read parity-backed. This is the same
-        # public workflow used by the performance row below, so backend timing
-        # cannot be credited without comparing every returned sample to
-        # Pillow first.
-        cases.append(
-            {
-                "case_id": "PIL.Image.Image.getdata.performance.material-rgb-band0-512x512",
-                "surface": surface_id,
-                "operation": "getdata",
-                "covers": ["PIL.Image.Image.getdata.performance.standard"],
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
-                "assets": [],
-                "steps": [
+        # Keep banded terminal reads parity-backed and benchmark every mode
+        # accepted by Pillow's getdata(band=...) API. The RGB 512x512 case
+        # retains its reviewed lazy Invert pipeline; larger copies measure
+        # that composed path where GPU dispatch and transfers can amortize.
+        getdata_cases = [
+            ("1", "1", 0, 1, [(1024, 768)]),
+            ("L", "l", 0, 137, [(32, 32), (1024, 768)]),
+            ("LA", "la", 1, (73, 209), [(32, 32), (1024, 768)]),
+            ("La", "la-premultiplied", 1, (73, 209), [(1024, 768)]),
+            ("P", "p", 0, 23, [(1024, 768)]),
+            ("PA", "pa", 1, (23, 209), [(1024, 768)]),
+            ("RGB", "rgb", 0, (31, 109, 197), [(32, 32), (512, 512), (1024, 768)]),
+            ("RGB", "rgb", 2, (31, 109, 197), [(1024, 768)]),
+            ("RGBA", "rgba", 3, (31, 109, 197, 241), [(32, 32), (1024, 768)]),
+            ("CMYK", "cmyk", 3, (9, 23, 51, 87), [(1024, 768)]),
+            ("YCbCr", "ycbcr", 2, (31, 109, 197), [(1024, 768)]),
+            ("HSV", "hsv", 2, (31, 109, 197), [(1024, 768)]),
+            ("LAB", "lab", 2, (31, 109, 197), [(1024, 768)]),
+        ]
+        for mode, mode_slug, band, color, sizes in getdata_cases:
+            for width, height in sizes:
+                if mode == "RGB" and band == 0 and (width, height) == (512, 512):
+                    case_id = "PIL.Image.Image.getdata.performance.material-rgb-band0-512x512"
+                else:
+                    case_id = (
+                        "PIL.Image.Image.getdata.performance.material-"
+                        f"{mode_slug}-band{band}-{width}x{height}"
+                    )
+                steps = [
                     {
                         "step_id": "setup-image",
                         "surface": "PIL.Image",
                         "operation": "new",
                         "receiver": None,
                         "arguments": {
-                            "mode": literal("RGB"),
-                            "size": literal([512, 512]),
-                            "color": literal([31, 109, 197]),
+                            "mode": literal(mode),
+                            "size": literal([width, height]),
+                            "color": literal(color),
                         },
                     },
-                    {
-                        "step_id": "inverted",
-                        "surface": "PIL.ImageOps",
-                        "operation": "invert",
-                        "receiver": None,
-                        "arguments": {"image": binding("setup-image")},
-                    },
+                ]
+                if mode == "RGB" and band == 0 and (width, height) == (512, 512):
+                    steps.append(
+                        {
+                            "step_id": "inverted",
+                            "surface": "PIL.ImageOps",
+                            "operation": "invert",
+                            "receiver": None,
+                            "arguments": {"image": binding("setup-image")},
+                        }
+                    )
+                    receiver = binding("inverted")
+                else:
+                    receiver = binding("setup-image")
+                steps.append(
                     {
                         "step_id": "band-data",
                         "surface": surface_id,
                         "operation": "getdata",
-                        "receiver": binding("inverted"),
-                        "arguments": {"band": literal(0)},
-                    },
-                ],
-                "observations": ["band-data"],
-            }
+                        "receiver": receiver,
+                        "arguments": {"band": literal(band)},
+                    }
+                )
+                cases.append(
+                    {
+                        "case_id": case_id,
+                        "surface": surface_id,
+                        "operation": "getdata",
+                        "covers": ["PIL.Image.Image.getdata.performance.standard"],
+                        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                        "assets": [],
+                        "steps": steps,
+                        "observations": ["band-data"],
+                    }
+                )
+        pipeline_template_id = (
+            "PIL.Image.Image.getdata.performance.material-rgb-band0-512x512"
         )
+        pipeline_template = next(
+            case for case in cases if case["case_id"] == pipeline_template_id
+        )
+        for width, height in ((1024, 768), (2048, 1536)):
+            case = copy.deepcopy(pipeline_template)
+            case["case_id"] = (
+                "PIL.Image.Image.getdata.performance.material-invert-rgb-"
+                f"band0-{width}x{height}"
+            )
+            case["steps"][0]["arguments"]["size"] = literal([width, height])
+            cases.append(case)
     return [case for case in cases if case["surface"] == surface_id]
 
 
@@ -50039,29 +50086,56 @@ def build_pipeline_benchmark_document(
             }
         )
 
-    # The material band read shares one exact-input case between performance
-    # timing and source/target output comparison on CPU, SIMD, and GPU.
+    # Banded GetData timings share exact-input cases between performance
+    # measurement and source/target output comparison across the supported
+    # Pillow modes and representative sizes.
     terminal_read_case_id = (
         "PIL.Image.Image.getdata.performance.material-rgb-band0-512x512"
     )
-    terminal_read_case = cases_by_id[terminal_read_case_id]
     terminal_read_measurement = copy.deepcopy(chain_policy)
+    terminal_read_measurement.update(
+        warmup_iterations=5,
+        measurement_iterations=20,
+        samples=5,
+    )
     terminal_read_measurement["correctness_gate"] = "parity_pass"
-    terminal_read_workloads = [
-        {
-            "workload_id": "pipeline-chain.terminal-read.rgb-band0",
-            "covers": [_performance_requirement(operations, "PIL.Image.Image", "getdata")],
-            "subjects": benchmark_subjects(),
-            "input": {"kind": "parity_case", "case_id": terminal_read_case_id},
-            "measurement": terminal_read_measurement,
-            "context": _workflow_benchmark_context(
-                terminal_read_case,
-                variant="getdata-band",
-                surface="PIL.Image.Image",
-                operation="getdata",
-            ),
-        }
-    ]
+    terminal_read_workloads = []
+    terminal_read_case_prefix = "PIL.Image.Image.getdata.performance.material-"
+    for case_id in sorted(cases_by_id):
+        if not case_id.startswith(terminal_read_case_prefix):
+            continue
+        case = cases_by_id[case_id]
+        measurement = copy.deepcopy(terminal_read_measurement)
+        if not any(step["operation"] == "invert" for step in case["steps"]):
+            # A direct GetData workload begins with an already-materialized
+            # receiver. Keep image construction outside the per-operation
+            # timing boundary while retaining GetData's returned-buffer
+            # allocation and materialization inside the measured step. The
+            # composed Invert→GetData cases below continue to time the full
+            # workflow.
+            measurement.update(boundary="observed_steps", step_ids=["band-data"])
+        if case_id == terminal_read_case_id:
+            workload_id = "pipeline-chain.terminal-read.rgb-band0"
+            variant = "getdata-band-rgb-band0-512x512"
+        else:
+            case_suffix = case_id.removeprefix(terminal_read_case_prefix)
+            workload_id = f"pipeline-chain.terminal-read.getdata.{case_suffix}"
+            variant = f"getdata-band-{case_suffix}"
+        terminal_read_workloads.append(
+            {
+                "workload_id": workload_id,
+                "covers": [_performance_requirement(operations, "PIL.Image.Image", "getdata")],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": measurement,
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant=variant,
+                    surface="PIL.Image.Image",
+                    operation="getdata",
+                ),
+            }
+        )
 
     # Batch related read-only reductions behind one public lazy pipeline so
     # the benchmark charges their terminal work without starting one process
@@ -52577,8 +52651,8 @@ def build_pipeline_benchmark_document(
             {
                 "suite_id": "pipeline-operations.terminal-read-suite",
                 "description": (
-                    "Benchmark-only public terminal reads over a lazy native "
-                    "pipeline, including banded getdata without RGBA widening."
+                    "Exact-parity banded GetData benchmarks across Pillow modes "
+                    "and sizes, including the RGB lazy-pipeline terminal read."
                 ),
                 "members": [
                     {"workload_id": item["workload_id"], "weight": 1}

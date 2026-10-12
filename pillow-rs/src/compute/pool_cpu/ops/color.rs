@@ -226,6 +226,24 @@ pub fn op_remap_palette(
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
+/// Gather one band from a byte-interleaved raster into its compact output.
+#[inline]
+fn extract_interleaved_band(
+    source: &[u8],
+    bands: usize,
+    band: usize,
+    pixel_count: usize,
+) -> Vec<u8> {
+    let mut output = Vec::with_capacity(pixel_count);
+    output.extend(
+        source
+            .chunks_exact(bands)
+            .take(pixel_count)
+            .map(|pixel| pixel[band]),
+    );
+    output
+}
+
 /// Extract a single band/channel from the image as an L-mode output.
 /// index: 0=R, 1=G, 2=B, 3=A (for RGBA), 0=only band for L/LA
 pub fn op_extract_band(img: &DynamicImage, index: u8) -> Result<DynamicImage, PilError> {
@@ -251,14 +269,22 @@ pub fn op_extract_band(img: &DynamicImage, index: u8) -> Result<DynamicImage, Pi
     if let DynamicImage::ImageRgb8(rgb) = img {
         let channel = idx.min(3);
         let samples = if channel < 3 {
-            rgb.as_raw()
-                .chunks_exact(3)
-                .take(pixel_count)
-                .map(|pixel| pixel[channel])
-                .collect()
+            extract_interleaved_band(rgb.as_raw(), 3, channel, pixel_count)
         } else {
             vec![u8::MAX; pixel_count]
         };
+        return crate::image_utils::raw_bytes_to_image_allow_empty(w, h, samples, 1);
+    }
+
+    // LA and RGBA have the same packed channel semantics. Avoid initializing
+    // a zero-filled GrayImage before overwriting every pixel; gather directly
+    // into one compact allocation as the RGB path does.
+    if let DynamicImage::ImageLumaA8(la) = img {
+        let samples = extract_interleaved_band(la.as_raw(), 2, idx.min(1), pixel_count);
+        return crate::image_utils::raw_bytes_to_image_allow_empty(w, h, samples, 1);
+    }
+    if let DynamicImage::ImageRgba8(rgba) = img {
+        let samples = extract_interleaved_band(rgba.as_raw(), 4, idx.min(3), pixel_count);
         return crate::image_utils::raw_bytes_to_image_allow_empty(w, h, samples, 1);
     }
 
