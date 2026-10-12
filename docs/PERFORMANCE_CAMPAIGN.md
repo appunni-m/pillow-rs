@@ -9,12 +9,12 @@ prototype. Its scripts and Make hooks have been removed and are not current
 reproduction commands. The current executor has its own
 [validation targets and measurements](GPU_BATCH_VALIDATION.md).
 
-The active per-operation goals are CPU latency at or below Pillow, single-thread
-SIMD latency at or below half of Pillow (at least 2× faster), and GPU latency no
-slower than SIMD with higher sustained throughput. Keep existing test and
-workflow thresholds intact. Older dated snapshots and labels may report a 5×
-SIMD target; treat those figures as historical until they are recalculated for
-the active 2× target. Every comparison requires equal output, the same timing
+The per-operation goals are CPU latency at or below Pillow, single-thread SIMD
+at least 5× faster than Pillow, and GPU latency no slower than SIMD with higher
+sustained throughput. The initial CPU triage gate is 2× Pillow; after CPU rows
+slower than Pillow clear that gate, prioritize workloads that lose to a
+version-matched Pillow-SIMD cohort. These priority gates do not replace the
+final 5× SIMD goal. Every comparison requires equal output, the same timing
 boundary, and a receipt naming the backend that actually ran. Pipeline
 latency, materialized-operation latency, and changing-input throughput are
 separate measures. A pass at one boundary does not substitute for another.
@@ -68,7 +68,41 @@ current local outputs are `build/migration-parity/optimization-goals.json` and
 `build/migration-parity/optimization-goals.md`. See
 [the reporting command](BENCHMARKING.md#correctness-gate-and-budget-gate).
 
-## Published cross-runner inventory — 2026-10-10
+## Published cross-runner inventory — 2026-10-12
+
+The committed [full per-workload matrix](evidence/performance-optimization-matrix.csv),
+[public API census](evidence/performance-optimization-public-api.csv), and
+[per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
+are generated from the GitHub Pages [full benchmark snapshot](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
+and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json).
+The full snapshot is clean at revision
+`c3ec2a1ddc851c602e4b3d77e490bc7d7ac15979`, measured
+`2026-10-12T18:01:53.285622Z`, with 8,918 rows across 686 workloads and JSON
+SHA-256 `89913ac6935359959d7bc40ab9a5bde80e9918cb46705074f0dd9e992f6cac2d`.
+The flattened matrix has 8,954 rows after retaining all 36 Pillow-SIMD rows.
+The operation matrix has 1,320 rows for 330 public paths: 209 map to the
+selected manifest and 121 remain explicit inventory gaps.
+
+The latest full snapshot has 192 verified serial-CPU workload/runner pairs:
+none are slower than Pillow and 74 are below 2×. The current 2× CPU triage
+list is led by Thumbnail (1.139974×), GetData (1.342395×), Resize (1.352654×),
+Grayscale (1.414526×), Convert (1.514433×), Merge (1.734456×), Filter
+(1.976719×), and GetProjection (1.976935×). Each is a weakest verified row
+within its operation; runner and workload rows remain separate in the matrix.
+SIMD has 174 verified pairs: one is slower than Pillow, 60 are below 2×, and
+141 are below the final 5× goal. The weakest verified SIMD row is Resize at
+0.928182× Pillow. Parallel CPU remains separate, with 192 verified pairs, 13
+below Pillow and 84 below 2×. GPU has 51 verified latency pairs, 35 slower than
+SIMD; sustained throughput remains unmeasured.
+
+The published Pillow-SIMD snapshot is still dirty and partial at revision
+`101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`: 9 of 34 declared workloads and 36
+rows. It yields zero verified Pillow-SIMD comparisons, so the second ranking
+phase cannot yet be completed. The newest full snapshot and this partial
+Pillow-SIMD cohort are retained as-is; failed, execution-only, fallback, and
+unproven evidence is not counted as accelerated execution.
+
+## Historical published cross-runner inventory — 2026-10-10
 
 The committed [full per-workload matrix](evidence/performance-optimization-matrix.csv),
 [public API census](evidence/performance-optimization-public-api.csv), and
