@@ -26160,3 +26160,34 @@ GPU throughput remains unmeasured. The refreshed complete per-operation
 rankings are in `docs/evidence/performance-optimization-operation-matrix.csv`
 and `docs/evidence/performance-optimization-matrix.csv`. No source change was
 selected and no coverage was run.
+
+### Merge CPU destination-cursor candidate — rejected — 2026-10-13
+
+I changed the serial RGB-from-three-L helper from an indexed output base to a
+destination pointer advanced by three bytes per pixel, to remove repeated
+destination offset calculation. The candidate did not produce a repeatable
+full-call gain on the local Apple ARM64 host. Four matched runs used the
+1024×768 public Merge call plus result observation, five warmups, 20 iterations
+across five samples, warm cache, and concurrency one. Exact Pillow parity passed
+3/3 in each run; CPU, SIMD, and GPU were the actual requested backends, with no
+fallback. The existing unit case covering zero length, odd lengths, and tails
+passed 1/1.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Restored control before | 0.988667 | 0.238896 | 0.276021 | 0.755146 |
+| Destination cursor candidate 1 | 1.128063 | 0.331104 | 0.357063 | 0.737396 |
+| Destination cursor candidate repeat | 0.983563 | 0.230708 | 0.286354 | 0.725250 |
+| Restored control after | 1.179500 | 0.309604 | 0.299270 | 0.803875 |
+
+Candidate and control CPU medians overlap, and the four-cohort movement in
+Pillow and SIMD confirms that these runs do not isolate a small loop effect.
+The candidate was reverted; the production helper remains the indexed loop.
+This Apple ARM64 experiment does not address the below-Pillow hosted x86_64
+row. Reports and parity receipts use the
+`merge-pointer-{control-before,candidate,candidate-repeat,control-after}` stems
+under `build/migration-parity/`; parity gate IDs are
+`752e137c4cdf45f1962ad0a9cc2de867`, `40119d68fb8e4bc2bccc481acf28ce04`,
+`0f94bfe36ccf40059e01142807cbe826`, and
+`a278a1f238d24c76b976c079b37249c0`. No genuine test defect was found and no
+coverage was run.
