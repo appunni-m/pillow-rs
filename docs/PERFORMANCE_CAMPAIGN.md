@@ -25772,3 +25772,24 @@ version identity; the production check correctly rejected the incomplete
 envelope, so the mock now uses the declared source name and version without
 relaxing that check. All six affected script suites then passed (117 tests).
 No coverage was run.
+
+### Merge clean c3 ARM64 current-source control — 2026-10-12
+
+The clean c3 source control measured the full 1024×768 RGB-from-three-L public
+call, including result observation, with 5 warmups and 20×5 measured calls at
+concurrency 1. Exact Pillow parity passed 3/3. CPU, SIMD, and GPU receipts named
+the requested backend and reported no fallback.
+
+| Backend | Pillow µs | Serial CPU µs | SIMD µs | GPU µs |
+| --- | ---: | ---: | ---: | ---: |
+| ARM64 control | 1,004.979 | 196.896 (5.105×) | 201.375 (4.991×) | 678.146 (0.297× SIMD) |
+
+CPU and SIMD each allocated a 2,359,296-byte output and reported two host
+buffers totaling 3,145,728 bytes. GPU used one dispatch, transferred 2,359,296
+bytes in each direction, and allocated one 2,359,296-byte host output. This is a
+current-source ARM control, not a candidate gain or x86 SSSE3 result; the hosted
+full benchmark run 38283678897 was still active when these rows were recorded.
+GPU sustained throughput remains unmeasured. The local evidence ledger now has
+6,636 data rows. No operation completion credit is due; no coverage was run.
+Reports: `build/migration-parity/merge-current-c3-baseline.json` and its matching
+parity report.
