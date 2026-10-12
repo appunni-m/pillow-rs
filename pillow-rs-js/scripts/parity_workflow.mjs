@@ -14,6 +14,9 @@ function key(surface, operation) {
 // loads, and shallow-copy it across operations whose wrappers preserve info.
 const imageInfo = new WeakMap();
 const getdataViews = new WeakMap();
+const multiBandGetdataModes = new Set([
+    'LA', 'La', 'RGB', 'RGBA', 'RGBa', 'RGBX', 'CMYK', 'HSV', 'PA', 'YCbCr', 'LAB',
+]);
 
 function imageInfoValue(image) {
     if (!imageInfo.has(image)) {
@@ -1027,7 +1030,10 @@ function imageMethod(receiver, operation, args, wasm, owned) {
         case 'getcolors': return receiver.getcolors(args.maxcolors ?? 256);
         case 'getdata': {
             const band = args.band ?? args.b ?? null;
-            const bandMode = band == null || !['LA', 'RGB', 'RGBA', 'RGBX', 'CMYK', 'HSV', 'PA', 'YCbCr'].includes(mode)
+            // Pillow's ImagingCore reports a one-band L result whenever a
+            // band is selected from a multiband image. Preserve scalar modes
+            // such as 1 and P, which retain their source mode.
+            const bandMode = band == null || !multiBandGetdataModes.has(mode)
                 ? mode
                 : 'L';
             if (band == null) return liveGetdataView(receiver, bandMode);
