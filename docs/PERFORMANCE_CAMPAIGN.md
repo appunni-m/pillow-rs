@@ -26124,3 +26124,39 @@ ARM64 host cannot execute x86_64 binaries, so those ARM timings and cross-target
 assembly inspection cannot validate an x86 speedup. Keep Merge as the next
 CPU-first operation and require a hosted x86 result before crediting a change.
 No coverage was run.
+
+### Refresh the operation ranking from published benchmark #136 — 2026-10-13
+
+The latest GitHub Pages full snapshot is clean revision
+`a51daf48f78ea6dc30a31c6329051fad16fa7138`, measured
+`2026-10-12T23:04:32.515918Z`, with JSON SHA-256
+`08a2bbf475a2c19f3569ae4ac4596dbc437c81a78925af90ca8edcad81860955`. The
+matrices contain 8,954 workload rows and 1,320 API/profile rows for all 330
+tracked public paths, including 121 explicit inventory gaps. The published
+Pillow-SIMD snapshot remains dirty and partial at 9 of 34 declared workloads;
+it contributes no verified Pillow-SIMD ratios.
+
+Among 192 exact-parity, backend-verified serial CPU workload/runner pairs, one
+is slower than Pillow and 54 are below 2×. The only below-Pillow row remains
+`pipeline-op.merge.material-rgb-l-1024x768` on Ubuntu x86_64: Pillow measured
+2,190.549 µs and CPU 2,231.627 µs (0.981593×). Both subjects passed exact
+parity; the requested CPU backend executed with no fallback. The timed boundary
+includes the Merge call and result observation, with five warmups, 20
+iterations across five samples, and concurrency one.
+
+The previous published snapshot measured this row at 0.924338×. The ratio
+narrowed, but both timing medians shifted and the CPU implementation did not
+change between those source revisions. Treat this as an unresolved hosted x86
+CPU miss, not as a credited optimization or a resolved regression. The
+weakest other verified CPU ratios are Thumbnail (1.195×), Grayscale (1.322×),
+Resize (1.399×), GetData (1.616×), Posterize (1.648×), BoxBlur (1.757×), and
+Filter (1.984×). The rejected scalar word-packing candidate remains rejected.
+
+SIMD has 174 verified pairs: three are slower than Pillow (worst 0.797×), 54
+are below 2×, and 142 are below the 5× target. Parallel CPU remains separate:
+14 of 192 verified pairs are slower than Pillow and 64 are below 2×. GPU
+latency is slower than SIMD in 36 of 51 verified comparisons, and sustained
+GPU throughput remains unmeasured. The refreshed complete per-operation
+rankings are in `docs/evidence/performance-optimization-operation-matrix.csv`
+and `docs/evidence/performance-optimization-matrix.csv`. No source change was
+selected and no coverage was run.
