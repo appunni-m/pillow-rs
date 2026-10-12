@@ -26087,3 +26087,40 @@ Among 192 exact-parity, backend-verified serial CPU pairs, one is slower than Pi
 Among 174 verified SIMD pairs, two CMYK-to-RGB workload rows are below Pillow (worst 0.923×); 53 are below 2× and 143 below 5×. The separately reported Parallel CPU profile has 11 of 192 verified pairs below Pillow and 61 below 2×. GPU latency is slower than SIMD in 36 of 51 verified comparisons; 15 meet the per-call latency target, while sustained throughput is unmeasured. No Pillow-SIMD ratio is eligible because the snapshot is dirty and partial.
 
 I checked the apparent GetData measurement-boundary concern against the parity workflow. The benchmark times the `band-data` call and consumes the returned sequence on both sides before stopping the timer. The preceding `Image.new` step is outside timing on both sides, and pillow-rs constructs its LA raster eagerly, like Pillow. The reference and target therefore include equivalent result consumption; no benchmark defect was found. Earlier inline-GIL, detach-threshold, chunk-loop, backend-reuse, mode-cache, and wrapper candidates for GetData were already rejected for lacking repeatable end-to-end gains, so none was reintroduced. No source change was selected. The refreshed matrices preserve all workloads; no coverage was run.
+
+### Refresh the operation ranking from the latest published benchmark — 2026-10-13
+
+The current GitHub Pages full snapshot is clean revision
+`bf02bb81f979467ab64d02dada74c772c5c99d02`, measured
+`2026-10-12T22:34:56.130174Z`, with JSON SHA-256
+`1b5f014309f4058d4db9edbc2de9ca99fcf24914a88bf7eac931b3a4436870ad`. The
+published Pillow-SIMD snapshot remains dirty and partial (9 of 34 workloads),
+so it still yields zero verified Pillow-SIMD comparisons. The regenerated
+matrices contain 8,954 workload rows and 1,320 API/profile rows, covering 209
+manifest-mapped paths and 121 explicit inventory gaps.
+
+Among 192 exact-parity, backend-verified serial CPU workload/runner pairs, one
+is slower than Pillow and 62 are below 2×. The only below-Pillow row is
+`pipeline-op.merge.material-rgb-l-1024x768` on Ubuntu x86_64: Pillow measured
+2,003.834 µs and CPU measured 2,167.859 µs (0.924338×). Both subjects passed
+parity; CPU requested and executed the CPU backend with no fallback. The timed
+boundary includes the Merge call and result observation, with five warmups,
+20 iterations across five samples, and concurrency one. The existing scalar
+word-packing candidate was previously rejected after it regressed local CPU
+latency by 12–31%; it remains rejected.
+
+The weakest other verified serial CPU ratios are Thumbnail (1.209×), Grayscale
+(1.333×), Resize (1.368×), GetData (1.588×), Posterize (1.657×), BoxBlur
+(1.850×), and GetProjection (1.884×). SIMD has 174 verified pairs, two
+below-Pillow CMYK-to-RGB rows (worst 0.920×), 59 below 2×, and 143 below the
+repository's 5× target. Parallel CPU remains separate: 16 of 192 verified
+pairs are below Pillow and 79 below 2×. GPU latency is slower than SIMD in 36
+of 51 verified comparisons; sustained throughput remains unmeasured. No
+Pillow-SIMD ratios are eligible.
+
+The RGB Merge CPU miss is isolated to the x86_64 hosted row; the same workload
+is 2.867× Pillow on macOS arm64 and 2.246× on Ubuntu arm64. The current Apple
+ARM64 host cannot execute x86_64 binaries, so those ARM timings and cross-target
+assembly inspection cannot validate an x86 speedup. Keep Merge as the next
+CPU-first operation and require a hosted x86 result before crediting a change.
+No coverage was run.
