@@ -1,11 +1,30 @@
 //! AArch64 NEON kernels for regular native-I resize blocks.
 
 use super::{ResizeIHorizontalBlockPlan, SIMD_RESIZE_LANES};
-use crate::ops::pil_resize::round_up;
 use std::arch::aarch64::{
-    vcvtq_f64_s64, vdupq_n_f64, vfmaq_f64, vget_high_s32, vget_low_s32, vld1q_s32, vld2q_s32,
-    vmovl_s32, vst1q_f64,
+    float64x2_t, int32x2_t, vaddq_f64, vbslq_f64, vcgeq_f64, vcvtq_f64_s64, vcvtq_s64_f64,
+    vdupq_n_f64, vfmaq_f64, vget_high_s32, vget_low_s32, vld1q_s32, vld2q_s32, vmovl_s32,
+    vqmovn_s64, vst1_s32,
 };
+
+/// Match PIL's sign-aware half adjustment, truncation, and saturating cast in
+/// two lanes. Keeping the conversion in NEON avoids storing each accumulator
+/// as f64 and rounding it again in scalar code.
+#[allow(unsafe_code)]
+#[inline]
+fn round_up_i32x2(value: float64x2_t) -> int32x2_t {
+    // SAFETY: AArch64 includes Advanced SIMD. These operations have no memory
+    // access; the comparison selects +0.5 for values >= 0 and -0.5 otherwise,
+    // then FCVTZS truncates to i64 and SQXTN saturates to i32, matching Rust's
+    // f64-to-i32 cast even for infinities, NaNs, and values outside i32 range.
+    unsafe {
+        let zero = vdupq_n_f64(0.0);
+        let positive_half = vdupq_n_f64(0.5);
+        let negative_half = vdupq_n_f64(-0.5);
+        let adjustment = vbslq_f64(vcgeq_f64(value, zero), positive_half, negative_half);
+        vqmovn_s64(vcvtq_s64_f64(vaddq_f64(value, adjustment)))
+    }
+}
 
 /// Apply the horizontal tap plan when each lane reads a stride-two source
 /// sample and every lane shares the same coefficient.
@@ -67,16 +86,14 @@ pub(super) fn horizontal_block(
             );
         }
 
-        let mut lanes = [[0.0f64; 2]; 4];
-        for (sum, lane_pair) in sums.into_iter().zip(&mut lanes) {
-            vst1q_f64(lane_pair.as_mut_ptr(), sum);
+        let mut lanes = [0i32; SIMD_RESIZE_LANES];
+        for (pair, sum) in lanes.chunks_exact_mut(2).zip(sums) {
+            vst1_s32(pair.as_mut_ptr(), round_up_i32x2(sum));
         }
         lanes
     };
 
-    Some(std::array::from_fn(|lane| {
-        round_up(rounded[lane / 2][lane % 2]) as i32
-    }))
+    Some(rounded)
 }
 
 /// Apply the vertical tap span to eight contiguous I-mode samples.
@@ -141,25 +158,24 @@ pub(super) fn vertical_block(
             );
         }
 
-        let mut lanes = [[0.0f64; 2]; 4];
-        for (sum, lane_pair) in sums.into_iter().zip(&mut lanes) {
-            vst1q_f64(lane_pair.as_mut_ptr(), sum);
+        let mut lanes = [0i32; SIMD_RESIZE_LANES];
+        for (pair, sum) in lanes.chunks_exact_mut(2).zip(sums) {
+            vst1_s32(pair.as_mut_ptr(), round_up_i32x2(sum));
         }
         lanes
     };
 
-    Some(std::array::from_fn(|lane| {
-        round_up(rounded[lane / 2][lane % 2]) as i32
-    }))
+    Some(rounded)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{SIMD_RESIZE_LANES, horizontal_block, vertical_block};
+    use super::{SIMD_RESIZE_LANES, horizontal_block, round_up_i32x2, vertical_block};
     use crate::compute::pool_cpu::ops::geometry::resample_kernel;
     use crate::ops::pil_resize::{precompute_coeffs_f64, round_up};
     use crate::pipeline::ResampleFilter;
     use crate::raster::{DynamicImage, RgbaImage};
+    use std::arch::aarch64::{vld1q_f64, vst1_s32};
     use wide::{f64x8, i32x8};
 
     fn signed_samples(length: usize) -> Vec<i32> {
@@ -170,6 +186,46 @@ mod tests {
                 _ => (index as i32).wrapping_mul(31_337).wrapping_sub(2_000_000),
             })
             .collect()
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn neon_round_up_matches_scalar_sign_half_and_saturating_cast() {
+        let just_below_positive_half = f64::from_bits(0.5f64.to_bits() - 1);
+        let just_above_positive_half = f64::from_bits(0.5f64.to_bits() + 1);
+        let just_above_negative_half = f64::from_bits((-0.5f64).to_bits() - 1);
+        let just_below_negative_half = f64::from_bits((-0.5f64).to_bits() + 1);
+        let values = [
+            f64::NEG_INFINITY,
+            f64::INFINITY,
+            f64::NAN,
+            -0.0,
+            0.0,
+            0.5,
+            -0.5,
+            1.5,
+            -1.5,
+            just_below_positive_half,
+            just_above_positive_half,
+            just_above_negative_half,
+            just_below_negative_half,
+            f64::from(i32::MAX) + 1.0,
+            f64::from(i32::MIN) - 1.0,
+            1.0e300,
+            -1.0e300,
+            2.0,
+        ];
+
+        for pair in values.chunks_exact(2) {
+            // SAFETY: `pair` contains exactly two initialized f64 values.
+            let input = unsafe { vld1q_f64(pair.as_ptr()) };
+            let output = round_up_i32x2(input);
+            let mut actual = [0i32; 2];
+            // SAFETY: `actual` has room for the two i32 lanes written here.
+            unsafe { vst1_s32(actual.as_mut_ptr(), output) };
+            let expected = [round_up(pair[0]) as i32, round_up(pair[1]) as i32];
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]

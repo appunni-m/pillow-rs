@@ -26000,3 +26000,42 @@ retains all four profiles from both runs (6,692 data rows total) under
 This is a rejected implementation hypothesis, not a resize improvement or a
 published-matrix update. No genuine test defect was found and no coverage was
 run.
+
+### Vectorize native-I resize rounding after NEON accumulation — retained partial candidate — 2026-10-13
+
+The profile of the retained stride-two AArch64 NEON path showed scalar
+`round_up` and `i32` casts after both horizontal and vertical vector sums. I
+added a two-lane NEON conversion that applies Pillow's sign-aware ±0.5
+adjustment, truncates toward zero, and saturates to `i32`. Both kernels now
+write their rounded lanes directly, avoiding temporary `f64` lane stores and
+scalar conversion. A focused helper test compares the vector result with the
+existing scalar reference for half ties, adjacent representable values,
+signed zero, NaN, infinities, and values outside the `i32` range.
+
+Two full-call runs measured the 1024×768 native-I Bicubic resize followed by
+materialization on the same Apple ARM64 host. Each used five warmups and 20×5
+timed samples at concurrency one. Exact Pillow parity passed 3/3 in each run;
+the CPU, SIMD, and GPU receipts showed the requested backend and no fallback.
+
+| Run | Pillow µs | Serial CPU µs | SIMD µs | Pillow/SIMD | GPU µs | GPU/SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Vector-round candidate 1 | 2,118.251 | 1,158.917 | 1,406.375 | 1.506× | 12,274.146 | 0.115× |
+| Vector-round candidate 2 | 2,040.208 | 1,070.375 | 1,336.521 | 1.527× | 12,247.209 | 0.109× |
+
+Against the two preceding NEON SIMD controls (1,434.709 and 1,444.979 µs),
+the candidate runs were 2.3% and 7.2% faster; their median was 4.8% below the
+control mean. This is a retained local partial improvement, not proof that
+Resize meets its 2× SIMD target: these candidate runs remain at 1.51–1.53×
+Pillow, and the workload covers one mode, size, filter, and architecture. The
+GPU path still used two dispatches, uploaded 3,145,728 bytes, and read back
+786,432 bytes; its sustained throughput was not measured. Serial CPU stayed
+below Pillow in both runs. The current published operation matrix is unchanged.
+
+The eight profile rows are in
+`docs/evidence/performance-optimization-local-runs.csv` (6,700 data rows
+total). Reports and parity receipts use the
+`i32-resize-neon-vector-round-candidate{1,2}-20261013` stems under
+`build/migration-parity/`; benchmark IDs are
+`migration-benchmark-0e810b184bcb4fc599f401bd3212173e` and
+`migration-benchmark-25c8aa39abdc4008bb40c55fdfa4ca32`. No genuine test defect
+was found and no coverage was run.
