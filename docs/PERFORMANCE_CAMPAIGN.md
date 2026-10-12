@@ -25922,3 +25922,53 @@ The 16 profile rows for all four cohorts are in
 `migration-benchmark-62c4a02a44f1477e93a371b603c457b6`,
 `migration-benchmark-b5f5cca93c3c4df4a7b4644370b9a0bc`, and
 `migration-benchmark-1d0dea8d2a1b460b9e8e70f0f923d80c`.
+
+### I-mode bicubic Resize stride-two AArch64 NEON — retained partial candidate — 2026-10-13
+
+The published operation matrix ranked direct `Image.resize` in native I mode
+below Pillow on SIMD, so I tested a narrow AArch64 NEON path for its regular
+stride-two interior. The planner admits only full eight-lane blocks whose
+source indices are exactly `first + 2 * lane`, whose interleaved-load spans
+fit the source row, and whose tap weights are bitwise equal. Irregular edges
+keep the existing wide path. The new kernel uses NEON loads and f64 fused
+multiply-adds in Pillow's original tap order; it does not change serial CPU,
+GPU, or thumbnail dispatch. The code is in a dedicated `resize_i32/neon.rs`
+module with bounds proofs at each raw load and tests that compare signed
+extremes against the ordered wide-FMA reference and exercise actual-path
+telemetry.
+
+Three same-host runs measured the complete 1024×768 → 512×384 resize and
+materialization with five warmups and 20×5 samples at concurrency one. Exact
+Pillow parity passed 3/3 in every run. Target receipts reported the requested
+backend with no fallback.
+
+| Cohort | Pillow µs | Serial CPU µs | CPU/Pillow | SIMD µs | Pillow/SIMD | GPU µs | GPU/SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Clean control | 2,077.730 | 1,091.500 | 1.904× | 2,055.334 | 1.011× | 11,631.584 | 0.177× |
+| NEON candidate 1 | 2,020.125 | 1,063.771 | 1.899× | 1,434.709 | 1.408× | 11,880.021 | 0.121× |
+| NEON candidate repeat | 2,014.167 | 1,052.875 | 1.913× | 1,444.979 | 1.394× | 11,770.875 | 0.123× |
+
+The candidate SIMD medians were 30% lower than the clean-control median in
+both repetitions. This is a local Apple ARM64 result for one size, mode, and
+filter; SIMD remains below the required 2× Pillow threshold, and CPU's roughly
+1.9× ratio in this local cohort does not replace the cross-runner matrix. GPU
+used two dispatches, uploaded 3,145,728 bytes, and read back 786,432 bytes in
+each run. GPU latency remains far above SIMD, and sustained throughput was not
+measured. Do not mark Resize complete or generalize this result to other
+geometries, modes, architectures, or filters.
+
+A five-second target profile recorded 672 samples in the SIMD resize adapter,
+including 349 under the new vertical NEON block. It supports that the vertical
+kernel is active and material; it does not isolate a further instruction-level
+opportunity. A shorter first profile was dominated by dynamic-loader startup
+and was discarded. The local evidence ledger contains four profiles per run,
+12 rows for these cohorts, and 6,684 data rows total. Reports and parity
+receipts are
+`i32-resize-current-source-20261013`, `i32-resize-neon-candidate1-20261013`,
+and `i32-resize-neon-candidate2-20261013` under `build/migration-parity/`;
+their benchmark IDs are `migration-benchmark-f94a014dd5c74ca89d78626a105b6386`,
+`migration-benchmark-4d02549f95f14b04b63a362522c5a305`, and
+`migration-benchmark-e8d61354297d45c094b801c0c03928e2`. These selected-workload
+results do not refresh the full published operation matrix. No genuine test
+defect was found, no coverage was run, and this change is being pushed by the
+user's explicit request before the normal 33-change batch is full.
