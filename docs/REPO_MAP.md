@@ -256,6 +256,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- integer.rs
 |   |   |   |       |   |-- native_thumbnail.rs
 |   |   |   |       |   |-- projection.rs
+|   |   |   |       |   |-- resize_i32/
+|   |   |   |       |   |   `-- neon.rs
 |   |   |   |       |   `-- resize_i32.rs
 |   |   |   |       |-- adapters.rs
 |   |   |   |       |-- mod.rs
