@@ -25972,3 +25972,31 @@ their benchmark IDs are `migration-benchmark-f94a014dd5c74ca89d78626a105b6386`,
 results do not refresh the full published operation matrix. No genuine test
 defect was found, no coverage was run, and this change is being pushed by the
 user's explicit request before the normal 33-change batch is full.
+
+### Reject checked vertical row preplanning for I-mode resize — 2026-10-13
+
+After the NEON profile showed substantial time in the vertical kernel, I tried
+checking each complete source row once per output row and passing those slices
+to each eight-lane block. This removed repeated checked row-offset arithmetic
+from the block loop while preserving its ordered f64 FMA operations. The
+candidate passed the focused four-test NEON suite and exact Pillow parity 3/3
+in both full-call benchmark runs; telemetry showed the requested CPU, SIMD, and
+GPU paths with no fallback.
+
+| Run | Pillow µs | Serial CPU µs | SIMD µs | Pillow/SIMD | GPU µs | GPU/SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Candidate 1 | 2,142.625 | 1,072.959 | 1,452.730 | 1.475× | 12,454.646 | 0.117× |
+| Candidate 2 | 2,096.729 | 1,072.271 | 1,422.917 | 1.474× | 12,514.979 | 0.114× |
+
+Against the two preceding NEON SIMD controls (1,434.709 and 1,444.979 µs),
+candidate 1 was 1.3% slower and candidate 2 was 1.5% faster. Their mean was
+only 0.14% lower, so the gain was not repeatable and is within run-to-run
+variation. I reverted this candidate. The full-call boundary included the
+public resize and materialization, with five warmups and 20×5 timed samples at
+concurrency one. GPU still used two dispatches and moved 3,145,728 bytes up
+and 786,432 bytes back; GPU throughput was not measured. The local ledger
+retains all four profiles from both runs (6,692 data rows total) under
+`build/migration-parity/i32-resize-vertical-row-plan-candidate{1,2}-20261013.json`.
+This is a rejected implementation hypothesis, not a resize improvement or a
+published-matrix update. No genuine test defect was found and no coverage was
+run.
