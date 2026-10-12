@@ -3,7 +3,15 @@
 //! Keep byte-layout shuffles and architecture-specific interleavers here;
 //! the operation adapter owns admission, backend receipts, and allocation telemetry.
 
+#[cfg(any(
+    target_arch = "x86_64",
+    all(target_arch = "aarch64", target_feature = "neon")
+))]
 use crate::error::PilError;
+#[cfg(any(
+    target_arch = "x86_64",
+    all(target_arch = "aarch64", target_feature = "neon")
+))]
 use crate::raster::DynamicImage;
 use wide::u8x16;
 
