@@ -26039,3 +26039,19 @@ total). Reports and parity receipts use the
 `migration-benchmark-0e810b184bcb4fc599f401bd3212173e` and
 `migration-benchmark-25c8aa39abdc4008bb40c55fdfa4ca32`. No genuine test defect
 was found and no coverage was run.
+
+### Recheck the published LA GetData slowdown on a matched local call — 2026-10-13
+
+The latest GitHub Pages full snapshot (clean revision `6cd84e18d645c0fa5f7ffd6ab412e0296dcaf00b`) reports the 32×32 `getdata(band=1)` LA workload on its macOS arm64 runner at 14.292 µs for Pillow, 25.625 µs for CPU (0.558× Pillow), 25.959 µs for SIMD (0.551×), and 1,783.730 µs for GPU (0.008×). Exact parity passed and each target receipt named the requested backend with no fallback.
+
+I reran the same public `band-data` step against clean `main` revision `f41578dcaa164074e0d9bbba0b7c6edbce30cbca` on the local Apple ARM64 host, using five warmups and 20×5 timed observations at concurrency one. Exact Pillow parity passed 3/3 comparisons across CPU, SIMD, and GPU, and each requested backend executed without fallback.
+
+| Profile | Pillow µs | Target µs | Speedup vs Pillow | GPU speedup vs SIMD |
+| --- | ---: | ---: | ---: | ---: |
+| Serial CPU | 9.917 | 5.375 | 1.845× | — |
+| SIMD | 9.917 | 4.917 | 2.017× | — |
+| GPU | 9.917 | 203.104 | 0.049× | 0.024× |
+
+The hosted CPU/SIMD slowdown did not reproduce locally, so I made no source change and do not use this local row to overwrite the published hosted comparison. The code revision differs only in a resize kernel, not GetData; the discrepancy is not attributed to that change. The direct-read benchmark is an end-to-end band extraction and immutable result materialization. The GPU receipt used one dispatch, uploaded 2,048 bytes, and read back 1,024 bytes; sustained throughput was not measured. Retain the hosted regression in the ranked matrix until a fresh hosted run or matched runner cohort resolves it. The full benchmark for `f41578dca` is running; the current published snapshot predates that source.
+
+The local ledger records all four profiles in `docs/evidence/performance-optimization-local-runs.csv` (6,704 data rows total). Reports are `build/migration-parity/getdata-la-band1-32x32-published-gap-control-20261013.json` and its parity sidecar; run ID `migration-benchmark-2f72eb0041604c2983ab960197dc5b3c`, parity gate `migration-parity-benchmark-gate-d9d6e52c52ca42feb6ed9f3dc79dbab4`. No genuine test defect was found and no coverage was run.
