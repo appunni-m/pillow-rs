@@ -16,15 +16,24 @@ use crate::pipeline::ResampleFilter;
 use crate::raster::DynamicImage;
 use wide::{f64x8, i32x8};
 
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+mod neon;
+
 #[derive(Clone, Copy)]
 pub(super) struct ResizeIHorizontalTapPlan {
     pub(super) source_indices: [usize; SIMD_RESIZE_LANES],
     pub(super) active_lanes: u8,
     pub(super) weights: f64x8,
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    pub(super) neon_source_start: Option<usize>,
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    pub(super) neon_weight: Option<f64>,
 }
 
 pub(super) struct ResizeIHorizontalBlockPlan {
     pub(super) taps: Vec<ResizeIHorizontalTapPlan>,
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    pub(super) neon_eligible: bool,
 }
 
 pub(super) struct ResizeIHorizontalPlan {
@@ -40,6 +49,23 @@ pub(super) fn build_resize_i_horizontal_plan(
     source_width: usize,
     output_width: usize,
 ) -> Option<ResizeIHorizontalPlan> {
+    build_resize_i_horizontal_plan_inner::<false>(coeffs, source_width, output_width)
+}
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+fn build_resize_i_horizontal_plan_with_neon(
+    coeffs: &FilterCoeffsF64,
+    source_width: usize,
+    output_width: usize,
+) -> Option<ResizeIHorizontalPlan> {
+    build_resize_i_horizontal_plan_inner::<true>(coeffs, source_width, output_width)
+}
+
+fn build_resize_i_horizontal_plan_inner<const ALLOW_NEON: bool>(
+    coeffs: &FilterCoeffsF64,
+    source_width: usize,
+    output_width: usize,
+) -> Option<ResizeIHorizontalPlan> {
     let mut blocks = Vec::with_capacity(output_width.div_ceil(SIMD_RESIZE_LANES));
     for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
         let lane_count = (output_width - output_x).min(SIMD_RESIZE_LANES);
@@ -49,6 +75,8 @@ pub(super) fn build_resize_i_horizontal_plan(
             .max()
             .unwrap_or(0);
         let mut taps = Vec::with_capacity(max_count);
+        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+        let mut neon_eligible = ALLOW_NEON && lane_count == SIMD_RESIZE_LANES;
         for tap in 0..max_count {
             let mut source_indices = [0usize; SIMD_RESIZE_LANES];
             let mut weights = [0.0f64; SIMD_RESIZE_LANES];
@@ -69,13 +97,48 @@ pub(super) fn build_resize_i_horizontal_plan(
                 weights[lane] = weight;
                 active_lanes |= 1u8 << lane;
             }
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            let (neon_source_start, neon_weight) = if ALLOW_NEON && active_lanes == u8::MAX {
+                let first_source = source_indices[0];
+                let stride_two = source_indices
+                    .iter()
+                    .enumerate()
+                    .all(|(lane, &source)| first_source.checked_add(lane * 2) == Some(source));
+                // The interleaved loads read each requested stride-two sample
+                // and its adjacent partner, including the final pair.
+                let source_span_fits = first_source
+                    .checked_add(SIMD_RESIZE_LANES * 2)
+                    .is_some_and(|end| end <= source_width);
+                let first_weight = weights[0];
+                let weights_match = weights
+                    .iter()
+                    .all(|weight| weight.to_bits() == first_weight.to_bits());
+                (
+                    (stride_two && source_span_fits).then_some(first_source),
+                    weights_match.then_some(first_weight),
+                )
+            } else {
+                (None, None)
+            };
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            {
+                neon_eligible &= neon_source_start.is_some() && neon_weight.is_some();
+            }
             taps.push(ResizeIHorizontalTapPlan {
                 source_indices,
                 active_lanes,
                 weights: f64x8::new(weights),
+                #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+                neon_source_start,
+                #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+                neon_weight,
             });
         }
-        blocks.push(ResizeIHorizontalBlockPlan { taps });
+        blocks.push(ResizeIHorizontalBlockPlan {
+            taps,
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            neon_eligible,
+        });
     }
     Some(ResizeIHorizontalPlan { blocks })
 }
@@ -130,6 +193,8 @@ pub(super) fn simd_resize_i32(
     let source_values = i32_samples_from_le_bytes(img.as_bytes(), source_pixels);
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = 0u64;
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    let mut used_neon = false;
 
     if matches!(filter, ResampleFilter::Nearest) {
         let x_indices = resize_nearest_indices(img.width(), output_width as u32)
@@ -178,6 +243,11 @@ pub(super) fn simd_resize_i32(
             precompute_coeffs_f64(output_width as u32, source_width as u32, kernel, support);
         let vertical =
             precompute_coeffs_f64(output_height as u32, source_height as u32, kernel, support);
+        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+        let horizontal_plan =
+            build_resize_i_horizontal_plan_with_neon(&horizontal, source_width, output_width)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+        #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
         let horizontal_plan =
             build_resize_i_horizontal_plan(&horizontal, source_width, output_width)
                 .ok_or_else(|| simd_unsupported("Resize"))?;
@@ -211,6 +281,32 @@ pub(super) fn simd_resize_i32(
                     .get(block_index)
                     .ok_or_else(|| simd_unsupported("Resize"))?;
                 let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
+                #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+                let neon_values = if block.neon_eligible {
+                    neon::horizontal_block(source_row, block)
+                } else {
+                    None
+                };
+                #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+                let neon_values: Option<[i32; SIMD_RESIZE_LANES]> = None;
+                if let Some(values) = neon_values {
+                    let block_start = intermediate_row
+                        .checked_add(output_x)
+                        .ok_or_else(|| simd_unsupported("Resize"))?;
+                    let block_end = block_start
+                        .checked_add(count)
+                        .ok_or_else(|| simd_unsupported("Resize"))?;
+                    let output_block = intermediate
+                        .get_mut(block_start..block_end)
+                        .ok_or_else(|| simd_unsupported("Resize"))?;
+                    output_block.copy_from_slice(&values[..count]);
+                    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+                    {
+                        used_neon = true;
+                    }
+                    vector_blocks = vector_blocks.saturating_add(1);
+                    continue;
+                }
                 let mut sums = f64x8::splat(0.0);
                 for tap in &block.taps {
                     sums = tap.weights.mul_add(
@@ -252,24 +348,40 @@ pub(super) fn simd_resize_i32(
                 .ok_or_else(|| simd_unsupported("Resize"))?;
             for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
                 let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
-                let mut sums = f64x8::splat(0.0);
-                for (tap, &weight) in weights.iter().enumerate() {
-                    let source_y = y0
-                        .checked_add(tap)
-                        .ok_or_else(|| simd_unsupported("Resize"))?;
-                    let source_row = source_y
-                        .checked_mul(output_width)
-                        .ok_or_else(|| simd_unsupported("Resize"))?;
-                    let values = std::array::from_fn(|lane| {
-                        if lane < count {
-                            f64::from(intermediate[source_row + output_x + lane])
-                        } else {
-                            0.0
-                        }
-                    });
-                    sums = f64x8::splat(weight).mul_add(f64x8::new(values), sums);
-                }
-                let rounded = sums.to_array().map(|value| round_up(value) as i32);
+                #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+                let neon_values = if count == SIMD_RESIZE_LANES {
+                    neon::vertical_block(&intermediate, output_width, output_x, y0, weights)
+                } else {
+                    None
+                };
+                #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+                let neon_values: Option<[i32; SIMD_RESIZE_LANES]> = None;
+                let rounded = if let Some(values) = neon_values {
+                    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+                    {
+                        used_neon = true;
+                    }
+                    values
+                } else {
+                    let mut sums = f64x8::splat(0.0);
+                    for (tap, &weight) in weights.iter().enumerate() {
+                        let source_y = y0
+                            .checked_add(tap)
+                            .ok_or_else(|| simd_unsupported("Resize"))?;
+                        let source_row = source_y
+                            .checked_mul(output_width)
+                            .ok_or_else(|| simd_unsupported("Resize"))?;
+                        let values = std::array::from_fn(|lane| {
+                            if lane < count {
+                                f64::from(intermediate[source_row + output_x + lane])
+                            } else {
+                                0.0
+                            }
+                        });
+                        sums = f64x8::splat(weight).mul_add(f64x8::new(values), sums);
+                    }
+                    sums.to_array().map(|value| round_up(value) as i32)
+                };
                 let packed = i32x8::new(rounded).to_array();
                 let block_start = output_row
                     .checked_add(output_x)
@@ -292,9 +404,16 @@ pub(super) fn simd_resize_i32(
         }
     }
 
-    crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(0);
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    crate::compute::record_pipeline_operation_path(if used_neon {
+        "neon-f64-resize"
+    } else {
+        "vector"
+    });
+    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+    crate::compute::record_pipeline_operation_path("vector");
     let result = crate::image_utils::raw_bytes_to_image(
         output_width as u32,
         output_height as u32,
