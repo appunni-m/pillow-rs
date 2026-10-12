@@ -1303,15 +1303,12 @@ pub fn muldiv255(a: u32, b: u32) -> u32 {
 #[inline]
 fn cmyk_to_rgb_row(source: &[u8], output: &mut [u8]) {
     for (rgb, cmyk) in output.chunks_exact_mut(3).zip(source.chunks_exact(4)) {
-        let c = u32::from(cmyk[0]);
-        let m = u32::from(cmyk[1]);
-        let y = u32::from(cmyk[2]);
-        let nk = 255 - u32::from(cmyk[3]);
-        // muldiv255(channel, nk) is in 0..=nk for byte channels, so the
+        let ink = u8::MAX - cmyk[3];
+        // muldiv255(channel, ink) is in 0..=ink for byte channels, so the
         // subtraction is already the exact clipped Pillow result.
-        rgb[0] = (nk - muldiv255(c, nk)) as u8;
-        rgb[1] = (nk - muldiv255(m, nk)) as u8;
-        rgb[2] = (nk - muldiv255(y, nk)) as u8;
+        rgb[0] = ink - cmyk_muldiv255_byte(cmyk[0], ink);
+        rgb[1] = ink - cmyk_muldiv255_byte(cmyk[1], ink);
+        rgb[2] = ink - cmyk_muldiv255_byte(cmyk[2], ink);
     }
 }
 
