@@ -241,8 +241,27 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- pool_simd/
 |   |   |   |   |-- mod.rs
 |   |   |   |   `-- ops/
+|   |   |   |       |-- adapters/
+|   |   |   |       |   |-- extract_band.rs
+|   |   |   |       |   |-- grayscale/
+|   |   |   |       |   |   `-- kernels/
+|   |   |   |       |   |       |-- channels.rs
+|   |   |   |       |   |       |-- cmyk.rs
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- ycbcr.rs
+|   |   |   |       |   |-- grayscale.rs
+|   |   |   |       |   |-- merge.rs
+|   |   |   |       |   |-- native_thumbnail/
+|   |   |   |       |   |   |-- float.rs
+|   |   |   |       |   |   `-- integer.rs
+|   |   |   |       |   |-- native_thumbnail.rs
+|   |   |   |       |   |-- projection.rs
+|   |   |   |       |   `-- resize_i32.rs
 |   |   |   |       |-- adapters.rs
 |   |   |   |       |-- mod.rs
+|   |   |   |       |-- native_channel.rs
+|   |   |   |       |-- native_filter.rs
+|   |   |   |       |-- native_merge.rs
 |   |   |   |       `-- scalar.rs
 |   |   |   `-- registry.rs
 |   |   |-- data/
@@ -391,6 +410,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- docs_site.py
     |-- generate_migration_parity_docs.py
     |-- lint.sh
+    |-- migration_benchmark_adapter.py
     |-- migration_parity_inventory.py
     |-- prepare_pypi_release.py
     |-- profile_migration_benchmark.py
@@ -440,6 +460,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_optimization_goals.py
     |-- test_parity_reduction.py
     |-- test_pillow_simd_benchmark.py
+    |-- test_profile_migration_benchmark.py
     |-- test_receipt_state.py
     |-- test_release_tools.py
     |-- validate_migration_parity_contract.py

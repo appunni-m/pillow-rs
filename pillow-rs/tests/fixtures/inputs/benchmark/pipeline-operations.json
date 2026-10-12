@@ -58926,10 +58926,8 @@
         "case_id": "PIL.Image.Image.getprojection.parity.material-cmyk-1024x768"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -58982,9 +58980,7 @@
       },
       "measurement": {
         "boundary": "whole_workflow",
-        "step_ids": [
-          "call"
-        ],
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -59003,6 +58999,165 @@
         ],
         "mode": "CMYK",
         "chain_length": 4,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pil-image-image.getprojection.edge-rgb-sparse-tail-17x4",
+      "covers": [
+        "PIL.Image.Image.getprojection.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getprojection.parity.rgb-sparse-tail-17x4"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          17,
+          4
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pil-image-image.getprojection.edge-rgb-dense-tail-17x4",
+      "covers": [
+        "PIL.Image.Image.getprojection.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getprojection.parity.rgb-dense-tail-17x4"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          17,
+          4
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pil-image-image.getprojection.edge-rgb-dense-scalar-tail-15x3",
+      "covers": [
+        "PIL.Image.Image.getprojection.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getprojection.parity.rgb-dense-scalar-tail-15x3"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          15,
+          3
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -247713,165 +247868,6 @@
         "mode": "RGBA",
         "chain_length": 2,
         "operation_class": "geometry",
-        "cache_state": "warm",
-        "build_profile": "release"
-      }
-    },
-    {
-      "workload_id": "pil-image-image.getprojection.edge-rgb-sparse-tail-17x4",
-      "covers": [
-        "PIL.Image.Image.getprojection.performance.standard"
-      ],
-      "subjects": [
-        {
-          "kind": "oracle",
-          "id": "pillow"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-cpu"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-simd"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-gpu"
-        }
-      ],
-      "input": {
-        "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getprojection.parity.rgb-sparse-tail-17x4"
-      },
-      "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
-        "metrics": [
-          "latency",
-          "throughput"
-        ],
-        "warmup_iterations": 5,
-        "measurement_iterations": 20,
-        "samples": 5,
-        "concurrency": 1,
-        "cache_state": "warm",
-        "correctness_gate": "parity_pass"
-      },
-      "context": {
-        "size": [
-          17,
-          4
-        ],
-        "mode": "RGB",
-        "chain_length": 3,
-        "operation_class": "point",
-        "cache_state": "warm",
-        "build_profile": "release"
-      }
-    },
-    {
-      "workload_id": "pil-image-image.getprojection.edge-rgb-dense-tail-17x4",
-      "covers": [
-        "PIL.Image.Image.getprojection.performance.standard"
-      ],
-      "subjects": [
-        {
-          "kind": "oracle",
-          "id": "pillow"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-cpu"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-simd"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-gpu"
-        }
-      ],
-      "input": {
-        "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getprojection.parity.rgb-dense-tail-17x4"
-      },
-      "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
-        "metrics": [
-          "latency",
-          "throughput"
-        ],
-        "warmup_iterations": 5,
-        "measurement_iterations": 20,
-        "samples": 5,
-        "concurrency": 1,
-        "cache_state": "warm",
-        "correctness_gate": "parity_pass"
-      },
-      "context": {
-        "size": [
-          17,
-          4
-        ],
-        "mode": "RGB",
-        "chain_length": 1,
-        "operation_class": "point",
-        "cache_state": "warm",
-        "build_profile": "release"
-      }
-    },
-    {
-      "workload_id": "pil-image-image.getprojection.edge-rgb-dense-scalar-tail-15x3",
-      "covers": [
-        "PIL.Image.Image.getprojection.performance.standard"
-      ],
-      "subjects": [
-        {
-          "kind": "oracle",
-          "id": "pillow"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-cpu"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-simd"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-gpu"
-        }
-      ],
-      "input": {
-        "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getprojection.parity.rgb-dense-scalar-tail-15x3"
-      },
-      "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
-        "metrics": [
-          "latency",
-          "throughput"
-        ],
-        "warmup_iterations": 5,
-        "measurement_iterations": 20,
-        "samples": 5,
-        "concurrency": 1,
-        "cache_state": "warm",
-        "correctness_gate": "parity_pass"
-      },
-      "context": {
-        "size": [
-          15,
-          3
-        ],
-        "mode": "RGB",
-        "chain_length": 1,
-        "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
       }
