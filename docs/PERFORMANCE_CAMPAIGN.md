@@ -25827,3 +25827,53 @@ GPU sustained throughput remains unmeasured. The local evidence ledger now has
 6,636 data rows. No operation completion credit is due; no coverage was run.
 Reports: `build/migration-parity/merge-current-c3-baseline.json` and its matching
 parity report.
+
+### CMYK-to-RGB byte-width CPU arithmetic — retained local candidate — 2026-10-13
+
+The serial `Image.convert("RGB")` loop previously widened each CMYK channel to
+`u32` and called the generic `muldiv255`. I reused the existing exact
+`cmyk_muldiv255_byte(u8, u8)` helper for all three channels. This changes only
+the scalar CPU loop; the SIMD adapter and GPU path are untouched. The formula
+remains `ink = 255 - K; channel = ink - MULDIV255(component, ink)`.
+
+Five matched-host cohorts measured the 1024×768 CMYK conversion workload with
+5 warmups, 20 iterations × 5 samples, concurrency 1, exact Pillow parity, and
+materialization of the observed image inside the timed boundary. All five
+parity gates passed 3/3. CPU, SIMD, and GPU receipts reported their requested
+backend, terminal completion, and no fallback.
+
+| Cohort | Pillow µs | Serial CPU µs | CPU/Pillow | SIMD µs | GPU µs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Control before candidate | 4,563.729 | 1,404.271 | 3.250× | 684.646 | 7,496.479 |
+| Candidate 1 | 1,834.250 | 676.729 | 2.710× | 704.188 | 5,023.646 |
+| Candidate repeat | 1,868.729 | 654.688 | 2.854× | 853.708 | 5,054.958 |
+| Reverted control | 1,844.792 | 1,156.438 | 1.595× | 707.354 | 4,959.646 |
+| Candidate confirmation | 1,840.771 | 668.271 | 2.754× | 686.313 | 4,957.063 |
+
+The first control had a large whole-host timing shift. The post-revert control
+and confirmation had Pillow medians within 0.22%; against that bracket, the
+candidate CPU was 42.2% faster. Two earlier candidate runs measured 0.677 and
+0.655 ms CPU, and the confirmation measured 0.668 ms. Keep this local ARM64
+CPU change. SIMD was not edited and the paired SIMD values do not establish an
+attributed change. GPU executed one dispatch, uploaded and read back
+3,145,728 bytes, and remained much slower than SIMD; sustained GPU throughput
+was not measured. Parallel CPU was not measured.
+
+The candidate does not update the published cross-runner matrix. Its clean c3
+snapshot still has a 1.514× CPU/Pillow worst verified Convert row on Ubuntu
+ARM64, SIMD remains below the repository 5× target, GPU latency is slower than
+SIMD, Parallel CPU remains separately tracked, six declared workloads are
+unpublished, and Pillow-SIMD still has no verified Convert comparison. Keep
+Convert open; this is one local partial optimization, not operation completion.
+No genuine test defect was found, no coverage was run, and the commit/push
+batch remains 0/33. The local evidence ledger has 6,656 data rows.
+
+The five benchmark reports and parity receipts use the `convert-cmyk-chain-audit`,
+`convert-cmyk-u16-candidate`, `convert-cmyk-u16-candidate-repeat`,
+`convert-cmyk-u16-post-revert-control`, and
+`convert-cmyk-u16-candidate-confirmation` stems under
+`build/migration-parity/`. Run IDs are `migration-benchmark-e29536ddede945268c790e1a3c2442ad`,
+`migration-benchmark-8f577894b7874bf2a1defc424eafd8eb`,
+`migration-benchmark-461f884de9a447bca4eaf598c112d2b1`,
+`migration-benchmark-cc34b7569fd545fa81558e5a1c65db40`, and
+`migration-benchmark-773921fdf00e4697abfe7fd20c72456e`.
