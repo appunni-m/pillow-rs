@@ -504,7 +504,7 @@ def operation_matrix_rows(
                 baseline, threshold = "Pillow", 1.0
                 speedup_field = "verified_speedup_vs_pillow"
             elif profile == "python-simd":
-                baseline, threshold = "Pillow", 2.0
+                baseline, threshold = "Pillow", 5.0
                 speedup_field = "verified_speedup_vs_pillow"
             elif profile == "python-gpu":
                 baseline, threshold = "SIMD", 1.0
@@ -641,7 +641,7 @@ def operation_matrix_rows(
             if profile == "python-cpu":
                 baseline, threshold = "Pillow", 1.0
             elif profile == "python-simd":
-                baseline, threshold = "Pillow", 2.0
+                baseline, threshold = "Pillow", 5.0
             elif profile == "python-gpu":
                 baseline, threshold = "SIMD", 1.0
             else:

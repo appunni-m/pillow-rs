@@ -508,33 +508,35 @@ python3 scripts/build_performance_optimization_matrix.py \
   --public-api-inventory docs/evidence/performance-optimization-public-api.csv
 ```
 
-The latest published workload matrix records 8,707 rows total: 8,671 full-
-benchmark rows across 667 workloads and 36 Pillow-SIMD rows across 9 workloads.
-The full snapshot is clean at revision
-`88d414bdbe6bd31b531271324094e041a9fece8a`, measured
-`2026-10-10T13:39:05.910204Z`, with JSON SHA-256
-`72574ed44afee99c59a5fe2a6479003d90e11e6f60f4f318ea5dbc231cdb2955`, from the [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
+The latest published workload matrix records 8,954 rows: 8,918 full-benchmark
+rows across 686 workloads and 36 Pillow-SIMD rows across 9 workloads. The full
+snapshot is clean at revision
+`c3ec2a1ddc851c602e4b3d77e490bc7d7ac15979`, measured
+`2026-10-12T18:01:53.285622Z`, with JSON SHA-256
+`89913ac6935359959d7bc40ab9a5bde80e9918cb46705074f0dd9e992f6cac2d`, from the
+[published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
 The operation matrix has 1,320 rows for 330 public paths and four profiles;
 209 paths map to the benchmark manifest and 121 remain explicit inventory
 gaps. Only rows with exact parity and completed backend receipts are eligible
 for speed claims.
 
-Across the 135 verified serial CPU workload-runner pairs, one is slower than
-Pillow and 38 are below 2×. The corresponding SIMD counts are 2 slower than
-Pillow, 31 below 2×, and 96 below 5×. The separately built Parallel CPU profile
-uses the opt-in Cargo `parallel` feature; 15 of its 135 verified pairs are
-slower than Pillow and 46 are below 2×. GPU latency is slower than SIMD in 23
-of its 38 verified pairs; sustained GPU throughput remains unmeasured. The
-operation matrix's GPU latency baseline is SIMD; its GPU
+Across the 192 verified serial CPU workload-runner pairs, none are slower than
+Pillow and 74 are below 2×. The current 2× CPU triage list is led by Thumbnail
+(1.139974×), GetData (1.342395×), Resize (1.352654×), Grayscale (1.414526×),
+Convert (1.514433×), Merge (1.734456×), Filter (1.976719×), and GetProjection
+(1.976935×). SIMD has 174 verified pairs: one is slower than Pillow, 60 are
+below 2×, and 141 are below the 5× project goal. The separately built Parallel
+CPU profile uses the opt-in Cargo `parallel` feature; 13 of its 192 verified
+pairs are slower than Pillow and 84 are below 2×. GPU latency is slower than
+SIMD in 35 of its 51 verified pairs; sustained GPU throughput remains
+unmeasured. The operation matrix's GPU latency baseline is SIMD; its GPU
 `below_baseline_comparisons` field and per-operation ratios must not be read as
 Pillow comparisons.
 
-The clean 88d414b hosted snapshot reveals one serial-CPU regression:
-`PIL.Image.Image.getdata` is 0.725603× Pillow for the RGB-band terminal-read
-workload on macOS arm64. Fix this before the seven other CPU operations below
-2×: Thumbnail, MedianFilter, Filter, Grayscale, Resize, Posterize, and BoxBlur.
-The Pillow-SIMD snapshot remains dirty and partial (9 of 34 declared cases), so
-its ratios are excluded from the optimization ranking.
+The published Pillow-SIMD snapshot is dirty and partial (9 of 34 declared
+workloads), so there are no verified Pillow-SIMD comparisons to rank. The
+Pillow-SIMD speed ratios are excluded until a clean matched cohort is
+published.
 
 ### Rejected CPU alpha-composite-plus-mirror fusion trial
 
