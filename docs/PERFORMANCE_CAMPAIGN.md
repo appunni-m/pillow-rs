@@ -26236,3 +26236,22 @@ The prior isolated macOS RGBA GetData miss (0.501× Pillow on revision `1d8faf6`
 SIMD has 174 exact-parity verified pairs, none slower than Pillow, 51 below 2×, and 141 below the repository's 5× target. Its weakest API rows are Thumbnail (1.131×), GaussianBlur (1.182×), Convert (1.184×), F-mode Resize (1.244×), and Grayscale (1.325×). Parallel CPU remains separate: 192 verified pairs include 15 below Pillow and 66 below 2×. For GPU, 36 of 51 verified GPU/SIMD comparisons are slower than SIMD; sustained throughput is unmeasured. No acceleration target is complete from these selected rows alone, and the 121 unmapped public API paths remain open.
 
 The complete refreshed records are `docs/evidence/benchmark.json`, `docs/evidence/performance-optimization-matrix.csv`, and `docs/evidence/performance-optimization-operation-matrix.csv`. The latest source matrix selects F-mode Resize for the next serial-CPU investigation; it does not authorize reusing prior rejected candidates. No source change or test-contract change was made, and no coverage was run.
+
+### F-mode resize horizontal row-slice hoist — retained local candidate, hosted gap open — 2026-10-13
+
+The clean published snapshot at revision `6ca035c4609b6b2a82a741218326d3055baeeefa` ranks native F-mode Bicubic Resize first for serial CPU follow-up: 1.215× Pillow on Ubuntu x86_64 and 1.665× on Ubuntu ARM64. The local Apple ARM64 candidate changes only `pool_cpu::ops::geometry`: the horizontal sampler now receives a checked source-row slice created once per source row, instead of repeating the whole-image row lookup for each output pixel. Tap order, FMA order, coefficient handling, and the FLOAT32 pass boundary are unchanged; SIMD and GPU source paths were not edited.
+
+Four full public 1024×768-to-512×384 call-plus-materialization runs used the same workload, five warmups, 20 iterations across five samples, and concurrency one. Each parity gate passed 3/3, and the requested CPU, SIMD, and GPU backends executed without fallback:
+
+| Run | Pillow ms | Serial CPU ms | Pillow/CPU | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Matched control A | 2.815312 | 1.045250 | 2.693× | 1.354084 | 4.185000 |
+| Matched control B | 2.949396 | 1.071417 | 2.753× | 1.358688 | 3.947125 |
+| Row-slice candidate 1 | 2.814709 | 0.945500 | 2.977× | 1.349000 | 4.195750 |
+| Row-slice candidate 2 | 2.813250 | 0.980708 | 2.869× | 1.366500 | 4.261125 |
+
+The candidate CPU mean is 9.0% below the two matched controls while Pillow is stable across the candidate pair. SIMD medians remain within about 1% of the controls. The GPU executed two dispatches with 3,145,728 upload bytes and 786,432 readback bytes, but remained about 3.1× slower than SIMD; sustained GPU throughput is still unmeasured. The target-only Parallel CPU profile measured 0.6070 ms before and 0.5921 ms with the candidate. Those two rows passed parity and named the opt-in `parallel-cpu` profile, but that runner does not emit a Pillow subject, so they do not establish a paired Parallel CPU speedup.
+
+The full F-mode lane passes 138/138 with strict CPU selection. Normal SIMD and GPU parity lanes also pass 138/138. A strict SIMD probe passed 107 cases and reported capability errors for 31 unsupported Resize/Reduce layouts; these are not byte mismatches or test defects. The correctness receipts cover this corpus, while only the full public benchmark receipts prove backend execution. No fallback result receives acceleration credit.
+
+The local evidence supports retaining the row-slice change as a partial ARM64 CPU candidate, not closing Resize. It does not test the hosted x86_64 code path or change its published 1.215× result; CPU remains below the sequencing target there, and GPU latency and throughput remain open. Keep the published 330-operation matrix tied to its clean snapshot until a complete matched-host snapshot is available. Reports are `f32-resize-row-slice-control-a-20261013.json`, `f32-resize-row-slice-control-b-20261013.json`, `f32-resize-row-slice-candidate-1-20261013.json`, `f32-resize-row-slice-candidate-2-20261013.json`, `f32-resize-row-slice-parallel-control-20261013.json`, and `f32-resize-row-slice-parallel-candidate-20261013.json` under `build/migration-parity/`; their parity sidecars are likewise named with `-parity`. The 18 subject rows are recorded in `docs/evidence/performance-optimization-local-runs.csv` (6,742 data rows). No genuine test defect was found and no coverage was run.

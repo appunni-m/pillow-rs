@@ -155,8 +155,7 @@ fn f_resize_accumulate<const FINITE_OPERANDS: bool, F: F64MulAdd>(
 
 #[inline]
 fn f_resize_horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
-    source: &[f32],
-    source_row_start: usize,
+    source_row: &[f32],
     first_source_x: i64,
     weights: &[f64],
     fma: &F,
@@ -172,7 +171,6 @@ fn f_resize_horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
         weight7,
     ] = weights
         && let Ok(source_x) = usize::try_from(first_source_x)
-        && let Some(source_row) = source.get(source_row_start..)
         && let Some(source_row) = source_row.get(source_x..)
         && let Some(
             [
@@ -214,7 +212,7 @@ fn f_resize_horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
             accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
                 fma,
                 weight,
-                f64::from(source[source_row_start + source_x]),
+                f64::from(source_row[source_x]),
                 accumulator,
             );
         }
@@ -224,7 +222,7 @@ fn f_resize_horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
             f_resize_accumulate::<FINITE_OPERANDS, _>(
                 &mut accumulator,
                 weight,
-                source[source_row_start + source_x],
+                source_row[source_x],
                 offset < vector_product_count,
                 fma,
             );
@@ -337,10 +335,10 @@ fn f_resize_horizontal_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
         _source_height,
         |_row_start, _row_end, source_y, row| {
             let source_row_start = source_y as usize * source_width;
+            let source_row = &source[source_row_start..source_row_start + source_width];
             for (destination_x, output) in row.iter_mut().enumerate() {
                 *output = f_resize_horizontal_sample::<FINITE_OPERANDS, _>(
-                    source,
-                    source_row_start,
+                    source_row,
                     coefficients.xmin[destination_x],
                     &coefficients.weights[destination_x],
                     fma,
@@ -351,10 +349,10 @@ fn f_resize_horizontal_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     #[cfg(not(feature = "parallel"))]
     for (source_y, row) in output.chunks_mut(destination_width).enumerate() {
         let source_row_start = source_y * source_width;
+        let source_row = &source[source_row_start..source_row_start + source_width];
         for (destination_x, output) in row.iter_mut().enumerate() {
             *output = f_resize_horizontal_sample::<FINITE_OPERANDS, _>(
-                source,
-                source_row_start,
+                source_row,
                 coefficients.xmin[destination_x],
                 &coefficients.weights[destination_x],
                 fma,
