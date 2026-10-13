@@ -11,6 +11,7 @@ explains ownership; [Contributing](../CONTRIBUTING.md) explains the workflow.
 | `pillow-rs-js/` | WASM bindings, npm runtime entry points, Node/browser runners |
 | `pillow-rs/tests/fixtures/manifest.yaml` | Selected public contract and indexed input files |
 | `scripts/` | Maintained generators, runners, receipt validators, release and documentation tools |
+| `tools/perfdb/` | Standalone Rust/DuckDB CLI for importing and comparing benchmark evidence |
 | `docs/` | Public guides and explicitly versioned generated evidence |
 | `.github/workflows/` | Validation, benchmark, Pages, and package-release automation |
 | `scripts/data/migration-authority-v0.yaml` | Hash-pinned provenance used to regenerate the public inventory |
@@ -51,6 +52,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |-- benchmark.yml
 |       |-- ci.yml
 |       |-- docs.yml
+|       |-- perfdb.yml
 |       `-- release.yml
 |-- AGENT.md
 |-- AGENTS.md
@@ -379,94 +381,106 @@ It is a navigation aid, not an API-support or coverage claim.
 |-- requirements-docs.txt
 |-- rust-toolchain.toml
 |-- rustfmt.toml
-`-- scripts/
-    |-- aggregate_migration_parity.py
-    |-- audit_rust_result_methods.py
-    |-- benchmark_gpu_batch.py
-    |-- build_migration_parity_inputs.py
-    |-- build_migration_parity_manifest.py
-    |-- build_performance_optimization_matrix.py
-    |-- build_public_api_inventory.py
-    |-- check_bindings.py
-    |-- check_docs_browser.cjs
-    |-- check_docs_examples.py
-    |-- check_docs_registry.py
-    |-- check_migration_parity_inputs.py
-    |-- check_pipeline_benchmark_budgets.py
-    |-- check_public_api_boundary.py
-    |-- check_python_compatibility.py
-    |-- check_release_crate.py
-    |-- check_release_licenses.py
-    |-- check_release_parallel_wheel.py
-    |-- check_release_recovery.py
-    |-- check_release_status.py
-    |-- check_release_wheel.py
-    |-- check_repo_map.py
-    |-- check_workflows.py
-    |-- codex-worktree-setup.sh
-    |-- data/
-    |   `-- migration-authority-v0.yaml
-    |-- docs_benchmark_view.py
-    |-- docs_evidence.py
-    |-- docs_release.py
-    |-- docs_site.py
-    |-- generate_migration_parity_docs.py
-    |-- lint.sh
-    |-- migration_benchmark_adapter.py
-    |-- migration_parity_inventory.py
-    |-- prepare_pypi_release.py
-    |-- profile_migration_benchmark.py
-    |-- reduce_migration_parity_cases.py
-    |-- release_versions.py
-    |-- report_migration_changed_line_coverage.py
-    |-- report_migration_js_parity_gaps.py
-    |-- report_migration_parity_region_coverage.py
-    |-- report_migration_pillow_missing.py
-    |-- report_optimization_goals.py
-    |-- report_pipeline_benchmark_coverage.py
-    |-- report_pipeline_performance.py
-    |-- report_pipeline_roadmap_status.py
-    |-- run_all_backend_tests.py
-    |-- run_migration_benchmark.py
-    |-- run_migration_coverage.py
-    |-- run_migration_font_native_cases.py
-    |-- run_migration_imagecolor_native_cases.py
-    |-- run_migration_imagecore_native_cases.py
-    |-- run_migration_imagedraw_native_cases.py
-    |-- run_migration_imageops_native_cases.py
-    |-- run_migration_imagepalette_native_cases.py
-    |-- run_migration_imagesequence_native_cases.py
-    |-- run_migration_js_parity.py
-    |-- run_migration_parity.py
-    |-- run_migration_pillow_coverage.py
-    |-- run_migration_rust_coverage.py
-    |-- run_pillow_simd_benchmark.py
-    |-- run_transpose_throughput.py
-    |-- select_docs_benchmark.py
-    |-- test_chops_affine_parity.py
-    |-- test_coverage_context.py
-    |-- test_docs_benchmark_selection.py
-    |-- test_docs_benchmark_view.py
-    |-- test_docs_evidence.py
-    |-- test_docs_release.py
-    |-- test_docs_site.py
-    |-- test_font_native_cases.py
-    |-- test_font_variant_parity.py
-    |-- test_getdata_sequence_parity.py
-    |-- test_gpu_batch.py
-    |-- test_grayscale_rgb_domain.py
-    |-- test_migration_benchmark_selection.py
-    |-- test_migration_parity_icc_timestamp.py
-    |-- test_migration_parity_serialization.py
-    |-- test_migration_parity_timing.py
-    |-- test_optimization_goals.py
-    |-- test_parity_reduction.py
-    |-- test_pillow_simd_benchmark.py
-    |-- test_pillow_simd_suite_compatibility.py
-    |-- test_profile_migration_benchmark.py
-    |-- test_receipt_state.py
-    |-- test_release_tools.py
-    |-- validate_migration_parity_contract.py
-    `-- validate_migration_parity_result.py
+|-- scripts/
+|   |-- aggregate_migration_parity.py
+|   |-- audit_rust_result_methods.py
+|   |-- benchmark_gpu_batch.py
+|   |-- build_migration_parity_inputs.py
+|   |-- build_migration_parity_manifest.py
+|   |-- build_performance_optimization_matrix.py
+|   |-- build_public_api_inventory.py
+|   |-- check_bindings.py
+|   |-- check_docs_browser.cjs
+|   |-- check_docs_examples.py
+|   |-- check_docs_registry.py
+|   |-- check_migration_parity_inputs.py
+|   |-- check_pipeline_benchmark_budgets.py
+|   |-- check_public_api_boundary.py
+|   |-- check_python_compatibility.py
+|   |-- check_release_crate.py
+|   |-- check_release_licenses.py
+|   |-- check_release_parallel_wheel.py
+|   |-- check_release_recovery.py
+|   |-- check_release_status.py
+|   |-- check_release_wheel.py
+|   |-- check_repo_map.py
+|   |-- check_workflows.py
+|   |-- codex-worktree-setup.sh
+|   |-- data/
+|   |   `-- migration-authority-v0.yaml
+|   |-- docs_benchmark_view.py
+|   |-- docs_evidence.py
+|   |-- docs_release.py
+|   |-- docs_site.py
+|   |-- generate_migration_parity_docs.py
+|   |-- lint.sh
+|   |-- migration_benchmark_adapter.py
+|   |-- migration_parity_inventory.py
+|   |-- prepare_pypi_release.py
+|   |-- profile_migration_benchmark.py
+|   |-- reduce_migration_parity_cases.py
+|   |-- release_versions.py
+|   |-- report_migration_changed_line_coverage.py
+|   |-- report_migration_js_parity_gaps.py
+|   |-- report_migration_parity_region_coverage.py
+|   |-- report_migration_pillow_missing.py
+|   |-- report_optimization_goals.py
+|   |-- report_pipeline_benchmark_coverage.py
+|   |-- report_pipeline_performance.py
+|   |-- report_pipeline_roadmap_status.py
+|   |-- run_all_backend_tests.py
+|   |-- run_migration_benchmark.py
+|   |-- run_migration_coverage.py
+|   |-- run_migration_font_native_cases.py
+|   |-- run_migration_imagecolor_native_cases.py
+|   |-- run_migration_imagecore_native_cases.py
+|   |-- run_migration_imagedraw_native_cases.py
+|   |-- run_migration_imageops_native_cases.py
+|   |-- run_migration_imagepalette_native_cases.py
+|   |-- run_migration_imagesequence_native_cases.py
+|   |-- run_migration_js_parity.py
+|   |-- run_migration_parity.py
+|   |-- run_migration_pillow_coverage.py
+|   |-- run_migration_rust_coverage.py
+|   |-- run_pillow_simd_benchmark.py
+|   |-- run_transpose_throughput.py
+|   |-- select_docs_benchmark.py
+|   |-- test_chops_affine_parity.py
+|   |-- test_coverage_context.py
+|   |-- test_docs_benchmark_selection.py
+|   |-- test_docs_benchmark_view.py
+|   |-- test_docs_evidence.py
+|   |-- test_docs_release.py
+|   |-- test_docs_site.py
+|   |-- test_font_native_cases.py
+|   |-- test_font_variant_parity.py
+|   |-- test_getdata_sequence_parity.py
+|   |-- test_gpu_batch.py
+|   |-- test_grayscale_rgb_domain.py
+|   |-- test_migration_benchmark_selection.py
+|   |-- test_migration_parity_icc_timestamp.py
+|   |-- test_migration_parity_serialization.py
+|   |-- test_migration_parity_timing.py
+|   |-- test_optimization_goals.py
+|   |-- test_parity_reduction.py
+|   |-- test_pillow_simd_benchmark.py
+|   |-- test_pillow_simd_suite_compatibility.py
+|   |-- test_profile_migration_benchmark.py
+|   |-- test_receipt_state.py
+|   |-- test_release_tools.py
+|   |-- validate_migration_parity_contract.py
+|   `-- validate_migration_parity_result.py
+`-- tools/
+    `-- perfdb/
+        |-- .gitignore
+        |-- Cargo.lock
+        |-- Cargo.toml
+        |-- README.md
+        `-- src/
+            |-- import.rs
+            |-- main.rs
+            |-- model.rs
+            |-- report.rs
+            `-- store.rs
 ```
 <!-- END GENERATED CODE TREE -->

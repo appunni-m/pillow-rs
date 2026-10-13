@@ -17,6 +17,7 @@ DOC_PATH = Path("docs/REPO_MAP.md")
 ROOT_FILES = {
     ".github/workflows/benchmark.yml",
     ".github/workflows/ci.yml",
+    ".github/workflows/perfdb.yml",
     ".github/workflows/release.yml",
     "AGENT.md",
     "AGENTS.md",
@@ -47,6 +48,7 @@ INCLUDED_PREFIXES = (
     "pillow-rs-py/src/",
     "pillow-rs-parallel/",
     "scripts/",
+    "tools/perfdb/",
     "tests/",
 )
 
