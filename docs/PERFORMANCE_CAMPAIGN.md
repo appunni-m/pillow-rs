@@ -26210,3 +26210,17 @@ under `build/migration-parity/`; parity gate IDs are
 `0f94bfe36ccf40059e01142807cbe826`, and
 `a278a1f238d24c76b976c079b37249c0`. No genuine test defect was found and no
 coverage was run.
+
+### GetData clean-source local control for the hosted RGBA miss — 2026-10-13
+
+After the documentation/evidence refresh was committed at `6ca035c46`, I reran the exact 32×32 RGBA `getdata(band=3)` workload from a clean worktree on the same local Apple ARM64 host. The call and returned-band consumption remained inside the timed `band-data` step; five warmups and 20 iterations across five single-thread samples were used. Exact Pillow parity passed 3/3, and each requested target backend executed without fallback.
+
+| Profile | Pillow µs | Target µs | Speedup vs Pillow | GPU speedup vs SIMD |
+| --- | ---: | ---: | ---: | ---: |
+| Serial CPU | 9.958 | 5.375 | 1.853× | — |
+| SIMD | 9.958 | 5.250 | 1.897× | — |
+| GPU | 9.958 | 199.000 | 0.050× | 0.026× |
+
+The CPU slowdown from the published 1d8faf6 macOS runner (0.501× Pillow) again did not reproduce locally. This clean local control does not explain the hosted cost or replace its row in the published ranking, so I made no source change and kept GetData open pending a fresh hosted cohort or a distinct measured cost. GPU used one dispatch, uploaded 4,096 bytes, read back 1,024 bytes, and allocated one 1,024-byte host result; sustained throughput was not measured.
+
+The four profile rows bring `docs/evidence/performance-optimization-local-runs.csv` to 6724 data rows. The report and parity sidecar are `build/migration-parity/getdata-hosted-gap-clean-control-20261013.json` and `build/migration-parity/getdata-hosted-gap-clean-control-20261013-parity.json`; benchmark run ID is `migration-benchmark-09ec900c37fe4d0aac4e118e91f148ad`, and parity gate ID is `migration-parity-benchmark-gate-31eebe7fadf5406da0ca70033f7c28b1`. No test defect was found and no coverage was run.
