@@ -78,43 +78,33 @@ The committed [full per-workload matrix](evidence/performance-optimization-matri
 are generated from the GitHub Pages [full benchmark snapshot](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
 and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json).
 The full snapshot is clean at revision
-`1d8faf6d72db0625fce27a2f1391a51ce788dbda`, measured
-`2026-10-13T00:31:26.912197Z`, with 8,918 rows across 686 workloads and JSON
-SHA-256 `de9b9fd1e4ace5a674ea4123f8c52b0d268816afb6d39c663b58ac98ddab3b52`.
+`10352de697c03fdbbda515fc5ae6cd1e440aeed8`, measured
+`2026-10-13T03:13:20.493672Z`, with 8,918 rows across 686 workloads and JSON
+SHA-256 `c1c4f2c3126e4c25f5282d21e1541a4c041dbd5996f5018e2dd771fc9ee8c124`.
 The flattened matrix has 8,954 rows after retaining all 36 Pillow-SIMD rows.
 The operation matrix has 1,320 rows for 330 public paths: 209 map to the
 selected manifest and 121 remain explicit inventory gaps.
 
 The latest full snapshot has 192 verified serial-CPU workload/runner pairs:
-one is slower than Pillow and 60 are below 2×. The only below-Pillow CPU row is
-`GetData` on 32×32 RGBA band 3: 0.501139× on macOS ARM64 (27.4375 µs versus
-Pillow's 13.7500 µs). Exact parity passed, the CPU backend executed, the result
-was consumed inside the timed boundary, and no fallback occurred. The next
-weakest API minima are Resize (1.220738×), Thumbnail (1.298846×), Grayscale
-(1.403287×), and Convert (1.816035×); the workload-level matrix preserves each
-mode, runner, and size separately.
+one is slower than Pillow and 62 are below 2×. The only below-Pillow CPU row is
+RGB `Image.merge` from three native L bands at 1024×768: 0.905218× on Ubuntu
+x86_64 (2,328.487 µs versus Pillow's 2,107.790 µs). Exact parity passed, the
+CPU backend executed, the call and result observation were timed, and no
+fallback occurred. The weakest subsequent API minima are Resize (1.268504×),
+Grayscale (1.325656×), Thumbnail (1.486431×), GetData (1.642989×), Posterize
+(1.644546×), BoxBlur (1.657555×), and Convert (1.678278×). The workload matrix
+retains each mode, runner, and size separately.
 
-SIMD has 174 verified workload/runner pairs: none are slower than Pillow, 53
-are below 2×, and 139 are below the final 5× goal. The weakest API minima are
-Thumbnail (1.145730×), GaussianBlur (1.195270×), Resize (1.236129×), Grayscale
-(1.318384×), and Convert (1.425662×). Parallel CPU remains separate, with 192
-verified pairs, 16 below Pillow and 70 below 2×. GPU has 53 verified comparisons
-against Pillow and 51 comparable latency pairs against SIMD; 37 are slower than
-SIMD. GPU sustained throughput is unmeasured in all 51 comparable rows.
+SIMD has 174 verified workload/runner pairs: none are slower than Pillow, 56
+are below 2×, and 143 are below the final 5× goal. Its weakest API minima are
+GaussianBlur (1.034164×), UnsharpMask (1.049297×), Merge (1.158926×), Convert
+(1.186247×), and Resize (1.252295×). Parallel CPU remains separate, with 192
+verified pairs, 15 below Pillow and 77 below 2×. GPU has 53 verified
+comparisons against Pillow and 51 comparable latency pairs against SIMD; 36
+are slower than SIMD, 15 meet the per-call latency target, and 11 rows are
+fallbacks. GPU sustained throughput is unmeasured in all comparable rows.
 
-The hosted `GetData` result remains unresolved. Existing local experiments have
-already rejected GIL/detach shortcuts, iterator/chunk rewrites, mode and storage
-lookup changes, and wrapper changes because they did not produce a repeatable
-full-call gain. Local ARM runs were faster than Pillow for the same small
-workload. The current-revision local diagnostic measured Pillow at 10.542 µs,
-CPU at 5.542 µs, SIMD at 5.416 µs, and GPU at 296.313 µs, with exact parity
-passing 3/3 and actual-backend receipts. Its worktree was marked dirty by this
-documentation/evidence refresh, so it is not clean-source proof and does not
-erase the hosted regression. Do not repeat the rejected candidates; keep the
-hosted row in the matrix until a distinct measured cost or a newer matched
-hosted cohort justifies a change.
-
-The published Pillow-SIMD snapshot is still dirty and partial at revision
+The published Pillow-SIMD snapshot is dirty and partial at revision
 `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`: 9 of 34 declared workloads and 36
 rows. It yields zero verified Pillow-SIMD comparisons, so the second ranking
 phase cannot yet be completed. The newest full snapshot and this partial
@@ -22552,13 +22542,23 @@ CPU passed 2/2 in `pillow-simd-oracle-fix-cpu-20261012.json` and SIMD passed
 the current target-oracle path on arm64; they do not certify Pillow-SIMD output
 compatibility or the x86 benchmark workflow.
 
+The x86 Pillow-SIMD workflow run `38339047980` at revision
+`10352de697c03fdbbda515fc5ae6cd1e440aeed8` still failed those same four
+comparisons. Its error summary retained only case/profile/outcome, and the
+uploaded artifact omitted parity details, so there is no byte-level diff
+available to classify this as an x86 implementation mismatch or a harness
+defect. The local workflow change adds byte mismatch offsets and retains compact
+failure diagnostics in a short-lived artifact without copying full image
+payloads once these changes are pushed. Keep Filter and Grayscale parity
+open until a fresh x86 run supplies those diagnostics; the passing arm64
+reports do not resolve it.
+
 The earlier oracle selection is present at baseline revision
-`88d414bdbe6bd31b531271324094e041a9fece8a`; the correction is in the current
-uncommitted `scripts/run_pillow_simd_benchmark.py` and
-`scripts/run_migration_benchmark.py`, and is guarded by the focused Pillow-SIMD
-and benchmark-selection tests. This benchmark defect does not establish an
-optimization or parity completion for Filter or Grayscale. No coverage was
-run.
+`88d414bdbe6bd31b531271324094e041a9fece8a`; the correction pins regular Pillow
+as the target oracle, reuses its parity receipt for Pillow-SIMD timing, and is
+guarded by the focused Pillow-SIMD and benchmark-selection tests. This
+benchmark defect does not establish an optimization or parity completion for
+Filter or Grayscale. No coverage was run.
 
 ## BoxBlur RGB radius-one horizontal row specialization — 2026-10-11
 
@@ -26286,3 +26286,18 @@ After rejecting the iterator-read candidate, I tested a second CPU-only change: 
 Both candidate serial-CPU end-to-end medians were about 2.4× slower than the pre-candidate control. Other profiles also moved during those runs, so the timing does not isolate the source change cleanly; it provides no evidence of a speedup and repeated backend timings are substantially worse. I reverted the candidate. The local helper now retains its original byte-wise stores, and the published x86_64 Merge result remains open. These local Apple ARM64 measurements do not replace the matched-host operation matrix.
 
 Reports and exact-parity receipts use the `merge-rg-u16-candidate-1` and `merge-rg-u16-candidate-2` stems under `build/migration-parity/`; benchmark run IDs are `migration-benchmark-d74dac9a5fe24c1d8604d5637d6dfbc3` and `migration-benchmark-98b009117a26426db54e06aba83185c5`. The eight subject rows are in `docs/evidence/performance-optimization-local-runs.csv` (6,766 data rows). No genuine test defect was found and no coverage was run.
+
+### Merge raw source-pointer read trial — rejected — 2026-10-13
+
+I replaced the serial helper's three indexed source-band reads with raw source-pointer reads while keeping its existing output allocation and destination stores. This was an allocation-free input-read experiment; the output already uses `Vec::with_capacity` and writes each RGB byte once, so no output zero-fill change was made. The helper's exact-byte edge test covers empty, short, odd, block-boundary, and tail lengths. Each selected public call passed Pillow parity 3/3, and CPU, SIMD, and GPU reported their named backends without fallback.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Matched control before | 0.936438 | 0.228604 | 0.237688 | 0.696438 |
+| Raw-pointer candidate 1 | 0.948875 | 0.204833 | 0.208146 | 0.616292 |
+| Raw-pointer candidate 2 | 0.902875 | 0.253292 | 0.224625 | 0.660354 |
+| Matched control after revert | 0.837667 | 0.207396 | 0.221959 | 0.686646 |
+
+The two candidate CPU medians average 0.229063 ms versus 0.228604 ms for the pre-candidate control. Candidate 1 was close to the restored control; candidate 2 regressed. Pillow, SIMD, and GPU also moved across the four cohorts, so this does not establish an end-to-end CPU gain. The candidate was reverted. The published x86_64 Merge row remains a verified miss at 0.905218× Pillow; local Apple ARM64 results and x86 cross-compilation do not establish x86 runtime performance. The current source keeps safe indexed source reads and direct output stores.
+
+Each run used the public 1024×768 RGB-from-three-L merge, five warmups, 20 iterations across five samples, warm cache, concurrency one, and the `call + observe-result` boundary. GPU used one dispatch and transferred 2,359,296 bytes each way; sustained throughput remains unmeasured. Reports are `merge-raw-source-control-20261013.json`, `merge-raw-source-candidate-{1,2}-20261013.json`, and `merge-raw-source-control-after-revert-20261013.json` with corresponding parity files under `build/migration-parity/`. Run IDs are `migration-benchmark-bfc0bdaf7a9f495ebd09b6a310d50d86`, `migration-benchmark-76ec00539d4c473989a3181d93d6904b`, `migration-benchmark-6c52237e489d471984128f7fb4cec8af`, and `migration-benchmark-a2bea6fbfd43481ca62310df70a1c8fd`. The local run ledger has 6,782 data rows. No genuine test defect was found and no coverage was run.

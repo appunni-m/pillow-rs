@@ -511,9 +511,9 @@ python3 scripts/build_performance_optimization_matrix.py \
 The current published workload matrix records 8,954 rows: 8,918 full-benchmark
 rows across 686 workloads and 36 Pillow-SIMD rows across 9 workloads. The full
 snapshot is clean at revision
-`1d8faf6d72db0625fce27a2f1391a51ce788dbda`, measured
-`2026-10-13T00:31:26.912197Z`, with JSON SHA-256
-`de9b9fd1e4ace5a674ea4123f8c52b0d268816afb6d39c663b58ac98ddab3b52`, from the
+`10352de697c03fdbbda515fc5ae6cd1e440aeed8`, measured
+`2026-10-13T03:13:20.493672Z`, with JSON SHA-256
+`c1c4f2c3126e4c25f5282d21e1541a4c041dbd5996f5018e2dd771fc9ee8c124`, from the
 [published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
 The operation matrix has 1,320 rows for 330 public paths and four profiles;
 209 paths map to the benchmark manifest and 121 remain explicit inventory
@@ -521,20 +521,22 @@ gaps. Only rows with exact parity and completed backend receipts are eligible
 for speed claims.
 
 Across the 192 verified serial CPU workload-runner pairs, one is slower than
-Pillow and 60 are below 2×. The below-Pillow row is 32×32 RGBA `GetData` band 3
-(0.501139× on macOS ARM64; Pillow 13.750 µs, CPU 27.438 µs). The weakest other
-API minima are Resize (1.221×), Thumbnail (1.299×), Grayscale (1.403×), and
-Convert (1.816×). Each minimum retains its runner, mode, workload, and input
-size in the matrix.
+Pillow and 62 are below 2×. The below-Pillow row is RGB `Image.merge` from
+three native L bands at 1024×768 (0.905218× on Ubuntu x86_64; Pillow 2,107.790
+µs, CPU 2,328.487 µs). The weakest following API minima are Resize (1.269×),
+Grayscale (1.326×), Thumbnail (1.486×), GetData (1.643×), Posterize (1.645×),
+BoxBlur (1.658×), and Convert (1.678×). Each minimum retains its runner, mode,
+workload, and input size in the matrix.
 
-SIMD has 174 verified pairs: none are slower than Pillow, 53 are below 2×, and
-139 are below the repository's 5× target. The weakest API minima are Thumbnail
-(1.146×), GaussianBlur (1.195×), Resize (1.236×), Grayscale (1.318×), and
-Convert (1.426×). The separately built Parallel CPU profile uses the opt-in
-Cargo `parallel` feature; 16 of its 192 verified pairs are slower than Pillow
-and 70 are below 2×. GPU has 53 verified comparisons against Pillow and 51
-comparable latency pairs against SIMD; 37 are slower than SIMD, 14 meet the
-per-call latency target, and sustained GPU throughput remains unmeasured. The
+SIMD has 174 verified pairs: none are slower than Pillow, 56 are below 2×, and
+143 are below the repository's 5× target. The weakest API minima are
+GaussianBlur (1.034×), UnsharpMask (1.049×), Merge (1.159×), Convert (1.186×),
+and Resize (1.252×). The separately built Parallel CPU profile uses the opt-in
+Cargo `parallel` feature; 15 of its 192 verified pairs are slower than Pillow
+and 77 are below 2×. GPU has 53 verified comparisons against Pillow and 51
+comparable latency pairs against SIMD; 36 are slower than SIMD, 15 meet the
+per-call latency target, and 11 profile rows are fallback observations.
+Sustained GPU throughput remains unmeasured. The
 operation matrix's GPU latency baseline is SIMD; its GPU
 `below_baseline_comparisons` field and per-operation ratios must not be read as
 Pillow comparisons.

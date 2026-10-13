@@ -9,6 +9,8 @@ timing as a separate Pillow-SIMD subject.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import gzip
 import hashlib
 import json
@@ -164,15 +166,29 @@ def run_source_cohort(
         raise RuntimeError(f"{source_name} benchmark run failed: {detail}")
     result = json.loads(output.read_text(encoding="utf-8"))
     parity = json.loads(parity_output.read_text(encoding="utf-8"))
-    validate_run(
-        result,
-        parity,
-        source_name,
-        source_version,
-        workload_ids,
-        oracle_name="Pillow",
-        oracle_version=PILLOW_VERSION,
-    )
+    try:
+        validate_run(
+            result,
+            parity,
+            source_name,
+            source_version,
+            workload_ids,
+            oracle_name="Pillow",
+            oracle_version=PILLOW_VERSION,
+        )
+    except ValueError:
+        if parity.get("summary", {}).get("failed", 0) or any(
+            comparison.get("outcome") != "pass"
+            for comparison in parity.get("comparisons", [])
+        ):
+            source_slug = source_name.lower().replace(" ", "-")
+            diagnostic_path = parity_output.with_name(
+                f"pillow-simd-parity-failure-{source_slug}.json"
+            )
+            write_parity_failure_diagnostics(
+                diagnostic_path, source_name, source_version, parity
+            )
+        raise
     return result, str(parity["identity"]["run_id"])
 
 
@@ -202,18 +218,15 @@ def validate_run(
     if parity.get("status") != "completed":
         raise ValueError(f"{source_name} parity preflight did not complete")
     failed = [
-        {
-            "case_id": comparison.get("case_id"),
-            "target_profile": comparison.get("target_profile"),
-            "outcome": comparison.get("outcome"),
-        }
+        summarize_failed_comparison(comparison)
         for comparison in parity.get("comparisons", [])
         if comparison.get("outcome") != "pass"
     ]
-    if parity.get("summary", {}).get("failed") != 0:
+    reported_failures = parity.get("summary", {}).get("failed")
+    if reported_failures != 0 or failed:
         raise ValueError(
-            f"{source_name} parity preflight had "
-            f"{parity.get('summary', {}).get('failed')} failing comparison(s): {failed[:40]}"
+            f"{source_name} parity preflight had {reported_failures} reported failing "
+            f"comparison(s), with {len(failed)} non-passing row(s): {failed[:40]}"
         )
     if parity.get("infrastructure_errors"):
         raise ValueError(f"{source_name} parity preflight has infrastructure errors")
@@ -230,6 +243,107 @@ def validate_run(
             raise ValueError(
                 f"{source_name} has an incomplete subject for {workload['workload_id']}"
             )
+
+
+def summarize_failed_comparison(comparison: dict[str, Any]) -> dict[str, Any]:
+    """Keep failure summaries small while reporting exact byte mismatch locations."""
+
+    summary: dict[str, Any] = {
+        "case_id": comparison.get("case_id"),
+        "target_profile": comparison.get("target_profile"),
+        "outcome": comparison.get("outcome"),
+    }
+    source_observations = {
+        item.get("step_id"): item
+        for item in comparison.get("source", {}).get("observations", [])
+    }
+    target_observations = {
+        item.get("step_id"): item
+        for item in comparison.get("target", {}).get("observations", [])
+    }
+    compact_diffs: list[dict[str, Any]] = []
+    for diff in comparison.get("diffs", [])[:3]:
+        compact: dict[str, Any] = {
+            key: diff[key]
+            for key in ("path", "kind", "message")
+            if key in diff
+        }
+        if diff.get("kind") == "bytes_mismatch":
+            step_id = diff.get("step_id")
+            source_value = source_observations.get(step_id, {}).get("value")
+            target_value = target_observations.get(step_id, {}).get("value")
+            source_data = _decode_byte_observation(source_value)
+            target_data = _decode_byte_observation(target_value)
+            if source_data is not None and target_data is not None:
+                mismatch_count = 0
+                first_differences = []
+                for index, (source_byte, target_byte) in enumerate(
+                    zip(source_data, target_data)
+                ):
+                    if source_byte == target_byte:
+                        continue
+                    mismatch_count += 1
+                    if len(first_differences) < 8:
+                        first_differences.append(
+                            {
+                                "offset": index,
+                                "source": source_byte,
+                                "target": target_byte,
+                            }
+                        )
+                compact["byte_comparison"] = {
+                    "source_length": len(source_data),
+                    "target_length": len(target_data),
+                    "different_bytes_in_shared_range": mismatch_count,
+                    "first_differences": first_differences,
+                }
+        compact_diffs.append(compact)
+    if compact_diffs:
+        summary["diffs"] = compact_diffs
+    return summary
+
+
+def write_parity_failure_diagnostics(
+    path: Path,
+    source_name: str,
+    source_version: str,
+    parity: dict[str, Any],
+) -> None:
+    """Persist compact mismatch summaries without copying full image payloads."""
+
+    failures = [
+        summarize_failed_comparison(comparison)
+        for comparison in parity.get("comparisons", [])
+        if comparison.get("outcome") != "pass"
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "pillow-simd/parity-failure-diagnostics@1",
+                "source": {"name": source_name, "version": source_version},
+                "parity_identity": parity.get("identity", {}),
+                "failed_comparisons": failures,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _decode_byte_observation(value: Any) -> bytes | None:
+    if (
+        not isinstance(value, dict)
+        or value.get("kind") != "bytes"
+        or value.get("encoding") != "base64"
+        or not isinstance(value.get("data"), str)
+    ):
+        return None
+    try:
+        return base64.b64decode(value["data"], validate=True)
+    except (ValueError, binascii.Error):
+        return None
 
 
 def read_parity_artifact(path: Path) -> dict[str, Any]:

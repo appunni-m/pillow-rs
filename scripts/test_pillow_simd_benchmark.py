@@ -24,6 +24,7 @@ from run_pillow_simd_benchmark import (
     run_source_cohort,
     validate_run,
     workload_contracts,
+    write_parity_failure_diagnostics,
 )
 from run_migration_benchmark import (
     DEFAULT_MANIFEST,
@@ -262,6 +263,118 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "case-that-did-not-match"):
             validate_run(result, parity, "Pillow-SIMD", PILLOW_SIMD_VERSION, list(WORKLOAD_IDS))
+
+    def test_parity_failure_row_cannot_be_hidden_by_zero_summary_count(self) -> None:
+        result = run("Pillow", PILLOW_VERSION, "simd", source_id="pillow-simd")
+        parity = {
+            "status": "completed",
+            "summary": {"failed": 0},
+            "comparisons": [
+                {
+                    "case_id": "unaccounted-mismatch",
+                    "target_profile": "python-cpu",
+                    "outcome": "mismatch",
+                }
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "unaccounted-mismatch"):
+            validate_run(result, parity, "Pillow-SIMD", PILLOW_SIMD_VERSION, list(WORKLOAD_IDS))
+
+    def test_parity_failure_reports_exact_byte_mismatch_offsets(self) -> None:
+        result = run("Pillow", PILLOW_VERSION, "simd", source_id="pillow-simd")
+
+        def observation(data: str) -> dict:
+            return {
+                "status": "completed",
+                "observations": [
+                    {
+                        "step_id": "materialize",
+                        "status": "ok",
+                        "value": {"kind": "bytes", "encoding": "base64", "data": data},
+                    }
+                ],
+            }
+
+        parity = {
+            "status": "completed",
+            "summary": {"failed": 1},
+            "comparisons": [
+                {
+                    "case_id": "byte-mismatch",
+                    "target_profile": "python-simd",
+                    "outcome": "mismatch",
+                    "source": observation("AQIDBA=="),
+                    "target": observation("AQkDBQ=="),
+                    "diffs": [
+                        {
+                            "step_id": "materialize",
+                            "path": "materialize.value",
+                            "kind": "bytes_mismatch",
+                            "message": "exact byte value mismatch",
+                        }
+                    ],
+                }
+            ],
+        }
+        with self.assertRaises(ValueError) as raised:
+            validate_run(result, parity, "Pillow-SIMD", PILLOW_SIMD_VERSION, list(WORKLOAD_IDS))
+
+        message = str(raised.exception)
+        self.assertIn("byte-mismatch", message)
+        self.assertIn("different_bytes_in_shared_range", message)
+        self.assertIn("'offset': 1", message)
+        self.assertIn("'source': 2", message)
+        self.assertIn("'target': 9", message)
+
+    def test_parity_failure_artifact_keeps_only_compact_diagnostics(self) -> None:
+        parity = {
+            "identity": {"run_id": "parity-run", "oracles": [{"name": "Pillow"}]},
+            "comparisons": [
+                {
+                    "case_id": "byte-mismatch",
+                    "target_profile": "python-cpu",
+                    "outcome": "mismatch",
+                    "source": {
+                        "observations": [
+                            {
+                                "step_id": "materialize",
+                                "value": {"kind": "bytes", "encoding": "base64", "data": "AQIDBA=="},
+                            }
+                        ]
+                    },
+                    "target": {
+                        "observations": [
+                            {
+                                "step_id": "materialize",
+                                "value": {"kind": "bytes", "encoding": "base64", "data": "AQkDBQ=="},
+                            }
+                        ]
+                    },
+                    "diffs": [
+                        {
+                            "step_id": "materialize",
+                            "path": "materialize.value",
+                            "kind": "bytes_mismatch",
+                            "message": "exact byte value mismatch",
+                        }
+                    ],
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "failure.json"
+            write_parity_failure_diagnostics(path, "Pillow-SIMD", PILLOW_SIMD_VERSION, parity)
+            encoded = path.read_text()
+            diagnostic = json.loads(encoded)
+
+        self.assertEqual(diagnostic["parity_identity"]["run_id"], "parity-run")
+        failure = diagnostic["failed_comparisons"][0]
+        self.assertEqual(failure["case_id"], "byte-mismatch")
+        self.assertEqual(
+            failure["diffs"][0]["byte_comparison"]["different_bytes_in_shared_range"],
+            2,
+        )
+        self.assertNotIn("AQIDBA==", encoded)
 
     def test_pillow_simd_timing_is_gated_against_regular_pillow(self) -> None:
         result = run("Pillow", PILLOW_VERSION, "simd", source_id="pillow-simd")
