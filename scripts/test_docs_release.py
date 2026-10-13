@@ -37,9 +37,13 @@ class ReleaseDocumentationTests(unittest.TestCase):
             self.assertNotIn('```json',text)
             self.assertIn(snapshot['source_sha256'],(output/'benchmark-details.md').read_text())
             self.assertEqual(json.loads((output/'assets/benchmark.json').read_text()),snapshot)
-            # One comparative row per workload; every original observation is
-            # retained in the downloadable snapshot and contributor table.
-            self.assertEqual(text.count('class="bench-workload"'),len({row['workload'] for row in snapshot['rows']}))
+            # Each runner keeps its own comparison row so measurements from
+            # different hosts cannot be combined. Every original observation
+            # remains in the downloadable snapshot and contributor table.
+            self.assertEqual(
+                text.count('class="bench-workload"'),
+                len({(row['workload'], row.get('machine_id')) for row in snapshot['rows']}),
+            )
             details=(output/'benchmark-details.md').read_text()
             for row in snapshot['rows']:
                 self.assertIn(row['workload'],details)
