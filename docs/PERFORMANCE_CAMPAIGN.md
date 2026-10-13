@@ -70,46 +70,104 @@ current local outputs are `build/migration-parity/optimization-goals.json` and
 `build/migration-parity/optimization-goals.md`. See
 [the reporting command](BENCHMARKING.md#correctness-gate-and-budget-gate).
 
-## Published cross-runner inventory — 2026-10-13
+## Published cross-runner inventory — refreshed 2026-10-13
 
 The committed [full per-workload matrix](evidence/performance-optimization-matrix.csv),
 [public API census](evidence/performance-optimization-public-api.csv), and
 [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
-are generated from the GitHub Pages [full benchmark snapshot](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json).
-The full snapshot is clean at revision
-`10352de697c03fdbbda515fc5ae6cd1e440aeed8`, measured
-`2026-10-13T03:13:20.493672Z`, with 8,918 rows across 686 workloads and JSON
-SHA-256 `c1c4f2c3126e4c25f5282d21e1541a4c041dbd5996f5018e2dd771fc9ee8c124`.
-The flattened matrix has 8,954 rows after retaining all 36 Pillow-SIMD rows.
-The operation matrix has 1,320 rows for 330 public paths: 209 map to the
-selected manifest and 121 remain explicit inventory gaps.
+use the deployed GitHub Pages benchmark JSON and Pillow-SIMD JSON. The full
+snapshot is clean at revision `5cb39769fa0b6a01bb9b89b585ce68bffb765032`,
+measured `2026-10-13T04:55:28.229446Z`. Its raw JSON SHA-256 is
+`c52160886498092ff27b35b2b013dbdceefe4c662b71a8231e17a9b45a3cd7a9`. It has
+8,918 rows across 686 workloads in three default and three Parallel CPU cohorts.
+The flattened matrix has 8,954 rows after retaining all 36 rows from the
+separate Pillow-SIMD source. The operation matrix has 1,320 profile rows for
+330 public paths: 209 map to the selected manifest and 121 remain explicit
+inventory gaps.
 
-The latest full snapshot has 192 verified serial-CPU workload/runner pairs:
-one is slower than Pillow and 62 are below 2×. The only below-Pillow CPU row is
-RGB `Image.merge` from three native L bands at 1024×768: 0.905218× on Ubuntu
-x86_64 (2,328.487 µs versus Pillow's 2,107.790 µs). Exact parity passed, the
-CPU backend executed, the call and result observation were timed, and no
-fallback occurred. The weakest subsequent API minima are Resize (1.268504×),
-Grayscale (1.325656×), Thumbnail (1.486431×), GetData (1.642989×), Posterize
-(1.644546×), BoxBlur (1.657555×), and Convert (1.678278×). The workload matrix
-retains each mode, runner, and size separately.
+The current matrix has 192 verified serial-CPU workload/runner pairs. None are
+slower than Pillow, and 64 remain below the interim 2× threshold. Rank the
+remaining sub-2× work by the weakest verified result for each API:
 
-SIMD has 174 verified workload/runner pairs: none are slower than Pillow, 56
-are below 2×, and 143 are below the final 5× goal. Its weakest API minima are
-GaussianBlur (1.034164×), UnsharpMask (1.049297×), Merge (1.158926×), Convert
-(1.186247×), and Resize (1.252295×). Parallel CPU remains separate, with 192
-verified pairs, 15 below Pillow and 77 below 2×. GPU has 53 verified
-comparisons against Pillow and 51 comparable latency pairs against SIMD; 36
-are slower than SIMD, 15 meet the per-call latency target, and 11 rows are
-fallbacks. GPU sustained throughput is unmeasured in all comparable rows.
+| API | Below 2× comparisons | Weakest paired Pillow speedup | Workload | Runner |
+| --- | ---: | ---: | --- | --- |
+| Resize | 3 | 1.203645× | Native F32 Bicubic 1024×768 | Ubuntu x86_64 |
+| Filter | 1 | 1.332236× | I-mode convolution 5×5 noise 1024×768 | macOS arm64 |
+| GetData | 46 | 1.333874× | RGBA band 3 32×32 | Ubuntu x86_64 |
+| Grayscale | 3 | 1.359632× | RGB noise 1024×768 | Ubuntu arm64 |
+| Thumbnail | 9 | 1.439553× | Native F32 2048×1536 | Ubuntu x86_64 |
+| Posterize | 1 | 1.536228× | RGB noise 1024×768 | Ubuntu x86_64 |
+| Merge | 1 | 1.663537× | RGB from three L bands 1024×768 | Ubuntu x86_64 |
 
-The published Pillow-SIMD snapshot is dirty and partial at revision
-`101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`: 9 of 34 declared workloads and 36
-rows. It yields zero verified Pillow-SIMD comparisons, so the second ranking
-phase cannot yet be completed. The newest full snapshot and this partial
-Pillow-SIMD cohort are retained as-is; failed, execution-only, fallback, and
-unproven evidence is not counted as accelerated execution.
+Each ratio uses the same-run Pillow timing. The chosen public-call boundary
+includes the operation and result observation, and verified rows prove the
+requested backend ran without fallback. Continue serial CPU optimization until
+the verified sub-2× gaps close; then rank workloads against a clean, complete
+Pillow-SIMD comparison. The final CPU goal remains no slower than Pillow; the
+interim 2× gate is the user's sequencing threshold.
+
+Single-thread SIMD has 174 verified comparisons: none are slower than Pillow,
+61 are below 2×, and 139 are below the final 5× target. Parallel CPU remains a
+separate opt-in profile with 192 verified pairs: 15 are slower than Pillow and
+89 are below 2×. GPU has 51 comparable latency pairs against SIMD: 36 are slower
+and 15 meet the latency target. Its full matrix also records 11 GPU fallback
+rows; they do not count as accelerated execution. Sustained GPU throughput
+remains unmeasured.
+
+The currently published Pillow-SIMD snapshot is still dirty and partial at
+revision `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`: 9 of 34 declared workloads
+and 36 rows, with zero verified source comparisons. Pillow-SIMD has no ranked
+speed ratios yet.
+
+### Pillow-SIMD timed-source identity defect — 2026-10-13
+
+[Run 38347304632](https://github.com/appunni-m/pillow-rs/actions/runs/38347304632)
+at revision `5cb39769fa0b6a01bb9b89b585ce68bffb765032` completed the regular
+Pillow 12.1.1 cohort: all 34 selected workloads reported passing correctness
+gates, including the L-mode 5×5 Filter and RGB Grayscale workloads on CPU and
+SIMD. It then failed the strict subject-set assertion before starting the
+Pillow-SIMD cohort. The uploaded `benchmark-result-pillow.json` mislabeled its
+timed regular Pillow subject as `pillow-simd`. This is a confirmed benchmark
+identity defect, and explains why this run produced no parity-failure artifact.
+It does not establish Pillow-SIMD source compatibility.
+
+Both timed sources share the `pillow-simd` cohort flag to select the x86
+CPU/SIMD workload contract. Three runner selectors incorrectly used that flag
+to choose the source subject ID. The local correction selects the ID from
+`BENCHMARK_SOURCE_NAME` through one helper for workload subjects, suite
+subjects, and suite comparisons. The existing selection test had encoded the
+same defect by setting only the cohort flag; it now exercises both source
+names within that cohort. The existing source-cohort test likewise covers
+both names while keeping ordinary Pillow as the oracle. The strict assertion,
+workloads, timing boundaries, and parity comparator are preserved.
+
+The failed artifact also reports `dirty: true`. This workflow creates two
+oracle environments, `.venv-oracle-pillow` and `.venv-oracle-pillow-simd`, which
+were missing from the repository ignore rules. The local correction ignores
+only these generated environments. It does not exempt source changes or alter
+the clean-evidence gate. Keep the uploaded artifact diagnostic: its incorrect
+source label, dirty identity, and incomplete two-source campaign prevent any
+public speedup or operation-completion claim. The local operation matrix was
+refreshed from the clean published full snapshot at revision
+`5cb39769fa0b6a01bb9b89b585ce68bffb765032`.
+
+The raw benchmark also contains weighted suite comparisons. A Pillow-SIMD
+source-compatibility failure in any timing-common member invalidates that
+aggregate ratio: preserve its measured means, set the ratio to null, and mark
+the comparison `not_comparable`. Per-workload compatibility details remain in
+the dedicated source-compatibility report, keeping the strict benchmark result
+schema unchanged. This gate prevents a raw suite ratio from surviving after its
+Pillow-SIMD baseline output has failed exact compatibility.
+
+The focused benchmark-selection, Pillow-SIMD, and suite-compatibility tests
+passed (17, 16, and 2 tests); all 63 docs tests, docs lint, and the repository-
+map check passed. The strict site build passed with the last successful
+Pillow-SIMD snapshot supplied as its declared input; that snapshot remains
+dirty and partial and adds no comparison evidence. These corrections remain
+unpushed; full CI, documentation, and deployment workflows will run after the
+push. No Rust execution path changed, and no coverage was run. The earlier run
+`38339047980` still lacks byte-level failure evidence; retain that historical
+failure separately from this passing regular-Pillow gate.
 
 ## Historical published cross-runner inventory — 2026-10-10
 

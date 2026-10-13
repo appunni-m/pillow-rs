@@ -563,6 +563,44 @@ def run_source_compatibility(
     )
 
 
+def gate_pillow_simd_suite_comparisons(
+    result: dict[str, Any],
+    source_compatibility: dict[str, dict[str, Any]],
+) -> None:
+    """Withhold suite ratios that include Pillow-SIMD-incompatible timings."""
+
+    for suite in result.get("suites", []):
+        members = suite.get("members", [])
+        for comparison in suite.get("comparisons", []):
+            if comparison.get("baseline_subject") != "pillow-simd":
+                continue
+
+            excluded_ids = {
+                item.get("workload_id")
+                for item in comparison.get("excluded_members", [])
+            }
+            timing_common_ids = [
+                member["workload_id"]
+                for member in members
+                if member.get("workload_id") not in excluded_ids
+            ]
+            compatibility_excluded = []
+            for workload_id in timing_common_ids:
+                evidence = source_compatibility.get(workload_id)
+                outcome = evidence.get("outcome") if isinstance(evidence, dict) else None
+                if outcome != "pass":
+                    compatibility_excluded.append(
+                        {
+                            "workload_id": workload_id,
+                            "outcome": outcome if isinstance(outcome, str) else "missing",
+                        }
+                    )
+
+            if compatibility_excluded:
+                comparison["ratio"] = None
+                comparison["status"] = "not_comparable"
+
+
 def append_github_failure_summary(source_name: str, detail: object) -> None:
     """Expose concise benchmark failure context on public Actions run summaries."""
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
@@ -769,6 +807,11 @@ def main() -> int:
         pillow_parity_path=pillow_parity_path,
         workload_ids=ids,
         output=root / "benchmark-source-compatibility-pillow-simd.json",
+    )
+    pillow_simd_result_path = root / "benchmark-result-pillow-simd.json"
+    gate_pillow_simd_suite_comparisons(results[1], source_compatibility)
+    pillow_simd_result_path.write_text(
+        json.dumps(results[1], indent=2) + "\n", encoding="utf-8"
     )
     append_github_source_compatibility_summary(source_compatibility)
     source_files = [

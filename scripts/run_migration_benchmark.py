@@ -126,13 +126,27 @@ def runtime_backend_for_profile(profile: str) -> str:
     return "cpu" if profile == "python-parallel-cpu" else profile.removeprefix("python-")
 
 
+def benchmark_source_subject_id() -> str:
+    """Identify the timed source independently of its comparison cohort."""
+
+    # The x86 comparison cohort times both regular Pillow and Pillow-SIMD.
+    # Its workload/backend selection does not identify which source is timed.
+    if BENCHMARK_SOURCE_NAME == "Pillow":
+        return "pillow"
+    if BENCHMARK_SOURCE_NAME == "Pillow-SIMD":
+        return "pillow-simd"
+    raise ValueError(
+        f"unsupported benchmark source identity: {BENCHMARK_SOURCE_NAME!r}"
+    )
+
+
 def benchmark_subjects() -> list[tuple[str, str]]:
     if PARALLEL_CPU_PROFILE:
         # The ordinary Pillow timing is already recorded by the default run.
         # Keep this run's timed cohort to the Rayon-enabled target only; the
         # parity preflight still compares it with Pillow before timing.
         return [("target_profile", "python-parallel-cpu")]
-    baseline_id = "pillow-simd" if PILLOW_SIMD_COMPARISON else "pillow"
+    baseline_id = benchmark_source_subject_id()
     return [
         ("oracle", baseline_id),
         *(
@@ -1244,7 +1258,7 @@ def workload_subjects_for_profile(
         )
     if PARALLEL_CPU_PROFILE:
         return [{"kind": "target_profile", "id": "python-parallel-cpu"}]
-    baseline_id = "pillow-simd" if PILLOW_SIMD_COMPARISON else "pillow"
+    baseline_id = benchmark_source_subject_id()
     return [{"kind": "oracle", "id": baseline_id}] + [
         {"kind": "target_profile", "id": target_profile_for_backend(backend)}
         for backend in TARGET_BACKENDS
@@ -1692,7 +1706,7 @@ def run(args: argparse.Namespace) -> int:
                 "comparisons": [],
             })
             continue
-        baseline_subject_id = "pillow-simd" if PILLOW_SIMD_COMPARISON else "pillow"
+        baseline_subject_id = benchmark_source_subject_id()
         oracle_subject = next(
             item for item in suite_subjects if item["id"] == baseline_subject_id
         )

@@ -324,26 +324,31 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
             {"kind": "target_profile", "id": "python-gpu"},
         ]
         workload = {"workload_id": "fixture", "subjects": standard_subjects}
-        with patch("run_migration_benchmark.PARALLEL_CPU_PROFILE", False), patch(
-            "run_migration_benchmark.PILLOW_SIMD_COMPARISON", True
-        ), patch("run_migration_benchmark.TARGET_BACKENDS", ("cpu", "simd")):
-            profiled = apply_profile_to_workloads([workload])
-            pillow_simd_subjects = [
-                {"kind": "oracle", "id": "pillow-simd"},
-                *standard_subjects[1:3],
-            ]
-            self.assertEqual(
-                profiled[0]["subjects"],
-                pillow_simd_subjects,
-            )
-            self.assertEqual(
-                benchmark_subjects(),
-                [
-                    ("oracle", "pillow-simd"),
-                    ("target_profile", "python-cpu"),
-                    ("target_profile", "python-simd"),
-                ],
-            )
+        for source_name, source_id in (
+            ("Pillow", "pillow"),
+            ("Pillow-SIMD", "pillow-simd"),
+        ):
+            with (
+                self.subTest(source=source_name),
+                patch("run_migration_benchmark.PARALLEL_CPU_PROFILE", False),
+                patch("run_migration_benchmark.PILLOW_SIMD_COMPARISON", True),
+                patch("run_migration_benchmark.TARGET_BACKENDS", ("cpu", "simd")),
+                patch("run_migration_benchmark.BENCHMARK_SOURCE_NAME", source_name),
+            ):
+                profiled = apply_profile_to_workloads([workload])
+                source_subjects = [
+                    {"kind": "oracle", "id": source_id},
+                    *standard_subjects[1:3],
+                ]
+                self.assertEqual(profiled[0]["subjects"], source_subjects)
+                self.assertEqual(
+                    benchmark_subjects(),
+                    [
+                        ("oracle", source_id),
+                        ("target_profile", "python-cpu"),
+                        ("target_profile", "python-simd"),
+                    ],
+                )
         self.assertEqual(workload["subjects"], standard_subjects)
 
     def test_timed_source_can_be_distinct_from_the_parity_oracle(self) -> None:

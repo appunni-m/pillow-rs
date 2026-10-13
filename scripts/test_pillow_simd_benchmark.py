@@ -392,7 +392,6 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
         )
 
     def test_source_cohort_keeps_regular_pillow_as_oracle(self) -> None:
-        result = run("Pillow", PILLOW_VERSION, "simd", source_id="pillow-simd")
         parity = {
             "status": "completed",
             "identity": {"run_id": "regular-pillow-parity"},
@@ -401,33 +400,40 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
             "infrastructure_errors": [],
         }
 
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            result_path = root / "benchmark.json"
-            parity_path = root / "parity.json"
-            reused_parity = root / "regular-pillow-parity.json"
+        for name, version, source_id in (
+            ("Pillow", PILLOW_VERSION, "pillow"),
+            ("Pillow-SIMD", PILLOW_SIMD_VERSION, "pillow-simd"),
+        ):
+            result = run("Pillow", PILLOW_VERSION, source_id, source_id=source_id)
+            with self.subTest(source=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                result_path = root / "benchmark.json"
+                parity_path = root / "parity.json"
+                reused_parity = root / "regular-pillow-parity.json"
+                source_python = f"/subject/{source_id}"
 
-            def fake_run(_command, *, env, **_kwargs):
-                self.assertEqual(env["MIGRATION_ORACLE_PYTHON"], "/oracle/pillow")
-                self.assertEqual(env["MIGRATION_ORACLE_NAME"], "Pillow")
-                self.assertEqual(env["MIGRATION_BENCHMARK_SOURCE_PYTHON"], "/subject/pillow-simd")
-                self.assertEqual(env["MIGRATION_BENCHMARK_SOURCE_NAME"], "Pillow-SIMD")
-                result_path.write_text(json.dumps(result))
-                parity_path.write_text(json.dumps(parity))
-                return type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+                def fake_run(_command, *, env, **_kwargs):
+                    self.assertEqual(env["MIGRATION_ORACLE_PYTHON"], "/oracle/pillow")
+                    self.assertEqual(env["MIGRATION_ORACLE_NAME"], "Pillow")
+                    self.assertEqual(env["MIGRATION_BENCHMARK_COHORT"], "pillow-simd")
+                    self.assertEqual(env["MIGRATION_BENCHMARK_SOURCE_PYTHON"], source_python)
+                    self.assertEqual(env["MIGRATION_BENCHMARK_SOURCE_NAME"], name)
+                    result_path.write_text(json.dumps(result))
+                    parity_path.write_text(json.dumps(parity))
+                    return type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
-            with patch("run_pillow_simd_benchmark.subprocess.run", side_effect=fake_run):
-                _, run_id = run_source_cohort(
-                    source_python="/subject/pillow-simd",
-                    source_name="Pillow-SIMD",
-                    source_version=PILLOW_SIMD_VERSION,
-                    oracle_python="/oracle/pillow",
-                    output=result_path,
-                    parity_output=parity_path,
-                    workload_ids=list(WORKLOAD_IDS),
-                    reuse_parity=reused_parity,
-                )
-        self.assertEqual(run_id, "regular-pillow-parity")
+                with patch("run_pillow_simd_benchmark.subprocess.run", side_effect=fake_run):
+                    _, run_id = run_source_cohort(
+                        source_python=source_python,
+                        source_name=name,
+                        source_version=version,
+                        oracle_python="/oracle/pillow",
+                        output=result_path,
+                        parity_output=parity_path,
+                        workload_ids=list(WORKLOAD_IDS),
+                        reuse_parity=(reused_parity if source_id == "pillow-simd" else None),
+                    )
+                self.assertEqual(run_id, "regular-pillow-parity")
 
     def test_source_output_compatibility_uses_the_declared_parity_comparator(self) -> None:
         manifest = load_manifest(DEFAULT_MANIFEST)
