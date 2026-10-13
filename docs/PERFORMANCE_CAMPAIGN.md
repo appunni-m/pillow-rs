@@ -26,10 +26,12 @@ the version-matched JSON cohort. The eventual SIMD and GPU goals remain
 independent and do not count fallback as acceleration.
 
 Spend at most three or four optimization attempts on one operation per visit.
-Then commit a checkpoint with the retained changes, parity evidence, measured
-gaps, and concrete remaining investigations, and move to the next ranked
-operation. A checkpoint is not completion: unmet targets stay in the matrix
-and can be revisited after other operations receive their first pass.
+Keep each visit scoped to that operation, then move to the next ranked
+operation with retained changes and evidence in the working tree. Accumulate 33
+completed operation items before committing and pushing a checkpoint, unless
+the user explicitly asks for an earlier Git action. A checkpoint is not
+completion: unmet targets stay in the matrix and can be revisited after other
+operations receive their first pass.
 
 ## Operation-wide baseline
 
@@ -68,7 +70,7 @@ current local outputs are `build/migration-parity/optimization-goals.json` and
 `build/migration-parity/optimization-goals.md`. See
 [the reporting command](BENCHMARKING.md#correctness-gate-and-budget-gate).
 
-## Published cross-runner inventory — 2026-10-12
+## Published cross-runner inventory — 2026-10-13
 
 The committed [full per-workload matrix](evidence/performance-optimization-matrix.csv),
 [public API census](evidence/performance-optimization-public-api.csv), and
@@ -76,24 +78,41 @@ The committed [full per-workload matrix](evidence/performance-optimization-matri
 are generated from the GitHub Pages [full benchmark snapshot](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
 and [Pillow-SIMD snapshot](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json).
 The full snapshot is clean at revision
-`c3ec2a1ddc851c602e4b3d77e490bc7d7ac15979`, measured
-`2026-10-12T18:01:53.285622Z`, with 8,918 rows across 686 workloads and JSON
-SHA-256 `89913ac6935359959d7bc40ab9a5bde80e9918cb46705074f0dd9e992f6cac2d`.
+`1d8faf6d72db0625fce27a2f1391a51ce788dbda`, measured
+`2026-10-13T00:31:26.912197Z`, with 8,918 rows across 686 workloads and JSON
+SHA-256 `de9b9fd1e4ace5a674ea4123f8c52b0d268816afb6d39c663b58ac98ddab3b52`.
 The flattened matrix has 8,954 rows after retaining all 36 Pillow-SIMD rows.
 The operation matrix has 1,320 rows for 330 public paths: 209 map to the
 selected manifest and 121 remain explicit inventory gaps.
 
 The latest full snapshot has 192 verified serial-CPU workload/runner pairs:
-none are slower than Pillow and 74 are below 2×. The current 2× CPU triage
-list is led by Thumbnail (1.139974×), GetData (1.342395×), Resize (1.352654×),
-Grayscale (1.414526×), Convert (1.514433×), Merge (1.734456×), Filter
-(1.976719×), and GetProjection (1.976935×). Each is a weakest verified row
-within its operation; runner and workload rows remain separate in the matrix.
-SIMD has 174 verified pairs: one is slower than Pillow, 60 are below 2×, and
-141 are below the final 5× goal. The weakest verified SIMD row is Resize at
-0.928182× Pillow. Parallel CPU remains separate, with 192 verified pairs, 13
-below Pillow and 84 below 2×. GPU has 51 verified latency pairs, 35 slower than
-SIMD; sustained throughput remains unmeasured.
+one is slower than Pillow and 60 are below 2×. The only below-Pillow CPU row is
+`GetData` on 32×32 RGBA band 3: 0.501139× on macOS ARM64 (27.4375 µs versus
+Pillow's 13.7500 µs). Exact parity passed, the CPU backend executed, the result
+was consumed inside the timed boundary, and no fallback occurred. The next
+weakest API minima are Resize (1.220738×), Thumbnail (1.298846×), Grayscale
+(1.403287×), and Convert (1.816035×); the workload-level matrix preserves each
+mode, runner, and size separately.
+
+SIMD has 174 verified workload/runner pairs: none are slower than Pillow, 53
+are below 2×, and 139 are below the final 5× goal. The weakest API minima are
+Thumbnail (1.145730×), GaussianBlur (1.195270×), Resize (1.236129×), Grayscale
+(1.318384×), and Convert (1.425662×). Parallel CPU remains separate, with 192
+verified pairs, 16 below Pillow and 70 below 2×. GPU has 53 verified comparisons
+against Pillow and 51 comparable latency pairs against SIMD; 37 are slower than
+SIMD. GPU sustained throughput is unmeasured in all 51 comparable rows.
+
+The hosted `GetData` result remains unresolved. Existing local experiments have
+already rejected GIL/detach shortcuts, iterator/chunk rewrites, mode and storage
+lookup changes, and wrapper changes because they did not produce a repeatable
+full-call gain. Local ARM runs were faster than Pillow for the same small
+workload. The current-revision local diagnostic measured Pillow at 10.542 µs,
+CPU at 5.542 µs, SIMD at 5.416 µs, and GPU at 296.313 µs, with exact parity
+passing 3/3 and actual-backend receipts. Its worktree was marked dirty by this
+documentation/evidence refresh, so it is not clean-source proof and does not
+erase the hosted regression. Do not repeat the rejected candidates; keep the
+hosted row in the matrix until a distinct measured cost or a newer matched
+hosted cohort justifies a change.
 
 The published Pillow-SIMD snapshot is still dirty and partial at revision
 `101fdb8cc2c9da7ea98da8602ac4e7879ab23c9d`: 9 of 34 declared workloads and 36
