@@ -2723,6 +2723,20 @@ pub fn execute_thumbnail(
     // If the image is still RGB or other format, use normal thumbnail regardless
     // of explicit_mode, because the F/I convert hasn't happened yet in the pipeline.
     let result = match (explicit_mode, &work_img, resize_box) {
+        (Some("F"), DynamicImage::ImageRgba8(_), Some((left, top, right, bottom)))
+            if cur_w % 2 == 0
+                && cur_h % 2 == 0
+                && cur_w / 2 == work_img.width()
+                && cur_h / 2 == work_img.height()
+                && left == 0.0
+                && top == 0.0
+                && right == work_img.width() as f64
+                && bottom == work_img.height() as f64
+                && new_w < work_img.width()
+                && new_h < work_img.height() =>
+        {
+            resize_f(&work_img, new_w, new_h, &effective_filter)?
+        }
         (Some("F"), DynamicImage::ImageRgba8(_), Some((left, top, right, bottom))) => {
             // Image.resize adjusts the source box after its reducing-gap pass.
             // Keep that fractional box for F as well; resizing the complete
