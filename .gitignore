@@ -31,6 +31,8 @@ venv/
 .venv/
 .venv-docs/
 .oracle-venv/
+/.venv-oracle-pillow/
+/.venv-oracle-pillow-simd/
 libnull.rlib
 pybak/
 pillow-rs-freetype/freetype/
