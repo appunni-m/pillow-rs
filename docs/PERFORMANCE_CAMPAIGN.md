@@ -26255,3 +26255,34 @@ The candidate CPU mean is 9.0% below the two matched controls while Pillow is st
 The full F-mode lane passes 138/138 with strict CPU selection. Normal SIMD and GPU parity lanes also pass 138/138. A strict SIMD probe passed 107 cases and reported capability errors for 31 unsupported Resize/Reduce layouts; these are not byte mismatches or test defects. The correctness receipts cover this corpus, while only the full public benchmark receipts prove backend execution. No fallback result receives acceleration credit.
 
 The local evidence supports retaining the row-slice change as a partial ARM64 CPU candidate, not closing Resize. It does not test the hosted x86_64 code path or change its published 1.215× result; CPU remains below the sequencing target there, and GPU latency and throughput remain open. Keep the published 330-operation matrix tied to its clean snapshot until a complete matched-host snapshot is available. Reports are `f32-resize-row-slice-control-a-20261013.json`, `f32-resize-row-slice-control-b-20261013.json`, `f32-resize-row-slice-candidate-1-20261013.json`, `f32-resize-row-slice-candidate-2-20261013.json`, `f32-resize-row-slice-parallel-control-20261013.json`, and `f32-resize-row-slice-parallel-candidate-20261013.json` under `build/migration-parity/`; their parity sidecars are likewise named with `-parity`. The 18 subject rows are recorded in `docs/evidence/performance-optimization-local-runs.csv` (6,742 data rows). No genuine test defect was found and no coverage was run.
+
+### Merge source-band iterator candidate — rejected — 2026-10-13
+
+After the published matrix ranked RGB Merge from three native L bands at 1.242× Pillow on Ubuntu x86_64, I replaced the serial helper's three indexed source reads with zipped source iterators while retaining its output allocation and indexed destination stores. This is distinct from the earlier rejected destination-cursor and four-pixel packing candidates. The experiment only establishes local ARM64 behavior; it does not validate the hosted x86_64 gap.
+
+Four full public 1024×768 Merge calls measured the call and result observation with five warmups, 20 iterations across five samples, warm cache, and concurrency one. Exact parity passed 3/3 in every run. Pillow, serial CPU, SIMD, and GPU were all the requested and observed backends without fallback:
+
+| Run | Pillow ms | Serial CPU ms | Pillow/CPU | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Matched control before | 0.828208 | 0.203625 | 4.068× | 0.204250 | 0.698959 |
+| Iterator candidate 1 | 0.838958 | 0.203417 | 4.126× | 0.208417 | 0.584521 |
+| Iterator candidate 2 | 0.835833 | 0.202854 | 4.120× | 0.214541 | 0.596791 |
+| Restored control after | 1.024291 | 0.263187 | 3.892× | 0.297438 | 0.922270 |
+
+The two candidate CPU medians differ from the pre-candidate control by less than 0.5%, which is not an attributable end-to-end gain. The post-candidate control shifted slower across Pillow and every target profile, showing substantial host-load movement. SIMD source was unchanged and its movement was not repeatable; GPU used one dispatch and transferred 2,359,296 bytes in and 2,359,296 bytes out in every run, with sustained throughput unmeasured. The candidate was reverted. The current published x86_64 Merge result remains open pending the full hosted benchmark for commit `10352de69`.
+
+Reports and exact-parity receipts use the `merge-iterator-control`, `merge-iterzip-candidate-1`, `merge-iterzip-candidate-2`, and `merge-iterator-control-after` stems under `build/migration-parity/`; benchmark run IDs are `migration-benchmark-4824acda0f6b4121bf29877ade33889b`, `migration-benchmark-237f9f73a8284ccb9f7eded3c9470e78`, `migration-benchmark-c8fa64e0371c40a1927f5ed9c7ba0e6e`, and `migration-benchmark-32513fb786504f4996c88fe6504687e0`. Their 16 subject rows are in `docs/evidence/performance-optimization-local-runs.csv` (6,758 data rows). No genuine test defect was found and no coverage was run.
+
+### Merge packed red/green store trial — rejected — 2026-10-13
+
+After rejecting the iterator-read candidate, I tested a second CPU-only change: pack each red/green byte pair into an unaligned 16-bit store, followed by the blue byte store. The byte order was preserved with `u16::from_ne_bytes`; the allocation, output length, and SIMD/GPU implementations were unchanged. Both selected-workload exact-parity gates passed 3/3. The reports confirm CPU, SIMD, and GPU executed their named backends without fallback.
+
+| Run | Pillow ms | Serial CPU ms | Pillow/CPU | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Matched control before | 0.828208 | 0.203625 | 4.068× | 0.204250 | 0.698959 |
+| Packed-store candidate 1 | 1.054583 | 0.493729 | 2.135× | 0.292375 | 0.768959 |
+| Packed-store candidate 2 | 1.045354 | 0.504021 | 2.074× | 0.367063 | 0.779396 |
+
+Both candidate serial-CPU end-to-end medians were about 2.4× slower than the pre-candidate control. Other profiles also moved during those runs, so the timing does not isolate the source change cleanly; it provides no evidence of a speedup and repeated backend timings are substantially worse. I reverted the candidate. The local helper now retains its original byte-wise stores, and the published x86_64 Merge result remains open. These local Apple ARM64 measurements do not replace the matched-host operation matrix.
+
+Reports and exact-parity receipts use the `merge-rg-u16-candidate-1` and `merge-rg-u16-candidate-2` stems under `build/migration-parity/`; benchmark run IDs are `migration-benchmark-d74dac9a5fe24c1d8604d5637d6dfbc3` and `migration-benchmark-98b009117a26426db54e06aba83185c5`. The eight subject rows are in `docs/evidence/performance-optimization-local-runs.csv` (6,766 data rows). No genuine test defect was found and no coverage was run.
