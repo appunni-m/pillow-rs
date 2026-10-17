@@ -70,65 +70,63 @@ current local outputs are `build/migration-parity/optimization-goals.json` and
 `build/migration-parity/optimization-goals.md`. See
 [the reporting command](BENCHMARKING.md#correctness-gate-and-budget-gate).
 
-## Published cross-runner inventory — refreshed 2026-10-14
+## Published cross-runner inventory — refreshed 2026-10-17
 
 The committed [full per-workload matrix](evidence/performance-optimization-matrix.csv),
 [public API census](evidence/performance-optimization-public-api.csv), and
 [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
-use the deployed GitHub Pages benchmark JSON and Pillow-SIMD JSON. The full
-snapshot is clean at revision `310a6d643bdd4d06a7748cbd81466ab26caf4ede`,
-measured `2026-10-13T06:16:43.035113Z`. Its raw JSON SHA-256 is
-`9e801b6c9a634187be447270cd8d09c37edad1d430e6986f81809c071b61947e`. It has
-8,918 rows across 686 workloads. The flattened matrix has 9,054 rows after
-retaining all 136 rows from the separate Pillow-SIMD source. The operation
-matrix has 1,320 profile rows for 330 public paths: 209 map to the selected
-manifest and 121 remain explicit inventory gaps.
+use the deployed GitHub Pages benchmark JSON and Pillow-SIMD JSON. Both current
+snapshots are clean at revision `df92b7e78baa7a54264b8d1903958d7518990fde`.
+The full JSON was measured `2026-10-17T12:38:46.453082Z`, SHA-256
+`d660e749aac667f062ed75e4965ff15b483b15df070b4ca47d961504d6c36b14`, with
+9,229 rows across 707 workloads. The separate Pillow-SIMD JSON was measured
+`2026-10-17T12:34:18.150813Z`, SHA-256
+`c9e5970408edf59a58ec586734d8e6e0452b590c80908876c2584037a521d9bd`, with 147
+rows across 37 workloads. The flattened matrix has 9,376 rows. The operation
+matrix has 1,632 profile rows for 408 public API paths: 209 map to the selected
+manifest and 199 remain explicit inventory gaps. The CSV checksums are
+`f71bd72144921f417496e0ecffb5256a4c4a58619917447b43d94cf41c31bc40` for the
+workload matrix and
+`9644df7dc7039af7029ba5f8271a63c107b23bf5748b05ff0c8dd3dc32e977e1` for the
+operation matrix.
 
-The current matrix has 226 verified serial-CPU workload/runner pairs. Four
-are slower than Pillow and 62 are below the interim 2× threshold. Prioritize
-the slower-than-Pillow cases first:
+The workload matrix has 319 evidence-backed serial-CPU ratios; 22 are slower
+than Pillow and 112 are below the interim 2× threshold. The current highest
+priority verified misses are:
 
-| API | Paired Pillow speedup | Workload | Runner |
+| API / pipeline | CPU / Pillow | Workload | Runner |
 | --- | ---: | --- | --- |
-| GetChannel | 0.760568× | RGB 1024×768 | Ubuntu x86_64 |
-| GetData | 0.765807× | HSV band 2, 1024×768 | macOS arm64 |
-| GetChannel | 0.769505× | RGBA 1024×768 | Ubuntu x86_64 |
-| GetChannel | 0.773437× | LA 1024×768 | Ubuntu x86_64 |
+| YCbCr Grayscale | 0.226829× | `pipeline-op.grayscale.material-ycbcr-noise-1024x768` | Ubuntu x86_64, Pillow-SIMD-paired cohort |
+| YCbCr Grayscale | 0.503471× | `pipeline-op.grayscale.material-ycbcr-noise-1024x768` | Ubuntu ARM64 |
+| RGBA→RGB plus three GetChannel results | 0.520673× | `pipeline-chain.getchannel.seeded-corners-1024x768-all-bands` | macOS ARM64 |
+| RGB Grayscale | 0.662085× | `pipeline-op.grayscale.material-rgb-noise-1024x768` | Ubuntu x86_64 |
+| RGBA→RGB plus three GetChannel results | 0.694033× | `pipeline-chain.getchannel.seeded-corners-1024x768-all-bands` | Ubuntu x86_64 |
+| GaussianBlur RGBA | 0.833174× | `pipeline-chain.blur-material.gaussian-rgba-noise-1024x768` | macOS ARM64 |
 
-Each ratio uses the same-run Pillow timing. The public-call boundary includes
-the operation and result observation, and verified rows prove the requested
-backend ran without fallback. Keep each workload and runner distinct; local
-results on a different machine do not replace a hosted-runner comparison.
-After all verified CPU misses clear the interim 2× gate, continue with the
-remaining sub-2× cases. The final CPU goal remains no slower than Pillow.
+Each ratio uses a same-run Pillow reference and exact parity with completed
+backend receipts, terminal materialization, and no fallback. The
+GetChannel rows include seeded RGBA input, one RGBA→RGB conversion, three
+channel extractions, and each output's byte materialization; they are composed
+workflow comparisons, not isolated GetChannel costs. The
+`analysis-scalar-if` row at 0.800506× is a composed workload containing five
+terminal APIs and does not isolate which API accounts for the miss. Keep each
+workload and runner distinct; local results on another host do not replace a
+published comparison. First clear CPU misses to the interim 2× sequencing
+gate, then continue with the remaining CPU rows below 2×. The final CPU goal is
+latency no slower than Pillow.
 
-The published snapshots lack operation-level vector telemetry for all 208
-parity-backed SIMD rows. The current matrix marks them
-`simd_vector_not_proven`, preserving observed timings and ratios while
-withholding accelerated SIMD credit. Under the earlier backend-label gate,
-these observations included 2 slower than Pillow, 61 below 2×, and 162 below
-5×. These remain measurement gaps, not completed targets. Parallel CPU remains
-separate with 192 verified pairs: 12 slower than Pillow and 61 below 2×.
+SIMD has 261 evidence-backed comparisons: 32 are slower than Pillow, 93 are
+below 2×, and 203 are below the 5× goal. The SIMD target label alone is not
+proof of vector work; the matrix credits only rows with operation-level vector
+evidence. Parallel CPU remains separate with 245 evidence-backed ratios: 33
+are slower than Pillow and 109 are below 2×. GPU has 56 verified latency pairs
+against SIMD, 37 slower than SIMD. Sustained GPU throughput remains
+unmeasured, and fallback rows do not count as accelerated execution.
 
-GPU has 51 observed latency pairs against SIMD: 37 slower and 14 matching or
-faster. Their verified GPU/SIMD ratios are now withheld until the SIMD baseline
-proves vector work. The full matrix also records 11 GPU fallback rows; they do
-not count as accelerated execution. Sustained GPU throughput remains unmeasured.
-
-The current Pillow-SIMD snapshot is clean at revision
-`310a6d643bdd4d06a7748cbd81466ab26caf4ede`: 34 workloads and 136 rows. Its
-compatibility preflight found output differences for L-mode 5×5 Filter and RGB
-Grayscale. The other 32 workloads have observed SIMD/Pillow-SIMD ratios, pending
-vector proof: 3 slower than Pillow-SIMD and 13 below 2×. CPU misses retain
-priority. The two incompatible source workloads remain visible without verified
-Pillow-SIMD ratios. Current targets pass exact regular-Pillow parity on both;
-these source differences do not establish a target parity failure.
-
-| Observed SIMD workload slower than Pillow-SIMD | Pillow-SIMD / target SIMD |
-| --- | ---: |
-| CMYK-to-RGB Convert, 1024×768 | 0.755935× |
-| LA 3×3 Filter, noise 1024×768 | 0.814169× |
-| RGB GaussianBlur, 1024×768 | 0.841092× |
+The current Pillow-SIMD snapshot has 37 workloads; 32 comparisons are eligible
+in the per-operation matrix. Source incompatibilities and missing proofs stay
+visible without a ratio. Use the matched Pillow-SIMD JSON comparisons only after
+the verified CPU misses clear the CPU sequencing gate.
 
 ### Require recorded SIMD vector work — 2026-10-14
 
