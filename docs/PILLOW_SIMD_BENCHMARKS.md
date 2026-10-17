@@ -20,16 +20,15 @@ compatibility separately, withholding ratios for incompatible output. Focused
 arm64 CPU and SIMD reproductions pass 2/2; original x86 behavior remains
 unverified. Preserve those parity checks when changing cohort setup.
 
-The benchmark currently covers 34 full-size, parity-backed individual
-operation cases: all 29 current `pipeline-op` workloads in the benchmark
-manifest, the established RGB GaussianBlur case, and getchannel in L, LA, RGB,
-and RGBA. Together they cover L, LA, RGB, RGBA, CMYK, F, I, and YCbCr modes.
-Pillow and Pillow-SIMD each run in an isolated environment because both
-packages provide the `PIL` namespace. pillow-rs CPU/SIMD output is checked
-against regular Pillow. Pillow-SIMD is timed as a separate source, and its
-output is checked directly against regular Pillow on the same cases. A
-Pillow-SIMD row with different output remains visible with its measured time,
-but its speed ratio is withheld.
+The maintained benchmark declares 37 full-size, parity-gated workflow IDs:
+32 `pipeline-op` workloads, the established RGB GaussianBlur case, and
+getchannel in L, LA, RGB, and RGBA. Together they cover L, LA, RGB, RGBA,
+CMYK, F, I, and YCbCr modes. Pillow and Pillow-SIMD each run in an isolated
+environment because both packages provide the `PIL` namespace. pillow-rs
+CPU/SIMD output is checked against regular Pillow. Pillow-SIMD is timed as a
+separate source, and its output is checked directly against regular Pillow on
+the same cases. A Pillow-SIMD row with different output remains visible with
+its measured time, but its speed ratio is withheld.
 
 The [Pillow-SIMD project](https://github.com/uploadcare/pillow-simd) documents
 additional accelerated operations, including convolution resizing, alpha
@@ -46,10 +45,21 @@ benchmark and documentation workflows complete successfully.
 
 The currently published
 [`pillow-simd-benchmark.json`](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json)
-contains 9 workload IDs, while this repository declares 34. Its rows all pass
-their recorded parity and backend checks, but the snapshot is marked dirty and
-does not demonstrate the complete declared workload set. Treat those rows as
-matched-host diagnostics only; do not use the snapshot to close the full x86
-comparison category or to compare against the separate ARM measurements. The
-page is refreshed only by a later successful x86 benchmark and documentation
-workflow.
+is a completed, clean snapshot at revision
+`600e96997427e9212d3d83023e80463a6f3d6179`, measured 2026-10-17. It contains
+147 rows across 37 workflow IDs: 37 Pillow, 37 `python-cpu`, 36 `python-simd`,
+and 37 Pillow-SIMD rows. The absent SIMD row is for
+`pipeline-op.rotate.material-rgba-nearest-37deg-noise-fill-1024x768`, whose
+workload contract declares only Pillow and `python-cpu`. The file-level
+`clean` flag describes source state; it does not mean every compatibility
+comparison passed.
+
+Pillow-SIMD matched regular Pillow on 34 workflows. Three completed
+measurements failed compatibility and are retained as diagnostics only:
+`pipeline-op.grayscale.material-rgb-noise-1024x768`,
+`pipeline-op.filter.material-l-noise-5x5-1024x768`, and
+`pipeline-op.filter.material-la-nonmatching-5x5-1024x768`. Do not use their
+Pillow-SIMD timings as speed comparisons. The remaining compatible rows are
+matched-host evidence for their listed workloads; they do not close operations
+or modes absent from the selected cohort and are not comparable with the
+separate ARM measurements.

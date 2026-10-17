@@ -1841,6 +1841,102 @@ pub(crate) fn uniform5x5_parameters_match(kernel: &[f32; 25], scale: f32, offset
     scale == 25.0 && offset == 0.0 && kernel.iter().all(|&coefficient| coefficient == 1.0)
 }
 
+#[cfg(not(feature = "parallel"))]
+fn la_single_outlier5x5_parameters_match(kernel: &[f32; 25], scale: f32, offset: f32) -> bool {
+    scale == 25.0
+        && offset == 0.0
+        && kernel[..24].iter().all(|&coefficient| coefficient == 1.0)
+        && kernel[24] == 2.0
+}
+
+/// Apply the native-LA 5x5 kernel whose final tap is 2 and whose other taps
+/// are 1, using rolling integer sums.
+///
+/// The exact weighted numerator is the 5x5 byte sum plus the final tap's
+/// sample. The normalized f32 coefficients and ordered FMA error stay below
+/// 0.001 at the maximum result (265.2), while a denominator-25 integer sum is
+/// at least 0.02 from a half-byte rounding boundary. Therefore Pillow's
+/// rounded byte is exactly `(sum + 12) / 25`, clipped to a byte. The copied
+/// two-pixel border and native interleaved L/A bytes are preserved.
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_la_single_outlier_rows(
+    raw: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+) -> bool {
+    let Some(row_stride) = width.checked_mul(2) else {
+        return false;
+    };
+    let Some(sample_count) = row_stride.checked_mul(height) else {
+        return false;
+    };
+    if raw.len() != sample_count || out.len() != sample_count {
+        return false;
+    }
+    if width < 5 || height < 5 {
+        return true;
+    }
+
+    let mut horizontal_rows: [Vec<u16>; 5] = std::array::from_fn(|_| vec![0; row_stride]);
+    let fill_horizontal_row = |source_y: usize, destination: &mut [u16]| {
+        let row_start = source_y * row_stride;
+        let row = &raw[row_start..row_start + row_stride];
+        let mut sums = [0u16; 2];
+        for channel in 0..2 {
+            sums[channel] = u16::from(row[channel])
+                + u16::from(row[2 + channel])
+                + u16::from(row[4 + channel])
+                + u16::from(row[6 + channel])
+                + u16::from(row[8 + channel]);
+            destination[4 + channel] = sums[channel];
+        }
+        for x in 3..width - 2 {
+            let leaving = (x - 3) * 2;
+            let entering = (x + 2) * 2;
+            for channel in 0..2 {
+                sums[channel] = sums[channel] - u16::from(row[leaving + channel])
+                    + u16::from(row[entering + channel]);
+                destination[x * 2 + channel] = sums[channel];
+            }
+        }
+    };
+
+    for source_y in 0..5 {
+        fill_horizontal_row(source_y, &mut horizontal_rows[source_y]);
+    }
+    for y in 2..height - 2 {
+        let rows = [
+            &horizontal_rows[(y - 2) % 5],
+            &horizontal_rows[(y - 1) % 5],
+            &horizontal_rows[y % 5],
+            &horizontal_rows[(y + 1) % 5],
+            &horizontal_rows[(y + 2) % 5],
+        ];
+        let output_row = y * row_stride;
+        let extra_row = (y - 2) * row_stride;
+        for x in 2..width - 2 {
+            let pixel = x * 2;
+            let extra_sample = extra_row + (x + 2) * 2;
+            for channel in 0..2 {
+                let sum = u32::from(rows[0][pixel + channel])
+                    + u32::from(rows[1][pixel + channel])
+                    + u32::from(rows[2][pixel + channel])
+                    + u32::from(rows[3][pixel + channel])
+                    + u32::from(rows[4][pixel + channel])
+                    + u32::from(raw[extra_sample + channel]);
+                out[output_row + pixel + channel] = ((sum + 12) / 25).min(255) as u8;
+            }
+        }
+
+        let next_source_y = y + 3;
+        if next_source_y < height {
+            fill_horizontal_row(next_source_y, &mut horizontal_rows[next_source_y % 5]);
+        }
+    }
+    true
+}
+
 /// Apply the uniform 5x5 kernel to native L bytes without intermediate rounding.
 ///
 /// The integer sum is at most 6,375. Its exact mean plus 0.5 is at least
@@ -5165,6 +5261,15 @@ pub fn execute_filter5x5(
     }
     let mut out = raw.to_vec();
     #[cfg(not(feature = "parallel"))]
+    if matches!(explicit_mode, None | Some("LA"))
+        && matches!(img, DynamicImage::ImageLumaA8(_))
+        && la_single_outlier5x5_parameters_match(kernel, scale, offset)
+        && filter_5x5_la_single_outlier_rows(raw, &mut out, w_u32 as usize, h_u32 as usize)
+    {
+        let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
+    #[cfg(not(feature = "parallel"))]
     if matches!(img, DynamicImage::ImageRgba8(_))
         && matches!(explicit_mode, None | Some("RGBA"))
         && uniform5x5_parameters_match(kernel, scale, offset)
@@ -6615,6 +6720,83 @@ mod binomial5x5_native_byte_tests {
                 assert!(scalar_tail > 0, "{width}x{height} should have a tail");
             }
             assert_eq!(actual, expected, "native LA {width}x{height}");
+        }
+    }
+}
+
+#[cfg(all(test, not(feature = "parallel")))]
+mod la_single_outlier5x5_tests {
+    use super::{
+        filter_5x5_byte_rows, filter_5x5_la_single_outlier_rows,
+        la_single_outlier5x5_parameters_match,
+    };
+
+    #[test]
+    fn rolling_integer_sums_match_ordered_float_for_la_pixels_and_borders() {
+        let mut kernel = [1.0f32; 25];
+        kernel[24] = 2.0;
+        let normalized = std::array::from_fn(|index| kernel[index] / 25.0);
+        assert!(la_single_outlier5x5_parameters_match(&kernel, 25.0, 0.0));
+        assert!(!la_single_outlier5x5_parameters_match(&kernel, 24.0, 0.0));
+        assert!(!la_single_outlier5x5_parameters_match(&kernel, 25.0, 1.0));
+
+        let mut misplaced_outlier = kernel;
+        misplaced_outlier[23] = 2.0;
+        misplaced_outlier[24] = 1.0;
+        assert!(!la_single_outlier5x5_parameters_match(
+            &misplaced_outlier,
+            25.0,
+            0.0
+        ));
+
+        for (width, height) in [
+            (1usize, 1usize),
+            (4, 7),
+            (7, 4),
+            (5, 5),
+            (7, 5),
+            (13, 7),
+            (19, 11),
+            (71, 67),
+        ] {
+            for pattern in 0..4 {
+                let mut state = 0x9e37_79b9u32;
+                let raw: Vec<u8> = (0..width * height * 2)
+                    .map(|index| match pattern {
+                        0 => 0,
+                        1 => 255,
+                        2 => ((index * 73 + index / (width * 2) * 29 + 17) % 256) as u8,
+                        _ => {
+                            state ^= state << 13;
+                            state ^= state >> 17;
+                            state ^= state << 5;
+                            state as u8
+                        }
+                    })
+                    .collect();
+                let mut expected = raw.clone();
+                filter_5x5_byte_rows(
+                    &raw,
+                    &mut expected,
+                    width as i32,
+                    height as i32,
+                    2,
+                    &normalized,
+                    0.5,
+                );
+
+                let mut actual = raw.clone();
+                assert!(filter_5x5_la_single_outlier_rows(
+                    &raw,
+                    &mut actual,
+                    width,
+                    height,
+                ));
+                assert_eq!(
+                    actual, expected,
+                    "native LA {width}x{height}, pattern {pattern}"
+                );
+            }
         }
     }
 }
