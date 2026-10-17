@@ -814742,7 +814742,8 @@
         "PIL.Image.Image.rotate.parameter.resample"
       ],
       "target_profiles": [
-        "python-cpu"
+        "python-cpu",
+        "python-simd"
       ],
       "assets": [
         {
@@ -814824,7 +814825,8 @@
         "PIL.Image.Image.rotate.parameter.fillcolor"
       ],
       "target_profiles": [
-        "python-cpu"
+        "python-cpu",
+        "python-simd"
       ],
       "assets": [
         {
