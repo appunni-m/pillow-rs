@@ -1091,6 +1091,20 @@ class ReceiptStateTests(unittest.TestCase):
         self.assertTrue(result["terminal_complete"])
         self.assertEqual(result["actual_backend_counts"], {"gpu": 1})
 
+    def test_partial_receipt_keeps_aggregate_terminal_incomplete(self) -> None:
+        partial = benchmark_record(terminal_complete=False)
+        partial["status"] = "partial"
+        result = execution_result(
+            "target_profile",
+            "python-gpu",
+            [partial, benchmark_record(terminal_complete=True)],
+            aggregate_policy(),
+        )
+
+        self.assertEqual(result["status"], "partial")
+        self.assertFalse(result["terminal_complete"])
+        execution_receipt(result, "benchmark.execution")
+
     def test_benchmark_execution_preserves_vector_and_zero_vector_operation_receipts(
         self,
     ) -> None:
