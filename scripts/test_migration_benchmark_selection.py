@@ -40,6 +40,7 @@ import run_migration_benchmark
 import run_migration_parity
 from test_migration_benchmark_samples import synthetic_report
 from run_migration_parity import TARGET_FEATURES, target_profile_for_backend
+from validate_migration_parity_result import execution_receipt
 
 
 class BenchmarkExecutionProofScopeTests(unittest.TestCase):
@@ -101,10 +102,11 @@ class BenchmarkExecutionProofScopeTests(unittest.TestCase):
         )
 
         self.assertEqual(result["status"], "not_proven")
-        self.assertTrue(result["terminal_complete"])
+        self.assertFalse(result["terminal_complete"])
         self.assertIsNone(result["actual_backend"])
         self.assertEqual(result["actual_backend_counts"], {})
         self.assertEqual(result["operation_telemetry"], [])
+        execution_receipt(result, "benchmark.execution")
 
     def test_fallback_from_any_proof_step_remains_visible(self):
         later_step = self.receipt(

@@ -1313,6 +1313,10 @@ def execution_result(
         status = "unsupported"
     else:
         status = "not_proven"
+    # The receipt belongs to this workload's selected operation(s). A later
+    # unrelated workflow terminal cannot make a partial or unproven workload
+    # complete; keep the explicit terminal bit aligned with the report schema.
+    terminal_complete = terminal_complete and status == "completed"
     return {
         "status": status,
         "terminal_complete": terminal_complete,
