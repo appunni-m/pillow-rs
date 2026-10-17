@@ -738,7 +738,19 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
 
             with (
                 patch("run_pillow_simd_benchmark.load_parity_cases", return_value=({case_id: case}, {})),
-                patch("run_pillow_simd_benchmark.workload_contracts", return_value={workload_id: {"input": {"case_id": case_id}}}),
+                patch(
+                    "run_pillow_simd_benchmark.workload_contracts",
+                    return_value={
+                        workload_id: {
+                            "input": {"case_id": case_id},
+                            "subjects": [
+                                {"kind": "oracle", "id": "pillow"},
+                                {"kind": "target_profile", "id": "python-cpu"},
+                                {"kind": "target_profile", "id": "python-simd"},
+                            ],
+                        }
+                    },
+                ),
                 patch("run_pillow_simd_benchmark.subprocess.run", side_effect=fake_run),
             ):
                 compatibility, _artifacts = run_source_compatibility(
@@ -754,6 +766,80 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
             compatibility[workload_id]["differences"][0]["kind"],
             "image_mismatch",
         )
+
+    def test_source_compatibility_uses_each_workloads_declared_profiles(self) -> None:
+        manifest = load_manifest(DEFAULT_MANIFEST)
+        cases, _ = load_parity_cases(manifest)
+        workload_id = "pipeline-op.rotate.material-rgba-nearest-37deg-noise-fill-1024x768"
+        case_id = workload_contracts()[workload_id]["input"]["case_id"]
+        case = cases[case_id]
+
+        def observations() -> list[dict]:
+            return [
+                {"step_id": step_id, "status": "ok", "value": "same-output"}
+                for step_id in case["observations"]
+            ]
+
+        reference = {
+            "case_id": case_id,
+            "target_profile": "python-cpu",
+            "outcome": "pass",
+            "source": {"status": "completed", "observations": observations()},
+            "target": {"status": "completed", "observations": observations()},
+        }
+        observed_backends = []
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference_path = root / "pillow-parity.json"
+            reference_path.write_text(json.dumps({"comparisons": [reference]}))
+
+            def fake_run(command, *, env, **_kwargs):
+                backend = env["MIGRATION_TARGET_BACKEND"]
+                observed_backends.append(backend)
+                artifact = Path(command[command.index("--output") + 1])
+                parity = {
+                    "status": "completed",
+                    "identity": {
+                        "run_id": f"compat-python-{backend}",
+                        "oracles": [
+                            {"name": "Pillow-SIMD", "version": PILLOW_SIMD_VERSION}
+                        ],
+                    },
+                    "infrastructure_errors": [],
+                    "comparisons": [
+                        {
+                            "case_id": case_id,
+                            "target_profile": f"python-{backend}",
+                            "outcome": "pass",
+                            "source": {
+                                "status": "completed",
+                                "observations": observations(),
+                            },
+                            "target": {
+                                "status": "completed",
+                                "observations": observations(),
+                            },
+                        }
+                    ],
+                }
+                with gzip.open(artifact, "wt", encoding="utf-8") as stream:
+                    json.dump(parity, stream)
+                return type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+            with patch(
+                "run_pillow_simd_benchmark.subprocess.run", side_effect=fake_run
+            ):
+                compatibility, _artifacts = run_source_compatibility(
+                    pillow_python="/oracle/pillow",
+                    pillow_simd_python="/oracle/pillow-simd",
+                    pillow_parity_path=reference_path,
+                    workload_ids=[workload_id],
+                    output=root / "compatibility.json",
+                )
+
+        self.assertEqual(observed_backends, ["cpu"])
+        self.assertEqual(compatibility[workload_id]["outcome"], "pass")
 
     def test_matrix_requires_explicit_source_compatibility_for_simd_baseline(self) -> None:
         row = {

@@ -439,9 +439,28 @@ def run_source_compatibility(
     manifest_data = load_manifest(DEFAULT_MANIFEST)
     cases_by_id, _ = load_parity_cases(manifest_data)
     workloads = workload_contracts()
-    selected_case_ids = list(
-        dict.fromkeys(workloads[item]["input"]["case_id"] for item in workload_ids)
-    )
+    selected_profiles_by_case: dict[str, set[str]] = {}
+    selected_case_ids: list[str] = []
+    for workload_id in workload_ids:
+        workload = workloads.get(workload_id)
+        if workload is None:
+            raise ValueError(
+                f"Pillow-SIMD compatibility has an unknown workload: {workload_id}"
+            )
+        case_id = workload["input"]["case_id"]
+        declared_profiles = {
+            subject["id"]
+            for subject in workload["subjects"]
+            if subject["kind"] == "target_profile"
+        }
+        profiles = declared_profiles & {"python-cpu", "python-simd"}
+        if not profiles:
+            raise ValueError(
+                f"Pillow-SIMD compatibility workload has no CPU/SIMD profile: {workload_id}"
+            )
+        selected_profiles_by_case.setdefault(case_id, set()).update(profiles)
+        if case_id not in selected_case_ids:
+            selected_case_ids.append(case_id)
     cases = {case_id: cases_by_id[case_id] for case_id in selected_case_ids}
     operation_index = build_operation_index(manifest_data)
     pillow_parity = read_parity_artifact(pillow_parity_path)
@@ -458,7 +477,8 @@ def run_source_compatibility(
         backend_cases = [
             cases[case_id]
             for case_id in selected_case_ids
-            if profile_applies_to_case(profile, cases[case_id])
+            if profile in selected_profiles_by_case[case_id]
+            and profile_applies_to_case(profile, cases[case_id])
         ]
         if not backend_cases:
             continue
