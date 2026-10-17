@@ -1273,6 +1273,7 @@ def execution_result(
     terminal_complete = (
         complete
         and len(terminal_completed_candidates) + len(terminal_cached_candidates) == 1
+        and partial_count == 0
         and not errors
     )
     terminal_gap = complete and not terminal_complete
