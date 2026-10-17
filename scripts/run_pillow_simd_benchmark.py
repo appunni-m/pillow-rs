@@ -802,7 +802,7 @@ def combine_results(
     snapshot["notes"] = [
         "This x86-only cohort compares pillow-rs CPU/SIMD, ordinary Pillow 12.1.1, and Pillow-SIMD 12.1.1.post0 on identical workloads and measurement policies.",
         "Pillow-SIMD and Pillow were run in separate virtual environments because both install the PIL namespace. pillow-rs CPU/SIMD parity uses regular Pillow; Pillow-SIMD compatibility is checked separately and incompatible baseline cells remain visible with their speed ratios withheld.",
-        f"The matched cohort covers {len(WORKLOAD_IDS)} full-size, parity-backed individual-operation cases: all 29 current pipeline-op cases, the established RGB GaussianBlur case, and getchannel in L, LA, RGB, and RGBA. Every workload uses identical inputs and measurement policy across the three sources.",
+        f"The matched cohort covers {len(WORKLOAD_IDS)} full-size, parity-backed workflow IDs: {sum(workload.startswith('pipeline-op.') for workload in WORKLOAD_IDS)} pipeline-op workloads, the established RGB GaussianBlur case, and getchannel in L, LA, RGB, and RGBA. Each measured source uses the same input and measurement policy per workflow; target profiles appear only when declared by that workload.",
         "This cohort uses the Pillow-SIMD default SSE4 build. It is not comparable with the Apple ARM measurements on the main benchmark page.",
         *(
             [
