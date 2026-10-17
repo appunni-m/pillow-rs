@@ -4,8 +4,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts import build_migration_parity_inputs
+from scripts import run_migration_parity
 from scripts.run_migration_parity import AssetStore, serialize_value
 
 
@@ -32,6 +34,100 @@ class UnreadableCore:
 
 
 class ParitySerializationTests(unittest.TestCase):
+    def test_timed_workflow_resolves_byte_fixtures_before_starting_timer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "assets").mkdir()
+            (root / "assets" / "pixels.bin").write_bytes(b"fixture bytes")
+            original_resolve = run_migration_parity.AssetStore.resolve
+
+            for kind in ("inline", "ref_bytes"):
+                with self.subTest(kind=kind):
+                    events = []
+                    tick = 0
+
+                    def perf_counter_ns():
+                        nonlocal tick
+                        tick += 1
+                        events.append("timer")
+                        return tick * 100
+
+                    def tracked_resolve(asset_store, asset_id):
+                        events.append("asset_resolve")
+                        return original_resolve(asset_store, asset_id)
+
+                    def workflow_step(_side, _step, _definition, _bindings, assets):
+                        return assets.resolve("pixels")
+
+                    if kind == "inline":
+                        asset = {
+                            "id": "pixels",
+                            "kind": "inline",
+                            "encoding": "base64",
+                            "data": "Zml4dHVyZSBieXRlcw==",
+                            "media_type": "application/octet-stream",
+                        }
+                    else:
+                        asset = {
+                            "id": "pixels",
+                            "kind": "ref_bytes",
+                            "path": "pixels.bin",
+                        }
+                    case = {
+                        "case_id": f"timed-{kind}-input",
+                        "assets": [asset],
+                        "steps": [
+                            {
+                                "step_id": "input",
+                                "surface": "PIL.Image",
+                                "operation": "frombytes",
+                                "receiver": None,
+                                "arguments": {},
+                            }
+                        ],
+                        "observations": [],
+                    }
+
+                    with (
+                        patch.object(run_migration_parity, "FIXTURE_ROOT", root),
+                        patch.object(
+                            run_migration_parity.time,
+                            "perf_counter_ns",
+                            side_effect=perf_counter_ns,
+                        ),
+                        patch.object(
+                            run_migration_parity.AssetStore,
+                            "resolve",
+                            new=tracked_resolve,
+                        ),
+                        patch.object(
+                            run_migration_parity,
+                            "operation_definition",
+                            return_value={"source": {"result": {"shape": "scalar"}}},
+                        ),
+                        patch.object(
+                            run_migration_parity,
+                            "call_workflow_step",
+                            side_effect=workflow_step,
+                        ),
+                    ):
+                        timings = []
+                        result = run_migration_parity.run_case(
+                            "source",
+                            case,
+                            {},
+                            root / "tmp",
+                            timing_sink=timings,
+                            timing_boundary="whole_workflow",
+                            serialize_observations=False,
+                        )
+
+                    self.assertEqual(result["status"], "completed")
+                    self.assertEqual(len(timings), 1)
+                    self.assertLess(
+                        events.index("asset_resolve"), events.index("timer")
+                    )
+
     def test_large_generated_byte_assets_round_trip_through_file_reference(self):
         raw = bytes(range(256)) * 300
         asset = {

@@ -1,0 +1,176 @@
+{
+  "artifact_sha256": {
+    "benchmark-instrumented.json": "196316bb76d71f71a8cbb3eabc429e8620c3bd5f7dfc68b2d48d71550d0b7a1a",
+    "parity.json": "f8093fccd7736a6242aab53fc40bd9bc0c946e20e8797b1e9bef627f2662d5a4",
+    "phase-probe.patch": "52691aacf867abc1a1496e9bc36615a630dca2ab4fcc5aa3d3597227b43d8242",
+    "phase-rows.jsonl": "ac4766a1ea93d72523b58d46ad982e48654eeef3e0227c9a801dfe8c865d6747",
+    "raw-samples.json": "18841a25eb7a0dd7e4d737096308318aadb57b147e91d5f1dbe8568ad4984715"
+  },
+  "case_id": "PIL.Image.Image.getcolors.nuanced.i-high-cardinality-signed-run-fallback-128x64",
+  "disposition": "diagnostic_attribution_only",
+  "environment": {
+    "backend": "cpu",
+    "dirty": true,
+    "features": [
+      "pillow-rs-py/default",
+      "pillow-rs/default"
+    ],
+    "host": {
+      "architecture": "arm64",
+      "cpu": "arm",
+      "machine_id": "Lazys-MacBook-Pro.local",
+      "memory_bytes": 0,
+      "os": "macOS-15.7.7-arm64-arm-64bit",
+      "power_mode": "unknown",
+      "toolchain": "3.12.13"
+    },
+    "oracle": {
+      "name": "Pillow",
+      "oracle_id": "pillow",
+      "runtime": "CPython 3.12",
+      "version": "12.2.0"
+    },
+    "python_target": "3.12.13",
+    "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+    "target_profile": "python-cpu"
+  },
+  "execution": {
+    "actual_backend": "cpu",
+    "actual_backend_counts": {
+      "cpu": 1
+    },
+    "fallback_reason_counts": {},
+    "operation_count": {
+      "max": 1,
+      "mean": 1,
+      "median": 1,
+      "min": 1,
+      "sample_count": 1,
+      "total": 1
+    },
+    "operation_telemetry": [
+      {
+        "handoff_count": 0,
+        "mode_conversion_count": 0,
+        "operation": "GetColors",
+        "path": "cpu",
+        "scalar_tail_count": 0,
+        "vector_block_count": 0
+      }
+    ],
+    "requested_backend": "cpu",
+    "terminal_complete": true
+  },
+  "inputs": [
+    {
+      "path": "inputs/benchmark/pipeline-operations.json",
+      "schema": "migration-parity/benchmark-input@1",
+      "sha256": "97a4ec9b8fa1704fb77518abae0dbb52e9afd4bf1e8fd459d40c64580fc74966"
+    },
+    {
+      "path": "inputs/parity/pil-image-image.json",
+      "schema": "migration-parity/parity-input@1",
+      "sha256": "c9cd37e39695fa309230dcbd497e3a7a47d2706378d756ec08fb3aad81e67d6d"
+    }
+  ],
+  "instrumented_public_call_latency_ms": {
+    "pillow": {
+      "max": 2.560291,
+      "mean": 0.2063471,
+      "median": 0.1782915,
+      "min": 0.172958,
+      "p95": 0.21,
+      "p99": 0.388459,
+      "sample_count": 100,
+      "standard_deviation": 0.23768292821864592,
+      "total": 20.63471,
+      "weighted_mean": null
+    },
+    "python_cpu": {
+      "max": 3.755833,
+      "mean": 0.25020041,
+      "median": 0.1948955,
+      "min": 0.180083,
+      "p95": 0.367208,
+      "p99": 0.606583,
+      "sample_count": 100,
+      "standard_deviation": 0.3579755593135122,
+      "total": 25.020041,
+      "weighted_mean": null
+    }
+  },
+  "loaded_probe_extension_sha256": "8aa91fe5030b4d76d068dd2207f21ead23f671f317775f255695fd1b1619081e",
+  "manifest": {
+    "path": "pillow-rs/tests/fixtures/manifest.yaml",
+    "schema": "migration-parity/manifest@2",
+    "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+  },
+  "measurement_policy": {
+    "boundary": "observed_steps",
+    "cache_state": "warm",
+    "concurrency": 1,
+    "correctness_gate": "parity_pass",
+    "measurement_iterations": 20,
+    "metrics": [
+      "latency",
+      "throughput"
+    ],
+    "samples": 5,
+    "step_ids": [
+      "call-fallback-4097"
+    ],
+    "warmup_iterations": 5
+  },
+  "parity": {
+    "failed": 0,
+    "outcome": "pass",
+    "passed": 1,
+    "selected": 1,
+    "status": "completed"
+  },
+  "phase_samples": {
+    "measurements": 100,
+    "phases": {
+      "conversion_ns": {
+        "max_us": 241.125,
+        "median_us": 86.666,
+        "min_us": 79.583,
+        "p95_us": 149.542,
+        "sample_count": 100
+      },
+      "core_ns": {
+        "max_us": 86.375,
+        "median_us": 25.937,
+        "min_us": 25.0,
+        "p95_us": 40.041,
+        "sample_count": 100
+      },
+      "detach_map_error_ns": {
+        "max_us": 96.583,
+        "median_us": 25.979,
+        "min_us": 25.042,
+        "p95_us": 41.667,
+        "sample_count": 100
+      }
+    },
+    "rows_per_call": 4097,
+    "timed_calls": 105,
+    "untimed_preflight_calls": 2,
+    "warmups": 5
+  },
+  "restored_normal_extension_sha256": "e0e3e5373c0bb2c2779f2fc6b38631ce35b951528dac852808c6d3cf0cc3f847",
+  "restored_source_hashes": {
+    "pillow-rs-py/src/lib.rs": "068c22d3b7964dd917584118860de0034623b7f19683e36a87d997b8e8b3ca24",
+    "scripts/run_migration_parity.py": "e4f692735be23d059d28c6fde2122072210fc1499fc83339fb243083c7c4e564"
+  },
+  "run_ids": {
+    "benchmark": "migration-benchmark-193c9dbb31e242adb66fb3b50bc8f18d",
+    "parity": "migration-parity-benchmark-gate-d60cc45fad774360881f1fa6bee40d65"
+  },
+  "schema": "pillow-rs/getcolors-phase-attribution@1",
+  "source_hashes_during_probe": {
+    "pillow-rs-py/src/lib.rs": "a336e690b48ad937b7d0d67543c998111757b794b5a962a4f37598707e48a33c",
+    "scripts/run_migration_parity.py": "1076643fe08c5cd5fc75379cb64d8ed7d1053bbcc7d5418fba4d2903bf701b19"
+  },
+  "workload_id": "pipeline-chain.terminal-read.getcolors.high-cardinality-signed-run-i-128x64"
+}

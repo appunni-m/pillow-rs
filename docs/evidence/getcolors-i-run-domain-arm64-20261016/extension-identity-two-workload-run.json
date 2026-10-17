@@ -1,0 +1,55 @@
+{
+  "candidate": "signed scalar-I repeated-run scanner; sample-domain plausibility is admission-only; values are counted as signed I pixels",
+  "source_revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+  "source_dirty": true,
+  "source_file": "pillow-rs/src/image.rs",
+  "source_sha256": "a8568471c23b6e50e7b95921c24332d016a2add03f34e8060e878eed95492386",
+  "target_profile": "python-cpu",
+  "features": [
+    "pillow-rs-py/default",
+    "pillow-rs/default"
+  ],
+  "python_runtime": "3.12.13",
+  "pillow_version": "12.2.0",
+  "host": {
+    "machine_id": "Lazys-MacBook-Pro.local",
+    "os": "macOS-15.7.7-arm64-arm-64bit",
+    "architecture": "arm64",
+    "cpu": "arm"
+  },
+  "extension_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/_core.abi3.so",
+  "extension_sha256": "298ad94f3cf8668bfe6c1d73de5616fea83de2856daae3a9deb0eea690645f92",
+  "manifest_sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885",
+  "benchmark_input_sha256": "fd6cb933915300ada3cb8bf8e79cb7a5ab580aa7e40c60db643ca30bfee745e6",
+  "parity_input_sha256": "856dcfce5ff70800578a1b87bae9f1e97ce7c8eaf858d9f75c94f387d14f1ca5",
+  "benchmark_run_id": "migration-benchmark-cec34e9df40e4bed98602afab67c72e1",
+  "benchmark_gate_id": "migration-parity-benchmark-gate-b543f9a3050642588aa6be1b8789588c",
+  "focused_parity_run_id": "migration-parity-792e89ef6113429d8a9f2bd07c724623",
+  "focused_parity_input_sha256": "856dcfce5ff70800578a1b87bae9f1e97ce7c8eaf858d9f75c94f387d14f1ca5",
+  "workloads": [
+    {
+      "workload_id": "pipeline-chain.terminal-read.getcolors.scalar-i-1024x768",
+      "pillow_median_ms": 0.833521,
+      "pillow_p95_ms": 1.994583,
+      "cpu_median_ms": 0.134,
+      "cpu_p95_ms": 0.143333,
+      "cpu_speedup_vs_pillow": 6.220305970149253
+    },
+    {
+      "workload_id": "pipeline-chain.terminal-read.getcolors.late-negative-signed-run-i-1024x768",
+      "pillow_median_ms": 2.744563,
+      "pillow_p95_ms": 3.340833,
+      "cpu_median_ms": 0.1124585,
+      "cpu_p95_ms": 0.141292,
+      "cpu_speedup_vs_pillow": 24.405118332540447
+    }
+  ],
+  "focused_parity": {
+    "selected": 5,
+    "executed": 5,
+    "passed": 5,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  }
+}

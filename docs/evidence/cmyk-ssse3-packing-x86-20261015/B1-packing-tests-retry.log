@@ -1,0 +1,10 @@
+   Compiling pillow-rs v12.2.1 (/home/appunni/pillow-rs-resize-trial-20261015/pillow-rs)
+    Finished `release` profile [optimized] target(s) in 2m 10s
+     Running unittests src/lib.rs (/tmp/pillow-rs-resize-target-20261015/release/deps/pillow_rs-b82456c2a66ce856)
+
+running 2 tests
+test compute::pool_simd::ops::adapters::cmyk_packing_tests::cmyk_conversion_preserves_rounding_length_and_vector_tails ... ok
+test compute::pool_simd::ops::adapters::cmyk_packing_tests::rgb16_packing_preserves_channel_order_across_output_blocks ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 574 filtered out; finished in 0.00s
+

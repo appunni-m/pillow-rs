@@ -1,0 +1,6067 @@
+{
+  "records": [
+    {
+      "boundary": "observed_steps",
+      "capture_errors": [],
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.performance-rgb-noise-1024x768",
+      "child_invocation_id": "bd0833c7e6f745b086ffb83cd4f1964d",
+      "child_repeat": 105,
+      "child_sequence": 0,
+      "group_id": "d79273ac9b184571aaf4c2bb90cda539",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 367917,
+          "setup_ns": 10800291,
+          "terminal_ns": 1466000,
+          "total_ns": 12663625
+        },
+        {
+          "pipeline_ns": 360209,
+          "setup_ns": 565291,
+          "terminal_ns": 1126459,
+          "total_ns": 2075250
+        },
+        {
+          "pipeline_ns": 317042,
+          "setup_ns": 559957,
+          "terminal_ns": 967917,
+          "total_ns": 1861958
+        },
+        {
+          "pipeline_ns": 285792,
+          "setup_ns": 498791,
+          "terminal_ns": 885250,
+          "total_ns": 1682416
+        },
+        {
+          "pipeline_ns": 317166,
+          "setup_ns": 593583,
+          "terminal_ns": 985292,
+          "total_ns": 1917917
+        },
+        {
+          "pipeline_ns": 294125,
+          "setup_ns": 548624,
+          "terminal_ns": 1335375,
+          "total_ns": 2192709
+        },
+        {
+          "pipeline_ns": 282875,
+          "setup_ns": 491458,
+          "terminal_ns": 1055958,
+          "total_ns": 1846542
+        },
+        {
+          "pipeline_ns": 352333,
+          "setup_ns": 514374,
+          "terminal_ns": 1038208,
+          "total_ns": 1918000
+        },
+        {
+          "pipeline_ns": 287292,
+          "setup_ns": 509542,
+          "terminal_ns": 886292,
+          "total_ns": 1696042
+        },
+        {
+          "pipeline_ns": 367083,
+          "setup_ns": 492917,
+          "terminal_ns": 1141250,
+          "total_ns": 2023875
+        },
+        {
+          "pipeline_ns": 283708,
+          "setup_ns": 583125,
+          "terminal_ns": 900625,
+          "total_ns": 1780709
+        },
+        {
+          "pipeline_ns": 305916,
+          "setup_ns": 550499,
+          "terminal_ns": 930584,
+          "total_ns": 1801792
+        },
+        {
+          "pipeline_ns": 318875,
+          "setup_ns": 612083,
+          "terminal_ns": 1276875,
+          "total_ns": 2228166
+        },
+        {
+          "pipeline_ns": 270125,
+          "setup_ns": 485416,
+          "terminal_ns": 908292,
+          "total_ns": 1675667
+        },
+        {
+          "pipeline_ns": 279791,
+          "setup_ns": 556958,
+          "terminal_ns": 923125,
+          "total_ns": 1776250
+        },
+        {
+          "pipeline_ns": 287583,
+          "setup_ns": 682167,
+          "terminal_ns": 904417,
+          "total_ns": 1893709
+        },
+        {
+          "pipeline_ns": 289292,
+          "setup_ns": 518666,
+          "terminal_ns": 884875,
+          "total_ns": 1705750
+        },
+        {
+          "pipeline_ns": 264208,
+          "setup_ns": 512665,
+          "terminal_ns": 851792,
+          "total_ns": 1641125
+        },
+        {
+          "pipeline_ns": 273417,
+          "setup_ns": 529542,
+          "terminal_ns": 839167,
+          "total_ns": 1653833
+        },
+        {
+          "pipeline_ns": 284084,
+          "setup_ns": 520584,
+          "terminal_ns": 920334,
+          "total_ns": 1736959
+        },
+        {
+          "pipeline_ns": 279208,
+          "setup_ns": 512500,
+          "terminal_ns": 841792,
+          "total_ns": 1645041
+        },
+        {
+          "pipeline_ns": 284042,
+          "setup_ns": 518166,
+          "terminal_ns": 882000,
+          "total_ns": 1699541
+        },
+        {
+          "pipeline_ns": 307291,
+          "setup_ns": 507792,
+          "terminal_ns": 1007417,
+          "total_ns": 1835416
+        },
+        {
+          "pipeline_ns": 271166,
+          "setup_ns": 507417,
+          "terminal_ns": 831749,
+          "total_ns": 1620458
+        },
+        {
+          "pipeline_ns": 272250,
+          "setup_ns": 490251,
+          "terminal_ns": 901874,
+          "total_ns": 1677792
+        },
+        {
+          "pipeline_ns": 370625,
+          "setup_ns": 499916,
+          "terminal_ns": 1272708,
+          "total_ns": 2165583
+        },
+        {
+          "pipeline_ns": 319334,
+          "setup_ns": 558333,
+          "terminal_ns": 1088249,
+          "total_ns": 1985625
+        },
+        {
+          "pipeline_ns": 295333,
+          "setup_ns": 548541,
+          "terminal_ns": 782625,
+          "total_ns": 1641083
+        },
+        {
+          "pipeline_ns": 286625,
+          "setup_ns": 621084,
+          "terminal_ns": 881125,
+          "total_ns": 1808416
+        },
+        {
+          "pipeline_ns": 275958,
+          "setup_ns": 555333,
+          "terminal_ns": 1014750,
+          "total_ns": 1862625
+        },
+        {
+          "pipeline_ns": 282500,
+          "setup_ns": 507542,
+          "terminal_ns": 863916,
+          "total_ns": 1665500
+        },
+        {
+          "pipeline_ns": 323208,
+          "setup_ns": 616457,
+          "terminal_ns": 982125,
+          "total_ns": 1941916
+        },
+        {
+          "pipeline_ns": 312125,
+          "setup_ns": 595001,
+          "terminal_ns": 1119791,
+          "total_ns": 2042916
+        },
+        {
+          "pipeline_ns": 286500,
+          "setup_ns": 540334,
+          "terminal_ns": 1174416,
+          "total_ns": 2013208
+        },
+        {
+          "pipeline_ns": 290250,
+          "setup_ns": 547916,
+          "terminal_ns": 879417,
+          "total_ns": 1729458
+        },
+        {
+          "pipeline_ns": 289750,
+          "setup_ns": 626251,
+          "terminal_ns": 897792,
+          "total_ns": 1833292
+        },
+        {
+          "pipeline_ns": 289750,
+          "setup_ns": 506625,
+          "terminal_ns": 1257292,
+          "total_ns": 2069042
+        },
+        {
+          "pipeline_ns": 318084,
+          "setup_ns": 528292,
+          "terminal_ns": 844500,
+          "total_ns": 1703542
+        },
+        {
+          "pipeline_ns": 293875,
+          "setup_ns": 516458,
+          "terminal_ns": 891750,
+          "total_ns": 1713208
+        },
+        {
+          "pipeline_ns": 308083,
+          "setup_ns": 596750,
+          "terminal_ns": 948542,
+          "total_ns": 1865375
+        },
+        {
+          "pipeline_ns": 298959,
+          "setup_ns": 492415,
+          "terminal_ns": 942000,
+          "total_ns": 1744250
+        },
+        {
+          "pipeline_ns": 278917,
+          "setup_ns": 478916,
+          "terminal_ns": 874916,
+          "total_ns": 1644583
+        },
+        {
+          "pipeline_ns": 308167,
+          "setup_ns": 669500,
+          "terminal_ns": 929917,
+          "total_ns": 1922708
+        },
+        {
+          "pipeline_ns": 308500,
+          "setup_ns": 647000,
+          "terminal_ns": 1036084,
+          "total_ns": 2013792
+        },
+        {
+          "pipeline_ns": 315667,
+          "setup_ns": 594959,
+          "terminal_ns": 960250,
+          "total_ns": 1885750
+        },
+        {
+          "pipeline_ns": 302125,
+          "setup_ns": 557791,
+          "terminal_ns": 875833,
+          "total_ns": 1750250
+        },
+        {
+          "pipeline_ns": 324458,
+          "setup_ns": 542042,
+          "terminal_ns": 951376,
+          "total_ns": 1829834
+        },
+        {
+          "pipeline_ns": 309666,
+          "setup_ns": 568166,
+          "terminal_ns": 912208,
+          "total_ns": 1801333
+        },
+        {
+          "pipeline_ns": 286833,
+          "setup_ns": 512750,
+          "terminal_ns": 838792,
+          "total_ns": 1649375
+        },
+        {
+          "pipeline_ns": 317667,
+          "setup_ns": 544332,
+          "terminal_ns": 1003000,
+          "total_ns": 1878250
+        },
+        {
+          "pipeline_ns": 278834,
+          "setup_ns": 518709,
+          "terminal_ns": 923541,
+          "total_ns": 1731792
+        },
+        {
+          "pipeline_ns": 279541,
+          "setup_ns": 555875,
+          "terminal_ns": 814833,
+          "total_ns": 1660333
+        },
+        {
+          "pipeline_ns": 308333,
+          "setup_ns": 549958,
+          "terminal_ns": 912584,
+          "total_ns": 1782791
+        },
+        {
+          "pipeline_ns": 277834,
+          "setup_ns": 488042,
+          "terminal_ns": 925916,
+          "total_ns": 1701417
+        },
+        {
+          "pipeline_ns": 278708,
+          "setup_ns": 499375,
+          "terminal_ns": 805084,
+          "total_ns": 1593375
+        },
+        {
+          "pipeline_ns": 282375,
+          "setup_ns": 532791,
+          "terminal_ns": 855792,
+          "total_ns": 1680666
+        },
+        {
+          "pipeline_ns": 280125,
+          "setup_ns": 537666,
+          "terminal_ns": 827541,
+          "total_ns": 1655000
+        },
+        {
+          "pipeline_ns": 279625,
+          "setup_ns": 525334,
+          "terminal_ns": 818125,
+          "total_ns": 1633708
+        },
+        {
+          "pipeline_ns": 289959,
+          "setup_ns": 528084,
+          "terminal_ns": 943791,
+          "total_ns": 1773500
+        },
+        {
+          "pipeline_ns": 288459,
+          "setup_ns": 515957,
+          "terminal_ns": 859499,
+          "total_ns": 1681917
+        },
+        {
+          "pipeline_ns": 294792,
+          "setup_ns": 582126,
+          "terminal_ns": 907625,
+          "total_ns": 1802583
+        },
+        {
+          "pipeline_ns": 283792,
+          "setup_ns": 486416,
+          "terminal_ns": 770791,
+          "total_ns": 1552625
+        },
+        {
+          "pipeline_ns": 284792,
+          "setup_ns": 476418,
+          "terminal_ns": 1061500,
+          "total_ns": 1841666
+        },
+        {
+          "pipeline_ns": 294250,
+          "setup_ns": 505917,
+          "terminal_ns": 886500,
+          "total_ns": 1699333
+        },
+        {
+          "pipeline_ns": 266917,
+          "setup_ns": 502584,
+          "terminal_ns": 837125,
+          "total_ns": 1618666
+        },
+        {
+          "pipeline_ns": 283708,
+          "setup_ns": 487042,
+          "terminal_ns": 1048291,
+          "total_ns": 1831041
+        },
+        {
+          "pipeline_ns": 264375,
+          "setup_ns": 499959,
+          "terminal_ns": 845584,
+          "total_ns": 1620292
+        },
+        {
+          "pipeline_ns": 262875,
+          "setup_ns": 504666,
+          "terminal_ns": 874916,
+          "total_ns": 1654709
+        },
+        {
+          "pipeline_ns": 268708,
+          "setup_ns": 530625,
+          "terminal_ns": 970834,
+          "total_ns": 1786917
+        },
+        {
+          "pipeline_ns": 289833,
+          "setup_ns": 562375,
+          "terminal_ns": 869958,
+          "total_ns": 1732708
+        },
+        {
+          "pipeline_ns": 260167,
+          "setup_ns": 487708,
+          "terminal_ns": 873875,
+          "total_ns": 1631917
+        },
+        {
+          "pipeline_ns": 284584,
+          "setup_ns": 425750,
+          "terminal_ns": 995292,
+          "total_ns": 1716834
+        },
+        {
+          "pipeline_ns": 281333,
+          "setup_ns": 485291,
+          "terminal_ns": 929542,
+          "total_ns": 1706583
+        },
+        {
+          "pipeline_ns": 265750,
+          "setup_ns": 488375,
+          "terminal_ns": 886958,
+          "total_ns": 1651708
+        },
+        {
+          "pipeline_ns": 293166,
+          "setup_ns": 466583,
+          "terminal_ns": 950625,
+          "total_ns": 1723000
+        },
+        {
+          "pipeline_ns": 280333,
+          "setup_ns": 481876,
+          "terminal_ns": 870750,
+          "total_ns": 1642459
+        },
+        {
+          "pipeline_ns": 292792,
+          "setup_ns": 537583,
+          "terminal_ns": 951292,
+          "total_ns": 1793625
+        },
+        {
+          "pipeline_ns": 282792,
+          "setup_ns": 663209,
+          "terminal_ns": 948208,
+          "total_ns": 1907541
+        },
+        {
+          "pipeline_ns": 278625,
+          "setup_ns": 452125,
+          "terminal_ns": 851166,
+          "total_ns": 1591250
+        },
+        {
+          "pipeline_ns": 299375,
+          "setup_ns": 603124,
+          "terminal_ns": 865167,
+          "total_ns": 1784292
+        },
+        {
+          "pipeline_ns": 264833,
+          "setup_ns": 495085,
+          "terminal_ns": 951876,
+          "total_ns": 1722375
+        },
+        {
+          "pipeline_ns": 282792,
+          "setup_ns": 553833,
+          "terminal_ns": 843999,
+          "total_ns": 1690875
+        },
+        {
+          "pipeline_ns": 288292,
+          "setup_ns": 573541,
+          "terminal_ns": 875000,
+          "total_ns": 1751667
+        },
+        {
+          "pipeline_ns": 304250,
+          "setup_ns": 564291,
+          "terminal_ns": 1025876,
+          "total_ns": 1908000
+        },
+        {
+          "pipeline_ns": 295167,
+          "setup_ns": 530667,
+          "terminal_ns": 1123416,
+          "total_ns": 1964375
+        },
+        {
+          "pipeline_ns": 274708,
+          "setup_ns": 511542,
+          "terminal_ns": 890625,
+          "total_ns": 1694417
+        },
+        {
+          "pipeline_ns": 279917,
+          "setup_ns": 592290,
+          "terminal_ns": 859957,
+          "total_ns": 1747250
+        },
+        {
+          "pipeline_ns": 285042,
+          "setup_ns": 539082,
+          "terminal_ns": 888916,
+          "total_ns": 1723917
+        },
+        {
+          "pipeline_ns": 280500,
+          "setup_ns": 471708,
+          "terminal_ns": 886292,
+          "total_ns": 1648958
+        },
+        {
+          "pipeline_ns": 292417,
+          "setup_ns": 586084,
+          "terminal_ns": 933334,
+          "total_ns": 1826458
+        },
+        {
+          "pipeline_ns": 294292,
+          "setup_ns": 537500,
+          "terminal_ns": 1027791,
+          "total_ns": 1872917
+        },
+        {
+          "pipeline_ns": 270542,
+          "setup_ns": 477376,
+          "terminal_ns": 865292,
+          "total_ns": 1630042
+        },
+        {
+          "pipeline_ns": 279875,
+          "setup_ns": 491334,
+          "terminal_ns": 881458,
+          "total_ns": 1664333
+        },
+        {
+          "pipeline_ns": 309208,
+          "setup_ns": 456709,
+          "terminal_ns": 1005417,
+          "total_ns": 1783208
+        },
+        {
+          "pipeline_ns": 281625,
+          "setup_ns": 485125,
+          "terminal_ns": 844333,
+          "total_ns": 1621375
+        },
+        {
+          "pipeline_ns": 309125,
+          "setup_ns": 551000,
+          "terminal_ns": 798916,
+          "total_ns": 1675083
+        },
+        {
+          "pipeline_ns": 303875,
+          "setup_ns": 539624,
+          "terminal_ns": 1012584,
+          "total_ns": 1869500
+        },
+        {
+          "pipeline_ns": 273333,
+          "setup_ns": 540042,
+          "terminal_ns": 1108916,
+          "total_ns": 1939625
+        },
+        {
+          "pipeline_ns": 325000,
+          "setup_ns": 671999,
+          "terminal_ns": 1155667,
+          "total_ns": 2177834
+        },
+        {
+          "pipeline_ns": 307916,
+          "setup_ns": 580125,
+          "terminal_ns": 936666,
+          "total_ns": 1840750
+        },
+        {
+          "pipeline_ns": 309625,
+          "setup_ns": 591041,
+          "terminal_ns": 950333,
+          "total_ns": 1867417
+        },
+        {
+          "pipeline_ns": 281625,
+          "setup_ns": 558124,
+          "terminal_ns": 975792,
+          "total_ns": 1829833
+        },
+        {
+          "pipeline_ns": 299750,
+          "setup_ns": 594417,
+          "terminal_ns": 870166,
+          "total_ns": 1778083
+        },
+        {
+          "pipeline_ns": 302625,
+          "setup_ns": 625416,
+          "terminal_ns": 913209,
+          "total_ns": 1855584
+        },
+        {
+          "pipeline_ns": 283625,
+          "setup_ns": 505000,
+          "terminal_ns": 928249,
+          "total_ns": 1728291
+        }
+      ],
+      "planned_repeat": 105,
+      "profile": "pillow",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 1,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 2,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 3,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 4,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 7,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 8,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 9,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 10,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 11,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 12,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 13,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 14,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 15,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 16,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 17,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 18,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 19,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 20,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 21,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 22,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 23,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 24,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 25,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 26,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 27,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 28,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 29,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 30,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 31,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 32,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 33,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 34,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 35,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 36,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 37,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 38,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 39,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 40,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 41,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 42,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 43,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 44,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 45,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 46,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 47,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 48,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 49,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 50,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 51,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 52,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 53,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 54,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 55,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 56,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 57,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 58,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 59,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 60,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 61,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 62,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 63,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 64,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 65,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 66,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 67,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 68,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 69,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 70,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 71,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 72,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 73,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 74,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 75,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 76,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 77,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 78,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 79,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 80,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 81,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 82,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 83,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 84,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 85,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 86,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 87,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 88,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 89,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 90,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 91,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 92,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 93,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 94,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 95,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 96,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 97,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 98,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 99,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 100,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 101,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 102,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 103,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 104,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        }
+      ],
+      "side": "source",
+      "step_ids": [
+        "call",
+        "observe-receiver"
+      ],
+      "subject_kind": "oracle",
+      "throughput_operations_per_second": [
+        740.6721599851866,
+        1025.2466999871845,
+        1160.0362859350241,
+        1255.229600322343,
+        1196.6503363784095,
+        1035.821826216029,
+        1276.2557718667283,
+        1073.5373054213635,
+        1299.6853461776905,
+        952.2304092876745,
+        1232.7279406416842,
+        1240.1178111920633,
+        1115.137998327293,
+        1290.8772414469702,
+        1286.1041590036293,
+        1294.847026772257,
+        1346.3480309660047,
+        1426.0249554367201,
+        1413.0940117315065,
+        1337.4956197018455,
+        1423.3193800590109,
+        1335.1134846461948,
+        1147.3929511061442,
+        1474.8370673749816,
+        1310.8307389808292,
+        950.7962918944617,
+        1089.3732726625046,
+        1385.1221262178685,
+        1316.5100897333277,
+        1315.069646088457,
+        1358.695652173913,
+        1146.405102878394,
+        1162.7906976744187,
+        1090.5624903212579,
+        1333.7779259753252,
+        1291.851132242925,
+        1053.0938317134994,
+        1301.6596160104132,
+        1316.4390324173112,
+        1200.8405884118883,
+        1238.390092879257,
+        1365.4990284474413,
+        1239.4123202542282,
+        1293.5204971257974,
+        1211.814219185685,
+        1286.7263879274183,
+        1214.2686277914518,
+        1293.9406055383247,
+        1385.9207087044135,
+        1128.3497884344147,
+        1333.1111481419764,
+        1428.0614066404855,
+        1237.1766638788952,
+        1267.6954437758054,
+        1461.8109206046636,
+        1376.0685172036085,
+        1373.0775198375375,
+        1430.0177894213004,
+        1208.0329358099618,
+        1432.5785554450879,
+        1281.9822522377,
+        1427.5517487508923,
+        1347.0281192119885,
+        1293.5221703232382,
+        1445.7824357675008,
+        1223.9272889276194,
+        1393.4039045964214,
+        1380.3403643270358,
+        1180.9275477330914,
+        1355.779620734209,
+        1364.4891693672182,
+        1250.9116018298334,
+        1296.386323124291,
+        1317.5959671022638,
+        1200.3605883207315,
+        1426.3646387089689,
+        1219.14050594331,
+        1227.0555942078067,
+        1333.7032136912637,
+        1297.9275990026724,
+        1360.62196751379,
+        1397.8682509173511,
+        1327.360212377634,
+        1161.9462599854758,
+        1186.7675419077289,
+        1299.1230919129587,
+        1347.331206346469,
+        1238.5818238117356,
+        1341.0812064902966,
+        1189.885497318593,
+        1100.2613120616147,
+        1327.7285485537052,
+        1295.058316475991,
+        1136.1480264540708,
+        1391.8698100654458,
+        1331.7795904777759,
+        1103.1950735720795,
+        1292.129895234108,
+        1042.5267512364367,
+        1253.8540338365049,
+        1208.8244182532487,
+        1253.5899682716379,
+        1295.5465587044534,
+        1297.5772934354268,
+        1365.0311773120898
+      ],
+      "timings_ns": [
+        1350125,
+        975375,
+        862042,
+        796667,
+        835666,
+        965417,
+        783542,
+        931500,
+        769417,
+        1050166,
+        811209,
+        806375,
+        896750,
+        774667,
+        777542,
+        772292,
+        742750,
+        701250,
+        707667,
+        747666,
+        702583,
+        749000,
+        871541,
+        678041,
+        762875,
+        1051750,
+        917959,
+        721958,
+        759584,
+        760416,
+        736000,
+        872292,
+        860000,
+        916958,
+        749750,
+        774083,
+        949583,
+        768250,
+        759625,
+        832750,
+        807500,
+        732333,
+        806834,
+        773084,
+        825209,
+        777166,
+        823541,
+        772833,
+        721542,
+        886250,
+        750125,
+        700250,
+        808292,
+        788833,
+        684083,
+        726708,
+        728291,
+        699292,
+        827792,
+        698042,
+        780042,
+        700500,
+        742375,
+        773083,
+        691667,
+        817042,
+        717667,
+        724459,
+        846792,
+        737583,
+        732875,
+        799417,
+        771375,
+        758958,
+        833083,
+        701083,
+        820250,
+        814959,
+        749792,
+        770459,
+        734958,
+        715375,
+        753375,
+        860625,
+        842625,
+        769750,
+        742208,
+        807375,
+        745667,
+        840417,
+        908875,
+        753166,
+        772166,
+        880167,
+        718458,
+        750875,
+        906458,
+        773916,
+        959208,
+        797541,
+        827250,
+        797709,
+        771875,
+        770667,
+        732584
+      ],
+      "workload_ids": [
+        "pil-imagedraw-imagedraw.text.standard"
+      ]
+    },
+    {
+      "boundary": "observed_steps",
+      "capture_errors": [],
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.performance-rgb-rgba-context-noise-1024x768",
+      "child_invocation_id": "bd0833c7e6f745b086ffb83cd4f1964d",
+      "child_repeat": 105,
+      "child_sequence": 0,
+      "group_id": "d79273ac9b184571aaf4c2bb90cda539",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 287916,
+          "setup_ns": 562625,
+          "terminal_ns": 852292,
+          "total_ns": 1717625
+        },
+        {
+          "pipeline_ns": 270375,
+          "setup_ns": 551417,
+          "terminal_ns": 873166,
+          "total_ns": 1708917
+        },
+        {
+          "pipeline_ns": 288666,
+          "setup_ns": 541500,
+          "terminal_ns": 1224083,
+          "total_ns": 2071500
+        },
+        {
+          "pipeline_ns": 300625,
+          "setup_ns": 553583,
+          "terminal_ns": 898166,
+          "total_ns": 1764083
+        },
+        {
+          "pipeline_ns": 287583,
+          "setup_ns": 494249,
+          "terminal_ns": 863209,
+          "total_ns": 1656666
+        },
+        {
+          "pipeline_ns": 307541,
+          "setup_ns": 519749,
+          "terminal_ns": 1018500,
+          "total_ns": 1859625
+        },
+        {
+          "pipeline_ns": 280667,
+          "setup_ns": 498500,
+          "terminal_ns": 927875,
+          "total_ns": 1718375
+        },
+        {
+          "pipeline_ns": 285583,
+          "setup_ns": 526875,
+          "terminal_ns": 858458,
+          "total_ns": 1683583
+        },
+        {
+          "pipeline_ns": 289291,
+          "setup_ns": 562666,
+          "terminal_ns": 989750,
+          "total_ns": 1856250
+        },
+        {
+          "pipeline_ns": 307291,
+          "setup_ns": 592958,
+          "terminal_ns": 889624,
+          "total_ns": 1803167
+        },
+        {
+          "pipeline_ns": 313750,
+          "setup_ns": 584168,
+          "terminal_ns": 924583,
+          "total_ns": 1844125
+        },
+        {
+          "pipeline_ns": 301708,
+          "setup_ns": 563168,
+          "terminal_ns": 842708,
+          "total_ns": 1719708
+        },
+        {
+          "pipeline_ns": 294667,
+          "setup_ns": 513000,
+          "terminal_ns": 969209,
+          "total_ns": 1790459
+        },
+        {
+          "pipeline_ns": 269417,
+          "setup_ns": 520833,
+          "terminal_ns": 828875,
+          "total_ns": 1630042
+        },
+        {
+          "pipeline_ns": 277041,
+          "setup_ns": 515209,
+          "terminal_ns": 822501,
+          "total_ns": 1625917
+        },
+        {
+          "pipeline_ns": 291917,
+          "setup_ns": 541876,
+          "terminal_ns": 946709,
+          "total_ns": 1791916
+        },
+        {
+          "pipeline_ns": 276041,
+          "setup_ns": 493125,
+          "terminal_ns": 793459,
+          "total_ns": 1572875
+        },
+        {
+          "pipeline_ns": 283292,
+          "setup_ns": 504376,
+          "terminal_ns": 823750,
+          "total_ns": 1624334
+        },
+        {
+          "pipeline_ns": 278167,
+          "setup_ns": 535083,
+          "terminal_ns": 1009208,
+          "total_ns": 1836084
+        },
+        {
+          "pipeline_ns": 280750,
+          "setup_ns": 513124,
+          "terminal_ns": 874834,
+          "total_ns": 1679208
+        },
+        {
+          "pipeline_ns": 277750,
+          "setup_ns": 533499,
+          "terminal_ns": 891042,
+          "total_ns": 1716917
+        },
+        {
+          "pipeline_ns": 262958,
+          "setup_ns": 510209,
+          "terminal_ns": 1166000,
+          "total_ns": 1953750
+        },
+        {
+          "pipeline_ns": 284166,
+          "setup_ns": 480875,
+          "terminal_ns": 889625,
+          "total_ns": 1665459
+        },
+        {
+          "pipeline_ns": 272291,
+          "setup_ns": 501709,
+          "terminal_ns": 842792,
+          "total_ns": 1629417
+        },
+        {
+          "pipeline_ns": 276375,
+          "setup_ns": 526375,
+          "terminal_ns": 1170041,
+          "total_ns": 1991000
+        },
+        {
+          "pipeline_ns": 291708,
+          "setup_ns": 556626,
+          "terminal_ns": 1173916,
+          "total_ns": 2036334
+        },
+        {
+          "pipeline_ns": 347125,
+          "setup_ns": 671166,
+          "terminal_ns": 892666,
+          "total_ns": 1938041
+        },
+        {
+          "pipeline_ns": 308959,
+          "setup_ns": 627375,
+          "terminal_ns": 916167,
+          "total_ns": 1869042
+        },
+        {
+          "pipeline_ns": 322041,
+          "setup_ns": 602125,
+          "terminal_ns": 1025541,
+          "total_ns": 1968416
+        },
+        {
+          "pipeline_ns": 285084,
+          "setup_ns": 544917,
+          "terminal_ns": 853709,
+          "total_ns": 1697334
+        },
+        {
+          "pipeline_ns": 311167,
+          "setup_ns": 620917,
+          "terminal_ns": 940375,
+          "total_ns": 1887375
+        },
+        {
+          "pipeline_ns": 358875,
+          "setup_ns": 611333,
+          "terminal_ns": 1152999,
+          "total_ns": 2146292
+        },
+        {
+          "pipeline_ns": 310292,
+          "setup_ns": 611958,
+          "terminal_ns": 911125,
+          "total_ns": 1847292
+        },
+        {
+          "pipeline_ns": 323500,
+          "setup_ns": 565000,
+          "terminal_ns": 819625,
+          "total_ns": 1725250
+        },
+        {
+          "pipeline_ns": 296667,
+          "setup_ns": 543249,
+          "terminal_ns": 837458,
+          "total_ns": 1690958
+        },
+        {
+          "pipeline_ns": 300291,
+          "setup_ns": 592250,
+          "terminal_ns": 910042,
+          "total_ns": 1819417
+        },
+        {
+          "pipeline_ns": 291541,
+          "setup_ns": 552791,
+          "terminal_ns": 865709,
+          "total_ns": 1725500
+        },
+        {
+          "pipeline_ns": 271000,
+          "setup_ns": 526958,
+          "terminal_ns": 909750,
+          "total_ns": 1720666
+        },
+        {
+          "pipeline_ns": 271791,
+          "setup_ns": 438168,
+          "terminal_ns": 947000,
+          "total_ns": 1675541
+        },
+        {
+          "pipeline_ns": 310333,
+          "setup_ns": 510083,
+          "terminal_ns": 784416,
+          "total_ns": 1620708
+        },
+        {
+          "pipeline_ns": 288500,
+          "setup_ns": 441875,
+          "terminal_ns": 805458,
+          "total_ns": 1547583
+        },
+        {
+          "pipeline_ns": 280042,
+          "setup_ns": 425417,
+          "terminal_ns": 883709,
+          "total_ns": 1600250
+        },
+        {
+          "pipeline_ns": 279625,
+          "setup_ns": 472042,
+          "terminal_ns": 920624,
+          "total_ns": 1682375
+        },
+        {
+          "pipeline_ns": 297209,
+          "setup_ns": 523916,
+          "terminal_ns": 841916,
+          "total_ns": 1679459
+        },
+        {
+          "pipeline_ns": 311375,
+          "setup_ns": 457875,
+          "terminal_ns": 834958,
+          "total_ns": 1615625
+        },
+        {
+          "pipeline_ns": 279833,
+          "setup_ns": 467042,
+          "terminal_ns": 850042,
+          "total_ns": 1607292
+        },
+        {
+          "pipeline_ns": 278084,
+          "setup_ns": 452000,
+          "terminal_ns": 795333,
+          "total_ns": 1536167
+        },
+        {
+          "pipeline_ns": 276584,
+          "setup_ns": 453918,
+          "terminal_ns": 829834,
+          "total_ns": 1570542
+        },
+        {
+          "pipeline_ns": 260917,
+          "setup_ns": 480542,
+          "terminal_ns": 897958,
+          "total_ns": 1649333
+        },
+        {
+          "pipeline_ns": 292000,
+          "setup_ns": 495167,
+          "terminal_ns": 854917,
+          "total_ns": 1652833
+        },
+        {
+          "pipeline_ns": 265417,
+          "setup_ns": 466084,
+          "terminal_ns": 1069334,
+          "total_ns": 1813375
+        },
+        {
+          "pipeline_ns": 292542,
+          "setup_ns": 555500,
+          "terminal_ns": 953834,
+          "total_ns": 1815375
+        },
+        {
+          "pipeline_ns": 283000,
+          "setup_ns": 489333,
+          "terminal_ns": 866042,
+          "total_ns": 1649125
+        },
+        {
+          "pipeline_ns": 305833,
+          "setup_ns": 470624,
+          "terminal_ns": 875584,
+          "total_ns": 1662542
+        },
+        {
+          "pipeline_ns": 279791,
+          "setup_ns": 469542,
+          "terminal_ns": 924207,
+          "total_ns": 1683250
+        },
+        {
+          "pipeline_ns": 305000,
+          "setup_ns": 523374,
+          "terminal_ns": 867333,
+          "total_ns": 1707625
+        },
+        {
+          "pipeline_ns": 281208,
+          "setup_ns": 512376,
+          "terminal_ns": 803041,
+          "total_ns": 1607209
+        },
+        {
+          "pipeline_ns": 287375,
+          "setup_ns": 499625,
+          "terminal_ns": 885125,
+          "total_ns": 1682333
+        },
+        {
+          "pipeline_ns": 264958,
+          "setup_ns": 504000,
+          "terminal_ns": 812583,
+          "total_ns": 1592334
+        },
+        {
+          "pipeline_ns": 277500,
+          "setup_ns": 567875,
+          "terminal_ns": 750417,
+          "total_ns": 1606417
+        },
+        {
+          "pipeline_ns": 282584,
+          "setup_ns": 514334,
+          "terminal_ns": 875375,
+          "total_ns": 1682750
+        },
+        {
+          "pipeline_ns": 275667,
+          "setup_ns": 480249,
+          "terminal_ns": 867916,
+          "total_ns": 1633875
+        },
+        {
+          "pipeline_ns": 283875,
+          "setup_ns": 530666,
+          "terminal_ns": 930750,
+          "total_ns": 1756375
+        },
+        {
+          "pipeline_ns": 263541,
+          "setup_ns": 520209,
+          "terminal_ns": 915958,
+          "total_ns": 1709917
+        },
+        {
+          "pipeline_ns": 292458,
+          "setup_ns": 512458,
+          "terminal_ns": 969416,
+          "total_ns": 1788375
+        },
+        {
+          "pipeline_ns": 294333,
+          "setup_ns": 578291,
+          "terminal_ns": 915376,
+          "total_ns": 1798500
+        },
+        {
+          "pipeline_ns": 289959,
+          "setup_ns": 554500,
+          "terminal_ns": 950750,
+          "total_ns": 1805208
+        },
+        {
+          "pipeline_ns": 292000,
+          "setup_ns": 521125,
+          "terminal_ns": 866375,
+          "total_ns": 1689042
+        },
+        {
+          "pipeline_ns": 262750,
+          "setup_ns": 481917,
+          "terminal_ns": 823833,
+          "total_ns": 1578625
+        },
+        {
+          "pipeline_ns": 292042,
+          "setup_ns": 491208,
+          "terminal_ns": 867376,
+          "total_ns": 1659917
+        },
+        {
+          "pipeline_ns": 260541,
+          "setup_ns": 517167,
+          "terminal_ns": 901416,
+          "total_ns": 1689375
+        },
+        {
+          "pipeline_ns": 283292,
+          "setup_ns": 530709,
+          "terminal_ns": 828125,
+          "total_ns": 1651917
+        },
+        {
+          "pipeline_ns": 277458,
+          "setup_ns": 454334,
+          "terminal_ns": 895916,
+          "total_ns": 1644959
+        },
+        {
+          "pipeline_ns": 286000,
+          "setup_ns": 518501,
+          "terminal_ns": 871750,
+          "total_ns": 1686542
+        },
+        {
+          "pipeline_ns": 285125,
+          "setup_ns": 484500,
+          "terminal_ns": 800292,
+          "total_ns": 1579625
+        },
+        {
+          "pipeline_ns": 277583,
+          "setup_ns": 461250,
+          "terminal_ns": 828291,
+          "total_ns": 1576250
+        },
+        {
+          "pipeline_ns": 294250,
+          "setup_ns": 494875,
+          "terminal_ns": 804542,
+          "total_ns": 1603208
+        },
+        {
+          "pipeline_ns": 288125,
+          "setup_ns": 491084,
+          "terminal_ns": 777208,
+          "total_ns": 1566042
+        },
+        {
+          "pipeline_ns": 276042,
+          "setup_ns": 463291,
+          "terminal_ns": 837458,
+          "total_ns": 1585958
+        },
+        {
+          "pipeline_ns": 311667,
+          "setup_ns": 472709,
+          "terminal_ns": 914833,
+          "total_ns": 1709791
+        },
+        {
+          "pipeline_ns": 285375,
+          "setup_ns": 528292,
+          "terminal_ns": 860667,
+          "total_ns": 1685208
+        },
+        {
+          "pipeline_ns": 279875,
+          "setup_ns": 535167,
+          "terminal_ns": 890875,
+          "total_ns": 1716375
+        },
+        {
+          "pipeline_ns": 271458,
+          "setup_ns": 550875,
+          "terminal_ns": 850126,
+          "total_ns": 1686500
+        },
+        {
+          "pipeline_ns": 272416,
+          "setup_ns": 496708,
+          "terminal_ns": 1133083,
+          "total_ns": 1918416
+        },
+        {
+          "pipeline_ns": 296625,
+          "setup_ns": 519458,
+          "terminal_ns": 937125,
+          "total_ns": 1765042
+        },
+        {
+          "pipeline_ns": 284791,
+          "setup_ns": 534291,
+          "terminal_ns": 916584,
+          "total_ns": 1750125
+        },
+        {
+          "pipeline_ns": 265209,
+          "setup_ns": 498167,
+          "terminal_ns": 867125,
+          "total_ns": 1641666
+        },
+        {
+          "pipeline_ns": 287167,
+          "setup_ns": 546875,
+          "terminal_ns": 1057293,
+          "total_ns": 1904542
+        },
+        {
+          "pipeline_ns": 280791,
+          "setup_ns": 502041,
+          "terminal_ns": 890750,
+          "total_ns": 1682958
+        },
+        {
+          "pipeline_ns": 265667,
+          "setup_ns": 583917,
+          "terminal_ns": 894416,
+          "total_ns": 1756708
+        },
+        {
+          "pipeline_ns": 293083,
+          "setup_ns": 549750,
+          "terminal_ns": 986416,
+          "total_ns": 1846917
+        },
+        {
+          "pipeline_ns": 272792,
+          "setup_ns": 536668,
+          "terminal_ns": 830750,
+          "total_ns": 1654500
+        },
+        {
+          "pipeline_ns": 284875,
+          "setup_ns": 551708,
+          "terminal_ns": 878126,
+          "total_ns": 1729500
+        },
+        {
+          "pipeline_ns": 307958,
+          "setup_ns": 595375,
+          "terminal_ns": 815001,
+          "total_ns": 1729666
+        },
+        {
+          "pipeline_ns": 279541,
+          "setup_ns": 475000,
+          "terminal_ns": 876709,
+          "total_ns": 1642708
+        },
+        {
+          "pipeline_ns": 279750,
+          "setup_ns": 542791,
+          "terminal_ns": 943875,
+          "total_ns": 1780875
+        },
+        {
+          "pipeline_ns": 299500,
+          "setup_ns": 680707,
+          "terminal_ns": 1004124,
+          "total_ns": 1998375
+        },
+        {
+          "pipeline_ns": 300875,
+          "setup_ns": 522500,
+          "terminal_ns": 876208,
+          "total_ns": 1712959
+        },
+        {
+          "pipeline_ns": 282292,
+          "setup_ns": 508833,
+          "terminal_ns": 817125,
+          "total_ns": 1619166
+        },
+        {
+          "pipeline_ns": 281750,
+          "setup_ns": 525625,
+          "terminal_ns": 803541,
+          "total_ns": 1622208
+        },
+        {
+          "pipeline_ns": 291500,
+          "setup_ns": 510249,
+          "terminal_ns": 875625,
+          "total_ns": 1688792
+        },
+        {
+          "pipeline_ns": 280333,
+          "setup_ns": 489125,
+          "terminal_ns": 871292,
+          "total_ns": 1650542
+        },
+        {
+          "pipeline_ns": 287167,
+          "setup_ns": 498542,
+          "terminal_ns": 903958,
+          "total_ns": 1700250
+        },
+        {
+          "pipeline_ns": 326417,
+          "setup_ns": 508750,
+          "terminal_ns": 1163583,
+          "total_ns": 2014542
+        },
+        {
+          "pipeline_ns": 267792,
+          "setup_ns": 529958,
+          "terminal_ns": 925125,
+          "total_ns": 1734167
+        }
+      ],
+      "planned_repeat": 105,
+      "profile": "pillow",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 1,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 2,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 3,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 4,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 7,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 8,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 9,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 10,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 11,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 12,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 13,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 14,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 15,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 16,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 17,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 18,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 19,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 20,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 21,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 22,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 23,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 24,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 25,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 26,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 27,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 28,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 29,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 30,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 31,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 32,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 33,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 34,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 35,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 36,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 37,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 38,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 39,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 40,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 41,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 42,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 43,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 44,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 45,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 46,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 47,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 48,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 49,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 50,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 51,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 52,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 53,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 54,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 55,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 56,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 57,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 58,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 59,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 60,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 61,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 62,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 63,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 64,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 65,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 66,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 67,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 68,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 69,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 70,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 71,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 72,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 73,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 74,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 75,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 76,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 77,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 78,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 79,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 80,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 81,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 82,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 83,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 84,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 85,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 86,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 87,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 88,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 89,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 90,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 91,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 92,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 93,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 94,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 95,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 96,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 97,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 98,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 99,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 100,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 101,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 102,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 103,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 104,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        }
+      ],
+      "side": "source",
+      "step_ids": [
+        "call",
+        "observe-receiver"
+      ],
+      "subject_kind": "oracle",
+      "throughput_operations_per_second": [
+        1335.8554283821188,
+        1424.4162030191926,
+        1107.1634582914917,
+        1317.5230566534915,
+        1339.7336877375515,
+        1123.331711991229,
+        1258.916274514247,
+        1347.7088948787061,
+        1245.6526721741122,
+        1274.222978827511,
+        1216.54501216545,
+        1293.2428063368898,
+        1399.825021872266,
+        1455.3392759687101,
+        1365.3442852149599,
+        1369.3940431359124,
+        1440.6627048442283,
+        1409.278407177173,
+        1269.1692145238649,
+        1376.1480515119738,
+        1334.4453711426188,
+        1177.3944966226438,
+        1382.248337500812,
+        1358.156818218859,
+        1155.3454367321285,
+        1058.0611030287,
+        1201.8624059843132,
+        1240.5024034734067,
+        1135.3418287177903,
+        1328.97782999184,
+        1222.1831123626266,
+        1044.8862223392496,
+        1211.265251343596,
+        1303.7095752253463,
+        1322.604366710577,
+        1226.554412406843,
+        1304.2775085169321,
+        1370.6459717400214,
+        1253.9184952978057,
+        1338.3136445091,
+        1436.5236128568863,
+        1330.3037881730672,
+        1310.0442401939913,
+        1310.258802318634,
+        1346.1214874642437,
+        1345.1418855660895,
+        1468.5171941335675,
+        1465.8264549426935,
+        1427.8065322148848,
+        1376.305253494783,
+        1323.4077750206782,
+        1257.861635220126,
+        1431.0409964624666,
+        1296.735985850017,
+        1306.7624959163672,
+        1267.494594135556,
+        1428.1470648721522,
+        1319.1150321072598,
+        1396.3243158709015,
+        1476.8321949418498,
+        1372.133612882688,
+        1339.2097858737473,
+        1305.2001785513844,
+        1336.524954925696,
+        1179.1868798950995,
+        1358.081194242279,
+        1262.2278321236984,
+        1342.957864696995,
+        1410.853128778441,
+        1276.527844263603,
+        1330.082611430996,
+        1413.9271827500884,
+        1380.5785728683177,
+        1350.7435167688054,
+        1417.3520745073638,
+        1401.7067180999586,
+        1373.703738809466,
+        1426.0249554367201,
+        1397.6240391334732,
+        1243.2661596627267,
+        1319.6250681256442,
+        1329.196872665598,
+        1330.2294645826405,
+        1172.4470259122518,
+        1297.2978582909657,
+        1279.250052449252,
+        1422.054356605727,
+        1214.8217977904822,
+        1378.1223083548664,
+        1293.1742384173617,
+        1242.4289485945023,
+        1428.1450252710263,
+        1309.4729895006456,
+        1258.2573136206354,
+        1358.389276331697,
+        1311.117754107732,
+        1098.7501716797144,
+        1314.5648527424453,
+        1373.8622703074018,
+        1395.9968394631555,
+        1376.7789705272926,
+        1371.1928829604603,
+        1289.6985329679187,
+        1043.9317811459657,
+        1417.9369018078696
+      ],
+      "timings_ns": [
+        748584,
+        702042,
+        903209,
+        759000,
+        746417,
+        890209,
+        794334,
+        742000,
+        802792,
+        784792,
+        822000,
+        773250,
+        714375,
+        687125,
+        732416,
+        730250,
+        694125,
+        709583,
+        787917,
+        726666,
+        749375,
+        849333,
+        723459,
+        736292,
+        865542,
+        945125,
+        832042,
+        806125,
+        880792,
+        752458,
+        818208,
+        957042,
+        825583,
+        767042,
+        756084,
+        815292,
+        766708,
+        729583,
+        797500,
+        747209,
+        696125,
+        751708,
+        763333,
+        763208,
+        742875,
+        743416,
+        680959,
+        682209,
+        700375,
+        726583,
+        755625,
+        795000,
+        698792,
+        771167,
+        765250,
+        788958,
+        700208,
+        758084,
+        716166,
+        677125,
+        728792,
+        746709,
+        766166,
+        748209,
+        848042,
+        736333,
+        792250,
+        744625,
+        708791,
+        783375,
+        751833,
+        707250,
+        724334,
+        740333,
+        705541,
+        713416,
+        727959,
+        701250,
+        715500,
+        804333,
+        757791,
+        752334,
+        751750,
+        852917,
+        770833,
+        781708,
+        703208,
+        823166,
+        725625,
+        773291,
+        804875,
+        700209,
+        763666,
+        794750,
+        736166,
+        762708,
+        910125,
+        760708,
+        727875,
+        716334,
+        726333,
+        729292,
+        775375,
+        957917,
+        705250
+      ],
+      "workload_ids": [
+        "pil-imagedraw-imagedraw.text.rgba-context-rgb-noise-1024x768"
+      ]
+    },
+    {
+      "boundary": "observed_steps",
+      "capture_errors": [],
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.performance-rgb-noise-1024x768",
+      "child_invocation_id": "9c0cc54a27be414d82fc9e1af60a31cb",
+      "child_repeat": 105,
+      "child_sequence": 1,
+      "group_id": "467bcb97dc444a98bfec880b08572f98",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 745917,
+          "setup_ns": 4551000,
+          "terminal_ns": 524501,
+          "total_ns": 5863666
+        },
+        {
+          "pipeline_ns": 384167,
+          "setup_ns": 186125,
+          "terminal_ns": 196584,
+          "total_ns": 782292
+        },
+        {
+          "pipeline_ns": 508583,
+          "setup_ns": 280625,
+          "terminal_ns": 348291,
+          "total_ns": 1158167
+        },
+        {
+          "pipeline_ns": 388041,
+          "setup_ns": 184167,
+          "terminal_ns": 260250,
+          "total_ns": 844792
+        },
+        {
+          "pipeline_ns": 364291,
+          "setup_ns": 150208,
+          "terminal_ns": 201292,
+          "total_ns": 726292
+        },
+        {
+          "pipeline_ns": 486500,
+          "setup_ns": 171832,
+          "terminal_ns": 276834,
+          "total_ns": 952333
+        },
+        {
+          "pipeline_ns": 379583,
+          "setup_ns": 148292,
+          "terminal_ns": 246458,
+          "total_ns": 786417
+        },
+        {
+          "pipeline_ns": 436500,
+          "setup_ns": 230499,
+          "terminal_ns": 291333,
+          "total_ns": 975125
+        },
+        {
+          "pipeline_ns": 501542,
+          "setup_ns": 128750,
+          "terminal_ns": 304750,
+          "total_ns": 950958
+        },
+        {
+          "pipeline_ns": 378875,
+          "setup_ns": 155292,
+          "terminal_ns": 256626,
+          "total_ns": 803583
+        },
+        {
+          "pipeline_ns": 490000,
+          "setup_ns": 151917,
+          "terminal_ns": 197625,
+          "total_ns": 851167
+        },
+        {
+          "pipeline_ns": 371917,
+          "setup_ns": 147542,
+          "terminal_ns": 281374,
+          "total_ns": 813541
+        },
+        {
+          "pipeline_ns": 485916,
+          "setup_ns": 170499,
+          "terminal_ns": 193167,
+          "total_ns": 862500
+        },
+        {
+          "pipeline_ns": 371792,
+          "setup_ns": 156750,
+          "terminal_ns": 184500,
+          "total_ns": 723000
+        },
+        {
+          "pipeline_ns": 471542,
+          "setup_ns": 206084,
+          "terminal_ns": 202958,
+          "total_ns": 892667
+        },
+        {
+          "pipeline_ns": 411333,
+          "setup_ns": 136750,
+          "terminal_ns": 183167,
+          "total_ns": 740834
+        },
+        {
+          "pipeline_ns": 450542,
+          "setup_ns": 138167,
+          "terminal_ns": 265333,
+          "total_ns": 863667
+        },
+        {
+          "pipeline_ns": 491083,
+          "setup_ns": 225541,
+          "terminal_ns": 369500,
+          "total_ns": 1104084
+        },
+        {
+          "pipeline_ns": 503208,
+          "setup_ns": 153750,
+          "terminal_ns": 266000,
+          "total_ns": 934791
+        },
+        {
+          "pipeline_ns": 407875,
+          "setup_ns": 131749,
+          "terminal_ns": 207083,
+          "total_ns": 756500
+        },
+        {
+          "pipeline_ns": 373875,
+          "setup_ns": 128292,
+          "terminal_ns": 179084,
+          "total_ns": 690791
+        },
+        {
+          "pipeline_ns": 378000,
+          "setup_ns": 142124,
+          "terminal_ns": 200791,
+          "total_ns": 730208
+        },
+        {
+          "pipeline_ns": 440792,
+          "setup_ns": 174709,
+          "terminal_ns": 172459,
+          "total_ns": 800292
+        },
+        {
+          "pipeline_ns": 391667,
+          "setup_ns": 128750,
+          "terminal_ns": 270833,
+          "total_ns": 800833
+        },
+        {
+          "pipeline_ns": 353167,
+          "setup_ns": 121457,
+          "terminal_ns": 174666,
+          "total_ns": 658584
+        },
+        {
+          "pipeline_ns": 363042,
+          "setup_ns": 130332,
+          "terminal_ns": 224417,
+          "total_ns": 726833
+        },
+        {
+          "pipeline_ns": 345875,
+          "setup_ns": 128459,
+          "terminal_ns": 173834,
+          "total_ns": 658000
+        },
+        {
+          "pipeline_ns": 379500,
+          "setup_ns": 137458,
+          "terminal_ns": 200625,
+          "total_ns": 726833
+        },
+        {
+          "pipeline_ns": 472500,
+          "setup_ns": 178834,
+          "terminal_ns": 169750,
+          "total_ns": 835750
+        },
+        {
+          "pipeline_ns": 387792,
+          "setup_ns": 151374,
+          "terminal_ns": 224625,
+          "total_ns": 773709
+        },
+        {
+          "pipeline_ns": 345083,
+          "setup_ns": 142751,
+          "terminal_ns": 204458,
+          "total_ns": 701208
+        },
+        {
+          "pipeline_ns": 409500,
+          "setup_ns": 135585,
+          "terminal_ns": 205333,
+          "total_ns": 760125
+        },
+        {
+          "pipeline_ns": 444167,
+          "setup_ns": 195541,
+          "terminal_ns": 217625,
+          "total_ns": 871666
+        },
+        {
+          "pipeline_ns": 390583,
+          "setup_ns": 175458,
+          "terminal_ns": 206874,
+          "total_ns": 784250
+        },
+        {
+          "pipeline_ns": 400583,
+          "setup_ns": 285125,
+          "terminal_ns": 238083,
+          "total_ns": 938291
+        },
+        {
+          "pipeline_ns": 555292,
+          "setup_ns": 327624,
+          "terminal_ns": 231708,
+          "total_ns": 1139125
+        },
+        {
+          "pipeline_ns": 390833,
+          "setup_ns": 247708,
+          "terminal_ns": 176292,
+          "total_ns": 827166
+        },
+        {
+          "pipeline_ns": 389750,
+          "setup_ns": 156209,
+          "terminal_ns": 199333,
+          "total_ns": 754791
+        },
+        {
+          "pipeline_ns": 352083,
+          "setup_ns": 128584,
+          "terminal_ns": 168083,
+          "total_ns": 657458
+        },
+        {
+          "pipeline_ns": 369625,
+          "setup_ns": 140374,
+          "terminal_ns": 224041,
+          "total_ns": 742750
+        },
+        {
+          "pipeline_ns": 349750,
+          "setup_ns": 137333,
+          "terminal_ns": 174084,
+          "total_ns": 669792
+        },
+        {
+          "pipeline_ns": 369417,
+          "setup_ns": 141125,
+          "terminal_ns": 172209,
+          "total_ns": 691417
+        },
+        {
+          "pipeline_ns": 452667,
+          "setup_ns": 212542,
+          "terminal_ns": 238375,
+          "total_ns": 918208
+        },
+        {
+          "pipeline_ns": 398500,
+          "setup_ns": 669583,
+          "terminal_ns": 244709,
+          "total_ns": 1349334
+        },
+        {
+          "pipeline_ns": 385917,
+          "setup_ns": 168083,
+          "terminal_ns": 225209,
+          "total_ns": 790083
+        },
+        {
+          "pipeline_ns": 475917,
+          "setup_ns": 158209,
+          "terminal_ns": 176333,
+          "total_ns": 821917
+        },
+        {
+          "pipeline_ns": 356875,
+          "setup_ns": 131834,
+          "terminal_ns": 169666,
+          "total_ns": 668000
+        },
+        {
+          "pipeline_ns": 354333,
+          "setup_ns": 163417,
+          "terminal_ns": 199500,
+          "total_ns": 726250
+        },
+        {
+          "pipeline_ns": 347334,
+          "setup_ns": 124083,
+          "terminal_ns": 229167,
+          "total_ns": 710333
+        },
+        {
+          "pipeline_ns": 349125,
+          "setup_ns": 141376,
+          "terminal_ns": 208167,
+          "total_ns": 707833
+        },
+        {
+          "pipeline_ns": 449750,
+          "setup_ns": 225291,
+          "terminal_ns": 215875,
+          "total_ns": 907709
+        },
+        {
+          "pipeline_ns": 385792,
+          "setup_ns": 193292,
+          "terminal_ns": 198959,
+          "total_ns": 791167
+        },
+        {
+          "pipeline_ns": 363833,
+          "setup_ns": 143208,
+          "terminal_ns": 181833,
+          "total_ns": 698125
+        },
+        {
+          "pipeline_ns": 378542,
+          "setup_ns": 186750,
+          "terminal_ns": 227833,
+          "total_ns": 801625
+        },
+        {
+          "pipeline_ns": 384875,
+          "setup_ns": 160249,
+          "terminal_ns": 267626,
+          "total_ns": 822209
+        },
+        {
+          "pipeline_ns": 365583,
+          "setup_ns": 150459,
+          "terminal_ns": 208124,
+          "total_ns": 732292
+        },
+        {
+          "pipeline_ns": 515084,
+          "setup_ns": 218500,
+          "terminal_ns": 214375,
+          "total_ns": 964500
+        },
+        {
+          "pipeline_ns": 395959,
+          "setup_ns": 191709,
+          "terminal_ns": 215250,
+          "total_ns": 813958
+        },
+        {
+          "pipeline_ns": 382792,
+          "setup_ns": 170335,
+          "terminal_ns": 212001,
+          "total_ns": 776500
+        },
+        {
+          "pipeline_ns": 393333,
+          "setup_ns": 138750,
+          "terminal_ns": 246250,
+          "total_ns": 789167
+        },
+        {
+          "pipeline_ns": 461583,
+          "setup_ns": 258500,
+          "terminal_ns": 242374,
+          "total_ns": 977792
+        },
+        {
+          "pipeline_ns": 382750,
+          "setup_ns": 155541,
+          "terminal_ns": 174833,
+          "total_ns": 723917
+        },
+        {
+          "pipeline_ns": 353833,
+          "setup_ns": 147750,
+          "terminal_ns": 190625,
+          "total_ns": 701458
+        },
+        {
+          "pipeline_ns": 399042,
+          "setup_ns": 196166,
+          "terminal_ns": 239750,
+          "total_ns": 847333
+        },
+        {
+          "pipeline_ns": 362709,
+          "setup_ns": 149084,
+          "terminal_ns": 186125,
+          "total_ns": 706958
+        },
+        {
+          "pipeline_ns": 392000,
+          "setup_ns": 159334,
+          "terminal_ns": 205126,
+          "total_ns": 765584
+        },
+        {
+          "pipeline_ns": 502791,
+          "setup_ns": 189082,
+          "terminal_ns": 175251,
+          "total_ns": 884083
+        },
+        {
+          "pipeline_ns": 396750,
+          "setup_ns": 154709,
+          "terminal_ns": 258125,
+          "total_ns": 821750
+        },
+        {
+          "pipeline_ns": 513583,
+          "setup_ns": 214666,
+          "terminal_ns": 193500,
+          "total_ns": 938917
+        },
+        {
+          "pipeline_ns": 393209,
+          "setup_ns": 207707,
+          "terminal_ns": 213708,
+          "total_ns": 832958
+        },
+        {
+          "pipeline_ns": 382625,
+          "setup_ns": 266083,
+          "terminal_ns": 209208,
+          "total_ns": 872625
+        },
+        {
+          "pipeline_ns": 549042,
+          "setup_ns": 201042,
+          "terminal_ns": 175459,
+          "total_ns": 943042
+        },
+        {
+          "pipeline_ns": 453750,
+          "setup_ns": 158500,
+          "terminal_ns": 214083,
+          "total_ns": 837917
+        },
+        {
+          "pipeline_ns": 611917,
+          "setup_ns": 339750,
+          "terminal_ns": 227459,
+          "total_ns": 1213958
+        },
+        {
+          "pipeline_ns": 491792,
+          "setup_ns": 291332,
+          "terminal_ns": 195292,
+          "total_ns": 998834
+        },
+        {
+          "pipeline_ns": 399750,
+          "setup_ns": 189083,
+          "terminal_ns": 272542,
+          "total_ns": 875333
+        },
+        {
+          "pipeline_ns": 362500,
+          "setup_ns": 134042,
+          "terminal_ns": 169708,
+          "total_ns": 677459
+        },
+        {
+          "pipeline_ns": 380125,
+          "setup_ns": 159500,
+          "terminal_ns": 207416,
+          "total_ns": 757166
+        },
+        {
+          "pipeline_ns": 560041,
+          "setup_ns": 184834,
+          "terminal_ns": 173584,
+          "total_ns": 933709
+        },
+        {
+          "pipeline_ns": 387792,
+          "setup_ns": 151250,
+          "terminal_ns": 240167,
+          "total_ns": 790250
+        },
+        {
+          "pipeline_ns": 360875,
+          "setup_ns": 140292,
+          "terminal_ns": 193708,
+          "total_ns": 704125
+        },
+        {
+          "pipeline_ns": 493708,
+          "setup_ns": 168542,
+          "terminal_ns": 162458,
+          "total_ns": 838208
+        },
+        {
+          "pipeline_ns": 355459,
+          "setup_ns": 143125,
+          "terminal_ns": 215624,
+          "total_ns": 723292
+        },
+        {
+          "pipeline_ns": 357834,
+          "setup_ns": 156500,
+          "terminal_ns": 171583,
+          "total_ns": 695333
+        },
+        {
+          "pipeline_ns": 464625,
+          "setup_ns": 220250,
+          "terminal_ns": 199291,
+          "total_ns": 895083
+        },
+        {
+          "pipeline_ns": 434291,
+          "setup_ns": 168916,
+          "terminal_ns": 198083,
+          "total_ns": 814541
+        },
+        {
+          "pipeline_ns": 407500,
+          "setup_ns": 155791,
+          "terminal_ns": 224875,
+          "total_ns": 799209
+        },
+        {
+          "pipeline_ns": 408333,
+          "setup_ns": 174083,
+          "terminal_ns": 229542,
+          "total_ns": 823875
+        },
+        {
+          "pipeline_ns": 362667,
+          "setup_ns": 174250,
+          "terminal_ns": 173667,
+          "total_ns": 720000
+        },
+        {
+          "pipeline_ns": 350167,
+          "setup_ns": 135834,
+          "terminal_ns": 196084,
+          "total_ns": 690500
+        },
+        {
+          "pipeline_ns": 484375,
+          "setup_ns": 158667,
+          "terminal_ns": 161750,
+          "total_ns": 816333
+        },
+        {
+          "pipeline_ns": 351958,
+          "setup_ns": 136792,
+          "terminal_ns": 193624,
+          "total_ns": 691084
+        },
+        {
+          "pipeline_ns": 328000,
+          "setup_ns": 128500,
+          "terminal_ns": 161875,
+          "total_ns": 627708
+        },
+        {
+          "pipeline_ns": 352542,
+          "setup_ns": 144084,
+          "terminal_ns": 194916,
+          "total_ns": 700167
+        },
+        {
+          "pipeline_ns": 393417,
+          "setup_ns": 141375,
+          "terminal_ns": 191376,
+          "total_ns": 736375
+        },
+        {
+          "pipeline_ns": 352375,
+          "setup_ns": 133750,
+          "terminal_ns": 216791,
+          "total_ns": 712500
+        },
+        {
+          "pipeline_ns": 353583,
+          "setup_ns": 134667,
+          "terminal_ns": 198042,
+          "total_ns": 694541
+        },
+        {
+          "pipeline_ns": 372375,
+          "setup_ns": 132668,
+          "terminal_ns": 176042,
+          "total_ns": 690042
+        },
+        {
+          "pipeline_ns": 360959,
+          "setup_ns": 146293,
+          "terminal_ns": 218125,
+          "total_ns": 734292
+        },
+        {
+          "pipeline_ns": 372666,
+          "setup_ns": 158917,
+          "terminal_ns": 175958,
+          "total_ns": 717125
+        },
+        {
+          "pipeline_ns": 382583,
+          "setup_ns": 128374,
+          "terminal_ns": 210208,
+          "total_ns": 730917
+        },
+        {
+          "pipeline_ns": 381125,
+          "setup_ns": 159792,
+          "terminal_ns": 175417,
+          "total_ns": 726958
+        },
+        {
+          "pipeline_ns": 392334,
+          "setup_ns": 153125,
+          "terminal_ns": 235000,
+          "total_ns": 788833
+        },
+        {
+          "pipeline_ns": 478250,
+          "setup_ns": 246916,
+          "terminal_ns": 212667,
+          "total_ns": 959250
+        },
+        {
+          "pipeline_ns": 414958,
+          "setup_ns": 208500,
+          "terminal_ns": 191292,
+          "total_ns": 830917
+        }
+      ],
+      "planned_repeat": 105,
+      "profile": "python-cpu",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 1,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 2,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 3,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 4,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 7,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 8,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 9,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 10,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 11,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 12,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 13,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 14,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 15,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 16,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 17,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 18,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 19,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 20,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 21,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 22,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 23,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 24,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 25,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 26,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 27,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 28,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 29,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 30,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 31,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 32,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 33,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 34,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 35,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 36,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 37,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 38,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 39,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 40,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 41,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 42,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 43,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 44,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 45,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 46,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 47,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 48,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 49,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 50,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 51,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 52,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 53,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 54,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 55,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 56,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 57,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 58,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 59,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 60,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 61,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 62,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 63,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 64,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 65,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 66,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 67,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 68,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 69,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 70,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 71,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 72,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 73,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 74,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 75,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 76,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 77,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 78,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 79,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 80,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 81,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 82,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 83,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 84,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 85,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 86,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 87,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 88,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 89,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 90,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 91,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 92,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 93,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 94,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 95,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 96,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 97,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 98,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 99,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 100,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 101,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 102,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 103,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 104,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        }
+      ],
+      "side": "target",
+      "step_ids": [
+        "call",
+        "observe-receiver"
+      ],
+      "subject_kind": "target_profile",
+      "throughput_operations_per_second": [
+        893.0237874746269,
+        2073.436991359988,
+        1425.8561909962884,
+        2064.337131025542,
+        2138.4656508954827,
+        1655.5167612794496,
+        2110.44819588336,
+        1709.4017094017095,
+        1484.137537993921,
+        2066.4700764800577,
+        1675.274786946929,
+        2154.3970165910114,
+        1691.4492167744402,
+        2168.999787438021,
+        1730.1038062283737,
+        1946.3166929743807,
+        1793.5900678156404,
+        1437.469363934181,
+        1691.9271388496925,
+        1887.6828692779613,
+        2139.9895568509623,
+        2052.334530528476,
+        1887.5332205846823,
+        2029.7685860835006,
+        2272.2986345757504,
+        2054.620018573765,
+        2298.190175237001,
+        2051.80815593742,
+        1787.9779935668553,
+        1956.7863306734084,
+        2208.1148219707425,
+        1913.4178426213825,
+        1813.9240437445922,
+        1995.0124688279302,
+        1930.0361881785284,
+        1476.9238040240266,
+        2064.869954490266,
+        2018.3345510618458,
+        2279.202279202279,
+        2035.275393113442,
+        2259.248799774075,
+        2197.802197802198,
+        1712.57216350954,
+        1859.1680223100163,
+        1986.4287189918477,
+        1772.3928544209682,
+        2245.5106628073822,
+        2187.9875109672876,
+        2154.977351188039,
+        2213.6137244050915,
+        1772.135298985807,
+        2046.9069189547674,
+        2130.6833314512296,
+        1966.568338249754,
+        1912.5029882859192,
+        2088.227616810232,
+        1588.9813676044835,
+        1980.0333437615088,
+        2041.858090862685,
+        1973.196104121612,
+        1663.3150867668314,
+        2116.7784325679063,
+        2207.5055187637968,
+        1898.7329754854586,
+        2182.0197210942392,
+        2030.4568527918782,
+        1661.1295681063123,
+        1882.6470770962806,
+        1642.5971431950486,
+        2066.6494445879616,
+        2062.740309246027,
+        1573.873696635845,
+        1766.394347538088,
+        1373.313228027675,
+        1655.7442736084297,
+        1821.6329846727801,
+        2215.860241262863,
+        2022.75600505689,
+        1531.8815181558598,
+        1944.8933906687905,
+        2165.4770979142127,
+        1724.88141440276,
+        2110.8179419525068,
+        2246.5599550688007,
+        1748.7592553083587,
+        1901.1406844106464,
+        1923.8464616615877,
+        1900.9925081885253,
+        2224.9019930672052,
+        2201.83324636092,
+        1754.256703891994,
+        2195.992314026901,
+        2435.068888098844,
+        2215.4527831625587,
+        2020.0306236642548,
+        2236.931288181621,
+        2181.424732121043,
+        2175.2938822034857,
+        2055.321020590206,
+        2190.383777141593,
+        2038.735983690112,
+        2131.6280309086064,
+        1916.3218884202417,
+        1712.205629047226,
+        1923.3876241546711
+      ],
+      "timings_ns": [
+        1119791,
+        482291,
+        701333,
+        484417,
+        467625,
+        604041,
+        473833,
+        585000,
+        673792,
+        483917,
+        596917,
+        464167,
+        591209,
+        461042,
+        578000,
+        513791,
+        557541,
+        695667,
+        591042,
+        529750,
+        467292,
+        487250,
+        529792,
+        492667,
+        440083,
+        486708,
+        435125,
+        487375,
+        559291,
+        511042,
+        452875,
+        522625,
+        551291,
+        501250,
+        518125,
+        677083,
+        484292,
+        495458,
+        438750,
+        491334,
+        442625,
+        455000,
+        583917,
+        537875,
+        503416,
+        564209,
+        445333,
+        457041,
+        464042,
+        451750,
+        564291,
+        488542,
+        469333,
+        508500,
+        522875,
+        478875,
+        629334,
+        505042,
+        489750,
+        506792,
+        601209,
+        472416,
+        453000,
+        526667,
+        458291,
+        492500,
+        602000,
+        531167,
+        608792,
+        483875,
+        484792,
+        635375,
+        566125,
+        728166,
+        603958,
+        548958,
+        451292,
+        494375,
+        652792,
+        514167,
+        461792,
+        579750,
+        473750,
+        445125,
+        571834,
+        526000,
+        519792,
+        526041,
+        449458,
+        454167,
+        570042,
+        455375,
+        410666,
+        451375,
+        495042,
+        447041,
+        458416,
+        459708,
+        486542,
+        456541,
+        490500,
+        469125,
+        521833,
+        584042,
+        519916
+      ],
+      "workload_ids": [
+        "pil-imagedraw-imagedraw.text.standard"
+      ]
+    },
+    {
+      "boundary": "observed_steps",
+      "capture_errors": [],
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.performance-rgb-rgba-context-noise-1024x768",
+      "child_invocation_id": "9c0cc54a27be414d82fc9e1af60a31cb",
+      "child_repeat": 105,
+      "child_sequence": 1,
+      "group_id": "467bcb97dc444a98bfec880b08572f98",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 561250,
+          "setup_ns": 242416,
+          "terminal_ns": 205875,
+          "total_ns": 1031625
+        },
+        {
+          "pipeline_ns": 413875,
+          "setup_ns": 164415,
+          "terminal_ns": 213417,
+          "total_ns": 806750
+        },
+        {
+          "pipeline_ns": 465625,
+          "setup_ns": 163709,
+          "terminal_ns": 418291,
+          "total_ns": 1059541
+        },
+        {
+          "pipeline_ns": 403292,
+          "setup_ns": 243832,
+          "terminal_ns": 212458,
+          "total_ns": 874416
+        },
+        {
+          "pipeline_ns": 411959,
+          "setup_ns": 204083,
+          "terminal_ns": 185416,
+          "total_ns": 822708
+        },
+        {
+          "pipeline_ns": 371542,
+          "setup_ns": 142375,
+          "terminal_ns": 220583,
+          "total_ns": 744750
+        },
+        {
+          "pipeline_ns": 380667,
+          "setup_ns": 194917,
+          "terminal_ns": 190375,
+          "total_ns": 777208
+        },
+        {
+          "pipeline_ns": 389625,
+          "setup_ns": 143416,
+          "terminal_ns": 207292,
+          "total_ns": 750083
+        },
+        {
+          "pipeline_ns": 368750,
+          "setup_ns": 135875,
+          "terminal_ns": 187542,
+          "total_ns": 700875
+        },
+        {
+          "pipeline_ns": 415708,
+          "setup_ns": 131375,
+          "terminal_ns": 224917,
+          "total_ns": 783291
+        },
+        {
+          "pipeline_ns": 358042,
+          "setup_ns": 144417,
+          "terminal_ns": 184749,
+          "total_ns": 696542
+        },
+        {
+          "pipeline_ns": 378458,
+          "setup_ns": 152791,
+          "terminal_ns": 169417,
+          "total_ns": 709292
+        },
+        {
+          "pipeline_ns": 332208,
+          "setup_ns": 127416,
+          "terminal_ns": 190666,
+          "total_ns": 658708
+        },
+        {
+          "pipeline_ns": 333750,
+          "setup_ns": 121750,
+          "terminal_ns": 174041,
+          "total_ns": 637875
+        },
+        {
+          "pipeline_ns": 358417,
+          "setup_ns": 137582,
+          "terminal_ns": 210750,
+          "total_ns": 717000
+        },
+        {
+          "pipeline_ns": 319625,
+          "setup_ns": 118666,
+          "terminal_ns": 159917,
+          "total_ns": 606250
+        },
+        {
+          "pipeline_ns": 376292,
+          "setup_ns": 145043,
+          "terminal_ns": 167417,
+          "total_ns": 697833
+        },
+        {
+          "pipeline_ns": 521167,
+          "setup_ns": 168792,
+          "terminal_ns": 197042,
+          "total_ns": 898750
+        },
+        {
+          "pipeline_ns": 379500,
+          "setup_ns": 128834,
+          "terminal_ns": 223500,
+          "total_ns": 741584
+        },
+        {
+          "pipeline_ns": 373250,
+          "setup_ns": 173584,
+          "terminal_ns": 206458,
+          "total_ns": 764542
+        },
+        {
+          "pipeline_ns": 492667,
+          "setup_ns": 187751,
+          "terminal_ns": 164042,
+          "total_ns": 856000
+        },
+        {
+          "pipeline_ns": 337459,
+          "setup_ns": 133584,
+          "terminal_ns": 192875,
+          "total_ns": 672417
+        },
+        {
+          "pipeline_ns": 324875,
+          "setup_ns": 145625,
+          "terminal_ns": 194875,
+          "total_ns": 673583
+        },
+        {
+          "pipeline_ns": 351875,
+          "setup_ns": 131251,
+          "terminal_ns": 199042,
+          "total_ns": 691291
+        },
+        {
+          "pipeline_ns": 339667,
+          "setup_ns": 117165,
+          "terminal_ns": 170459,
+          "total_ns": 635708
+        },
+        {
+          "pipeline_ns": 336250,
+          "setup_ns": 132376,
+          "terminal_ns": 170042,
+          "total_ns": 646375
+        },
+        {
+          "pipeline_ns": 374750,
+          "setup_ns": 124374,
+          "terminal_ns": 201416,
+          "total_ns": 709417
+        },
+        {
+          "pipeline_ns": 343542,
+          "setup_ns": 139501,
+          "terminal_ns": 168584,
+          "total_ns": 660167
+        },
+        {
+          "pipeline_ns": 362333,
+          "setup_ns": 147583,
+          "terminal_ns": 271250,
+          "total_ns": 789833
+        },
+        {
+          "pipeline_ns": 454417,
+          "setup_ns": 188833,
+          "terminal_ns": 160501,
+          "total_ns": 814250
+        },
+        {
+          "pipeline_ns": 336000,
+          "setup_ns": 126376,
+          "terminal_ns": 194875,
+          "total_ns": 665333
+        },
+        {
+          "pipeline_ns": 322375,
+          "setup_ns": 122959,
+          "terminal_ns": 183708,
+          "total_ns": 637209
+        },
+        {
+          "pipeline_ns": 340791,
+          "setup_ns": 130459,
+          "terminal_ns": 204667,
+          "total_ns": 683709
+        },
+        {
+          "pipeline_ns": 454250,
+          "setup_ns": 220375,
+          "terminal_ns": 159707,
+          "total_ns": 844625
+        },
+        {
+          "pipeline_ns": 383833,
+          "setup_ns": 159042,
+          "terminal_ns": 203208,
+          "total_ns": 754500
+        },
+        {
+          "pipeline_ns": 362459,
+          "setup_ns": 182125,
+          "terminal_ns": 238208,
+          "total_ns": 794417
+        },
+        {
+          "pipeline_ns": 373375,
+          "setup_ns": 141541,
+          "terminal_ns": 168583,
+          "total_ns": 692584
+        },
+        {
+          "pipeline_ns": 481250,
+          "setup_ns": 143291,
+          "terminal_ns": 206250,
+          "total_ns": 840292
+        },
+        {
+          "pipeline_ns": 447917,
+          "setup_ns": 120584,
+          "terminal_ns": 196000,
+          "total_ns": 779500
+        },
+        {
+          "pipeline_ns": 385791,
+          "setup_ns": 175958,
+          "terminal_ns": 207708,
+          "total_ns": 781541
+        },
+        {
+          "pipeline_ns": 468292,
+          "setup_ns": 204041,
+          "terminal_ns": 212500,
+          "total_ns": 899084
+        },
+        {
+          "pipeline_ns": 419125,
+          "setup_ns": 190875,
+          "terminal_ns": 208584,
+          "total_ns": 837250
+        },
+        {
+          "pipeline_ns": 395542,
+          "setup_ns": 163749,
+          "terminal_ns": 239875,
+          "total_ns": 813000
+        },
+        {
+          "pipeline_ns": 428292,
+          "setup_ns": 235709,
+          "terminal_ns": 247750,
+          "total_ns": 929334
+        },
+        {
+          "pipeline_ns": 346875,
+          "setup_ns": 195083,
+          "terminal_ns": 195332,
+          "total_ns": 747667
+        },
+        {
+          "pipeline_ns": 334167,
+          "setup_ns": 125626,
+          "terminal_ns": 223374,
+          "total_ns": 692709
+        },
+        {
+          "pipeline_ns": 340375,
+          "setup_ns": 129083,
+          "terminal_ns": 196417,
+          "total_ns": 674750
+        },
+        {
+          "pipeline_ns": 329000,
+          "setup_ns": 146459,
+          "terminal_ns": 168458,
+          "total_ns": 652667
+        },
+        {
+          "pipeline_ns": 362583,
+          "setup_ns": 131749,
+          "terminal_ns": 267625,
+          "total_ns": 769875
+        },
+        {
+          "pipeline_ns": 381917,
+          "setup_ns": 192209,
+          "terminal_ns": 217708,
+          "total_ns": 801000
+        },
+        {
+          "pipeline_ns": 358209,
+          "setup_ns": 141168,
+          "terminal_ns": 210333,
+          "total_ns": 717917
+        },
+        {
+          "pipeline_ns": 353250,
+          "setup_ns": 133751,
+          "terminal_ns": 209542,
+          "total_ns": 704875
+        },
+        {
+          "pipeline_ns": 426500,
+          "setup_ns": 189210,
+          "terminal_ns": 189166,
+          "total_ns": 817667
+        },
+        {
+          "pipeline_ns": 333667,
+          "setup_ns": 119166,
+          "terminal_ns": 164125,
+          "total_ns": 625542
+        },
+        {
+          "pipeline_ns": 330417,
+          "setup_ns": 136959,
+          "terminal_ns": 172792,
+          "total_ns": 648375
+        },
+        {
+          "pipeline_ns": 535000,
+          "setup_ns": 165209,
+          "terminal_ns": 224750,
+          "total_ns": 938458
+        },
+        {
+          "pipeline_ns": 382333,
+          "setup_ns": 150667,
+          "terminal_ns": 240041,
+          "total_ns": 784917
+        },
+        {
+          "pipeline_ns": 379584,
+          "setup_ns": 177959,
+          "terminal_ns": 201625,
+          "total_ns": 770667
+        },
+        {
+          "pipeline_ns": 383500,
+          "setup_ns": 151542,
+          "terminal_ns": 181209,
+          "total_ns": 725709
+        },
+        {
+          "pipeline_ns": 374834,
+          "setup_ns": 139415,
+          "terminal_ns": 202834,
+          "total_ns": 726333
+        },
+        {
+          "pipeline_ns": 343375,
+          "setup_ns": 128584,
+          "terminal_ns": 167875,
+          "total_ns": 650167
+        },
+        {
+          "pipeline_ns": 341250,
+          "setup_ns": 142666,
+          "terminal_ns": 184458,
+          "total_ns": 677500
+        },
+        {
+          "pipeline_ns": 345875,
+          "setup_ns": 123709,
+          "terminal_ns": 168208,
+          "total_ns": 646709
+        },
+        {
+          "pipeline_ns": 379833,
+          "setup_ns": 143459,
+          "terminal_ns": 176999,
+          "total_ns": 709000
+        },
+        {
+          "pipeline_ns": 429292,
+          "setup_ns": 195084,
+          "terminal_ns": 246624,
+          "total_ns": 883875
+        },
+        {
+          "pipeline_ns": 442666,
+          "setup_ns": 206250,
+          "terminal_ns": 229916,
+          "total_ns": 891042
+        },
+        {
+          "pipeline_ns": 378792,
+          "setup_ns": 163000,
+          "terminal_ns": 228457,
+          "total_ns": 779875
+        },
+        {
+          "pipeline_ns": 354084,
+          "setup_ns": 126583,
+          "terminal_ns": 168291,
+          "total_ns": 657250
+        },
+        {
+          "pipeline_ns": 361625,
+          "setup_ns": 137334,
+          "terminal_ns": 220791,
+          "total_ns": 728000
+        },
+        {
+          "pipeline_ns": 341375,
+          "setup_ns": 133499,
+          "terminal_ns": 168333,
+          "total_ns": 651625
+        },
+        {
+          "pipeline_ns": 380750,
+          "setup_ns": 167541,
+          "terminal_ns": 209001,
+          "total_ns": 765666
+        },
+        {
+          "pipeline_ns": 367333,
+          "setup_ns": 138499,
+          "terminal_ns": 173791,
+          "total_ns": 688750
+        },
+        {
+          "pipeline_ns": 375208,
+          "setup_ns": 162917,
+          "terminal_ns": 181125,
+          "total_ns": 727709
+        },
+        {
+          "pipeline_ns": 505917,
+          "setup_ns": 150375,
+          "terminal_ns": 206958,
+          "total_ns": 874750
+        },
+        {
+          "pipeline_ns": 379709,
+          "setup_ns": 162999,
+          "terminal_ns": 245167,
+          "total_ns": 798458
+        },
+        {
+          "pipeline_ns": 355792,
+          "setup_ns": 143458,
+          "terminal_ns": 210666,
+          "total_ns": 718292
+        },
+        {
+          "pipeline_ns": 381666,
+          "setup_ns": 143041,
+          "terminal_ns": 184042,
+          "total_ns": 718459
+        },
+        {
+          "pipeline_ns": 375167,
+          "setup_ns": 152041,
+          "terminal_ns": 209125,
+          "total_ns": 745000
+        },
+        {
+          "pipeline_ns": 400000,
+          "setup_ns": 156584,
+          "terminal_ns": 174957,
+          "total_ns": 742167
+        },
+        {
+          "pipeline_ns": 365292,
+          "setup_ns": 140167,
+          "terminal_ns": 210999,
+          "total_ns": 724917
+        },
+        {
+          "pipeline_ns": 471750,
+          "setup_ns": 195875,
+          "terminal_ns": 192917,
+          "total_ns": 874917
+        },
+        {
+          "pipeline_ns": 339167,
+          "setup_ns": 129625,
+          "terminal_ns": 185791,
+          "total_ns": 666500
+        },
+        {
+          "pipeline_ns": 373416,
+          "setup_ns": 330708,
+          "terminal_ns": 192000,
+          "total_ns": 913917
+        },
+        {
+          "pipeline_ns": 495625,
+          "setup_ns": 207375,
+          "terminal_ns": 160167,
+          "total_ns": 875541
+        },
+        {
+          "pipeline_ns": 360917,
+          "setup_ns": 142959,
+          "terminal_ns": 201416,
+          "total_ns": 715083
+        },
+        {
+          "pipeline_ns": 427625,
+          "setup_ns": 236959,
+          "terminal_ns": 177167,
+          "total_ns": 860792
+        },
+        {
+          "pipeline_ns": 391166,
+          "setup_ns": 211834,
+          "terminal_ns": 197958,
+          "total_ns": 811417
+        },
+        {
+          "pipeline_ns": 339291,
+          "setup_ns": 128125,
+          "terminal_ns": 169249,
+          "total_ns": 646042
+        },
+        {
+          "pipeline_ns": 347917,
+          "setup_ns": 147001,
+          "terminal_ns": 183875,
+          "total_ns": 687958
+        },
+        {
+          "pipeline_ns": 339083,
+          "setup_ns": 129458,
+          "terminal_ns": 237625,
+          "total_ns": 714875
+        },
+        {
+          "pipeline_ns": 348167,
+          "setup_ns": 126084,
+          "terminal_ns": 167584,
+          "total_ns": 651041
+        },
+        {
+          "pipeline_ns": 337833,
+          "setup_ns": 126042,
+          "terminal_ns": 198750,
+          "total_ns": 671208
+        },
+        {
+          "pipeline_ns": 387375,
+          "setup_ns": 144584,
+          "terminal_ns": 214917,
+          "total_ns": 756458
+        },
+        {
+          "pipeline_ns": 362250,
+          "setup_ns": 146500,
+          "terminal_ns": 214625,
+          "total_ns": 731917
+        },
+        {
+          "pipeline_ns": 447125,
+          "setup_ns": 143709,
+          "terminal_ns": 160791,
+          "total_ns": 761083
+        },
+        {
+          "pipeline_ns": 373458,
+          "setup_ns": 141543,
+          "terminal_ns": 216708,
+          "total_ns": 739875
+        },
+        {
+          "pipeline_ns": 378792,
+          "setup_ns": 176335,
+          "terminal_ns": 176626,
+          "total_ns": 746458
+        },
+        {
+          "pipeline_ns": 384708,
+          "setup_ns": 144501,
+          "terminal_ns": 190750,
+          "total_ns": 729750
+        },
+        {
+          "pipeline_ns": 351292,
+          "setup_ns": 167168,
+          "terminal_ns": 200083,
+          "total_ns": 727000
+        },
+        {
+          "pipeline_ns": 337708,
+          "setup_ns": 123168,
+          "terminal_ns": 203334,
+          "total_ns": 673500
+        },
+        {
+          "pipeline_ns": 362042,
+          "setup_ns": 145583,
+          "terminal_ns": 203000,
+          "total_ns": 721083
+        },
+        {
+          "pipeline_ns": 469417,
+          "setup_ns": 187083,
+          "terminal_ns": 176667,
+          "total_ns": 843208
+        },
+        {
+          "pipeline_ns": 354750,
+          "setup_ns": 183917,
+          "terminal_ns": 206792,
+          "total_ns": 753500
+        },
+        {
+          "pipeline_ns": 390000,
+          "setup_ns": 189750,
+          "terminal_ns": 203000,
+          "total_ns": 794542
+        },
+        {
+          "pipeline_ns": 384875,
+          "setup_ns": 148333,
+          "terminal_ns": 207583,
+          "total_ns": 751541
+        }
+      ],
+      "planned_repeat": 105,
+      "profile": "python-cpu",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 1,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 2,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 3,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": null,
+          "ordinal": 4,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 7,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 8,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 9,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 10,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 11,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 12,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 13,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 14,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 15,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 16,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 17,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 18,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 19,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 20,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 21,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 22,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 23,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 4,
+          "ordinal": 24,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 25,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 26,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 27,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 28,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 5,
+          "ordinal": 29,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 30,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 31,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 32,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 33,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 6,
+          "ordinal": 34,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 35,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 36,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 37,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 38,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 7,
+          "ordinal": 39,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 40,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 41,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 42,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 43,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 8,
+          "ordinal": 44,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 45,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 46,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 47,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 48,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 9,
+          "ordinal": 49,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 50,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 51,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 52,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 53,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 10,
+          "ordinal": 54,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 55,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 56,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 57,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 58,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 11,
+          "ordinal": 59,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 60,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 61,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 62,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 63,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 12,
+          "ordinal": 64,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 65,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 66,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 67,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 68,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 13,
+          "ordinal": 69,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 70,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 71,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 72,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 73,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 14,
+          "ordinal": 74,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 75,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 76,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 77,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 78,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 15,
+          "ordinal": 79,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 80,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 81,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 82,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 83,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 16,
+          "ordinal": 84,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 85,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 86,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 87,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 88,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 17,
+          "ordinal": 89,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 90,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 91,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 92,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 93,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 18,
+          "ordinal": 94,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 95,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 96,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 97,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 98,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 19,
+          "ordinal": 99,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 100,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 101,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 102,
+          "role": "measurement",
+          "sample_in_iteration": 3
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 103,
+          "role": "measurement",
+          "sample_in_iteration": 4
+        },
+        {
+          "measurement_iteration": 20,
+          "ordinal": 104,
+          "role": "measurement",
+          "sample_in_iteration": 5
+        }
+      ],
+      "side": "target",
+      "step_ids": [
+        "call",
+        "observe-receiver"
+      ],
+      "subject_kind": "target_profile",
+      "throughput_operations_per_second": [
+        1501.2197410395947,
+        1923.3839247418339,
+        1467.7994164029521,
+        1950.4279238865006,
+        1994.5150835203192,
+        2031.3147481575975,
+        2083.3333333333335,
+        2022.4164640879508,
+        2184.598580010923,
+        1854.5718906247682,
+        2195.19209028386,
+        2144.3903819802586,
+        2327.161700503598,
+        2345.122262949179,
+        2162.162162162162,
+        2478.3147459727384,
+        2165.674066053059,
+        1625.4638667509741,
+        2067.0040017197475,
+        2093.872491540755,
+        1723.145636822933,
+        2260.740211560069,
+        2377.8837785524393,
+        2190.3789793710107,
+        2330.095277595901,
+        2375.065611187509,
+        2046.2116437627376,
+        2325.808567348439,
+        1869.1588785046729,
+        1857.5862895271143,
+        2290.0745877293225,
+        2469.135802469136,
+        2234.0128455738623,
+        1858.4493470338218,
+        2023.6074039747696,
+        2052.161849900778,
+        2172.1422753190336,
+        1695.875292114519,
+        1810.6396808928625,
+        2025.8293238794631,
+        1722.5282580760738,
+        1876.3204605240937,
+        1987.4117340763603,
+        1780.6806829978827,
+        2213.4128391225145,
+        2301.718463004479,
+        2249.51129367145,
+        2407.944289800911,
+        2080.083203328133,
+        1988.0715705765408,
+        2136.181575433912,
+        2203.8567493112946,
+        1936.4195988900442,
+        2370.600757644002,
+        2383.0801310694073,
+        1535.9024886228024,
+        1966.7269140678009,
+        2078.6390734258466,
+        2069.677771867698,
+        2088.0444836996808,
+        2326.712285738882,
+        2283.542962577298,
+        2311.2516352105317,
+        2121.453195438876,
+        1791.8481659538097,
+        1802.2077044379364,
+        2032.520325203252,
+        2267.573696145125,
+        2123.1422505307855,
+        2340.0954290915984,
+        2062.2085841494522,
+        2201.430930104568,
+        2146.3050285780514,
+        1623.4873156936026,
+        1918.925401775006,
+        2149.7655680648027,
+        2096.0713334996217,
+        2059.732234809475,
+        2051.6313546716674,
+        2131.437206794169,
+        1746.7248908296942,
+        2350.1762632197415,
+        2140.562154432997,
+        1723.5198411604115,
+        2156.5248895320124,
+        1945.9985405010946,
+        2016.9748604253396,
+        2342.381171003195,
+        2197.1985718209285,
+        2122.3897259358146,
+        2303.484019579614,
+        2258.4018193685056,
+        2013.5917442738485,
+        2124.644387645618,
+        1881.4675446848541,
+        1986.9181310253293,
+        2152.2733387140165,
+        2081.529341237594,
+        2200.621895747738,
+        2363.1332310884354,
+        2135.0413664264747,
+        1791.177376713261,
+        2154.3970165910114,
+        2073.613271124935,
+        2083.876009377442
+      ],
+      "timings_ns": [
+        666125,
+        519917,
+        681292,
+        512708,
+        501375,
+        492292,
+        480000,
+        494458,
+        457750,
+        539208,
+        455541,
+        466333,
+        429708,
+        426417,
+        462500,
+        403500,
+        461750,
+        615209,
+        483792,
+        477584,
+        580334,
+        442333,
+        420542,
+        456542,
+        429167,
+        421041,
+        488708,
+        429958,
+        535000,
+        538333,
+        436667,
+        405000,
+        447625,
+        538083,
+        494167,
+        487291,
+        460375,
+        589666,
+        552291,
+        493625,
+        580542,
+        532958,
+        503167,
+        561583,
+        451791,
+        434458,
+        444541,
+        415292,
+        480750,
+        503000,
+        468125,
+        453750,
+        516417,
+        421834,
+        419625,
+        651083,
+        508459,
+        481084,
+        483167,
+        478917,
+        429791,
+        437916,
+        432666,
+        471375,
+        558083,
+        554875,
+        492000,
+        441000,
+        471000,
+        427333,
+        484917,
+        454250,
+        465917,
+        615958,
+        521125,
+        465167,
+        477083,
+        485500,
+        487417,
+        469167,
+        572500,
+        425500,
+        467167,
+        580208,
+        463709,
+        513875,
+        495792,
+        426916,
+        455125,
+        471167,
+        434125,
+        442791,
+        496625,
+        470667,
+        531500,
+        503292,
+        464625,
+        480416,
+        454417,
+        423167,
+        468375,
+        558292,
+        464167,
+        482250,
+        479875
+      ],
+      "workload_ids": [
+        "pil-imagedraw-imagedraw.text.rgba-context-rgb-noise-1024x768"
+      ]
+    }
+  ],
+  "report": {
+    "inputs": [
+      {
+        "path": "inputs/benchmark/pil-imagedraw-imagedraw.json",
+        "schema": "migration-parity/benchmark-input@1",
+        "sha256": "251a2fffbb20da7e26e850dbceb1adfb027f4972f8ad0100c72d8f02d40b305d"
+      },
+      {
+        "path": "inputs/parity/pil-imagedraw-imagedraw.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "7d68f5510e985dccfbb910d1c8657228a85f4441d6bfe86aa016589cd8e7f400"
+      }
+    ],
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+    },
+    "path": "/private/tmp/imagedraw-text-arm64-20261016-benchmark-cpu.json",
+    "run_id": "migration-benchmark-90ad849a5f44439d8f9f268b8793d266",
+    "schema": "migration-parity/benchmark-result@1"
+  },
+  "schema": "migration-parity/benchmark-raw-samples@1",
+  "workloads": [
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.performance-rgb-rgba-context-noise-1024x768",
+      "measurement_policy": {
+        "boundary": "observed_steps",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "parity_pass",
+        "measurement_iterations": 20,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 5,
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "warmup_iterations": 5
+      },
+      "workload_id": "pil-imagedraw-imagedraw.text.rgba-context-rgb-noise-1024x768"
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.performance-rgb-noise-1024x768",
+      "measurement_policy": {
+        "boundary": "observed_steps",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "parity_pass",
+        "measurement_iterations": 20,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 5,
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "warmup_iterations": 5
+      },
+      "workload_id": "pil-imagedraw-imagedraw.text.standard"
+    }
+  ]
+}

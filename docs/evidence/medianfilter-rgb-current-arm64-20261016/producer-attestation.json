@@ -1,0 +1,682 @@
+{
+  "errors": [],
+  "execution_attestation_sha256": "ea54c0ec5ff49b993bab99d9a70cbe8fe54aef9a351ac00e1cf927d262afee7d",
+  "invocations": [
+    {
+      "errors": [],
+      "invocation_id": "e1f8cbef3f4546ad9e6386c60cfce67f",
+      "receipt": {
+        "error": null,
+        "identity": {
+          "entrypoint": {
+            "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+            "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+            "size": 198968
+          },
+          "files_sha256": "063440b166a619ec550e17f889ee241241038c7755c18dcb6dd9994e3986b0c8",
+          "loaded_modules": [
+            {
+              "module": "__main__",
+              "origin": null,
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+              "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+              "size": 198968
+            },
+            {
+              "module": "migration_execution_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+              "size": 24471
+            },
+            {
+              "module": "migration_execution_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+              "size": 47103
+            },
+            {
+              "module": "migration_parity.display",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+              "size": 5820
+            },
+            {
+              "module": "migration_producer_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+              "size": 8459
+            },
+            {
+              "module": "migration_producer_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+              "size": 32710
+            },
+            {
+              "module": "validate_migration_parity_contract",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+              "size": 58714
+            }
+          ],
+          "role": "child",
+          "schema": "migration-parity/producer-identity@1"
+        },
+        "invocation_id": "e1f8cbef3f4546ad9e6386c60cfce67f",
+        "producer_bundle_sha256": "2b4baace19259f9cdf40cdd7bd5e00cf3db04760638ad0aeb792d99137011a59",
+        "schema": "migration-parity/child-producer-attestation@1",
+        "status": "complete"
+      }
+    },
+    {
+      "errors": [],
+      "invocation_id": "a5bf05e92b794e8e81334a5886e14ba8",
+      "receipt": {
+        "error": null,
+        "identity": {
+          "entrypoint": {
+            "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+            "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+            "size": 198968
+          },
+          "files_sha256": "063440b166a619ec550e17f889ee241241038c7755c18dcb6dd9994e3986b0c8",
+          "loaded_modules": [
+            {
+              "module": "__main__",
+              "origin": null,
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+              "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+              "size": 198968
+            },
+            {
+              "module": "migration_execution_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+              "size": 24471
+            },
+            {
+              "module": "migration_execution_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+              "size": 47103
+            },
+            {
+              "module": "migration_parity.display",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+              "size": 5820
+            },
+            {
+              "module": "migration_producer_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+              "size": 8459
+            },
+            {
+              "module": "migration_producer_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+              "size": 32710
+            },
+            {
+              "module": "validate_migration_parity_contract",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+              "size": 58714
+            }
+          ],
+          "role": "child",
+          "schema": "migration-parity/producer-identity@1"
+        },
+        "invocation_id": "a5bf05e92b794e8e81334a5886e14ba8",
+        "producer_bundle_sha256": "2b4baace19259f9cdf40cdd7bd5e00cf3db04760638ad0aeb792d99137011a59",
+        "schema": "migration-parity/child-producer-attestation@1",
+        "status": "complete"
+      }
+    },
+    {
+      "errors": [],
+      "invocation_id": "e724a5d01050455db47f3368da28d37a",
+      "receipt": {
+        "error": null,
+        "identity": {
+          "entrypoint": {
+            "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+            "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+            "size": 198968
+          },
+          "files_sha256": "063440b166a619ec550e17f889ee241241038c7755c18dcb6dd9994e3986b0c8",
+          "loaded_modules": [
+            {
+              "module": "__main__",
+              "origin": null,
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+              "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+              "size": 198968
+            },
+            {
+              "module": "migration_execution_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+              "size": 24471
+            },
+            {
+              "module": "migration_execution_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+              "size": 47103
+            },
+            {
+              "module": "migration_parity.display",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+              "size": 5820
+            },
+            {
+              "module": "migration_producer_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+              "size": 8459
+            },
+            {
+              "module": "migration_producer_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+              "size": 32710
+            },
+            {
+              "module": "validate_migration_parity_contract",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+              "size": 58714
+            }
+          ],
+          "role": "child",
+          "schema": "migration-parity/producer-identity@1"
+        },
+        "invocation_id": "e724a5d01050455db47f3368da28d37a",
+        "producer_bundle_sha256": "2b4baace19259f9cdf40cdd7bd5e00cf3db04760638ad0aeb792d99137011a59",
+        "schema": "migration-parity/child-producer-attestation@1",
+        "status": "complete"
+      }
+    },
+    {
+      "errors": [],
+      "invocation_id": "852967913f0f4ae5af0e62e348156b0e",
+      "receipt": {
+        "error": null,
+        "identity": {
+          "entrypoint": {
+            "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+            "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+            "size": 198968
+          },
+          "files_sha256": "063440b166a619ec550e17f889ee241241038c7755c18dcb6dd9994e3986b0c8",
+          "loaded_modules": [
+            {
+              "module": "__main__",
+              "origin": null,
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+              "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+              "size": 198968
+            },
+            {
+              "module": "migration_execution_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+              "size": 24471
+            },
+            {
+              "module": "migration_execution_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+              "size": 47103
+            },
+            {
+              "module": "migration_parity.display",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+              "size": 5820
+            },
+            {
+              "module": "migration_producer_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+              "size": 8459
+            },
+            {
+              "module": "migration_producer_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+              "size": 32710
+            },
+            {
+              "module": "validate_migration_parity_contract",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+              "size": 58714
+            }
+          ],
+          "role": "child",
+          "schema": "migration-parity/producer-identity@1"
+        },
+        "invocation_id": "852967913f0f4ae5af0e62e348156b0e",
+        "producer_bundle_sha256": "2b4baace19259f9cdf40cdd7bd5e00cf3db04760638ad0aeb792d99137011a59",
+        "schema": "migration-parity/child-producer-attestation@1",
+        "status": "complete"
+      }
+    },
+    {
+      "errors": [],
+      "invocation_id": "9109e30c489d46e6b1141e3ea72e2119",
+      "receipt": {
+        "error": null,
+        "identity": {
+          "entrypoint": {
+            "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+            "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+            "size": 198968
+          },
+          "files_sha256": "063440b166a619ec550e17f889ee241241038c7755c18dcb6dd9994e3986b0c8",
+          "loaded_modules": [
+            {
+              "module": "__main__",
+              "origin": null,
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+              "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+              "size": 198968
+            },
+            {
+              "module": "migration_execution_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+              "size": 24471
+            },
+            {
+              "module": "migration_execution_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+              "size": 47103
+            },
+            {
+              "module": "migration_parity.display",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+              "size": 5820
+            },
+            {
+              "module": "migration_producer_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+              "size": 8459
+            },
+            {
+              "module": "migration_producer_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+              "size": 32710
+            },
+            {
+              "module": "validate_migration_parity_contract",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+              "size": 58714
+            }
+          ],
+          "role": "child",
+          "schema": "migration-parity/producer-identity@1"
+        },
+        "invocation_id": "9109e30c489d46e6b1141e3ea72e2119",
+        "producer_bundle_sha256": "2b4baace19259f9cdf40cdd7bd5e00cf3db04760638ad0aeb792d99137011a59",
+        "schema": "migration-parity/child-producer-attestation@1",
+        "status": "complete"
+      }
+    },
+    {
+      "errors": [],
+      "invocation_id": "c95d8a24438d468897a3513a3f37fa5a",
+      "receipt": {
+        "error": null,
+        "identity": {
+          "entrypoint": {
+            "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+            "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+            "size": 198968
+          },
+          "files_sha256": "063440b166a619ec550e17f889ee241241038c7755c18dcb6dd9994e3986b0c8",
+          "loaded_modules": [
+            {
+              "module": "__main__",
+              "origin": null,
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+              "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+              "size": 198968
+            },
+            {
+              "module": "migration_execution_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+              "size": 24471
+            },
+            {
+              "module": "migration_execution_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+              "size": 47103
+            },
+            {
+              "module": "migration_parity.display",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+              "size": 5820
+            },
+            {
+              "module": "migration_producer_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+              "size": 8459
+            },
+            {
+              "module": "migration_producer_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+              "size": 32710
+            },
+            {
+              "module": "validate_migration_parity_contract",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+              "size": 58714
+            }
+          ],
+          "role": "child",
+          "schema": "migration-parity/producer-identity@1"
+        },
+        "invocation_id": "c95d8a24438d468897a3513a3f37fa5a",
+        "producer_bundle_sha256": "2b4baace19259f9cdf40cdd7bd5e00cf3db04760638ad0aeb792d99137011a59",
+        "schema": "migration-parity/child-producer-attestation@1",
+        "status": "complete"
+      }
+    },
+    {
+      "errors": [],
+      "invocation_id": "9a12788241ee41d4bed68aef018ee5b9",
+      "receipt": {
+        "error": null,
+        "identity": {
+          "entrypoint": {
+            "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+            "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+            "size": 198968
+          },
+          "files_sha256": "063440b166a619ec550e17f889ee241241038c7755c18dcb6dd9994e3986b0c8",
+          "loaded_modules": [
+            {
+              "module": "__main__",
+              "origin": null,
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+              "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+              "size": 198968
+            },
+            {
+              "module": "migration_execution_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+              "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+              "size": 24471
+            },
+            {
+              "module": "migration_execution_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+              "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+              "size": 47103
+            },
+            {
+              "module": "migration_parity.display",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+              "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+              "size": 5820
+            },
+            {
+              "module": "migration_producer_attestation",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+              "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+              "size": 8459
+            },
+            {
+              "module": "migration_producer_identity",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+              "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+              "size": 32710
+            },
+            {
+              "module": "validate_migration_parity_contract",
+              "origin": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "path": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+              "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+              "size": 58714
+            }
+          ],
+          "role": "child",
+          "schema": "migration-parity/producer-identity@1"
+        },
+        "invocation_id": "9a12788241ee41d4bed68aef018ee5b9",
+        "producer_bundle_sha256": "2b4baace19259f9cdf40cdd7bd5e00cf3db04760638ad0aeb792d99137011a59",
+        "schema": "migration-parity/child-producer-attestation@1",
+        "status": "complete"
+      }
+    }
+  ],
+  "parent_end": {
+    "entrypoint": {
+      "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_benchmark.py",
+      "sha256": "519a67c17b058c2a013afe4f0ac0266f276c3bea2aeba03b2be603e77c340604",
+      "size": 111871
+    },
+    "files_sha256": "063440b166a619ec550e17f889ee241241038c7755c18dcb6dd9994e3986b0c8",
+    "loaded_modules": [
+      {
+        "module": "__main__",
+        "origin": null,
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_benchmark.py",
+        "sha256": "519a67c17b058c2a013afe4f0ac0266f276c3bea2aeba03b2be603e77c340604",
+        "size": 111871
+      },
+      {
+        "module": "migration_benchmark_adapter",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_benchmark_adapter.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_benchmark_adapter.py",
+        "sha256": "2b913005963c3fdbaf89010348ee9c76a459f16e17c8e177f6ebeda612220786",
+        "size": 2601
+      },
+      {
+        "module": "migration_benchmark_samples",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_benchmark_samples.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_benchmark_samples.py",
+        "sha256": "846cf4834c685fdc3571b5b984d9b0d3037cf855896b212b96654bef880a0620",
+        "size": 21051
+      },
+      {
+        "module": "migration_execution_attestation",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+        "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+        "size": 24471
+      },
+      {
+        "module": "migration_execution_identity",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+        "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+        "size": 47103
+      },
+      {
+        "module": "migration_parity.display",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+        "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+        "size": 5820
+      },
+      {
+        "module": "migration_producer_attestation",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+        "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+        "size": 8459
+      },
+      {
+        "module": "migration_producer_identity",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+        "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+        "size": 32710
+      },
+      {
+        "module": "run_migration_parity",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+        "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+        "size": 198968
+      },
+      {
+        "module": "validate_migration_parity_contract",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+        "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+        "size": 58714
+      }
+    ],
+    "role": "parent",
+    "schema": "migration-parity/producer-identity@1"
+  },
+  "parent_start": {
+    "entrypoint": {
+      "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_benchmark.py",
+      "sha256": "519a67c17b058c2a013afe4f0ac0266f276c3bea2aeba03b2be603e77c340604",
+      "size": 111871
+    },
+    "files_sha256": "063440b166a619ec550e17f889ee241241038c7755c18dcb6dd9994e3986b0c8",
+    "loaded_modules": [
+      {
+        "module": "__main__",
+        "origin": null,
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_benchmark.py",
+        "sha256": "519a67c17b058c2a013afe4f0ac0266f276c3bea2aeba03b2be603e77c340604",
+        "size": 111871
+      },
+      {
+        "module": "migration_benchmark_adapter",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_benchmark_adapter.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_benchmark_adapter.py",
+        "sha256": "2b913005963c3fdbaf89010348ee9c76a459f16e17c8e177f6ebeda612220786",
+        "size": 2601
+      },
+      {
+        "module": "migration_benchmark_samples",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_benchmark_samples.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_benchmark_samples.py",
+        "sha256": "846cf4834c685fdc3571b5b984d9b0d3037cf855896b212b96654bef880a0620",
+        "size": 21051
+      },
+      {
+        "module": "migration_execution_attestation",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_attestation.py",
+        "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+        "size": 24471
+      },
+      {
+        "module": "migration_execution_identity",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_execution_identity.py",
+        "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+        "size": 47103
+      },
+      {
+        "module": "migration_parity.display",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_parity/display.py",
+        "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+        "size": 5820
+      },
+      {
+        "module": "migration_producer_attestation",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_attestation.py",
+        "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+        "size": 8459
+      },
+      {
+        "module": "migration_producer_identity",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/migration_producer_identity.py",
+        "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+        "size": 32710
+      },
+      {
+        "module": "run_migration_parity",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/run_migration_parity.py",
+        "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+        "size": 198968
+      },
+      {
+        "module": "validate_migration_parity_contract",
+        "origin": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+        "path": "/Users/lazytrot/work/pillow-rs/scripts/validate_migration_parity_contract.py",
+        "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+        "size": 58714
+      }
+    ],
+    "role": "parent",
+    "schema": "migration-parity/producer-identity@1"
+  },
+  "producer_bundle_sha256": "2b4baace19259f9cdf40cdd7bd5e00cf3db04760638ad0aeb792d99137011a59",
+  "report": {
+    "canonical_sha256": "e66860d18a2ebf8bebdcfa6246925291c87a839511cded22a8ce92a75eacdc64",
+    "run_id": "migration-benchmark-af1e66e0e776477394d148285f67f109",
+    "schema": "migration-parity/benchmark-result@1"
+  },
+  "schema": "migration-parity/producer-attestation@1",
+  "status": "complete"
+}

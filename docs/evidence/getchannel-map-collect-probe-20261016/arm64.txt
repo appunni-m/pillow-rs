@@ -1,0 +1,8 @@
+rustc 1.96.1 (31fca3adb 2026-06-26)
+host=aarch64 pixels=786432 input_bytes=2359296 allocation_and_drop_included=true unit=ns_per_channel_call warmups=4 samples=9 iterations=20
+current_grouped channel=0 median=124275 samples=[117837, 118158, 118760, 121122, 124275, 132266, 151287, 165414, 220470]
+current_grouped channel=1 median=123958 samples=[117185, 117429, 117437, 119314, 123958, 129589, 148281, 157631, 212316]
+current_grouped channel=2 median=124345 samples=[117208, 117525, 117685, 121850, 124345, 130072, 141418, 154579, 183029]
+chunks_map_collect channel=0 median=30031 samples=[28170, 28341, 29058, 29589, 30031, 32395, 33904, 40714, 44337]
+chunks_map_collect channel=1 median=30852 samples=[28489, 28735, 29518, 30770, 30852, 33075, 33747, 41191, 44510]
+chunks_map_collect channel=2 median=29785 samples=[28470, 28477, 28814, 29016, 29785, 32729, 32733, 41604, 44339]

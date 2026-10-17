@@ -611,8 +611,10 @@ class Image:
         return result
 
     def show(self, title=None):
-        """Display image. Not applicable in headless/test environments."""
-        pass
+        """Display the image using the registered :mod:`PIL.ImageShow` viewers."""
+        from PIL import ImageShow
+
+        ImageShow.show(self, title)
 
     @staticmethod
     def _qt_imports():

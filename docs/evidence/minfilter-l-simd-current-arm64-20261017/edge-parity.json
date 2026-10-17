@@ -1,0 +1,253 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "identity": {
+    "run_id": "migration-parity-1bf2a165c72547db9285e2fe59e10d01",
+    "started_at": "2026-10-16T18:53:10.815888Z",
+    "finished_at": "2026-10-16T18:53:11.837352Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/pil-imagefilter.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "bf48f3b32721bb955075668f42afd6c7b94538828547773d282e63ca6da2b9e2"
+      }
+    ],
+    "assets": [
+      {
+        "input_path": "inputs/parity/pil-imagefilter.json",
+        "item_id": "PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-1x1-size-3",
+        "asset_id": "image-noise",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "7902699be42c8a8e46fbbb4501726517e86b22c56a189f7625a6da49081b2451"
+      },
+      {
+        "input_path": "inputs/parity/pil-imagefilter.json",
+        "item_id": "PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-33x35-size-3",
+        "asset_id": "image-noise",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "b04133515bcca0ac1ed07515a1aaf6f8cb5daef13eddb6713ac1766d39506e51"
+      }
+    ],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-simd",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "simd",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-test"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 3600
+    }
+  },
+  "status": "completed",
+  "summary": {
+    "selected": 2,
+    "executed": 2,
+    "passed": 2,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-1x1-size-3",
+      "target_profile": "python-simd",
+      "requirements": [
+        "PIL.ImageFilter.MinFilter.mode.l",
+        "PIL.ImageFilter.MinFilter.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-1x1-size-3",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "type": "MinFilter"
+            }
+          },
+          {
+            "step_id": "apply-filter",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                1,
+                1
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "Nw=="
+            }
+          },
+          {
+            "step_id": "observe-filter-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "Nw=="
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-1x1-size-3",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "type": "MinFilter"
+            }
+          },
+          {
+            "step_id": "apply-filter",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                1,
+                1
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "Nw=="
+            }
+          },
+          {
+            "step_id": "observe-filter-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "Nw=="
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-33x35-size-3",
+      "target_profile": "python-simd",
+      "requirements": [
+        "PIL.ImageFilter.MinFilter.mode.l",
+        "PIL.ImageFilter.MinFilter.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-33x35-size-3",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "type": "MinFilter"
+            }
+          },
+          {
+            "step_id": "apply-filter",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                33,
+                35
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "FBQHBwcHBywQEBBiYmKAAgICMC0tLUVFRRMTEywsYDs7FBQHBwcHByYQEBArDQ0NAgICMC0tLUUeHhMTExUqKio7QQ8HBwcmJiYVFRUrDQ0NT09bMC0tLUMeGAwMDBUYGBkZMw8PBQUFGyYVFRUrDQ0FBQUNDTcUFBQeGAwMDBUYGBkZMw8PBQUFGx8VFRUxMS4FBQUNDTcUFBQeGAwMDBgYGBkZMygoBQUFFhYWLXQ/Py4FBQUNDTcUAQEBLj5LWykSEhJWNCgnJyc+FhYWLTExPy4uHQ4ODjg4AQEBIxwcHCkSEhJWZRwcHCc+FhYWLSQkJD9CGxgYGEBAAQEBBBwcHCkSEhKKExMcHB02NkIdHR0kJCdCGxgYGEBACwQEBAgICFJAQEBnExMcHB0wMDAPDw8kJCdCGwICAgxVVQQEBAgICFIiIhISExMEBAQOIjAJCQknJydKSgICAgweHjcLCwgICFIiIhISNjYEBAEBATAJCQk7BwcHKgICAgweHjdMBAQDAwMVFRISNjYEBAEBATgJCQkUBwcHCgo2LB4eHjdMBAQDAwMVFRUVHQ0NDQEBATYcHBwUBwcHCgo2LCwsVVVVBAQDAwMVFRUVEg0NDQMDAwccHBwUAwMDCgo8PDxVVVVVVXIGBgZEVSIiDg0NDVoHBwcNDSAAAAADDik8PBMTEwcHBywGBgZVVS0tDgcDAwMHBwcNDS0AAAADDk48PBMTEwcHBywGBgYSEhIuBgYDAwMvEQ0NDQsAAAANCgoKExMTEwcHByyFhRoSEhIuBgYDAwMXFxdDWQsLCw0NCgoKEycnJxcXF4WFYggICBIuBgYGBwcWFxdDRAsLCxcXCgoKCwsnZhcXDw8PGAgICDg4Dg4OFhYWERERREQCAgIrSWsLCwsUFBQXDw8PDggICDg4EBAQFgQEBBERFxcCAgIqGxsLCwsUFBQpDw8CAgIOODg4FhY1NQQEBBERFxcCAgIqGxsbdBQSEhIdEBACAgIOIiI5JCQkNQQEBBI7FxYWFioqGxsbTk4SBAQEHV0CAgIiIiI5FhYWNTISEhIwLxYWFiUlIyMjTk4SBAQEHSEhNjYiIiI/FhYWDg4OCAgIAwMDFiUAAAAjNTUcBAQEISEhQUccHBwkFhYWDg4OCAgIAwMDJSUAAAAMDBAQOjo6ISEhQUIcFBQUUDcXDg4OCAgIAwMDOjoAAAAKCgoQOgAAADY2QSUcFBQUIyMPDw8yKQwJCQkICAgeHgwKCgoQOwAAAAMDAyUcFBQUIyMPDwwMDAwJCQkICAguDw8KCgodHQAAAAMDAyUlGRkZHx8PDAwMDAwMDA0ICAguDw8PDQ0NHURQEgMDAy4lJRwcHx8sCwsLDBAnJw0NDUZNDw8PDQ0NHR0nEhISU1NTLhwcHx8sCwsLIiKRiS4RERFNUBAQDQ0NER0nEgEBASEhLhwcPT1kCwsLHR0dKioREREzIRAQEBERER0nHAEBASEhKUpKPT1khEAgHR0dKioREREzISEhKxEREVZgKwEBASEhKUpK"
+            }
+          },
+          {
+            "step_id": "observe-filter-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "FBQHBwcHBywQEBBiYmKAAgICMC0tLUVFRRMTEywsYDs7FBQHBwcHByYQEBArDQ0NAgICMC0tLUUeHhMTExUqKio7QQ8HBwcmJiYVFRUrDQ0NT09bMC0tLUMeGAwMDBUYGBkZMw8PBQUFGyYVFRUrDQ0FBQUNDTcUFBQeGAwMDBUYGBkZMw8PBQUFGx8VFRUxMS4FBQUNDTcUFBQeGAwMDBgYGBkZMygoBQUFFhYWLXQ/Py4FBQUNDTcUAQEBLj5LWykSEhJWNCgnJyc+FhYWLTExPy4uHQ4ODjg4AQEBIxwcHCkSEhJWZRwcHCc+FhYWLSQkJD9CGxgYGEBAAQEBBBwcHCkSEhKKExMcHB02NkIdHR0kJCdCGxgYGEBACwQEBAgICFJAQEBnExMcHB0wMDAPDw8kJCdCGwICAgxVVQQEBAgICFIiIhISExMEBAQOIjAJCQknJydKSgICAgweHjcLCwgICFIiIhISNjYEBAEBATAJCQk7BwcHKgICAgweHjdMBAQDAwMVFRISNjYEBAEBATgJCQkUBwcHCgo2LB4eHjdMBAQDAwMVFRUVHQ0NDQEBATYcHBwUBwcHCgo2LCwsVVVVBAQDAwMVFRUVEg0NDQMDAwccHBwUAwMDCgo8PDxVVVVVVXIGBgZEVSIiDg0NDVoHBwcNDSAAAAADDik8PBMTEwcHBywGBgZVVS0tDgcDAwMHBwcNDS0AAAADDk48PBMTEwcHBywGBgYSEhIuBgYDAwMvEQ0NDQsAAAANCgoKExMTEwcHByyFhRoSEhIuBgYDAwMXFxdDWQsLCw0NCgoKEycnJxcXF4WFYggICBIuBgYGBwcWFxdDRAsLCxcXCgoKCwsnZhcXDw8PGAgICDg4Dg4OFhYWERERREQCAgIrSWsLCwsUFBQXDw8PDggICDg4EBAQFgQEBBERFxcCAgIqGxsLCwsUFBQpDw8CAgIOODg4FhY1NQQEBBERFxcCAgIqGxsbdBQSEhIdEBACAgIOIiI5JCQkNQQEBBI7FxYWFioqGxsbTk4SBAQEHV0CAgIiIiI5FhYWNTISEhIwLxYWFiUlIyMjTk4SBAQEHSEhNjYiIiI/FhYWDg4OCAgIAwMDFiUAAAAjNTUcBAQEISEhQUccHBwkFhYWDg4OCAgIAwMDJSUAAAAMDBAQOjo6ISEhQUIcFBQUUDcXDg4OCAgIAwMDOjoAAAAKCgoQOgAAADY2QSUcFBQUIyMPDw8yKQwJCQkICAgeHgwKCgoQOwAAAAMDAyUcFBQUIyMPDwwMDAwJCQkICAguDw8KCgodHQAAAAMDAyUlGRkZHx8PDAwMDAwMDA0ICAguDw8PDQ0NHURQEgMDAy4lJRwcHx8sCwsLDBAnJw0NDUZNDw8PDQ0NHR0nEhISU1NTLhwcHx8sCwsLIiKRiS4RERFNUBAQDQ0NER0nEgEBASEhLhwcPT1kCwsLHR0dKioREREzIRAQEBERER0nHAEBASEhKUpKPT1khEAgHR0dKioREREzISEhKxEREVZgKwEBASEhKUpK"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFilter.MinFilter.nuanced.backend-noise-l-33x35-size-3",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "type": "MinFilter"
+            }
+          },
+          {
+            "step_id": "apply-filter",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                33,
+                35
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "FBQHBwcHBywQEBBiYmKAAgICMC0tLUVFRRMTEywsYDs7FBQHBwcHByYQEBArDQ0NAgICMC0tLUUeHhMTExUqKio7QQ8HBwcmJiYVFRUrDQ0NT09bMC0tLUMeGAwMDBUYGBkZMw8PBQUFGyYVFRUrDQ0FBQUNDTcUFBQeGAwMDBUYGBkZMw8PBQUFGx8VFRUxMS4FBQUNDTcUFBQeGAwMDBgYGBkZMygoBQUFFhYWLXQ/Py4FBQUNDTcUAQEBLj5LWykSEhJWNCgnJyc+FhYWLTExPy4uHQ4ODjg4AQEBIxwcHCkSEhJWZRwcHCc+FhYWLSQkJD9CGxgYGEBAAQEBBBwcHCkSEhKKExMcHB02NkIdHR0kJCdCGxgYGEBACwQEBAgICFJAQEBnExMcHB0wMDAPDw8kJCdCGwICAgxVVQQEBAgICFIiIhISExMEBAQOIjAJCQknJydKSgICAgweHjcLCwgICFIiIhISNjYEBAEBATAJCQk7BwcHKgICAgweHjdMBAQDAwMVFRISNjYEBAEBATgJCQkUBwcHCgo2LB4eHjdMBAQDAwMVFRUVHQ0NDQEBATYcHBwUBwcHCgo2LCwsVVVVBAQDAwMVFRUVEg0NDQMDAwccHBwUAwMDCgo8PDxVVVVVVXIGBgZEVSIiDg0NDVoHBwcNDSAAAAADDik8PBMTEwcHBywGBgZVVS0tDgcDAwMHBwcNDS0AAAADDk48PBMTEwcHBywGBgYSEhIuBgYDAwMvEQ0NDQsAAAANCgoKExMTEwcHByyFhRoSEhIuBgYDAwMXFxdDWQsLCw0NCgoKEycnJxcXF4WFYggICBIuBgYGBwcWFxdDRAsLCxcXCgoKCwsnZhcXDw8PGAgICDg4Dg4OFhYWERERREQCAgIrSWsLCwsUFBQXDw8PDggICDg4EBAQFgQEBBERFxcCAgIqGxsLCwsUFBQpDw8CAgIOODg4FhY1NQQEBBERFxcCAgIqGxsbdBQSEhIdEBACAgIOIiI5JCQkNQQEBBI7FxYWFioqGxsbTk4SBAQEHV0CAgIiIiI5FhYWNTISEhIwLxYWFiUlIyMjTk4SBAQEHSEhNjYiIiI/FhYWDg4OCAgIAwMDFiUAAAAjNTUcBAQEISEhQUccHBwkFhYWDg4OCAgIAwMDJSUAAAAMDBAQOjo6ISEhQUIcFBQUUDcXDg4OCAgIAwMDOjoAAAAKCgoQOgAAADY2QSUcFBQUIyMPDw8yKQwJCQkICAgeHgwKCgoQOwAAAAMDAyUcFBQUIyMPDwwMDAwJCQkICAguDw8KCgodHQAAAAMDAyUlGRkZHx8PDAwMDAwMDA0ICAguDw8PDQ0NHURQEgMDAy4lJRwcHx8sCwsLDBAnJw0NDUZNDw8PDQ0NHR0nEhISU1NTLhwcHx8sCwsLIiKRiS4RERFNUBAQDQ0NER0nEgEBASEhLhwcPT1kCwsLHR0dKioREREzIRAQEBERER0nHAEBASEhKUpKPT1khEAgHR0dKioREREzISEhKxEREVZgKwEBASEhKUpK"
+            }
+          },
+          {
+            "step_id": "observe-filter-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "FBQHBwcHBywQEBBiYmKAAgICMC0tLUVFRRMTEywsYDs7FBQHBwcHByYQEBArDQ0NAgICMC0tLUUeHhMTExUqKio7QQ8HBwcmJiYVFRUrDQ0NT09bMC0tLUMeGAwMDBUYGBkZMw8PBQUFGyYVFRUrDQ0FBQUNDTcUFBQeGAwMDBUYGBkZMw8PBQUFGx8VFRUxMS4FBQUNDTcUFBQeGAwMDBgYGBkZMygoBQUFFhYWLXQ/Py4FBQUNDTcUAQEBLj5LWykSEhJWNCgnJyc+FhYWLTExPy4uHQ4ODjg4AQEBIxwcHCkSEhJWZRwcHCc+FhYWLSQkJD9CGxgYGEBAAQEBBBwcHCkSEhKKExMcHB02NkIdHR0kJCdCGxgYGEBACwQEBAgICFJAQEBnExMcHB0wMDAPDw8kJCdCGwICAgxVVQQEBAgICFIiIhISExMEBAQOIjAJCQknJydKSgICAgweHjcLCwgICFIiIhISNjYEBAEBATAJCQk7BwcHKgICAgweHjdMBAQDAwMVFRISNjYEBAEBATgJCQkUBwcHCgo2LB4eHjdMBAQDAwMVFRUVHQ0NDQEBATYcHBwUBwcHCgo2LCwsVVVVBAQDAwMVFRUVEg0NDQMDAwccHBwUAwMDCgo8PDxVVVVVVXIGBgZEVSIiDg0NDVoHBwcNDSAAAAADDik8PBMTEwcHBywGBgZVVS0tDgcDAwMHBwcNDS0AAAADDk48PBMTEwcHBywGBgYSEhIuBgYDAwMvEQ0NDQsAAAANCgoKExMTEwcHByyFhRoSEhIuBgYDAwMXFxdDWQsLCw0NCgoKEycnJxcXF4WFYggICBIuBgYGBwcWFxdDRAsLCxcXCgoKCwsnZhcXDw8PGAgICDg4Dg4OFhYWERERREQCAgIrSWsLCwsUFBQXDw8PDggICDg4EBAQFgQEBBERFxcCAgIqGxsLCwsUFBQpDw8CAgIOODg4FhY1NQQEBBERFxcCAgIqGxsbdBQSEhIdEBACAgIOIiI5JCQkNQQEBBI7FxYWFioqGxsbTk4SBAQEHV0CAgIiIiI5FhYWNTISEhIwLxYWFiUlIyMjTk4SBAQEHSEhNjYiIiI/FhYWDg4OCAgIAwMDFiUAAAAjNTUcBAQEISEhQUccHBwkFhYWDg4OCAgIAwMDJSUAAAAMDBAQOjo6ISEhQUIcFBQUUDcXDg4OCAgIAwMDOjoAAAAKCgoQOgAAADY2QSUcFBQUIyMPDw8yKQwJCQkICAgeHgwKCgoQOwAAAAMDAyUcFBQUIyMPDwwMDAwJCQkICAguDw8KCgodHQAAAAMDAyUlGRkZHx8PDAwMDAwMDA0ICAguDw8PDQ0NHURQEgMDAy4lJRwcHx8sCwsLDBAnJw0NDUZNDw8PDQ0NHR0nEhISU1NTLhwcHx8sCwsLIiKRiS4RERFNUBAQDQ0NER0nEgEBASEhLhwcPT1kCwsLHR0dKioREREzIRAQEBERER0nHAEBASEhKUpKPT1khEAgHR0dKioREREzISEhKxEREVZgKwEBASEhKUpK"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    }
+  ],
+  "infrastructure_errors": []
+}

@@ -1,0 +1,49 @@
+{
+  "records": [],
+  "report": {
+    "inputs": [
+      {
+        "path": "inputs/benchmark/pil-image-image.json",
+        "schema": "migration-parity/benchmark-input@1",
+        "sha256": "940458632a1af7be40e54b3458ef8fa6462fd5bafe1896f6bef7caae43c526cd"
+      },
+      {
+        "path": "inputs/parity/pil-image-image.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "4dc6ada6553b7ac3916097e30f43ef0cc16f3ef092cacae44745d07631eb2ac3"
+      }
+    ],
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "630ad23d4ba4d01aa25cb23a57fbfb308422c3c40618f2c063cccef01c8afc3b"
+    },
+    "path": "/Users/lazytrot/work/pillow-rs/docs/evidence/getchannel-current-arm64-20261015/benchmark.json",
+    "run_id": "migration-benchmark-27d8dac702d74c85bb3c40e1f7ee33c2",
+    "schema": "migration-parity/benchmark-result@1"
+  },
+  "schema": "migration-parity/benchmark-raw-samples@1",
+  "workloads": [
+    {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+      "measurement_policy": {
+        "boundary": "observed_steps",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "parity_pass",
+        "measurement_iterations": 20,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 5,
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "warmup_iterations": 5
+      },
+      "workload_id": "pil-image-image.getchannel.materialized.rgb-1024x768"
+    }
+  ]
+}

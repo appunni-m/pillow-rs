@@ -154,13 +154,13 @@ fn f_resize_accumulate<const FINITE_OPERANDS: bool, F: F64MulAdd>(
 }
 
 #[inline]
-fn f_resize_horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
+fn f_resize_horizontal_eight_tap_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source_row: &[f32],
-    first_source_x: i64,
-    weights: &[f64],
+    source_x: usize,
+    weights: &[f64; 8],
     fma: &F,
-) -> f32 {
-    if let [
+) -> Option<f32> {
+    let [
         weight0,
         weight1,
         weight2,
@@ -169,39 +169,55 @@ fn f_resize_horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
         weight5,
         weight6,
         weight7,
-    ] = weights
+    ] = weights;
+    let samples = source_row.get(source_x..)?.get(..8)?;
+    let [
+        sample0,
+        sample1,
+        sample2,
+        sample3,
+        sample4,
+        sample5,
+        sample6,
+        sample7,
+    ] = samples
+    else {
+        return None;
+    };
+
+    let mut accumulator =
+        f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight0, f64::from(*sample0), 0.0);
+    accumulator =
+        f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight1, f64::from(*sample1), accumulator);
+    accumulator =
+        f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight2, f64::from(*sample2), accumulator);
+    accumulator =
+        f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight3, f64::from(*sample3), accumulator);
+    accumulator =
+        f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight4, f64::from(*sample4), accumulator);
+    accumulator =
+        f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight5, f64::from(*sample5), accumulator);
+    accumulator =
+        f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight6, f64::from(*sample6), accumulator);
+    accumulator =
+        f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight7, f64::from(*sample7), accumulator);
+    Some(accumulator as f32)
+}
+
+#[inline]
+fn f_resize_horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
+    source_row: &[f32],
+    first_source_x: i64,
+    weights: &[f64],
+    fma: &F,
+) -> f32 {
+    if let Ok(weights) = <&[f64; 8]>::try_from(weights)
         && let Ok(source_x) = usize::try_from(first_source_x)
-        && let Some(source_row) = source_row.get(source_x..)
-        && let Some(
-            [
-                sample0,
-                sample1,
-                sample2,
-                sample3,
-                sample4,
-                sample5,
-                sample6,
-                sample7,
-            ],
-        ) = source_row.get(..8)
+        && let Some(sample) = f_resize_horizontal_eight_tap_sample::<FINITE_OPERANDS, _>(
+            source_row, source_x, weights, fma,
+        )
     {
-        let mut accumulator =
-            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight0, f64::from(*sample0), 0.0);
-        accumulator =
-            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight1, f64::from(*sample1), accumulator);
-        accumulator =
-            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight2, f64::from(*sample2), accumulator);
-        accumulator =
-            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight3, f64::from(*sample3), accumulator);
-        accumulator =
-            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight4, f64::from(*sample4), accumulator);
-        accumulator =
-            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight5, f64::from(*sample5), accumulator);
-        accumulator =
-            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight6, f64::from(*sample6), accumulator);
-        accumulator =
-            f_resize_mul_add::<FINITE_OPERANDS, _>(fma, *weight7, f64::from(*sample7), accumulator);
-        return accumulator as f32;
+        return sample;
     }
 
     let vector_product_count = (weights.len() / F_RESIZE_VECTOR_WIDTH) * F_RESIZE_VECTOR_WIDTH;
@@ -229,6 +245,27 @@ fn f_resize_horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
         }
     }
     accumulator as f32
+}
+
+#[cfg(not(feature = "parallel"))]
+fn f_resize_contiguous_eight_tap_coefficients(
+    coefficients: &FilterCoeffsF64,
+) -> Option<(usize, Vec<(usize, [f64; 8])>)> {
+    let first = coefficients
+        .weights
+        .iter()
+        .position(|weights| weights.len() == 8)?;
+    let last = coefficients
+        .weights
+        .iter()
+        .rposition(|weights| weights.len() == 8)?;
+    let mut fixed = Vec::with_capacity(last - first + 1);
+    for index in first..=last {
+        let source_x = usize::try_from(*coefficients.xmin.get(index)?).ok()?;
+        let weights = <&[f64; 8]>::try_from(coefficients.weights.get(index)?.as_slice()).ok()?;
+        fixed.push((source_x, *weights));
+    }
+    Some((first, fixed))
 }
 
 #[inline]
@@ -347,16 +384,56 @@ fn f_resize_horizontal_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
         }
     );
     #[cfg(not(feature = "parallel"))]
-    for (source_y, row) in output.chunks_mut(destination_width).enumerate() {
-        let source_row_start = source_y * source_width;
-        let source_row = &source[source_row_start..source_row_start + source_width];
-        for (destination_x, output) in row.iter_mut().enumerate() {
-            *output = f_resize_horizontal_sample::<FINITE_OPERANDS, _>(
-                source_row,
-                coefficients.xmin[destination_x],
-                &coefficients.weights[destination_x],
-                fma,
-            );
+    {
+        let eight_tap_coefficients = f_resize_contiguous_eight_tap_coefficients(coefficients);
+        for (source_y, row) in output.chunks_mut(destination_width).enumerate() {
+            let source_row_start = source_y * source_width;
+            let source_row = &source[source_row_start..source_row_start + source_width];
+            if let Some((first_eight_tap, fixed_weights)) = &eight_tap_coefficients {
+                let end_eight_tap = *first_eight_tap + fixed_weights.len();
+                for (destination_x, output) in row[..*first_eight_tap].iter_mut().enumerate() {
+                    *output = f_resize_horizontal_sample::<FINITE_OPERANDS, _>(
+                        source_row,
+                        coefficients.xmin[destination_x],
+                        &coefficients.weights[destination_x],
+                        fma,
+                    );
+                }
+                for (offset, output) in row[*first_eight_tap..end_eight_tap].iter_mut().enumerate()
+                {
+                    let destination_x = *first_eight_tap + offset;
+                    let (source_x, weights) = fixed_weights[offset];
+                    *output = f_resize_horizontal_eight_tap_sample::<FINITE_OPERANDS, _>(
+                        source_row, source_x, &weights, fma,
+                    )
+                    .unwrap_or_else(|| {
+                        f_resize_horizontal_sample::<FINITE_OPERANDS, _>(
+                            source_row,
+                            coefficients.xmin[destination_x],
+                            &coefficients.weights[destination_x],
+                            fma,
+                        )
+                    });
+                }
+                for (offset, output) in row[end_eight_tap..].iter_mut().enumerate() {
+                    let destination_x = end_eight_tap + offset;
+                    *output = f_resize_horizontal_sample::<FINITE_OPERANDS, _>(
+                        source_row,
+                        coefficients.xmin[destination_x],
+                        &coefficients.weights[destination_x],
+                        fma,
+                    );
+                }
+            } else {
+                for (destination_x, output) in row.iter_mut().enumerate() {
+                    *output = f_resize_horizontal_sample::<FINITE_OPERANDS, _>(
+                        source_row,
+                        coefficients.xmin[destination_x],
+                        &coefficients.weights[destination_x],
+                        fma,
+                    );
+                }
+            }
         }
     }
 }
@@ -1119,7 +1196,7 @@ fn resize_i_with_fma<F: F64MulAdd>(
     if matches!(filter, ResampleFilter::Nearest) {
         let mut output_bytes = output_dims.alloc_buffer();
         #[cfg(feature = "parallel")]
-        crate::par_rows_mut!(
+        crate::par_rows_mut_typed!(
             &mut output_bytes,
             output_stride,
             dst_h as usize,
@@ -1341,6 +1418,139 @@ fn resize_i_boxed(
 
 // ── Generic rotation & transform helpers (mode-aware) ──
 
+#[cfg(not(feature = "parallel"))]
+fn ceil_div_positive_denominator(value: i128, denominator: i128) -> Option<i128> {
+    if denominator <= 0 {
+        return None;
+    }
+    let quotient = value.div_euclid(denominator);
+    if value.rem_euclid(denominator) == 0 {
+        Some(quotient)
+    } else {
+        quotient.checked_add(1)
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn fixed_coordinate_in_bounds_span(
+    origin: i64,
+    step: i64,
+    source_length: u32,
+    destination_length: u32,
+) -> Option<(usize, usize)> {
+    if step <= 0 {
+        return None;
+    }
+
+    let denominator = i128::from(step);
+    let origin = i128::from(origin);
+    let source_limit = i128::from(source_length).checked_mul(1 << 16)?;
+    let destination_limit = i128::from(destination_length);
+    let first_in_bounds = ceil_div_positive_denominator(origin.checked_neg()?, denominator)?;
+    let first_past_bounds =
+        ceil_div_positive_denominator(source_limit.checked_sub(origin)?, denominator)?;
+    let first_in_bounds = first_in_bounds.clamp(0, destination_limit);
+    let first_past_bounds = first_past_bounds.clamp(0, destination_limit);
+
+    Some((first_in_bounds as usize, first_past_bounds as usize))
+}
+
+#[cfg(not(feature = "parallel"))]
+fn nearest_positive_step_in_bounds_span(
+    y: u32,
+    destination_width: u32,
+    source_width: u32,
+    source_height: u32,
+    origin_x: i64,
+    origin_y: i64,
+    step_x_x: i64,
+    step_y_x: i64,
+    step_x_y: i64,
+    step_y_y: i64,
+) -> Option<(usize, usize, i64, i64)> {
+    if step_x_x <= 0 || step_x_y <= 0 {
+        return None;
+    }
+
+    let row = i64::from(y);
+    let row_x = origin_x.checked_add(row.checked_mul(step_y_x)?)?;
+    let row_y = origin_y.checked_add(row.checked_mul(step_y_y)?)?;
+    let x_span = fixed_coordinate_in_bounds_span(row_x, step_x_x, source_width, destination_width)?;
+    let y_span =
+        fixed_coordinate_in_bounds_span(row_y, step_x_y, source_height, destination_width)?;
+    let start = x_span.0.max(y_span.0);
+    let end = x_span.1.min(y_span.1);
+    if start >= end {
+        return Some((start, start, 0, 0));
+    }
+
+    let x_offset = i128::try_from(start)
+        .ok()?
+        .checked_mul(i128::from(step_x_x))?;
+    let y_offset = i128::try_from(start)
+        .ok()?
+        .checked_mul(i128::from(step_x_y))?;
+    let source_x = i64::try_from(i128::from(row_x).checked_add(x_offset)?).ok()?;
+    let source_y = i64::try_from(i128::from(row_y).checked_add(y_offset)?).ok()?;
+
+    Some((start, end, source_x, source_y))
+}
+
+#[cfg(not(feature = "parallel"))]
+fn nearest_contiguous_rgb_run_len(
+    source_x: i64,
+    source_y: i64,
+    step_x_x: i64,
+    step_x_y: i64,
+    max_len: usize,
+) -> Option<usize> {
+    if max_len == 0 || step_x_x <= 0 || step_x_y < 0 {
+        return None;
+    }
+
+    let fixed_one = 1_i128 << 16;
+    let fixed_last = fixed_one - 1;
+    let x_fraction = i128::from(source_x).rem_euclid(fixed_one);
+    let y_fraction = i128::from(source_y).rem_euclid(fixed_one);
+    let x_delta_from_one = i128::from(step_x_x) - fixed_one;
+    let remaining = i128::try_from(max_len).ok()?;
+
+    // For a contiguous source slice, each destination step must advance the
+    // integer source x by exactly one. Bound the run where the fractional
+    // error relative to 1.0 remains in the current fixed-point pixel.
+    let x_run = if x_delta_from_one > 0 {
+        (fixed_last - x_fraction) / x_delta_from_one + 1
+    } else if x_delta_from_one < 0 {
+        x_fraction / -x_delta_from_one + 1
+    } else {
+        remaining
+    };
+
+    // The source y coordinate must stay on one row for the same run.
+    let y_step = i128::from(step_x_y);
+    let y_run = if y_step == 0 {
+        remaining
+    } else {
+        (fixed_last - y_fraction) / y_step + 1
+    };
+
+    usize::try_from(x_run.min(y_run).min(remaining)).ok()
+}
+
+#[cfg(not(feature = "parallel"))]
+fn fill_rgb_pixels(bytes: &mut [u8], fill_pixel: [u8; 3]) {
+    for pixel in bytes.chunks_exact_mut(3) {
+        pixel.copy_from_slice(&fill_pixel);
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn fill_rgba_pixels(bytes: &mut [u8], fill_pixel: [u8; 4]) {
+    for pixel in bytes.chunks_exact_mut(4) {
+        pixel.copy_from_slice(&fill_pixel);
+    }
+}
+
 fn affine_nearest_fixed(
     source: &[u8],
     source_size: (u32, u32),
@@ -1386,7 +1596,7 @@ fn affine_nearest_fixed(
                     .copy_from_slice(&source[input_index..input_index + channels]);
             } else {
                 for channel in 0..channels.min(4) {
-                    row[output_index + channel] = if channels == 2 && channel == 1 {
+                    let value = if channels == 2 && channel == 1 {
                         // LA/PA normalize their second sample as alpha in
                         // fill.3; fill.1 is only the duplicated luma/index
                         // component used by the host-neutral color record.
@@ -1399,12 +1609,183 @@ fn affine_nearest_fixed(
                             _ => fill.3,
                         }
                     };
+                    row[output_index + channel] = value;
                 }
             }
             source_x += step_x_x;
             source_y += step_x_y;
         }
     };
+
+    #[cfg(not(feature = "parallel"))]
+    if channels == 3 {
+        let fill_pixel = [fill.0, fill.1, fill.2];
+        let output_stride = destination_width as usize * channels;
+        for (y, row) in output
+            .chunks_exact_mut(output_stride)
+            .take(destination_height as usize)
+            .enumerate()
+        {
+            let Some((start, end, mut source_x, mut source_y)) =
+                nearest_positive_step_in_bounds_span(
+                    y as u32,
+                    destination_width,
+                    source_width,
+                    source_height,
+                    origin_x,
+                    origin_y,
+                    step_x_x,
+                    step_y_x,
+                    step_x_y,
+                    step_y_y,
+                )
+            else {
+                process_row(y as u32, row);
+                continue;
+            };
+
+            let start_byte = start * channels;
+            let end_byte = end * channels;
+            fill_rgb_pixels(&mut row[..start_byte], fill_pixel);
+            fill_rgb_pixels(&mut row[end_byte..], fill_pixel);
+
+            let source_width = source_width as usize;
+            let span_length = end - start;
+            let mut offset = 0;
+            let mut contiguous_copies = true;
+            while offset < span_length {
+                let Some(run_length) = nearest_contiguous_rgb_run_len(
+                    source_x,
+                    source_y,
+                    step_x_x,
+                    step_x_y,
+                    span_length - offset,
+                ) else {
+                    contiguous_copies = false;
+                    break;
+                };
+                // Short copies do not repay the run-bound calculation. Keep
+                // the original fixed-point per-pixel path for those rows.
+                if run_length < 4 {
+                    contiguous_copies = false;
+                    break;
+                }
+
+                let input_x = (source_x >> 16) as usize;
+                let input_y = (source_y >> 16) as usize;
+                let source_start = (input_y * source_width + input_x) * 3;
+                let destination_start = start_byte + offset * 3;
+                let copy_bytes = run_length * 3;
+                row[destination_start..destination_start + copy_bytes]
+                    .copy_from_slice(&source[source_start..source_start + copy_bytes]);
+
+                offset += run_length;
+                if offset < span_length {
+                    let run = run_length as i128;
+                    let Some(next_x) =
+                        i64::try_from(i128::from(source_x) + i128::from(step_x_x) * run).ok()
+                    else {
+                        contiguous_copies = false;
+                        break;
+                    };
+                    let Some(next_y) =
+                        i64::try_from(i128::from(source_y) + i128::from(step_x_y) * run).ok()
+                    else {
+                        contiguous_copies = false;
+                        break;
+                    };
+                    source_x = next_x;
+                    source_y = next_y;
+                }
+            }
+            if !contiguous_copies {
+                process_row(y as u32, row);
+            }
+        }
+        return;
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    if channels == 4 {
+        let fill_pixel = [fill.0, fill.1, fill.2, fill.3];
+        let output_stride = destination_width as usize * channels;
+        for (y, row) in output
+            .chunks_exact_mut(output_stride)
+            .take(destination_height as usize)
+            .enumerate()
+        {
+            let Some((start, end, mut source_x, mut source_y)) =
+                nearest_positive_step_in_bounds_span(
+                    y as u32,
+                    destination_width,
+                    source_width,
+                    source_height,
+                    origin_x,
+                    origin_y,
+                    step_x_x,
+                    step_y_x,
+                    step_x_y,
+                    step_y_y,
+                )
+            else {
+                process_row(y as u32, row);
+                continue;
+            };
+
+            let start_byte = start * channels;
+            let end_byte = end * channels;
+            fill_rgba_pixels(&mut row[..start_byte], fill_pixel);
+            fill_rgba_pixels(&mut row[end_byte..], fill_pixel);
+
+            let source_width = source_width as usize;
+            let span_length = end - start;
+            let mut pixels = row[start_byte..end_byte].chunks_exact_mut(16);
+            let group_count = span_length / 4;
+            let tail_count = span_length % 4;
+            for (group_index, group) in pixels.by_ref().enumerate() {
+                let input_x = (source_x >> 16) as usize;
+                let input_y = (source_y >> 16) as usize;
+                let input_index = (input_y * source_width + input_x) * 4;
+                group[0..4].copy_from_slice(&source[input_index..input_index + 4]);
+                source_x += step_x_x;
+                source_y += step_x_y;
+
+                let input_x = (source_x >> 16) as usize;
+                let input_y = (source_y >> 16) as usize;
+                let input_index = (input_y * source_width + input_x) * 4;
+                group[4..8].copy_from_slice(&source[input_index..input_index + 4]);
+                source_x += step_x_x;
+                source_y += step_x_y;
+
+                let input_x = (source_x >> 16) as usize;
+                let input_y = (source_y >> 16) as usize;
+                let input_index = (input_y * source_width + input_x) * 4;
+                group[8..12].copy_from_slice(&source[input_index..input_index + 4]);
+                source_x += step_x_x;
+                source_y += step_x_y;
+
+                let input_x = (source_x >> 16) as usize;
+                let input_y = (source_y >> 16) as usize;
+                let input_index = (input_y * source_width + input_x) * 4;
+                group[12..16].copy_from_slice(&source[input_index..input_index + 4]);
+                if group_index + 1 < group_count || tail_count > 0 {
+                    source_x += step_x_x;
+                    source_y += step_x_y;
+                }
+            }
+            for (offset, pixel) in pixels.into_remainder().chunks_exact_mut(4).enumerate() {
+                let input_x = (source_x >> 16) as usize;
+                let input_y = (source_y >> 16) as usize;
+                let input_index = (input_y * source_width + input_x) * 4;
+                pixel.copy_from_slice(&source[input_index..input_index + 4]);
+                if offset + 1 < tail_count {
+                    source_x += step_x_x;
+                    source_y += step_x_y;
+                }
+            }
+        }
+        return;
+    }
 
     #[cfg(feature = "parallel")]
     const PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
@@ -3982,6 +4363,10 @@ pub fn execute_reduce(
 mod tests {
     use super::PortableFma;
     #[cfg(not(feature = "parallel"))]
+    use super::fixed_coordinate_in_bounds_span;
+    #[cfg(not(feature = "parallel"))]
+    use super::nearest_contiguous_rgb_run_len;
+    #[cfg(not(feature = "parallel"))]
     use super::resize_i;
     #[cfg(not(feature = "parallel"))]
     use super::resize_i_contiguous_eight_tap_weights;
@@ -3998,6 +4383,99 @@ mod tests {
     use super::{resize_i_round_up_to_i32, round_up};
     use crate::pipeline::{PipelineOp, ResampleFilter};
     use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
+
+    #[cfg(not(feature = "parallel"))]
+    #[test]
+    fn rotate_contiguous_rgb_run_length_matches_fixed_point_scan() {
+        let x_steps = [1, 32_768, 65_526, 65_536, 65_537, 98_304, 131_072, 655_360];
+        let y_steps = [0, 1, 1_144, 65_535, 65_536, 100_000];
+        let x_fractions = [0, 1, 5, 9, 10, 32_767, 65_525, 65_535];
+        let y_fractions = [0, 1, 1_143, 32_767, 65_535];
+        let remaining_lengths = [1, 2, 17, 257];
+
+        for x_step in x_steps {
+            for y_step in y_steps {
+                for x_fraction in x_fractions {
+                    for y_fraction in y_fractions {
+                        for remaining in remaining_lengths {
+                            let source_x = (3_i64 << 16) + x_fraction;
+                            let source_y = (2_i64 << 16) + y_fraction;
+                            let base_x = source_x >> 16;
+                            let base_y = source_y >> 16;
+                            let expected = (1..=remaining)
+                                .take_while(|&length| {
+                                    let offset = (length - 1) as i64;
+                                    ((source_x + offset * x_step) >> 16) == base_x + offset
+                                        && ((source_y + offset * y_step) >> 16) == base_y
+                                })
+                                .last()
+                                .unwrap_or(0);
+
+                            assert_eq!(
+                                nearest_contiguous_rgb_run_len(
+                                    source_x, source_y, x_step, y_step, remaining
+                                ),
+                                Some(expected),
+                                "x_step={x_step}, y_step={y_step}, x_fraction={x_fraction}, \
+                                 y_fraction={y_fraction}, remaining={remaining}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[test]
+    fn rotate_positive_step_span_matches_signed_fixed_point_bounds() {
+        let origins = [
+            i64::MIN,
+            -1_000_001,
+            -65_537,
+            -65_536,
+            -65_535,
+            -1,
+            0,
+            1,
+            32_768,
+            65_535,
+            65_536,
+            65_537,
+            1_000_001,
+            i64::MAX,
+        ];
+        let steps = [1, 32_767, 32_768, 65_535, 65_536, 65_537, 131_072, i64::MAX];
+
+        for source_length in 0..=11 {
+            for destination_length in 0..=17 {
+                for origin in origins {
+                    for step in steps {
+                        let span = fixed_coordinate_in_bounds_span(
+                            origin,
+                            step,
+                            source_length,
+                            destination_length,
+                        )
+                        .expect("positive step has a representable clipped span");
+                        let fixed_source_limit = i128::from(source_length) * (1 << 16);
+                        for x in 0..destination_length as usize {
+                            let coordinate = i128::from(origin)
+                                + i128::try_from(x).expect("small test coordinate")
+                                    * i128::from(step);
+                            let expected = coordinate >> 16 >= 0
+                                && coordinate >> 16 < i128::from(source_length);
+                            assert_eq!(
+                                (span.0..span.1).contains(&x),
+                                expected,
+                                "source={source_length}, destination={destination_length}, origin={origin}, step={step}, x={x}, limit={fixed_source_limit}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[cfg(target_arch = "x86_64")]
     #[test]

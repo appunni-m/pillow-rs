@@ -1,7 +1,11 @@
 """Regression tests for composing migration benchmark workload filters."""
 from __future__ import annotations
 
+import argparse
+import copy
 import gzip
+import io
+from contextlib import ExitStack, redirect_stderr, redirect_stdout
 import json
 import unittest
 
@@ -14,20 +18,114 @@ from run_migration_benchmark import (
     PARALLEL_CPU_PROFILE,
     TARGET_BACKENDS,
     TARGET_PROFILES,
+    applicable_parity_profiles,
     apply_profile_to_workloads,
     benchmark_subjects,
+    frozen_workload_subjects,
+    execution_result,
+    parity_gate_outcome,
     profile_applies_to_case,
+    parity_profile_for_subject,
+    parity_timing_allowed,
     runtime_backend_for_profile,
     read_and_remove_backend_parity,
     run_timed_side,
     select_workloads,
     sha256,
+    validate_selected_workloads,
     validate_reused_parity,
     write_parity_artifact,
 )
 import run_migration_benchmark
 import run_migration_parity
+from test_migration_benchmark_samples import synthetic_report
 from run_migration_parity import TARGET_FEATURES, target_profile_for_backend
+
+
+class BenchmarkExecutionProofScopeTests(unittest.TestCase):
+    @staticmethod
+    def receipt(step_id, operation, *, terminal_complete):
+        return {
+            "step_id": step_id,
+            "status": "completed",
+            "terminal_complete": terminal_complete,
+            "actual_backend": "cpu",
+            "operation_count": 1,
+            "dispatch_count": 0,
+            "operation_telemetry": [
+                {
+                    "operation": operation,
+                    "path": "cpu",
+                    "vector_block_count": 0,
+                    "scalar_tail_count": 0,
+                    "mode_conversion_count": 0,
+                    "handoff_count": 0,
+                }
+            ],
+        }
+
+    def test_observed_step_uses_its_receipt_and_keeps_full_case_completion(self):
+        result = execution_result(
+            "target_profile",
+            "python-cpu",
+            [
+                self.receipt(
+                    "i-getcolors", "GetColors", terminal_complete=False
+                ),
+                self.receipt(
+                    "f-getprojection", "GetProjection", terminal_complete=True
+                ),
+            ],
+            {"boundary": "observed_steps", "step_ids": ["i-getcolors"]},
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue(result["terminal_complete"])
+        self.assertEqual(result["actual_backend"], "cpu")
+        self.assertEqual(result["actual_backend_counts"], {"cpu": 1})
+        self.assertEqual(
+            [item["operation"] for item in result["operation_telemetry"]],
+            ["GetColors"],
+        )
+
+    def test_observed_step_without_its_own_receipt_is_not_attributed_later(self):
+        result = execution_result(
+            "target_profile",
+            "python-cpu",
+            [
+                self.receipt(
+                    "f-getprojection", "GetProjection", terminal_complete=True
+                ),
+            ],
+            {"boundary": "observed_steps", "step_ids": ["i-getcolors"]},
+        )
+
+        self.assertEqual(result["status"], "not_proven")
+        self.assertTrue(result["terminal_complete"])
+        self.assertIsNone(result["actual_backend"])
+        self.assertEqual(result["actual_backend_counts"], {})
+        self.assertEqual(result["operation_telemetry"], [])
+
+    def test_fallback_from_any_proof_step_remains_visible(self):
+        later_step = self.receipt(
+            "f-getprojection", "GetProjection", terminal_complete=True
+        )
+        later_step["fallback_reason"] = "unsupported-profile"
+        result = execution_result(
+            "target_profile",
+            "python-cpu",
+            [
+                self.receipt(
+                    "i-getcolors", "GetColors", terminal_complete=False
+                ),
+                later_step,
+            ],
+            {"boundary": "observed_steps", "step_ids": ["i-getcolors"]},
+        )
+
+        self.assertEqual(
+            result["fallback_reason_counts"], {"unsupported-profile": 1}
+        )
 
 
 class BenchmarkWorkloadSelectionTests(unittest.TestCase):
@@ -86,6 +184,29 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 workload_ids=["missing.workload"],
                 limit=None,
             )
+
+    def test_benchmark_identity_uses_its_start_not_reused_parity_start(self) -> None:
+        benchmark_started_at = "2026-10-13T10:30:00Z"
+        parity_identity = {
+            "started_at": "2026-10-13T10:00:00Z",
+            "oracles": [],
+        }
+        with patch(
+            "run_migration_benchmark.benchmark_target_identities", return_value=[]
+        ):
+            result_identity = run_migration_benchmark.identity(
+                run_migration_benchmark.DEFAULT_MANIFEST,
+                [],
+                [],
+                parity_identity,
+                30,
+                started_at=benchmark_started_at,
+            )
+
+        self.assertEqual(result_identity["started_at"], benchmark_started_at)
+        self.assertNotEqual(
+            result_identity["started_at"], parity_identity["started_at"]
+        )
 
     def test_material_rgb_thumbnail_times_lazy_pixel_setup(self) -> None:
         inputs = (
@@ -231,6 +352,116 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
         self.assertFalse(profile_applies_to_case("python-parallel-cpu", simd_only_case))
         self.assertEqual(runtime_backend_for_profile("python-parallel-cpu"), "cpu")
 
+    def test_parity_gate_requires_every_declared_target_profile(self) -> None:
+        case = {"target_profiles": ["python-cpu", "python-simd"]}
+        comparisons = {
+            ("shared", "python-cpu"): {"outcome": "pass"},
+            ("shared", "python-simd"): {"outcome": "pass"},
+        }
+
+        cpu_profiles = applicable_parity_profiles(
+            ["python-cpu"], case, active_profiles=("python-cpu", "python-simd")
+        )
+        mixed_profiles = applicable_parity_profiles(
+            ["python-cpu", "python-simd"],
+            case,
+            active_profiles=("python-cpu", "python-simd"),
+        )
+        self.assertEqual(cpu_profiles, ["python-cpu"])
+        self.assertEqual(mixed_profiles, ["python-cpu", "python-simd"])
+        self.assertEqual(
+            parity_gate_outcome("shared", ["python-cpu"], cpu_profiles, comparisons),
+            "pass",
+        )
+        self.assertEqual(
+            parity_gate_outcome(
+                "shared", ["python-cpu", "python-simd"], mixed_profiles, comparisons
+            ),
+            "pass",
+        )
+
+    def test_partial_shared_case_parity_is_unproven_but_failure_is_a_fail(self) -> None:
+        cpu_only_case = {"target_profiles": ["python-cpu"]}
+        mixed_subjects = ["python-cpu", "python-simd"]
+        applicable = applicable_parity_profiles(
+            mixed_subjects,
+            cpu_only_case,
+            active_profiles=("python-cpu", "python-simd"),
+        )
+        self.assertEqual(applicable, ["python-cpu"])
+
+        cpu_pass = {("shared", "python-cpu"): {"outcome": "pass"}}
+        self.assertEqual(
+            parity_gate_outcome("shared", mixed_subjects, applicable, cpu_pass),
+            "not_proven",
+        )
+        self.assertTrue(parity_timing_allowed("not_proven"))
+        fully_applicable = applicable_parity_profiles(
+            mixed_subjects,
+            {"target_profiles": ["python-cpu", "python-simd"]},
+            active_profiles=("python-cpu", "python-simd"),
+        )
+        self.assertEqual(
+            parity_gate_outcome(
+                "shared", mixed_subjects, fully_applicable, cpu_pass
+            ),
+            "not_proven",
+        )
+        cpu_fail = {("shared", "python-cpu"): {"outcome": "fail"}}
+        self.assertEqual(
+            parity_gate_outcome("shared", mixed_subjects, applicable, cpu_fail),
+            "fail",
+        )
+        self.assertFalse(parity_timing_allowed("fail"))
+
+    def test_unapplicable_profile_never_passes_parity(self) -> None:
+        cpu_only_case = {"target_profiles": ["python-cpu"]}
+        simd_only_subjects = ["python-simd"]
+        applicable = applicable_parity_profiles(
+            simd_only_subjects,
+            cpu_only_case,
+            active_profiles=("python-cpu", "python-simd"),
+        )
+
+        self.assertEqual(applicable, [])
+        self.assertEqual(
+            parity_gate_outcome("shared", simd_only_subjects, applicable, {}),
+            "not_proven",
+        )
+        self.assertTrue(parity_timing_allowed("not_proven"))
+
+    def test_parallel_parity_uses_its_result_key_and_cpu_applicability(self) -> None:
+        cpu_only_case = {"target_profiles": ["python-cpu"]}
+        parallel_subjects = ["python-parallel-cpu"]
+        applicable = applicable_parity_profiles(
+            parallel_subjects,
+            cpu_only_case,
+            active_profiles=("python-parallel-cpu",),
+        )
+
+        self.assertEqual(
+            parity_profile_for_subject("python-parallel-cpu"), "python-cpu"
+        )
+        self.assertEqual(applicable, ["python-parallel-cpu"])
+        self.assertEqual(
+            parity_gate_outcome(
+                "parallel",
+                parallel_subjects,
+                applicable,
+                {("parallel", "python-parallel-cpu"): {"outcome": "pass"}},
+            ),
+            "pass",
+        )
+        self.assertEqual(
+            parity_gate_outcome(
+                "parallel",
+                parallel_subjects,
+                applicable,
+                {("parallel", "python-cpu"): {"outcome": "pass"}},
+            ),
+            "not_proven",
+        )
+
     def test_selected_profile_has_matching_backend_and_feature_identity(self) -> None:
         selected_parallel = os.environ.get("MIGRATION_TARGET_PROFILE") == "parallel-cpu"
         self.assertEqual(PARALLEL_CPU_PROFILE, selected_parallel)
@@ -292,6 +523,212 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 ],
             )
         self.assertEqual(workload["subjects"], standard_subjects)
+
+    def test_cpu_only_frozen_contract_is_not_expanded_to_acceleration_profiles(self) -> None:
+        cpu_only_subjects = [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+        ]
+        workload = self._subject_contract_workload("cpu-only", cpu_only_subjects)
+        with (
+            patch.object(run_migration_benchmark, "PARALLEL_CPU_PROFILE", False),
+            patch.object(run_migration_benchmark, "PILLOW_SIMD_COMPARISON", False),
+            patch.object(run_migration_benchmark, "BENCHMARK_SOURCE_NAME", "Pillow"),
+            patch.object(
+                run_migration_benchmark,
+                "TARGET_BACKENDS",
+                ("cpu", "simd", "gpu"),
+            ),
+        ):
+            original = frozen_workload_subjects([workload])
+            profiled = apply_profile_to_workloads([workload])
+            validate_selected_workloads(profiled, original)
+
+        self.assertEqual(profiled[0]["subjects"], cpu_only_subjects)
+        self.assertEqual(workload["subjects"], cpu_only_subjects)
+
+    def test_mixed_frozen_contracts_keep_each_workload_subject_scope(self) -> None:
+        full_subjects = [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+            {"kind": "target_profile", "id": "python-simd"},
+            {"kind": "target_profile", "id": "python-gpu"},
+        ]
+        cpu_only_subjects = full_subjects[:2]
+        workloads = [
+            self._subject_contract_workload("full", full_subjects),
+            self._subject_contract_workload("cpu-only", cpu_only_subjects),
+        ]
+        with (
+            patch.object(run_migration_benchmark, "PARALLEL_CPU_PROFILE", False),
+            patch.object(run_migration_benchmark, "PILLOW_SIMD_COMPARISON", False),
+            patch.object(run_migration_benchmark, "BENCHMARK_SOURCE_NAME", "Pillow"),
+            patch.object(
+                run_migration_benchmark,
+                "TARGET_BACKENDS",
+                ("cpu", "simd", "gpu"),
+            ),
+        ):
+            original = frozen_workload_subjects(workloads)
+            profiled = apply_profile_to_workloads(workloads)
+            validate_selected_workloads(profiled, original)
+
+        self.assertEqual(profiled[0]["subjects"], full_subjects)
+        self.assertEqual(profiled[1]["subjects"], cpu_only_subjects)
+
+    def test_cpu_profile_intersects_each_frozen_contract(self) -> None:
+        full_subjects = [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+            {"kind": "target_profile", "id": "python-simd"},
+            {"kind": "target_profile", "id": "python-gpu"},
+        ]
+        cpu_only_subjects = full_subjects[:2]
+        workloads = [
+            self._subject_contract_workload("full", full_subjects),
+            self._subject_contract_workload("cpu-only", cpu_only_subjects),
+        ]
+        with (
+            patch.object(run_migration_benchmark, "PARALLEL_CPU_PROFILE", False),
+            patch.object(run_migration_benchmark, "PILLOW_SIMD_COMPARISON", False),
+            patch.object(run_migration_benchmark, "BENCHMARK_SOURCE_NAME", "Pillow"),
+            patch.object(run_migration_benchmark, "TARGET_BACKENDS", ("cpu",)),
+        ):
+            original = frozen_workload_subjects(workloads)
+            profiled = apply_profile_to_workloads(workloads)
+            validate_selected_workloads(profiled, original)
+
+        expected = [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+        ]
+        self.assertEqual(profiled[0]["subjects"], expected)
+        self.assertEqual(profiled[1]["subjects"], expected)
+
+    def test_parallel_cpu_maps_only_a_declared_cpu_subject_to_its_featured_profile(self) -> None:
+        cpu_only_subjects = [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+        ]
+        workload = self._subject_contract_workload("cpu-only", cpu_only_subjects)
+        with (
+            patch.object(run_migration_benchmark, "PARALLEL_CPU_PROFILE", True),
+            patch.object(run_migration_benchmark, "TARGET_BACKENDS", ("cpu",)),
+        ):
+            original = frozen_workload_subjects([workload])
+            profiled = apply_profile_to_workloads([workload])
+            validate_selected_workloads(profiled, original)
+
+        self.assertEqual(
+            profiled[0]["subjects"],
+            [{"kind": "target_profile", "id": "python-parallel-cpu"}],
+        )
+
+    def test_pillow_simd_keeps_its_source_id_for_a_cpu_only_contract(self) -> None:
+        cpu_only_subjects = [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+        ]
+        workload = self._subject_contract_workload("cpu-only", cpu_only_subjects)
+        with (
+            patch.object(run_migration_benchmark, "PARALLEL_CPU_PROFILE", False),
+            patch.object(run_migration_benchmark, "PILLOW_SIMD_COMPARISON", True),
+            patch.object(run_migration_benchmark, "BENCHMARK_SOURCE_NAME", "Pillow-SIMD"),
+            patch.object(run_migration_benchmark, "TARGET_BACKENDS", ("cpu", "simd")),
+        ):
+            original = frozen_workload_subjects([workload])
+            profiled = apply_profile_to_workloads([workload])
+            validate_selected_workloads(profiled, original)
+
+        self.assertEqual(
+            profiled[0]["subjects"],
+            [
+                {"kind": "oracle", "id": "pillow-simd"},
+                {"kind": "target_profile", "id": "python-cpu"},
+            ],
+        )
+
+    def test_profiled_workload_cannot_drop_a_declared_requested_subject(self) -> None:
+        full_subjects = [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+            {"kind": "target_profile", "id": "python-simd"},
+            {"kind": "target_profile", "id": "python-gpu"},
+        ]
+        workload = self._subject_contract_workload("full", full_subjects)
+        with (
+            patch.object(run_migration_benchmark, "PARALLEL_CPU_PROFILE", False),
+            patch.object(run_migration_benchmark, "PILLOW_SIMD_COMPARISON", False),
+            patch.object(run_migration_benchmark, "BENCHMARK_SOURCE_NAME", "Pillow"),
+            patch.object(
+                run_migration_benchmark,
+                "TARGET_BACKENDS",
+                ("cpu", "simd", "gpu"),
+            ),
+        ):
+            original = frozen_workload_subjects([workload])
+            profiled = apply_profile_to_workloads([workload])
+            profiled[0]["subjects"] = profiled[0]["subjects"][:-1]
+
+            with self.assertRaisesRegex(
+                ValueError, "do not preserve the declared subjects"
+            ):
+                validate_selected_workloads(profiled, original)
+
+    def test_frozen_subject_contract_rejects_malformed_duplicate_unknown_or_missing(self) -> None:
+        invalid_contracts = (
+            (
+                "malformed",
+                [{"kind": "oracle", "id": "pillow", "extra": True}],
+                "exactly kind and id",
+            ),
+            (
+                "duplicate",
+                [
+                    {"kind": "oracle", "id": "pillow"},
+                    {"kind": "target_profile", "id": "python-cpu"},
+                    {"kind": "target_profile", "id": "python-cpu"},
+                ],
+                "duplicate subject",
+            ),
+            (
+                "unknown",
+                [
+                    {"kind": "oracle", "id": "pillow"},
+                    {"kind": "target_profile", "id": "python-neon"},
+                ],
+                "unknown target profile",
+            ),
+            (
+                "missing-oracle",
+                [{"kind": "target_profile", "id": "python-cpu"}],
+                "exactly one Pillow oracle",
+            ),
+            (
+                "missing-target",
+                [{"kind": "oracle", "id": "pillow"}],
+                "at least one target profile",
+            ),
+        )
+        for workload_id, subjects, message in invalid_contracts:
+            with self.subTest(contract=workload_id):
+                workload = self._subject_contract_workload(workload_id, subjects)
+                with self.assertRaisesRegex(ValueError, message):
+                    frozen_workload_subjects([workload])
+
+    @staticmethod
+    def _subject_contract_workload(
+        workload_id: str, subjects: list[dict[str, str]]
+    ) -> dict:
+        return {
+            "workload_id": workload_id,
+            "subjects": subjects,
+            "measurement": {
+                "warmup_iterations": 0,
+                "measurement_iterations": 1,
+                "samples": 1,
+            },
+        }
 
     def test_standard_cpu_simd_subset_keeps_pillow_and_requested_backends(self) -> None:
         standard_subjects = [
@@ -455,23 +892,111 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
         self.assertNotIn("MIGRATION_PARITY_TIMED_SOURCE", observed)
         write_artifact.assert_called_once_with(output, merged_result)
 
-    def test_reused_parity_receipt_must_cover_every_selected_profile(self) -> None:
+    def test_parity_preflight_merges_backend_attestations_when_requested(self) -> None:
+        observed_commands = []
+        observed_output_paths = []
+        parity_result = {"status": "completed", "identity": {"run_id": "backend"}}
+        merged_result = {"status": "completed", "identity": {"run_id": "merged"}}
+
+        def fake_run_process(command, *, env, **_kwargs):
+            observed_commands.append(command)
+            output_path = Path(command[command.index("--output") + 1])
+            observed_output_paths.append(output_path)
+            output_path.write_bytes(gzip.compress(b"stub parity receipt"))
+            attestation_path = Path(
+                command[command.index("--attestation-output") + 1]
+            )
+            attestation_path.write_text(json.dumps({"sidecar": "captured"}))
+            return 0, "{}", ""
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "parity.json"
+            attestation_output = Path(directory) / "parity.attestation.json"
+            report_binding = {
+                "path": "",
+                "canonical_sha256": "a" * 64,
+                "canonical_bytes": 20,
+                "container_sha256": "b" * 64,
+                "container_bytes": 30,
+            }
+
+            def fake_fingerprint(path):
+                return {**report_binding, "path": str(path.resolve())}
+
+            def assert_report_released(*args):
+                self.assertFalse(observed_output_paths[0].exists())
+
+            with (
+                patch.object(run_migration_benchmark, "TARGET_BACKENDS", ("cpu",)),
+                patch("run_migration_benchmark.run_process", side_effect=fake_run_process),
+                patch(
+                    "run_migration_benchmark.read_parity_artifact",
+                    return_value=parity_result,
+                ),
+                patch(
+                    "run_migration_benchmark.merge_parity_results",
+                    return_value=merged_result,
+                ),
+                patch("run_migration_benchmark.execution_report_fingerprint", side_effect=fake_fingerprint),
+                patch("run_migration_benchmark.validate_attestation"),
+                patch("run_migration_benchmark.write_parity_artifact") as write_artifact,
+                patch(
+                    "run_migration_benchmark.merge_parity_attestations",
+                    side_effect=assert_report_released,
+                ) as merge_attestations,
+            ):
+                result = run_migration_benchmark.run_parity(
+                    run_migration_benchmark.DEFAULT_MANIFEST,
+                    output,
+                    30,
+                    [{"case_id": "fixture", "target_profiles": ["python-cpu"]}],
+                    attestation_output=attestation_output,
+                )
+
+        self.assertIs(result, merged_result)
+        command = observed_commands[0]
+        self.assertIn("--attestation-output", command)
+        self.assertIn(".attestation.json", command[command.index("--attestation-output") + 1])
+        write_artifact.assert_called_once_with(output, merged_result)
+        merge_attestations.assert_called_once_with(
+            attestation_output,
+            output,
+            merged_result,
+            [
+                (
+                    {"sidecar": "captured"},
+                    parity_result,
+                    {**report_binding, "path": str(observed_output_paths[0].resolve())},
+                )
+            ],
+        )
+
+    def test_reused_parity_accepts_only_attested_passing_supersets(self) -> None:
         case = {
-            "case_id": "fixture",
-            # Inputs declare capability applicability: Parallel CPU reuses
-            # the CPU declaration while keeping its own selected profile ID.
-            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+            "case_id": "selected",
+            "target_profiles": ["python-cpu"],
         }
         selected_profiles = [
             profile
             for profile in TARGET_PROFILES
             if profile_applies_to_case(profile, case)
         ]
+        input_record = {
+            "path": "synthetic-input.json",
+            "schema": "migration-parity/parity-input@1",
+            "sha256": "c" * 64,
+        }
+        source_sha256 = "a" * 64
+        target_sha256 = "b" * 64
+        runtime_identity_hashes = [(('source', 'pillow'), source_sha256)] + [
+            (('target', profile), target_sha256) for profile in selected_profiles
+        ]
         parity = {
             "schema": "migration-parity/parity-result@1",
             "status": "completed",
             "identity": {
                 "manifest": {"sha256": sha256(run_migration_benchmark.DEFAULT_MANIFEST)},
+                "inputs": [input_record],
                 "oracles": [
                     {
                         "name": run_migration_parity.ORACLE_NAME,
@@ -490,26 +1015,302 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                     for profile in selected_profiles
                 ],
             },
-            "summary": {"failed": 0, "not_run": 0},
+            "summary": {
+                "selected": 2,
+                "executed": 2,
+                "passed": 2,
+                "failed": 0,
+                "not_run": 0,
+                "infrastructure_errors": 0,
+            },
             "comparisons": [
                 {
-                    "case_id": "fixture",
+                    "case_id": case_id,
                     "target_profile": profile,
                     "outcome": "pass",
                 }
                 for profile in selected_profiles
+                for case_id in ("selected", "extra-passing-guard")
             ],
             "infrastructure_errors": [],
         }
-        validate_reused_parity(
-            parity, run_migration_benchmark.DEFAULT_MANIFEST, [case]
-        )
-        incomplete = dict(parity)
-        incomplete["comparisons"] = parity["comparisons"][:-1]
-        with self.assertRaisesRegex(ValueError, "does not cover"):
-            validate_reused_parity(
-                incomplete, run_migration_benchmark.DEFAULT_MANIFEST, [case]
+        attestation = {
+            "report": {
+                "canonical_sha256": "d" * 64,
+                "canonical_bytes": 10,
+                "container_sha256": "e" * 64,
+                "container_bytes": 10,
+            },
+            "invocations": [
+                {
+                    "side": side,
+                    "profile": profile,
+                    "role": "parity",
+                    "receipt": {"runtime": {"stable_sha256": stable_sha256}},
+                }
+                for (side, profile), stable_sha256 in runtime_identity_hashes
+            ],
+        }
+        report_path = Path("synthetic-parity.json")
+        report_fingerprint = {
+            "path": str(report_path.resolve()),
+            "canonical_sha256": "d" * 64,
+            "canonical_bytes": 10,
+            "container_sha256": "e" * 64,
+            "container_bytes": 10,
+        }
+        with (
+            patch.object(run_migration_benchmark, "validate_attestation"),
+            patch.object(
+                run_migration_benchmark,
+                "execution_report_fingerprint",
+                return_value=report_fingerprint,
+            ),
+        ):
+            runtime_hashes = validate_reused_parity(
+                parity,
+                run_migration_benchmark.DEFAULT_MANIFEST,
+                [case],
+                report_path=report_path,
+                attestation=attestation,
+                expected_inputs=[input_record],
             )
+            self.assertEqual(runtime_hashes[("source", "pillow")], source_sha256)
+            for profile in selected_profiles:
+                self.assertEqual(runtime_hashes[("target", profile)], target_sha256)
+
+            incomplete = copy.deepcopy(parity)
+            incomplete["comparisons"] = [
+                row for row in incomplete["comparisons"]
+                if row["case_id"] != "selected"
+            ]
+            incomplete["summary"].update(selected=1, executed=1, passed=1)
+            with self.assertRaisesRegex(ValueError, "does not cover"):
+                validate_reused_parity(
+                    incomplete,
+                    run_migration_benchmark.DEFAULT_MANIFEST,
+                    [case],
+                    report_path=report_path,
+                    attestation=attestation,
+                    expected_inputs=[input_record],
+                )
+
+            failed_extra = copy.deepcopy(parity)
+            failed_extra["comparisons"][1]["outcome"] = "fail"
+            failed_extra["summary"].update(passed=1, failed=1)
+            with self.assertRaisesRegex(ValueError, "complete passing"):
+                validate_reused_parity(
+                    failed_extra,
+                    run_migration_benchmark.DEFAULT_MANIFEST,
+                    [case],
+                    report_path=report_path,
+                    attestation=attestation,
+                    expected_inputs=[input_record],
+                )
+
+            duplicate = copy.deepcopy(parity)
+            duplicate["comparisons"].append(copy.deepcopy(duplicate["comparisons"][0]))
+            duplicate["summary"].update(selected=3, executed=3, passed=3)
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                validate_reused_parity(
+                    duplicate,
+                    run_migration_benchmark.DEFAULT_MANIFEST,
+                    [case],
+                    report_path=report_path,
+                    attestation=attestation,
+                    expected_inputs=[input_record],
+                )
+
+            changed_input = dict(input_record, sha256="f" * 64)
+            with self.assertRaisesRegex(ValueError, "selected input bytes"):
+                validate_reused_parity(
+                    parity,
+                    run_migration_benchmark.DEFAULT_MANIFEST,
+                    [case],
+                    report_path=report_path,
+                    attestation=attestation,
+                    expected_inputs=[changed_input],
+                )
+
+
+class BenchmarkTimingGroupTests(unittest.TestCase):
+    def run_shared_case(self, scenario: str, capture: bool):
+        case_id = "synthetic.shared-case"
+        case = {"case_id": case_id, "target_profiles": ["python-cpu"], "steps": [], "assets": []}
+        base = {
+            "input": {"kind": "parity_case", "case_id": case_id},
+            "covers": ["synthetic.requirement"],
+            "subjects": [
+                {"kind": "oracle", "id": "pillow"},
+                {"kind": "target_profile", "id": "python-cpu"},
+            ],
+            "measurement": {
+                "correctness_gate": "parity_pass",
+                "boundary": "observed_steps",
+                "step_ids": ["call", "materialize"],
+                "cache_state": "warm",
+                "warmup_iterations": 1,
+                "measurement_iterations": 2,
+                "samples": 1,
+                "metrics": ["latency", "throughput"],
+            },
+            "context": {
+                "size": [1, 1], "mode": "RGB", "chain_length": 1,
+                "operation_class": "point", "cache_state": "warm", "build_profile": "release",
+            },
+        }
+        first, second = copy.deepcopy(base), copy.deepcopy(base)
+        first["workload_id"], second["workload_id"] = "A.full", "B.call"
+        second["measurement"]["step_ids"] = ["call"]
+        if scenario == "different-repeats":
+            second["measurement"]["measurement_iterations"] = 3
+        if scenario in {"same-group", "mixed-subjects"}:
+            second["measurement"]["step_ids"] = ["call", "materialize"]
+        if scenario == "mixed-subjects":
+            case["target_profiles"].append("python-simd")
+            second["subjects"].append({"kind": "target_profile", "id": "python-simd"})
+        workloads = {workload["workload_id"]: workload for workload in [first, second]}
+        identity = synthetic_report([])["identity"]
+        identity["oracles"][0].update(oracle_id="pillow", name="Pillow")
+        if scenario == "mixed-subjects":
+            simd_identity = dict(identity["targets"][0])
+            simd_identity.update(target_profile="python-simd", backend="simd")
+            identity["targets"].append(simd_identity)
+        parity = {
+            "identity": {"run_id": "synthetic-parity"},
+            "comparisons": [
+                {"case_id": case_id, "target_profile": profile, "outcome": "pass"}
+                for profile in case["target_profiles"]
+            ],
+        }
+        calls = []
+
+        def timed_side(side, _manifest, cases, repeat, _timeout, *, backend,
+                       timing_boundary, timing_steps, lifecycle, raw_sample_capture=None,
+                       raw_sample_workloads_by_case=None, **_kwargs):
+            full = "materialize" in timing_steps
+            nanoseconds = (9_000_000 if side == "source" else 6_000_000) if full else (
+                3_000_000 if side == "source" else 2_000_000
+            )
+            timings = {case_id: [nanoseconds] * repeat}
+            telemetry = {case_id: [{"pipeline_ns": nanoseconds, "total_ns": nanoseconds}] * repeat}
+            marker = "full" if full else "call"
+            calls.append({
+                "side": side, "case_ids": [case["case_id"] for case in cases],
+                "profiles": [case["target_profiles"] for case in cases], "repeat": repeat,
+            })
+            if raw_sample_capture is not None:
+                raw_sample_capture.record_timed_child(
+                    group_id=f"{side}-{backend}-{marker}", side=side,
+                    profile="pillow" if side == "source" else f"python-{backend}",
+                    cases=cases, workload_ids_by_case=raw_sample_workloads_by_case,
+                    planned_repeat=repeat, child_repeat=repeat, lifecycle=lifecycle,
+                    boundary=timing_boundary, step_ids=timing_steps,
+                    timings_ns=timings, telemetry=telemetry,
+                    child_invocation_id=f"{side}-{backend}-{marker}",
+                )
+            failed = scenario == "late-failure" and not full
+            return {
+                "identity": {"side": side},
+                "results": [{"case_id": case_id, "status": "failed" if failed else "completed",
+                             "execution_errors": [{"marker": marker}] if failed else []}],
+                "timings_ns": timings, "telemetry": telemetry,
+                "execution": {case_id: [{"status": "not_applicable", "fallback_reason": marker}]},
+            }
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            args = argparse.Namespace(
+                manifest=Path(run_migration_benchmark.__file__), output=directory / "report.json",
+                parity_output=directory / "parity.json",
+                raw_samples_output=directory / "raw.json" if capture else None,
+                reuse_parity=None, pipeline=False, workload_id=None, limit=None, timeout=30,
+            )
+            with ExitStack() as stack:
+                for name, value in {
+                    "TARGET_BACKENDS": ("cpu", "simd") if scenario == "mixed-subjects" else ("cpu",),
+                    "TARGET_PROFILES": tuple(case["target_profiles"]),
+                    "PARALLEL_CPU_PROFILE": False, "PILLOW_SIMD_COMPARISON": False,
+                    "BENCHMARK_SOURCE_NAME": "Pillow",
+                }.items():
+                    stack.enter_context(patch.object(run_migration_benchmark, name, value))
+                for name, value in {
+                    "load_manifest": {},
+                    "load_parity_cases": ({case_id: case}, {case_id: "synthetic-cases.json"}),
+                    "load_benchmarks": (workloads, [], {key: "synthetic-benchmarks.json" for key in workloads}),
+                    "run_parity": parity, "identity": identity,
+                }.items():
+                    stack.enter_context(patch.object(run_migration_benchmark, name, return_value=value))
+                stack.enter_context(patch.object(run_migration_benchmark, "run_timed_side", side_effect=timed_side))
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    self.assertEqual(run_migration_benchmark.run(args), 0)
+            report = json.loads(args.output.read_text())
+            raw = json.loads(args.raw_samples_output.read_text()) if capture else None
+            return report["workloads"], raw, calls
+
+    def test_shared_case_preserves_boundary_samples_phases_and_execution(self):
+        for capture in (False, True):
+            with self.subTest(capture=capture):
+                rows, raw, calls = self.run_shared_case("different-steps", capture)
+                self.assertEqual(len(calls), 4)
+                for row, expected, marker in zip(rows, [(9, 6), (3, 2)], ["full", "call"]):
+                    self.assertEqual(row["correctness"]["outcome"], "pass")
+                    for subject, median in zip(row["subjects"], expected):
+                        self.assertEqual(subject["measurements"][0]["statistics"]["median"], median)
+                        self.assertEqual(subject["phases"]["pipeline"]["statistics"]["median"], median)
+                        if subject["kind"] == "target_profile":
+                            self.assertEqual(subject["execution"]["fallback_reason_counts"], {marker: 1})
+                if raw is not None:
+                    self.assertEqual(len(raw["records"]), 4)
+                    self.assertEqual([r["workload_ids"] for r in raw["records"]],
+                                     [["A.full"], ["A.full"], ["B.call"], ["B.call"]])
+
+    def test_shared_case_preserves_each_sampling_count(self):
+        for capture in (False, True):
+            with self.subTest(capture=capture):
+                rows, _, calls = self.run_shared_case("different-repeats", capture)
+                self.assertEqual([call["repeat"] for call in calls], [3, 3, 4, 4])
+                for row, count in zip(rows, [2, 3]):
+                    self.assertEqual(row["correctness"]["outcome"], "pass")
+                    self.assertEqual([s["measurements"][0]["sample_count"] for s in row["subjects"]], [count, count])
+
+    def test_later_failure_does_not_erase_earlier_success(self):
+        for capture in (False, True):
+            with self.subTest(capture=capture):
+                rows, _, _ = self.run_shared_case("late-failure", capture)
+                self.assertEqual(rows[0]["correctness"]["outcome"], "pass")
+                self.assertEqual(rows[1]["correctness"]["outcome"], "not_proven")
+                self.assertTrue(all(s["status"] == "completed" for s in rows[0]["subjects"]))
+                self.assertTrue(all(s["status"] == "failed" for s in rows[1]["subjects"]))
+                for subject in rows[0]["subjects"]:
+                    self.assertEqual(subject["execution"]["errors"], [])
+                self.assertEqual(rows[1]["subjects"][1]["execution"]["errors"], [{"marker": "call"}])
+
+    def test_same_policy_aliases_share_one_child_case_and_keep_both_rows(self):
+        for capture in (False, True):
+            with self.subTest(capture=capture):
+                rows, raw, calls = self.run_shared_case("same-group", capture)
+                self.assertEqual(len(calls), 2)
+                self.assertTrue(all(call["case_ids"] == ["synthetic.shared-case"] for call in calls))
+                self.assertTrue(all(row["correctness"]["outcome"] == "pass" for row in rows))
+                if raw is not None:
+                    self.assertEqual(len(raw["records"]), 2)
+                    self.assertTrue(all(r["workload_ids"] == ["A.full", "B.call"] for r in raw["records"]))
+
+    def test_aliases_union_child_profiles_without_expanding_workload_subjects(self):
+        for capture in (False, True):
+            with self.subTest(capture=capture):
+                rows, raw, calls = self.run_shared_case("mixed-subjects", capture)
+                self.assertEqual(len(calls), 3)
+                self.assertTrue(all(call["case_ids"] == ["synthetic.shared-case"] for call in calls))
+                self.assertTrue(all(call["profiles"] == [["python-cpu", "python-simd"]] for call in calls))
+                self.assertEqual([s["id"] for s in rows[0]["subjects"]], ["pillow", "python-cpu"])
+                self.assertEqual([s["id"] for s in rows[1]["subjects"]], ["pillow", "python-cpu", "python-simd"])
+                self.assertTrue(all(row["correctness"]["outcome"] == "pass" for row in rows))
+                if raw is not None:
+                    self.assertEqual(len(raw["records"]), 3)
+                    self.assertEqual(raw["records"][-1]["workload_ids"], ["B.call"])
+
 
 
 if __name__ == "__main__":

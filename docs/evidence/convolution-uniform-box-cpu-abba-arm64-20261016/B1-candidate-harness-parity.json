@@ -1,0 +1,57 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "identity": {
+    "run_id": "migration-benchmark-no-parity-89febacb0693436a868aa9bb0be09c40",
+    "started_at": "2026-10-15T21:45:26.453844Z",
+    "finished_at": "2026-10-15T21:45:26.453861Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.convolution-uniform-color-trial-20261014.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "453990309df1a2251977e27d8fd36eea81d18a0644063949f802898e5136c74b"
+    },
+    "inputs": [],
+    "assets": [],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-cpu",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "cpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "benchmark",
+      "argv": [
+        "make",
+        "migration-parity-benchmark"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 7200
+    }
+  },
+  "status": "completed",
+  "summary": {
+    "selected": 0,
+    "executed": 0,
+    "passed": 0,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [],
+  "infrastructure_errors": []
+}

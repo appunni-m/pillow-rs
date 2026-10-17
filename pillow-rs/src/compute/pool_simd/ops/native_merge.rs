@@ -56,6 +56,47 @@ const NATIVE_MERGE_RGB_SSSE3_MASKS: [[[u8; 16]; 3]; 3] = [
     ],
 ];
 
+/// Pack sixteen planar RGB samples into forty-eight interleaved bytes.
+///
+/// # Safety
+/// The caller must establish SSSE3 support before calling this function.
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+#[inline]
+#[target_feature(enable = "ssse3")]
+pub(super) unsafe fn rgb16_interleave_ssse3(
+    red: &[u8; 16],
+    green: &[u8; 16],
+    blue: &[u8; 16],
+) -> [u8; 48] {
+    use core::arch::x86_64::{_mm_loadu_si128, _mm_or_si128, _mm_shuffle_epi8, _mm_storeu_si128};
+
+    let mut output = [0u8; 48];
+    // SAFETY: SSSE3 is a caller obligation. Each input and mask is a fully
+    // initialized sixteen-byte array. Unaligned loads are permitted, and the
+    // three unaligned stores cover disjoint sixteen-byte spans of `output`.
+    // The local output cannot alias the borrowed input arrays.
+    unsafe {
+        let red = _mm_loadu_si128(red.as_ptr().cast());
+        let green = _mm_loadu_si128(green.as_ptr().cast());
+        let blue = _mm_loadu_si128(blue.as_ptr().cast());
+        for (chunk, masks) in NATIVE_MERGE_RGB_SSSE3_MASKS.iter().enumerate() {
+            let red_mask = _mm_loadu_si128(masks[0].as_ptr().cast());
+            let green_mask = _mm_loadu_si128(masks[1].as_ptr().cast());
+            let blue_mask = _mm_loadu_si128(masks[2].as_ptr().cast());
+            let packed = _mm_or_si128(
+                _mm_or_si128(
+                    _mm_shuffle_epi8(red, red_mask),
+                    _mm_shuffle_epi8(green, green_mask),
+                ),
+                _mm_shuffle_epi8(blue, blue_mask),
+            );
+            _mm_storeu_si128(output.as_mut_ptr().add(chunk * 16).cast(), packed);
+        }
+    }
+    output
+}
+
 pub(super) fn vector_block(
     bands: &[&[u8]],
     pixel: usize,

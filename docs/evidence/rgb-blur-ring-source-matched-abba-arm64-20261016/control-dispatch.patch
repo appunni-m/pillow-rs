@@ -1,0 +1,5 @@
+--- candidate/pillow-rs/src/compute/pool_cpu/ops/filter.rs
++++ control/pillow-rs/src/compute/pool_cpu/ops/filter.rs
+@@ -4843,7 +4843,7 @@ pub fn execute_filter5x5(...)
+-    if matches!(img, DynamicImage::ImageRgb8(_))
++    if false && matches!(img, DynamicImage::ImageRgb8(_))

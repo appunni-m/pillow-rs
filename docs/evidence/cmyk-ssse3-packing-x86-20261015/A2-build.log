@@ -1,0 +1,61 @@
+/tmp/pillow-rs-resize-venv-20261015/bin/python -m maturin develop --skip-install --manifest-path pillow-rs-py/Cargo.toml --release --locked
+🍹 Building a mixed python/rust project
+🐍 Found CPython 3.12 at /tmp/pillow-rs-resize-venv-20261015/bin/python
+🔗 Found pyo3 bindings with abi3-py3.8 support
+📡 Using build options features from pyproject.toml
+   Compiling pillow-rs v12.2.1 (/home/appunni/pillow-rs-resize-trial-20261015/pillow-rs)
+   Compiling pillow-rs-py v12.2.1 (/home/appunni/pillow-rs-resize-trial-20261015/pillow-rs-py)
+warning: missing documentation for the crate
+    --> pillow-rs-py/src/lib.rs:2:1
+     |
+   2 | / #![allow(clippy::unwrap_used)]
+   3 | | #![allow(clippy::expect_used)]
+   4 | | #![allow(clippy::unwrap_in_result)]
+   5 | | #![allow(clippy::redundant_clone)]
+...    |
+4972 | | }
+     | |_^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct
+  --> pillow-rs-py/src/lib.rs:52:1
+   |
+52 | pyo3::create_exception!(_core, DecompressionBombError, pyo3::exceptions::PyException);
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this warning originates in the macro `pyo3::create_exception` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: missing documentation for a struct
+  --> pillow-rs-py/src/lib.rs:61:1
+   |
+61 | pub struct PyImage {
+   | ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+    --> pillow-rs-py/src/lib.rs:2696:1
+     |
+2696 | pub struct PyFont {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+    --> pillow-rs-py/src/lib.rs:3245:1
+     |
+3245 | pub struct PyPilFont {
+     | ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+    --> pillow-rs-py/src/lib.rs:3489:1
+     |
+3489 | pub struct PyOutline {
+     | ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+    --> pillow-rs-py/src/lib.rs:3529:1
+     |
+3529 | pub struct PyDraw {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: `pillow-rs-py` (lib) generated 7 warnings
+    Finished `release` profile [optimized] target(s) in 2m 01s
+📦 Built wheel for abi3 Python ≥ 3.8 to /tmp/.tmph55kqQ/pillow_rs-12.2.1-cp38-abi3-linux_x86_64.whl

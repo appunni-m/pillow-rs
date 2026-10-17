@@ -74,11 +74,30 @@
 - During development, use focused builds, reproductions, or diagnostics when
   they resolve a specific uncertainty. Routine verification belongs at Git push,
   not after each edit or local commit.
+- Before parity or benchmark execution, freeze the affected case/workload IDs,
+  backend profiles, and necessary guards. Reuse passing evidence for unchanged
+  inputs, source/build, producer, oracle, and executed paths. Retry only failures
+  or directly affected guards, recording the reason; do not repeat full campaigns
+  after each change. A proof-tool change requires its focused contracts, not a
+  new image campaign.
+- Select explicit workload IDs for benchmarks and case IDs for parity. Run only
+  the operation being changed, its affected modes/backends, and justified
+  regression guards. Reuse passing parity only for the same input contract and
+  verified source/build variant. Do not repeat full campaigns during each
+  optimization; broaden verification only when the push affects that scope.
 - Fix implementation failures without weakening assertions, thresholds, or the
   selected contract. Do not special-case fixture identities in runtime code.
 - For Pillow comparisons, use `make build-parity` and isolated processes or
   environments. `make build` installs the replacement `PIL` namespace and can
   overwrite the oracle in that environment.
+- Before benchmarking or parity, select explicit affected workload/case IDs,
+  backend profiles, and necessary regression guards. Preserve their workloads,
+  thresholds, sample counts, and materialization boundaries. Reuse passing
+  parity only when source, extension, input, producer, oracle, and profile
+  identities match; dirty commit IDs alone are insufficient. Repeat only
+  affected failures or flagged benchmark pairs, with a recorded reason. Do not
+  repeatedly run the full benchmark or parity campaign during an operation
+  experiment. Run no coverage in the current optimization campaign.
 - Record subtle reference behavior beside the implementation. Keep user guides
   separate from contributor procedures, and retain README acknowledgements.
 

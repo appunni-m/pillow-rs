@@ -11,7 +11,11 @@ from unittest.mock import patch
 
 from docs_benchmark_view import compare, render_dashboard
 from docs_evidence import render_pillow_simd_benchmarks, validate
-from build_performance_optimization_matrix import classify, goal_status
+from build_performance_optimization_matrix import (
+    classify,
+    goal_status,
+    operation_matrix_rows,
+)
 from run_pillow_simd_benchmark import (
     PILLOW_SIMD_VERSION,
     PILLOW_VERSION,
@@ -137,6 +141,121 @@ def run(
 
 
 class PillowSimdBenchmarkTests(unittest.TestCase):
+    def test_operation_matrix_includes_verified_cpu_rows_from_both_snapshots(self) -> None:
+        full_source = "github-pages/benchmark.json"
+        pillow_simd_source = "github-pages/pillow-simd-benchmark.json"
+
+        def workload_row(
+            source: str,
+            workload: str,
+            profile: str,
+            speedup: str = "",
+        ) -> dict[str, str]:
+            return {
+                "source_snapshot": source,
+                "source_revision": "a" * 40,
+                "source_clean": "true",
+                "measured_at": "2026-10-13T00:00:00Z",
+                "source_json_sha256": "b" * 64,
+                "workload": workload,
+                "runner": "test-runner",
+                "profile": profile,
+                "verified_speedup_vs_pillow": speedup,
+                "evidence_status": "parity_backend_verified",
+            }
+
+        operation = {
+            "api_path": "PIL.Image.Image.getchannel",
+            "kind": "method",
+            "classification": "endpoint",
+            "manifest_profiles": {"python-cpu"},
+            "workload_profiles": {"python-cpu"},
+            "declared_profiles": ["python-cpu"],
+            "workload_ids": ["workload.full", "workload.pillow-simd", "workload.missing"],
+        }
+        rows = [
+            workload_row(full_source, "workload.full", "python-cpu", "1.25"),
+            workload_row(
+                pillow_simd_source,
+                "workload.pillow-simd",
+                "python-cpu",
+                "0.75",
+            ),
+            # Local observations are not part of either published snapshot.
+            workload_row("local-run", "workload.pillow-simd", "python-cpu", "0.1"),
+        ]
+
+        result = operation_matrix_rows(
+            {"PIL.Image.Image.getchannel": operation},
+            rows,
+            [],
+        )
+        cpu = next(row for row in result if row["profile"] == "python-cpu")
+
+        self.assertEqual(cpu["published_workloads"], "2")
+        self.assertEqual(cpu["missing_published_workloads"], "workload.missing")
+        self.assertEqual(cpu["published_profile_rows"], "2")
+        self.assertEqual(cpu["verified_comparisons"], "2")
+        self.assertEqual(cpu["below_baseline_comparisons"], "1")
+        self.assertEqual(cpu["worst_verified_workload"], "workload.pillow-simd")
+        self.assertEqual(cpu["worst_verified_speedup"], "0.750000")
+        self.assertEqual(cpu["profile_status"], "target_unmet_in_verified_rows")
+
+    def test_operation_matrix_counts_paired_source_compatibility(self) -> None:
+        source = "github-pages/pillow-simd-benchmark.json"
+
+        def row(
+            workload: str,
+            profile: str,
+            evidence: str,
+            *,
+            runner: str = "test-runner",
+            group: str = "default",
+            speedup: str = "",
+        ) -> dict[str, str]:
+            return {
+                "source_snapshot": source,
+                "source_clean": "true",
+                "runner": runner,
+                "comparison_group": group,
+                "workload": workload,
+                "profile": profile,
+                "evidence_status": evidence,
+                "verified_speedup_vs_pillow_simd": speedup,
+            }
+
+        workload_ids = ["compatible", "incompatible", "unproven", "missing"]
+        operation = {
+            "api_path": "PIL.Image.Image.filter",
+            "kind": "method",
+            "classification": "endpoint",
+            "manifest_profiles": {"python-simd"},
+            "workload_profiles": {"python-simd"},
+            "declared_profiles": ["python-simd"],
+            "workload_ids": workload_ids,
+        }
+        rows = [
+            row(workload, "python-simd", "parity_backend_verified",
+                speedup="2" if workload == "compatible" else "")
+            for workload in workload_ids
+        ]
+        rows.extend([
+            row("compatible", "pillow-simd", "pillow-simd_reference"),
+            row("incompatible", "pillow-simd", "pillow_simd_incompatible"),
+            row("unproven", "pillow-simd", "pillow_simd_compatibility_not_proven"),
+            # A source from another runner or comparison group cannot fill
+            # the missing baseline or override its incompatible counterpart.
+            row("missing", "pillow-simd", "pillow-simd_reference", runner="other"),
+            row("incompatible", "pillow-simd", "pillow-simd_reference", group="other"),
+        ])
+        result = operation_matrix_rows({"PIL.Image.Image.filter": operation}, rows, [])
+        simd = next(item for item in result if item["profile"] == "python-simd")
+        self.assertEqual(simd["pillow_simd_snapshot_workloads"], "4")
+        self.assertEqual(simd["verified_pillow_simd_comparisons"], "1")
+        self.assertEqual(simd["pillow_simd_incompatible_rows"], "1")
+        self.assertEqual(simd["pillow_simd_unproven_rows"], "2")
+        self.assertEqual(simd["worst_verified_speedup_vs_pillow_simd"], "2.000000")
+
     @staticmethod
     def compatibility(outcome: str = "pass") -> dict[str, dict[str, object]]:
         return {
@@ -147,7 +266,7 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
     def test_selected_workloads_are_material_full_size_and_parity_backed(self) -> None:
         selected = workload_contracts()
         self.assertEqual(tuple(selected), WORKLOAD_IDS)
-        self.assertEqual(len(selected), 34)
+        self.assertEqual(len(selected), 37)
         self.assertEqual(
             {item["context"]["mode"] for item in selected.values()},
             {"L", "LA", "RGB", "RGBA", "CMYK", "F", "I", "YCbCr"},
@@ -165,7 +284,7 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
         selected_direct_operations = {
             workload_id for workload_id in selected if workload_id.startswith("pipeline-op.")
         }
-        self.assertEqual(len(expected_direct_operations), 29)
+        self.assertEqual(len(expected_direct_operations), 32)
         self.assertEqual(selected_direct_operations, expected_direct_operations)
         self.assertTrue(
             all(
@@ -410,9 +529,14 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
                 result_path = root / "benchmark.json"
                 parity_path = root / "parity.json"
                 reused_parity = root / "regular-pillow-parity.json"
+                reused_attestation = root / "regular-pillow-parity.attestation.json"
+                parity_attestation = root / "parity.attestation.json"
+                benchmark_attestation = root / "benchmark.attestation.json"
                 source_python = f"/subject/{source_id}"
+                observed_commands = []
 
-                def fake_run(_command, *, env, **_kwargs):
+                def fake_run(command, *, env, **_kwargs):
+                    observed_commands.append(command)
                     self.assertEqual(env["MIGRATION_ORACLE_PYTHON"], "/oracle/pillow")
                     self.assertEqual(env["MIGRATION_ORACLE_NAME"], "Pillow")
                     self.assertEqual(env["MIGRATION_BENCHMARK_COHORT"], "pillow-simd")
@@ -432,8 +556,24 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
                         parity_output=parity_path,
                         workload_ids=list(WORKLOAD_IDS),
                         reuse_parity=(reused_parity if source_id == "pillow-simd" else None),
+                        reuse_parity_attestation=(
+                            reused_attestation if source_id == "pillow-simd" else None
+                        ),
+                        parity_attestation_output=(
+                            parity_attestation if source_id == "pillow" else None
+                        ),
+                        attestation_output=benchmark_attestation,
                     )
                 self.assertEqual(run_id, "regular-pillow-parity")
+                command = observed_commands[0]
+                self.assertIn("--attestation-output", command)
+                self.assertIn(str(benchmark_attestation), command)
+                if source_id == "pillow":
+                    self.assertIn("--parity-attestation-output", command)
+                    self.assertIn(str(parity_attestation), command)
+                else:
+                    self.assertIn("--reuse-parity-attestation", command)
+                    self.assertIn(str(reused_attestation), command)
 
     def test_source_output_compatibility_uses_the_declared_parity_comparator(self) -> None:
         manifest = load_manifest(DEFAULT_MANIFEST)

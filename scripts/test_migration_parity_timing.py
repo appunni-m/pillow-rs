@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from scripts.run_migration_parity import (
+    _phase_totals,
     _run_side_subprocess_batch,
     build_argument_parser,
     effective_timing_steps,
@@ -27,6 +28,42 @@ class MigrationParityTimingTests(unittest.TestCase):
             effective_timing_steps(args.timing_step),
             {"apply-filter", "observe-filter-result"},
         )
+
+    def test_untimed_frombytes_fixture_setup_is_not_reported_as_pipeline_work(self):
+        case = {
+            "steps": [
+                {"step_id": "image", "operation": "frombytes"},
+                {"step_id": "call", "operation": "resize"},
+                {"step_id": "materialize", "operation": "tobytes"},
+            ]
+        }
+        totals = _phase_totals(
+            case,
+            [
+                {"step_id": "image", "duration_ns": 300},
+                {"step_id": "call", "duration_ns": 200},
+                {"step_id": "materialize", "duration_ns": 400},
+            ],
+            0,
+            timing_steps={"call", "materialize"},
+        )
+
+        self.assertEqual(totals["setup_ns"], 300)
+        self.assertEqual(totals["pipeline_ns"], 200)
+        self.assertEqual(totals["terminal_ns"], 400)
+
+    def test_timed_frombytes_public_call_remains_pipeline_work(self):
+        case = {"steps": [{"step_id": "call", "operation": "frombytes"}]}
+
+        totals = _phase_totals(
+            case,
+            [{"step_id": "call", "duration_ns": 300}],
+            0,
+            timing_steps={"call"},
+        )
+
+        self.assertEqual(totals["setup_ns"], 0)
+        self.assertEqual(totals["pipeline_ns"], 300)
 
     def test_execution_receipt_fields_are_optional_adapter_envelope_fields(self):
         case = {"case_id": "filter-case"}

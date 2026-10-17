@@ -1,0 +1,32 @@
+{
+  "candidate-B1": {
+    "canonical_report": "candidate-B1.json.gz",
+    "report_run_id": "migration-parity-904a4e0e303a4b288fff4ed5793fbb41",
+    "reused_report": "rotate-contiguous-candidate-B1-reused-parity.json",
+    "sha256_uncompressed": "19f1be0be45f67082debbcbe0b67ccad4bbea9c5eb1e67a660b5b5accce79076"
+  },
+  "candidate-B2": {
+    "canonical_report": "candidate-B1.json.gz",
+    "report_run_id": "migration-parity-904a4e0e303a4b288fff4ed5793fbb41",
+    "reused_report": "rotate-contiguous-candidate-B2-reused-parity.json",
+    "sha256_uncompressed": "19f1be0be45f67082debbcbe0b67ccad4bbea9c5eb1e67a660b5b5accce79076"
+  },
+  "control-A1": {
+    "canonical_report": "control-A1.json.gz",
+    "report_run_id": "migration-parity-d58b0d1082144088ae47a98131f7f75d",
+    "reused_report": "rotate-contiguous-control-A1b-reused-parity.json",
+    "sha256_uncompressed": "75a584e26e9b8e814db2b729a9bfda5c2e3053f472a74a13a8c5120bf79e6478"
+  },
+  "control-A2": {
+    "canonical_report": "control-A2.json.gz",
+    "report_run_id": "migration-parity-ba3b2b016d5f4cf78767ac9c2c8a6177",
+    "reused_report": "rotate-contiguous-control-A2b-reused-parity.json",
+    "sha256_uncompressed": "5eb544a0aebd26c2a831761b10c0974a14845ca6a965bedb5b2ffa6056c038ed"
+  },
+  "final-B3": {
+    "canonical_report": "final-production.json.gz",
+    "report_run_id": "migration-parity-87c9aa30b8ab4c8a8edbf1573c282d53",
+    "reused_report": "rotate-contiguous-final-B3-reused-parity.json",
+    "sha256_uncompressed": "75fdd704d8f29c970f69d30fc0445cec4b19e84114f40bb9d9b468003026efb3"
+  }
+}

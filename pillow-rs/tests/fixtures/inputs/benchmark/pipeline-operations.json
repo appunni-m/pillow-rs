@@ -13683,6 +13683,62 @@
       }
     },
     {
+      "workload_id": "pipeline-op.rotate.material-rgb-nearest-noise-recovered-20261016-1024x768",
+      "covers": [
+        "PIL.Image.Image.rotate.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.rotate.nuanced.rgb-nearest-1deg-noise-recovered-20261016-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-op.grayscale.material-ycbcr-noise-1024x768",
       "covers": [
         "PIL.ImageOps.grayscale.performance.standard"
@@ -27991,69 +28047,8 @@
         }
       ],
       "input": {
-        "kind": "workflow",
-        "assets": [],
-        "steps": [
-          {
-            "step_id": "setup-image-1",
-            "surface": "PIL.Image",
-            "operation": "new",
-            "receiver": null,
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "RGB"
-              },
-              "size": {
-                "kind": "literal",
-                "value": [
-                  1024,
-                  768
-                ]
-              },
-              "color": {
-                "kind": "literal",
-                "value": 0
-              }
-            }
-          },
-          {
-            "step_id": "setup-filter-blur-2",
-            "surface": "PIL.ImageFilter",
-            "operation": "BLUR",
-            "receiver": null,
-            "arguments": {}
-          },
-          {
-            "step_id": "call",
-            "surface": "PIL.Image.Image",
-            "operation": "filter",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "setup-image-1"
-            },
-            "arguments": {
-              "filter": {
-                "kind": "binding",
-                "step_id": "setup-filter-blur-2"
-              }
-            }
-          },
-          {
-            "step_id": "materialize",
-            "surface": "PIL.Image.Image",
-            "operation": "tobytes",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "call"
-            },
-            "arguments": {}
-          }
-        ],
-        "observations": [
-          "call",
-          "materialize"
-        ]
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.filter.nuanced.rgb-blur-5x5-noise-1024x768"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -28067,7 +28062,7 @@
         "samples": 2,
         "concurrency": 1,
         "cache_state": "warm",
-        "correctness_gate": "successful_execution"
+        "correctness_gate": "parity_pass"
       },
       "context": {
         "size": [
@@ -46838,6 +46833,51 @@
       }
     },
     {
+      "workload_id": "pipeline-chain.autocontrast-materialized.rgb-identity-lut-1024x768",
+      "covers": [
+        "PIL.ImageOps.autocontrast.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageOps.autocontrast.nuanced.performance-rgb-identity-lut-1024x768"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-chain.matrix-000",
       "covers": [
         "PIL.Image.Image.thumbnail.performance.standard"
@@ -57650,6 +57690,112 @@
       }
     },
     {
+      "workload_id": "pipeline-chain.getchannel.seeded-corners-16x16-all-bands",
+      "covers": [
+        "PIL.Image.Image.getchannel.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getchannel.nuanced.pipeline-seeded-corners-16x16-all-bands"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGBA",
+        "chain_length": 8,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.getchannel.seeded-corners-1024x768-all-bands",
+      "covers": [
+        "PIL.Image.Image.getchannel.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getchannel.nuanced.pipeline-seeded-corners-1024x768-all-bands"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGBA",
+        "chain_length": 8,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-chain.terminal-read.getdata.1-band0-1024x768",
       "covers": [
         "PIL.Image.Image.getdata.performance.standard"
@@ -59357,212 +59503,8 @@
         }
       ],
       "input": {
-        "kind": "workflow",
-        "assets": [],
-        "steps": [
-          {
-            "step_id": "gradient",
-            "surface": "PIL.Image",
-            "operation": "linear_gradient",
-            "receiver": null,
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "L"
-              }
-            }
-          },
-          {
-            "step_id": "resized",
-            "surface": "PIL.Image.Image",
-            "operation": "resize",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "gradient"
-            },
-            "arguments": {
-              "size": {
-                "kind": "literal",
-                "value": [
-                  1024,
-                  768
-                ]
-              },
-              "resample": {
-                "kind": "literal",
-                "value": 0
-              }
-            }
-          },
-          {
-            "step_id": "integer",
-            "surface": "PIL.Image.Image",
-            "operation": "convert",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "resized"
-            },
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "I"
-              }
-            }
-          },
-          {
-            "step_id": "float",
-            "surface": "PIL.Image.Image",
-            "operation": "convert",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "resized"
-            },
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "F"
-              }
-            }
-          },
-          {
-            "step_id": "i-getbbox",
-            "surface": "PIL.Image.Image",
-            "operation": "getbbox",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "integer"
-            },
-            "arguments": {}
-          },
-          {
-            "step_id": "i-getcolors",
-            "surface": "PIL.Image.Image",
-            "operation": "getcolors",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "integer"
-            },
-            "arguments": {
-              "maxcolors": {
-                "kind": "literal",
-                "value": 1000000
-              }
-            }
-          },
-          {
-            "step_id": "i-getextrema",
-            "surface": "PIL.Image.Image",
-            "operation": "getextrema",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "integer"
-            },
-            "arguments": {}
-          },
-          {
-            "step_id": "i-getpixel",
-            "surface": "PIL.Image.Image",
-            "operation": "getpixel",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "integer"
-            },
-            "arguments": {
-              "xy": {
-                "kind": "literal",
-                "value": [
-                  512,
-                  384
-                ]
-              }
-            }
-          },
-          {
-            "step_id": "i-getprojection",
-            "surface": "PIL.Image.Image",
-            "operation": "getprojection",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "integer"
-            },
-            "arguments": {}
-          },
-          {
-            "step_id": "f-getbbox",
-            "surface": "PIL.Image.Image",
-            "operation": "getbbox",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "float"
-            },
-            "arguments": {}
-          },
-          {
-            "step_id": "f-getcolors",
-            "surface": "PIL.Image.Image",
-            "operation": "getcolors",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "float"
-            },
-            "arguments": {
-              "maxcolors": {
-                "kind": "literal",
-                "value": 1000000
-              }
-            }
-          },
-          {
-            "step_id": "f-getextrema",
-            "surface": "PIL.Image.Image",
-            "operation": "getextrema",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "float"
-            },
-            "arguments": {}
-          },
-          {
-            "step_id": "f-getpixel",
-            "surface": "PIL.Image.Image",
-            "operation": "getpixel",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "float"
-            },
-            "arguments": {
-              "xy": {
-                "kind": "literal",
-                "value": [
-                  512,
-                  384
-                ]
-              }
-            }
-          },
-          {
-            "step_id": "f-getprojection",
-            "surface": "PIL.Image.Image",
-            "operation": "getprojection",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "float"
-            },
-            "arguments": {}
-          }
-        ],
-        "observations": [
-          "i-getbbox",
-          "i-getcolors",
-          "i-getextrema",
-          "i-getpixel",
-          "i-getprojection",
-          "f-getbbox",
-          "f-getcolors",
-          "f-getextrema",
-          "f-getpixel",
-          "f-getprojection"
-        ]
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.analysis-scalar-if-terminal-1024x768"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -59576,7 +59518,7 @@
         "samples": 2,
         "concurrency": 1,
         "cache_state": "warm",
-        "correctness_gate": "successful_execution"
+        "correctness_gate": "parity_pass"
       },
       "context": {
         "size": [
@@ -59585,6 +59527,382 @@
         ],
         "mode": "I+F",
         "chain_length": 14,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.terminal-read.getcolors.scalar-i-1024x768",
+      "covers": [
+        "PIL.Image.Image.getcolors.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.analysis-scalar-if-terminal-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "i-getcolors"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.terminal-read.getcolors.scalar-f-1024x768",
+      "covers": [
+        "PIL.Image.Image.getcolors.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.analysis-scalar-if-terminal-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "f-getcolors"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.terminal-read.getprojection.scalar-i-1024x768",
+      "covers": [
+        "PIL.Image.Image.getprojection.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.analysis-scalar-if-terminal-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "i-getprojection"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.terminal-read.getprojection.scalar-f-1024x768",
+      "covers": [
+        "PIL.Image.Image.getprojection.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.analysis-scalar-if-terminal-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "f-getprojection"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.terminal-read.getcolors.no-adjacent-scalar-i-1024x768",
+      "covers": [
+        "PIL.Image.Image.getcolors.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.no-adjacent-scalar-if-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "i-getcolors"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.terminal-read.getcolors.no-adjacent-scalar-f-1024x768",
+      "covers": [
+        "PIL.Image.Image.getcolors.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.no-adjacent-scalar-if-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "f-getcolors"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.terminal-read.getcolors.late-negative-signed-run-i-1024x768",
+      "covers": [
+        "PIL.Image.Image.getcolors.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.i-late-negative-signed-run-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.terminal-read.getcolors.high-cardinality-signed-run-i-128x64",
+      "covers": [
+        "PIL.Image.Image.getcolors.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.i-high-cardinality-signed-run-fallback-128x64"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call-fallback-4097"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          128,
+          64
+        ],
+        "mode": "I",
+        "chain_length": 1,
         "operation_class": "terminal",
         "cache_state": "warm",
         "build_profile": "release"
@@ -68839,6 +69157,62 @@
       }
     },
     {
+      "workload_id": "pipeline-op.filter.material-la-nonmatching-5x5-1024x768",
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-nonmatching-noise-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-op.filter.material-la-noise-3x3-1024x768",
       "covers": [
         "PIL.Image.Image.filter.performance.standard"
@@ -76039,6 +76413,54 @@
       }
     },
     {
+      "workload_id": "pipeline-op.rotate.material-rgba-nearest-37deg-noise-fill-1024x768",
+      "covers": [
+        "PIL.Image.Image.rotate.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.rotate.nuanced.rgba-nearest-37deg-noise-fill-20261016-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGBA",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-chain.geometry-copy.crop-l-1024x768",
       "covers": [
         "PIL.Image.Image.crop.performance.standard"
@@ -77479,79 +77901,8 @@
         }
       ],
       "input": {
-        "kind": "workflow",
-        "assets": [],
-        "steps": [
-          {
-            "step_id": "setup-image",
-            "surface": "PIL.Image",
-            "operation": "new",
-            "receiver": null,
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "RGBA"
-              },
-              "size": {
-                "kind": "literal",
-                "value": [
-                  1024,
-                  768
-                ]
-              },
-              "color": {
-                "kind": "literal",
-                "value": [
-                  83,
-                  149,
-                  17,
-                  191
-                ]
-              }
-            }
-          },
-          {
-            "step_id": "setup-filter",
-            "surface": "PIL.ImageFilter",
-            "operation": "GaussianBlur",
-            "receiver": null,
-            "arguments": {
-              "radius": {
-                "kind": "literal",
-                "value": 7.5
-              }
-            }
-          },
-          {
-            "step_id": "blurred",
-            "surface": "PIL.Image.Image",
-            "operation": "filter",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "setup-image"
-            },
-            "arguments": {
-              "filter": {
-                "kind": "binding",
-                "step_id": "setup-filter"
-              }
-            }
-          },
-          {
-            "step_id": "materialize",
-            "surface": "PIL.Image.Image",
-            "operation": "tobytes",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "blurred"
-            },
-            "arguments": {}
-          }
-        ],
-        "observations": [
-          "blurred",
-          "materialize"
-        ]
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-gaussian-1024x768-radius-7-5"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -77565,7 +77916,60 @@
         "samples": 2,
         "concurrency": 1,
         "cache_state": "warm",
-        "correctness_gate": "successful_execution"
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGBA",
+        "chain_length": 1,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.blur-material.gaussian-rgba-noise-1024x768",
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-noise-1024x768-radius-7-5"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
       },
       "context": {
         "size": [
@@ -79155,6 +79559,54 @@
         "size": [
           256,
           256
+        ],
+        "mode": "RGBA",
+        "chain_length": 1,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.blur-guard.gaussian-rgba-sparse-512x512-radius-2",
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.filter.nuanced.performance-gaussian-rgba-sparse-512x512-radius-2"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          512,
+          512
         ],
         "mode": "RGBA",
         "chain_length": 1,
@@ -248567,6 +249019,20 @@
       ]
     },
     {
+      "suite_id": "pipeline-operations.getchannel-seeded-corners-suite",
+      "description": "Parity-gated 16x16 and 1024x768 seeded-corner RGBA-to-RGB workflows that extract all three bands.",
+      "members": [
+        {
+          "workload_id": "pipeline-chain.getchannel.seeded-corners-16x16-all-bands",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.getchannel.seeded-corners-1024x768-all-bands",
+          "weight": 1
+        }
+      ]
+    },
+    {
       "suite_id": "pipeline-operations.terminal-read-suite",
       "description": "Exact-parity banded GetData benchmarks across Pillow modes and sizes, including the RGB lazy-pipeline terminal read.",
       "members": [
@@ -248664,6 +249130,56 @@
         },
         {
           "workload_id": "pipeline-chain.terminal-read.imagestat.cmyk-1024x768",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "suite_id": "pipeline-operations.scalar-getcolors-suite",
+      "description": "Exact-parity scalar I/F GetColors calls plus late-negative signed-key and high-cardinality I fallback guards, measured as separate CPU operations after materialization.",
+      "members": [
+        {
+          "workload_id": "pipeline-chain.terminal-read.getcolors.scalar-i-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.terminal-read.getcolors.late-negative-signed-run-i-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.terminal-read.getcolors.high-cardinality-signed-run-i-128x64",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.terminal-read.getcolors.scalar-f-1024x768",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "suite_id": "pipeline-operations.scalar-getcolors-no-run-suite",
+      "description": "Exact-parity 1024x768 I-mode and F-mode GetColors calls with no adjacent equal samples, measured separately on CPU.",
+      "members": [
+        {
+          "workload_id": "pipeline-chain.terminal-read.getcolors.no-adjacent-scalar-i-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.terminal-read.getcolors.no-adjacent-scalar-f-1024x768",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "suite_id": "pipeline-operations.scalar-getprojection-suite",
+      "description": "Exact-parity 1024x768 I-mode and F-mode GetProjection calls, measured as separate CPU operations after materialization.",
+      "members": [
+        {
+          "workload_id": "pipeline-chain.terminal-read.getprojection.scalar-i-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.terminal-read.getprojection.scalar-f-1024x768",
           "weight": 1
         }
       ]
@@ -248788,6 +249304,10 @@
         },
         {
           "workload_id": "pipeline-op.filter.material-la-noise-5x5-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-op.filter.material-la-nonmatching-5x5-1024x768",
           "weight": 1
         },
         {
@@ -250147,6 +250667,10 @@
         {
           "workload_id": "pipeline-chain.geometry-material.rotate-rgba-1024x768",
           "weight": 1
+        },
+        {
+          "workload_id": "pipeline-op.rotate.material-rgba-nearest-37deg-noise-fill-1024x768",
+          "weight": 1
         }
       ]
     },
@@ -250213,6 +250737,10 @@
           "weight": 1
         },
         {
+          "workload_id": "pipeline-chain.blur-material.gaussian-rgba-noise-1024x768",
+          "weight": 1
+        },
+        {
           "workload_id": "pipeline-chain.blur-material.gaussian-l-1024x768",
           "weight": 1
         },
@@ -250262,6 +250790,10 @@
         },
         {
           "workload_id": "pipeline-chain.blur-material.box-rgba-256x256-radius-2",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.blur-guard.gaussian-rgba-sparse-512x512-radius-2",
           "weight": 1
         }
       ]

@@ -1,0 +1,144 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "identity": {
+    "run_id": "migration-parity-75f7cb28033e462f80f6f6972aacc8e7",
+    "started_at": "2026-10-16T12:10:02.393762Z",
+    "finished_at": "2026-10-16T12:10:04.262447Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/pil-imageops.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "f9bc243391b4f5b3129319d8c792c59a12691df3363ff1aedb02ffb005923b2e"
+      }
+    ],
+    "assets": [
+      {
+        "input_path": "inputs/parity/pil-imageops.json",
+        "item_id": "PIL.ImageOps.posterize.nuanced.gpu-native-byte-tail-l-3x1-bits-4",
+        "asset_id": "image-noise",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "40c04261688a448c7e16c5239211c5daf47daa789407a94526dae676ec5ed229"
+      }
+    ],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-cpu",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "cpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-test"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 3600
+    }
+  },
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.ImageOps.posterize.nuanced.gpu-native-byte-tail-l-3x1-bits-4",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageOps.posterize.parameter.bits"
+      ],
+      "source": {
+        "case_id": "PIL.ImageOps.posterize.nuanced.gpu-native-byte-tail-l-3x1-bits-4",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                3,
+                1
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "wJDg"
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "wJDg"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageOps.posterize.nuanced.gpu-native-byte-tail-l-3x1-bits-4",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                3,
+                1
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "wJDg"
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "wJDg"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    }
+  ],
+  "infrastructure_errors": []
+}

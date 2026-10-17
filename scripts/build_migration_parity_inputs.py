@@ -30,6 +30,26 @@ from typing import Any
 import yaml
 
 try:
+    from migration_parity.display_inputs import (
+        DISPLAY_OPERATIONS, default_display_case, nuanced_display_cases,
+    )
+except ModuleNotFoundError:
+    from scripts.migration_parity.display_inputs import (
+        DISPLAY_OPERATIONS, default_display_case, nuanced_display_cases,
+    )
+
+try:
+    from migration_parity.channel_inputs import (
+        seeded_corner_benchmark_workloads,
+        seeded_corner_parity_cases,
+    )
+except ModuleNotFoundError:
+    from scripts.migration_parity.channel_inputs import (
+        seeded_corner_benchmark_workloads,
+        seeded_corner_parity_cases,
+    )
+
+try:
     from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
 except ModuleNotFoundError:  # imported as ``scripts.build_migration_parity_inputs`` in tests
     from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
@@ -41,6 +61,9 @@ DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_OUTPUT_ROOT = FIXTURE_ROOT
 TARGET_PROFILE = "python-cpu"
 BENCHMARK_TARGET_PROFILES = ("python-cpu", "python-simd", "python-gpu")
+FILTER_BLUR_RGB_NOISE_CASE_ID = (
+    "PIL.Image.Image.filter.nuanced.rgb-blur-5x5-noise-1024x768"
+)
 
 # The benchmark lane measures successful, repeatable workflows.  A default
 # benchmark case that only exercises Pillow's argument-validation/error path
@@ -403,6 +426,16 @@ BENCHMARK_PIPELINE_WORKLOADS: dict[str, dict[str, Any]] = {
         "case_id": "PIL.ImageChops.multiply.benchmark.materialized-pipeline-1024",
         "step_ids": [],
     },
+    "pil-imagechops.screen.standard": {
+        "case_id": (
+            "PIL.ImageChops.screen.nuanced."
+            "performance-materialized-rgb-noise-1024x768"
+        ),
+        # Keep source setup outside timing; include the lazy Screen call and
+        # public bytes materialization so GPU transfer/synchronization cost is
+        # part of the same end-to-end boundary as Pillow's eager result.
+        "step_ids": ["call", "observe-result"],
+    },
     "pil-imageops.invert.standard": {
         "case_id": "PIL.ImageOps.invert.benchmark.materialized-pipeline-1024",
         "step_ids": [],
@@ -668,8 +701,17 @@ PIPELINE_GEOMETRY_BENCHMARK_IDS: tuple[str, ...] = (
 )
 
 # Material-sized blur chains used to measure the rolling horizontal/vertical
-# implementation. These are benchmark-only workflows: they do not create
-# parity cases or expected outputs.
+# implementation. Most remain benchmark-only; the RGBA Gaussian workflow also
+# has a parity case because it is a current CPU optimization lead.
+GAUSSIAN_RGBA_MATERIAL_PARITY_CASE_ID = (
+    "PIL.Image.Image.filter.nuanced.performance-material-rgba-gaussian-1024x768-radius-7-5"
+)
+GAUSSIAN_RGBA_NOISE_PARITY_CASE_ID = (
+    "PIL.Image.Image.filter.nuanced.performance-material-rgba-noise-1024x768-radius-7-5"
+)
+GAUSSIAN_RGBA_SPARSE_GUARD_PARITY_CASE_ID = (
+    "PIL.Image.Image.filter.nuanced.performance-gaussian-rgba-sparse-512x512-radius-2"
+)
 PIPELINE_BLUR_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
     {
         "name": "gaussian-rgb-1024x1024",
@@ -694,6 +736,18 @@ PIPELINE_BLUR_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
         "color": [83, 149, 17, 191],
         "filter": "GaussianBlur",
         "radius": 7.5,
+        "parity_case_id": GAUSSIAN_RGBA_MATERIAL_PARITY_CASE_ID,
+    },
+    {
+        "name": "gaussian-rgba-noise-1024x768",
+        "mode": "RGBA",
+        "size": [1024, 768],
+        "filter": "GaussianBlur",
+        "radius": 7.5,
+        "noise_source_case_id": (
+            "PIL.Image.Image.entropy.nuanced.performance-rgba-noise-1024x768"
+        ),
+        "parity_case_id": GAUSSIAN_RGBA_NOISE_PARITY_CASE_ID,
     },
     {
         "name": "gaussian-l-1024x768",
@@ -7232,6 +7286,10 @@ def build_parity_case(
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
     canonical_case_id = f"{prefix}.{slug(suffix)}"
+    if (surface, operation["id"]) in DISPLAY_OPERATIONS:
+        return default_display_case(
+            surface, operation, requirement, case_id or canonical_case_id,
+        )
     if (
         surface == "PIL.ImageOps"
         and operation["id"] == "exif_transpose"
@@ -7246,6 +7304,16 @@ def build_parity_case(
                 **(scenario_values or {}),
                 "in_place": literal(True),
             }
+    if (
+        surface == "PIL.ImageChops"
+        and operation["id"] == "screen"
+        and requirement["dimension"] == "backend"
+        and ".backend.gpu-mode-" in requirement["id"]
+    ):
+        # A backend requirement is separate from the public mode requirement,
+        # but its input still has to exercise that mode. Keep each GPU proof
+        # case distinct instead of merging four identical default RGB calls.
+        scenario_mode = requirement["id"].rsplit("gpu-mode-", 1)[1].upper()
     builder = WorkflowBuilder(
         operations=operations,
         primary_surface=surface,
@@ -7284,7 +7352,11 @@ def build_parity_case(
         "surface": surface,
         "operation": operation["id"],
         "covers": [requirement["id"]],
-        "target_profiles": [TARGET_PROFILE],
+        "target_profiles": (
+            list(requirement["target_profiles"])
+            if surface == "PIL.ImageChops" and operation["id"] == "screen"
+            else [TARGET_PROFILE]
+        ),
         "assets": assets,
         "steps": steps,
         "observations": observations,
@@ -12622,6 +12694,220 @@ def pipeline_composition_cases(
     return [case for case in cases if case["surface"] == surface_id]
 
 
+def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Return input-only RGB edge cases for GetChannel parity.
+
+    These workflows cover all three RGB selectors at logical row tails,
+    degenerate image dimensions, and an RGB image produced by public mode
+    conversion. They are added to parity inputs only; they do not participate
+    in managed coverage plans. GPU profiles are omitted from the empty-image
+    cases because the GPU channel extraction path cannot launch a zero-pixel
+    shader grid.
+    """
+
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    covers = [
+        "PIL.Image.Image.getchannel.behavior.default",
+        "PIL.Image.Image.getchannel.parameter.channel",
+        "PIL.Image.Image.getchannel.mode.rgb",
+    ]
+    nonempty_profiles = list(BENCHMARK_TARGET_PROFILES)
+    empty_profiles = ["python-cpu", "python-simd"]
+
+    def new_image(
+        step_id: str,
+        mode: str,
+        size: list[int],
+        color: Any,
+    ) -> dict[str, Any]:
+        return {
+            "step_id": step_id,
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal(size),
+                "color": literal(color),
+            },
+        }
+
+    def putpixel(
+        step_id: str,
+        receiver: str,
+        xy: list[int],
+        value: Any,
+    ) -> dict[str, Any]:
+        return {
+            "step_id": step_id,
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "receiver": binding(receiver),
+            "arguments": {"xy": literal(xy), "value": literal(value)},
+        }
+
+    def extract_all_bands(receiver: str) -> tuple[list[dict[str, Any]], list[str]]:
+        steps: list[dict[str, Any]] = []
+        observations: list[str] = []
+        for channel in range(3):
+            result_id = f"channel-{channel}"
+            bytes_id = f"channel-{channel}-bytes"
+            steps.extend(
+                [
+                    {
+                        "step_id": result_id,
+                        "surface": "PIL.Image.Image",
+                        "operation": "getchannel",
+                        "receiver": binding(receiver),
+                        "arguments": {"channel": literal(channel)},
+                    },
+                    {
+                        "step_id": bytes_id,
+                        "surface": "PIL.Image.Image",
+                        "operation": "tobytes",
+                        "receiver": binding(result_id),
+                        "arguments": {},
+                    },
+                ]
+            )
+            observations.extend([result_id, bytes_id])
+        return steps, observations
+
+    def case(
+        case_suffix: str,
+        profiles: list[str],
+        steps: list[dict[str, Any]],
+        observations: list[str],
+        assets: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "case_id": f"{surface_id}.getchannel.nuanced.{case_suffix}",
+            "surface": surface_id,
+            "operation": "getchannel",
+            "covers": list(covers),
+            "target_profiles": list(profiles),
+            "assets": list(assets or []),
+            "steps": steps,
+            "observations": observations,
+        }
+
+    cases: list[dict[str, Any]] = []
+    for residue in (1, 2, 3):
+        width = 4 + residue
+        steps = [new_image("rgb-input", "RGB", [width, 1], [0, 0, 0])]
+        for x in range(width):
+            # Each logical tail pixel carries distinct, nonzero values in all
+            # bands so channel selection and tail handling are both visible.
+            rgb = [
+                (17 + 37 * x) % 256,
+                (53 + 59 * x) % 256,
+                (109 + 83 * x) % 256,
+            ]
+            steps.append(putpixel(f"put-pixel-{x}", "rgb-input", [x, 0], rgb))
+        extraction_steps, observations = extract_all_bands("rgb-input")
+        steps.extend(extraction_steps)
+        cases.append(
+            case(
+                f"rgb-tail-residue-{residue}-all-bands",
+                nonempty_profiles,
+                steps,
+                observations,
+            )
+        )
+
+    for suffix, size in (
+        ("empty-zero-width-0x3", [0, 3]),
+        ("empty-zero-height-3x0", [3, 0]),
+    ):
+        steps = [new_image("rgb-input", "RGB", size, [17, 53, 109])]
+        extraction_steps, observations = extract_all_bands("rgb-input")
+        steps.extend(extraction_steps)
+        cases.append(case(suffix, empty_profiles, steps, observations))
+
+    for residue in (1, 2, 3):
+        width = 260 + residue
+        pixels = bytearray()
+        for x in range(width):
+            pixels.extend(
+                (
+                    (17 + 37 * x) % 256,
+                    (53 + 59 * x) % 256,
+                    (109 + 83 * x) % 256,
+                )
+            )
+        pixel_data = bytes(pixels)
+        pixel_asset = {
+            "id": "rgb-pixels",
+            "kind": "inline",
+            "encoding": "base64",
+            "data": base64.b64encode(pixel_data).decode("ascii"),
+            "sha256": hashlib.sha256(pixel_data).hexdigest(),
+            "media_type": "application/octet-stream",
+        }
+        steps = [
+            new_image("rgb-input", "RGB", [width, 1], [0, 0, 0]),
+            {
+                "step_id": "load-rgb-bytes",
+                "surface": "PIL.Image.Image",
+                "operation": "frombytes",
+                "receiver": binding("rgb-input"),
+                "arguments": {"data": {"kind": "asset", "asset_id": "rgb-pixels"}},
+            },
+        ]
+        extraction_steps, observations = extract_all_bands("rgb-input")
+        steps.extend(extraction_steps)
+        cases.append(
+            case(
+                f"rgb-deferred-tail-residue-{residue}-wide-all-bands",
+                nonempty_profiles,
+                steps,
+                observations,
+                assets=[pixel_asset],
+            )
+        )
+
+    size = [7, 2]
+    steps = [new_image("rgba-input", "RGBA", size, [0, 0, 0, 255])]
+    for y in range(size[1]):
+        for x in range(size[0]):
+            rgb = [
+                (17 + 37 * (x + y * size[0])) % 256,
+                (53 + 59 * (x + y * size[0])) % 256,
+                (109 + 83 * (x + y * size[0])) % 256,
+            ]
+            alpha = (31 + 47 * (x + y * size[0])) % 256
+            steps.append(
+                putpixel(
+                    f"put-pixel-{x}-{y}",
+                    "rgba-input",
+                    [x, y],
+                    [*rgb, alpha],
+                )
+            )
+    steps.append(
+        {
+            "step_id": "rgb-converted",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": binding("rgba-input"),
+            "arguments": {"mode": literal("RGB")},
+        }
+    )
+    extraction_steps, observations = extract_all_bands("rgb-converted")
+    steps.extend(extraction_steps)
+    cases.append(
+        case(
+            "pipeline-rgba-converted-to-rgb-all-bands",
+            nonempty_profiles,
+            steps,
+            observations,
+        )
+    )
+    return cases
+
+
 def build_nuanced_cases(
     manifest: dict[str, Any],
     operations: dict[tuple[str, str], dict[str, Any]],
@@ -15401,6 +15687,22 @@ def build_nuanced_cases(
         *(getchannel_coverage_spec(pattern) for pattern in range(100)),
         # Materialized performance cases keep public setup outside the timed
         # call+observation boundary and parity-gate every execution backend.
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "screen",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-materialized-rgb-noise-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "noise-ref-fill",
+            "seed": 20261015,
+            "observe_result": "tobytes",
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "additional_requirement_suffixes": [
+                "mode.rgb",
+                "backend.gpu-mode-rgb",
+            ],
+        },
         *(
             {
                 "surface": "PIL.Image.Image",
@@ -27990,6 +28292,25 @@ def build_nuanced_cases(
         *(
             {
                 "surface": "PIL.ImageChops",
+                "operation": "screen",
+                "requirement_suffix": f"backend.gpu-mode-{mode.lower()}",
+                "name": f"gpu-native-byte-tail-{mode.lower()}-5x5",
+                "mode": mode,
+                "size": [5, 5],
+                "edge": "noise-fill",
+                "seed": 20261015 + index,
+                "observe_result": "tobytes",
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "additional_requirement_suffixes": [
+                    "performance.standard",
+                    f"mode.{mode.lower()}",
+                ],
+            }
+            for index, mode in enumerate(("L", "LA", "RGB", "RGBA"))
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
                 "operation": operation,
                 "requirement_suffix": "behavior.default",
                 "name": f"coverage-batch-chops-large-wide-{operation}-{mode.lower()}",
@@ -31542,6 +31863,16 @@ def build_nuanced_cases(
             "edge": "autocontrast-varied-range",
             "size": [2, 1],
             "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-rgb-identity-lut-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "observe_result": "tobytes",
+            "additional_requirement_suffixes": ["mode.rgb"],
         },
         {
             "surface": "PIL.ImageOps",
@@ -35878,6 +36209,56 @@ def build_nuanced_cases(
                 "angle": literal(33.5),
                 "expand": literal(True),
                 "resample": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.fillcolor",
+            "name": "rgba-nearest-expanded-fill-alpha",
+            "observe_result": "tobytes",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50, 128],
+            "size": [9, 8],
+            "values": {
+                "angle": literal(37),
+                "expand": literal(True),
+                "resample": literal(0),
+                "fillcolor": literal([17, 31, 47, 63]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.resample",
+            "name": "rgb-nearest-1deg-noise-recovered-20261016-1024x768",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "edge": "noise-fill",
+            "seed": 20261016,
+            "size": [1024, 768],
+            "values": {
+                "angle": literal(1),
+                "expand": literal(False),
+                "resample": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.fillcolor",
+            "name": "rgba-nearest-37deg-noise-fill-20261016-1024x768",
+            "observe_result": "tobytes",
+            "mode": "RGBA",
+            "edge": "noise-fill",
+            "seed": 20261017,
+            "size": [1024, 768],
+            "values": {
+                "angle": literal(37),
+                "expand": literal(True),
+                "resample": literal(0),
+                "fillcolor": literal([17, 31, 47, 63]),
             },
         },
         {
@@ -42793,6 +43174,7 @@ def build_nuanced_cases(
     cases.extend(cmyk_to_rgb_parity_cases(surface_id))
     cases.extend(cmyk_to_1_parity_cases(surface_id))
     cases.extend(cmyk_grayscale_parity_cases(surface_id))
+    cases.extend(getbbox_f_signed_zero_parity_cases(surface_id))
     cases.extend(getprojection_performance_parity_cases(surface_id))
     cases.extend(getprojection_cmyk_parity_cases(surface_id))
     cases.extend(putpixel_input_parity_cases(surface_id))
@@ -42922,6 +43304,7 @@ def build_nuanced_cases(
             }
         )
     cases.extend(append_at_end)
+    cases.extend(nuanced_display_cases(surface_id, operations))
     return cases
 
 
@@ -43622,6 +44005,54 @@ def rgb_to_rgba_performance_parity_cases(surface_id: str) -> list[dict[str, Any]
     ]
 
 
+def getbbox_f_signed_zero_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Compare Pillow's raw-word F GetBBox semantics for negative zero."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    raw = struct.pack("<4f", 0.0, 0.0, 0.0, -0.0)
+    return [
+        {
+            "case_id": f"{surface_id}.getbbox.parity.f-negative-zero-is-data",
+            "surface": surface_id,
+            "operation": "getbbox",
+            "covers": [f"{surface_id}.getbbox.behavior.default"],
+            "target_profiles": ["python-cpu"],
+            "assets": [
+                {
+                    "id": "f-negative-zero-sample",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("F"),
+                        "size": literal([2, 2]),
+                        "data": asset_value("f-negative-zero-sample"),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "getbbox",
+                    "receiver": binding("image"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call"],
+        }
+    ]
+
+
 def getprojection_performance_parity_cases(
     surface_id: str,
 ) -> list[dict[str, Any]]:
@@ -43683,7 +44114,7 @@ def getprojection_performance_parity_cases(
             "observations": ["call"],
         }
 
-    return [
+    cases = [
         case("standard", "RGB", [16, 16], 0),
         case(
             "material-cmyk-1024x768",
@@ -43722,7 +44153,80 @@ def getprojection_performance_parity_cases(
             ),
         ),
         case("rgb-dense-scalar-tail-15x3", "RGB", [15, 3], [1, 2, 3]),
+        case(
+            "f-negative-zero-is-nonzero",
+            "F",
+            [4, 3],
+            0.0,
+            pixels=(
+                ([1, 1], -0.0, "negative-zero"),
+                ([3, 2], 1.0, "nonzero-pixel"),
+            ),
+        ),
+        *[
+            case(
+                f"{mode.lower()}-row-scan-after-horizontal-complete",
+                mode,
+                [4, 4],
+                0.0 if mode == "F" else 0,
+                pixels=tuple(
+                    ([x, 0], float(x + 1) if mode == "F" else x + 1, f"top-{x}")
+                    for x in range(4)
+                )
+                + (
+                    ([3, 2], 5.0 if mode == "F" else 5, "later-row-right"),
+                    ([0, 3], 6.0 if mode == "F" else 6, "later-row-left"),
+                ),
+            )
+            for mode in ("I", "F")
+        ],
     ]
+
+    # Build this edge from raw bytes. Pillow's F-mode PutPixel preserves the
+    # negative-zero sign bit, while the scalar target path currently applies
+    # its putdata offset normalization during setup; GetProjection parity must
+    # observe the same input words on both sides.
+    samples = [0.0] * 12
+    samples[5] = -0.0
+    samples[11] = 1.0
+    raw = struct.pack("<12f", *samples)
+    negative_zero_case = next(
+        case
+        for case in cases
+        if case["case_id"]
+        == f"{surface_id}.getprojection.parity.f-negative-zero-is-nonzero"
+    )
+    negative_zero_case["assets"] = [
+        {
+            "id": "f-signed-zero-samples",
+            "kind": "inline",
+            "encoding": "base64",
+            "data": base64.b64encode(raw).decode("ascii"),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "media_type": "application/octet-stream",
+        }
+    ]
+    negative_zero_case["steps"] = [
+        {
+            "step_id": "image",
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "receiver": None,
+            "arguments": {
+                "mode": literal("F"),
+                "size": literal([4, 3]),
+                "data": asset_value("f-signed-zero-samples"),
+            },
+        },
+        {
+            "step_id": "call",
+            "surface": surface_id,
+            "operation": "getprojection",
+            "receiver": binding("image"),
+            "arguments": {},
+        },
+    ]
+    return cases
 
 
 def getprojection_cmyk_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -45028,6 +45532,26 @@ def la_filter_materialized_parity_cases(
         },
     )
 
+    # Keep a full-size generic-kernel case beside the binomial case. The
+    # uniform-byte CPU specialization is admitted through the generic byte
+    # row dispatcher, so a late coefficient mismatch exercises its decline
+    # path without changing the measured image or mode. The first 24
+    # normalized coefficients equal 1/25; the final one differs, forcing the
+    # specialization's admission scan to inspect the complete kernel.
+    nonmatching = copy.deepcopy(material)
+    nonmatching["case_id"] = (
+        f"{surface_id}.filter.nuanced."
+        f"la-mode-kernel-5x5-nonmatching-noise-{width}x{height}"
+    )
+    filter_step = next(
+        step for step in nonmatching["steps"] if step["step_id"] == "setup-filter"
+    )
+    filter_step["arguments"].update(
+        kernel=literal([1.0] * 24 + [2.0]),
+        scale=literal(25.0),
+        offset=literal(0),
+    )
+
     edge_width, edge_height = 7, 5
     edge_raw = bytes(
         (index * 73 + index // 5 * 29 + 17) & 0xFF
@@ -45046,7 +45570,7 @@ def la_filter_materialized_parity_cases(
             "media_type": "application/octet-stream",
         },
     )
-    return [material, edge]
+    return [material, nonmatching, edge]
 
 
 def la_filter3x3_materialized_parity_cases(
@@ -48663,6 +49187,107 @@ def build_pipeline_parity_case(
     }
 
 
+def _filter_blur_rgb_noise_parity_case(
+    operations: dict[tuple[str, str], dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Build exact-size RGB BLUR parity from the canonical noise asset."""
+    source_case_id = "PIL.Image.Image.getbbox.nuanced.performance-rgb-noise-1024x768"
+    source_case = cases_by_id.get(source_case_id)
+    if source_case is None:
+        raise ValueError(
+            "RGB BLUR performance parity requires the canonical RGB noise input: "
+            f"{source_case_id}"
+        )
+    source_image = next(
+        (
+            step
+            for step in source_case["steps"]
+            if step["surface"] == "PIL.Image" and step["operation"] == "frombytes"
+        ),
+        None,
+    )
+    if source_image is None:
+        raise ValueError(f"{source_case_id} no longer has an Image.frombytes step")
+    arguments = source_image["arguments"]
+    if (
+        arguments.get("mode") != literal("RGB")
+        or arguments.get("size") != literal([1024, 768])
+    ):
+        raise ValueError(f"{source_case_id} is not the expected RGB 1024x768 input")
+    source_asset_id = arguments.get("data", {}).get("asset_id")
+    source_asset = next(
+        (
+            asset
+            for asset in source_case["assets"]
+            if asset["id"] == source_asset_id
+        ),
+        None,
+    )
+    if source_asset is None:
+        raise ValueError(f"{source_case_id} references a missing RGB noise asset")
+    pixels = copy.deepcopy(source_asset)
+    pixels["id"] = "pixels"
+
+    operation = operations.get(("PIL.Image.Image", "filter"))
+    if operation is None:
+        raise ValueError("RGB BLUR performance parity has no Image.filter operation")
+    required_covers = [
+        "PIL.Image.Image.filter.behavior.default",
+        "PIL.Image.Image.filter.parameter.filter",
+        "PIL.Image.Image.filter.mode.rgb",
+        _performance_requirement(operations, "PIL.Image.Image", "filter"),
+    ]
+    available = {item["id"] for item in operation["requirements"]}
+    missing = [requirement for requirement in required_covers if requirement not in available]
+    if missing:
+        raise ValueError(f"RGB BLUR parity references unknown requirements: {missing}")
+
+    return {
+        "case_id": FILTER_BLUR_RGB_NOISE_CASE_ID,
+        "surface": "PIL.Image.Image",
+        "operation": "filter",
+        "covers": required_covers,
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        "assets": [pixels],
+        "steps": [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "frombytes",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("RGB"),
+                    "size": literal([1024, 768]),
+                    "data": asset_value("pixels"),
+                },
+            },
+            {
+                "step_id": "setup-filter",
+                "surface": "PIL.ImageFilter",
+                "operation": "BLUR",
+                "receiver": None,
+                "arguments": {},
+            },
+            {
+                "step_id": "call",
+                "surface": "PIL.Image.Image",
+                "operation": "filter",
+                "receiver": binding("image"),
+                "arguments": {"filter": binding("setup-filter")},
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("call"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["call", "materialize"],
+    }
+
+
 def _performance_requirement(
     operations: dict[tuple[str, str], dict[str, Any]],
     surface: str,
@@ -48679,6 +49304,438 @@ def _performance_requirement(
     }:
         raise ValueError(f"pipeline benchmark lacks requirement: {requirement_id}")
     return requirement_id
+
+
+TERMINAL_SCALAR_ANALYSIS_CASE_ID = (
+    "PIL.Image.Image.getcolors.nuanced.analysis-scalar-if-terminal-1024x768"
+)
+TERMINAL_SCALAR_NO_RUN_CASE_ID = (
+    "PIL.Image.Image.getcolors.nuanced.no-adjacent-scalar-if-1024x768"
+)
+SIGNED_RUN_GETCOLORS_CASES = (
+    (
+        "pipeline-chain.terminal-read.getcolors.late-negative-signed-run-i-1024x768",
+        "PIL.Image.Image.getcolors.nuanced.i-late-negative-signed-run-1024x768",
+        "call",
+    ),
+    (
+        "pipeline-chain.terminal-read.getcolors.high-cardinality-signed-run-i-128x64",
+        "PIL.Image.Image.getcolors.nuanced.i-high-cardinality-signed-run-fallback-128x64",
+        "call-fallback-4097",
+    ),
+)
+BENCHMARK_CPU_ONLY_WORKLOAD_IDS = frozenset(
+    {
+        "pil-imagedraw-imagedraw.text.standard",
+        "pil-imagedraw-imagedraw.text.rgba-context-rgb-noise-1024x768",
+        "pil-imageenhance-color.enhance.material-rgb-520x512-factor-zero",
+    }
+)
+
+
+def _scalar_no_adjacent_l_png() -> bytes:
+    """Build a compact 1024x768 PNG with no adjacent equal grayscale samples."""
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", checksum)
+        )
+
+    width, height = 1024, 768
+    row = bytes(range(256)) * 4
+    scanlines = b"".join(b"\x00" + row for _ in range(height))
+    header = struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(scanlines))
+        + chunk(b"IEND", b"")
+    )
+
+
+def _terminal_scalar_no_run_parity_case(
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    """Create exact I/F GetColors parity inputs without adjacent sample runs."""
+
+    image_data = _scalar_no_adjacent_l_png()
+    getcolors_requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "getcolors"
+    )
+    parity_requirement = "PIL.Image.Image.getcolors.behavior.default"
+    requirements = {
+        item["id"]
+        for item in operations[("PIL.Image.Image", "getcolors")]["requirements"]
+    }
+    if parity_requirement not in requirements:
+        raise ValueError(
+            "no-run scalar GetColors parity requires "
+            f"{parity_requirement}"
+        )
+    return {
+        "case_id": TERMINAL_SCALAR_NO_RUN_CASE_ID,
+        "surface": "PIL.Image.Image",
+        "operation": "getcolors",
+        "covers": [parity_requirement, getcolors_requirement],
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        "assets": [
+            {
+                "id": "scalar-no-adjacent-l-png",
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(image_data).decode("ascii"),
+                "sha256": hashlib.sha256(image_data).hexdigest(),
+                "media_type": "image/png",
+            }
+        ],
+        "steps": [
+            {
+                "step_id": "source",
+                "surface": "PIL.Image",
+                "operation": "open",
+                "receiver": None,
+                "arguments": {"fp": asset_value("scalar-no-adjacent-l-png")},
+            },
+            {
+                "step_id": "integer",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "receiver": binding("source"),
+                "arguments": {"mode": literal("I")},
+            },
+            {
+                "step_id": "i-materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "getpixel",
+                "receiver": binding("integer"),
+                "arguments": {"xy": literal([0, 0])},
+            },
+            {
+                "step_id": "float",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "receiver": binding("source"),
+                "arguments": {"mode": literal("F")},
+            },
+            {
+                "step_id": "f-materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "getpixel",
+                "receiver": binding("float"),
+                "arguments": {"xy": literal([0, 0])},
+            },
+            {
+                "step_id": "i-getcolors",
+                "surface": "PIL.Image.Image",
+                "operation": "getcolors",
+                "receiver": binding("integer"),
+                "arguments": {"maxcolors": literal(1_000_000)},
+            },
+            {
+                "step_id": "f-getcolors",
+                "surface": "PIL.Image.Image",
+                "operation": "getcolors",
+                "receiver": binding("float"),
+                "arguments": {"maxcolors": literal(1_000_000)},
+            },
+        ],
+        "observations": ["i-getcolors", "f-getcolors"],
+    }
+
+
+def _add_terminal_scalar_no_run_parity_case(
+    parity_cases: list[dict[str, Any]],
+    existing_signatures: set[str],
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> None:
+    """Keep the no-adjacent-run GetColors regression guard in parity inputs."""
+
+    case = _terminal_scalar_no_run_parity_case(operations)
+    signature = case_signature(case)
+    if signature in existing_signatures:
+        raise ValueError("no-run scalar GetColors case duplicates an existing case")
+    if any(item["case_id"] == case["case_id"] for item in parity_cases):
+        raise ValueError(f"duplicate no-run scalar GetColors case ID: {case['case_id']}")
+    parity_cases.append(case)
+    existing_signatures.add(signature)
+
+
+def _signed_run_getcolors_parity_cases(
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build signed-I GetColors guards for run detection and fallback paths."""
+
+    parity_requirement = "PIL.Image.Image.getcolors.behavior.default"
+    requirements = {
+        item["id"]
+        for item in operations[("PIL.Image.Image", "getcolors")]["requirements"]
+    }
+    if parity_requirement not in requirements:
+        raise ValueError(
+            "signed-run GetColors parity requires "
+            f"{parity_requirement}"
+        )
+
+    high_cardinality_pixels = [0] * 64
+    for value in range(1, 4096):
+        high_cardinality_pixels.append(value)
+        if len(high_cardinality_pixels) % 546 == 0:
+            high_cardinality_pixels.append(0)
+    high_cardinality_pixels.extend(
+        [0] * (8190 - len(high_cardinality_pixels))
+    )
+    high_cardinality_pixels.extend([-1, 0])
+
+    def case(
+        case_id: str,
+        size: list[int],
+        setup_steps: list[dict[str, Any]],
+        calls: list[dict[str, Any]],
+        observations: list[str],
+    ) -> dict[str, Any]:
+        return {
+            "case_id": case_id,
+            "surface": "PIL.Image.Image",
+            "operation": "getcolors",
+            "covers": [parity_requirement],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "setup-image-1",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("I"),
+                        "size": literal(size),
+                        "color": literal(0),
+                    },
+                },
+                *setup_steps,
+                *calls,
+            ],
+            "observations": observations,
+        }
+
+    image_binding = binding("setup-image-1")
+    high_cardinality = case(
+        "PIL.Image.Image.getcolors.nuanced.i-high-cardinality-signed-run-fallback-128x64",
+        [128, 64],
+        [
+            {
+                "step_id": "setup-pixels-2",
+                "surface": "PIL.Image.Image",
+                "operation": "putdata",
+                "receiver": image_binding,
+                "arguments": {"data": literal(high_cardinality_pixels)},
+            }
+        ],
+        [
+            {
+                "step_id": "call-limit-4096",
+                "surface": "PIL.Image.Image",
+                "operation": "getcolors",
+                "receiver": image_binding,
+                "arguments": {"maxcolors": literal(4096)},
+            },
+            {
+                "step_id": "call-fallback-4097",
+                "surface": "PIL.Image.Image",
+                "operation": "getcolors",
+                "receiver": image_binding,
+                "arguments": {"maxcolors": literal(4097)},
+            },
+        ],
+        ["call-limit-4096", "call-fallback-4097"],
+    )
+    late_negative = case(
+        "PIL.Image.Image.getcolors.nuanced.i-late-negative-signed-run-1024x768",
+        [1024, 768],
+        [
+            {
+                "step_id": "setup-late-value-2",
+                "surface": "PIL.Image.Image",
+                "operation": "putpixel",
+                "receiver": image_binding,
+                "arguments": {
+                    "xy": literal([1022, 767]),
+                    "value": literal(-1),
+                },
+            }
+        ],
+        [
+            {
+                "step_id": "call",
+                "surface": "PIL.Image.Image",
+                "operation": "getcolors",
+                "receiver": image_binding,
+                "arguments": {"maxcolors": literal(1_000_000)},
+            }
+        ],
+        ["call"],
+    )
+    return [late_negative, high_cardinality]
+
+
+def _add_signed_run_getcolors_parity_cases(
+    parity_cases: list[dict[str, Any]],
+    existing_signatures: set[str],
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> None:
+    """Keep signed-I GetColors regressions reproducible in generated inputs."""
+
+    for case in _signed_run_getcolors_parity_cases(operations):
+        signature = case_signature(case)
+        if signature in existing_signatures:
+            raise ValueError(
+                f"signed-run GetColors case duplicates an input: {case['case_id']}"
+            )
+        if any(item["case_id"] == case["case_id"] for item in parity_cases):
+            raise ValueError(
+                f"duplicate signed-run GetColors case ID: {case['case_id']}"
+            )
+        parity_cases.append(case)
+        existing_signatures.add(signature)
+
+
+def _terminal_scalar_analysis_workflow(
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> tuple[dict[str, Any], list[str]]:
+    """Build the shared I/F terminal-analysis workflow and benchmark covers."""
+
+    workflow = {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "gradient",
+                "surface": "PIL.Image",
+                "operation": "linear_gradient",
+                "receiver": None,
+                "arguments": {"mode": literal("L")},
+            },
+            {
+                "step_id": "resized",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "receiver": binding("gradient"),
+                "arguments": {
+                    "size": literal([1024, 768]),
+                    "resample": literal(0),
+                },
+            },
+            {
+                "step_id": "integer",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "receiver": binding("resized"),
+                "arguments": {"mode": literal("I")},
+            },
+            {
+                "step_id": "float",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "receiver": binding("resized"),
+                "arguments": {"mode": literal("F")},
+            },
+        ],
+        "observations": [],
+    }
+    observations: list[str] = []
+    performance_covers: list[str] = []
+    for image_step, label in (("integer", "i"), ("float", "f")):
+        for operation in (
+            "getbbox",
+            "getcolors",
+            "getextrema",
+            "getpixel",
+            "getprojection",
+        ):
+            step_id = f"{label}-{operation}"
+            workflow["steps"].append(
+                {
+                    "step_id": step_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": operation,
+                    "receiver": binding(image_step),
+                    "arguments": {
+                        "maxcolors": literal(1_000_000)
+                    }
+                    if operation == "getcolors"
+                    else {"xy": literal([512, 384])}
+                    if operation == "getpixel"
+                    else {},
+                }
+            )
+            observations.append(step_id)
+            requirement_id = _performance_requirement(
+                operations, "PIL.Image.Image", operation
+            )
+            if requirement_id not in performance_covers:
+                performance_covers.append(requirement_id)
+    workflow["observations"] = observations
+    return workflow, performance_covers
+
+
+def _terminal_scalar_analysis_parity_case(
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    """Pair the scalar-analysis performance workload with exact oracle parity."""
+
+    workflow, _ = _terminal_scalar_analysis_workflow(operations)
+    parity_covers = []
+    for operation in (
+        "getbbox",
+        "getcolors",
+        "getextrema",
+        "getpixel",
+        "getprojection",
+    ):
+        requirement_id = f"PIL.Image.Image.{operation}.behavior.default"
+        requirements = {
+            item["id"]: item
+            for item in operations[("PIL.Image.Image", operation)]["requirements"]
+        }
+        requirement = requirements.get(requirement_id)
+        if requirement is None or "parity" not in requirement["lanes"]:
+            raise ValueError(
+                "terminal scalar-analysis parity requires a default parity "
+                f"requirement for PIL.Image.Image.{operation}"
+            )
+        parity_covers.append(requirement_id)
+    return {
+        "case_id": TERMINAL_SCALAR_ANALYSIS_CASE_ID,
+        "surface": "PIL.Image.Image",
+        "operation": "getcolors",
+        "covers": parity_covers,
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        **workflow,
+    }
+
+
+def _add_terminal_scalar_analysis_parity_case(
+    parity_cases: list[dict[str, Any]],
+    existing_signatures: set[str],
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> None:
+    """Keep the material scalar-analysis workflow in the active parity corpus."""
+
+    case = _terminal_scalar_analysis_parity_case(operations)
+    signature = case_signature(case)
+    if signature in existing_signatures:
+        raise ValueError(
+            "terminal scalar-analysis parity workflow duplicates an existing case"
+        )
+    if any(item["case_id"] == case["case_id"] for item in parity_cases):
+        raise ValueError(
+            f"duplicate terminal scalar-analysis case ID: {case['case_id']}"
+        )
+    parity_cases.append(case)
+    existing_signatures.add(signature)
 
 
 def _literal_workflow_value(descriptor: dict[str, Any] | None) -> Any:
@@ -48968,23 +50025,71 @@ def _alpha_resize_benchmark_workflow(spec: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _blur_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
+def _blur_pipeline_workflow(
+    spec: dict[str, Any],
+    cases_by_id: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Build one material-sized public blur workflow for benchmark timing."""
 
-    return {
-        "assets": [],
-        "steps": [
-            {
-                "step_id": "setup-image",
-                "surface": "PIL.Image",
-                "operation": "new",
-                "receiver": None,
-                "arguments": {
-                    "mode": literal(spec["mode"]),
-                    "size": literal(spec["size"]),
-                    "color": literal(spec["color"]),
-                },
+    source_case_id = spec.get("noise_source_case_id")
+    if source_case_id is not None:
+        if cases_by_id is None or source_case_id not in cases_by_id:
+            raise ValueError(
+                f"Gaussian noise workflow requires source case {source_case_id!r}"
+            )
+        source_case = cases_by_id[source_case_id]
+        source_image = next(
+            (
+                step
+                for step in source_case["steps"]
+                if step["surface"] == "PIL.Image"
+                and step["operation"] == "frombytes"
+            ),
+            None,
+        )
+        if source_image is None:
+            raise ValueError(f"{source_case_id} has no Image.frombytes step")
+        source_arguments = source_image["arguments"]
+        if (
+            source_arguments.get("mode") != literal("RGBA")
+            or source_arguments.get("size") != literal([1024, 768])
+        ):
+            raise ValueError(f"{source_case_id} is not the expected RGBA 1024x768 input")
+        source_asset_id = source_arguments.get("data", {}).get("asset_id")
+        source_asset = next(
+            (
+                asset
+                for asset in source_case["assets"]
+                if asset["id"] == source_asset_id
+            ),
+            None,
+        )
+        if source_asset is None:
+            raise ValueError(f"{source_case_id} references a missing image asset")
+        pixels = copy.deepcopy(source_asset)
+        pixels["id"] = "image-noise"
+        image_step = copy.deepcopy(source_image)
+        image_step["step_id"] = "setup-image"
+        image_step["arguments"]["data"] = asset_value("image-noise")
+        assets = [pixels]
+    else:
+        image_step = {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(spec["mode"]),
+                "size": literal(spec["size"]),
+                "color": literal(spec["color"]),
             },
+        }
+        assets = []
+
+    return {
+        "assets": assets,
+        "steps": [
+            image_step,
             {
                 "step_id": "setup-filter",
                 "surface": "PIL.ImageFilter",
@@ -49008,6 +50113,130 @@ def _blur_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
             },
         ],
         "observations": ["blurred", "materialize"],
+    }
+
+
+def _gaussian_rgba_material_parity_case(
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the exact RGBA GaussianBlur workflow used by its material benchmark."""
+
+    spec = next(
+        spec
+        for spec in PIPELINE_BLUR_BENCHMARK_SPECS
+        if spec.get("parity_case_id") == GAUSSIAN_RGBA_MATERIAL_PARITY_CASE_ID
+    )
+    workflow = _blur_pipeline_workflow(spec)
+    return {
+        "case_id": GAUSSIAN_RGBA_MATERIAL_PARITY_CASE_ID,
+        "surface": "PIL.Image.Image",
+        "operation": "filter",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "filter")
+        ],
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        "assets": workflow["assets"],
+        "steps": workflow["steps"],
+        "observations": workflow["observations"],
+    }
+
+
+def _gaussian_rgba_noise_parity_case(
+    operations: dict[tuple[str, str], dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Build exact RGBA GaussianBlur parity from the canonical RGBA noise asset."""
+
+    spec = next(
+        spec
+        for spec in PIPELINE_BLUR_BENCHMARK_SPECS
+        if spec.get("parity_case_id") == GAUSSIAN_RGBA_NOISE_PARITY_CASE_ID
+    )
+    workflow = _blur_pipeline_workflow(spec, cases_by_id)
+    return {
+        "case_id": GAUSSIAN_RGBA_NOISE_PARITY_CASE_ID,
+        "surface": "PIL.Image.Image",
+        "operation": "filter",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "filter")
+        ],
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        "assets": workflow["assets"],
+        "steps": workflow["steps"],
+        "observations": workflow["observations"],
+    }
+
+
+def _gaussian_rgba_sparse_guard_workflow() -> dict[str, Any]:
+    """Build a sparse RGBA blur workflow that forces the identity scan to reject."""
+
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("RGBA"),
+                    "size": literal([512, 512]),
+                    "color": literal(0),
+                },
+            },
+            {
+                "step_id": "setup-outlier",
+                "surface": "PIL.Image.Image",
+                "operation": "putpixel",
+                "receiver": binding("setup-image"),
+                "arguments": {
+                    "xy": literal([2, 3]),
+                    "value": literal([180, 120, 60, 128]),
+                },
+            },
+            {
+                "step_id": "setup-filter",
+                "surface": "PIL.ImageFilter",
+                "operation": "GaussianBlur",
+                "receiver": None,
+                "arguments": {"radius": literal(2.0)},
+            },
+            {
+                "step_id": "apply-filter",
+                "surface": "PIL.Image.Image",
+                "operation": "filter",
+                "receiver": binding("setup-image"),
+                "arguments": {"filter": binding("setup-filter")},
+            },
+            {
+                "step_id": "observe-filter-result",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("apply-filter"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["apply-filter", "observe-filter-result"],
+    }
+
+
+def _gaussian_rgba_sparse_guard_parity_case(
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    """Pin exact bytes for the large sparse RGBA GaussianBlur scan guard."""
+
+    workflow = _gaussian_rgba_sparse_guard_workflow()
+    return {
+        "case_id": GAUSSIAN_RGBA_SPARSE_GUARD_PARITY_CASE_ID,
+        "surface": "PIL.Image.Image",
+        "operation": "filter",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "filter")
+        ],
+        "target_profiles": [TARGET_PROFILE],
+        "assets": workflow["assets"],
+        "steps": workflow["steps"],
+        "observations": workflow["observations"],
     }
 
 
@@ -49759,6 +50988,38 @@ def build_pipeline_benchmark_document(
         ),
     }
 
+    rotate_rgb_case_id = (
+        "PIL.Image.Image.rotate.nuanced."
+        "rgb-nearest-1deg-noise-recovered-20261016-1024x768"
+    )
+    rotate_rgb_case = cases_by_id[rotate_rgb_case_id]
+    rotate_rgb_material_workload = {
+        "workload_id": (
+            "pipeline-op.rotate.material-rgb-nearest-noise-recovered-"
+            "20261016-1024x768"
+        ),
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "rotate")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": rotate_rgb_case_id},
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["call", "observe-result"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            rotate_rgb_case,
+            variant="rotate-material-rgb-nearest-noise-recovered-20261016-1024x768",
+            surface="PIL.Image.Image",
+            operation="rotate",
+        ),
+    }
+
     grayscale_ycbcr_case_id = (
         "PIL.ImageOps.grayscale.nuanced."
         "performance-material-ycbcr-noise-1024x768"
@@ -50036,6 +51297,69 @@ def build_pipeline_benchmark_document(
                     "context": matrix_context,
                 }
             )
+
+    filter_blur_workload = next(
+        (
+            workload
+            for workload in expanded_matrix_workloads
+            if workload["workload_id"]
+            == "pipeline-matrix.expanded.filter5x5.1024x768"
+        ),
+        None,
+    )
+    if filter_blur_workload is None:
+        raise ValueError("expanded filter5x5 matrix lacks the 1024x768 workload")
+    if FILTER_BLUR_RGB_NOISE_CASE_ID not in cases_by_id:
+        raise ValueError(
+            "expanded filter5x5 workload references missing exact parity case: "
+            f"{FILTER_BLUR_RGB_NOISE_CASE_ID}"
+        )
+    filter_blur_workload["input"] = {
+        "kind": "parity_case",
+        "case_id": FILTER_BLUR_RGB_NOISE_CASE_ID,
+    }
+    filter_blur_workload["measurement"]["correctness_gate"] = "parity_pass"
+
+    autocontrast_identity_case_id = (
+        "PIL.ImageOps.autocontrast.nuanced.performance-rgb-identity-lut-1024x768"
+    )
+    autocontrast_identity_case = cases_by_id.get(autocontrast_identity_case_id)
+    if autocontrast_identity_case is None:
+        raise ValueError(
+            "autocontrast identity-LUT workload references missing parity case: "
+            f"{autocontrast_identity_case_id}"
+        )
+    autocontrast_reference_workload = next(
+        (
+            workload
+            for workload in expanded_matrix_workloads
+            if workload["workload_id"]
+            == "pipeline-matrix.expanded.autocontrast.1024x768"
+        ),
+        None,
+    )
+    if autocontrast_reference_workload is None:
+        raise ValueError(
+            "autocontrast identity-LUT workload lacks its matrix timing policy"
+        )
+    autocontrast_identity_measurement = copy.deepcopy(
+        autocontrast_reference_workload["measurement"]
+    )
+    autocontrast_identity_measurement["correctness_gate"] = "parity_pass"
+    autocontrast_identity_workload = {
+        "workload_id": "pipeline-chain.autocontrast-materialized.rgb-identity-lut-1024x768",
+        "covers": ["PIL.ImageOps.autocontrast.performance.standard"],
+        "subjects": [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+        ],
+        "input": {
+            "kind": "parity_case",
+            "case_id": autocontrast_identity_case_id,
+        },
+        "measurement": autocontrast_identity_measurement,
+        "context": copy.deepcopy(autocontrast_reference_workload["context"]),
+    }
 
     # The operation matrix above gives every PipelineOp variant one isolated
     # materialization.  Keep the existing reviewed composition matrix in the
@@ -50443,82 +51767,31 @@ def build_pipeline_benchmark_document(
         "context": cmyk_grayscale_context,
     }
 
-    # Exercise the packed scalar reduction paths on a materially sized frame.
-    # I and F are created through public conversion steps and all terminal
-    # observations share one workflow process; this is benchmark-only input,
-    # not a hand-authored parity oracle.
-    terminal_scalar_analysis_workflow = {
-        "assets": [],
-        "steps": [
-            {
-                "step_id": "gradient",
-                "surface": "PIL.Image",
-                "operation": "linear_gradient",
-                "receiver": None,
-                "arguments": {"mode": literal("L")},
-            },
-            {
-                "step_id": "resized",
-                "surface": "PIL.Image.Image",
-                "operation": "resize",
-                "receiver": binding("gradient"),
-                "arguments": {
-                    "size": literal([1024, 768]),
-                    "resample": literal(0),
-                },
-            },
-            {
-                "step_id": "integer",
-                "surface": "PIL.Image.Image",
-                "operation": "convert",
-                "receiver": binding("resized"),
-                "arguments": {"mode": literal("I")},
-            },
-            {
-                "step_id": "float",
-                "surface": "PIL.Image.Image",
-                "operation": "convert",
-                "receiver": binding("resized"),
-                "arguments": {"mode": literal("F")},
-            },
-        ],
-        "observations": [],
-    }
-    scalar_observations = []
-    scalar_covers = []
-    for image_step, label in (("integer", "i"), ("float", "f")):
-        for operation in (
-            "getbbox",
-            "getcolors",
-            "getextrema",
-            "getpixel",
-            "getprojection",
-        ):
-            step_id = f"{label}-{operation}"
-            terminal_scalar_analysis_workflow["steps"].append(
-                {
-                    "step_id": step_id,
-                    "surface": "PIL.Image.Image",
-                    "operation": operation,
-                    "receiver": binding(image_step),
-                    "arguments": {
-                        "maxcolors": literal(1_000_000)
-                    }
-                    if operation == "getcolors"
-                    else {"xy": literal([512, 384])}
-                    if operation == "getpixel"
-                    else {},
-                }
-            )
-            scalar_observations.append(step_id)
-            requirement = _performance_requirement(
-                operations, "PIL.Image.Image", operation
-            )
-            if requirement not in scalar_covers:
-                scalar_covers.append(requirement)
-    terminal_scalar_analysis_workflow["observations"] = scalar_observations
+    # Exercise packed scalar reductions on a materially sized frame. The
+    # benchmark reuses the exact parity case so the whole I/F workflow is
+    # oracle-checked before timing.
+    terminal_scalar_analysis_workflow, scalar_covers = (
+        _terminal_scalar_analysis_workflow(operations)
+    )
+    terminal_scalar_analysis_case = cases_by_id.get(
+        TERMINAL_SCALAR_ANALYSIS_CASE_ID
+    )
+    if terminal_scalar_analysis_case is None:
+        raise ValueError(
+            "terminal scalar-analysis benchmark references missing parity case: "
+            f"{TERMINAL_SCALAR_ANALYSIS_CASE_ID}"
+        )
+    if (
+        terminal_scalar_analysis_case["steps"]
+        != terminal_scalar_analysis_workflow["steps"]
+        or terminal_scalar_analysis_case["observations"]
+        != terminal_scalar_analysis_workflow["observations"]
+    ):
+        raise ValueError(
+            "terminal scalar-analysis benchmark and parity case have different workflows"
+        )
     terminal_scalar_analysis_context = _workflow_benchmark_context(
-        terminal_scalar_analysis_workflow,
+        terminal_scalar_analysis_case,
         variant="terminal-scalar-analysis",
         surface="PIL.Image.Image",
         operation="getprojection",
@@ -50530,13 +51803,219 @@ def build_pipeline_benchmark_document(
             "covers": scalar_covers,
             "subjects": benchmark_subjects(),
             "input": {
-                "kind": "workflow",
-                **terminal_scalar_analysis_workflow,
+                "kind": "parity_case",
+                "case_id": TERMINAL_SCALAR_ANALYSIS_CASE_ID,
             },
-            "measurement": copy.deepcopy(chain_policy),
+            "measurement": {
+                **copy.deepcopy(chain_policy),
+                "correctness_gate": "parity_pass",
+            },
             "context": terminal_scalar_analysis_context,
         }
     ]
+    terminal_scalar_getcolors_workloads = []
+    for label, mode in (("i", "I"), ("f", "F")):
+        context = _workflow_benchmark_context(
+            terminal_scalar_analysis_case,
+            variant=f"getcolors-scalar-{label}",
+            surface="PIL.Image.Image",
+            operation="getcolors",
+        )
+        context.update(
+            size=[1024, 768],
+            mode=mode,
+            chain_length=1,
+            operation_class="terminal",
+        )
+        terminal_scalar_getcolors_workloads.append(
+            {
+                "workload_id": (
+                    "pipeline-chain.terminal-read.getcolors."
+                    f"scalar-{label}-1024x768"
+                ),
+                "covers": [
+                    _performance_requirement(
+                        operations, "PIL.Image.Image", "getcolors"
+                    )
+                ],
+                "subjects": [
+                    {"kind": "oracle", "id": "pillow"},
+                    {"kind": "target_profile", "id": "python-cpu"},
+                ],
+                "input": {
+                    "kind": "parity_case",
+                    "case_id": TERMINAL_SCALAR_ANALYSIS_CASE_ID,
+                },
+                "measurement": {
+                    "boundary": "observed_steps",
+                    "step_ids": [f"{label}-getcolors"],
+                    "metrics": ["latency", "throughput"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "concurrency": 1,
+                    "cache_state": "warm",
+                    "correctness_gate": "parity_pass",
+                },
+                "context": context,
+            }
+        )
+
+    terminal_scalar_getprojection_workloads = []
+    for label, mode in (("i", "I"), ("f", "F")):
+        context = _workflow_benchmark_context(
+            terminal_scalar_analysis_case,
+            variant=f"getprojection-scalar-{label}",
+            surface="PIL.Image.Image",
+            operation="getprojection",
+        )
+        context.update(
+            size=[1024, 768],
+            mode=mode,
+            chain_length=1,
+            operation_class="terminal",
+        )
+        terminal_scalar_getprojection_workloads.append(
+            {
+                "workload_id": (
+                    "pipeline-chain.terminal-read.getprojection."
+                    f"scalar-{label}-1024x768"
+                ),
+                "covers": [
+                    _performance_requirement(
+                        operations, "PIL.Image.Image", "getprojection"
+                    )
+                ],
+                "subjects": [
+                    {"kind": "oracle", "id": "pillow"},
+                    {"kind": "target_profile", "id": "python-cpu"},
+                ],
+                "input": {
+                    "kind": "parity_case",
+                    "case_id": TERMINAL_SCALAR_ANALYSIS_CASE_ID,
+                },
+                "measurement": {
+                    "boundary": "observed_steps",
+                    "step_ids": [f"{label}-getprojection"],
+                    "metrics": ["latency", "throughput"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "concurrency": 1,
+                    "cache_state": "warm",
+                    "correctness_gate": "parity_pass",
+                },
+                "context": context,
+            }
+        )
+
+    terminal_scalar_no_run_case = cases_by_id.get(
+        TERMINAL_SCALAR_NO_RUN_CASE_ID
+    )
+    if terminal_scalar_no_run_case is None:
+        raise ValueError(
+            "no-run scalar GetColors benchmark references missing parity case: "
+            f"{TERMINAL_SCALAR_NO_RUN_CASE_ID}"
+        )
+    terminal_scalar_no_run_getcolors_workloads = []
+    for label, mode in (("i", "I"), ("f", "F")):
+        context = _workflow_benchmark_context(
+            terminal_scalar_no_run_case,
+            variant=f"getcolors-no-adjacent-scalar-{label}",
+            surface="PIL.Image.Image",
+            operation="getcolors",
+        )
+        context.update(
+            size=[1024, 768],
+            mode=mode,
+            chain_length=1,
+            operation_class="terminal",
+        )
+        terminal_scalar_no_run_getcolors_workloads.append(
+            {
+                "workload_id": (
+                    "pipeline-chain.terminal-read.getcolors."
+                    f"no-adjacent-scalar-{label}-1024x768"
+                ),
+                "covers": [
+                    _performance_requirement(
+                        operations, "PIL.Image.Image", "getcolors"
+                    )
+                ],
+                "subjects": [
+                    {"kind": "oracle", "id": "pillow"},
+                    {"kind": "target_profile", "id": "python-cpu"},
+                ],
+                "input": {
+                    "kind": "parity_case",
+                    "case_id": TERMINAL_SCALAR_NO_RUN_CASE_ID,
+                },
+                "measurement": {
+                    "boundary": "observed_steps",
+                    "step_ids": [f"{label}-getcolors"],
+                    "metrics": ["latency", "throughput"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "concurrency": 1,
+                    "cache_state": "warm",
+                    "correctness_gate": "parity_pass",
+                },
+                "context": context,
+            }
+        )
+
+    terminal_signed_run_getcolors_workloads = []
+    for workload_id, case_id, step_id in SIGNED_RUN_GETCOLORS_CASES:
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(
+                "signed-run GetColors benchmark references missing parity case: "
+                f"{case_id}"
+            )
+        context = _workflow_benchmark_context(
+            case,
+            variant="signed-run-getcolors",
+            surface="PIL.Image.Image",
+            operation="getcolors",
+        )
+        context.update(
+            size=next(
+                step["arguments"]["size"]["value"]
+                for step in case["steps"]
+                if step["operation"] == "new"
+            ),
+            mode="I",
+            chain_length=1,
+            operation_class="terminal",
+        )
+        terminal_signed_run_getcolors_workloads.append(
+            {
+                "workload_id": workload_id,
+                "covers": [
+                    _performance_requirement(
+                        operations, "PIL.Image.Image", "getcolors"
+                    )
+                ],
+                "subjects": [
+                    {"kind": "oracle", "id": "pillow"},
+                    {"kind": "target_profile", "id": "python-cpu"},
+                ],
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": {
+                    "boundary": "observed_steps",
+                    "step_ids": [step_id],
+                    "metrics": ["latency", "throughput"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "concurrency": 1,
+                    "cache_state": "warm",
+                    "correctness_gate": "parity_pass",
+                },
+                "context": context,
+            }
+        )
 
     # Exercise the public mask parameter on terminal reductions after both
     # source and mask have gone through lazy resize pipelines. The benchmark
@@ -51572,6 +53051,30 @@ def build_pipeline_benchmark_document(
     la_filter_workload["context"]["operation_class"] = "neighborhood"
     la_filter_workloads = [la_filter_workload]
 
+    la_nonmatching_case_id = (
+        "PIL.Image.Image.filter.nuanced."
+        "la-mode-kernel-5x5-nonmatching-noise-1024x768"
+    )
+    la_nonmatching_case = cases_by_id.get(la_nonmatching_case_id)
+    if la_nonmatching_case is None:
+        raise ValueError(
+            f"LA-mode nonmatching-kernel benchmark references missing case: "
+            f"{la_nonmatching_case_id}"
+        )
+    la_nonmatching_workload = copy.deepcopy(la_filter_workload)
+    la_nonmatching_workload["workload_id"] = (
+        "pipeline-op.filter.material-la-nonmatching-5x5-1024x768"
+    )
+    la_nonmatching_workload["input"]["case_id"] = la_nonmatching_case_id
+    la_nonmatching_workload["context"] = _workflow_benchmark_context(
+        la_nonmatching_case,
+        variant="filter-material-la-nonmatching-5x5-1024x768",
+        surface="PIL.Image.Image",
+        operation="filter",
+    )
+    la_nonmatching_workload["context"]["operation_class"] = "neighborhood"
+    la_filter_workloads.append(la_nonmatching_workload)
+
     la_filter3x3_case_id = (
         "PIL.Image.Image.filter.nuanced."
         "la-mode-kernel-3x3-smooth-noise-1024x768"
@@ -51896,6 +53399,57 @@ def build_pipeline_benchmark_document(
             }
         )
 
+    rotate_material_case_id = (
+        "PIL.Image.Image.rotate.nuanced."
+        "rgba-nearest-37deg-noise-fill-20261016-1024x768"
+    )
+    rotate_material_case = cases_by_id.get(rotate_material_case_id)
+    if rotate_material_case is None:
+        raise ValueError(
+            "material Rotate benchmark references missing parity case: "
+            f"{rotate_material_case_id}"
+        )
+    rotate_material_context = _workflow_benchmark_context(
+        rotate_material_case,
+        variant="material-rgba-nearest-37deg-noise-fill-1024x768",
+        surface="PIL.Image.Image",
+        operation="rotate",
+    )
+    rotate_material_context["operation_class"] = "geometry"
+    geometry_workloads.append(
+        {
+            "workload_id": (
+                "pipeline-op.rotate.material-"
+                "rgba-nearest-37deg-noise-fill-1024x768"
+            ),
+            "covers": [
+                _performance_requirement(
+                    operations, "PIL.Image.Image", "rotate"
+                )
+            ],
+            "subjects": [
+                {"kind": "oracle", "id": "pillow"},
+                {"kind": "target_profile", "id": "python-cpu"},
+            ],
+            "input": {
+                "kind": "parity_case",
+                "case_id": rotate_material_case_id,
+            },
+            "measurement": {
+                "boundary": "observed_steps",
+                "step_ids": ["call", "observe-result"],
+                "metrics": ["latency", "throughput"],
+                "warmup_iterations": 5,
+                "measurement_iterations": 20,
+                "samples": 5,
+                "concurrency": 1,
+                "cache_state": "warm",
+                "correctness_gate": "parity_pass",
+            },
+            "context": rotate_material_context,
+        }
+    )
+
     # Keep copy-only geometry visible across the native byte layouts used by
     # the public API. These are benchmark-only workflows: they use ordinary
     # Image.crop/ImageOps.crop calls, retain successful-execution correctness
@@ -52040,19 +53594,31 @@ def build_pipeline_benchmark_document(
         operations, "PIL.Image.Image", "filter"
     )
     for spec in PIPELINE_BLUR_BENCHMARK_SPECS:
-        workflow = _blur_pipeline_workflow(spec)
+        workflow = _blur_pipeline_workflow(spec, cases_by_id)
+        parity_case_id = spec.get("parity_case_id")
         blur_workloads.append(
             {
                 "workload_id": f"pipeline-chain.blur-material.{spec['name']}",
                 "covers": [blur_requirement],
                 "subjects": benchmark_subjects(),
-                "input": {
-                    "kind": "workflow",
-                    "assets": workflow["assets"],
-                    "steps": workflow["steps"],
-                    "observations": workflow["observations"],
+                "input": (
+                    {"kind": "parity_case", "case_id": parity_case_id}
+                    if parity_case_id is not None
+                    else {
+                        "kind": "workflow",
+                        "assets": workflow["assets"],
+                        "steps": workflow["steps"],
+                        "observations": workflow["observations"],
+                    }
+                ),
+                "measurement": {
+                    **copy.deepcopy(chain_policy),
+                    **(
+                        {"correctness_gate": "parity_pass"}
+                        if parity_case_id is not None
+                        else {}
+                    ),
                 },
-                "measurement": copy.deepcopy(chain_policy),
                 "context": _workflow_benchmark_context(
                     workflow,
                     variant="blur-material",
@@ -52061,6 +53627,41 @@ def build_pipeline_benchmark_document(
                 ),
             }
         )
+
+    sparse_blur_workflow = _gaussian_rgba_sparse_guard_workflow()
+    blur_workloads.append(
+        {
+            "workload_id": (
+                "pipeline-chain.blur-guard.gaussian-rgba-sparse-512x512-radius-2"
+            ),
+            "covers": [blur_requirement],
+            "subjects": [
+                {"kind": "oracle", "id": "pillow"},
+                {"kind": "target_profile", "id": TARGET_PROFILE},
+            ],
+            "input": {
+                "kind": "parity_case",
+                "case_id": GAUSSIAN_RGBA_SPARSE_GUARD_PARITY_CASE_ID,
+            },
+            "measurement": {
+                "boundary": "observed_steps",
+                "step_ids": ["apply-filter", "observe-filter-result"],
+                "metrics": ["latency", "throughput"],
+                "warmup_iterations": 5,
+                "measurement_iterations": 20,
+                "samples": 5,
+                "concurrency": 1,
+                "cache_state": "warm",
+                "correctness_gate": "parity_pass",
+            },
+            "context": _workflow_benchmark_context(
+                sparse_blur_workflow,
+                variant="blur-guard-sparse-rgba-512x512",
+                surface="PIL.Image.Image",
+                operation="filter",
+            ),
+        }
+    )
 
     point_fusion_workloads: list[dict[str, Any]] = []
     point_requirement = _performance_requirement(
@@ -52559,6 +54160,16 @@ def build_pipeline_benchmark_document(
     quick_workloads = _quick_pipeline_workloads(operations, cases_by_id)
     lifecycle_workloads = _lifecycle_pipeline_workloads(cases_by_id)
     transpose_tiled_workloads = _transpose_tiled_benchmark_workloads(operations, cases_by_id)
+    seeded_corner_workloads, seeded_corner_suite = seeded_corner_benchmark_workloads(
+        requirement_id=_performance_requirement(
+            operations,
+            "PIL.Image.Image",
+            "getchannel",
+        ),
+        cases_by_id=cases_by_id,
+        subjects=benchmark_subjects(),
+        context_builder=_workflow_benchmark_context,
+    )
     return {
         "schema": "migration-parity/benchmark-input@1",
         "workloads": [
@@ -52572,6 +54183,7 @@ def build_pipeline_benchmark_document(
             median_rgb_material_workload,
             *extreme_filter_material_workloads,
             grayscale_rgb_material_workload,
+            rotate_rgb_material_workload,
             grayscale_ycbcr_material_workload,
             *thumbnail_scalar_workloads,
             f_boxed_resize_workload,
@@ -52579,7 +54191,9 @@ def build_pipeline_benchmark_document(
             i_resize_workload,
             *matrix_workloads,
             *expanded_matrix_workloads,
+            autocontrast_identity_workload,
             *chain_workloads,
+            *seeded_corner_workloads,
             *terminal_read_workloads,
             *terminal_analysis_workloads,
             getprojection_cmyk_workload,
@@ -52589,6 +54203,10 @@ def build_pipeline_benchmark_document(
         cmyk_to_1_workload,
         cmyk_grayscale_workload,
             *terminal_scalar_analysis_workloads,
+            *terminal_scalar_getcolors_workloads,
+            *terminal_scalar_getprojection_workloads,
+            *terminal_scalar_no_run_getcolors_workloads,
+            *terminal_signed_run_getcolors_workloads,
             *terminal_masked_analysis_workloads,
             *terminal_color_count_workloads,
             *terminal_stat_workloads,
@@ -52691,6 +54309,7 @@ def build_pipeline_benchmark_document(
                     for item in chain_workloads
                 ],
             },
+            seeded_corner_suite,
             {
                 "suite_id": "pipeline-operations.terminal-read-suite",
                 "description": (
@@ -52705,6 +54324,44 @@ def build_pipeline_benchmark_document(
                         *terminal_color_count_workloads,
                         *terminal_stat_workloads,
                     ]
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.scalar-getcolors-suite",
+                "description": (
+                    "Exact-parity scalar I/F GetColors calls plus late-negative "
+                    "signed-key and high-cardinality I fallback guards, "
+                    "measured as separate CPU operations after materialization."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in (
+                        terminal_scalar_getcolors_workloads[0],
+                        *terminal_signed_run_getcolors_workloads,
+                        terminal_scalar_getcolors_workloads[1],
+                    )
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.scalar-getcolors-no-run-suite",
+                "description": (
+                    "Exact-parity 1024x768 I-mode and F-mode GetColors calls "
+                    "with no adjacent equal samples, measured separately on CPU."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in terminal_scalar_no_run_getcolors_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.scalar-getprojection-suite",
+                "description": (
+                    "Exact-parity 1024x768 I-mode and F-mode GetProjection "
+                    "calls, measured as separate CPU operations after materialization."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in terminal_scalar_getprojection_workloads
                 ],
             },
             {
@@ -53207,6 +54864,21 @@ def build_inputs(
             pipeline_case_pool[pipeline_case["case_id"]] = pipeline_case
             pipeline_case_ids.append(pipeline_case["case_id"])
 
+        if surface_id == "PIL.Image.Image":
+            # The expanded RGB BLUR workload uses the same full-size noise
+            # stimulus as this parity case. Keep this performance-only case
+            # out of managed coverage while linking the benchmark to exact
+            # oracle/target bytes.
+            filter_blur_case = _filter_blur_rgb_noise_parity_case(
+                operations,
+                pipeline_case_pool,
+            )
+            signature = case_signature(filter_blur_case)
+            if signature not in existing_signatures:
+                parity_cases.append(filter_blur_case)
+                existing_signatures.add(signature)
+            pipeline_case_pool[filter_blur_case["case_id"]] = filter_blur_case
+
         # Keep native Paste clipping cases after the shared pipeline smoke
         # aliases in the generated corpus, while still selecting them for
         # their behavior requirement's coverage plan.
@@ -53218,6 +54890,157 @@ def build_inputs(
                 existing_signatures.add(signature)
                 appended_nuanced.append(native_case)
                 added_nuanced_cases += 1
+
+        # These GetChannel edge stimuli extend parity only. Keep them out of
+        # `appended_nuanced` so the selected coverage corpus stays unchanged.
+        for edge_case in getchannel_rgb_edge_parity_cases(surface_id):
+            signature = case_signature(edge_case)
+            if signature not in existing_signatures:
+                parity_cases.append(edge_case)
+                existing_signatures.add(signature)
+                added_nuanced_cases += 1
+
+        # The metadata-cache GetChannel benchmark repeats the same public
+        # mode/size reads and terminal byte materialization. Keep an exact
+        # input-only parity workflow for that composed path so its diagnostic
+        # timing is never treated as performance evidence on successful
+        # execution alone.
+        if surface_id == "PIL.Image.Image":
+            metadata_cache_case = {
+                "case_id": (
+                    "PIL.Image.Image.getchannel.pipeline."
+                    "metadata-cache-extractband-rgba-256x256"
+                ),
+                "surface": "PIL.Image.Image",
+                "operation": "getchannel",
+                "covers": [
+                    "PIL.Image.Image.getchannel.performance.standard",
+                    "PIL.Image.Image.mode.performance.standard",
+                    "PIL.Image.Image.size.performance.standard",
+                ],
+                "target_profiles": ["python-cpu"],
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "setup-image",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("RGBA"),
+                            "size": literal([256, 256]),
+                            "color": literal([17, 83, 149, 211]),
+                        },
+                    },
+                    {
+                        "step_id": "extracted",
+                        "surface": "PIL.Image.Image",
+                        "operation": "getchannel",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"channel": literal(1)},
+                    },
+                    *[
+                        step
+                        for index in range(3)
+                        for step in (
+                            {
+                                "step_id": f"mode-{index}",
+                                "surface": "PIL.Image.Image",
+                                "operation": "mode",
+                                "receiver": binding("extracted"),
+                                "arguments": {},
+                            },
+                            {
+                                "step_id": f"size-{index}",
+                                "surface": "PIL.Image.Image",
+                                "operation": "size",
+                                "receiver": binding("extracted"),
+                                "arguments": {},
+                            },
+                        )
+                    ],
+                    {
+                        "step_id": "materialize",
+                        "surface": "PIL.Image.Image",
+                        "operation": "tobytes",
+                        "receiver": binding("extracted"),
+                        "arguments": {},
+                    },
+                ],
+                "observations": ["extracted"]
+                + [
+                    f"{kind}-{index}"
+                    for index in range(3)
+                    for kind in ("mode", "size")
+                ]
+                + ["materialize"],
+            }
+            signature = case_signature(metadata_cache_case)
+            if signature not in existing_signatures:
+                parity_cases.append(metadata_cache_case)
+                existing_signatures.add(signature)
+
+        # The seeded-corner composed workflows are parity-only performance
+        # inputs. Keep them out of `appended_nuanced` so managed coverage
+        # selection and its object list remain unchanged.
+        for channel_case in seeded_corner_parity_cases(
+            surface_id,
+            BENCHMARK_TARGET_PROFILES,
+        ):
+            signature = case_signature(channel_case)
+            if signature not in existing_signatures:
+                parity_cases.append(channel_case)
+                existing_signatures.add(signature)
+                added_nuanced_cases += 1
+
+        if surface_id == "PIL.Image.Image":
+            # Keep the exact material RGBA GaussianBlur workflow in parity,
+            # while leaving managed coverage selection unchanged.
+            material_blur_case = _gaussian_rgba_material_parity_case(operations)
+            signature = case_signature(material_blur_case)
+            if signature not in existing_signatures:
+                parity_cases.append(material_blur_case)
+                existing_signatures.add(signature)
+                added_nuanced_cases += 1
+
+            # Exercise the large-image uniformity guard with a nonuniform
+            # RGBA input, reusing the canonical noise asset from entropy
+            # parity rather than introducing another multi-megabyte fixture.
+            noise_blur_case = _gaussian_rgba_noise_parity_case(
+                operations,
+                pipeline_case_pool,
+            )
+            signature = case_signature(noise_blur_case)
+            if signature not in existing_signatures:
+                parity_cases.append(noise_blur_case)
+                existing_signatures.add(signature)
+                added_nuanced_cases += 1
+
+            sparse_blur_case = _gaussian_rgba_sparse_guard_parity_case(operations)
+            signature = case_signature(sparse_blur_case)
+            if signature not in existing_signatures:
+                parity_cases.append(sparse_blur_case)
+                existing_signatures.add(signature)
+                added_nuanced_cases += 1
+
+            # This material workflow is both a ranked CPU performance lead and
+            # the exact input for its benchmark's parity preflight. Keep it
+            # outside the managed coverage selection.
+            _add_terminal_scalar_analysis_parity_case(
+                parity_cases,
+                existing_signatures,
+                operations,
+            )
+            _add_terminal_scalar_no_run_parity_case(
+                parity_cases,
+                existing_signatures,
+                operations,
+            )
+            _add_signed_run_getcolors_parity_cases(
+                parity_cases,
+                existing_signatures,
+                operations,
+            )
 
         counts.setdefault("nuanced_parity_cases", 0)
         counts["nuanced_parity_cases"] += added_nuanced_cases
@@ -53458,6 +55281,7 @@ def build_inputs(
                 if workflow_override is not None
                 else all_cases_by_id[case_id]
             )
+            isolated_display = (surface_id, operation["id"]) in DISPLAY_OPERATIONS
             workloads.append(
                 {
                     "workload_id": workload_id,
@@ -53470,6 +55294,12 @@ def build_inputs(
                                 "id": profile,
                             }
                             for profile in BENCHMARK_TARGET_PROFILES
+                            if profile == "python-cpu"
+                            or (
+                                not isolated_display
+                                and workload_id
+                                not in BENCHMARK_CPU_ONLY_WORKLOAD_IDS
+                            )
                         ),
                     ],
                     "input": input_spec,
@@ -53477,6 +55307,7 @@ def build_inputs(
                         "boundary": (
                             "observed_steps"
                             if materialized_getchannel
+                            or isolated_display
                             or materialized_sharpness
                             or materialized_reduce
                             or materialized_convert
@@ -53522,7 +55353,8 @@ def build_inputs(
                             else ["call", "observe-receiver"]
                             if isolated_imagedraw_text
                             else ["call"]
-                            if eager_getcolors
+                            if isolated_display
+                            or eager_getcolors
                             or isolated_getdata
                             or isolated_get_flattened_data
                             or isolated_split
@@ -54202,6 +56034,59 @@ def build_inputs(
                 )
                 workloads.append(full_width_workload)
                 members.append({"workload_id": full_width_workload_id, "weight": 1})
+        if surface_id == "PIL.ImageEnhance.Color":
+            color_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "enhance"
+                ),
+                None,
+            )
+            if color_benchmark is not None:
+                operation, requirement = color_benchmark
+                case_id = (
+                    "PIL.ImageEnhance.Color.enhance.nuanced."
+                    "coverage-batch-enhance-large-color-rgb-0"
+                )
+                case = all_cases_by_id[case_id]
+                workload_id = (
+                    "pil-imageenhance-color.enhance."
+                    "material-rgb-520x512-factor-zero"
+                )
+                workloads.append(
+                    {
+                        "workload_id": workload_id,
+                        "covers": [requirement["id"]],
+                        "subjects": [
+                            {"kind": "oracle", "id": "pillow"},
+                            {"kind": "target_profile", "id": "python-cpu"},
+                        ],
+                        "input": {
+                            "kind": "parity_case",
+                            "case_id": case_id,
+                        },
+                        "measurement": {
+                            "boundary": "whole_workflow",
+                            "step_ids": [],
+                            "metrics": operation["benchmark"]["metrics"],
+                            "warmup_iterations": 5,
+                            "measurement_iterations": 20,
+                            "samples": 5,
+                            "concurrency": 1,
+                            "cache_state": "warm",
+                            "correctness_gate": "parity_pass",
+                        },
+                        "context": _workflow_benchmark_context(
+                            case,
+                            variant="material-rgb-520x512-factor-zero",
+                            surface=surface_id,
+                            operation=operation["id"],
+                        ),
+                    }
+                )
+                members.append({"workload_id": workload_id, "weight": 1})
+
         if surface_id == "PIL.ImageEnhance.Brightness":
             brightness_benchmark = next(
                 (

@@ -1,0 +1,97 @@
+{
+  "cases": {
+    "PIL.Image.Image.getprojection.parity.f-negative-zero-is-nonzero": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 958,
+        "dispatch_count": null,
+        "fallback_reason": "GPU getprojection is unsupported for mode F",
+        "operation_count": 1,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "GetProjection",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "gpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 28,
+          "host_allocation_count": 2,
+          "host_buffer_bytes": 76,
+          "host_buffer_count": 3,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 76,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 0,
+        "status": "completed",
+        "step_id": "call",
+        "terminal_complete": true,
+        "validation_ns": 0
+      }
+    ]
+  },
+  "errors": {},
+  "identity": {
+    "backend": "gpu",
+    "backend_state": {
+      "active": [
+        "gpu"
+      ],
+      "available": [
+        "cpu",
+        "gpu",
+        "simd"
+      ],
+      "requested": "gpu"
+    },
+    "implementation": "pillow-rs",
+    "side": "target"
+  },
+  "pipeline_case_status": {
+    "PIL.Image.Image.getprojection.parity.f-negative-zero-is-nonzero": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    }
+  },
+  "reason": "Normal parity workflows collected completed pipeline receipts for workflow calls and observations.  Each selected case also carries an explicit pipeline/receipt classification; only high-confidence non-pipeline cases are outside the backend-proof cohort, while missing, partial, and indeterminate cases remain gaps.",
+  "schema": "migration-parity/pipeline-execution-evidence@2",
+  "scope": {
+    "case_ids_sha256": "4c5c5dbc9fbc991e5bfb65228037ad4117974b1d419ade3757f618f823b9dc57",
+    "kind": "public-parity-corpus",
+    "selected": 1
+  },
+  "status": "measured",
+  "summary": {
+    "actual_backend_counts": {
+      "cpu": 1
+    },
+    "completed_receipts": 1,
+    "fallback_reason_counts": {
+      "GPU getprojection is unsupported for mode F": 1
+    },
+    "not_recorded_cases": 0,
+    "pipeline_applicable_cases": 1,
+    "pipeline_complete_cases": 1,
+    "pipeline_indeterminate_cases": 0,
+    "pipeline_missing_receipt_cases": 0,
+    "pipeline_not_applicable_cases": 0,
+    "pipeline_partial_receipt_cases": 0,
+    "receipt_cases": 1,
+    "selected": 1,
+    "terminal_complete_receipts": 1,
+    "terminal_incomplete_cases": 0
+  }
+}

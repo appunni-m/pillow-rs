@@ -50,9 +50,16 @@ ORACLE_ID = "pillow"
 BENCHMARK_TARGET_PROFILE_OVERRIDES = {
     "PIL.ImageOps.mirror": ["python-cpu", "python-simd", "python-gpu"],
     "PIL.Image.Image.getprojection": ["python-cpu", "python-simd", "python-gpu"],
+    "PIL.ImageChops.screen": ["python-cpu", "python-simd", "python-gpu"],
 }
 PARITY_TARGET_PROFILE_OVERRIDES = {
     "PIL.Image.Image.getprojection": ["python-cpu", "python-simd", "python-gpu"],
+    "PIL.ImageChops.screen": ["python-cpu", "python-simd", "python-gpu"],
+}
+CPU_ONLY_API_BENCHMARK_ENDPOINTS = {
+    "PIL.Image.Image::show",
+    "PIL.ImageShow::register",
+    "PIL.ImageShow::show",
 }
 
 # The legacy authority records the Qt-only ImageQt endpoints as ignored for
@@ -110,6 +117,10 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
         "pillow-rs/src/ops/transform.rs",
         "pillow-rs/src/ops/transpose.rs",
         "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+    ),
+    "image-show": (
+        "pillow-rs-py/python/PIL/ImageShow.py",
+        "pillow-rs-py/python/pillow_rs/imageshow.py",
     ),
     "image-draw": (
         "pillow-rs-py/python/pillow_rs/imagedraw.py",
@@ -445,6 +456,11 @@ def target_candidates(endpoint: Endpoint) -> list[str]:
     # imports.
     surface = endpoint.surface
     operation = endpoint.operation
+    if surface == "PIL.ImageShow":
+        return [f"pillow_rs.imageshow.{operation}"]
+    if surface.startswith("PIL.ImageShow."):
+        viewer_class = surface.removeprefix("PIL.ImageShow.")
+        return [f"pillow_rs.imageshow.{viewer_class}.{operation}"]
     if surface == "PIL.Image":
         return [f"pillow_rs.{operation}", f"pillow_rs.Image.{operation}"]
     if surface == "PIL.Image.Image":
@@ -826,6 +842,19 @@ def operation_requirements(
                 ["parity", "coverage"],
             )
         )
+        if endpoint.source_path == "PIL.ImageChops.screen":
+            requirements.append(
+                requirement(
+                    f"{prefix}.backend.gpu-mode-{slug(str(mode))}",
+                    "backend",
+                    (
+                        "Exact public Screen output parity through the native "
+                        f"GPU path for mode {mode!r}."
+                    ),
+                    ["parity"],
+                    target_profiles=["python-gpu"],
+                )
+            )
     if endpoint.source_path == "PIL.Image.Image.histogram":
         # The target keeps an unsigned-16-bit histogram path that predates the
         # frozen authority row. Preserve its existing public requirement in
@@ -878,15 +907,18 @@ def operation_requirements(
             )
         )
     if benchmark_applicable:
+        benchmark_profiles = (
+            [TARGET_PROFILE]
+            if endpoint.id in CPU_ONLY_API_BENCHMARK_ENDPOINTS
+            else BENCHMARK_TARGET_PROFILE_OVERRIDES.get(endpoint.source_path)
+        )
         requirements.append(
             requirement(
                 f"{prefix}.performance.standard",
                 "performance",
                 f"Deterministic standard workload for {endpoint.source_path}.",
                 ["parity", "benchmark"],
-                target_profiles=BENCHMARK_TARGET_PROFILE_OVERRIDES.get(
-                    endpoint.source_path
-                ),
+                target_profiles=benchmark_profiles,
             )
         )
     ids = [item["id"] for item in requirements]
@@ -897,6 +929,8 @@ def operation_requirements(
 
 def component_for(endpoint: Endpoint) -> str:
     surface = endpoint.surface
+    if surface.startswith("PIL.ImageShow"):
+        return "image-show"
     if surface.startswith("PIL.ImageDraw"):
         return "image-draw"
     if surface.startswith("PIL.ImageFilter"):
@@ -947,6 +981,32 @@ def operation_contract(
     parameters = parameters_from_signature(
         source_signature, kind=endpoint.kind
     )
+    if endpoint.source_path == "PIL.ImageShow.register":
+        viewer_parameter = next(
+            (parameter for parameter in parameters if parameter["id"] == "viewer"),
+            None,
+        )
+        if viewer_parameter is None:
+            raise ValueError(
+                "PIL.ImageShow.register source signature is missing viewer"
+            )
+        # The managed parity harness supplies capture viewers through its
+        # named handle protocol; classes and instances share this input type.
+        viewer_parameter["value_types"] = ["handle"]
+    if endpoint.source_path == "PIL.ImageShow.show":
+        expected_value_types = {
+            "image": ["image"],
+            "title": ["null", "string"],
+            "options": ["mapping"],
+        }
+        parameters_by_id = {parameter["id"]: parameter for parameter in parameters}
+        for name, value_types in expected_value_types.items():
+            parameter = parameters_by_id.get(name)
+            if parameter is None:
+                raise ValueError(
+                    f"PIL.ImageShow.show source signature is missing {name}"
+                )
+            parameter["value_types"] = value_types
     if endpoint.source_path == "PIL.ImageSequence.Iterator":
         # Pillow's runtime contract deliberately validates the seek protocol
         # instead of relying on the Image.Image annotation. Keep null in the
@@ -1120,7 +1180,9 @@ def operation_contract(
         contract["benchmark"] = {
             "applicability": "required",
             "target_profiles": list(
-                PARITY_TARGET_PROFILE_OVERRIDES.get(
+                [TARGET_PROFILE]
+                if endpoint.id in CPU_ONLY_API_BENCHMARK_ENDPOINTS
+                else PARITY_TARGET_PROFILE_OVERRIDES.get(
                     endpoint.source_path, [TARGET_PROFILE]
                 )
             ),
@@ -1237,7 +1299,7 @@ def build_manifest() -> dict[str, Any]:
                 "authority": "scripts/migration_parity_inventory.py",
                 "revision": (
                     f"sha256:{EXPECTED_AUTHORITY_SHA256}"
-                    "+inventory-rule@1"
+                    "+inventory-rule@2"
                 ),
                 "command_id": "inventory",
             },

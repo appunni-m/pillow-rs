@@ -1,0 +1,533 @@
+{
+  "cases": {
+    "PIL.Image.Image.rotate.nuanced.expanded-red-fill": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 73166,
+        "dispatch_count": null,
+        "fallback_reason": null,
+        "operation_count": 1,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "Rotate",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "cpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 1728,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 2496,
+          "host_buffer_count": 2,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 2496,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 84,
+        "status": "completed",
+        "step_id": "observe-result",
+        "terminal_complete": true,
+        "validation_ns": 96750
+      }
+    ],
+    "PIL.Image.Image.rotate.nuanced.modes-CMYK-2-arbitrary": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 4250,
+        "dispatch_count": null,
+        "fallback_reason": null,
+        "operation_count": 1,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "Rotate",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "cpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 748,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 1496,
+          "host_buffer_count": 2,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 1496,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 0,
+        "status": "completed",
+        "step_id": "materialize",
+        "terminal_complete": true,
+        "validation_ns": 208
+      }
+    ],
+    "PIL.Image.Image.rotate.nuanced.modes-RGBA-0-expanded": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 4250,
+        "dispatch_count": null,
+        "fallback_reason": null,
+        "operation_count": 1,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "Rotate",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "cpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 1764,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 2512,
+          "host_buffer_count": 2,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 2512,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 0,
+        "status": "completed",
+        "step_id": "materialize",
+        "terminal_complete": true,
+        "validation_ns": 125
+      }
+    ],
+    "PIL.Image.Image.rotate.nuanced.modes-RGBa-2-arbitrary": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 3000,
+        "dispatch_count": null,
+        "fallback_reason": null,
+        "operation_count": 1,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "Rotate",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "cpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 748,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 1496,
+          "host_buffer_count": 2,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 1496,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 0,
+        "status": "completed",
+        "step_id": "materialize",
+        "terminal_complete": true,
+        "validation_ns": 84
+      }
+    ],
+    "PIL.Image.Image.rotate.nuanced.rgb-nearest-1deg-noise-recovered-20261016-1024x768": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 493708,
+        "dispatch_count": null,
+        "fallback_reason": null,
+        "operation_count": 1,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "Rotate",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "cpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 2359296,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 4718592,
+          "host_buffer_count": 2,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 4718592,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 42,
+        "status": "completed",
+        "step_id": "observe-result",
+        "terminal_complete": true,
+        "validation_ns": 125
+      }
+    ],
+    "PIL.Image.Image.rotate.nuanced.rgba-90-non-expand-materialized": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 27125,
+        "dispatch_count": null,
+        "fallback_reason": null,
+        "operation_count": 2,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "PutPixel",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          },
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "Rotate",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "cpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 288,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 864,
+          "host_buffer_count": 3,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 576,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 0,
+        "status": "completed",
+        "step_id": "observe-result",
+        "terminal_complete": true,
+        "validation_ns": 291
+      }
+    ],
+    "PIL.Image.Image.rotate.nuanced.rgba-fractional-nearest": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 4542,
+        "dispatch_count": null,
+        "fallback_reason": null,
+        "operation_count": 2,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "PutPixel",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          },
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "Rotate",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "cpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 624,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 1200,
+          "host_buffer_count": 3,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 912,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 0,
+        "status": "completed",
+        "step_id": "observe-result",
+        "terminal_complete": true,
+        "validation_ns": 125
+      }
+    ],
+    "PIL.Image.Image.rotate.nuanced.rgba-nearest-37deg-noise-fill-20261016-1024x768": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 1022917,
+        "dispatch_count": null,
+        "fallback_reason": null,
+        "operation_count": 1,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "Rotate",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "cpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 6297600,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 9443328,
+          "host_buffer_count": 2,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 9443328,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 42,
+        "status": "completed",
+        "step_id": "observe-result",
+        "terminal_complete": true,
+        "validation_ns": 83
+      }
+    ],
+    "PIL.Image.Image.rotate.nuanced.rgba-nearest-expanded-fill-alpha": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 7417,
+        "dispatch_count": null,
+        "fallback_reason": null,
+        "operation_count": 2,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "PutPixel",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          },
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "Rotate",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "cpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 624,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 1200,
+          "host_buffer_count": 3,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 912,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 42,
+        "status": "completed",
+        "step_id": "observe-result",
+        "terminal_complete": true,
+        "validation_ns": 792
+      }
+    ],
+    "pipeline-chain.geometry.rotate-rgba-1024x768": [
+      {
+        "actual_backend": "cpu",
+        "backend_ns": 1074459,
+        "dispatch_count": null,
+        "fallback_reason": null,
+        "operation_count": 1,
+        "operation_telemetry": [
+          {
+            "handoff_count": 0,
+            "mode_conversion_count": 0,
+            "operation": "Rotate",
+            "path": "cpu",
+            "scalar_tail_count": 0,
+            "vector_block_count": 0
+          }
+        ],
+        "requested_backend": "cpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 0,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 6297600,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 9443328,
+          "host_buffer_count": 2,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 0,
+          "peak_live_host_bytes": 9443328,
+          "readback_bytes": 0,
+          "retained_cache_bytes": 0,
+          "upload_bytes": 0
+        },
+        "route_ns": 41,
+        "status": "completed",
+        "step_id": "materialize",
+        "terminal_complete": true,
+        "validation_ns": 292
+      }
+    ]
+  },
+  "errors": {},
+  "identity": {
+    "backend": "cpu",
+    "backend_state": {
+      "active": [
+        "cpu"
+      ],
+      "available": [
+        "cpu",
+        "gpu",
+        "simd"
+      ],
+      "requested": "cpu"
+    },
+    "implementation": "pillow-rs",
+    "side": "target"
+  },
+  "pipeline_case_status": {
+    "PIL.Image.Image.rotate.nuanced.expanded-red-fill": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    },
+    "PIL.Image.Image.rotate.nuanced.modes-CMYK-2-arbitrary": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    },
+    "PIL.Image.Image.rotate.nuanced.modes-RGBA-0-expanded": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    },
+    "PIL.Image.Image.rotate.nuanced.modes-RGBa-2-arbitrary": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    },
+    "PIL.Image.Image.rotate.nuanced.rgb-nearest-1deg-noise-recovered-20261016-1024x768": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    },
+    "PIL.Image.Image.rotate.nuanced.rgba-90-non-expand-materialized": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    },
+    "PIL.Image.Image.rotate.nuanced.rgba-fractional-nearest": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    },
+    "PIL.Image.Image.rotate.nuanced.rgba-nearest-37deg-noise-fill-20261016-1024x768": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    },
+    "PIL.Image.Image.rotate.nuanced.rgba-nearest-expanded-fill-alpha": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    },
+    "pipeline-chain.geometry.rotate-rgba-1024x768": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    }
+  },
+  "reason": "Normal parity workflows collected completed pipeline receipts for workflow calls and observations.  Each selected case also carries an explicit pipeline/receipt classification; only high-confidence non-pipeline cases are outside the backend-proof cohort, while missing, partial, and indeterminate cases remain gaps.",
+  "schema": "migration-parity/pipeline-execution-evidence@2",
+  "scope": {
+    "case_ids_sha256": "c94dbe9a516c7ed5954d49ff5a0f1b3c17f0f623c991397ea8aad29ef4c05ea4",
+    "kind": "public-parity-corpus",
+    "selected": 10
+  },
+  "status": "measured",
+  "summary": {
+    "actual_backend_counts": {
+      "cpu": 10
+    },
+    "completed_receipts": 10,
+    "fallback_reason_counts": {},
+    "not_recorded_cases": 0,
+    "pipeline_applicable_cases": 10,
+    "pipeline_complete_cases": 10,
+    "pipeline_indeterminate_cases": 0,
+    "pipeline_missing_receipt_cases": 0,
+    "pipeline_not_applicable_cases": 0,
+    "pipeline_partial_receipt_cases": 0,
+    "receipt_cases": 10,
+    "selected": 10,
+    "terminal_complete_receipts": 10,
+    "terminal_incomplete_cases": 0
+  }
+}

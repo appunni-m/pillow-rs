@@ -1,0 +1,19 @@
+{
+  "git_head": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+  "worktree_dirty": true,
+  "control_extension_sha256": "d9cb7176aadd058e07f3a3cb68b24a2e29360e08d782a9faa3aa81eff1c6b6b3",
+  "candidate_extension_sha256": "4a879cd9ad7141eb1526487780a957a210cd0422435259f70288c0940ae288c7",
+  "candidate_adapter_sha256": "7db1795e755e3273354f185be00dc02ff257784cc103344f5d4de0a60573f3c9",
+  "candidate_kernel_sha256": "8f7c4050757e304f6bc3872d53a16092c6bfdd1bfcf3cadcf2e4a87a2420de6f",
+  "host": "Lazys-MacBook-Pro.local",
+  "os": "macOS-15.7.7-arm64-arm-64bit",
+  "architecture": "arm64",
+  "python": "CPython 3.12.13",
+  "pillow": "12.2.0",
+  "parallel_feature_enabled": false,
+  "workload_id": "pipeline-op.boxblur.material-l-noise-1024x768-radius-1",
+  "parity_case_ids": [
+    "PIL.ImageFilter.BoxBlur.nuanced.performance-material-l-noise-1024x768-radius-1",
+    "PIL.ImageFilter.BoxBlur.nuanced.backend-noise-l-65x47-radius-1"
+  ]
+}

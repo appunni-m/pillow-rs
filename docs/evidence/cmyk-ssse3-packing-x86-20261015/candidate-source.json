@@ -1,0 +1,5 @@
+{
+  "pillow-rs/src/compute/pool_simd/ops/adapters.rs": "afdda9e0ededcc87759c4baf330a33ffd4d6027600fc14fd9629f33005c992ca",
+  "pillow-rs/src/compute/pool_simd/ops/native_merge.rs": "7315b869c262136582213ef10165db36be7e7089e8bbb4182d839e470b089685",
+  "pillow-rs/src/compute/pool_simd/ops/adapters/cmyk_packing_tests.rs": "77a7e7ba202c88e8dc1d25fddbe883599e5cb757725dba08e03f8c700eccc224"
+}

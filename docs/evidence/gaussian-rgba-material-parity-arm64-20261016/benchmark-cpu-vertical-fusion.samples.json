@@ -1,0 +1,295 @@
+{
+  "records": [
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-gaussian-1024x768-radius-7-5",
+      "child_invocation_id": "8939f365c928477a93e88b9287126f1a",
+      "child_repeat": 7,
+      "child_sequence": 0,
+      "group_id": "23204e795d8b4614ba86e6985f8fcc1f",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 5497750,
+          "setup_ns": 7876167,
+          "terminal_ns": 1101125,
+          "total_ns": 14518667
+        },
+        {
+          "pipeline_ns": 5648417,
+          "setup_ns": 410958,
+          "terminal_ns": 533708,
+          "total_ns": 6634416
+        },
+        {
+          "pipeline_ns": 5485834,
+          "setup_ns": 309917,
+          "terminal_ns": 980958,
+          "total_ns": 6838083
+        },
+        {
+          "pipeline_ns": 5825709,
+          "setup_ns": 665084,
+          "terminal_ns": 732667,
+          "total_ns": 7262916
+        },
+        {
+          "pipeline_ns": 5797959,
+          "setup_ns": 363876,
+          "terminal_ns": 635000,
+          "total_ns": 6839458
+        },
+        {
+          "pipeline_ns": 5599084,
+          "setup_ns": 328291,
+          "terminal_ns": 664083,
+          "total_ns": 6625209
+        },
+        {
+          "pipeline_ns": 5902208,
+          "setup_ns": 405666,
+          "terminal_ns": 1422708,
+          "total_ns": 7779333
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "pillow",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "source",
+      "step_ids": [],
+      "subject_kind": "oracle",
+      "throughput_operations_per_second": [
+        68.90947720309111,
+        150.86180560762384,
+        146.35751276530226,
+        137.7877162526536,
+        146.3387936239602,
+        151.0393318503285,
+        128.64286027622967
+      ],
+      "timings_ns": [
+        14511792,
+        6628583,
+        6832584,
+        7257541,
+        6833458,
+        6620792,
+        7773459
+      ],
+      "workload_ids": [
+        "pipeline-chain.blur-material.gaussian-rgba-1024x768"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-gaussian-1024x768-radius-7-5",
+      "child_invocation_id": "9d32fb56f00b423d8fd24528bd8b8f4e",
+      "child_repeat": 7,
+      "child_sequence": 1,
+      "group_id": "a1f19f6e1e154e48b7e3dbd2692c6b77",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 419625,
+          "setup_ns": 422583,
+          "terminal_ns": 13696375,
+          "total_ns": 14595959
+        },
+        {
+          "pipeline_ns": 14375,
+          "setup_ns": 145292,
+          "terminal_ns": 12192875,
+          "total_ns": 12406291
+        },
+        {
+          "pipeline_ns": 15250,
+          "setup_ns": 238875,
+          "terminal_ns": 11701083,
+          "total_ns": 11987333
+        },
+        {
+          "pipeline_ns": 9084,
+          "setup_ns": 149084,
+          "terminal_ns": 11785625,
+          "total_ns": 11973584
+        },
+        {
+          "pipeline_ns": 9000,
+          "setup_ns": 131000,
+          "terminal_ns": 11591417,
+          "total_ns": 11774000
+        },
+        {
+          "pipeline_ns": 14417,
+          "setup_ns": 241042,
+          "terminal_ns": 11770875,
+          "total_ns": 12053333
+        },
+        {
+          "pipeline_ns": 9041,
+          "setup_ns": 130250,
+          "terminal_ns": 11577000,
+          "total_ns": 11748167
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "python-cpu",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "target",
+      "step_ids": [],
+      "subject_kind": "target_profile",
+      "throughput_operations_per_second": [
+        68.54577130169517,
+        80.64326227156586,
+        83.45040033660554,
+        83.54276809104023,
+        84.96718142617414,
+        82.98611252302761,
+        85.14775391720113
+      ],
+      "timings_ns": [
+        14588792,
+        12400292,
+        11983166,
+        11969917,
+        11769250,
+        12050209,
+        11744291
+      ],
+      "workload_ids": [
+        "pipeline-chain.blur-material.gaussian-rgba-1024x768"
+      ]
+    }
+  ],
+  "report": {
+    "inputs": [
+      {
+        "path": "inputs/benchmark/pipeline-operations.json",
+        "schema": "migration-parity/benchmark-input@1",
+        "sha256": "185fdfff760faec362ab3a7d31066b155479f902829eaeb438a20b2ba13983ab"
+      },
+      {
+        "path": "inputs/parity/pil-image-image.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "c166fd324eca3e341066a57b77e8ecb333893f99c35db7b39bd539fb754e8916"
+      }
+    ],
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+    },
+    "path": "/Users/lazytrot/work/pillow-rs/docs/evidence/gaussian-rgba-material-parity-arm64-20261016/benchmark-cpu-vertical-fusion.json",
+    "run_id": "migration-benchmark-2079e0c7d49c4a699000be4a1a6e4237",
+    "schema": "migration-parity/benchmark-result@1"
+  },
+  "schema": "migration-parity/benchmark-raw-samples@1",
+  "workloads": [
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-gaussian-1024x768-radius-7-5",
+      "measurement_policy": {
+        "boundary": "whole_workflow",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "parity_pass",
+        "measurement_iterations": 3,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 2,
+        "step_ids": [],
+        "warmup_iterations": 1
+      },
+      "workload_id": "pipeline-chain.blur-material.gaussian-rgba-1024x768"
+    }
+  ]
+}

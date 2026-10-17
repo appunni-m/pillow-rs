@@ -1,0 +1,55 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.performance-f-filled-1024x768",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "F"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    }
+  ]
+}

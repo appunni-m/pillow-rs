@@ -1,0 +1,1013 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "identity": {
+    "run_id": "migration-parity-7b074d8b5f704d66a5b1b73709c2771c",
+    "started_at": "2026-10-15T04:29:51.164040Z",
+    "finished_at": "2026-10-15T04:29:52.706577Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "630ad23d4ba4d01aa25cb23a57fbfb308422c3c40618f2c063cccef01c8afc3b"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/pil-image-image.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "4dc6ada6553b7ac3916097e30f43ef0cc16f3ef092cacae44745d07631eb2ac3"
+      }
+    ],
+    "assets": [
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-L-normal-0-fractional-box",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "ad8422434882c1945a35136e08adbcea21d46bee65e75d6fdcf4b34e4be15543"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-L-tall-0-fractional-box",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "69565f516fc57672d02a1034fd3025a4c2b06645fd714309bd4d0bbfb94c62f9"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-L-tall-0-full",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "69565f516fc57672d02a1034fd3025a4c2b06645fd714309bd4d0bbfb94c62f9"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-LA-normal-0-fractional-box",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "db3945814b58c10b42f4f62107548a741db81c471a85edd251198e3ed880001b"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-LA-tall-0-fractional-box",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "fc11cf7d5b2a8ceb0e6cbc69997279cf44e95c99ba4f991f1c13e556f7d2b49b"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-LA-tall-0-full",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "fc11cf7d5b2a8ceb0e6cbc69997279cf44e95c99ba4f991f1c13e556f7d2b49b"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-RGB-normal-0-fractional-box",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "c8b0838b5f80c595fb7a0b1cdc1aa489b68721ab1890616075c8ae1688b6e9a0"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-RGB-tall-0-fractional-box",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "2f4fa3de190f2ea969e7d23031168ea15a07251489cbf531c2fe03c550b22e91"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-RGB-tall-0-full",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "2f4fa3de190f2ea969e7d23031168ea15a07251489cbf531c2fe03c550b22e91"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-normal-0-fractional-box",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "1bdf76b994880e2231a6d39a2a92c584a64dd4b0a079a4d8c119251d6a3659b2"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-tall-0-fractional-box",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "2914a941b9ce4561c2689841007c942d98e11e0be0a1754835d2f2c3f32e244f"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-tall-0-full",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "2914a941b9ce4561c2689841007c942d98e11e0be0a1754835d2f2c3f32e244f"
+      }
+    ],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-gpu",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "gpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-test"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 120
+    }
+  },
+  "status": "completed",
+  "summary": {
+    "selected": 12,
+    "executed": 12,
+    "passed": 12,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-L-normal-0-fractional-box",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-L-normal-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "YgISrguWU+mLm6cRK0VG"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "YgISrguWU+mLm6cRK0VG"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-L-normal-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "YgISrguWU+mLm6cRK0VG"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "YgISrguWU+mLm6cRK0VG"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-L-tall-0-fractional-box",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-L-tall-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "GBg4ODje3s3NzfLyPj4+"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "GBg4ODje3s3NzfLyPj4+"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-L-tall-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "GBg4ODje3s3NzfLyPj4+"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "GBg4ODje3s3NzfLyPj4+"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-L-tall-0-full",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-L-tall-0-full",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "c3O3t7fe3s3NzZeXaGho"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "c3O3t7fe3s3NzZeXaGho"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-L-tall-0-full",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "c3O3t7fe3s3NzZeXaGho"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "c3O3t7fe3s3NzZeXaGho"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-LA-normal-0-fractional-box",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-LA-normal-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "LA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "U0cDslD+FosGE+HkYzBaP1Z91Lw2sIIPOiQcbrj2"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "U0cDslD+FosGE+HkYzBaP1Z91Lw2sIIPOiQcbrj2"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-LA-normal-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "LA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "U0cDslD+FosGE+HkYzBaP1Z91Lw2sIIPOiQcbrj2"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "U0cDslD+FosGE+HkYzBaP1Z91Lw2sIIPOiQcbrj2"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-LA-tall-0-fractional-box",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-LA-tall-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "LA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "zA3MDUH/Qf9B/80izSJWFVYVVhXQ4tDisWqxarFq"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "zA3MDUH/Qf9B/80izSJWFVYVVhXQ4tDisWqxarFq"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-LA-tall-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "LA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "zA3MDUH/Qf9B/80izSJWFVYVVhXQ4tDisWqxarFq"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "zA3MDUH/Qf9B/80izSJWFVYVVhXQ4tDisWqxarFq"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-LA-tall-0-full",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-LA-tall-0-full",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "LA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "XV9dX9Km0qbSps0izSJWFVYVVhWzY7NjcJxwnHCc"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "XV9dX9Km0qbSps0izSJWFVYVVhWzY7NjcJxwnHCc"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-LA-tall-0-full",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "LA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "XV9dX9Km0qbSps0izSJWFVYVVhWzY7NjcJxwnHCc"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "XV9dX9Km0qbSps0izSJWFVYVVhWzY7NjcJxwnHCc"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-RGB-normal-0-fractional-box",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGB-normal-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGB",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "kO2cNn4zH/9X4sb3QqxlLD/2bORcbqiuZdysV7C82VXXVy2joAlxTLsgF3F+"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "kO2cNn4zH/9X4sb3QqxlLD/2bORcbqiuZdysV7C82VXXVy2joAlxTLsgF3F+"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGB-normal-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGB",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "kO2cNn4zH/9X4sb3QqxlLD/2bORcbqiuZdysV7C82VXXVy2joAlxTLsgF3F+"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "kO2cNn4zH/9X4sb3QqxlLD/2bORcbqiuZdysV7C82VXXVy2joAlxTLsgF3F+"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-RGB-tall-0-fractional-box",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGB-tall-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGB",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "PaSpPaSpV61qV61qV61qE+C5E+C5nvQdnvQdnvQdO1/aO1/aBcC9BcC9BcC9"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "PaSpPaSpV61qV61qV61qE+C5E+C5nvQdnvQdnvQdO1/aO1/aBcC9BcC9BcC9"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGB-tall-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGB",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "PaSpPaSpV61qV61qV61qE+C5E+C5nvQdnvQdnvQdO1/aO1/aBcC9BcC9BcC9"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "PaSpPaSpV61qV61qV61qE+C5E+C5nvQdnvQdnvQdO1/aO1/aBcC9BcC9BcC9"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-RGB-tall-0-full",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGB-tall-0-full",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGB",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "cClGcClGyUTGyUTGyUTGE+C5E+C5nvQdnvQdnvQdQkQfQkQfOME0OME0OME0"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "cClGcClGyUTGyUTGyUTGE+C5E+C5nvQdnvQdnvQdQkQfQkQfOME0OME0OME0"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGB-tall-0-full",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGB",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "cClGcClGyUTGyUTGyUTGE+C5E+C5nvQdnvQdnvQdQkQfQkQfOME0OME0OME0"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "cClGcClGyUTGyUTGyUTGE+C5E+C5nvQdnvQdnvQdQkQfQkQfOME0OME0OME0"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-normal-0-fractional-box",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-normal-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGBA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "caXg4keDjA6HKI71Csz7EJl4ESVkUpmLzyDGRmJbfeMFrRo6OElpbj5RYU/RHNz/8KW0mpWYy5ZClamV"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "caXg4keDjA6HKI71Csz7EJl4ESVkUpmLzyDGRmJbfeMFrRo6OElpbj5RYU/RHNz/8KW0mpWYy5ZClamV"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-normal-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGBA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "caXg4keDjA6HKI71Csz7EJl4ESVkUpmLzyDGRmJbfeMFrRo6OElpbj5RYU/RHNz/8KW0mpWYy5ZClamV"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "caXg4keDjA6HKI71Csz7EJl4ESVkUpmLzyDGRmJbfeMFrRo6OElpbj5RYU/RHNz/8KW0mpWYy5ZClamV"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-tall-0-fractional-box",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-tall-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGBA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "o5ptbaOabW0dByRwHQckcB0HJHBVAHYQVQB2EOie2Vvontlb6J7ZW4D01ruA9Na7vqs0Lr6rNC6+qzQu"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "o5ptbaOabW0dByRwHQckcB0HJHBVAHYQVQB2EOie2Vvontlb6J7ZW4D01ruA9Na7vqs0Lr6rNC6+qzQu"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-tall-0-fractional-box",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGBA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "o5ptbaOabW0dByRwHQckcB0HJHBVAHYQVQB2EOie2Vvontlb6J7ZW4D01ruA9Na7vqs0Lr6rNC6+qzQu"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "o5ptbaOabW0dByRwHQckcB0HJHBVAHYQVQB2EOie2Vvontlb6J7ZW4D01ruA9Na7vqs0Lr6rNC6+qzQu"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-tall-0-full",
+      "target_profile": "python-gpu",
+      "requirements": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-tall-0-full",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGBA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "z63eXs+t3l7qbDlM6mw5TOpsOUxVAHYQVQB2EOie2Vvontlb6J7ZWyMn2oYjJ9qG9QvA/PULwPz1C8D8"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "z63eXs+t3l7qbDlM6mw5TOpsOUxVAHYQVQB2EOie2Vvontlb6J7ZWyMn2oYjJ9qG9QvA/PULwPz1C8D8"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.resize.nuanced.modes-RGBA-tall-0-full",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGBA",
+              "size": [
+                5,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "z63eXs+t3l7qbDlM6mw5TOpsOUxVAHYQVQB2EOie2Vvontlb6J7ZWyMn2oYjJ9qG9QvA/PULwPz1C8D8"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "z63eXs+t3l7qbDlM6mw5TOpsOUxVAHYQVQB2EOie2Vvontlb6J7ZWyMn2oYjJ9qG9QvA/PULwPz1C8D8"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    }
+  ],
+  "infrastructure_errors": []
+}

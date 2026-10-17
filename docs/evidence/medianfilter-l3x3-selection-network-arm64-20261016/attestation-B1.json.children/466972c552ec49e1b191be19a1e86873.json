@@ -1,0 +1,500 @@
+{
+  "case_ids": [
+    "PIL.ImageFilter.MedianFilter.nuanced.performance-material-l-noise-1024x768-size-3"
+  ],
+  "context": {
+    "boundary": "observed_steps",
+    "lifecycle": "warm",
+    "repeat": 105,
+    "step_ids": [
+      "apply-filter",
+      "observe-filter-result"
+    ]
+  },
+  "error": null,
+  "invocation_id": "466972c552ec49e1b191be19a1e86873",
+  "profile": "python-simd",
+  "role": "benchmark_timed",
+  "runtime": {
+    "loaded_modules": [
+      {
+        "module": "PIL",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL/__init__.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL/__init__.py",
+        "sha256": "a8963412c8d509ed96fa32f58c2fcd88f0444ce6b1ad7a83d5edf737912e0b90",
+        "size": 2782
+      },
+      {
+        "module": "PIL.Image",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL/Image.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL/Image.py",
+        "sha256": "25c48a1bf63692e581d27be8e4a5fd6a7046d2abf7ffee9b68d0ae07d19ca0b6",
+        "size": 1992
+      },
+      {
+        "module": "PIL.ImageChops",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagechops.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagechops.py",
+        "sha256": "0dee2fb10c3e213ab7af0cbbcd69e869c0c68b71c903b0b8a94b6529a73f15db",
+        "size": 4046
+      },
+      {
+        "module": "PIL.ImageColor",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagecolor.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagecolor.py",
+        "sha256": "cbe722af46f40ff2efc8a19b53eb98e3592bf219793ae4beeaf2331bd7b26cd0",
+        "size": 412
+      },
+      {
+        "module": "PIL.ImageDraw",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagedraw.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagedraw.py",
+        "sha256": "9250d4257edb038184efa883162034120892ea02e995f3699355209a84ad40c2",
+        "size": 6931
+      },
+      {
+        "module": "PIL.ImageEnhance",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageenhance.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageenhance.py",
+        "sha256": "b105d3d26e06c0648de3aebb2a94fb3bd03b320bdbcd6de159a122fe1ec77581",
+        "size": 4702
+      },
+      {
+        "module": "PIL.ImageFilter",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagefilter.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagefilter.py",
+        "sha256": "221ce032981e8ebf9226399107192653dadae6bb8b0e4862c66813c6f0f3f9c5",
+        "size": 8459
+      },
+      {
+        "module": "PIL.ImageFont",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagefont.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagefont.py",
+        "sha256": "fb84f0746a95bcb359e7513cf021abf261459a33f22b0ef8f4ea95b564811518",
+        "size": 17517
+      },
+      {
+        "module": "PIL.ImageOps",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageops.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageops.py",
+        "sha256": "9118e1b66382e9867f54be37745723249361987e4e251a331d4394cfa1d9c4c1",
+        "size": 3036
+      },
+      {
+        "module": "PIL.ImagePalette",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagepalette.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagepalette.py",
+        "sha256": "16dce987aa4095f753fd5d3c1c638d1ce64098fd874bb4ff04024e6ccb279728",
+        "size": 1667
+      },
+      {
+        "module": "PIL.ImageSequence",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagesequence.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagesequence.py",
+        "sha256": "0b95256ad7419b56b9e39db5167e58674fa730c283c7599db1dfb77dc7db2fd8",
+        "size": 304
+      },
+      {
+        "module": "PIL.ImageStat",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagestat.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagestat.py",
+        "sha256": "6b6e8916705afda2804f885d35b3005720fae1ebd7417e068d65af1a82254b42",
+        "size": 1365
+      },
+      {
+        "module": "pillow_rs",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/__init__.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/__init__.py",
+        "sha256": "f7c6ce90445af38da47f16d3d5956bc6df3c0dec222082684197a9412dc46311",
+        "size": 3738
+      },
+      {
+        "module": "pillow_rs._core",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/_core.abi3.so",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/_core.abi3.so",
+        "sha256": "315a2f3278395a2a2f9ae65221ad2fcbdb2cc463558931c0acd3ca35334ce198",
+        "size": 9967296
+      },
+      {
+        "module": "pillow_rs.enums",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/enums.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/enums.py",
+        "sha256": "1bd9437cfb2d2c66b3b63ae222fc2a086780d3cbc2d07deed5dfb7a32db56bc5",
+        "size": 1414
+      },
+      {
+        "module": "pillow_rs.gpu_batch",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/gpu_batch.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/gpu_batch.py",
+        "sha256": "e54e229c49cf92529fbcac2ad035a04325c9b3a1a6abbdc7c85472f95272b18a",
+        "size": 10797
+      },
+      {
+        "module": "pillow_rs.image",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/image.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/image.py",
+        "sha256": "16d7f78048f912b736d56071b5158903d962113cf2d6c1cbe305c5e69762565d",
+        "size": 36265
+      },
+      {
+        "module": "pillow_rs.imagechops",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagechops.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagechops.py",
+        "sha256": "0dee2fb10c3e213ab7af0cbbcd69e869c0c68b71c903b0b8a94b6529a73f15db",
+        "size": 4046
+      },
+      {
+        "module": "pillow_rs.imagecolor",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagecolor.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagecolor.py",
+        "sha256": "cbe722af46f40ff2efc8a19b53eb98e3592bf219793ae4beeaf2331bd7b26cd0",
+        "size": 412
+      },
+      {
+        "module": "pillow_rs.imagedraw",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagedraw.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagedraw.py",
+        "sha256": "9250d4257edb038184efa883162034120892ea02e995f3699355209a84ad40c2",
+        "size": 6931
+      },
+      {
+        "module": "pillow_rs.imageenhance",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageenhance.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageenhance.py",
+        "sha256": "b105d3d26e06c0648de3aebb2a94fb3bd03b320bdbcd6de159a122fe1ec77581",
+        "size": 4702
+      },
+      {
+        "module": "pillow_rs.imagefilter",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagefilter.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagefilter.py",
+        "sha256": "221ce032981e8ebf9226399107192653dadae6bb8b0e4862c66813c6f0f3f9c5",
+        "size": 8459
+      },
+      {
+        "module": "pillow_rs.imagefont",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagefont.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagefont.py",
+        "sha256": "fb84f0746a95bcb359e7513cf021abf261459a33f22b0ef8f4ea95b564811518",
+        "size": 17517
+      },
+      {
+        "module": "pillow_rs.imageops",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageops.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageops.py",
+        "sha256": "9118e1b66382e9867f54be37745723249361987e4e251a331d4394cfa1d9c4c1",
+        "size": 3036
+      },
+      {
+        "module": "pillow_rs.imagepalette",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagepalette.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagepalette.py",
+        "sha256": "16dce987aa4095f753fd5d3c1c638d1ce64098fd874bb4ff04024e6ccb279728",
+        "size": 1667
+      },
+      {
+        "module": "pillow_rs.imagesequence",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagesequence.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagesequence.py",
+        "sha256": "0b95256ad7419b56b9e39db5167e58674fa730c283c7599db1dfb77dc7db2fd8",
+        "size": 304
+      },
+      {
+        "module": "pillow_rs.imagestat",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagestat.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagestat.py",
+        "sha256": "6b6e8916705afda2804f885d35b3005720fae1ebd7417e068d65af1a82254b42",
+        "size": 1365
+      },
+      {
+        "module": "pillow_rs.operations",
+        "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/operations.py",
+        "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/operations.py",
+        "sha256": "a3b2dfc1ec2f41d2c67fff21b87b95bb5bdf4519411ead8397c149bfd19b5ad9",
+        "size": 4337
+      }
+    ],
+    "stable": {
+      "declared_features": [
+        "pillow-rs-py/default",
+        "pillow-rs/default"
+      ],
+      "host": {
+        "machine": "arm64",
+        "node": "Lazys-MacBook-Pro.local",
+        "platform": "macOS-15.7.7-arm64-arm-64bit",
+        "processor": "arm",
+        "release": "24.6.0",
+        "runner_id": null,
+        "system": "Darwin",
+        "version": "Darwin Kernel Version 24.6.0: Tue Apr 21 20:16:56 PDT 2026; root:xnu-11417.140.69.710.16~1/RELEASE_ARM64_T6030"
+      },
+      "implementation": "pillow-rs",
+      "installation": {
+        "PIL": {
+          "files": [
+            {
+              "relative_path": "Image.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL/Image.py",
+              "root_index": 0,
+              "sha256": "25c48a1bf63692e581d27be8e4a5fd6a7046d2abf7ffee9b68d0ae07d19ca0b6",
+              "size": 1992
+            },
+            {
+              "relative_path": "ImageShow.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL/ImageShow.py",
+              "root_index": 0,
+              "sha256": "efdc83572e435149c6831b677ba63cf65c51ebc5c87867d1ad50e50dd34aacc9",
+              "size": 403
+            },
+            {
+              "relative_path": "__init__.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL/__init__.py",
+              "root_index": 0,
+              "sha256": "a8963412c8d509ed96fa32f58c2fcd88f0444ce6b1ad7a83d5edf737912e0b90",
+              "size": 2782
+            }
+          ],
+          "package": "PIL",
+          "roots": [
+            "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL"
+          ],
+          "sha256": "f24f70c04a96318348523e4a9eb5462c0f0cf47e0dfcf60528c1917e096207f7"
+        },
+        "pillow_rs": {
+          "files": [
+            {
+              "relative_path": "__init__.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/__init__.py",
+              "root_index": 0,
+              "sha256": "f7c6ce90445af38da47f16d3d5956bc6df3c0dec222082684197a9412dc46311",
+              "size": 3738
+            },
+            {
+              "relative_path": "_core.abi3.so",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/_core.abi3.so",
+              "root_index": 0,
+              "sha256": "315a2f3278395a2a2f9ae65221ad2fcbdb2cc463558931c0acd3ca35334ce198",
+              "size": 9967296
+            },
+            {
+              "relative_path": "enums.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/enums.py",
+              "root_index": 0,
+              "sha256": "1bd9437cfb2d2c66b3b63ae222fc2a086780d3cbc2d07deed5dfb7a32db56bc5",
+              "size": 1414
+            },
+            {
+              "relative_path": "gpu_batch.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/gpu_batch.py",
+              "root_index": 0,
+              "sha256": "e54e229c49cf92529fbcac2ad035a04325c9b3a1a6abbdc7c85472f95272b18a",
+              "size": 10797
+            },
+            {
+              "relative_path": "image.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/image.py",
+              "root_index": 0,
+              "sha256": "16d7f78048f912b736d56071b5158903d962113cf2d6c1cbe305c5e69762565d",
+              "size": 36265
+            },
+            {
+              "relative_path": "imagechops.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagechops.py",
+              "root_index": 0,
+              "sha256": "0dee2fb10c3e213ab7af0cbbcd69e869c0c68b71c903b0b8a94b6529a73f15db",
+              "size": 4046
+            },
+            {
+              "relative_path": "imagecolor.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagecolor.py",
+              "root_index": 0,
+              "sha256": "cbe722af46f40ff2efc8a19b53eb98e3592bf219793ae4beeaf2331bd7b26cd0",
+              "size": 412
+            },
+            {
+              "relative_path": "imagedraw.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagedraw.py",
+              "root_index": 0,
+              "sha256": "9250d4257edb038184efa883162034120892ea02e995f3699355209a84ad40c2",
+              "size": 6931
+            },
+            {
+              "relative_path": "imageenhance.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageenhance.py",
+              "root_index": 0,
+              "sha256": "b105d3d26e06c0648de3aebb2a94fb3bd03b320bdbcd6de159a122fe1ec77581",
+              "size": 4702
+            },
+            {
+              "relative_path": "imagefilter.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagefilter.py",
+              "root_index": 0,
+              "sha256": "221ce032981e8ebf9226399107192653dadae6bb8b0e4862c66813c6f0f3f9c5",
+              "size": 8459
+            },
+            {
+              "relative_path": "imagefont.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagefont.py",
+              "root_index": 0,
+              "sha256": "fb84f0746a95bcb359e7513cf021abf261459a33f22b0ef8f4ea95b564811518",
+              "size": 17517
+            },
+            {
+              "relative_path": "imageops.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageops.py",
+              "root_index": 0,
+              "sha256": "9118e1b66382e9867f54be37745723249361987e4e251a331d4394cfa1d9c4c1",
+              "size": 3036
+            },
+            {
+              "relative_path": "imagepalette.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagepalette.py",
+              "root_index": 0,
+              "sha256": "16dce987aa4095f753fd5d3c1c638d1ce64098fd874bb4ff04024e6ccb279728",
+              "size": 1667
+            },
+            {
+              "relative_path": "imagesequence.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagesequence.py",
+              "root_index": 0,
+              "sha256": "0b95256ad7419b56b9e39db5167e58674fa730c283c7599db1dfb77dc7db2fd8",
+              "size": 304
+            },
+            {
+              "relative_path": "imageshow.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imageshow.py",
+              "root_index": 0,
+              "sha256": "547532a86770a14e3521ed47cbc31927e6d9c3d91ef0897eb94fbc10cf8e7987",
+              "size": 10705
+            },
+            {
+              "relative_path": "imagestat.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/imagestat.py",
+              "root_index": 0,
+              "sha256": "6b6e8916705afda2804f885d35b3005720fae1ebd7417e068d65af1a82254b42",
+              "size": 1365
+            },
+            {
+              "relative_path": "operations.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/operations.py",
+              "root_index": 0,
+              "sha256": "a3b2dfc1ec2f41d2c67fff21b87b95bb5bdf4519411ead8397c149bfd19b5ad9",
+              "size": 4337
+            }
+          ],
+          "package": "pillow_rs",
+          "roots": [
+            "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs"
+          ],
+          "sha256": "5d340991111afefd74ee60c5a7a16832c1b99bc1625a58c4de223a8789d18562"
+        },
+        "target_PIL_facade": {
+          "files": [
+            {
+              "relative_path": "Image.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL/Image.py",
+              "root_index": 0,
+              "sha256": "25c48a1bf63692e581d27be8e4a5fd6a7046d2abf7ffee9b68d0ae07d19ca0b6",
+              "size": 1992
+            },
+            {
+              "relative_path": "ImageShow.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL/ImageShow.py",
+              "root_index": 0,
+              "sha256": "efdc83572e435149c6831b677ba63cf65c51ebc5c87867d1ad50e50dd34aacc9",
+              "size": 403
+            },
+            {
+              "relative_path": "__init__.py",
+              "resolved_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL/__init__.py",
+              "root_index": 0,
+              "sha256": "a8963412c8d509ed96fa32f58c2fcd88f0444ce6b1ad7a83d5edf737912e0b90",
+              "size": 2782
+            }
+          ],
+          "package": "PIL",
+          "roots": [
+            "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/PIL"
+          ],
+          "sha256": "f24f70c04a96318348523e4a9eb5462c0f0cf47e0dfcf60528c1917e096207f7"
+        }
+      },
+      "profile": "python-simd",
+      "python": {
+        "build": [
+          "main",
+          "Jun 23 2026 15:44:24"
+        ],
+        "cache_tag": "cpython-312",
+        "executable": {
+          "path": "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/bin/python3.12",
+          "sha256": "7b05d803bbc1bbfc81644af4faf2b88f0a37b8de96b9f42c1e08033e2cd0848a",
+          "size": 18073888,
+          "stat": {
+            "ctime_ns": 1784303088143971799,
+            "device": 16777230,
+            "inode": 785332,
+            "mode": 33261,
+            "mtime_ns": 1784303088143050009,
+            "size": 18073888
+          }
+        },
+        "full_version": "3.12.13 (main, Jun 23 2026, 15:44:24) [Clang 22.1.3 ]",
+        "implementation": "cpython",
+        "platform": "darwin",
+        "soabi": "cpython-312-darwin",
+        "version": "3.12.13",
+        "version_info": [
+          3,
+          12,
+          13,
+          "final",
+          0
+        ]
+      },
+      "schema": "migration-parity/runtime-identity@1",
+      "side": "target",
+      "target_execution": {
+        "active_backends": [
+          "simd"
+        ],
+        "available_backends": [
+          "cpu",
+          "gpu",
+          "simd"
+        ],
+        "backend": "simd",
+        "parallel_feature_enabled": false,
+        "selected_core": {
+          "file": {
+            "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/_core.abi3.so",
+            "sha256": "315a2f3278395a2a2f9ae65221ad2fcbdb2cc463558931c0acd3ca35334ce198",
+            "size": 9967296,
+            "stat": {
+              "ctime_ns": 1792149492061182757,
+              "device": 16777230,
+              "inode": 134356084,
+              "mode": 33261,
+              "mtime_ns": 1792149491959658141,
+              "size": 9967296
+            }
+          },
+          "mapping": {
+            "device": null,
+            "inode": null,
+            "reason": "unsupported_platform",
+            "status": "unavailable"
+          },
+          "module_name": "pillow_rs._core",
+          "spec_name": "pillow_rs._core"
+        }
+      },
+      "version": "12.2.1"
+    },
+    "stable_sha256": "9f15dd7ff10f6a9e38efdb4670191c10c3ba2cb86b3302d8a3b91c0b7737562c"
+  },
+  "schema": "migration-parity/child-execution-attestation@1",
+  "side": "target",
+  "status": "complete"
+}

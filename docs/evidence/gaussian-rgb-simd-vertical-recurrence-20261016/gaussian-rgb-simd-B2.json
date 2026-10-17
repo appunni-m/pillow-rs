@@ -1,0 +1,695 @@
+{
+  "schema": "migration-parity/benchmark-result@1",
+  "identity": {
+    "run_id": "migration-benchmark-8f0a3088dc244f13bf2d45f7d400195c",
+    "started_at": "2026-10-15T18:56:34.615258Z",
+    "finished_at": "2026-10-15T18:56:55.329978Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.focused-gaussian-rgb.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "6d2799c2bc2bc97427f2f6c15c81c409ae5dde5a249a9f1d6d520ea62368689c"
+    },
+    "inputs": [
+      {
+        "path": "inputs/benchmark/pil-imagefilter.focused-gaussian-rgb.json",
+        "schema": "migration-parity/benchmark-input@1",
+        "sha256": "9d951c7a7c0bc5b44686951c2069cece382b10bdc79bd2a29a30c4261be3c48d"
+      },
+      {
+        "path": "inputs/parity/pil-imagefilter.focused-gaussian-rgb.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "f1fd80c0fd1e5d83612d06e114816b7ec343208502c7e1bcc021eb77d340c06f"
+      }
+    ],
+    "assets": [
+      {
+        "input_path": "inputs/parity/pil-imagefilter.focused-gaussian-rgb.json",
+        "item_id": "PIL.ImageFilter.GaussianBlur.nuanced.performance-material-rgb-noise-1024x768-radius-2",
+        "asset_id": "image-noise",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "86cffa627633d9bf0b8b7ddfb2826c433a8b3841361a06087770b989876595ed"
+      }
+    ],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-simd",
+        "target_id": "pillow-rs-python",
+        "revision": "f2b63f559e91022a85cb43f7264bdf8b586a448d",
+        "dirty": true,
+        "runtime": "3.12.11",
+        "backend": "simd",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "benchmark",
+      "argv": [
+        "make",
+        "migration-parity-benchmark"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 7200
+    }
+  },
+  "status": "completed",
+  "environment": {
+    "machine_id": "machine",
+    "os": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "architecture": "x86_64",
+    "cpu": "x86_64",
+    "memory_bytes": 0,
+    "power_mode": "unknown",
+    "toolchain": "3.12.11"
+  },
+  "summary": {
+    "workloads_selected": 1,
+    "workloads_measured": 1,
+    "workloads_not_run": 0,
+    "budgets_passed": 0,
+    "budgets_failed": 0,
+    "budgets_not_proven": 0
+  },
+  "workloads": [
+    {
+      "workload_id": "pil-imagefilter.gaussianblur.standard",
+      "requirements": [
+        "PIL.ImageFilter.GaussianBlur.performance.standard"
+      ],
+      "measurement_policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": {
+        "gate": "parity_pass",
+        "outcome": "pass",
+        "evidence_id": "migration-parity-benchmark-gate-45d3f314ef2740e48d3bc0c4b9625888"
+      },
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow",
+          "status": "completed",
+          "measurements": [
+            {
+              "metric": "latency",
+              "unit": "millisecond",
+              "sample_count": 100,
+              "statistics": {
+                "min": 30.220046,
+                "median": 31.29875,
+                "mean": 31.41232563,
+                "p95": 32.630264,
+                "p99": 33.325044,
+                "max": 34.589874,
+                "total": 3141.232563,
+                "weighted_mean": null,
+                "standard_deviation": 0.6884956737375719
+              },
+              "raw_samples_ref": "gaussian-rgb-simd-B2-samples.json#sha256=2b5bb4be90c07185f8431dd6364e61af32b8945f8d2af39395aa31c44399a2a2"
+            },
+            {
+              "metric": "throughput",
+              "unit": "operations_per_second",
+              "sample_count": 100,
+              "statistics": {
+                "min": 28.910194931614956,
+                "median": 31.95015862061903,
+                "mean": 31.849498180746263,
+                "p95": 32.78649073304593,
+                "p99": 33.05886103760657,
+                "max": 33.09061806193147,
+                "total": 3184.9498180746264,
+                "weighted_mean": null,
+                "standard_deviation": 0.6785748104467002
+              },
+              "raw_samples_ref": "gaussian-rgb-simd-B2-samples.json#sha256=2b5bb4be90c07185f8431dd6364e61af32b8945f8d2af39395aa31c44399a2a2"
+            }
+          ],
+          "phases": {
+            "setup": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.50641,
+                "median": 0.53963,
+                "mean": 0.5642727,
+                "p95": 0.64823,
+                "p99": 1.004,
+                "max": 1.171949,
+                "total": 56.42727,
+                "weighted_mean": null,
+                "standard_deviation": 0.0885220600252276
+              }
+            },
+            "pipeline": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 29.595786,
+                "median": 30.6620855,
+                "mean": 30.75859807,
+                "p95": 31.887324,
+                "p99": 32.721534,
+                "max": 33.928474,
+                "total": 3075.859807,
+                "weighted_mean": null,
+                "standard_deviation": 0.6757441395203403
+              }
+            },
+            "terminal": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.63522,
+                "median": 0.66037,
+                "mean": 0.67216991,
+                "p95": 0.75933,
+                "p99": 0.794499,
+                "max": 0.826729,
+                "total": 67.216991,
+                "weighted_mean": null,
+                "standard_deviation": 0.03705610418921422
+              }
+            },
+            "total": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 30.867536,
+                "median": 31.984775,
+                "mean": 32.11549464,
+                "p95": 33.591214,
+                "p99": 34.368304,
+                "max": 35.245164,
+                "total": 3211.549464,
+                "weighted_mean": null,
+                "standard_deviation": 0.723686585978551
+              }
+            }
+          },
+          "execution": {
+            "status": "not_applicable",
+            "terminal_complete": false,
+            "requested_backend": "pillow",
+            "actual_backend": "pillow",
+            "actual_backend_counts": {
+              "pillow": 1
+            },
+            "fallback_reason_counts": {},
+            "operation_count": {
+              "sample_count": 0,
+              "min": null,
+              "median": null,
+              "mean": null,
+              "max": null,
+              "total": null
+            },
+            "dispatch_count": {
+              "sample_count": 0,
+              "min": null,
+              "median": null,
+              "mean": null,
+              "max": null,
+              "total": null
+            },
+            "resize_coeff_cache_hits": {
+              "sample_count": 0,
+              "min": null,
+              "median": null,
+              "mean": null,
+              "max": null,
+              "total": null
+            },
+            "resize_coeff_cache_misses": {
+              "sample_count": 0,
+              "min": null,
+              "median": null,
+              "mean": null,
+              "max": null,
+              "total": null
+            },
+            "phase_timings_ns": {
+              "route_ns": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "validation_ns": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "backend_ns": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              }
+            },
+            "resource": {
+              "sample_count": 0,
+              "upload_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "readback_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "auxiliary_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "parameter_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "retained_cache_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "full_frame_copy_count": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "mode_conversion_count": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "host_buffer_count": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "host_buffer_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "peak_live_host_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "fused_operation_count": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "host_allocation_count": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "host_allocated_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              }
+            },
+            "sample_count": 0,
+            "cached_sample_count": 0,
+            "operation_telemetry": [],
+            "errors": []
+          }
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd",
+          "status": "completed",
+          "measurements": [
+            {
+              "metric": "latency",
+              "unit": "millisecond",
+              "sample_count": 100,
+              "statistics": {
+                "min": 12.505835,
+                "median": 12.8909495,
+                "mean": 13.04052584,
+                "p95": 13.896334,
+                "p99": 14.856954,
+                "max": 15.460383,
+                "total": 1304.052584,
+                "weighted_mean": null,
+                "standard_deviation": 0.5167031505471729
+              },
+              "raw_samples_ref": "gaussian-rgb-simd-B2-samples.json#sha256=2b5bb4be90c07185f8431dd6364e61af32b8945f8d2af39395aa31c44399a2a2"
+            },
+            {
+              "metric": "throughput",
+              "unit": "operations_per_second",
+              "sample_count": 100,
+              "statistics": {
+                "min": 64.68145064711527,
+                "median": 77.57380491342303,
+                "mean": 76.79639685833702,
+                "p95": 79.5951219015211,
+                "p99": 79.94982349077719,
+                "max": 79.96267342404566,
+                "total": 7679.639685833702,
+                "weighted_mean": null,
+                "standard_deviation": 2.8424441624120687
+              },
+              "raw_samples_ref": "gaussian-rgb-simd-B2-samples.json#sha256=2b5bb4be90c07185f8431dd6364e61af32b8945f8d2af39395aa31c44399a2a2"
+            }
+          ],
+          "phases": {
+            "setup": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.16407,
+                "median": 0.21425450000000001,
+                "mean": 0.22886193,
+                "p95": 0.33266,
+                "p99": 0.45866,
+                "max": 0.5684,
+                "total": 22.886193,
+                "weighted_mean": null,
+                "standard_deviation": 0.05665556963569513
+              }
+            },
+            "pipeline": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.06252,
+                "median": 0.06934499999999999,
+                "mean": 0.07129938,
+                "p95": 0.08267,
+                "p99": 0.09211,
+                "max": 0.110509,
+                "total": 7.129938,
+                "weighted_mean": null,
+                "standard_deviation": 0.0071454579024440405
+              }
+            },
+            "terminal": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 12.458965,
+                "median": 12.8447245,
+                "mean": 12.99005205,
+                "p95": 13.847404,
+                "p99": 14.806624,
+                "max": 15.409603,
+                "total": 1299.005205,
+                "weighted_mean": null,
+                "standard_deviation": 0.5149160967955532
+              }
+            },
+            "total": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 12.853635,
+                "median": 13.2440895,
+                "mean": 13.41981983,
+                "p95": 14.305004,
+                "p99": 15.278824,
+                "max": 15.773713,
+                "total": 1341.981983,
+                "weighted_mean": null,
+                "standard_deviation": 0.5250858672379796
+              }
+            }
+          },
+          "execution": {
+            "status": "completed",
+            "terminal_complete": true,
+            "requested_backend": "simd",
+            "actual_backend": "simd",
+            "actual_backend_counts": {
+              "simd": 1
+            },
+            "fallback_reason_counts": {},
+            "operation_count": {
+              "sample_count": 1,
+              "min": 1,
+              "median": 1,
+              "mean": 1,
+              "max": 1,
+              "total": 1
+            },
+            "dispatch_count": {
+              "sample_count": 0,
+              "min": null,
+              "median": null,
+              "mean": null,
+              "max": null,
+              "total": null
+            },
+            "resize_coeff_cache_hits": {
+              "sample_count": 1,
+              "min": 0,
+              "median": 0,
+              "mean": 0,
+              "max": 0,
+              "total": 0
+            },
+            "resize_coeff_cache_misses": {
+              "sample_count": 1,
+              "min": 0,
+              "median": 0,
+              "mean": 0,
+              "max": 0,
+              "total": 0
+            },
+            "phase_timings_ns": {
+              "route_ns": {
+                "sample_count": 1,
+                "min": 43830,
+                "median": 43830,
+                "mean": 43830,
+                "max": 43830,
+                "total": 43830
+              },
+              "validation_ns": {
+                "sample_count": 1,
+                "min": 30,
+                "median": 30,
+                "mean": 30,
+                "max": 30,
+                "total": 30
+              },
+              "backend_ns": {
+                "sample_count": 1,
+                "min": 12354006,
+                "median": 12354006,
+                "mean": 12354006,
+                "max": 12354006,
+                "total": 12354006
+              }
+            },
+            "resource": {
+              "sample_count": 1,
+              "upload_bytes": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "readback_bytes": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "auxiliary_bytes": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "parameter_bytes": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "retained_cache_bytes": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "full_frame_copy_count": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "mode_conversion_count": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "host_buffer_count": {
+                "sample_count": 1,
+                "min": 2,
+                "median": 2,
+                "mean": 2,
+                "max": 2,
+                "total": 2
+              },
+              "host_buffer_bytes": {
+                "sample_count": 1,
+                "min": 4718592,
+                "median": 4718592,
+                "mean": 4718592,
+                "max": 4718592,
+                "total": 4718592
+              },
+              "peak_live_host_bytes": {
+                "sample_count": 1,
+                "min": 4718592,
+                "median": 4718592,
+                "mean": 4718592,
+                "max": 4718592,
+                "total": 4718592
+              },
+              "fused_operation_count": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "host_allocation_count": {
+                "sample_count": 1,
+                "min": 1,
+                "median": 1,
+                "mean": 1,
+                "max": 1,
+                "total": 1
+              },
+              "host_allocated_bytes": {
+                "sample_count": 1,
+                "min": 2359296,
+                "median": 2359296,
+                "mean": 2359296,
+                "max": 2359296,
+                "total": 2359296
+              }
+            },
+            "sample_count": 1,
+            "cached_sample_count": 0,
+            "operation_telemetry": [
+              {
+                "operation": "GaussianBlur",
+                "path": "vector",
+                "vector_block_count": 882432,
+                "scalar_tail_count": 36864,
+                "mode_conversion_count": 0,
+                "handoff_count": 0
+              }
+            ],
+            "errors": []
+          }
+        }
+      ],
+      "budgets": []
+    }
+  ],
+  "suites": [],
+  "infrastructure_errors": []
+}

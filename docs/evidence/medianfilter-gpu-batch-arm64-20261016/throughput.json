@@ -1,0 +1,168 @@
+{
+  "comparison": {
+    "comparison_scope": "same 32 generated inputs, graph creation, execution, full CPU materialization, output export, and 20 measured 32-image windows",
+    "gpu_over_simd_completed_images_per_second": 10.278087924211583,
+    "same_native_extension_sha256": true
+  },
+  "context": {
+    "images_per_window": 32,
+    "jobs_per_backend": 704,
+    "max_in_flight": 4,
+    "max_jobs": 16,
+    "measured_windows": 20,
+    "measurement_boundary": "fresh Image.frombytes and filter graph; execution; CPU output image; tobytes; input byte generation and exact byte comparison outside timing",
+    "mode": "L",
+    "size": [
+      1024,
+      768
+    ],
+    "warmup_windows": 2,
+    "windows_per_backend": 22
+  },
+  "experiment_id": "medianfilter-batch-arm64-20261016",
+  "identity": {
+    "architecture": "arm64",
+    "host": "Lazys-MacBook-Pro.local",
+    "os": "macOS 15.7.7",
+    "python": "CPython 3.12.13",
+    "source_dirty": true,
+    "source_revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+    "target_extension": "pillow-rs-py/python/pillow_rs/_core.abi3.so",
+    "target_extension_sha256": "315a2f3278395a2a2f9ae65221ad2fcbdb2cc463558931c0acd3ca35334ce198",
+    "target_pillow_namespace_version": "12.2.1"
+  },
+  "inputs": {
+    "bytes_per_image": 786432,
+    "generation": "random.Random(i + width*31 + height*17 + 1).randbytes(width*height), i=0..31",
+    "ordered_oracle_sha256": "4383b55781800a9ed4359cbdc9e7870e1a2247401c69266e4c607de40897a67e",
+    "ordered_source_sha256": "15974eae666aebf0daa4899587663d9c2d777204700dfbdd06b29578df796e2a",
+    "per_output_exact_comparisons": {
+      "all_passed": true,
+      "gpu": 704,
+      "simd": 704
+    },
+    "pillow_oracle": "Pillow 12.2.0"
+  },
+  "limits": [
+    "Dirty-tree ARM64 diagnostic only; not clean published matrix credit.",
+    "Covers one mode, size, and kernel size.",
+    "Completed-window throughput does not prove long-duration throughput or overlapping GPU kernels.",
+    "GPU batch stats report shader dispatches and transfer bytes; no device-side profiler/timestamps were collected.",
+    "SIMD vector receipt is one representative operation; the SIMD backend was locked for all measured calls.",
+    "No host allocation counter was available for this custom batch runner."
+  ],
+  "operation": "PIL.Image.Image.filter(ImageFilter.MedianFilter(3))",
+  "paired_single_call_latency": {
+    "benchmark_run_id": "migration-benchmark-c0a7eb2c90f64c3a85720e0d5e5db701",
+    "evidence": "../medianfilter-current-gpu-simd-arm64-20261016/",
+    "gpu_latency_speedup_vs_simd": 4.254825494,
+    "gpu_median_ms": 1.4131455,
+    "note": "Separate matched direct-call cohort; its latency is not mixed into batch-window timing.",
+    "pillow_median_ms": 42.7965625,
+    "same_extension_sha256": "315a2f3278395a2a2f9ae65221ad2fcbdb2cc463558931c0acd3ca35334ce198",
+    "simd_median_ms": 6.0126875,
+    "simd_speedup_vs_pillow": 7.117709427
+  },
+  "results": {
+    "gpu": {
+      "execution": {
+        "actual_backend": "gpu",
+        "fallback": "unavailable by strict explicit-GPU executor contract; unsupported admission fails",
+        "gpu_bytes_at_end": 0,
+        "host_bytes_at_end": 0,
+        "in_flight_at_end": 0,
+        "largest_submission": 4,
+        "live_jobs_at_end": 0,
+        "readback_bytes": 553648128,
+        "real_shader_dispatches": 704,
+        "requested_backend": "GpuBatchExecutor(queue=True, output='cpu')",
+        "submission_count": 176,
+        "submitted_jobs": 704,
+        "upload_bytes": 553648128
+      },
+      "median_completed_images_per_second": 1700.3271780362493,
+      "median_window_seconds": 0.018819917,
+      "p05_window_images_per_second": 1564.2949673697847,
+      "p95_window_seconds": 0.019735375,
+      "parity": {
+        "exact_bytes_pass": true,
+        "outputs_checked": 704
+      },
+      "subject": "python-gpu-queued-batch",
+      "window_seconds": [
+        0.019369208,
+        0.0204565,
+        0.019332542,
+        0.018806459,
+        0.018690583,
+        0.019735375,
+        0.017861292,
+        0.018875667,
+        0.018183541,
+        0.018833375,
+        0.017829708,
+        0.018682375,
+        0.018549792,
+        0.018531959,
+        0.019547625,
+        0.018004167,
+        0.019586166,
+        0.019234625,
+        0.019114125,
+        0.017568917
+      ]
+    },
+    "simd": {
+      "execution": {
+        "actual_backend": "simd",
+        "backend_lock": "active SIMD backend locked for all calls",
+        "representative_receipt": {
+          "actual_backend": "simd",
+          "fallback_reason": null,
+          "host_buffer_bytes": 1572864,
+          "host_buffer_count": 2,
+          "operation": "MedianFilter",
+          "operation_count": 1,
+          "path": "vector",
+          "requested_backend": "simd",
+          "scalar_tail_count": 0,
+          "vector_block_count": 49152
+        },
+        "requested_backend": "simd"
+      },
+      "median_completed_images_per_second": 165.43224679279817,
+      "median_window_seconds": 0.1934327085,
+      "p05_window_images_per_second": 161.20477029902054,
+      "p95_window_seconds": 0.196980625,
+      "parity": {
+        "exact_bytes_pass": true,
+        "outputs_checked": 704
+      },
+      "subject": "python-simd-batch",
+      "window_seconds": [
+        0.194483167,
+        0.195601917,
+        0.193338625,
+        0.198505292,
+        0.193526792,
+        0.193076167,
+        0.192576583,
+        0.19303125,
+        0.196980625,
+        0.194230584,
+        0.193657208,
+        0.192514708,
+        0.191557667,
+        0.192232916,
+        0.191340917,
+        0.191634458,
+        0.19322825,
+        0.193864083,
+        0.194634459,
+        0.195370375
+      ]
+    }
+  },
+  "schema": "pillow-rs/local-batch-benchmark@1",
+  "workload_id": "pipeline-batch.medianfilter.material-l-noise-1024x768.images32.windows20.inflight4"
+}

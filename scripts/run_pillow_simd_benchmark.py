@@ -79,9 +79,12 @@ WORKLOAD_IDS = (
     "pipeline-op.filter.material-l-noise-5x5-1024x768",
     "pipeline-op.filter.material-l-noise-flat-5x5-1024x768",
     "pipeline-op.filter.material-la-noise-5x5-1024x768",
+    "pipeline-op.filter.material-la-nonmatching-5x5-1024x768",
     "pipeline-op.filter.material-la-noise-3x3-1024x768",
     "pipeline-op.filter.material-i-noise-5x5-1024x768",
     "pipeline-op.filter.material-i-bounded-noise-5x5-1024x768",
+    "pipeline-op.rotate.material-rgb-nearest-noise-recovered-20261016-1024x768",
+    "pipeline-op.rotate.material-rgba-nearest-37deg-noise-fill-1024x768",
     "pil-imagefilter.gaussianblur.standard",
     "pil-image-image.getchannel.materialized.l-1024x768",
     "pil-image-image.getchannel.materialized.rgb-1024x768",
@@ -125,6 +128,9 @@ def run_source_cohort(
     parity_output: Path,
     workload_ids: list[str],
     reuse_parity: Path | None = None,
+    reuse_parity_attestation: Path | None = None,
+    parity_attestation_output: Path | None = None,
+    attestation_output: Path | None = None,
 ) -> tuple[dict[str, Any], str]:
     env = os.environ.copy()
     env.update(
@@ -151,8 +157,18 @@ def run_source_cohort(
     ]
     for workload_id in workload_ids:
         command.extend(("--workload-id", workload_id))
+    if attestation_output is not None:
+        command.extend(("--attestation-output", str(attestation_output)))
     if reuse_parity is not None:
         command.extend(("--reuse-parity", str(reuse_parity)))
+        if reuse_parity_attestation is not None:
+            command.extend(
+                ("--reuse-parity-attestation", str(reuse_parity_attestation))
+            )
+    if parity_attestation_output is not None:
+        command.extend(
+            ("--parity-attestation-output", str(parity_attestation_output))
+        )
     completed = subprocess.run(
         command,
         cwd=ROOT,
@@ -779,6 +795,7 @@ def main() -> int:
     results = []
     parity_run_ids = []
     pillow_parity_path = root / "benchmark-parity-result-pillow.json"
+    pillow_parity_attestation_path = root / "benchmark-parity-attestation-pillow.json"
     for name, version, python_path, suffix in (
         ("Pillow", PILLOW_VERSION, args.pillow_python, "pillow"),
         ("Pillow-SIMD", PILLOW_SIMD_VERSION, args.pillow_simd_python, "pillow-simd"),
@@ -795,6 +812,13 @@ def main() -> int:
                 parity_output=parity_path,
                 workload_ids=ids,
                 reuse_parity=(pillow_parity_path if suffix == "pillow-simd" else None),
+                reuse_parity_attestation=(
+                    pillow_parity_attestation_path if suffix == "pillow-simd" else None
+                ),
+                parity_attestation_output=(
+                    pillow_parity_attestation_path if suffix == "pillow" else None
+                ),
+                attestation_output=root / f"benchmark-attestation-{suffix}.json",
             )
         except Exception as error:
             append_github_failure_summary(name, error)

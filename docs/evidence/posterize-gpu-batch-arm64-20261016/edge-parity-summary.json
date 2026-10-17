@@ -1,0 +1,63 @@
+{
+  "case_id": "PIL.ImageOps.posterize.nuanced.gpu-native-byte-tail-l-3x1-bits-4",
+  "input_sha256": "40c04261688a448c7e16c5239211c5daf47daa789407a94526dae676ec5ed229",
+  "profiles": {
+    "cpu": {
+      "run_id": "migration-parity-75f7cb28033e462f80f6f6972aacc8e7",
+      "status": "completed",
+      "summary": {
+        "selected": 1,
+        "executed": 1,
+        "passed": 1,
+        "failed": 0,
+        "not_run": 0,
+        "infrastructure_errors": 0
+      },
+      "comparisons": [
+        {
+          "case_id": "PIL.ImageOps.posterize.nuanced.gpu-native-byte-tail-l-3x1-bits-4",
+          "target_profile": "python-cpu",
+          "outcome": "pass"
+        }
+      ]
+    },
+    "simd": {
+      "run_id": "migration-parity-b688650a80eb4b65b4761338e7f2fef7",
+      "status": "completed",
+      "summary": {
+        "selected": 1,
+        "executed": 1,
+        "passed": 1,
+        "failed": 0,
+        "not_run": 0,
+        "infrastructure_errors": 0
+      },
+      "comparisons": [
+        {
+          "case_id": "PIL.ImageOps.posterize.nuanced.gpu-native-byte-tail-l-3x1-bits-4",
+          "target_profile": "python-simd",
+          "outcome": "pass"
+        }
+      ]
+    },
+    "gpu": {
+      "run_id": "migration-parity-5a35f30489dd4e0ea04cc895cd78f3b1",
+      "status": "completed",
+      "summary": {
+        "selected": 1,
+        "executed": 1,
+        "passed": 1,
+        "failed": 0,
+        "not_run": 0,
+        "infrastructure_errors": 0
+      },
+      "comparisons": [
+        {
+          "case_id": "PIL.ImageOps.posterize.nuanced.gpu-native-byte-tail-l-3x1-bits-4",
+          "target_profile": "python-gpu",
+          "outcome": "pass"
+        }
+      ]
+    }
+  }
+}

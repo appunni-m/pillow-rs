@@ -1,0 +1,762 @@
+{
+  "schema": "migration-parity/benchmark-result@1",
+  "identity": {
+    "run_id": "migration-benchmark-18b3ef3a87904e80b1fa7fc0cb1ef76b",
+    "started_at": "2026-10-15T22:17:01.125889Z",
+    "finished_at": "2026-10-15T22:17:28.061161Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest-getchannel-x86-baseline-20261015.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "63270b3ab5595564616e4a84351825a56fb67f87b73157e6227cade65b5b29bb"
+    },
+    "inputs": [
+      {
+        "path": "inputs/benchmark/getchannel-x86-baseline-20261015.json",
+        "schema": "migration-parity/benchmark-input@1",
+        "sha256": "8f735532c7f041ec9a5c79b5c334e7c20aeaa91252362419408fae48eabd7f63"
+      },
+      {
+        "path": "inputs/parity/getchannel-x86-baseline-20261015.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "7676c7d62ccdd4a4756b1b1f6f668cf0329721a9ae03e7b2fd6557536470b49a"
+      }
+    ],
+    "assets": [],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-cpu",
+        "target_id": "pillow-rs-python",
+        "revision": "f2b63f559e91022a85cb43f7264bdf8b586a448d",
+        "dirty": true,
+        "runtime": "3.12.11",
+        "backend": "cpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "benchmark",
+      "argv": [
+        "make",
+        "migration-parity-benchmark"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 7200
+    }
+  },
+  "status": "completed",
+  "environment": {
+    "machine_id": "machine",
+    "os": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "architecture": "x86_64",
+    "cpu": "x86_64",
+    "memory_bytes": 0,
+    "power_mode": "unknown",
+    "toolchain": "3.12.11"
+  },
+  "summary": {
+    "workloads_selected": 1,
+    "workloads_measured": 1,
+    "workloads_not_run": 0,
+    "budgets_passed": 0,
+    "budgets_failed": 0,
+    "budgets_not_proven": 0
+  },
+  "workloads": [
+    {
+      "workload_id": "pil-image-image.getchannel.materialized.rgb-1024x768",
+      "requirements": [
+        "PIL.Image.Image.getchannel.performance.standard"
+      ],
+      "measurement_policy": {
+        "boundary": "observed_steps",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "parity_pass",
+        "measurement_iterations": 20,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 5,
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "warmup_iterations": 5
+      },
+      "context": {
+        "build_profile": "release",
+        "cache_state": "warm",
+        "chain_length": 1,
+        "mode": "RGB",
+        "operation_class": "point",
+        "size": [
+          1024,
+          768
+        ]
+      },
+      "correctness": {
+        "gate": "parity_pass",
+        "outcome": "pass",
+        "evidence_id": "migration-parity-benchmark-gate-81cd6415a1ee408fb053cbe50a08c0fd"
+      },
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow",
+          "status": "completed",
+          "measurements": [
+            {
+              "metric": "latency",
+              "unit": "millisecond",
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.302081,
+                "median": 0.34575599999999995,
+                "mean": 0.34710262000000003,
+                "p95": 0.406491,
+                "p99": 0.444761,
+                "max": 0.475551,
+                "total": 34.710262,
+                "weighted_mean": null,
+                "standard_deviation": 0.034058690753985245
+              },
+              "raw_samples_ref": "raw-samples.json#sha256=6048cba381951e78edc29b6f1b73b635dcc7f53d06ad66b1c958051efa16f0b5"
+            },
+            {
+              "metric": "throughput",
+              "unit": "operations_per_second",
+              "sample_count": 100,
+              "statistics": {
+                "min": 2102.8238821913947,
+                "median": 2892.2141240281308,
+                "mean": 2906.9161105127423,
+                "p95": 3263.803440701587,
+                "p99": 3299.012605527166,
+                "max": 3310.370397343759,
+                "total": 290691.61105127423,
+                "weighted_mean": null,
+                "standard_deviation": 266.3648950766765
+              },
+              "raw_samples_ref": "raw-samples.json#sha256=6048cba381951e78edc29b6f1b73b635dcc7f53d06ad66b1c958051efa16f0b5"
+            }
+          ],
+          "phases": {
+            "setup": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.326541,
+                "median": 0.354061,
+                "mean": 0.35673869,
+                "p95": 0.396181,
+                "p99": 0.430231,
+                "max": 0.438301,
+                "total": 35.673869,
+                "weighted_mean": null,
+                "standard_deviation": 0.02213093250845748
+              }
+            },
+            "pipeline": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.20702,
+                "median": 0.2238755,
+                "mean": 0.22321782,
+                "p95": 0.241621,
+                "p99": 0.249251,
+                "max": 0.264901,
+                "total": 22.321782,
+                "weighted_mean": null,
+                "standard_deviation": 0.011931009406902669
+              }
+            },
+            "terminal": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.08841,
+                "median": 0.1152005,
+                "mean": 0.11940959,
+                "p95": 0.1665,
+                "p99": 0.19725,
+                "max": 0.20185,
+                "total": 11.940959,
+                "weighted_mean": null,
+                "standard_deviation": 0.02403025474525603
+              }
+            },
+            "total": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.690522,
+                "median": 0.767287,
+                "mean": 0.76595513,
+                "p95": 0.849432,
+                "p99": 0.941462,
+                "max": 0.981863,
+                "total": 76.595513,
+                "weighted_mean": null,
+                "standard_deviation": 0.055500554931758116
+              }
+            }
+          },
+          "execution": {
+            "status": "not_applicable",
+            "terminal_complete": false,
+            "requested_backend": "pillow",
+            "actual_backend": "pillow",
+            "actual_backend_counts": {
+              "pillow": 1
+            },
+            "fallback_reason_counts": {},
+            "operation_count": {
+              "sample_count": 0,
+              "min": null,
+              "median": null,
+              "mean": null,
+              "max": null,
+              "total": null
+            },
+            "dispatch_count": {
+              "sample_count": 0,
+              "min": null,
+              "median": null,
+              "mean": null,
+              "max": null,
+              "total": null
+            },
+            "resize_coeff_cache_hits": {
+              "sample_count": 0,
+              "min": null,
+              "median": null,
+              "mean": null,
+              "max": null,
+              "total": null
+            },
+            "resize_coeff_cache_misses": {
+              "sample_count": 0,
+              "min": null,
+              "median": null,
+              "mean": null,
+              "max": null,
+              "total": null
+            },
+            "phase_timings_ns": {
+              "route_ns": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "validation_ns": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "backend_ns": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              }
+            },
+            "resource": {
+              "sample_count": 0,
+              "upload_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "readback_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "auxiliary_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "parameter_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "retained_cache_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "full_frame_copy_count": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "mode_conversion_count": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "host_buffer_count": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "host_buffer_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "peak_live_host_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "fused_operation_count": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "host_allocation_count": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              },
+              "host_allocated_bytes": {
+                "sample_count": 0,
+                "min": null,
+                "median": null,
+                "mean": null,
+                "max": null,
+                "total": null
+              }
+            },
+            "sample_count": 0,
+            "cached_sample_count": 0,
+            "operation_telemetry": [],
+            "errors": []
+          }
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu",
+          "status": "completed",
+          "measurements": [
+            {
+              "metric": "latency",
+              "unit": "millisecond",
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.309381,
+                "median": 0.318676,
+                "mean": 0.32024271,
+                "p95": 0.340831,
+                "p99": 0.365581,
+                "max": 0.374171,
+                "total": 32.024271,
+                "weighted_mean": null,
+                "standard_deviation": 0.011121958054492922
+              },
+              "raw_samples_ref": "raw-samples.json#sha256=6048cba381951e78edc29b6f1b73b635dcc7f53d06ad66b1c958051efa16f0b5"
+            },
+            {
+              "metric": "throughput",
+              "unit": "operations_per_second",
+              "sample_count": 100,
+              "statistics": {
+                "min": 2672.574838776923,
+                "median": 3137.9834132961423,
+                "mean": 3126.099583126147,
+                "p95": 3218.2176866807627,
+                "p99": 3225.1718210287654,
+                "max": 3232.2605460580967,
+                "total": 312609.9583126147,
+                "weighted_mean": null,
+                "standard_deviation": 100.03466411322235
+              },
+              "raw_samples_ref": "raw-samples.json#sha256=6048cba381951e78edc29b6f1b73b635dcc7f53d06ad66b1c958051efa16f0b5"
+            }
+          ],
+          "phases": {
+            "setup": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.07311,
+                "median": 0.07599,
+                "mean": 0.07889586,
+                "p95": 0.092501,
+                "p99": 0.102,
+                "max": 0.10497,
+                "total": 7.8895859999999995,
+                "weighted_mean": null,
+                "standard_deviation": 0.006571899704073397
+              }
+            },
+            "pipeline": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.00983,
+                "median": 0.0101,
+                "mean": 0.010445920000000001,
+                "p95": 0.01184,
+                "p99": 0.01618,
+                "max": 0.01931,
+                "total": 1.044592,
+                "weighted_mean": null,
+                "standard_deviation": 0.0012766473176253495
+              }
+            },
+            "terminal": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.296811,
+                "median": 0.305211,
+                "mean": 0.30693377,
+                "p95": 0.327241,
+                "p99": 0.349481,
+                "max": 0.358671,
+                "total": 30.693377,
+                "weighted_mean": null,
+                "standard_deviation": 0.010528673461414785
+              }
+            },
+            "total": {
+              "sample_count": 100,
+              "statistics": {
+                "min": 0.432351,
+                "median": 0.44725099999999995,
+                "mean": 0.45304537,
+                "p95": 0.485282,
+                "p99": 0.548082,
+                "max": 0.548091,
+                "total": 45.304536999999996,
+                "weighted_mean": null,
+                "standard_deviation": 0.020984389449614678
+              }
+            }
+          },
+          "execution": {
+            "status": "completed",
+            "terminal_complete": true,
+            "requested_backend": "cpu",
+            "actual_backend": "cpu",
+            "actual_backend_counts": {
+              "cpu": 1
+            },
+            "fallback_reason_counts": {},
+            "operation_count": {
+              "sample_count": 1,
+              "min": 1,
+              "median": 1,
+              "mean": 1,
+              "max": 1,
+              "total": 1
+            },
+            "dispatch_count": {
+              "sample_count": 0,
+              "min": null,
+              "median": null,
+              "mean": null,
+              "max": null,
+              "total": null
+            },
+            "resize_coeff_cache_hits": {
+              "sample_count": 1,
+              "min": 0,
+              "median": 0,
+              "mean": 0,
+              "max": 0,
+              "total": 0
+            },
+            "resize_coeff_cache_misses": {
+              "sample_count": 1,
+              "min": 0,
+              "median": 0,
+              "mean": 0,
+              "max": 0,
+              "total": 0
+            },
+            "phase_timings_ns": {
+              "route_ns": {
+                "sample_count": 1,
+                "min": 55810,
+                "median": 55810,
+                "mean": 55810,
+                "max": 55810,
+                "total": 55810
+              },
+              "validation_ns": {
+                "sample_count": 1,
+                "min": 40,
+                "median": 40,
+                "mean": 40,
+                "max": 40,
+                "total": 40
+              },
+              "backend_ns": {
+                "sample_count": 1,
+                "min": 689762,
+                "median": 689762,
+                "mean": 689762,
+                "max": 689762,
+                "total": 689762
+              }
+            },
+            "resource": {
+              "sample_count": 1,
+              "upload_bytes": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "readback_bytes": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "auxiliary_bytes": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "parameter_bytes": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "retained_cache_bytes": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "full_frame_copy_count": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "mode_conversion_count": {
+                "sample_count": 1,
+                "min": 1,
+                "median": 1,
+                "mean": 1,
+                "max": 1,
+                "total": 1
+              },
+              "host_buffer_count": {
+                "sample_count": 1,
+                "min": 2,
+                "median": 2,
+                "mean": 2,
+                "max": 2,
+                "total": 2
+              },
+              "host_buffer_bytes": {
+                "sample_count": 1,
+                "min": 3145728,
+                "median": 3145728,
+                "mean": 3145728,
+                "max": 3145728,
+                "total": 3145728
+              },
+              "peak_live_host_bytes": {
+                "sample_count": 1,
+                "min": 3145728,
+                "median": 3145728,
+                "mean": 3145728,
+                "max": 3145728,
+                "total": 3145728
+              },
+              "fused_operation_count": {
+                "sample_count": 1,
+                "min": 0,
+                "median": 0,
+                "mean": 0,
+                "max": 0,
+                "total": 0
+              },
+              "host_allocation_count": {
+                "sample_count": 1,
+                "min": 1,
+                "median": 1,
+                "mean": 1,
+                "max": 1,
+                "total": 1
+              },
+              "host_allocated_bytes": {
+                "sample_count": 1,
+                "min": 786432,
+                "median": 786432,
+                "mean": 786432,
+                "max": 786432,
+                "total": 786432
+              }
+            },
+            "sample_count": 1,
+            "cached_sample_count": 0,
+            "operation_telemetry": [
+              {
+                "operation": "ExtractBand",
+                "path": "cpu",
+                "vector_block_count": 0,
+                "scalar_tail_count": 0,
+                "mode_conversion_count": 1,
+                "handoff_count": 0
+              }
+            ],
+            "errors": []
+          }
+        }
+      ],
+      "budgets": []
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "pil-image-image.benchmark-suite",
+      "members": [
+        {
+          "weight": 1,
+          "workload_id": "pil-image-image.getchannel.materialized.rgb-1024x768"
+        }
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow",
+          "status": "completed",
+          "measurements": [
+            {
+              "metric": "latency",
+              "unit": "millisecond",
+              "weighted_mean": 0.34710262000000003
+            },
+            {
+              "metric": "throughput",
+              "unit": "operations_per_second",
+              "weighted_mean": 2906.9161105127423
+            }
+          ]
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu",
+          "status": "completed",
+          "measurements": [
+            {
+              "metric": "latency",
+              "unit": "millisecond",
+              "weighted_mean": 0.32024271
+            },
+            {
+              "metric": "throughput",
+              "unit": "operations_per_second",
+              "weighted_mean": 3126.099583126147
+            }
+          ]
+        }
+      ],
+      "comparisons": [
+        {
+          "baseline_subject": "pillow",
+          "subject_id": "python-cpu",
+          "metric": "latency",
+          "baseline_value": 0.34710262000000003,
+          "subject_value": 0.32024271,
+          "unit": "millisecond",
+          "ratio": 0.9226168042177266,
+          "declared_member_count": 1,
+          "common_member_count": 1,
+          "common_member_ids_sha256": "d7019b696b0bb4b1919124e8c23a60454e030a68ecddd951193e845eea42dbaf",
+          "excluded_members": [],
+          "status": "not_comparable"
+        },
+        {
+          "baseline_subject": "pillow",
+          "subject_id": "python-cpu",
+          "metric": "throughput",
+          "baseline_value": 2906.9161105127423,
+          "subject_value": 3126.099583126147,
+          "unit": "operations_per_second",
+          "ratio": 1.0754006872853112,
+          "declared_member_count": 1,
+          "common_member_count": 1,
+          "common_member_ids_sha256": "d7019b696b0bb4b1919124e8c23a60454e030a68ecddd951193e845eea42dbaf",
+          "excluded_members": [],
+          "status": "not_comparable"
+        }
+      ]
+    }
+  ],
+  "infrastructure_errors": []
+}

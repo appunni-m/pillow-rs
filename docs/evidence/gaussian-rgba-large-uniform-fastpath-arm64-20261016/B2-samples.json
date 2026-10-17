@@ -1,0 +1,295 @@
+{
+  "records": [
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-gaussian-1024x768-radius-7-5",
+      "child_invocation_id": "2ded082d4cb841d8ae0771fb2b8c1f33",
+      "child_repeat": 7,
+      "child_sequence": 0,
+      "group_id": "24228d21316b4e1da3511068723f8460",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 5633250,
+          "setup_ns": 6318833,
+          "terminal_ns": 837500,
+          "total_ns": 12834875
+        },
+        {
+          "pipeline_ns": 5569209,
+          "setup_ns": 356375,
+          "terminal_ns": 463000,
+          "total_ns": 6416958
+        },
+        {
+          "pipeline_ns": 5473042,
+          "setup_ns": 359792,
+          "terminal_ns": 354833,
+          "total_ns": 6210625
+        },
+        {
+          "pipeline_ns": 5631208,
+          "setup_ns": 355625,
+          "terminal_ns": 386625,
+          "total_ns": 6398417
+        },
+        {
+          "pipeline_ns": 5433666,
+          "setup_ns": 353500,
+          "terminal_ns": 377167,
+          "total_ns": 6185583
+        },
+        {
+          "pipeline_ns": 5525959,
+          "setup_ns": 381500,
+          "terminal_ns": 400334,
+          "total_ns": 6328834
+        },
+        {
+          "pipeline_ns": 5481333,
+          "setup_ns": 357583,
+          "terminal_ns": 355625,
+          "total_ns": 6213083
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "pillow",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "source",
+      "step_ids": [],
+      "subject_kind": "oracle",
+      "throughput_operations_per_second": [
+        77.95852201244624,
+        155.94036092084656,
+        161.10842597067827,
+        156.3629966968317,
+        161.738128502237,
+        158.07777426493834,
+        161.01439066116535
+      ],
+      "timings_ns": [
+        12827334,
+        6412708,
+        6207000,
+        6395375,
+        6182834,
+        6326000,
+        6210625
+      ],
+      "workload_ids": [
+        "pipeline-chain.blur-material.gaussian-rgba-1024x768"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-gaussian-1024x768-radius-7-5",
+      "child_invocation_id": "292c5c4921ad4c499a62e29d9bd8b485",
+      "child_repeat": 7,
+      "child_sequence": 1,
+      "group_id": "f68ad5842d8940ac9c6915fe7b94717f",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 27042,
+          "setup_ns": 300834,
+          "terminal_ns": 915625,
+          "total_ns": 1297333
+        },
+        {
+          "pipeline_ns": 11542,
+          "setup_ns": 199667,
+          "terminal_ns": 681667,
+          "total_ns": 923709
+        },
+        {
+          "pipeline_ns": 8084,
+          "setup_ns": 184749,
+          "terminal_ns": 646125,
+          "total_ns": 865125
+        },
+        {
+          "pipeline_ns": 7083,
+          "setup_ns": 177584,
+          "terminal_ns": 711750,
+          "total_ns": 922583
+        },
+        {
+          "pipeline_ns": 22500,
+          "setup_ns": 358291,
+          "terminal_ns": 778375,
+          "total_ns": 1211833
+        },
+        {
+          "pipeline_ns": 11500,
+          "setup_ns": 212876,
+          "terminal_ns": 737209,
+          "total_ns": 1002917
+        },
+        {
+          "pipeline_ns": 8875,
+          "setup_ns": 199584,
+          "terminal_ns": 749166,
+          "total_ns": 985458
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "python-cpu",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "target",
+      "step_ids": [],
+      "subject_kind": "target_profile",
+      "throughput_operations_per_second": [
+        776.3474869243674,
+        1088.8798148904314,
+        1160.3176021340562,
+        1087.8433505575197,
+        830.3923603902845,
+        1002.1295252411375,
+        1018.5021093178684
+      ],
+      "timings_ns": [
+        1288083,
+        918375,
+        861833,
+        919250,
+        1204250,
+        997875,
+        981834
+      ],
+      "workload_ids": [
+        "pipeline-chain.blur-material.gaussian-rgba-1024x768"
+      ]
+    }
+  ],
+  "report": {
+    "inputs": [
+      {
+        "path": "inputs/benchmark/pipeline-operations.json",
+        "schema": "migration-parity/benchmark-input@1",
+        "sha256": "abfb9fe15ce284f84cf775a62358906810ee50fd4fc6f57fc300d291f99ef18c"
+      },
+      {
+        "path": "inputs/parity/pil-image-image.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "bf0fc142ef5ebe4c6da85a6b549316a4ee6ac9d365c5eadb486121010702d9f0"
+      }
+    ],
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+    },
+    "path": "/Users/lazytrot/work/pillow-rs/build/migration-parity/gaussian-rgba-uniform-fastpath-arm64-20261016/B2-benchmark.json",
+    "run_id": "migration-benchmark-efb8fc9bc55541a68a9cf5448a6c2a72",
+    "schema": "migration-parity/benchmark-result@1"
+  },
+  "schema": "migration-parity/benchmark-raw-samples@1",
+  "workloads": [
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-gaussian-1024x768-radius-7-5",
+      "measurement_policy": {
+        "boundary": "whole_workflow",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "parity_pass",
+        "measurement_iterations": 3,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 2,
+        "step_ids": [],
+        "warmup_iterations": 1
+      },
+      "workload_id": "pipeline-chain.blur-material.gaussian-rgba-1024x768"
+    }
+  ]
+}

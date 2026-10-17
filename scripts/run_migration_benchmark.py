@@ -29,6 +29,14 @@ import uuid
 from typing import Any
 
 try:
+    from migration_execution_attestation import (
+        AttestationCollector,
+        merge_parity_attestations,
+        report_fingerprint as execution_report_fingerprint,
+        validate_attestation,
+    )
+    from migration_benchmark_samples import RawSampleCollector
+    from simd_evidence import simd_vector_evidence
     from migration_benchmark_adapter import (
         benchmark_adapter_environment,
         benchmark_adapter_python,
@@ -47,6 +55,14 @@ try:
         receipt_terminal_complete,
     )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` in tests
+    from scripts.migration_execution_attestation import (
+        AttestationCollector,
+        merge_parity_attestations,
+        report_fingerprint as execution_report_fingerprint,
+        validate_attestation,
+    )
+    from scripts.migration_benchmark_samples import RawSampleCollector
+    from scripts.simd_evidence import simd_vector_evidence
     from scripts.migration_benchmark_adapter import (
         benchmark_adapter_environment,
         benchmark_adapter_python,
@@ -118,6 +134,7 @@ def target_profile_for_backend(backend: str) -> str:
 
 
 TARGET_PROFILES = tuple(target_profile_for_backend(backend) for backend in TARGET_BACKENDS)
+FROZEN_TARGET_PROFILES = ("python-cpu", "python-simd", "python-gpu")
 
 
 def runtime_backend_for_profile(profile: str) -> str:
@@ -154,6 +171,12 @@ def benchmark_subjects() -> list[tuple[str, str]]:
             for backend in TARGET_BACKENDS
         ),
     ]
+
+
+def active_target_profiles() -> tuple[str, ...]:
+    """Resolve requested profiles from the currently selected backends."""
+
+    return tuple(target_profile_for_backend(backend) for backend in TARGET_BACKENDS)
 
 
 def suite_subject_is_comparable(
@@ -218,6 +241,13 @@ def suite_subject_is_comparable(
     execution_samples = execution.get("sample_count")
     if not isinstance(execution_samples, int) or execution_samples <= 0:
         return False
+    if subject_id == "python-simd" and simd_vector_evidence(
+        {
+            "subject": subject_id,
+            "operation_telemetry": execution.get("operation_telemetry"),
+        }
+    ) != "positive_vector_work":
+        return False
     # A representative untimed receipt proves the route for the workload;
     # receipt collection is intentionally outside the latency sample cohort.
     return True
@@ -269,6 +299,66 @@ def run_process(
         suffix = f": {detail}" if detail else ""
         raise RuntimeError(f"{label} timed out after {timeout}s{suffix}") from exc
     return process.returncode, stdout, stderr
+
+
+def current_oracle_runtime_hash() -> str:
+    """Identify the currently configured Pillow oracle without running a case."""
+
+    if ORACLE_NAME != "Pillow":
+        raise ValueError("reusable parity currently requires the Pillow oracle")
+    python = os.environ.get("MIGRATION_ORACLE_PYTHON", sys.executable)
+    script = "\n".join(
+        (
+            "import json, sys",
+            f"sys.path.insert(0, {str(ROOT / 'scripts')!r})",
+            "from pathlib import Path",
+            "import PIL",
+            "from migration_execution_identity import capture_runtime_identity",
+            "version = str(getattr(PIL, '__version__', ''))",
+            "handshake = {'side': 'source', 'implementation': 'Pillow',",
+            "             'version': version, 'path': str(Path(PIL.__file__).resolve()),",
+            "             'public_module': 'PIL'}",
+            "print(json.dumps(capture_runtime_identity('source', handshake, 'pillow', []),",
+            "                  sort_keys=True, separators=(',', ':'))) ",
+        )
+    )
+    environment = os.environ.copy()
+    target_python = str((ROOT / "pillow-rs-py" / "python").resolve())
+    retained_pythonpath = [
+        item
+        for item in environment.get("PYTHONPATH", "").split(os.pathsep)
+        if item and str(Path(item).resolve()) != target_python
+    ]
+    if retained_pythonpath:
+        environment["PYTHONPATH"] = os.pathsep.join(retained_pythonpath)
+    else:
+        environment.pop("PYTHONPATH", None)
+    environment.pop(TIMED_SOURCE_FLAG, None)
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    returncode, stdout, stderr = run_process(
+        [python, "-c", script],
+        env=environment,
+        timeout=120,
+        label="Pillow oracle identity preflight",
+    )
+    if returncode != 0:
+        detail = stderr.strip().replace("\n", " ")[-800:]
+        raise RuntimeError(f"Pillow oracle identity preflight failed: {detail}")
+    try:
+        identity = json.loads(stdout)
+        stable = identity["stable"]
+        stable_sha256 = identity["stable_sha256"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise RuntimeError("Pillow oracle identity preflight emitted invalid JSON") from exc
+    if (
+        stable.get("profile") != "pillow"
+        or stable.get("implementation") != ORACLE_NAME
+        or stable.get("version") != ORACLE_VERSION
+        or not isinstance(stable_sha256, str)
+        or len(stable_sha256) != 64
+    ):
+        raise RuntimeError("Pillow oracle identity differs from the pinned oracle")
+    return stable_sha256
 
 
 def now() -> str:
@@ -427,14 +517,31 @@ def validate_reused_parity(
     parity: dict[str, Any],
     manifest: Path,
     cases: list[dict[str, Any]],
-) -> None:
-    """Require a reused parity gate to cover these exact inputs and profiles."""
+    *,
+    report_path: Path,
+    attestation: dict[str, Any],
+    expected_inputs: list[dict[str, str]],
+) -> dict[tuple[str, str], str]:
+    """Validate a report-bound parity superset and return its runtime hashes."""
 
+    summary = parity.get("summary", {})
+    comparisons = parity.get("comparisons", [])
+    comparison_count = len(comparisons) if isinstance(comparisons, list) else -1
     if (
         parity.get("schema") != "migration-parity/parity-result@1"
         or parity.get("status") != "completed"
-        or parity.get("summary", {}).get("failed") != 0
-        or parity.get("summary", {}).get("not_run") != 0
+        or not isinstance(summary, dict)
+        or any(
+            type(summary.get(field)) is not int or summary[field] != expected
+            for field, expected in (
+                ("selected", comparison_count),
+                ("executed", comparison_count),
+                ("passed", comparison_count),
+                ("failed", 0),
+                ("not_run", 0),
+                ("infrastructure_errors", 0),
+            )
+        )
         or parity.get("infrastructure_errors")
     ):
         raise ValueError("reused parity receipt is not a complete passing run")
@@ -446,6 +553,47 @@ def validate_reused_parity(
         oracles[0].get("name"), oracles[0].get("version")
     ) != (ORACLE_NAME, ORACLE_VERSION):
         raise ValueError("reused parity receipt has a different oracle")
+
+    input_records = identity.get("inputs")
+    if not isinstance(input_records, list):
+        raise ValueError("reused parity receipt has no input identities")
+    inputs_by_path: dict[str, dict[str, Any]] = {}
+    for record in input_records:
+        if (
+            not isinstance(record, dict)
+            or set(record) != {"path", "schema", "sha256"}
+            or not isinstance(record.get("path"), str)
+            or record["path"] in inputs_by_path
+        ):
+            raise ValueError("reused parity receipt has invalid input identities")
+        inputs_by_path[record["path"]] = record
+    for expected_input in expected_inputs:
+        if inputs_by_path.get(expected_input.get("path")) != expected_input:
+            raise ValueError("reused parity receipt has different selected input bytes")
+
+    try:
+        validate_attestation(
+            attestation,
+            result=parity,
+            allow_duplicate_parity_sources=(
+                identity.get("command", {}).get("argv")
+                == ["make", "migration-parity-benchmark"]
+            ),
+        )
+        current_report = execution_report_fingerprint(report_path)
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError) as exc:
+        raise ValueError(f"reused parity execution identity is invalid: {exc}") from exc
+    bound_report = attestation.get("report", {})
+    if any(
+        bound_report.get(field) != current_report[field]
+        for field in (
+            "canonical_sha256",
+            "canonical_bytes",
+            "container_sha256",
+            "container_bytes",
+        )
+    ):
+        raise ValueError("reused parity attestation does not bind the supplied report")
 
     expected: set[tuple[str, str]] = set()
     for case in cases:
@@ -467,14 +615,40 @@ def validate_reused_parity(
             or target.get("features") != TARGET_FEATURES
         ):
             raise ValueError("reused parity receipt has different target identity")
+    actual_rows = parity["comparisons"]
     actual = {
         (item.get("case_id"), item.get("target_profile"))
-        for item in parity.get("comparisons", [])
+        for item in actual_rows
     }
-    if actual != expected:
+    if len(actual) != len(actual_rows):
+        raise ValueError("reused parity receipt contains duplicate case/profile comparisons")
+    if not expected <= actual:
         raise ValueError("reused parity receipt does not cover the selected cases/profiles")
-    if any(item.get("outcome") != "pass" for item in parity["comparisons"]):
+    if any(item.get("outcome") != "pass" for item in actual_rows):
         raise ValueError("reused parity receipt contains a non-passing comparison")
+
+    runtime_hashes: dict[tuple[str, str], str] = {}
+    required_runtime_profiles = {("source", "pillow")} | {
+        ("target", profile) for profile in expected_profiles
+    }
+    for invocation in attestation.get("invocations", []):
+        key = (invocation.get("side"), invocation.get("profile"))
+        if (
+            key not in required_runtime_profiles
+            or invocation.get("role") != "parity"
+        ):
+            continue
+        receipt = invocation.get("receipt")
+        runtime = receipt.get("runtime") if isinstance(receipt, dict) else None
+        stable_sha256 = runtime.get("stable_sha256") if isinstance(runtime, dict) else None
+        if not isinstance(stable_sha256, str) or len(stable_sha256) != 64:
+            raise ValueError("reused parity attestation omits a selected runtime fingerprint")
+        previous = runtime_hashes.setdefault(key, stable_sha256)
+        if previous != stable_sha256:
+            raise ValueError("reused parity attestation changes runtime identity within a profile")
+    if set(runtime_hashes) != required_runtime_profiles:
+        raise ValueError("reused parity attestation omits a selected source or target profile")
+    return runtime_hashes
 
 
 def run_parity(
@@ -482,10 +656,15 @@ def run_parity(
     output: Path,
     timeout: int,
     cases: list[dict[str, Any]],
+    *,
+    attestation_output: Path | None = None,
 ) -> dict[str, Any]:
     script = ROOT / "scripts" / "run_migration_parity.py"
     output.parent.mkdir(parents=True, exist_ok=True)
     backend_results: list[dict[str, Any]] = []
+    backend_attestations: list[
+        tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
+    ] = []
     with tempfile.TemporaryDirectory(prefix="migration-benchmark-parity-") as directory:
         temporary = Path(directory)
         for backend in TARGET_BACKENDS:
@@ -506,6 +685,7 @@ def run_parity(
             # gzip receipts, so keep its temporary backend artifact compressed
             # too; only the decoded result remains in memory for aggregation.
             backend_output = temporary / f"{backend}.json.gz"
+            backend_attestation = temporary / f"{backend}.attestation.json"
             backend_timeout = (
                 min(timeout, 300) if backend == "gpu" else timeout
             )
@@ -533,6 +713,11 @@ def run_parity(
                     str(backend_output),
                     "--timeout",
                     str(backend_timeout),
+                    *(
+                        ["--attestation-output", str(backend_attestation)]
+                        if attestation_output is not None
+                        else []
+                    ),
                     *[
                         argument
                         for case in backend_cases
@@ -549,7 +734,16 @@ def run_parity(
                     f"{backend} parity preflight did not emit a result: {detail}"
                 )
             try:
-                result = read_and_remove_backend_parity(backend_output)
+                report_binding = (
+                    execution_report_fingerprint(backend_output)
+                    if attestation_output is not None
+                    else None
+                )
+                result = (
+                    read_parity_artifact(backend_output)
+                    if attestation_output is not None
+                    else read_and_remove_backend_parity(backend_output)
+                )
             except (EOFError, OSError, json.JSONDecodeError) as exc:
                 detail = " ".join(
                     part.strip().replace("\n", " ")[-800:]
@@ -566,14 +760,47 @@ def run_parity(
                 raise RuntimeError(
                     f"{backend} parity preflight failed infrastructure checks: {detail}"
                 )
+            if attestation_output is not None:
+                if not backend_attestation.is_file():
+                    raise RuntimeError(
+                        f"{backend} parity preflight did not emit an execution attestation"
+                    )
+                try:
+                    attestation_document = json.loads(
+                        backend_attestation.read_text(encoding="utf-8")
+                    )
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise RuntimeError(
+                        f"{backend} parity preflight emitted an invalid execution attestation: {exc}"
+                    ) from exc
+                assert report_binding is not None
+                validate_attestation(
+                    attestation_document,
+                    result=result,
+                    report_binding=report_binding,
+                )
+                backend_attestations.append(
+                    (attestation_document, result, report_binding)
+                )
             if returncode not in {0, 1}:
                 detail = stderr.strip().replace("\n", " ")[-800:]
                 raise RuntimeError(
                     f"{backend} parity preflight exited {returncode}: {detail}"
                 )
+            if attestation_output is not None:
+                # The decoded result and report fingerprint are enough for
+                # aggregation; release the potentially large gzip receipt now.
+                backend_output.unlink(missing_ok=True)
             backend_results.append(result)
-    merged = merge_parity_results(backend_results, timeout)
-    write_parity_artifact(output, merged)
+        merged = merge_parity_results(backend_results, timeout)
+        write_parity_artifact(output, merged)
+        if attestation_output is not None:
+            merge_parity_attestations(
+                attestation_output,
+                output,
+                merged,
+                backend_attestations,
+            )
     return merged
 
 
@@ -588,6 +815,9 @@ def run_timed_side(
     timing_boundary: str,
     timing_steps: list[str],
     lifecycle: str = "warm",
+    attestation: AttestationCollector | None = None,
+    raw_sample_capture: RawSampleCollector | None = None,
+    raw_sample_workloads_by_case: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     effective_timeout = (
         gpu_benchmark_timeout(timeout)
@@ -595,6 +825,16 @@ def run_timed_side(
         else timeout
     )
     script = ROOT / "scripts" / "run_migration_parity.py"
+    raw_sample_group_id = uuid.uuid4().hex if raw_sample_capture is not None else None
+    raw_sample_profile = (
+        (
+            benchmark_source_subject_id()
+            if side == "source"
+            else target_profile_for_backend(backend)
+        )
+        if raw_sample_capture is not None
+        else None
+    )
 
     def command_for(child_repeat: int, *, include_timings: bool) -> list[str]:
         adapter_python = benchmark_adapter_python(side)
@@ -624,6 +864,33 @@ def run_timed_side(
         collect_execution: bool = False,
     ) -> dict[str, Any]:
         adapter_environment = benchmark_adapter_environment(side, backend)
+        attestation_overrides: dict[str, str] | None = None
+        if attestation is not None:
+            attestation_overrides = attestation.child_environment(
+                side=side,
+                profile=(
+                    benchmark_source_subject_id()
+                    if side == "source"
+                    else target_profile_for_backend(backend)
+                ),
+                role=(
+                    "benchmark_execution_proof"
+                    if collect_execution
+                    else "benchmark_timed"
+                ),
+                cases=child_cases,
+                context={
+                    "lifecycle": lifecycle,
+                    "boundary": timing_boundary if include_timings else None,
+                    "step_ids": (
+                        (sorted(set(timing_steps)) or ["call"])
+                        if include_timings
+                        else []
+                    ),
+                    "repeat": child_repeat,
+                },
+            )
+            adapter_environment.update(attestation_overrides)
         execution_path: Path | None = None
         with tempfile.TemporaryDirectory(
             prefix="migration-benchmark-receipt-"
@@ -635,17 +902,27 @@ def run_timed_side(
                 )
             else:
                 adapter_environment.pop("MIGRATION_PARITY_EXECUTION_OUTPUT", None)
-            returncode, stdout, stderr = run_process(
-                command_for(child_repeat, include_timings=include_timings),
-                input_text=json.dumps(child_cases, separators=(",", ":")),
-                timeout=effective_timeout,
-                label=(
-                    f"{backend} benchmark adapter"
-                    if side == "target"
-                    else f"{BENCHMARK_SOURCE_NAME} benchmark adapter"
-                ),
-                env=adapter_environment,
-            )
+            try:
+                returncode, stdout, stderr = run_process(
+                    command_for(child_repeat, include_timings=include_timings),
+                    input_text=json.dumps(child_cases, separators=(",", ":")),
+                    timeout=effective_timeout,
+                    label=(
+                        f"{backend} benchmark adapter"
+                        if side == "target"
+                        else f"{BENCHMARK_SOURCE_NAME} benchmark adapter"
+                    ),
+                    env=adapter_environment,
+                )
+            finally:
+                if attestation is not None and attestation_overrides is not None:
+                    try:
+                        attestation.collect(attestation_overrides)
+                    except Exception:
+                        # Receipt collection is a separate evidence channel;
+                        # it must not replace a completed sample or the
+                        # adapter's original failure.
+                        pass
             if returncode != 0:
                 detail = stderr.strip().replace("\n", " ")[-800:]
                 raise RuntimeError(f"{side} benchmark adapter failed: {detail}")
@@ -678,6 +955,28 @@ def run_timed_side(
                 raise RuntimeError(
                     f"target benchmark adapter did not isolate the {backend!r} backend"
                 )
+        if raw_sample_capture is not None and include_timings:
+            raw_sample_capture.record_timed_child(
+                group_id=raw_sample_group_id or "",
+                side=side,
+                profile=raw_sample_profile,
+                cases=child_cases,
+                workload_ids_by_case=raw_sample_workloads_by_case or {},
+                planned_repeat=repeat,
+                child_repeat=child_repeat,
+                lifecycle=lifecycle,
+                boundary=timing_boundary,
+                step_ids=list(timing_steps),
+                timings_ns=payload["timings_ns"],
+                telemetry=payload["telemetry"],
+                child_invocation_id=(
+                    attestation_overrides.get(
+                        "MIGRATION_EXECUTION_ATTESTATION_INVOCATION_ID"
+                    )
+                    if attestation_overrides is not None
+                    else None
+                ),
+            )
         return payload
 
     if lifecycle != "cold":
@@ -836,6 +1135,21 @@ def execution_resource_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def execution_operation_telemetry(records: list[dict[str, Any]]) -> list[Any]:
+    """Preserve operation-level route and vector counts from proof receipts."""
+    telemetry: list[Any] = []
+    for index, record in enumerate(records):
+        if "operation_telemetry" not in record:
+            continue
+        record_telemetry = record["operation_telemetry"]
+        if not isinstance(record_telemetry, list):
+            raise ValueError(
+                f"execution_records[{index}].operation_telemetry: expected array"
+            )
+        telemetry.extend(record_telemetry)
+    return telemetry
+
+
 def execution_result(
     subject_kind: str,
     subject_id: str,
@@ -868,16 +1182,31 @@ def execution_result(
             "resource": execution_resource_summary([]),
             "sample_count": 0,
             "cached_sample_count": 0,
+            "operation_telemetry": [],
             "errors": errors,
         }
 
     # Backend/resource receipts are gathered by one representative untimed
     # execution. They prove the route for this workload, but are not latency
-    # samples and need not match the timing sample count.
-    _ = policy
-    measured = execution_records
+    # samples and need not match the timing sample count. The proof child may
+    # execute a full parity workflow even when this workload times selected
+    # steps, so route and operation evidence must be scoped to those steps.
+    observed_step_ids = (
+        set(policy.get("step_ids", []))
+        if policy.get("boundary") == "observed_steps"
+        else None
+    )
+    measured = (
+        [
+            record
+            for record in execution_records
+            if record.get("step_id") in observed_step_ids
+        ]
+        if observed_step_ids is not None
+        else execution_records
+    )
     terminal_records = [
-        record for record in measured if receipt_terminal_complete(record)
+        record for record in execution_records if receipt_terminal_complete(record)
     ]
     completed_candidates = [
         record
@@ -889,17 +1218,23 @@ def execution_result(
     ]
     cached_candidates = [
         record
-        for record in terminal_records
+        for record in (measured if observed_step_ids is not None else terminal_records)
         if record.get("status") == "cached"
     ]
-    completed = [
-        record
-        for record in completed_candidates
-        if receipt_terminal_complete(record)
-    ]
-    cached = [
-        record for record in cached_candidates if receipt_terminal_complete(record)
-    ]
+    if observed_step_ids is None:
+        completed = [
+            record
+            for record in completed_candidates
+            if receipt_terminal_complete(record)
+        ]
+        cached = [
+            record for record in cached_candidates if receipt_terminal_complete(record)
+        ]
+    else:
+        # A selected step can prove its operation even when a later, unrelated
+        # step owns the full workflow's terminal marker.
+        completed = completed_candidates
+        cached = cached_candidates
     cached_sample_count = len(cached)
     partial_count = sum(
         1 for record in measured if record.get("status") == "partial"
@@ -912,21 +1247,32 @@ def execution_result(
         if isinstance(record.get("actual_backend"), str):
             backend = str(record["actual_backend"])
             actual_counts[backend] = actual_counts.get(backend, 0) + 1
-    # The no-fallback predicate covers the complete measured workflow.  A
+    # The no-fallback predicate covers every receipt in the proof execution. A
     # host-controlled setup/prefix receipt can be followed by a terminal GPU
-    # receipt, so counting only ``completed`` would falsely admit that row to
-    # an actual-backend cohort.
+    # receipt, so counting only selected/completed receipts would falsely admit
+    # that row to an actual-backend cohort.
     fallback_counts: dict[str, int] = {}
-    for record in measured:
+    for record in execution_records:
         reason = record.get("fallback_reason")
         if isinstance(reason, str) and reason:
             fallback_counts[reason] = fallback_counts.get(reason, 0) + 1
     actual_backends = sorted(actual_counts)
     requested_backend = runtime_backend_for_profile(subject_id)
+    terminal_completed_candidates = [
+        record
+        for record in terminal_records
+        if record.get("status") == "completed"
+        and isinstance(record.get("actual_backend"), str)
+        and isinstance(record.get("operation_count"), int)
+        and record["operation_count"] > 0
+    ]
+    terminal_cached_candidates = [
+        record for record in terminal_records if record.get("status") == "cached"
+    ]
     complete = len(terminal_records) == 1
     terminal_complete = (
         complete
-        and len(completed) + len(cached) == 1
+        and len(terminal_completed_candidates) + len(terminal_cached_candidates) == 1
         and not errors
     )
     terminal_gap = complete and not terminal_complete
@@ -943,10 +1289,18 @@ def execution_result(
         # implying a backend capability failure); it remains excluded from
         # actual-backend performance cohorts by its null receipt.
         status = "not_applicable"
-    elif terminal_complete and not has_partial:
+    elif (
+        terminal_complete
+        and not has_partial
+        and (observed_step_ids is None or completed or cached)
+    ):
         status = "completed"
     elif has_partial and (
-        completed_candidates or cached_candidates or completed or cached
+        completed_candidates
+        or cached_candidates
+        or completed
+        or cached
+        or partial_count
     ):
         status = "partial"
     elif errors and all(
@@ -986,6 +1340,7 @@ def execution_result(
         "resource": execution_resource_summary(completed),
         "sample_count": len(completed),
         "cached_sample_count": cached_sample_count,
+        "operation_telemetry": execution_operation_telemetry(completed),
         "errors": errors,
     }
 
@@ -1053,6 +1408,8 @@ def identity(
     cases: list[dict[str, Any]],
     parity_identity: dict[str, Any],
     timeout: int,
+    started_at: str,
+    target_profiles: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     assets = [
         item
@@ -1061,7 +1418,7 @@ def identity(
     ]
     return {
         "run_id": f"migration-benchmark-{uuid.uuid4().hex}",
-        "started_at": now(),
+        "started_at": started_at,
         "finished_at": now(),
         "manifest": {
             "path": str(manifest.relative_to(ROOT)),
@@ -1083,11 +1440,10 @@ def identity(
         "assets": assets,
         "oracles": parity_identity["oracles"],
         # The parity preflight may select only the profiles declared by the
-        # public operation (currently many cases are CPU-only).  Timing still
-        # runs every benchmark subject, so the result identity must retain all
-        # timed backend profiles instead of silently inheriting a partial
-        # preflight target list.
-        "targets": benchmark_target_identities(parity_identity),
+        # public operation. Use the selected workloads' subject union so the
+        # result identity names every timed profile without adding undeclared
+        # backends.
+        "targets": benchmark_target_identities(parity_identity, target_profiles),
         "command": {
             "command_id": "benchmark",
             "argv": ["make", "migration-parity-benchmark"],
@@ -1097,9 +1453,15 @@ def identity(
     }
 
 
-def execution_identity() -> dict[str, Any]:
+def execution_identity(
+    target_profiles: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any]:
     """Return identity headers for a benchmark with no parity-backed cases."""
 
+    requested_profiles = TARGET_PROFILES if target_profiles is None else target_profiles
+    backends_by_profile = {
+        target_profile_for_backend(backend): backend for backend in TARGET_BACKENDS
+    }
     return {
         "oracles": [
             {
@@ -1119,21 +1481,20 @@ def execution_identity() -> dict[str, Any]:
                 "backend": backend,
                 "features": TARGET_FEATURES.copy(),
             }
-            for backend in TARGET_BACKENDS
+            for profile in requested_profiles
+            for backend in [backends_by_profile[profile]]
         ],
     }
 
 
 def benchmark_target_identities(
     parity_identity: dict[str, Any],
+    target_profiles: list[str] | tuple[str, ...] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return identities for every target profile timed by this benchmark.
+    """Return identities for every selected target profile timed by this run.
 
-    A parity preflight is allowed to cover a subset of target profiles.  The
-    benchmark adapter invokes each profile selected for the active run, so its
-    envelope must name every timed subject. Preserve any matching preflight
-    record (which carries the exact child identity) and fill missing profiles
-    from the local execution identity.
+    Preserve matching preflight records (which carry the exact child identity)
+    and fill missing profile records from the local execution identity.
     """
 
     records = {
@@ -1142,7 +1503,8 @@ def benchmark_target_identities(
     records.update(
         {item["target_profile"]: item for item in parity_identity.get("targets", [])}
     )
-    return [records[profile] for profile in TARGET_PROFILES]
+    requested = TARGET_PROFILES if target_profiles is None else target_profiles
+    return [records[profile] for profile in requested]
 
 
 def benchmark_workflow_case(
@@ -1158,7 +1520,11 @@ def benchmark_workflow_case(
     return {
         "case_id": f"benchmark-workflow.{workload['workload_id']}",
         "covers": workload["covers"],
-        "target_profiles": [target_profile_for_backend(backend) for backend in TARGET_BACKENDS],
+        "target_profiles": [
+            subject["id"]
+            for subject in workload["subjects"]
+            if subject["kind"] == "target_profile"
+        ],
         "assets": input_spec["assets"],
         "steps": input_spec["steps"],
         "observations": input_spec["observations"],
@@ -1229,40 +1595,114 @@ def select_workloads(
 
 
 def workload_subjects_for_profile(
-    subjects: list[dict[str, Any]],
+    subjects: Any,
 ) -> list[dict[str, Any]]:
-    """Select the declared benchmark subjects for the active backend profile.
+    """Intersect one frozen subject contract with the active backend profile.
 
-    The manifest's standard cohort contains Pillow, serial CPU, SIMD, and GPU.
-    Runners without a GPU retain Pillow and only the requested target backends.
-    Parallel CPU reuses the same inputs and parity preflight, but times only its
-    own feature-identified CPU profile. The x86 Pillow-SIMD cohort measures a
-    distinct Pillow-SIMD source subject plus serial CPU and architecture-specific
-    SIMD, while its correctness receipt remains pinned to ordinary Pillow. It
-    is exported separately because it uses a different host/version.
+    The source subject stays distinct for the Pillow-SIMD cohort. Parallel CPU
+    is derived only from an input that declares serial CPU, and is timed under
+    its own feature-identified profile after the same Pillow parity preflight.
     """
 
-    if not PARALLEL_CPU_PROFILE and not PILLOW_SIMD_COMPARISON and TARGET_BACKENDS == ("cpu", "simd", "gpu"):
-        return subjects
-
-    default_subjects = [
-        {"kind": "oracle", "id": "pillow"},
-        {"kind": "target_profile", "id": "python-cpu"},
-        {"kind": "target_profile", "id": "python-simd"},
-        {"kind": "target_profile", "id": "python-gpu"},
-    ]
-    if subjects != default_subjects:
-        raise ValueError(
-            "profiled benchmark input must start from the standard Pillow/"
-            "CPU/SIMD/GPU subject contract"
-        )
+    declared = validate_frozen_subject_contract(subjects)
+    declared_targets = {
+        subject["id"]
+        for subject in declared
+        if subject["kind"] == "target_profile"
+    }
     if PARALLEL_CPU_PROFILE:
+        if "python-cpu" not in declared_targets:
+            raise ValueError(
+                "Parallel CPU benchmark input must declare the serial CPU profile"
+            )
         return [{"kind": "target_profile", "id": "python-parallel-cpu"}]
-    baseline_id = benchmark_source_subject_id()
-    return [{"kind": "oracle", "id": baseline_id}] + [
-        {"kind": "target_profile", "id": target_profile_for_backend(backend)}
-        for backend in TARGET_BACKENDS
+
+    selected_targets = [
+        profile for profile in active_target_profiles() if profile in declared_targets
     ]
+    if not selected_targets:
+        raise ValueError(
+            "benchmark subject contract declares no target profile requested by "
+            "the active backend selection"
+        )
+    baseline_id = benchmark_source_subject_id()
+    return [
+        {"kind": "oracle", "id": baseline_id},
+        *(
+            {"kind": "target_profile", "id": profile}
+            for profile in selected_targets
+        ),
+    ]
+
+
+def validate_frozen_subject_contract(
+    subjects: Any,
+) -> list[dict[str, str]]:
+    """Validate the portable subjects stored in a frozen benchmark input."""
+
+    if not isinstance(subjects, list) or not subjects:
+        raise ValueError("benchmark input subjects must be a non-empty array")
+    validated: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    oracle_count = 0
+    target_count = 0
+    for index, subject in enumerate(subjects):
+        if not isinstance(subject, dict) or set(subject) != {"kind", "id"}:
+            raise ValueError(
+                f"benchmark input subjects[{index}] must contain exactly kind and id"
+            )
+        kind = subject["kind"]
+        subject_id = subject["id"]
+        if not isinstance(kind, str) or not isinstance(subject_id, str):
+            raise ValueError(
+                f"benchmark input subjects[{index}] kind and id must be strings"
+            )
+        if subject_id in seen_ids:
+            raise ValueError(f"benchmark input declares duplicate subject {subject_id!r}")
+        seen_ids.add(subject_id)
+        if kind == "oracle":
+            if subject_id != "pillow":
+                raise ValueError(
+                    f"benchmark input declares unknown oracle subject {subject_id!r}"
+                )
+            oracle_count += 1
+        elif kind == "target_profile":
+            if subject_id not in FROZEN_TARGET_PROFILES:
+                raise ValueError(
+                    f"benchmark input declares unknown target profile {subject_id!r}"
+                )
+            target_count += 1
+        else:
+            raise ValueError(
+                f"benchmark input declares unknown subject kind {kind!r}"
+            )
+        validated.append({"kind": kind, "id": subject_id})
+    if oracle_count != 1:
+        raise ValueError("benchmark input must declare exactly one Pillow oracle subject")
+    if target_count == 0:
+        raise ValueError("benchmark input must declare at least one target profile")
+    return validated
+
+
+def frozen_workload_subjects(
+    workloads: list[dict[str, Any]],
+) -> dict[str, list[dict[str, str]]]:
+    """Snapshot validated subject contracts before any active-profile rewrite."""
+
+    snapshots: dict[str, list[dict[str, str]]] = {}
+    for workload in workloads:
+        workload_id = workload.get("workload_id")
+        if not isinstance(workload_id, str) or not workload_id:
+            raise ValueError("benchmark workload must have a non-empty workload_id")
+        if workload_id in snapshots:
+            raise ValueError(f"duplicate selected benchmark workload: {workload_id}")
+        try:
+            snapshots[workload_id] = validate_frozen_subject_contract(
+                workload.get("subjects")
+            )
+        except ValueError as exc:
+            raise ValueError(f"{workload_id}: {exc}") from exc
+    return snapshots
 
 
 def apply_profile_to_workloads(
@@ -1270,31 +1710,123 @@ def apply_profile_to_workloads(
 ) -> list[dict[str, Any]]:
     """Build per-run subjects while preserving the frozen input documents."""
 
-    if not PARALLEL_CPU_PROFILE and not PILLOW_SIMD_COMPARISON and TARGET_BACKENDS == ("cpu", "simd", "gpu"):
-        return selected_workloads
-
     profiled: list[dict[str, Any]] = []
     for workload in selected_workloads:
         selected = dict(workload)
-        selected["subjects"] = workload_subjects_for_profile(workload["subjects"])
+        selected["subjects"] = workload_subjects_for_profile(
+            workload.get("subjects")
+        )
         profiled.append(selected)
     return profiled
 
 
+def workload_target_profiles(workload: dict[str, Any]) -> list[str]:
+    return [
+        subject["id"]
+        for subject in workload["subjects"]
+        if subject["kind"] == "target_profile"
+    ]
+
+
+def parity_profile_for_subject(subject_profile: str) -> str:
+    """Map the derived Parallel CPU timing subject to its serial parity lane."""
+
+    return "python-cpu" if subject_profile == "python-parallel-cpu" else subject_profile
+
+
+def applicable_parity_profiles(
+    target_profiles: list[str],
+    case: dict[str, Any],
+    *,
+    active_profiles: tuple[str, ...] | list[str] | None = None,
+) -> list[str]:
+    """Return this workload's selected profiles covered by its parity case."""
+
+    requested = {parity_profile_for_subject(profile) for profile in target_profiles}
+    active = TARGET_PROFILES if active_profiles is None else active_profiles
+    return [
+        profile
+        for profile in active
+        if parity_profile_for_subject(profile) in requested
+        and profile_applies_to_case(profile, case)
+    ]
+
+
+def parity_gate_outcome(
+    case_id: str,
+    target_profiles: list[str],
+    applicable_profiles: list[str],
+    comparisons: dict[tuple[str, str], dict[str, Any]],
+) -> str:
+    """Require passing parity for every declared timed target subject.
+
+    A failed executed comparison is a failure. A profile omitted from the
+    case's applicability set, or a missing/non-passing receipt, leaves the
+    workload unproven without turning absent evidence into a pass.
+    """
+
+    outcomes = {
+        profile: comparisons.get((case_id, profile), {}).get("outcome")
+        for profile in applicable_profiles
+    }
+    if any(outcome == "fail" for outcome in outcomes.values()):
+        return "fail"
+    if not target_profiles or set(target_profiles) != set(applicable_profiles):
+        return "not_proven"
+    if any(outcomes.get(profile) != "pass" for profile in target_profiles):
+        return "not_proven"
+    return "pass"
+
+
+def parity_timing_allowed(outcome: str) -> bool:
+    """Allow execution-only timing unless an executed parity lane failed."""
+
+    return outcome in {"pass", "not_proven"}
+
+
+def selected_benchmark_subjects(
+    workloads: list[dict[str, Any]],
+) -> list[tuple[str, str]]:
+    """Return active result subjects actually declared by selected workloads."""
+
+    declared_ids = {
+        subject["id"]
+        for workload in workloads
+        for subject in workload["subjects"]
+    }
+    return [
+        (kind, subject_id)
+        for kind, subject_id in benchmark_subjects()
+        if subject_id in declared_ids
+    ]
+
+
 def validate_selected_workloads(
     selected_workloads: list[dict[str, Any]],
+    original_subjects: dict[str, list[dict[str, str]]],
 ) -> None:
     if not selected_workloads:
         raise ValueError("no benchmark workloads selected")
-    expected_subjects = [
-        {"kind": kind, "id": subject_id}
-        for kind, subject_id in benchmark_subjects()
-    ]
+    selected_ids = [workload.get("workload_id") for workload in selected_workloads]
+    if len(selected_ids) != len(set(selected_ids)) or set(selected_ids) != set(
+        original_subjects
+    ):
+        raise ValueError(
+            "selected benchmark workloads do not match their original frozen contracts"
+        )
     for workload in selected_workloads:
-        if workload["subjects"] != expected_subjects:
+        workload_id = workload["workload_id"]
+        original = original_subjects.get(workload_id)
+        if original is None:
             raise ValueError(
-                f"{workload['workload_id']}: benchmark subjects do not match "
-                "the active target profile contract"
+                f"{workload_id}: missing original frozen benchmark subject contract"
+            )
+        frozen = validate_frozen_subject_contract(original)
+        expected_subjects = workload_subjects_for_profile(frozen)
+        if workload.get("subjects") != expected_subjects:
+            raise ValueError(
+                f"{workload_id}: benchmark subjects do not preserve the declared "
+                "subjects requested by the active target profile"
             )
     for workload in selected_workloads:
         policy = workload["measurement"]
@@ -1309,6 +1841,69 @@ def validate_selected_workloads(
 
 
 def run(args: argparse.Namespace) -> int:
+    benchmark_started_at = now()
+    attestation_output = getattr(args, "attestation_output", None)
+    producer_output = getattr(args, "producer_attestation_output", None)
+    raw_samples_output = getattr(args, "raw_samples_output", None)
+    parity_attestation_output = getattr(args, "parity_attestation_output", None)
+    reuse_parity_path = getattr(args, "reuse_parity", None)
+    reuse_attestation_path = getattr(args, "reuse_parity_attestation", None)
+    if reuse_parity_path is not None:
+        if reuse_attestation_path is None:
+            raise ValueError("--reuse-parity requires --reuse-parity-attestation")
+        if attestation_output is None:
+            raise ValueError(
+                "--reuse-parity requires --attestation-output to compare the loaded target"
+            )
+    elif reuse_attestation_path is not None:
+        raise ValueError("--reuse-parity-attestation requires --reuse-parity")
+    if reuse_parity_path is not None and parity_attestation_output is not None:
+        raise ValueError(
+            "--parity-attestation-output is only available when parity runs in this process"
+        )
+    if producer_output is not None and attestation_output is None:
+        raise ValueError("--producer-attestation-output requires --attestation-output")
+    output_paths = [Path(args.output).resolve(), Path(args.parity_output).resolve()]
+    output_paths.extend(
+        Path(path).resolve()
+        for path in (
+            attestation_output,
+            producer_output,
+            raw_samples_output,
+            parity_attestation_output,
+        )
+        if path is not None
+    )
+    if len(output_paths) != len(set(output_paths)):
+        raise ValueError("benchmark output artifacts must use distinct paths")
+    input_paths = [
+        Path(path).resolve()
+        for path in (reuse_parity_path, reuse_attestation_path)
+        if path is not None
+    ]
+    if len(input_paths) != len(set(input_paths)) or set(output_paths) & set(input_paths):
+        raise ValueError("reused parity inputs must be distinct from output artifacts")
+    if parity_attestation_output is not None and parity_attestation_output.exists():
+        raise FileExistsError(
+            f"parity attestation artifact already exists: {parity_attestation_output}"
+        )
+    raw_samples: RawSampleCollector | None = None
+    if raw_samples_output is not None:
+        raw_sample_path = Path(raw_samples_output).resolve()
+        conflicting_paths = [args.output, args.parity_output]
+        if attestation_output is not None:
+            conflicting_paths.append(Path(attestation_output))
+        if producer_output is not None:
+            conflicting_paths.append(Path(producer_output))
+        if any(Path(path).resolve() == raw_sample_path for path in conflicting_paths):
+            raise ValueError("--raw-samples-output must not collide with another artifact")
+        raw_samples = RawSampleCollector(raw_sample_path)
+    attestation = (
+        (AttestationCollector(attestation_output, producer_output=producer_output)
+         if producer_output is not None else AttestationCollector(attestation_output))
+        if attestation_output is not None
+        else None
+    )
     manifest = args.manifest.resolve()
     manifest_data = load_manifest(manifest)
     cases_by_id, case_inputs = load_parity_cases(manifest_data)
@@ -1319,11 +1914,14 @@ def run(args: argparse.Namespace) -> int:
         workload_ids=args.workload_id,
         limit=args.limit,
     )
+    original_subjects = frozen_workload_subjects(selected_workloads)
     selected_workloads = apply_profile_to_workloads(selected_workloads)
-    validate_selected_workloads(selected_workloads)
+    validate_selected_workloads(selected_workloads, original_subjects)
 
     workload_cases: dict[str, dict[str, Any]] = {}
     parity_case_ids: list[str] = []
+    parity_profiles_by_workload: dict[str, list[str]] = {}
+    requested_parity_profiles_by_case: dict[str, set[str]] = {}
     for workload in selected_workloads:
         workload_id = workload["workload_id"]
         input_spec = workload["input"]
@@ -1334,8 +1932,17 @@ def run(args: argparse.Namespace) -> int:
                     f"{workload_id}: benchmark references missing parity case: "
                     f"{case_id}"
                 )
-            workload_cases[workload_id] = cases_by_id[case_id]
+            timed_case = dict(cases_by_id[case_id])
+            timed_case["target_profiles"] = workload_target_profiles(workload)
+            workload_cases[workload_id] = timed_case
             parity_case_ids.append(case_id)
+            requested_profiles = {
+                parity_profile_for_subject(profile)
+                for profile in workload_target_profiles(workload)
+            }
+            requested_parity_profiles_by_case.setdefault(case_id, set()).update(
+                requested_profiles
+            )
         elif input_spec["kind"] == "workflow":
             workload_cases[workload_id] = benchmark_workflow_case(workload)
         else:
@@ -1345,14 +1952,81 @@ def run(args: argparse.Namespace) -> int:
             )
 
     parity_case_ids = list(dict.fromkeys(parity_case_ids))
-    measured_cases = [cases_by_id[case_id] for case_id in parity_case_ids]
+    measured_cases: list[dict[str, Any]] = []
+    parity_cases_by_id: dict[str, dict[str, Any]] = {}
+    for case_id in parity_case_ids:
+        source_case = cases_by_id[case_id]
+        requested_profiles = requested_parity_profiles_by_case[case_id]
+        source_profiles = set(source_case.get("target_profiles", []))
+        supported_profiles = (
+            source_profiles if source_profiles else set(FROZEN_TARGET_PROFILES)
+        )
+        effective_profiles = [
+            profile
+            for profile in FROZEN_TARGET_PROFILES
+            if profile in requested_profiles and profile in supported_profiles
+        ]
+        parity_case = dict(source_case)
+        parity_case["target_profiles"] = effective_profiles
+        parity_cases_by_id[case_id] = parity_case
+        if effective_profiles:
+            measured_cases.append(parity_case)
+    for workload in selected_workloads:
+        if workload["input"]["kind"] != "parity_case":
+            continue
+        workload_id = workload["workload_id"]
+        case = parity_cases_by_id[workload["input"]["case_id"]]
+        parity_profiles_by_workload[workload_id] = applicable_parity_profiles(
+            workload_target_profiles(workload), case
+        )
     parity_output = args.parity_output.resolve()
-    if args.reuse_parity is not None:
-        parity = read_parity_artifact(args.reuse_parity.resolve())
-        validate_reused_parity(parity, manifest, measured_cases)
+    reuse_runtime_hashes: dict[tuple[str, str], str] = {}
+    reuse_parity_proof: dict[str, str] | None = None
+    if reuse_parity_path is not None:
+        if not measured_cases:
+            raise ValueError("--reuse-parity is unused because no parity cases were selected")
+        resolved_reuse_path = reuse_parity_path.resolve()
+        resolved_reuse_attestation = reuse_attestation_path.resolve()
+        parity = read_parity_artifact(resolved_reuse_path)
+        parity_attestation = read_parity_artifact(resolved_reuse_attestation)
+        expected_inputs = [
+            {
+                "path": input_path,
+                "schema": "migration-parity/parity-input@1",
+                "sha256": sha256(FIXTURE_ROOT / input_path),
+            }
+            for input_path in sorted(
+                {case_inputs[case["case_id"]] for case in measured_cases}
+            )
+        ]
+        reuse_runtime_hashes = validate_reused_parity(
+            parity,
+            manifest,
+            measured_cases,
+            report_path=resolved_reuse_path,
+            attestation=parity_attestation,
+            expected_inputs=expected_inputs,
+        )
+        if reuse_runtime_hashes[("source", "pillow")] != current_oracle_runtime_hash():
+            raise ValueError("current Pillow oracle identity differs from reused parity")
+        reuse_parity_proof = {
+            "report_sha256": parity_attestation["report"]["canonical_sha256"],
+            "run_id": parity["identity"]["run_id"],
+            "attestation_sha256": sha256(resolved_reuse_attestation),
+        }
         write_parity_artifact(parity_output, parity)
     elif measured_cases:
-        parity = run_parity(manifest, parity_output, args.timeout, measured_cases)
+        parity = run_parity(
+            manifest,
+            parity_output,
+            args.timeout,
+            measured_cases,
+            attestation_output=(
+                parity_attestation_output.resolve()
+                if parity_attestation_output is not None
+                else None
+            ),
+        )
     else:
         started = now()
         parity_identity = {
@@ -1366,7 +2040,16 @@ def run(args: argparse.Namespace) -> int:
             },
             "inputs": [],
             "assets": [],
-            **execution_identity(),
+            **execution_identity(
+                [
+                    profile
+                    for profile in TARGET_PROFILES
+                    if any(
+                        profile in workload_target_profiles(workload)
+                        for workload in selected_workloads
+                    )
+                ]
+            ),
             "command": {
                 "command_id": "benchmark",
                 "argv": ["make", "migration-parity-benchmark"],
@@ -1395,24 +2078,17 @@ def run(args: argparse.Namespace) -> int:
         for item in parity["comparisons"]
     }
 
-    def parity_profiles(case_id: str) -> list[str]:
-        case = next(item for item in measured_cases if item["case_id"] == case_id)
-        declared = set(case.get("target_profiles", []))
-        return [
-            profile
-            for profile in TARGET_PROFILES
-            if not declared or profile_applies_to_case(profile, case)
-        ]
-
-    pass_cases = {
-        case_id
-        for case_id in parity_case_ids
-        if all(
-            parity_by_case.get(
-                (case_id, target_profile), {}
-            ).get("outcome")
-            == "pass"
-            for target_profile in parity_profiles(case_id)
+    parity_outcome_by_workload = {
+        workload_id: parity_gate_outcome(
+            workload["input"]["case_id"],
+            workload_target_profiles(workload),
+            parity_profiles_by_workload.get(workload_id, []),
+            parity_by_case,
+        )
+        for workload_id, workload in (
+            (item["workload_id"], item)
+            for item in selected_workloads
+            if item["input"]["kind"] == "parity_case"
         )
     }
     # Measuring failed correctness cases would make a performance number look
@@ -1440,18 +2116,25 @@ def run(args: argparse.Namespace) -> int:
         profile: {} for profile in TARGET_PROFILES
     }
     timing_groups: dict[
+        tuple[str, tuple[str, ...], str, int, int, int], dict[str, dict[str, Any]]
+    ] = {}
+    timing_workloads: dict[
         tuple[str, tuple[str, ...], str, int, int, int], list[dict[str, Any]]
     ] = {}
-    case_repeats: dict[str, int] = {}
+    workload_repeats: dict[str, int] = {}
     for workload in selected_workloads:
         workload_id = workload["workload_id"]
         case_id = workload_cases[workload_id]["case_id"]
         gate = workload["measurement"]["correctness_gate"]
-        eligible = (
-            case_id in pass_cases
-            if workload["input"]["kind"] == "parity_case"
-            else gate in {"successful_execution", "not_applicable"}
-        )
+        if workload["input"]["kind"] == "parity_case":
+            # Keep measurements as execution-only evidence when parity did
+            # not cover every requested profile. Any executed parity failure
+            # still blocks timing for this correctness-gated workload.
+            eligible = parity_timing_allowed(
+                parity_outcome_by_workload.get(workload_id, "not_proven")
+            )
+        else:
+            eligible = gate in {"successful_execution", "not_applicable"}
         if not eligible:
             continue
         policy = workload["measurement"]
@@ -1459,7 +2142,7 @@ def run(args: argparse.Namespace) -> int:
             int(policy["warmup_iterations"])
             + int(policy["measurement_iterations"]) * int(policy["samples"])
         )
-        case_repeats[workload_cases[workload_id]["case_id"]] = repeat
+        workload_repeats[workload_id] = repeat
         key = (
             policy["boundary"],
             tuple(policy["step_ids"]),
@@ -1468,7 +2151,18 @@ def run(args: argparse.Namespace) -> int:
             int(policy["measurement_iterations"]),
             int(policy["samples"]),
         )
-        timing_groups.setdefault(key, []).append(workload_cases[workload_id])
+        group_cases = timing_groups.setdefault(key, {})
+        timed_case = workload_cases[workload_id]
+        if case_id in group_cases:
+            group_cases[case_id]["target_profiles"] = list(
+                dict.fromkeys(
+                    group_cases[case_id]["target_profiles"]
+                    + timed_case["target_profiles"]
+                )
+            )
+        else:
+            group_cases[case_id] = dict(timed_case)
+        timing_workloads.setdefault(key, []).append(workload)
     for (
         timing_boundary,
         timing_step_ids,
@@ -1476,9 +2170,52 @@ def run(args: argparse.Namespace) -> int:
         warmup_iterations,
         measurement_iterations,
         samples,
-    ), timing_cases in timing_groups.items():
+    ), group_cases in timing_groups.items():
+        timing_cases = list(group_cases.values())
         repeat = warmup_iterations + measurement_iterations * samples
+        attestation_kwargs = {"attestation": attestation} if attestation is not None else {}
+        sample_workloads = timing_workloads.get(
+            (
+                timing_boundary,
+                timing_step_ids,
+                lifecycle,
+                warmup_iterations,
+                measurement_iterations,
+                samples,
+            ),
+            [],
+        )
+        def values_by_workload(values: dict[str, Any]) -> dict[str, Any]:
+            # A parity case may be timed under several boundaries or sampling
+            # policies. Keep each group's values under its workload identity;
+            # case IDs alone would let later groups overwrite earlier rows.
+            return {
+                workload["workload_id"]: values[case_id]
+                for workload in sample_workloads
+                if (case_id := workload_cases[workload["workload_id"]]["case_id"])
+                in values
+            }
+
         if not PARALLEL_CPU_PROFILE:
+            source_sample_kwargs: dict[str, Any] = {}
+            if raw_samples is not None:
+                source_workloads_by_case: dict[str, list[str]] = {}
+                for workload in sample_workloads:
+                    if not any(
+                        subject["kind"] == "oracle"
+                        for subject in workload["subjects"]
+                    ):
+                        continue
+                    workload_case_id = workload_cases[workload["workload_id"]][
+                        "case_id"
+                    ]
+                    source_workloads_by_case.setdefault(
+                        workload_case_id, []
+                    ).append(workload["workload_id"])
+                source_sample_kwargs = {
+                    "raw_sample_capture": raw_samples,
+                    "raw_sample_workloads_by_case": source_workloads_by_case,
+                }
             source_receipt = run_timed_side(
                 "source",
                 manifest,
@@ -1489,57 +2226,100 @@ def run(args: argparse.Namespace) -> int:
                 timing_boundary=timing_boundary,
                 timing_steps=list(timing_step_ids),
                 lifecycle=lifecycle,
+                **attestation_kwargs,
+                **source_sample_kwargs,
             )
-            source_timing.update(source_receipt["timings_ns"])
-            source_phase_telemetry.update(source_receipt["telemetry"])
-            source_execution.update(source_receipt["execution"])
+            source_timing.update(values_by_workload(source_receipt["timings_ns"]))
+            source_phase_telemetry.update(values_by_workload(source_receipt["telemetry"]))
+            source_execution.update(values_by_workload(source_receipt["execution"]))
             source_status.update(
-                {item["case_id"]: item["status"] for item in source_receipt["results"]}
+                values_by_workload(
+                    {item["case_id"]: item["status"] for item in source_receipt["results"]}
+                )
             )
             source_execution_errors.update(
-                {
-                    item["case_id"]: item.get("execution_errors", [])
-                    for item in source_receipt["results"]
-                }
+                values_by_workload(
+                    {
+                        item["case_id"]: item.get("execution_errors", [])
+                        for item in source_receipt["results"]
+                    }
+                )
             )
         for backend in TARGET_BACKENDS:
             profile = target_profile_for_backend(backend)
+            backend_cases = [
+                case
+                for case in timing_cases
+                if profile in case.get("target_profiles", [])
+            ]
+            if not backend_cases:
+                continue
+            target_sample_kwargs: dict[str, Any] = {}
+            if raw_samples is not None:
+                target_workloads_by_case: dict[str, list[str]] = {}
+                for workload in sample_workloads:
+                    if profile not in workload_target_profiles(workload):
+                        continue
+                    workload_case_id = workload_cases[workload["workload_id"]][
+                        "case_id"
+                    ]
+                    target_workloads_by_case.setdefault(
+                        workload_case_id, []
+                    ).append(workload["workload_id"])
+                target_sample_kwargs = {
+                    "raw_sample_capture": raw_samples,
+                    "raw_sample_workloads_by_case": target_workloads_by_case,
+                }
             target_receipt = run_timed_side(
                 "target",
                 manifest,
-                timing_cases,
+                backend_cases,
                 repeat,
                 args.timeout,
                 backend=backend,
                 timing_boundary=timing_boundary,
                 timing_steps=list(timing_step_ids),
                 lifecycle=lifecycle,
+                **attestation_kwargs,
+                **target_sample_kwargs,
             )
-            target_timings[profile].update(target_receipt["timings_ns"])
-            target_phase_telemetry[profile].update(target_receipt["telemetry"])
-            target_execution[profile].update(target_receipt["execution"])
+            target_timings[profile].update(
+                values_by_workload(target_receipt["timings_ns"])
+            )
+            target_phase_telemetry[profile].update(
+                values_by_workload(target_receipt["telemetry"])
+            )
+            target_execution[profile].update(
+                values_by_workload(target_receipt["execution"])
+            )
             target_status[profile].update(
-                {
-                    item["case_id"]: item["status"]
-                    for item in target_receipt["results"]
-                }
+                values_by_workload(
+                    {item["case_id"]: item["status"] for item in target_receipt["results"]}
+                )
             )
             target_execution_errors[profile].update(
-                {
-                    item["case_id"]: item.get("execution_errors", [])
-                    for item in target_receipt["results"]
-                }
+                values_by_workload(
+                    {
+                        item["case_id"]: item.get("execution_errors", [])
+                        for item in target_receipt["results"]
+                    }
+                )
             )
 
-    def timed_success(case_id: str, expected_repeat: int) -> bool:
-        source_complete = PARALLEL_CPU_PROFILE or (
-            source_status.get(case_id) == "completed"
-            and len(source_timing.get(case_id, [])) == expected_repeat
+    def timed_success(
+        workload: dict[str, Any], workload_id: str, expected_repeat: int
+    ) -> bool:
+        subjects = workload["subjects"]
+        source_required = any(subject["kind"] == "oracle" for subject in subjects)
+        target_profiles = workload_target_profiles(workload)
+        source_complete = not source_required or (
+            source_status.get(workload_id) == "completed"
+            and len(source_timing.get(workload_id, [])) == expected_repeat
         )
-        return source_complete and all(
-            target_status[profile].get(case_id) == "completed"
-            and len(target_timings[profile].get(case_id, [])) == expected_repeat
-            for profile in TARGET_PROFILES
+        return bool(target_profiles) and source_complete and all(
+            target_status[profile].get(workload_id) == "completed"
+            and len(target_timings[profile].get(workload_id, [])) == expected_repeat
+            for profile in target_profiles
         )
 
     def empty_phases() -> dict[str, Any]:
@@ -1553,18 +2333,25 @@ def run(args: argparse.Namespace) -> int:
 
     for workload in selected_workloads:
         workload_id = workload["workload_id"]
-        case_id = workload_cases[workload_id]["case_id"]
-        expected_repeat = case_repeats.get(case_id, 0)
-        if not timed_success(case_id, expected_repeat):
+        expected_repeat = workload_repeats.get(workload_id, 0)
+        if not timed_success(workload, workload_id, expected_repeat):
             details = {
-                "source_status": source_status.get(case_id),
-                "source_errors": source_execution_errors.get(case_id, []),
+                "source_status": (
+                    source_status.get(workload_id)
+                    if any(subject["kind"] == "oracle" for subject in workload["subjects"])
+                    else "not_requested"
+                ),
+                "source_errors": (
+                    source_execution_errors.get(workload_id, [])
+                    if any(subject["kind"] == "oracle" for subject in workload["subjects"])
+                    else []
+                ),
                 "targets": {
                     profile: {
-                        "status": target_status[profile].get(case_id),
-                        "errors": target_execution_errors[profile].get(case_id, []),
+                        "status": target_status[profile].get(workload_id),
+                        "errors": target_execution_errors[profile].get(workload_id, []),
                     }
-                    for profile in TARGET_PROFILES
+                    for profile in workload_target_profiles(workload)
                 },
             }
             print(
@@ -1577,18 +2364,35 @@ def run(args: argparse.Namespace) -> int:
     for workload in selected_workloads:
         workload_id = workload["workload_id"]
         case_id = workload_cases[workload_id]["case_id"]
+        parity_outcome = (
+            parity_outcome_by_workload.get(workload_id, "not_proven")
+            if workload["input"]["kind"] == "parity_case"
+            else "not_proven"
+        )
         parity_pass = (
             workload["input"]["kind"] == "parity_case"
-            and case_id in pass_cases
+            and parity_outcome == "pass"
         )
-        execution_pass = timed_success(case_id, case_repeats.get(case_id, 0))
+        parity_fail = (
+            workload["input"]["kind"] == "parity_case"
+            and parity_outcome == "fail"
+        )
+        execution_pass = timed_success(
+            workload, workload_id, workload_repeats.get(workload_id, 0)
+        )
         measured_pass = parity_pass and execution_pass if workload["input"]["kind"] == "parity_case" else execution_pass
         correctness = {
             "gate": workload["measurement"]["correctness_gate"],
-            "outcome": "pass" if measured_pass else "not_proven",
+            "outcome": (
+                "fail"
+                if parity_fail
+                else "pass"
+                if measured_pass
+                else "not_proven"
+            ),
             "evidence_id": (
                 parity["identity"]["run_id"]
-                if parity_pass
+                if parity_pass or parity_fail
                 else None
             ),
         }
@@ -1600,20 +2404,20 @@ def run(args: argparse.Namespace) -> int:
         # remains not_proven until every required subject completes.
         def errors_for(kind: str, subject_id: str) -> list[dict[str, Any]]:
             if kind == "oracle":
-                return source_execution_errors.get(case_id, [])
-            return target_execution_errors.get(subject_id, {}).get(case_id, [])
+                return source_execution_errors.get(workload_id, [])
+            return target_execution_errors.get(subject_id, {}).get(workload_id, [])
 
-        if parity_pass or benchmark_execution:
+        if (workload["input"]["kind"] == "parity_case" and not parity_fail) or benchmark_execution:
             def durations_for(kind: str, subject_id: str) -> list[int]:
                 if kind == "oracle":
                     return (
-                        source_timing.get(case_id, [])
-                        if source_status.get(case_id) == "completed"
+                        source_timing.get(workload_id, [])
+                        if source_status.get(workload_id) == "completed"
                         else []
                     )
                 return (
-                    target_timings.get(subject_id, {}).get(case_id, [])
-                    if target_status.get(subject_id, {}).get(case_id)
+                    target_timings.get(subject_id, {}).get(workload_id, [])
+                    if target_status.get(subject_id, {}).get(workload_id)
                     == "completed"
                     else []
                 )
@@ -1624,19 +2428,22 @@ def run(args: argparse.Namespace) -> int:
                     subject_id,
                     durations_for(kind, subject_id),
                     (
-                        source_phase_telemetry.get(case_id, [])
+                        source_phase_telemetry.get(workload_id, [])
                         if kind == "oracle"
-                        else target_phase_telemetry.get(subject_id, {}).get(case_id, [])
+                        else target_phase_telemetry.get(subject_id, {}).get(workload_id, [])
                     ),
                     (
-                        source_execution.get(case_id, [])
+                        source_execution.get(workload_id, [])
                         if kind == "oracle"
-                        else target_execution.get(subject_id, {}).get(case_id, [])
+                        else target_execution.get(subject_id, {}).get(workload_id, [])
                     ),
                     workload["measurement"],
                     errors_for(kind, subject_id),
                 )
-                for kind, subject_id in benchmark_subjects()
+                for kind, subject_id in (
+                    (subject["kind"], subject["id"])
+                    for subject in workload["subjects"]
+                )
             ]
         else:
             subjects = [
@@ -1654,7 +2461,10 @@ def run(args: argparse.Namespace) -> int:
                         errors_for(kind, subject_id),
                     ),
                 }
-                for kind, subject_id in benchmark_subjects()
+                for kind, subject_id in (
+                    (subject["kind"], subject["id"])
+                    for subject in workload["subjects"]
+                )
             ]
         workload_results.append(
             {
@@ -1668,17 +2478,27 @@ def run(args: argparse.Namespace) -> int:
             }
         )
     workload_by_id = {item["workload_id"]: item for item in workload_results}
+    result_subject_order = selected_benchmark_subjects(selected_workloads)
     suites: list[dict[str, Any]] = []
     for suite in suites_input:
         suite_subjects: list[dict[str, Any]] = []
         comparisons: list[dict[str, Any]] = []
-        for subject_kind, subject_id in benchmark_subjects():
+        for subject_kind, subject_id in result_subject_order:
             metric_values: dict[str, list[tuple[float, int]]] = {}
             for member in suite["members"]:
                 workload = workload_by_id.get(member["workload_id"])
                 if workload is None:
                     continue
-                subject = next(item for item in workload["subjects"] if item["id"] == subject_id)
+                subject = next(
+                    (
+                        item
+                        for item in workload["subjects"]
+                        if item["id"] == subject_id
+                    ),
+                    None,
+                )
+                if subject is None:
+                    continue
                 if subject["status"] != "completed":
                     continue
                 for measurement in subject["measurements"]:
@@ -1716,7 +2536,12 @@ def run(args: argparse.Namespace) -> int:
         }
         declared_members = list(suite["members"])
         declared_member_count = len(declared_members)
-        for target_profile in TARGET_PROFILES:
+        suite_target_profiles = [
+            subject_id
+            for subject_kind, subject_id in result_subject_order
+            if subject_kind == "target_profile"
+        ]
+        for target_profile in suite_target_profiles:
             target_subject = next(
                 item for item in suite_subjects if item["id"] == target_profile
             )
@@ -1867,8 +2692,13 @@ def run(args: argparse.Namespace) -> int:
         selected_cases,
         parity["identity"],
         args.timeout,
+        started_at=benchmark_started_at,
+        target_profiles=[
+            subject_id
+            for subject_kind, subject_id in result_subject_order
+            if subject_kind == "target_profile"
+        ],
     )
-    result_identity["started_at"] = parity["identity"]["started_at"]
     result_identity["finished_at"] = now()
     measured = sum(
         1
@@ -1876,19 +2706,23 @@ def run(args: argparse.Namespace) -> int:
         if any(subject["status"] == "completed" for subject in item["subjects"])
     )
     not_run = len(workload_results) - measured
+    environment = {
+        "machine_id": platform.node() or "unknown",
+        "os": platform.platform(),
+        "architecture": platform.machine(),
+        "cpu": platform.processor() or "unknown",
+        "memory_bytes": 0,
+        "power_mode": "unknown",
+        "toolchain": platform.python_version(),
+    }
+    runner_id = os.environ.get("MIGRATION_BENCHMARK_RUNNER_ID", "").strip()
+    if runner_id:
+        environment["runner_id"] = runner_id
     result = {
         "schema": "migration-parity/benchmark-result@1",
         "identity": result_identity,
         "status": "completed",
-        "environment": {
-            "machine_id": platform.node() or "unknown",
-            "os": platform.platform(),
-            "architecture": platform.machine(),
-            "cpu": platform.processor() or "unknown",
-            "memory_bytes": 0,
-            "power_mode": "unknown",
-            "toolchain": platform.python_version(),
-        },
+        "environment": environment,
         "summary": {
             "workloads_selected": len(workload_results),
             "workloads_measured": measured,
@@ -1901,8 +2735,55 @@ def run(args: argparse.Namespace) -> int:
         "suites": suites,
         "infrastructure_errors": [],
     }
+    if reuse_runtime_hashes:
+        assert attestation is not None
+        attestation.require_runtime_identities(
+            {
+                key: fingerprint
+                for key, fingerprint in reuse_runtime_hashes.items()
+                if key[0] == "target"
+            },
+            role="benchmark_execution_proof",
+        )
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
-    args.output.resolve().write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    result_path = args.output.resolve()
+    if raw_samples is not None:
+        raw_samples.publish(
+            report=result,
+            report_path=result_path,
+            workload_case_ids={
+                workload["workload_id"]: workload_cases[workload["workload_id"]][
+                    "case_id"
+                ]
+                for workload in selected_workloads
+            },
+        )
+    result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    if attestation is not None:
+        try:
+            attestation.finalize(
+                result_path,
+                result=result,
+                selection={
+                    "case_profiles": [],
+                    "workload_profiles": [
+                        {
+                            "workload_id": workload["workload_id"],
+                            "case_id": workload_cases[workload["workload_id"]][
+                                "case_id"
+                            ],
+                            "subject_id": subject["id"],
+                        }
+                        for workload in selected_workloads
+                        for subject in workload["subjects"]
+                    ],
+                },
+                parity_proof=reuse_parity_proof,
+            )
+        except Exception:
+            # The raw benchmark report is authoritative. A sidecar write
+            # failure must not alter its contents or successful exit status.
+            pass
     print(json.dumps(result["summary"], sort_keys=True))
     return 0
 
@@ -1911,11 +2792,28 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULT)
+    parser.add_argument("--attestation-output", type=Path)
+    parser.add_argument("--producer-attestation-output", type=Path)
+    parser.add_argument(
+        "--raw-samples-output",
+        type=Path,
+        help="retain ordered timing and phase samples in a separate sidecar",
+    )
     parser.add_argument("--parity-output", type=Path, default=DEFAULT_PARITY_RESULT)
     parser.add_argument(
         "--reuse-parity",
         type=Path,
-        help="reuse an exact passing Pillow parity receipt for matching selected cases",
+        help="reuse a passing Pillow parity report whose selected cases and runtime identities match",
+    )
+    parser.add_argument(
+        "--reuse-parity-attestation",
+        type=Path,
+        help="report-bound execution attestation for --reuse-parity",
+    )
+    parser.add_argument(
+        "--parity-attestation-output",
+        type=Path,
+        help="write a report-bound execution attestation for a fresh parity run",
     )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--workload-id", action="append")

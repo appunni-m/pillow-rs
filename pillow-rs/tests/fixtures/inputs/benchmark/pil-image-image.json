@@ -2800,6 +2800,53 @@
       }
     },
     {
+      "workload_id": "pil-image-image.show.standard",
+      "covers": [
+        "PIL.Image.Image.show.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.show.performance.standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 3,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pil-image-image.size.standard",
       "covers": [
         "PIL.Image.Image.size.performance.standard"
@@ -5159,6 +5206,10 @@
         },
         {
           "workload_id": "pil-image-image.seek.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-image-image.show.standard",
           "weight": 1
         },
         {

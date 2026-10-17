@@ -1,0 +1,70 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "suites": [
+    {
+      "description": "Exact-parity 32x24 RGB Filter5x5 constant-byte helper guard.",
+      "members": [
+        {
+          "weight": 1,
+          "workload_id": "pipeline-op.filter5x5.matrix-32x24"
+        }
+      ],
+      "suite_id": "filter5x5-helper-guard-x86-suite"
+    }
+  ],
+  "workloads": [
+    {
+      "context": {
+        "build_profile": "release",
+        "cache_state": "warm",
+        "chain_length": 1,
+        "mode": "RGB",
+        "operation_class": "neighborhood",
+        "size": [
+          32,
+          24
+        ]
+      },
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "input": {
+        "case_id": "PIL.Image.Image.filter.nuanced.performance-rgb-kernel-5x5-materialized-32x24",
+        "kind": "parity_case"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "parity_pass",
+        "measurement_iterations": 20,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 5,
+        "step_ids": [],
+        "warmup_iterations": 5
+      },
+      "subjects": [
+        {
+          "id": "pillow",
+          "kind": "oracle"
+        },
+        {
+          "id": "python-cpu",
+          "kind": "target_profile"
+        },
+        {
+          "id": "python-simd",
+          "kind": "target_profile"
+        },
+        {
+          "id": "python-gpu",
+          "kind": "target_profile"
+        }
+      ],
+      "workload_id": "pipeline-op.filter5x5.matrix-32x24"
+    }
+  ]
+}

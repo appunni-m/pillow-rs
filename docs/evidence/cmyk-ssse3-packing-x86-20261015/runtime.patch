@@ -1,0 +1,87 @@
+--- a/pillow-rs/src/compute/pool_simd/ops/adapters.rs
++++ b/pillow-rs/src/compute/pool_simd/ops/adapters.rs
+@@ -8,6 +8,8 @@
+ use super::native_channel;
+ use super::native_filter::{native_filter_5x5_binomial_la_rows, native_filter_5x5_i32_rows};
+ 
++#[cfg(all(test, target_arch = "x86_64"))]
++mod cmyk_packing_tests;
+ mod extract_band;
+ mod grayscale;
+ mod merge;
+@@ -11084,6 +11086,8 @@
+     {
+         let mut output = Vec::with_capacity(output_capacity);
+         let mut vector_blocks = 0u64;
++        #[cfg(target_arch = "x86_64")]
++        let pack_rgb_ssse3 = std::is_x86_feature_detected!("ssse3");
+         for source_block in source.as_raw().chunks(64) {
+             let active_pixels = source_block.len() / 4;
+             let mut padded = [0u8; 64];
+@@ -11106,6 +11110,16 @@
+             let red = simd_pack_u16x16(ink - muldiv255(c * ink)).to_array();
+             let green = simd_pack_u16x16(ink - muldiv255(m * ink)).to_array();
+             let blue = simd_pack_u16x16(ink - muldiv255(y * ink)).to_array();
++            #[cfg(target_arch = "x86_64")]
++            if active_pixels == 16 && pack_rgb_ssse3 {
++                // SAFETY: the runtime feature check above establishes SSSE3;
++                // all three lane arrays contain sixteen initialized samples.
++                let packed =
++                    unsafe { super::native_merge::rgb16_interleave_ssse3(&red, &green, &blue) };
++                output.extend_from_slice(&packed);
++                vector_blocks = vector_blocks.saturating_add(1);
++                continue;
++            }
+             for pixel in 0..active_pixels {
+                 output.extend_from_slice(&[red[pixel], green[pixel], blue[pixel]]);
+             }
+--- a/pillow-rs/src/compute/pool_simd/ops/native_merge.rs
++++ b/pillow-rs/src/compute/pool_simd/ops/native_merge.rs
+@@ -55,6 +55,47 @@
+         native_merge_rgb_ssse3_mask(2, 2),
+     ],
+ ];
++
++/// Pack sixteen planar RGB samples into forty-eight interleaved bytes.
++///
++/// # Safety
++/// The caller must establish SSSE3 support before calling this function.
++#[cfg(target_arch = "x86_64")]
++#[allow(unsafe_code)]
++#[inline]
++#[target_feature(enable = "ssse3")]
++pub(super) unsafe fn rgb16_interleave_ssse3(
++    red: &[u8; 16],
++    green: &[u8; 16],
++    blue: &[u8; 16],
++) -> [u8; 48] {
++    use core::arch::x86_64::{_mm_loadu_si128, _mm_or_si128, _mm_shuffle_epi8, _mm_storeu_si128};
++
++    let mut output = [0u8; 48];
++    // SAFETY: SSSE3 is a caller obligation. Each input and mask is a fully
++    // initialized sixteen-byte array. Unaligned loads are permitted, and the
++    // three unaligned stores cover disjoint sixteen-byte spans of `output`.
++    // The local output cannot alias the borrowed input arrays.
++    unsafe {
++        let red = _mm_loadu_si128(red.as_ptr().cast());
++        let green = _mm_loadu_si128(green.as_ptr().cast());
++        let blue = _mm_loadu_si128(blue.as_ptr().cast());
++        for (chunk, masks) in NATIVE_MERGE_RGB_SSSE3_MASKS.iter().enumerate() {
++            let red_mask = _mm_loadu_si128(masks[0].as_ptr().cast());
++            let green_mask = _mm_loadu_si128(masks[1].as_ptr().cast());
++            let blue_mask = _mm_loadu_si128(masks[2].as_ptr().cast());
++            let packed = _mm_or_si128(
++                _mm_or_si128(
++                    _mm_shuffle_epi8(red, red_mask),
++                    _mm_shuffle_epi8(green, green_mask),
++                ),
++                _mm_shuffle_epi8(blue, blue_mask),
++            );
++            _mm_storeu_si128(output.as_mut_ptr().add(chunk * 16).cast(), packed);
++        }
++    }
++    output
++}
+ 
+ pub(super) fn vector_block(
+     bands: &[&[u8]],

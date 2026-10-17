@@ -1,0 +1,1354 @@
+{
+  "records": [
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.material.rgb-5x5-pad.256x256",
+      "child_invocation_id": "5299f0c41c23455d92d7807492b4a539",
+      "child_repeat": 7,
+      "child_sequence": 0,
+      "group_id": "197792082e5442b59f54ade5ccda1ece",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 1423833,
+          "setup_ns": 5170584,
+          "terminal_ns": 363333,
+          "total_ns": 7008292
+        },
+        {
+          "pipeline_ns": 821083,
+          "setup_ns": 38208,
+          "terminal_ns": 7750,
+          "total_ns": 899917
+        },
+        {
+          "pipeline_ns": 844792,
+          "setup_ns": 32917,
+          "terminal_ns": 5916,
+          "total_ns": 911584
+        },
+        {
+          "pipeline_ns": 797875,
+          "setup_ns": 30667,
+          "terminal_ns": 5208,
+          "total_ns": 858833
+        },
+        {
+          "pipeline_ns": 814084,
+          "setup_ns": 31750,
+          "terminal_ns": 4750,
+          "total_ns": 873750
+        },
+        {
+          "pipeline_ns": 806208,
+          "setup_ns": 31333,
+          "terminal_ns": 4583,
+          "total_ns": 866917
+        },
+        {
+          "pipeline_ns": 795583,
+          "setup_ns": 30208,
+          "terminal_ns": 4500,
+          "total_ns": 853708
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "pillow",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "source",
+      "step_ids": [],
+      "subject_kind": "oracle",
+      "throughput_operations_per_second": [
+        142.8307803759649,
+        1116.5910920595857,
+        1100.9687423964347,
+        1167.9391363557263,
+        1147.7208559243056,
+        1156.6818037758721,
+        1174.4560506801274
+      ],
+      "timings_ns": [
+        7001292,
+        895583,
+        908291,
+        856209,
+        871292,
+        864542,
+        851458
+      ],
+      "workload_ids": [
+        "pipeline-chain.convolution.material.rgb-5x5-pad.256x256"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.rgb-5x5-pad.1024x768",
+      "child_invocation_id": "5299f0c41c23455d92d7807492b4a539",
+      "child_repeat": 7,
+      "child_sequence": 0,
+      "group_id": "197792082e5442b59f54ade5ccda1ece",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 9886750,
+          "setup_ns": 416749,
+          "terminal_ns": 7042,
+          "total_ns": 10340958
+        },
+        {
+          "pipeline_ns": 9752084,
+          "setup_ns": 302958,
+          "terminal_ns": 4542,
+          "total_ns": 10084500
+        },
+        {
+          "pipeline_ns": 9742125,
+          "setup_ns": 294792,
+          "terminal_ns": 4208,
+          "total_ns": 10064375
+        },
+        {
+          "pipeline_ns": 9758916,
+          "setup_ns": 295999,
+          "terminal_ns": 4333,
+          "total_ns": 10082542
+        },
+        {
+          "pipeline_ns": 9744626,
+          "setup_ns": 295625,
+          "terminal_ns": 4500,
+          "total_ns": 10068167
+        },
+        {
+          "pipeline_ns": 9725124,
+          "setup_ns": 303958,
+          "terminal_ns": 4416,
+          "total_ns": 10056208
+        },
+        {
+          "pipeline_ns": 9618833,
+          "setup_ns": 294625,
+          "terminal_ns": 15625,
+          "total_ns": 9964125
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "pillow",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "source",
+      "step_ids": [],
+      "subject_kind": "oracle",
+      "throughput_operations_per_second": [
+        96.73207141187133,
+        99.18707267109497,
+        99.38340547574737,
+        99.2030719620076,
+        99.34474195103934,
+        99.46248483943074,
+        100.39993309348459
+      ],
+      "timings_ns": [
+        10337833,
+        10081959,
+        10062042,
+        10080333,
+        10065958,
+        10054042,
+        9960166
+      ],
+      "workload_ids": [
+        "pipeline-chain.convolution.native.rgb-5x5-pad.1024x768"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.la-5x5-mirror.1024x768",
+      "child_invocation_id": "5299f0c41c23455d92d7807492b4a539",
+      "child_repeat": 7,
+      "child_sequence": 0,
+      "group_id": "197792082e5442b59f54ade5ccda1ece",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 6753667,
+          "setup_ns": 418459,
+          "terminal_ns": 260083,
+          "total_ns": 7469584
+        },
+        {
+          "pipeline_ns": 7259709,
+          "setup_ns": 285166,
+          "terminal_ns": 188875,
+          "total_ns": 7764208
+        },
+        {
+          "pipeline_ns": 6323958,
+          "setup_ns": 306083,
+          "terminal_ns": 152375,
+          "total_ns": 6804625
+        },
+        {
+          "pipeline_ns": 6306043,
+          "setup_ns": 297166,
+          "terminal_ns": 150125,
+          "total_ns": 6773416
+        },
+        {
+          "pipeline_ns": 6498750,
+          "setup_ns": 277292,
+          "terminal_ns": 158750,
+          "total_ns": 6954750
+        },
+        {
+          "pipeline_ns": 6438375,
+          "setup_ns": 277416,
+          "terminal_ns": 161292,
+          "total_ns": 6897208
+        },
+        {
+          "pipeline_ns": 6738167,
+          "setup_ns": 305500,
+          "terminal_ns": 175292,
+          "total_ns": 7241625
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "pillow",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "source",
+      "step_ids": [],
+      "subject_kind": "oracle",
+      "throughput_operations_per_second": [
+        133.9599802596573,
+        128.8611304832344,
+        147.01649142790944,
+        147.68594583617937,
+        143.83315354189142,
+        145.0291196717933,
+        138.13585661498084
+      ],
+      "timings_ns": [
+        7464916,
+        7760292,
+        6801958,
+        6771125,
+        6952500,
+        6895167,
+        7239250
+      ],
+      "workload_ids": [
+        "pipeline-chain.convolution.native.la-5x5-mirror.1024x768"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.rgba-5x5-invert.1024x768",
+      "child_invocation_id": "5299f0c41c23455d92d7807492b4a539",
+      "child_repeat": 7,
+      "child_sequence": 0,
+      "group_id": "197792082e5442b59f54ade5ccda1ece",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 12495084,
+          "setup_ns": 412250,
+          "terminal_ns": 553000,
+          "total_ns": 13814333
+        },
+        {
+          "pipeline_ns": 12551750,
+          "setup_ns": 317833,
+          "terminal_ns": 348541,
+          "total_ns": 13242625
+        },
+        {
+          "pipeline_ns": 12613791,
+          "setup_ns": 334166,
+          "terminal_ns": 375959,
+          "total_ns": 13351542
+        },
+        {
+          "pipeline_ns": 13230166,
+          "setup_ns": 317917,
+          "terminal_ns": 483042,
+          "total_ns": 14069542
+        },
+        {
+          "pipeline_ns": 13681250,
+          "setup_ns": 362291,
+          "terminal_ns": 583708,
+          "total_ns": 14684708
+        },
+        {
+          "pipeline_ns": 13574459,
+          "setup_ns": 332917,
+          "terminal_ns": 494792,
+          "total_ns": 14447958
+        },
+        {
+          "pipeline_ns": 13555458,
+          "setup_ns": 389667,
+          "terminal_ns": 423166,
+          "total_ns": 14406084
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "pillow",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "source",
+      "step_ids": [],
+      "subject_kind": "oracle",
+      "throughput_operations_per_second": [
+        72.41085571963212,
+        75.52798783999395,
+        74.9117427303023,
+        71.09552444431205,
+        68.12182607639468,
+        69.23669589193759,
+        69.43480072212192
+      ],
+      "timings_ns": [
+        13810084,
+        13240125,
+        13349042,
+        14065583,
+        14679583,
+        14443208,
+        14402000
+      ],
+      "workload_ids": [
+        "pipeline-chain.convolution.native.rgba-5x5-invert.1024x768"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.l-5x5-scale.1024x768",
+      "child_invocation_id": "5299f0c41c23455d92d7807492b4a539",
+      "child_repeat": 7,
+      "child_sequence": 0,
+      "group_id": "197792082e5442b59f54ade5ccda1ece",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 4366500,
+          "setup_ns": 78041,
+          "terminal_ns": 294792,
+          "total_ns": 4783208
+        },
+        {
+          "pipeline_ns": 4491917,
+          "setup_ns": 93709,
+          "terminal_ns": 304750,
+          "total_ns": 4940959
+        },
+        {
+          "pipeline_ns": 4297916,
+          "setup_ns": 58584,
+          "terminal_ns": 261792,
+          "total_ns": 4653083
+        },
+        {
+          "pipeline_ns": 4330833,
+          "setup_ns": 58584,
+          "terminal_ns": 208500,
+          "total_ns": 4626167
+        },
+        {
+          "pipeline_ns": 4309875,
+          "setup_ns": 62000,
+          "terminal_ns": 198333,
+          "total_ns": 4598375
+        },
+        {
+          "pipeline_ns": 4345500,
+          "setup_ns": 57166,
+          "terminal_ns": 218500,
+          "total_ns": 4648333
+        },
+        {
+          "pipeline_ns": 4305917,
+          "setup_ns": 67334,
+          "terminal_ns": 227208,
+          "total_ns": 4626333
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "pillow",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "source",
+      "step_ids": [],
+      "subject_kind": "oracle",
+      "throughput_operations_per_second": [
+        209.26337826008802,
+        202.62398054809788,
+        215.10770227545228,
+        216.3097555699762,
+        217.61208600116683,
+        215.25239742738944,
+        216.26685773122657
+      ],
+      "timings_ns": [
+        4778667,
+        4935250,
+        4648834,
+        4623000,
+        4595333,
+        4645709,
+        4623917
+      ],
+      "workload_ids": [
+        "pipeline-chain.convolution.native.l-5x5-scale.1024x768"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.material.rgb-5x5-pad.256x256",
+      "child_invocation_id": "b301bd05abc94a58a68f501a1913b52e",
+      "child_repeat": 7,
+      "child_sequence": 1,
+      "group_id": "9c7f5604b28b49759e1f8a482e61e815",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 32334,
+          "setup_ns": 36125,
+          "terminal_ns": 1664917,
+          "total_ns": 1779042
+        },
+        {
+          "pipeline_ns": 13417,
+          "setup_ns": 18541,
+          "terminal_ns": 1729292,
+          "total_ns": 1791167
+        },
+        {
+          "pipeline_ns": 10376,
+          "setup_ns": 15542,
+          "terminal_ns": 1700459,
+          "total_ns": 1751042
+        },
+        {
+          "pipeline_ns": 9626,
+          "setup_ns": 15125,
+          "terminal_ns": 1703959,
+          "total_ns": 1751958
+        },
+        {
+          "pipeline_ns": 9417,
+          "setup_ns": 13666,
+          "terminal_ns": 1701667,
+          "total_ns": 1747417
+        },
+        {
+          "pipeline_ns": 9126,
+          "setup_ns": 13751,
+          "terminal_ns": 1721333,
+          "total_ns": 1810375
+        },
+        {
+          "pipeline_ns": 9959,
+          "setup_ns": 14709,
+          "terminal_ns": 1701792,
+          "total_ns": 1748917
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "python-cpu",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "target",
+      "step_ids": [],
+      "subject_kind": "target_profile",
+      "throughput_operations_per_second": [
+        564.1618444933008,
+        559.5579492201161,
+        571.9868305752128,
+        571.5510466528542,
+        573.01106427064,
+        553.1098880007788,
+        572.5193024882834
+      ],
+      "timings_ns": [
+        1772541,
+        1787125,
+        1748292,
+        1749625,
+        1745167,
+        1807959,
+        1746666
+      ],
+      "workload_ids": [
+        "pipeline-chain.convolution.material.rgb-5x5-pad.256x256"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.rgb-5x5-pad.1024x768",
+      "child_invocation_id": "b301bd05abc94a58a68f501a1913b52e",
+      "child_repeat": 7,
+      "child_sequence": 1,
+      "group_id": "9c7f5604b28b49759e1f8a482e61e815",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 10583,
+          "setup_ns": 166166,
+          "terminal_ns": 20970625,
+          "total_ns": 21174417
+        },
+        {
+          "pipeline_ns": 14708,
+          "setup_ns": 99959,
+          "terminal_ns": 21101417,
+          "total_ns": 21239750
+        },
+        {
+          "pipeline_ns": 9667,
+          "setup_ns": 92083,
+          "terminal_ns": 21000250,
+          "total_ns": 21125000
+        },
+        {
+          "pipeline_ns": 9292,
+          "setup_ns": 91250,
+          "terminal_ns": 21897000,
+          "total_ns": 22054500
+        },
+        {
+          "pipeline_ns": 28666,
+          "setup_ns": 214667,
+          "terminal_ns": 21006042,
+          "total_ns": 21278542
+        },
+        {
+          "pipeline_ns": 12626,
+          "setup_ns": 99375,
+          "terminal_ns": 20999417,
+          "total_ns": 21137458
+        },
+        {
+          "pipeline_ns": 10334,
+          "setup_ns": 114417,
+          "terminal_ns": 21053334,
+          "total_ns": 21204917
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "python-cpu",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "target",
+      "step_ids": [],
+      "subject_kind": "target_profile",
+      "throughput_operations_per_second": [
+        47.23340040003856,
+        47.08689174860139,
+        47.34213221578127,
+        45.35361716413084,
+        47.00352526439483,
+        47.31544021102686,
+        47.16443635480032
+      ],
+      "timings_ns": [
+        21171459,
+        21237333,
+        21122834,
+        22048958,
+        21275000,
+        21134750,
+        21202416
+      ],
+      "workload_ids": [
+        "pipeline-chain.convolution.native.rgb-5x5-pad.1024x768"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.la-5x5-mirror.1024x768",
+      "child_invocation_id": "b301bd05abc94a58a68f501a1913b52e",
+      "child_repeat": 7,
+      "child_sequence": 1,
+      "group_id": "9c7f5604b28b49759e1f8a482e61e815",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 11333,
+          "setup_ns": 98832,
+          "terminal_ns": 16313750,
+          "total_ns": 16453500
+        },
+        {
+          "pipeline_ns": 9125,
+          "setup_ns": 80708,
+          "terminal_ns": 16058750,
+          "total_ns": 16171167
+        },
+        {
+          "pipeline_ns": 6917,
+          "setup_ns": 73376,
+          "terminal_ns": 16198000,
+          "total_ns": 16301375
+        },
+        {
+          "pipeline_ns": 6541,
+          "setup_ns": 69958,
+          "terminal_ns": 16053916,
+          "total_ns": 16150625
+        },
+        {
+          "pipeline_ns": 6458,
+          "setup_ns": 71500,
+          "terminal_ns": 16054834,
+          "total_ns": 16153708
+        },
+        {
+          "pipeline_ns": 6208,
+          "setup_ns": 83500,
+          "terminal_ns": 16123834,
+          "total_ns": 16234125
+        },
+        {
+          "pipeline_ns": 6125,
+          "setup_ns": 83292,
+          "terminal_ns": 16131000,
+          "total_ns": 16240417
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "python-cpu",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "target",
+      "step_ids": [],
+      "subject_kind": "target_profile",
+      "throughput_operations_per_second": [
+        60.79104222108097,
+        61.848813173846686,
+        61.35298674008574,
+        61.925256215747595,
+        61.91327498007166,
+        61.606543403473204,
+        61.582516723502195
+      ],
+      "timings_ns": [
+        16449792,
+        16168459,
+        16299125,
+        16148500,
+        16151625,
+        16232042,
+        16238375
+      ],
+      "workload_ids": [
+        "pipeline-chain.convolution.native.la-5x5-mirror.1024x768"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.rgba-5x5-invert.1024x768",
+      "child_invocation_id": "b301bd05abc94a58a68f501a1913b52e",
+      "child_repeat": 7,
+      "child_sequence": 1,
+      "group_id": "9c7f5604b28b49759e1f8a482e61e815",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 4708,
+          "setup_ns": 154874,
+          "terminal_ns": 755125,
+          "total_ns": 936959
+        },
+        {
+          "pipeline_ns": 4084,
+          "setup_ns": 154708,
+          "terminal_ns": 568542,
+          "total_ns": 745917
+        },
+        {
+          "pipeline_ns": 4250,
+          "setup_ns": 150209,
+          "terminal_ns": 566750,
+          "total_ns": 738834
+        },
+        {
+          "pipeline_ns": 3583,
+          "setup_ns": 149749,
+          "terminal_ns": 571541,
+          "total_ns": 742625
+        },
+        {
+          "pipeline_ns": 3708,
+          "setup_ns": 148959,
+          "terminal_ns": 566583,
+          "total_ns": 736709
+        },
+        {
+          "pipeline_ns": 4000,
+          "setup_ns": 150584,
+          "terminal_ns": 568042,
+          "total_ns": 740750
+        },
+        {
+          "pipeline_ns": 3625,
+          "setup_ns": 148584,
+          "terminal_ns": 683500,
+          "total_ns": 853125
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "python-cpu",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "target",
+      "step_ids": [],
+      "subject_kind": "target_profile",
+      "throughput_operations_per_second": [
+        1070.2810772164985,
+        1344.0101499646526,
+        1356.5447178183506,
+        1349.6806655545297,
+        1360.6201162241703,
+        1352.9511246406223,
+        1174.2836576117654
+      ],
+      "timings_ns": [
+        934334,
+        744042,
+        737167,
+        740916,
+        734959,
+        739125,
+        851583
+      ],
+      "workload_ids": [
+        "pipeline-chain.convolution.native.rgba-5x5-invert.1024x768"
+      ]
+    },
+    {
+      "boundary": "whole_workflow",
+      "capture_errors": [],
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.l-5x5-scale.1024x768",
+      "child_invocation_id": "b301bd05abc94a58a68f501a1913b52e",
+      "child_repeat": 7,
+      "child_sequence": 1,
+      "group_id": "9c7f5604b28b49759e1f8a482e61e815",
+      "lifecycle": "warm",
+      "phase_telemetry_ns": [
+        {
+          "pipeline_ns": 15167,
+          "setup_ns": 51375,
+          "terminal_ns": 2256250,
+          "total_ns": 2344875
+        },
+        {
+          "pipeline_ns": 8251,
+          "setup_ns": 48667,
+          "terminal_ns": 2266250,
+          "total_ns": 2343208
+        },
+        {
+          "pipeline_ns": 7458,
+          "setup_ns": 46833,
+          "terminal_ns": 2272958,
+          "total_ns": 2374625
+        },
+        {
+          "pipeline_ns": 7542,
+          "setup_ns": 47125,
+          "terminal_ns": 2245542,
+          "total_ns": 2320375
+        },
+        {
+          "pipeline_ns": 8459,
+          "setup_ns": 47667,
+          "terminal_ns": 2312375,
+          "total_ns": 2388291
+        },
+        {
+          "pipeline_ns": 7209,
+          "setup_ns": 47125,
+          "terminal_ns": 2283375,
+          "total_ns": 2357708
+        },
+        {
+          "pipeline_ns": 7667,
+          "setup_ns": 46667,
+          "terminal_ns": 2241000,
+          "total_ns": 2314500
+        }
+      ],
+      "planned_repeat": 7,
+      "profile": "python-cpu",
+      "sample_labels": [
+        {
+          "measurement_iteration": null,
+          "ordinal": 0,
+          "role": "warmup",
+          "sample_in_iteration": null
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 1,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 1,
+          "ordinal": 2,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 3,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 2,
+          "ordinal": 4,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 5,
+          "role": "measurement",
+          "sample_in_iteration": 1
+        },
+        {
+          "measurement_iteration": 3,
+          "ordinal": 6,
+          "role": "measurement",
+          "sample_in_iteration": 2
+        }
+      ],
+      "side": "target",
+      "step_ids": [],
+      "subject_kind": "target_profile",
+      "throughput_operations_per_second": [
+        426.91712471316504,
+        427.1299260894376,
+        421.51105813185455,
+        431.34441859732834,
+        419.06019883568314,
+        424.5082178423351,
+        432.4013930243278
+      ],
+      "timings_ns": [
+        2342375,
+        2341208,
+        2372417,
+        2318333,
+        2386292,
+        2355667,
+        2312666
+      ],
+      "workload_ids": [
+        "pipeline-chain.convolution.native.l-5x5-scale.1024x768"
+      ]
+    }
+  ],
+  "report": {
+    "inputs": [
+      {
+        "path": "inputs/benchmark/convolution-uniform-color-trial-20261014.json",
+        "schema": "migration-parity/benchmark-input@1",
+        "sha256": "dc01c2a870fe73940dcddd84538cb9c698386757f8083bd1c31f2b33cf567077"
+      }
+    ],
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.convolution-uniform-color-trial-20261014.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "453990309df1a2251977e27d8fd36eea81d18a0644063949f802898e5136c74b"
+    },
+    "path": "/Users/lazytrot/work/pillow-rs/build/migration-parity/convolution-box-local-arm64-20261016/A1-control-benchmark.json",
+    "run_id": "migration-benchmark-4c7496be93f045acb0715384256d378c",
+    "schema": "migration-parity/benchmark-result@1"
+  },
+  "schema": "migration-parity/benchmark-raw-samples@1",
+  "workloads": [
+    {
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.material.rgb-5x5-pad.256x256",
+      "measurement_policy": {
+        "boundary": "whole_workflow",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "successful_execution",
+        "measurement_iterations": 3,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 2,
+        "step_ids": [],
+        "warmup_iterations": 1
+      },
+      "workload_id": "pipeline-chain.convolution.material.rgb-5x5-pad.256x256"
+    },
+    {
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.l-5x5-scale.1024x768",
+      "measurement_policy": {
+        "boundary": "whole_workflow",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "successful_execution",
+        "measurement_iterations": 3,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 2,
+        "step_ids": [],
+        "warmup_iterations": 1
+      },
+      "workload_id": "pipeline-chain.convolution.native.l-5x5-scale.1024x768"
+    },
+    {
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.la-5x5-mirror.1024x768",
+      "measurement_policy": {
+        "boundary": "whole_workflow",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "successful_execution",
+        "measurement_iterations": 3,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 2,
+        "step_ids": [],
+        "warmup_iterations": 1
+      },
+      "workload_id": "pipeline-chain.convolution.native.la-5x5-mirror.1024x768"
+    },
+    {
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.rgb-5x5-pad.1024x768",
+      "measurement_policy": {
+        "boundary": "whole_workflow",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "successful_execution",
+        "measurement_iterations": 3,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 2,
+        "step_ids": [],
+        "warmup_iterations": 1
+      },
+      "workload_id": "pipeline-chain.convolution.native.rgb-5x5-pad.1024x768"
+    },
+    {
+      "case_id": "benchmark-workflow.pipeline-chain.convolution.native.rgba-5x5-invert.1024x768",
+      "measurement_policy": {
+        "boundary": "whole_workflow",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "successful_execution",
+        "measurement_iterations": 3,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 2,
+        "step_ids": [],
+        "warmup_iterations": 1
+      },
+      "workload_id": "pipeline-chain.convolution.native.rgba-5x5-invert.1024x768"
+    }
+  ]
+}

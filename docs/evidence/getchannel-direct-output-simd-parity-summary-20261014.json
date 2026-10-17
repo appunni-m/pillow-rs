@@ -1,0 +1,302 @@
+{
+  "cohorts": [
+    {
+      "artifact_bytes": 37767365,
+      "artifact_path": "/home/appunni/pillow-rs-getchannel-simd-20261014-01/evidence/getchannel-direct-output-simd-A1-parity-20261014.json",
+      "artifact_sha256": "3ff46e062cf4c2dfd9b4f0be9b8994586987f5a296a680a864afc08cf0e8396e",
+      "cohort": "A1",
+      "comparisons": [
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        }
+      ],
+      "finished_at": "2026-10-13T19:21:17.248742Z",
+      "manifest_sha256": "cfe6623742a349f1213aecd99d5ea710ff3e8810747f76934caa66a8f9f173dc",
+      "run_id": "migration-parity-benchmark-gate-9d5348e490dd4a9a8f4c39104bbf894a",
+      "started_at": "2026-10-13T19:21:01.629860Z",
+      "summary": {
+        "executed": 9,
+        "failed": 0,
+        "infrastructure_errors": 0,
+        "not_run": 0,
+        "passed": 9,
+        "selected": 9
+      }
+    },
+    {
+      "artifact_bytes": 37767365,
+      "artifact_path": "/home/appunni/pillow-rs-getchannel-simd-20261014-01/evidence/getchannel-direct-output-simd-A2-parity-20261014.json",
+      "artifact_sha256": "c82674e3586186abd932ece9ea8baccf848aefa434aece3a05d09445a37e7ac1",
+      "cohort": "A2",
+      "comparisons": [
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        }
+      ],
+      "finished_at": "2026-10-13T19:34:02.157396Z",
+      "manifest_sha256": "cfe6623742a349f1213aecd99d5ea710ff3e8810747f76934caa66a8f9f173dc",
+      "run_id": "migration-parity-benchmark-gate-df9dc90db4fa4956821418ae1681888d",
+      "started_at": "2026-10-13T19:33:46.458131Z",
+      "summary": {
+        "executed": 9,
+        "failed": 0,
+        "infrastructure_errors": 0,
+        "not_run": 0,
+        "passed": 9,
+        "selected": 9
+      }
+    },
+    {
+      "artifact_bytes": 37767365,
+      "artifact_path": "/home/appunni/pillow-rs-getchannel-simd-candidate-20261014-01/evidence/getchannel-direct-output-simd-B1-parity-20261014.json",
+      "artifact_sha256": "96d292db631a974df8dba3ae1189c6efef8df3732a1e24e43f93dad00c7e36c7",
+      "cohort": "B1",
+      "comparisons": [
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        }
+      ],
+      "finished_at": "2026-10-13T19:29:43.674866Z",
+      "manifest_sha256": "cfe6623742a349f1213aecd99d5ea710ff3e8810747f76934caa66a8f9f173dc",
+      "run_id": "migration-parity-benchmark-gate-5b0270b8abdf43f890a704ec17339cbb",
+      "started_at": "2026-10-13T19:29:27.956566Z",
+      "summary": {
+        "executed": 9,
+        "failed": 0,
+        "infrastructure_errors": 0,
+        "not_run": 0,
+        "passed": 9,
+        "selected": 9
+      }
+    },
+    {
+      "artifact_bytes": 37767365,
+      "artifact_path": "/home/appunni/pillow-rs-getchannel-simd-candidate-20261014-01/evidence/getchannel-direct-output-simd-B2-parity-20261014.json",
+      "artifact_sha256": "290d122ad44a60a2ea17c99b8c87ca4e19e6db2d36891f36c2ee725168e6ef40",
+      "cohort": "B2",
+      "comparisons": [
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-cpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-simd"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-la-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        },
+        {
+          "case_id": "PIL.Image.Image.getchannel.nuanced.performance-rgba-1024x768",
+          "diff_count": 0,
+          "outcome": "pass",
+          "target_profile": "python-gpu"
+        }
+      ],
+      "finished_at": "2026-10-13T19:30:38.054563Z",
+      "manifest_sha256": "cfe6623742a349f1213aecd99d5ea710ff3e8810747f76934caa66a8f9f173dc",
+      "run_id": "migration-parity-benchmark-gate-f3daa80aea414842b0b091a5f9f55028",
+      "started_at": "2026-10-13T19:30:22.427238Z",
+      "summary": {
+        "executed": 9,
+        "failed": 0,
+        "infrastructure_errors": 0,
+        "not_run": 0,
+        "passed": 9,
+        "selected": 9
+      }
+    }
+  ],
+  "note": "Derived from full runner-side parity artifacts; original receipts are retained on the runner and identified by size and SHA-256.",
+  "schema": "getchannel-parity-gate-summary@1"
+}

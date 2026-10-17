@@ -1,0 +1,85 @@
+{
+  "cases": [
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.mode.rgba",
+      "outcome": "pass",
+      "target_profile": "python-cpu"
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.canvas-rgb-negative-position",
+      "outcome": "pass",
+      "target_profile": "python-cpu"
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.embedded-bgra-rgb",
+      "outcome": "pass",
+      "target_profile": "python-cpu"
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.embedded-bgra-rgba-context-rgb",
+      "outcome": "pass",
+      "target_profile": "python-cpu"
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.performance-rgb-noise-1024x768",
+      "outcome": "pass",
+      "target_profile": "python-cpu"
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.performance-rgb-rgba-context-noise-1024x768",
+      "outcome": "pass",
+      "target_profile": "python-cpu"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "inputs/parity/pil-imagedraw-imagedraw.json",
+      "schema": "migration-parity/parity-input@1",
+      "sha256": "7d68f5510e985dccfbb910d1c8657228a85f4441d6bfe86aa016589cd8e7f400"
+    }
+  ],
+  "manifest": {
+    "path": "pillow-rs/tests/fixtures/manifest.yaml",
+    "schema": "migration-parity/manifest@2",
+    "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+  },
+  "oracle": [
+    {
+      "name": "Pillow",
+      "oracle_id": "pillow",
+      "runtime": "CPython 3.12",
+      "version": "12.2.0"
+    }
+  ],
+  "report": {
+    "canonical_sha256": "ab06a597b2634c1e69995f3388785911ae144d5666566a272cc3b3f730714192",
+    "container_bytes": 19051541,
+    "container_sha256": "8e5ab888604d1219876d8746b404ce1deda98e3a2763825bb788065c9e64c9dd",
+    "full_report_retained_at_measurement": "/tmp/imagedraw-text-arm64-20261016-parity.json.gz",
+    "run_id": "migration-parity-83b0ed5659564c20b9e8dc39b6b63330"
+  },
+  "schema": "pillow-rs/local-parity-summary@1",
+  "status": "completed",
+  "summary": {
+    "executed": 6,
+    "failed": 0,
+    "infrastructure_errors": 0,
+    "not_run": 0,
+    "passed": 6,
+    "selected": 6
+  },
+  "target": {
+    "backend": "cpu",
+    "dirty": true,
+    "extension_bytes": 9967296,
+    "extension_sha256": "315a2f3278395a2a2f9ae65221ad2fcbdb2cc463558931c0acd3ca35334ce198",
+    "features": [
+      "pillow-rs-py/default",
+      "pillow-rs/default"
+    ],
+    "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+    "runtime": "3.12.13",
+    "target_id": "pillow-rs-python",
+    "target_profile": "python-cpu"
+  }
+}

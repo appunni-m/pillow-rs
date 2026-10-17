@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "/home/appunni/pillow-rs-resize-trial-20261015/scripts/run_migration_parity.py", line 4545, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/appunni/pillow-rs-resize-trial-20261015/scripts/run_migration_parity.py", line 4541, in main
+    return run_orchestrator(args)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/appunni/pillow-rs-resize-trial-20261015/scripts/run_migration_parity.py", line 3589, in run_orchestrator
+    cases, case_inputs = load_cases(manifest, case_ids=case_ids or None, surface=args.surface)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/appunni/pillow-rs-resize-trial-20261015/scripts/run_migration_parity.py", line 2917, in load_cases
+    validate_fixed_inputs(manifest, FIXTURE_ROOT, lane="parity")
+  File "/home/appunni/pillow-rs-resize-trial-20261015/scripts/validate_migration_parity_contract.py", line 723, in validate_inputs
+    _validate_parity_document(document, relative, operation_index, requirement_index, profile_ids, fixture_root, item_ids)
+  File "/home/appunni/pillow-rs-resize-trial-20261015/scripts/validate_migration_parity_contract.py", line 779, in _validate_parity_document
+    raise _error(f"{path}.covers", f"requirement {requirement_id!r} is not applicable to this case")
+ValueError: inputs/parity/cmyk-packing-20261015.json.cases[0].covers: requirement 'PIL.Image.Image.convert.behavior.default' is not applicable to this case

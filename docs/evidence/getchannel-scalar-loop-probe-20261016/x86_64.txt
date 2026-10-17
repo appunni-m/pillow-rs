@@ -1,0 +1,6 @@
+rustc 1.91.1 (ed61e7d7e 2025-11-07)
+host=x86_64 pixels=786432 input_bytes=2359296 allocation_included=true unit=us_per_channel_call
+current_extend_array: median=429 max_of_5=503 samples=[425, 429, 429, 430, 503]
+unrolled_push: median=1298 max_of_5=1642 samples=[1290, 1291, 1298, 1302, 1642]
+pixel_chunks: median=1403 max_of_5=1408 samples=[1397, 1397, 1403, 1404, 1408]
+stride_iter_collect: median=413 max_of_5=417 samples=[413, 413, 413, 413, 417]

@@ -1,4 +1,6 @@
 /target/
+# Retained cache from perfdb before it moved to its separate repository.
+/tools/perfdb/target/
 /build/
 **/*.rs.bk
 *.pyc

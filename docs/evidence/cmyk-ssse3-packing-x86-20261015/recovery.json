@@ -1,0 +1,175 @@
+{
+  "method": "Project raw timing envelopes by explicit command boundary and side; bind each adjacent untimed target proof; discard exactly five warmups; aggregate the unchanged 100 samples. Original combined reports remain uncorrected historical artifacts.",
+  "aggregation_source_sha256": "55e6be88698f2cd37f9afc9984e01f7b3d531540c88f60579c29b3fe07cbea3d",
+  "recovery_script_sha256": "c0559f2e1e102d0033fec05e8efce968000ce67c25e4b01b07adca31a22c1a24",
+  "cohorts": [
+    {
+      "cohort": "A1-selected",
+      "original_report_sha256": "541b8ef09804dbd1876e689281a033b78d132b4954f1642ea83d3361aa05536a",
+      "raw_sha256": "ec8333f09f96322b7fe2e88b5d147ae827f8e7cea4bb06376ee4ae1b94666d79",
+      "recovered_report_sha256": "541f9fa9cf76e79afe97b5fbcdab7b0e83cd849ee6ed5b5ee21d82375adb45c5",
+      "rows": [
+        {
+          "workload_id": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+          "subject": "pillow",
+          "steps": [
+            "call",
+            "materialize"
+          ],
+          "median_ms": 9.3001705
+        },
+        {
+          "workload_id": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+          "subject": "python-simd",
+          "steps": [
+            "call",
+            "materialize"
+          ],
+          "median_ms": 5.879945
+        },
+        {
+          "workload_id": "pipeline-chain.convert.material-cmyk-to-rgb-1024x768",
+          "subject": "pillow",
+          "steps": [
+            "call"
+          ],
+          "median_ms": 8.5805785
+        },
+        {
+          "workload_id": "pipeline-chain.convert.material-cmyk-to-rgb-1024x768",
+          "subject": "python-simd",
+          "steps": [
+            "call"
+          ],
+          "median_ms": 5.806239
+        }
+      ]
+    },
+    {
+      "cohort": "B1",
+      "original_report_sha256": "f4a9104fcfc26c3c80c6276fa101759d82c2bf511799d41cd018640b2247548f",
+      "raw_sha256": "b4a9832ca7888ceb02351c4391e66496aab8861dd72fecf9b376a79a08083791",
+      "recovered_report_sha256": "81cb0b3a1dc65ad5d3a56a0e74d1e66cd99be15e0177019ebb31e5eb0b333eec",
+      "rows": [
+        {
+          "workload_id": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+          "subject": "pillow",
+          "steps": [
+            "call",
+            "materialize"
+          ],
+          "median_ms": 8.344968000000001
+        },
+        {
+          "workload_id": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+          "subject": "python-simd",
+          "steps": [
+            "call",
+            "materialize"
+          ],
+          "median_ms": 4.639881000000001
+        },
+        {
+          "workload_id": "pipeline-chain.convert.material-cmyk-to-rgb-1024x768",
+          "subject": "pillow",
+          "steps": [
+            "call"
+          ],
+          "median_ms": 8.176414999999999
+        },
+        {
+          "workload_id": "pipeline-chain.convert.material-cmyk-to-rgb-1024x768",
+          "subject": "python-simd",
+          "steps": [
+            "call"
+          ],
+          "median_ms": 4.624862
+        }
+      ]
+    },
+    {
+      "cohort": "B2",
+      "original_report_sha256": "c343b695f3a64c84faf2a82cb71e60b4ce2aecda99114e6c2d47cdf5287054ac",
+      "raw_sha256": "0f1da5ab489721d045e2628fe6ea29f7525a8405efe7bae4e328914ed12e473b",
+      "recovered_report_sha256": "5037f948379804b3b95169ef26087d88d454af61613a302a71d8cde41918c4ff",
+      "rows": [
+        {
+          "workload_id": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+          "subject": "pillow",
+          "steps": [
+            "call",
+            "materialize"
+          ],
+          "median_ms": 8.211406
+        },
+        {
+          "workload_id": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+          "subject": "python-simd",
+          "steps": [
+            "call",
+            "materialize"
+          ],
+          "median_ms": 4.5698205
+        },
+        {
+          "workload_id": "pipeline-chain.convert.material-cmyk-to-rgb-1024x768",
+          "subject": "pillow",
+          "steps": [
+            "call"
+          ],
+          "median_ms": 8.0861185
+        },
+        {
+          "workload_id": "pipeline-chain.convert.material-cmyk-to-rgb-1024x768",
+          "subject": "python-simd",
+          "steps": [
+            "call"
+          ],
+          "median_ms": 4.608881
+        }
+      ]
+    },
+    {
+      "cohort": "A2",
+      "original_report_sha256": "2f497a27ca5b138c8a38693820ffe0857d8e17bbe3c82790ecb375bc200c7b41",
+      "raw_sha256": "d02c4ba8d34e12f65e4b0bfa0bd1a67d29ceef30232b0775289f0c958140a38a",
+      "recovered_report_sha256": "a8470f005c83f23895bd135b5d69561e686efd365d719d3037676c0ed4bc9649",
+      "rows": [
+        {
+          "workload_id": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+          "subject": "pillow",
+          "steps": [
+            "call",
+            "materialize"
+          ],
+          "median_ms": 8.22094
+        },
+        {
+          "workload_id": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+          "subject": "python-simd",
+          "steps": [
+            "call",
+            "materialize"
+          ],
+          "median_ms": 5.5425995
+        },
+        {
+          "workload_id": "pipeline-chain.convert.material-cmyk-to-rgb-1024x768",
+          "subject": "pillow",
+          "steps": [
+            "call"
+          ],
+          "median_ms": 8.176175
+        },
+        {
+          "workload_id": "pipeline-chain.convert.material-cmyk-to-rgb-1024x768",
+          "subject": "python-simd",
+          "steps": [
+            "call"
+          ],
+          "median_ms": 5.7069995
+        }
+      ]
+    }
+  ]
+}

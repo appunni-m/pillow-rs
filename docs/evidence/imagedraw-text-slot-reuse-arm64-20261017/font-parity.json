@@ -1,0 +1,803 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "identity": {
+    "run_id": "migration-parity-c871c421c2d940208952035b59a20718",
+    "started_at": "2026-10-17T00:55:08.905821Z",
+    "finished_at": "2026-10-17T00:55:09.966269Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/pil-imagedraw-imagedraw.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "7d68f5510e985dccfbb910d1c8657228a85f4441d6bfe86aa016589cd8e7f400"
+      },
+      {
+        "path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "f8e5521194698a68d50dbf53ee2ab2811577f98cb261912b021af1a5ce561aa1"
+      }
+    ],
+    "assets": [
+      {
+        "input_path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "item_id": "PIL.ImageFont.FreeTypeFont.getmask.behavior.default",
+        "asset_id": "font",
+        "kind": "ref",
+        "locator": "font/fonts/DejaVuSans.ttf",
+        "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a"
+      },
+      {
+        "input_path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "item_id": "PIL.ImageFont.FreeTypeFont.getmask.nuanced.sbit-gray-private-base",
+        "asset_id": "font",
+        "kind": "ref",
+        "locator": "font/fonts/sbit-gray-format1.ttf",
+        "sha256": "59866ef21c5dd06e63acd7caecbdc9fb074cd0862408d4178c4148a737abd4d8"
+      },
+      {
+        "input_path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "item_id": "PIL.ImageFont.FreeTypeFont.getmask2.behavior.default",
+        "asset_id": "font",
+        "kind": "ref",
+        "locator": "font/fonts/DejaVuSans.ttf",
+        "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a"
+      },
+      {
+        "input_path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "item_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.fractional-start",
+        "asset_id": "font",
+        "kind": "ref",
+        "locator": "font/fonts/DejaVuSans.ttf",
+        "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a"
+      },
+      {
+        "input_path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "item_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-one",
+        "asset_id": "font",
+        "kind": "ref",
+        "locator": "font/fonts/DejaVuSans.ttf",
+        "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a"
+      },
+      {
+        "input_path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "item_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-rgba-embedded-bgra",
+        "asset_id": "font",
+        "kind": "ref",
+        "locator": "font/fonts/sbit-bgra-format1.ttf",
+        "sha256": "20189ba8c4c98024ff5887cba2099c7a5d8d46d7f4dd5e2d31be8815718f881d"
+      },
+      {
+        "input_path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "item_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-clipped",
+        "asset_id": "font",
+        "kind": "ref",
+        "locator": "font/fonts/DejaVuSans.ttf",
+        "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a"
+      },
+      {
+        "input_path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "item_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-vertical-clipped",
+        "asset_id": "font",
+        "kind": "ref",
+        "locator": "font/fonts/DejaVuSans.ttf",
+        "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a"
+      },
+      {
+        "input_path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "item_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.space-default-route",
+        "asset_id": "font",
+        "kind": "ref",
+        "locator": "font/fonts/DejaVuSans.ttf",
+        "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a"
+      },
+      {
+        "input_path": "inputs/parity/pil-imagefont-freetypefont.json",
+        "item_id": "PIL.ImageFont.FreeTypeFont.getmask2.parameter.stroke-width",
+        "asset_id": "font",
+        "kind": "ref",
+        "locator": "font/fonts/DejaVuSans.ttf",
+        "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a"
+      }
+    ],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-cpu",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "cpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-test"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 3600
+    }
+  },
+  "status": "completed",
+  "summary": {
+    "selected": 11,
+    "executed": 11,
+    "passed": 11,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.parameter.stroke-width",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageDraw.ImageDraw.text.parameter.stroke-width"
+      ],
+      "source": {
+        "case_id": "PIL.ImageDraw.ImageDraw.text.parameter.stroke-width",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": null
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageDraw.ImageDraw.text.parameter.stroke-width",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": null
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask.behavior.default",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageFont.FreeTypeFont.getmask.behavior.default",
+        "PIL.ImageFont.FreeTypeFont.getmask.parameter.text",
+        "PIL.ImageFont.FreeTypeFont.getmask.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask.behavior.default",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "mask",
+              "mode": "L",
+              "size": [
+                63,
+                19
+              ],
+              "bytes": "AAj/8AAAAAAAAADk/xQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP////////////8AAP////////////8AAP////////////8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAWMPy99N4BwAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAACK////////wAUAAAj//////////////xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAD3/+ngdElnt/3oAAAj//////////////xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAJ//gwAAAABM/94AAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AANH/JAAAAAAA6f8QAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAOD/CQAAAAAAzf8fAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AANH/JAAAAAAA6f8QAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAKD/gwAAAABK/94AAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAD7/+ngcEVfr/3sAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAACN////////wgYAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAW8Xz+NR7CAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////////////8AAP////////////8AAP////////////8AAAAAAAAAAAAAAAAA"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask.behavior.default",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "mask",
+              "mode": "L",
+              "size": [
+                63,
+                19
+              ],
+              "bytes": "AAj/8AAAAAAAAADk/xQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP////////////8AAP////////////8AAP////////////8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAWMPy99N4BwAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAACK////////wAUAAAj//////////////xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAD3/+ngdElnt/3oAAAj//////////////xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAJ//gwAAAABM/94AAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AANH/JAAAAAAA6f8QAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAOD/CQAAAAAAzf8fAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AANH/JAAAAAAA6f8QAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAKD/gwAAAABK/94AAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAD7/+ngcEVfr/3sAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAACN////////wgYAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAW8Xz+NR7CAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////////////8AAP////////////8AAP////////////8AAAAAAAAAAAAAAAAA"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask.nuanced.sbit-gray-private-base",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageFont.FreeTypeFont.getmask.parameter.text"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask.nuanced.sbit-gray-private-base",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "mask",
+              "mode": "L",
+              "size": [
+                3,
+                2
+              ],
+              "bytes": "ABGAAMD/"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask.nuanced.sbit-gray-private-base",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "mask",
+              "mode": "L",
+              "size": [
+                3,
+                2
+              ],
+              "bytes": "ABGAAMD/"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.behavior.default",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.behavior.default",
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.text",
+        "PIL.ImageFont.FreeTypeFont.getmask2.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.behavior.default",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  63,
+                  19
+                ],
+                "bytes": "AAj/8AAAAAAAAADk/xQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP////////////8AAP////////////8AAP////////////8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAWMPy99N4BwAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAACK////////wAUAAAj//////////////xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAD3/+ngdElnt/3oAAAj//////////////xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAJ//gwAAAABM/94AAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AANH/JAAAAAAA6f8QAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAOD/CQAAAAAAzf8fAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AANH/JAAAAAAA6f8QAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAKD/gwAAAABK/94AAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAD7/+ngcEVfr/3sAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAACN////////wgYAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAW8Xz+NR7CAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////////////8AAP////////////8AAP////////////8AAAAAAAAAAAAAAAAA"
+              },
+              "offset": [
+                0,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.behavior.default",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  63,
+                  19
+                ],
+                "bytes": "AAj/8AAAAAAAAADk/xQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP////////////8AAP////////////8AAP////////////8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAWMPy99N4BwAAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAACK////////wAUAAAj//////////////xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAD3/+ngdElnt/3oAAAj//////////////xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAJ//gwAAAABM/94AAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AANH/JAAAAAAA6f8QAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAOD/CQAAAAAAzf8fAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AANH/JAAAAAAA6f8QAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAKD/gwAAAABK/94AAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAD7/+ngcEVfr/3sAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAACN////////wgYAAAj/8AAAAAAAAADk/xQAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAW8Xz+NR7CAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAP8gAAAAAAAAHP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////////////8AAP////////////8AAP////////////8AAAAAAAAAAAAAAAAA"
+              },
+              "offset": [
+                0,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.fractional-start",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.start"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.fractional-start",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  29,
+                  16
+                ],
+                "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4//8jAAAAAACp/2YAAAAAAAAAALf/VAAAAAAAANb//4EAAAAAAEr/xAAAAAAAAAAY/O4HAAAAAAA1/8L43wEAAAAAA+f/IwAAAAAAAHP/lgAAAAAAAJT/XrD/PwAAAAAAjP+AAAAAAAAA0f83AAAAAAAG7PgPWf+eAAAAAAAt/90AAAAAAC3/2AAAAAAAAFL/rwAM9vIKAAAAAADO/zsAAAAAjP95AAAAAAAAsf9YAACs/1wAAAAAAG//mQAAAAPm/R0AAAAAABX69QsAAFX/uwAAAAAAFfrvBwAASP+7AAAAAAAAb/+qAAAACvT9HAAAAAAAsf9VAACm/1wAAAAAAADO/1MAAAAAp/95AAAAAABS/7IADfXzCgAAAAAALf///////////9gAAAAAAAbt+hVh/54AAAAAAACM/////////////zcAAAAAAJT/br//PwAAAAAAA+f/VgAAAAAAAKT/lgAAAAAANf/d/t8BAAAAAABK/+EEAAAAAAAAMv/uBwAAAAAA1v//gQAAAAAAAKn/dAAAAAAAAAAAwf9UAAAAAAB3//8jAAAAAAA="
+              },
+              "offset": [
+                0,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.fractional-start",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  29,
+                  16
+                ],
+                "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4//8jAAAAAACp/2YAAAAAAAAAALf/VAAAAAAAANb//4EAAAAAAEr/xAAAAAAAAAAY/O4HAAAAAAA1/8L43wEAAAAAA+f/IwAAAAAAAHP/lgAAAAAAAJT/XrD/PwAAAAAAjP+AAAAAAAAA0f83AAAAAAAG7PgPWf+eAAAAAAAt/90AAAAAAC3/2AAAAAAAAFL/rwAM9vIKAAAAAADO/zsAAAAAjP95AAAAAAAAsf9YAACs/1wAAAAAAG//mQAAAAPm/R0AAAAAABX69QsAAFX/uwAAAAAAFfrvBwAASP+7AAAAAAAAb/+qAAAACvT9HAAAAAAAsf9VAACm/1wAAAAAAADO/1MAAAAAp/95AAAAAABS/7IADfXzCgAAAAAALf///////////9gAAAAAAAbt+hVh/54AAAAAAACM/////////////zcAAAAAAJT/br//PwAAAAAAA+f/VgAAAAAAAKT/lgAAAAAANf/d/t8BAAAAAABK/+EEAAAAAAAAMv/uBwAAAAAA1v//gQAAAAAAAKn/dAAAAAAAAAAAwf9UAAAAAAB3//8jAAAAAAA="
+              },
+              "offset": [
+                0,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-one",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.mode"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-one",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  28,
+                  15
+                ],
+                "bytes": "AAAAAAD///8AAAAAAAD//wAAAAAAAAAAAP//AAAAAAAA////AAAAAAAAAP//AAAAAAAAAP//AAAAAAAAAP///wAAAAAAAAD//wAAAAAAAAD//wAAAAAAAP//AP//AAAAAAAA//8AAAAAAAAA//8AAAAAAAD//wD//wAAAAAAAAD//wAAAAAA//8AAAAAAAD///8A////AAAAAAAA//8AAAAAAP//AAAAAAAA//8AAAD//wAAAAAAAP//AAAAAAD//wAAAAAAAP//AAAA//8AAAAAAAAA//8AAAD//wAAAAAAAP//AAAAAAD//wAAAAAAAP//AAAA//8AAAAAAAD//wAAAAAA//8AAAAAAAD///8A////AAAAAAAA////////////AAAAAAAAAP//AP//AAAAAAAA//////////////8AAAAAAAD//wD//wAAAAAAAP//AAAAAAAAAP//AAAAAAAAAP///wAAAAAAAAD//wAAAAAAAAD//wAAAAAAAAD///8AAAAAAAD//wAAAAAAAAAAAP//AAAAAAAA////AAAAAAAA"
+              },
+              "offset": [
+                0,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-one",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  28,
+                  15
+                ],
+                "bytes": "AAAAAAD///8AAAAAAAD//wAAAAAAAAAAAP//AAAAAAAA////AAAAAAAAAP//AAAAAAAAAP//AAAAAAAAAP///wAAAAAAAAD//wAAAAAAAAD//wAAAAAAAP//AP//AAAAAAAA//8AAAAAAAAA//8AAAAAAAD//wD//wAAAAAAAAD//wAAAAAA//8AAAAAAAD///8A////AAAAAAAA//8AAAAAAP//AAAAAAAA//8AAAD//wAAAAAAAP//AAAAAAD//wAAAAAAAP//AAAA//8AAAAAAAAA//8AAAD//wAAAAAAAP//AAAAAAD//wAAAAAAAP//AAAA//8AAAAAAAD//wAAAAAA//8AAAAAAAD///8A////AAAAAAAA////////////AAAAAAAAAP//AP//AAAAAAAA//////////////8AAAAAAAD//wD//wAAAAAAAP//AAAAAAAAAP//AAAAAAAAAP///wAAAAAAAAD//wAAAAAAAAD//wAAAAAAAAD///8AAAAAAAD//wAAAAAAAAAAAP//AAAAAAAA////AAAAAAAA"
+              },
+              "offset": [
+                0,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-rgba-embedded-bgra",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.mode"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-rgba-embedded-bgra",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "RGBA",
+                "size": [
+                  4,
+                  1
+                ],
+                "bytes": "",
+                "pixels": [
+                  [
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  [
+                    48,
+                    32,
+                    16,
+                    255
+                  ],
+                  [
+                    191,
+                    159,
+                    127,
+                    128
+                  ],
+                  [
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                ]
+              },
+              "offset": [
+                0,
+                15
+              ]
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-rgba-embedded-bgra",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "RGBA",
+                "size": [
+                  4,
+                  1
+                ],
+                "bytes": "",
+                "pixels": [
+                  [
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  [
+                    48,
+                    32,
+                    16,
+                    255
+                  ],
+                  [
+                    191,
+                    159,
+                    127,
+                    128
+                  ],
+                  [
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                ]
+              },
+              "offset": [
+                0,
+                15
+              ]
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-clipped",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.start"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-clipped",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  13,
+                  14
+                ],
+                "bytes": "AAAAANb//4EAAAAAAAAAADX/wvjfAQAAAAAAAACU/16w/z8AAAAAAAAG7PgPWf+eAAAAAAAAUv+vAAz28goAAAAAALH/WAAArP9cAAAAABX69QsAAFX/uwAAAABv/6oAAAAK9P0cAAAAzv9TAAAAAKf/eQAALf///////////9gAAIz/////////////NwDn/1YAAAAAAACk/5YA/+EEAAAAAAAAMv/uB/90AAAAAAAAAADB/1Q="
+              },
+              "offset": [
+                0,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-clipped",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  13,
+                  14
+                ],
+                "bytes": "AAAAANb//4EAAAAAAAAAADX/wvjfAQAAAAAAAACU/16w/z8AAAAAAAAG7PgPWf+eAAAAAAAAUv+vAAz28goAAAAAALH/WAAArP9cAAAAABX69QsAAFX/uwAAAABv/6oAAAAK9P0cAAAAzv9TAAAAAKf/eQAALf///////////9gAAIz/////////////NwDn/1YAAAAAAACk/5YA/+EEAAAAAAAAMv/uB/90AAAAAAAAAADB/1Q="
+              },
+              "offset": [
+                0,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-vertical-clipped",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.start"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-vertical-clipped",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  14,
+                  5
+                ],
+                "bytes": "AC3////////////YAAAAjP////////////83AAPn/1YAAAAAAACk/5YASv/hBAAAAAAAADL/7gep/3QAAAAAAAAAAMH/VA=="
+              },
+              "offset": [
+                0,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-vertical-clipped",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  14,
+                  5
+                ],
+                "bytes": "AC3////////////YAAAAjP////////////83AAPn/1YAAAAAAACk/5YASv/hBAAAAAAAADL/7gep/3QAAAAAAAAAAMH/VA=="
+              },
+              "offset": [
+                0,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.space-default-route",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.text"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.space-default-route",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  6,
+                  0
+                ],
+                "bytes": ""
+              },
+              "offset": [
+                0,
+                19
+              ]
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.space-default-route",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  6,
+                  0
+                ],
+                "bytes": ""
+              },
+              "offset": [
+                0,
+                19
+              ]
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.parameter.stroke-width",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.stroke-width"
+      ],
+      "source": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.parameter.stroke-width",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  65,
+                  21
+                ],
+                "bytes": "AAC8//+kAAAAAACZ///FAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACP////AAAAAAAOT///8UtP////////////+0tP////////////+0tP////////////+0AAAAAAAAAAAAAAAAAAAI////8AAAAAAA5P///xT///////////////////////////////////////////////8AAAAAAAAAAAAAAAAAAAj////wAAAAAADk////FP///////////////////////////////////////////////wAAAAAAAAAAAAAAAAAACP////AAAAAAAOT///8U////IAAAAAAc////////IAAAAAAc////////IAAAAAAc////AAAKdsvy99iMGQAAAAAI////8AAAAAAA5P///xT///8gAAAAABz///////8gAAAAABz///////8gAAAAABz///8AHdf////////vPgAAAAj/////////////////FP///yAAAAAAHP///////yAAAAAAHP///////yAAAAAAHP///wPK//r5/v/38//uGwAACP/5w//////////M7/8U////IAAAAAAc////////IAAAAAAc////////IAAAAAAc////Vv///v/////9+f+SAAAI//nD/////////8zv/xT///8gAAAAABz///////8gAAAAABz///////8gAAAAABz///+o////uR0Tkv///+QAAAj/////////////////FP///yAAAAAAHP///////yAAAAAAHP///////yAAAAAAHP///9L///8pAAAF7v///xEACP////AAAAAAAOT///8U////IAAAAAAc////////IAAAAAAc////////IAAAAAAc////4P///wgAAADO////HwAI////8AAAAAAA5P///xT///8gAAAAABz///////8gAAAAABz///////8gAAAAABz////S////KQAABOz///8RAAj////wAAAAAADk////FP///yAAAAAAHP///////yAAAAAAHP///////yAAAAAAHP///6n///+5HRGO////5gAACP////AAAAAAAOT///8U////IAAAAAAc////////IAAAAAAc////////IAAAAAAc////WP/+/P/////9+f+VAAAI////8AAAAAAA5P///xT///8gAAAAABz///////8gAAAAABz///////8gAAAAABz///8Ezv/49/7/+fL/7x0AAAj////wAAAAAADk////FP///yAAAAAAHP///////yAAAAAAHP///////yAAAAAAHP///wAh2/////////FCAAAAALz//6QAAAAAAJr//8YB////IAAAAAAc////////IAAAAAAc////////IAAAAAAc////AAANe83z+NqSHAAAAAAAAAAAAAAAAAAAAAAAAAD///8gAAAAABz///////8gAAAAABz///////8gAAAAABz///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///////////////////////////////////////////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC1/////////////7S1/////////////7S1/////////////7QAAAAAAAAAAAAAAAAA"
+              },
+              "offset": [
+                -1,
+                3
+              ]
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.parameter.stroke-width",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "mask": {
+                "kind": "mask",
+                "mode": "L",
+                "size": [
+                  65,
+                  21
+                ],
+                "bytes": "AAC8//+kAAAAAACZ///FAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACP////AAAAAAAOT///8UtP////////////+0tP////////////+0tP////////////+0AAAAAAAAAAAAAAAAAAAI////8AAAAAAA5P///xT///////////////////////////////////////////////8AAAAAAAAAAAAAAAAAAAj////wAAAAAADk////FP///////////////////////////////////////////////wAAAAAAAAAAAAAAAAAACP////AAAAAAAOT///8U////IAAAAAAc////////IAAAAAAc////////IAAAAAAc////AAAKdsvy99iMGQAAAAAI////8AAAAAAA5P///xT///8gAAAAABz///////8gAAAAABz///////8gAAAAABz///8AHdf////////vPgAAAAj/////////////////FP///yAAAAAAHP///////yAAAAAAHP///////yAAAAAAHP///wPK//r5/v/38//uGwAACP/5w//////////M7/8U////IAAAAAAc////////IAAAAAAc////////IAAAAAAc////Vv///v/////9+f+SAAAI//nD/////////8zv/xT///8gAAAAABz///////8gAAAAABz///////8gAAAAABz///+o////uR0Tkv///+QAAAj/////////////////FP///yAAAAAAHP///////yAAAAAAHP///////yAAAAAAHP///9L///8pAAAF7v///xEACP////AAAAAAAOT///8U////IAAAAAAc////////IAAAAAAc////////IAAAAAAc////4P///wgAAADO////HwAI////8AAAAAAA5P///xT///8gAAAAABz///////8gAAAAABz///////8gAAAAABz////S////KQAABOz///8RAAj////wAAAAAADk////FP///yAAAAAAHP///////yAAAAAAHP///////yAAAAAAHP///6n///+5HRGO////5gAACP////AAAAAAAOT///8U////IAAAAAAc////////IAAAAAAc////////IAAAAAAc////WP/+/P/////9+f+VAAAI////8AAAAAAA5P///xT///8gAAAAABz///////8gAAAAABz///////8gAAAAABz///8Ezv/49/7/+fL/7x0AAAj////wAAAAAADk////FP///yAAAAAAHP///////yAAAAAAHP///////yAAAAAAHP///wAh2/////////FCAAAAALz//6QAAAAAAJr//8YB////IAAAAAAc////////IAAAAAAc////////IAAAAAAc////AAANe83z+NqSHAAAAAAAAAAAAAAAAAAAAAAAAAD///8gAAAAABz///////8gAAAAABz///////8gAAAAABz///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///////////////////////////////////////////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC1/////////////7S1/////////////7S1/////////////7QAAAAAAAAAAAAAAAAA"
+              },
+              "offset": [
+                -1,
+                3
+              ]
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    }
+  ],
+  "infrastructure_errors": []
+}

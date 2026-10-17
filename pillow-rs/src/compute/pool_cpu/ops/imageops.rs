@@ -541,6 +541,12 @@ pub fn op_autocontrast(
     let lut = autocontrast_lut(img, cutoff, mask)?;
     let raw = img.as_bytes();
     let native_rgb_bytes = channels == 3 && matches!(img, DynamicImage::ImageRgb8(_));
+    // Pillow still returns a distinct image when every RGB LUT is the
+    // identity. Preserve that copy behavior while skipping the byte-wise LUT
+    // pass for full-range images and masks that select no pixels.
+    if native_rgb_bytes && super::super::point_lut_is_identity(&lut, channels) {
+        return Ok(img.clone());
+    }
     // RGB has a separate LUT per interleaved byte band. Map it from immutable
     // source bytes into one output allocation instead of cloning and then
     // reading the source again in the per-byte pass.
@@ -866,6 +872,18 @@ pub fn op_posterize(img: &DynamicImage, bits: u8) -> Result<DynamicImage, PilErr
             }
         });
         return Ok(DynamicImage::ImageLuma8(gray));
+    }
+    #[cfg(not(feature = "parallel"))]
+    if let DynamicImage::ImageRgb8(source) = img {
+        // Transform borrowed native RGB bytes into the final result in one pass.
+        let bytes = source
+            .as_raw()
+            .iter()
+            .map(|&channel| channel & mask)
+            .collect();
+        let rgb = crate::raster::RgbImage::from_raw(source.width(), source.height(), bytes)
+            .ok_or_else(|| PilError::InternalError("posterize RGB buffer mismatch".into()))?;
+        return Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)));
     }
     let mut rgb = img.to_rgb8();
     #[cfg(feature = "parallel")]

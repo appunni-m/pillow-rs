@@ -1,0 +1,2416 @@
+schema: migration-parity/manifest@2
+scope:
+  id: pillow-rs-convolution-uniform-color-trial-20261014
+  mode: slice
+  inventory:
+    authority: scripts/migration_parity_inventory.py
+    revision: sha256:c9a9d982b52cc61f5c313f434b6c1da5a6e6e88bc64632642ee16749e72c2927+inventory-rule@2
+    command_id: inventory
+oracles:
+- id: pillow
+  name: Pillow
+  version: 12.2.0
+  runtime: CPython 3.12
+  identity_command_id: oracle-identity
+  contract: Public observable PIL behavior
+  components:
+  - id: freetype
+    name: FreeType
+    version: 2.14.3
+  - id: libjpeg
+    name: libjpeg-turbo
+    version: '6.2'
+  - id: openjpeg
+    name: OpenJPEG
+    version: 2.5.4
+  - id: zlib
+    name: zlib-ng
+    version: 1.3.1.zlib-ng
+  - id: libtiff
+    name: libtiff
+    version: 4.7.1
+  - id: libwebp
+    name: libwebp
+    version: 1.6.0
+targets:
+- id: pillow-rs-python
+  name: pillow-rs
+  runtime: CPython public PIL facade backed by Rust
+  identity_command_id: target-identity
+  contract: Public Pillow-compatible image and font behavior through the PIL package
+    supplied by pillow-rs
+target_profiles:
+- id: python-cpu
+  target_id: pillow-rs-python
+  backend: cpu
+  features:
+  - pillow-rs-py/default
+  - pillow-rs/default
+- id: python-simd
+  target_id: pillow-rs-python
+  backend: simd
+  features:
+  - pillow-rs-py/default
+  - pillow-rs/default
+- id: python-gpu
+  target_id: pillow-rs-python
+  backend: gpu
+  features:
+  - pillow-rs-py/default
+  - pillow-rs/default
+commands:
+- id: inventory
+  argv:
+  - make
+  - migration-parity-inventory
+  cwd: .
+  timeout_seconds: 60
+- id: oracle-identity
+  argv:
+  - make
+  - migration-parity-oracle-identity
+  cwd: .
+  timeout_seconds: 60
+- id: target-identity
+  argv:
+  - make
+  - migration-parity-target-identity
+  cwd: .
+  timeout_seconds: 300
+- id: parity
+  argv:
+  - make
+  - migration-parity-test
+  cwd: .
+  timeout_seconds: 3600
+- id: coverage
+  argv:
+  - make
+  - migration-parity-coverage
+  cwd: .
+  timeout_seconds: 3600
+- id: coverage-rust
+  argv:
+  - make
+  - migration-parity-coverage-rust
+  cwd: .
+  timeout_seconds: 7200
+- id: coverage-font-native
+  argv:
+  - make
+  - migration-parity-font-native-coverage
+  cwd: .
+  timeout_seconds: 600
+- id: coverage-imageops-native
+  argv:
+  - make
+  - migration-parity-imageops-native-coverage
+  cwd: .
+  timeout_seconds: 600
+- id: coverage-imagesequence-native
+  argv:
+  - make
+  - migration-parity-imagesequence-native-coverage
+  cwd: .
+  timeout_seconds: 600
+- id: coverage-imagecore-native
+  argv:
+  - make
+  - migration-parity-imagecore-native-coverage
+  cwd: .
+  timeout_seconds: 600
+- id: coverage-imagedraw-native
+  argv:
+  - make
+  - migration-parity-imagedraw-native-coverage
+  cwd: .
+  timeout_seconds: 600
+- id: coverage-imagecolor-native
+  argv:
+  - make
+  - migration-parity-imagecolor-native-coverage
+  cwd: .
+  timeout_seconds: 600
+- id: coverage-imagepalette-native
+  argv:
+  - make
+  - migration-parity-imagepalette-native-coverage
+  cwd: .
+  timeout_seconds: 600
+- id: benchmark
+  argv:
+  - make
+  - migration-parity-benchmark
+  cwd: .
+  timeout_seconds: 7200
+- id: aggregate
+  argv:
+  - make
+  - migration-parity-aggregate
+  cwd: .
+  timeout_seconds: 300
+- id: docs
+  argv:
+  - make
+  - migration-parity-docs
+  cwd: .
+  timeout_seconds: 300
+- id: drift
+  argv:
+  - make
+  - migration-parity-drift-check
+  cwd: .
+  timeout_seconds: 300
+interfaces:
+  parity:
+    input_schema: migration-parity/parity-input@1
+    result_schema: migration-parity/parity-result@1
+    command_id: parity
+  coverage:
+    input_schema: migration-parity/coverage-input@1
+    result_schema: migration-parity/coverage-result@1
+    command_id: coverage
+  benchmark:
+    input_schema: migration-parity/benchmark-input@1
+    result_schema: migration-parity/benchmark-result@1
+    command_id: benchmark
+  aggregation:
+    input_schemas:
+    - migration-parity/parity-result@1
+    - migration-parity/coverage-result@1
+    - migration-parity/benchmark-result@1
+    result_schema: migration-parity/status-report@1
+    command_id: aggregate
+input_index:
+  parity:
+  - inputs/parity/convolution-uniform-color-trial-20261014.json
+  coverage: []
+  benchmark:
+  - inputs/benchmark/convolution-uniform-color-trial-20261014.json
+coverage_components:
+- id: image-core
+  target_profile: python-cpu
+  paths:
+  - pillow-rs-py/python/PIL/__init__.py
+  - pillow-rs-py/python/PIL/Image.py
+  - pillow-rs-py/python/pillow_rs/image.py
+  - pillow-rs-py/python/pillow_rs/operations.py
+  - pillow-rs/src/image.rs
+  - pillow-rs/src/pipeline.rs
+  - pillow-rs/src/ops/module_fns.rs
+  - pillow-rs/src/ops/analysis.rs
+  - pillow-rs/src/ops/array.rs
+  - pillow-rs/src/ops/convert.rs
+  - pillow-rs/src/ops/crop.rs
+  - pillow-rs/src/ops/paste.rs
+  - pillow-rs/src/ops/quantize.rs
+  - pillow-rs/src/ops/resize.rs
+  - pillow-rs/src/ops/rotate.rs
+  - pillow-rs/src/ops/split.rs
+  - pillow-rs/src/ops/transform.rs
+  - pillow-rs/src/ops/transpose.rs
+  - pillow-rs/src/compute/pool_cpu/ops/geometry.rs
+  dimensions:
+  - function
+  - line
+  - branch
+  - region
+  thresholds:
+  - dimension: function
+    minimum_percent: 100
+  - dimension: line
+    minimum_percent: 100
+  - dimension: branch
+    minimum_percent: 100
+  - dimension: region
+    minimum_percent: 100
+- id: image-filter
+  target_profile: python-cpu
+  paths:
+  - pillow-rs-py/python/pillow_rs/imagefilter.py
+  - pillow-rs/src/ops/filter.rs
+  - pillow-rs/src/compute/pool_cpu/ops/filter.rs
+  - pillow-rs/src/ops/param_filters.rs
+  dimensions:
+  - function
+  - line
+  - branch
+  - region
+  thresholds:
+  - dimension: function
+    minimum_percent: 100
+  - dimension: line
+    minimum_percent: 100
+  - dimension: branch
+    minimum_percent: 100
+  - dimension: region
+    minimum_percent: 100
+- id: image-ops
+  target_profile: python-cpu
+  paths:
+  - pillow-rs-py/python/pillow_rs/imageops.py
+  - pillow-rs/src/ops/imageops.rs
+  dimensions:
+  - function
+  - line
+  - branch
+  - region
+  thresholds:
+  - dimension: function
+    minimum_percent: 100
+  - dimension: line
+    minimum_percent: 100
+  - dimension: branch
+    minimum_percent: 100
+  - dimension: region
+    minimum_percent: 100
+surfaces:
+- id: PIL.Image
+  kind: namespace
+  source_path: PIL.Image
+  storage_slug: pil-image
+  operations:
+  - id: frombytes
+    kind: function
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.Image.frombytes
+      signature: 'frombytes(mode: ''str'', size: ''tuple[int, int]'', data: ''bytes
+        | bytearray | SupportsArrayInterface'', decoder_name: ''str'' = ''raw'', *args:
+        ''Any'') -> ''Image'''
+      parameters:
+      - id: mode
+        style: positional_or_keyword
+        value_types:
+        - string
+        omission:
+          kind: required
+      - id: size
+        style: positional_or_keyword
+        value_types:
+        - integer
+        - sequence
+        omission:
+          kind: required
+      - id: data
+        style: positional_or_keyword
+        value_types:
+        - bytes
+        - record
+        omission:
+          kind: required
+      - id: decoder_name
+        style: positional_or_keyword
+        value_types:
+        - string
+        omission:
+          kind: literal
+          value: raw
+      - id: args
+        style: variadic_positional
+        value_types:
+        - sequence
+        omission:
+          kind: literal
+          value: []
+      result:
+        shape: image
+        observations:
+        - path: value
+          value_types:
+          - image
+          comparison:
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.frombytes
+      signature: frombytes(mode, size, data, decoder_name='raw', *args)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.Image.frombytes.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.Image.frombytes.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.parameter.mode
+      dimension: parameter
+      description: Public parameter mode with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.parameter.size
+      dimension: parameter
+      description: Public parameter size with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.parameter.data
+      dimension: parameter
+      description: Public parameter data with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.parameter.decoder-name
+      dimension: parameter
+      description: Public parameter decoder_name with its declared type union and
+        omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.parameter.args
+      dimension: parameter
+      description: Public parameter args with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.parameter-combination.legacy-001
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"mode":"RGB","size":[10,10]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.Image.frombytes.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-core
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+  - id: new
+    kind: function
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.Image.new
+      signature: 'new(mode: ''str'', size: ''tuple[int, int] | list[int]'', color:
+        ''float | tuple[float, ...] | str | None'' = 0) -> ''Image'''
+      parameters:
+      - id: mode
+        style: positional_or_keyword
+        value_types:
+        - string
+        omission:
+          kind: required
+      - id: size
+        style: positional_or_keyword
+        value_types:
+        - integer
+        - sequence
+        omission:
+          kind: required
+      - id: color
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - number
+        - string
+        - sequence
+        - integer
+        omission:
+          kind: literal
+          value: 0
+      result:
+        shape: image
+        observations:
+        - path: value
+          value_types:
+          - image
+          comparison:
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.new
+      signature: 'new(mode: ''str'', size: ''Tuple[int, int]'', color: ''Union[int,
+        Tuple[int, ...], str, None]'' = None) -> ''Image'''
+      support:
+        status: supported
+    requirements:
+    - id: PIL.Image.new.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.Image.new.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter.mode
+      dimension: parameter
+      description: Public parameter mode with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter.size
+      dimension: parameter
+      description: Public parameter size with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter.color
+      dimension: parameter
+      description: Public parameter color with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter-combination.legacy-001
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"mode":"RGB","size":[100,100]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter-combination.legacy-002
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"mode":"L","size":[100,100]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter-combination.legacy-003
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"mode":"RGBA","size":[100,100]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter-combination.legacy-004
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"color":"int","mode":"RGB","size":[100,100]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter-combination.legacy-005
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"color":"hex_string","mode":"RGB","size":[100,100]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter-combination.legacy-006
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"color":"rgb_tuple","mode":"RGB","size":[100,100]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter-combination.legacy-007
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"color":"la_tuple","mode":"LA","size":[100,100]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter-combination.legacy-008
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"color":"rgba_tuple","mode":"RGB","size":[100,100]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.parameter-combination.legacy-009
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.edge.zero-width
+      dimension: error_path
+      description: Deprecated-authority edge case 'zero_width'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.edge.zero-height
+      dimension: error_path
+      description: Deprecated-authority edge case 'zero_height'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.edge.invalid-mode
+      dimension: error_path
+      description: Deprecated-authority edge case 'invalid_mode'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.new.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.Image.new.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-core
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+- id: PIL.Image.Image
+  kind: type
+  source_path: PIL.Image.Image
+  storage_slug: pil-image-image
+  operations:
+  - id: filter
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.Image.Image.filter
+      signature: 'filter(self, filter: ''ImageFilter.Filter | type[ImageFilter.Filter]'')
+        -> ''Image'''
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      - id: filter
+        style: positional_or_keyword
+        value_types:
+        - any_json
+        omission:
+          kind: required
+      result:
+        shape: image
+        observations:
+        - path: value
+          value_types:
+          - image
+          comparison:
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.Image.filter
+      signature: filter(self, filter_type) -> 'Image'
+      support:
+        status: supported
+    requirements:
+    - id: PIL.Image.Image.filter.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.Image.Image.filter.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter.filter
+      dimension: parameter
+      description: Public parameter filter with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-001
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"BLUR"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-002
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"CONTOUR"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-003
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"DETAIL"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-004
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"EDGE_ENHANCE"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-005
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"EDGE_ENHANCE_MORE"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-006
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"EMBOSS"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-007
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"FIND_EDGES"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-008
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"SHARPEN"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-009
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"SMOOTH"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-010
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"SMOOTH_MORE"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-011
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"GaussianBlur"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-012
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"BoxBlur"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-013
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"UnsharpMask"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-014
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"MaxFilter"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-015
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"MinFilter"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-016
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"MedianFilter"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.parameter-combination.legacy-017
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"filter":"ModeFilter"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.filter.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.Image.Image.filter.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-core
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+  - id: putpixel
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.Image.Image.putpixel
+      signature: 'putpixel(self, xy: ''tuple[int, int]'', value: ''float | tuple[int,
+        ...] | list[int]'') -> ''None'''
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      - id: xy
+        style: positional_or_keyword
+        value_types:
+        - integer
+        - sequence
+        - 'null'
+        omission:
+          kind: required
+      - id: value
+        style: positional_or_keyword
+        value_types:
+        - integer
+        - number
+        - sequence
+        - 'null'
+        - string
+        omission:
+          kind: required
+      result:
+        shape: none
+        observations:
+        - path: value
+          value_types:
+          - 'null'
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.Image.putpixel
+      signature: 'putpixel(self, xy: Tuple[int, int], value)'
+      support:
+        status: supported
+    requirements:
+    - id: PIL.Image.Image.putpixel.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.Image.Image.putpixel.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.parameter.xy
+      dimension: parameter
+      description: Public parameter xy with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.parameter.value
+      dimension: parameter
+      description: Public parameter value with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.parameter-combination.legacy-001
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"value":"tuple","xy":[0,0]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.edge.out-of-bounds
+      dimension: boundary
+      description: Deprecated-authority edge case 'out_of_bounds'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.putpixel.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.Image.Image.putpixel.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-core
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+  - id: resize
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.Image.Image.resize
+      signature: 'resize(self, size: ''tuple[int, int] | list[int] | NumpyArray'',
+        resample: ''int | None'' = None, box: ''tuple[float, float, float, float]
+        | None'' = None, reducing_gap: ''float | None'' = None) -> ''Image'''
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      - id: size
+        style: positional_or_keyword
+        value_types:
+        - integer
+        - sequence
+        - record
+        omission:
+          kind: required
+      - id: resample
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - integer
+        omission:
+          kind: literal
+          value: null
+      - id: box
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - number
+        - sequence
+        omission:
+          kind: literal
+          value: null
+      - id: reducing_gap
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - number
+        omission:
+          kind: literal
+          value: null
+      result:
+        shape: image
+        observations:
+        - path: value
+          value_types:
+          - image
+          comparison:
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.Image.resize
+      signature: 'resize(self, size: Tuple[int, int], resample: Union[int, str] =
+        <Resampling.BICUBIC: 3>, box=None, reducing_gap=None) -> ''Image'''
+      support:
+        status: supported
+    requirements:
+    - id: PIL.Image.Image.resize.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.Image.Image.resize.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.parameter.size
+      dimension: parameter
+      description: Public parameter size with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.parameter.resample
+      dimension: parameter
+      description: Public parameter resample with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.parameter.box
+      dimension: parameter
+      description: Public parameter box with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.parameter.reducing-gap
+      dimension: parameter
+      description: Public parameter reducing_gap with its declared type union and
+        omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.parameter-combination.legacy-001
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"size":[100,100]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.parameter-combination.legacy-002
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"resample":"NEAREST","size":[50,50]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.parameter-combination.legacy-003
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"resample":"BILINEAR","size":[200,200]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.parameter-combination.legacy-004
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"resample":"BICUBIC","size":[200,200]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.parameter-combination.legacy-005
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"resample":"LANCZOS","size":[200,200]}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.edge.same-size-noop
+      dimension: boundary
+      description: Deprecated-authority edge case 'same_size_noop'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.edge.zero-dimension
+      dimension: error_path
+      description: Deprecated-authority edge case 'zero_dimension'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.edge.upscale
+      dimension: boundary
+      description: Deprecated-authority edge case 'upscale'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.edge.downscale
+      dimension: boundary
+      description: Deprecated-authority edge case 'downscale'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.resize.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.Image.Image.resize.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-core
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+  - id: tobytes
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.Image.Image.tobytes
+      signature: 'tobytes(self, encoder_name: ''str'' = ''raw'', *args: ''Any'') ->
+        ''bytes'''
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      - id: encoder_name
+        style: positional_or_keyword
+        value_types:
+        - string
+        omission:
+          kind: literal
+          value: raw
+      - id: args
+        style: variadic_positional
+        value_types:
+        - sequence
+        omission:
+          kind: literal
+          value: []
+      result:
+        shape: bytes
+        observations:
+        - path: value
+          value_types:
+          - bytes
+          comparison:
+            kind: bytes
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.Image.tobytes
+      signature: 'tobytes(self, encoder_name: str = ''raw'', *args) -> bytes'
+      support:
+        status: supported
+    requirements:
+    - id: PIL.Image.Image.tobytes.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.Image.Image.tobytes.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.parameter.encoder-name
+      dimension: parameter
+      description: Public parameter encoder_name with its declared type union and
+        omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.parameter.args
+      dimension: parameter
+      description: Public parameter args with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.parameter-combination.legacy-001
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.parameter-combination.legacy-002
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {"encoder_name":"raw"}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.tobytes.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.Image.Image.tobytes.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-core
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+- id: PIL.ImageFilter
+  kind: namespace
+  source_path: PIL.ImageFilter
+  storage_slug: pil-imagefilter
+  operations:
+  - id: Kernel
+    kind: type
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageFilter.Kernel
+      signature: 'Kernel(size: ''tuple[int, int]'', kernel: ''Sequence[float]'', scale:
+        ''float | None'' = None, offset: ''float'' = 0) -> ''None'''
+      parameters:
+      - id: size
+        style: positional_or_keyword
+        value_types:
+        - integer
+        - sequence
+        omission:
+          kind: required
+      - id: kernel
+        style: positional_or_keyword
+        value_types:
+        - number
+        - sequence
+        omission:
+          kind: required
+      - id: scale
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - number
+        omission:
+          kind: literal
+          value: null
+      - id: offset
+        style: positional_or_keyword
+        value_types:
+        - number
+        - integer
+        omission:
+          kind: literal
+          value: 0
+      result:
+        shape: handle
+        observations:
+        - path: value.type
+          value_types:
+          - string
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.ImageFilter.Kernel
+      signature: Kernel(size=(3, 3), kernel=None, scale=None, offset=0)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageFilter.Kernel.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageFilter.Kernel.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Kernel.parameter.size
+      dimension: parameter
+      description: Public parameter size with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Kernel.parameter.kernel
+      dimension: parameter
+      description: Public parameter kernel with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Kernel.parameter.scale
+      dimension: parameter
+      description: Public parameter scale with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Kernel.parameter.offset
+      dimension: parameter
+      description: Public parameter offset with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Kernel.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Kernel.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Kernel.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Kernel.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Kernel.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageFilter.Kernel.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Kernel.trial.simd-guard
+      dimension: success_path
+      description: Supplemental SIMD parity guard for the selected 1024x768 RGB box-filter
+        workflow.
+      lanes:
+      - parity
+      target_profiles:
+      - python-simd
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-filter
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+- id: PIL.ImageOps
+  kind: namespace
+  source_path: PIL.ImageOps
+  storage_slug: pil-imageops
+  operations:
+  - id: mirror
+    kind: function
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageOps.mirror
+      signature: 'mirror(image: ''Image.Image'') -> ''Image.Image'''
+      parameters:
+      - id: image
+        style: positional_or_keyword
+        value_types:
+        - image
+        omission:
+          kind: required
+      result:
+        shape: image
+        observations:
+        - path: value
+          value_types:
+          - image
+          comparison:
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.ImageOps.mirror
+      signature: 'mirror(image: pillow_rs.image.Image) -> pillow_rs.image.Image'
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageOps.mirror.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageOps.mirror.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.mirror.parameter.image
+      dimension: parameter
+      description: Public parameter image with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.mirror.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.mirror.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.mirror.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.mirror.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.mirror.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageOps.mirror.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+      - python-simd
+      - python-gpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-ops
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+  - id: pad
+    kind: function
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageOps.pad
+      signature: 'pad(image: ''Image.Image'', size: ''tuple[int, int]'', method: ''int''
+        = <Resampling.BICUBIC: 3>, color: ''str | int | tuple[int, ...] | None'' =
+        None, centering: ''tuple[float, float]'' = (0.5, 0.5)) -> ''Image.Image'''
+      parameters:
+      - id: image
+        style: positional_or_keyword
+        value_types:
+        - image
+        omission:
+          kind: required
+      - id: size
+        style: positional_or_keyword
+        value_types:
+        - integer
+        - sequence
+        omission:
+          kind: required
+      - id: method
+        style: positional_or_keyword
+        value_types:
+        - integer
+        - enum
+        omission:
+          kind: sentinel
+          name: BICUBIC
+          semantics: Use the public runtime default for method exactly.
+      - id: color
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - integer
+        - string
+        - sequence
+        omission:
+          kind: literal
+          value: null
+      - id: centering
+        style: positional_or_keyword
+        value_types:
+        - number
+        - sequence
+        omission:
+          kind: literal
+          value:
+          - 0.5
+          - 0.5
+      result:
+        shape: image
+        observations:
+        - path: value
+          value_types:
+          - image
+          comparison:
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.ImageOps.pad
+      signature: 'pad(image: pillow_rs.image.Image, size, method=None, color=None,
+        centering=(0.5, 0.5))'
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageOps.pad.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageOps.pad.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.pad.parameter.image
+      dimension: parameter
+      description: Public parameter image with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.pad.parameter.size
+      dimension: parameter
+      description: Public parameter size with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.pad.parameter.method
+      dimension: parameter
+      description: Public parameter method with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.pad.parameter.color
+      dimension: parameter
+      description: Public parameter color with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.pad.parameter.centering
+      dimension: parameter
+      description: Public parameter centering with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.pad.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.pad.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.pad.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.pad.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.pad.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageOps.pad.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-ops
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+  - id: scale
+    kind: function
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageOps.scale
+      signature: 'scale(image: ''Image.Image'', factor: ''float'', resample: ''int''
+        = <Resampling.BICUBIC: 3>) -> ''Image.Image'''
+      parameters:
+      - id: image
+        style: positional_or_keyword
+        value_types:
+        - image
+        omission:
+          kind: required
+      - id: factor
+        style: positional_or_keyword
+        value_types:
+        - number
+        omission:
+          kind: required
+      - id: resample
+        style: positional_or_keyword
+        value_types:
+        - integer
+        - enum
+        omission:
+          kind: sentinel
+          name: BICUBIC
+          semantics: Use the public runtime default for resample exactly.
+      result:
+        shape: image
+        observations:
+        - path: value
+          value_types:
+          - image
+          comparison:
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.ImageOps.scale
+      signature: 'scale(image: pillow_rs.image.Image, factor: float, resample=None)
+        -> pillow_rs.image.Image'
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageOps.scale.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageOps.scale.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.scale.parameter.image
+      dimension: parameter
+      description: Public parameter image with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.scale.parameter.factor
+      dimension: parameter
+      description: Public parameter factor with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.scale.parameter.resample
+      dimension: parameter
+      description: Public parameter resample with its declared type union and omission
+        semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.scale.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.scale.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.scale.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.scale.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.scale.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageOps.scale.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-ops
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+documentation:
+  command_id: docs
+  specification_outputs:
+  - docs/generated/migration-parity-public-contract.md
+  evidence_outputs:
+  - docs/generated/migration-parity-status.md
+  - docs/generated/migration-coverage-status.md
+  - docs/generated/migration-benchmark-status.md

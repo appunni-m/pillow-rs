@@ -1,0 +1,77 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imageshow.coverage-plan",
+      "covers": [
+        "PIL.ImageShow.register.behavior.default",
+        "PIL.ImageShow.register.parameter.viewer",
+        "PIL.ImageShow.register.parameter.order",
+        "PIL.ImageShow.show.behavior.default",
+        "PIL.ImageShow.show.parameter.image",
+        "PIL.ImageShow.show.parameter.title",
+        "PIL.ImageShow.show.parameter.options"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageShow.register.behavior.default",
+          "PIL.ImageShow.show.behavior.default",
+          "PIL.ImageShow.show.parameter.title",
+          "PIL.ImageShow.show.parameter.options",
+          "PIL.ImageShow.show.capture.1-show-default",
+          "PIL.ImageShow.show.capture.1-show_image-default",
+          "PIL.ImageShow.show.capture.1-show_image-PNG",
+          "PIL.ImageShow.show.capture.l-show-default",
+          "PIL.ImageShow.show.capture.l-show_image-default",
+          "PIL.ImageShow.show.capture.l-show_image-PNG",
+          "PIL.ImageShow.show.capture.la-show-default",
+          "PIL.ImageShow.show.capture.la-show_image-default",
+          "PIL.ImageShow.show.capture.la-show_image-PNG",
+          "PIL.ImageShow.show.capture.p-show-default",
+          "PIL.ImageShow.show.capture.p-show_image-default",
+          "PIL.ImageShow.show.capture.p-show_image-PNG",
+          "PIL.ImageShow.show.capture.pa-show-default",
+          "PIL.ImageShow.show.capture.pa-show_image-default",
+          "PIL.ImageShow.show.capture.pa-show_image-PNG",
+          "PIL.ImageShow.show.capture.rgb-show-default",
+          "PIL.ImageShow.show.capture.rgb-show_image-default",
+          "PIL.ImageShow.show.capture.rgb-show_image-PNG",
+          "PIL.ImageShow.show.capture.rgba-show-default",
+          "PIL.ImageShow.show.capture.rgba-show_image-default",
+          "PIL.ImageShow.show.capture.rgba-show_image-PNG",
+          "PIL.ImageShow.show.capture.cmyk-show-default",
+          "PIL.ImageShow.show.capture.cmyk-show_image-default",
+          "PIL.ImageShow.show.capture.cmyk-show_image-PNG",
+          "PIL.ImageShow.show.capture.ycbcr-show-default",
+          "PIL.ImageShow.show.capture.ycbcr-show_image-default",
+          "PIL.ImageShow.show.capture.ycbcr-show_image-PNG",
+          "PIL.ImageShow.show.capture.hsv-show-default",
+          "PIL.ImageShow.show.capture.hsv-show_image-default",
+          "PIL.ImageShow.show.capture.hsv-show_image-PNG",
+          "PIL.ImageShow.show.capture.i-show-default",
+          "PIL.ImageShow.show.capture.i-show_image-default",
+          "PIL.ImageShow.show.capture.i-show_image-PNG",
+          "PIL.ImageShow.show.capture.f-show-default",
+          "PIL.ImageShow.show.capture.f-show_image-default",
+          "PIL.ImageShow.show.capture.f-show_image-PNG",
+          "PIL.ImageShow.show.capture.i16-show-default",
+          "PIL.ImageShow.show.capture.i16-show_image-default",
+          "PIL.ImageShow.show.capture.i16-show_image-PNG",
+          "PIL.ImageShow.show.capture.prepend-short-circuit",
+          "PIL.ImageShow.show.capture.append-after-decline",
+          "PIL.ImageShow.show.capture.all-decline",
+          "PIL.ImageShow.register.capture.order--2",
+          "PIL.ImageShow.register.capture.order-0",
+          "PIL.ImageShow.register.capture.order-1",
+          "PIL.ImageShow.register.capture.order-3"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-show"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

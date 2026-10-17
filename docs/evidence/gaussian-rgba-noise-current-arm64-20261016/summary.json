@@ -1,0 +1,125 @@
+{
+  "workload_id": "pipeline-chain.blur-material.gaussian-rgba-noise-1024x768",
+  "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-noise-1024x768-radius-7-5",
+  "parity": {
+    "status": "completed",
+    "summary": {
+      "selected": 1,
+      "executed": 1,
+      "passed": 1,
+      "failed": 0,
+      "not_run": 0,
+      "infrastructure_errors": 0
+    },
+    "run_id": "migration-parity-1960eb4b163d484bb9b57aabab8a13e1"
+  },
+  "benchmark": {
+    "status": "completed",
+    "run_id": "migration-benchmark-8a76110bf37e4231bf700fa5d0e3f11b",
+    "summary": {
+      "workloads_selected": 1,
+      "workloads_measured": 1,
+      "workloads_not_run": 0,
+      "budgets_passed": 0,
+      "budgets_failed": 0,
+      "budgets_not_proven": 0
+    }
+  },
+  "host": {
+    "machine_id": "Lazys-MacBook-Pro.local",
+    "os": "macOS-15.7.7-arm64-arm-64bit",
+    "architecture": "arm64",
+    "cpu": "arm",
+    "memory_bytes": 0,
+    "power_mode": "unknown",
+    "toolchain": "3.12.13"
+  },
+  "measurement_policy": {
+    "boundary": "whole_workflow",
+    "step_ids": [],
+    "metrics": [
+      "latency",
+      "throughput"
+    ],
+    "warmup_iterations": 1,
+    "measurement_iterations": 3,
+    "samples": 2,
+    "concurrency": 1,
+    "cache_state": "warm",
+    "correctness_gate": "parity_pass"
+  },
+  "latency_ms_median": {
+    "pillow": 6.4459795,
+    "python-cpu": 7.604063
+  },
+  "speedup_vs_pillow": 0.8477020114115309,
+  "throughput_ops_per_second_median": {
+    "pillow": 155.13775170999634,
+    "python-cpu": 131.54276921265713
+  },
+  "phase_medians_ms": {
+    "pillow": {
+      "setup_ns": 0.2923535,
+      "pipeline_ns": 5.627438,
+      "terminal_ns": 0.5167085,
+      "total_ns": 6.4502705
+    },
+    "python-cpu": {
+      "setup_ns": 0.181062,
+      "pipeline_ns": 0.01275,
+      "terminal_ns": 7.333458,
+      "total_ns": 7.6096455
+    }
+  },
+  "cpu_execution": {
+    "requested_backend": "cpu",
+    "actual_backend": "cpu",
+    "actual_backend_counts": {
+      "cpu": 1
+    },
+    "terminal_complete": true,
+    "fallback_reason_counts": {},
+    "errors": [],
+    "status": "completed"
+  },
+  "loaded_core": {
+    "module": "pillow_rs._core",
+    "origin": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/_core.abi3.so",
+    "path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/_core.abi3.so",
+    "sha256": "af985e7b98977920ed0ec21ba59092b9ee7e4b7e0d4a241cab0703ec9dd874bb",
+    "size": 9967600
+  },
+  "input_digests": [
+    {
+      "path": "inputs/benchmark/pipeline-operations.json",
+      "schema": "migration-parity/benchmark-input@1",
+      "sha256": "5518e26b243dc3708095e09b8998cc6f5976f6c6cbc1b047529c5dc3d2e46350"
+    },
+    {
+      "path": "inputs/parity/pil-image-image.json",
+      "schema": "migration-parity/parity-input@1",
+      "sha256": "61de1054b8f2aec567c8d092f3683379b0fc30c07e4a6a98e710294af005e343"
+    }
+  ],
+  "asset": {
+    "input_path": "inputs/parity/pil-image-image.json",
+    "item_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-noise-1024x768-radius-7-5",
+    "asset_id": "image-noise",
+    "kind": "ref_bytes",
+    "locator": "generated/34e223e165d2ad684903acd71f162248a31e34892bb852914e020b9be5e48b9e.bin",
+    "sha256": "34e223e165d2ad684903acd71f162248a31e34892bb852914e020b9be5e48b9e"
+  },
+  "target_identity": {
+    "target_profile": "python-cpu",
+    "target_id": "pillow-rs-python",
+    "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+    "dirty": true,
+    "runtime": "3.12.13",
+    "backend": "cpu",
+    "features": [
+      "pillow-rs-py/default",
+      "pillow-rs/default"
+    ]
+  },
+  "benchmark_attestation_status": "complete"
+}

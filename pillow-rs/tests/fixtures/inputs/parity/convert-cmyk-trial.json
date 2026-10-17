@@ -1,0 +1,78 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.Image.Image.convert.nuanced.material-cmyk-to-rgb-1024x768",
+      "surface": "PIL.Image.Image",
+      "operation": "convert",
+      "covers": [
+        "PIL.Image.Image.convert.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                17,
+                83,
+                149,
+                211
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "convert",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "materialize"
+      ]
+    }
+  ]
+}

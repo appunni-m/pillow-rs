@@ -1,0 +1,85 @@
+   Compiling cfg-if v1.0.4
+   Compiling log v0.4.33
+   Compiling syn v2.0.119
+   Compiling serde_core v1.0.229
+   Compiling libc v0.2.189
+   Compiling libm v0.2.16
+   Compiling scopeguard v1.2.0
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling thiserror v2.0.19
+   Compiling smallvec v1.15.2
+   Compiling unicode-width v0.1.14
+   Compiling libloading v0.8.9
+   Compiling termcolor v1.4.1
+   Compiling foldhash v0.1.5
+   Compiling bit-vec v0.8.0
+   Compiling lock_api v0.4.14
+   Compiling hashbrown v0.15.5
+   Compiling arrayvec v0.7.8
+   Compiling rustc-hash v1.1.0
+   Compiling hexf-parse v0.2.1
+   Compiling bit-set v0.8.0
+   Compiling codespan-reporting v0.11.1
+   Compiling unicode-xid v0.2.6
+   Compiling uncased v0.9.10
+   Compiling crc32fast v1.5.0
+   Compiling ash v0.38.0+1.3.281
+   Compiling glow v0.16.0
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling profiling v1.0.18
+   Compiling raw-window-handle v0.6.2
+   Compiling renderdoc-sys v1.1.0
+   Compiling indexmap v2.14.0
+   Compiling once_cell v1.21.4
+   Compiling siphasher v1.0.3
+   Compiling miniz_oxide v0.8.9
+   Compiling tinyvec v1.12.0
+   Compiling num-traits v0.2.19
+   Compiling phf_shared v0.13.1
+   Compiling parking_lot_core v0.9.12
+   Compiling khronos-egl v6.0.0
+   Compiling static_assertions v1.1.0
+   Compiling bzip2-rs v0.1.2
+   Compiling parking_lot v0.12.5
+   Compiling flate2 v1.1.9
+   Compiling pollster v0.3.0
+   Compiling bytes v1.12.1
+   Compiling ordered-float v4.6.0
+   Compiling fontdone v2.14.3 (https://github.com/appunni-m/fontdone.git?rev=7c48b706482b8800e97b35cccc18671893c34e9f#7c48b706)
+   Compiling bitflags v2.13.1
+   Compiling spirv v0.3.0+sdk-1.3.268.0
+   Compiling gpu-alloc-types v0.3.1
+   Compiling gpu-descriptor-types v0.2.0
+   Compiling wgpu-types v24.0.0
+   Compiling gpu-descriptor v0.3.2
+   Compiling gpu-alloc v0.6.2
+   Compiling bytemuck_derive v1.11.0
+   Compiling strum_macros v0.26.4
+   Compiling phf_macros v0.13.1
+   Compiling phf v0.13.1
+   Compiling csscolorparser v0.8.3
+   Compiling bytemuck v1.25.2
+   Compiling safe_arch v1.1.0
+   Compiling strum v0.26.3
+   Compiling naga v24.0.0
+   Compiling wide v1.6.1
+   Compiling image-slash-star v0.1.2 (https://github.com/appunni-m/image-slash-star.git?rev=70190214a0711223302c76ab58e76c097288d80b#70190214)
+   Compiling wgpu-hal v24.0.4
+   Compiling wgpu-core v24.0.5
+   Compiling wgpu v24.0.5
+   Compiling pillow-rs v12.2.1 (/home/appunni/pillow-rs-resize-trial-20261015/pillow-rs)
+error: couldn't read `pillow-rs/src/../tests/fixtures/assets/image/rgb-small.jpg`: No such file or directory (os error 2)
+    --> pillow-rs/src/image.rs:9589:13
+     |
+9589 |             include_bytes!("../tests/fixtures/assets/image/rgb-small.jpg").to_vec(),
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: couldn't read `pillow-rs/src/../tests/fixtures/assets/image/rgb-small.webp`: No such file or directory (os error 2)
+    --> pillow-rs/src/image.rs:9603:13
+     |
+9603 |             include_bytes!("../tests/fixtures/assets/image/rgb-small.webp").to_vec(),
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: could not compile `pillow-rs` (lib test) due to 2 previous errors

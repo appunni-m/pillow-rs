@@ -1,0 +1,6 @@
+Imported four recovered reports (16 rows) and five exact compressed parity artifacts.
+Command: pillow-perfdb --db performance-results.duckdb compare --workload pipeline-op.convert-mode-cmyk-to-rgb-1024x768 --profile python-simd --source-kind benchmark-result --from 541f9fa9cf76 --to 81cb0b3a1dc6
+Result: unpaired: runner identity is only a label (machine)
+Paired cases: 0; source rows: 1; destination rows: 1
+No ratio was calculated because no row passed all pairing/evidence checks.
+Follow-up: pillow-rs#jsg4.

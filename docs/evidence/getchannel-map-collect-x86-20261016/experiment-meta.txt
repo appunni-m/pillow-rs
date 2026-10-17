@@ -1,0 +1,14 @@
+host=machine
+Linux machine 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+Architecture:                            x86_64
+Model name:                              AMD Ryzen 5 2600X Six-Core Processor
+rust=rustc 1.96.1 (31fca3adb 2026-06-26)
+python=Python 3.12.11
+control_source_sha256=a1ca93c594d0b417df9fc64d8977dd76b09fe9f0c6ca7b5b2456b7f66608cd19
+candidate_source_sha256=761c086118858975cbe5ad93457f97241ffedd5816452b1d9b3303d17e8265ca
+control_core_sha256=83d8491c207a6eea16968ab5a30f62df3eb2a887c8dbd131cc17f3e8d2557053
+case_id=PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768
+workload_id=pil-image-image.getchannel.materialized.rgb-1024x768
+manifest=/home/appunni/pillow-rs-getchannel-x86-baseline-20261015/pillow-rs/tests/fixtures/manifest-getchannel-x86-baseline-20261015.yaml
+backend=python-cpu; parallel=disabled; strict_backend=1
+candidate_core_sha256=96beda2b1b8499e4a8197f00041b1c5e17f7a9d2ad1f4bfea8d422efd99e6479

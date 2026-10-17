@@ -1,0 +1,127 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "suites": [
+    {
+      "description": "Exact-parity RGBA Filter5x5 public workflow rebaseline.",
+      "members": [
+        {
+          "workload_id": "pipeline-chain.convolution.native.rgba-5x5-uniform.1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.convolution.native.rgba-5x5-nearuniform-tail.1024x768",
+          "weight": 1
+        }
+      ],
+      "suite_id": "filter-rgba-5x5-current-x86-suite"
+    }
+  ],
+  "workloads": [
+    {
+      "context": {
+        "build_profile": "release",
+        "cache_state": "warm",
+        "chain_length": 1,
+        "mode": "RGBA",
+        "operation_class": "neighborhood",
+        "size": [
+          1024,
+          768
+        ]
+      },
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "input": {
+        "case_id": "PIL.Image.Image.filter.nuanced.performance-rgba-kernel-5x5-uniform-1024x768",
+        "kind": "parity_case"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "parity_pass",
+        "measurement_iterations": 20,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 5,
+        "step_ids": [],
+        "warmup_iterations": 5
+      },
+      "subjects": [
+        {
+          "id": "pillow",
+          "kind": "oracle"
+        },
+        {
+          "id": "python-cpu",
+          "kind": "target_profile"
+        },
+        {
+          "id": "python-simd",
+          "kind": "target_profile"
+        },
+        {
+          "id": "python-gpu",
+          "kind": "target_profile"
+        }
+      ],
+      "workload_id": "pipeline-chain.convolution.native.rgba-5x5-uniform.1024x768"
+    },
+    {
+      "context": {
+        "build_profile": "release",
+        "cache_state": "warm",
+        "chain_length": 1,
+        "mode": "RGBA",
+        "operation_class": "neighborhood",
+        "size": [
+          1024,
+          768
+        ]
+      },
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "input": {
+        "case_id": "PIL.Image.Image.filter.nuanced.performance-rgba-kernel-5x5-nearuniform-tail-1024x768",
+        "kind": "parity_case"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "cache_state": "warm",
+        "concurrency": 1,
+        "correctness_gate": "parity_pass",
+        "measurement_iterations": 20,
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "samples": 5,
+        "step_ids": [],
+        "warmup_iterations": 5
+      },
+      "subjects": [
+        {
+          "id": "pillow",
+          "kind": "oracle"
+        },
+        {
+          "id": "python-cpu",
+          "kind": "target_profile"
+        },
+        {
+          "id": "python-simd",
+          "kind": "target_profile"
+        },
+        {
+          "id": "python-gpu",
+          "kind": "target_profile"
+        }
+      ],
+      "workload_id": "pipeline-chain.convolution.native.rgba-5x5-nearuniform-tail.1024x768"
+    }
+  ]
+}

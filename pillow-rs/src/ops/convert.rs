@@ -528,12 +528,51 @@ impl Image {
         // PA is a dedicated indexed-plus-alpha destination; route I/F through
         // convert_to_palette_alpha below so scalar samples use its direct
         // clamped-index conversion instead of the generic L fallback.
-        if effective_src_mode_name == "I" && mode == "L" {
-            // i_to_l only reads the packed scalar carrier. Share the already
-            // materialized source instead of materialize() cloning its full
-            // four-byte-per-pixel buffer before the conversion.
+        if matches!(effective_src_mode_name, "I" | "F") && mode == "L" {
+            // The scalar-to-L converters only read the packed four-byte
+            // carrier. Share the already materialized source instead of
+            // materialize() cloning its full buffer before the conversion.
             let img = self.materialized_shared_for_ops()?;
-            return Ok(Image::from_dynamic(color::i_to_l(img.as_ref()), None));
+            let luma = if effective_src_mode_name == "I" {
+                color::i_to_l(img.as_ref())
+            } else if !cfg!(feature = "parallel")
+                && crate::compute::Backend::pipeline_telemetry_enabled()
+                && matches!(
+                    crate::compute::preferred_active_backend()?,
+                    Some((crate::compute::Backend::Cpu, _))
+                )
+            {
+                crate::compute::execute_eager_cpu_image_operation(
+                    "Convert",
+                    img.as_ref(),
+                    true,
+                    || Ok(color::f_to_l(img.as_ref())),
+                )?
+            } else {
+                color::f_to_l(img.as_ref())
+            };
+            return Ok(Image::from_dynamic(luma, None));
+        }
+        if effective_src_mode_name == "F" && mode == "I" {
+            // f_to_i only reads the packed scalar carrier. Share the already
+            // materialized source instead of cloning its full buffer first.
+            let img = self.materialized_shared_for_ops()?;
+            let converted = if !cfg!(feature = "parallel")
+                && crate::compute::Backend::pipeline_telemetry_enabled()
+                && matches!(
+                    crate::compute::preferred_active_backend()?,
+                    Some((crate::compute::Backend::Cpu, _))
+                ) {
+                crate::compute::execute_eager_cpu_image_operation(
+                    "Convert",
+                    img.as_ref(),
+                    true,
+                    || Ok(color::f_to_i(img.as_ref())),
+                )?
+            } else {
+                color::f_to_i(img.as_ref())
+            };
+            return Ok(Image::from_dynamic(converted, explicit_mode_for(mode)));
         }
         if matches!(effective_src_mode_name, "I" | "F") && mode != "PA" {
             let img = self.materialize()?;

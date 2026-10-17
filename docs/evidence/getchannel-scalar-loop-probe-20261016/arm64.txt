@@ -1,0 +1,5 @@
+host=aarch64 pixels=786432 input_bytes=2359296 allocation_included=true unit=us_per_channel_call
+current_extend_array: median=190 max_of_5=288 samples=[151, 184, 190, 215, 288]
+unrolled_push: median=421 max_of_5=430 samples=[421, 421, 421, 428, 430]
+pixel_chunks: median=385 max_of_5=387 samples=[382, 384, 385, 385, 387]
+stride_iter_collect: median=1198 max_of_5=1213 samples=[1151, 1195, 1198, 1206, 1213]

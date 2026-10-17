@@ -1,0 +1,82 @@
+diff --git a/pillow-rs/src/compute/pool_simd/ops/adapters.rs b/pillow-rs/src/compute/pool_simd/ops/adapters.rs
+index d3ea49a04..0733534f2 100644
+--- a/pillow-rs/src/compute/pool_simd/ops/adapters.rs
++++ b/pillow-rs/src/compute/pool_simd/ops/adapters.rs
+@@ -20056,36 +20070,51 @@ fn simd_rgb_vertical_radius_one_rows(
+     let vector_blocks = row_stride.div_ceil(16).saturating_mul(height) as u64;
+     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+ 
+-    for y in 0..height {
+-        let sum_top_base = y.saturating_sub(1) * row_stride;
+-        let sum_middle_base = y * row_stride;
+-        let sum_bottom_base = y.saturating_add(1).min(last_y) * row_stride;
+-        let edge_top_base = y.saturating_sub(2) * row_stride;
+-        let edge_bottom_base = y.saturating_add(2).min(last_y) * row_stride;
+-        let output_row = y * row_stride;
++    let has_fractional_weight = fractional_weight != 0;
++    let whole_weight = u32x16::splat(whole_weight);
++    let fractional_weight = u32x16::splat(fractional_weight);
++    let rounding_bias = u32x16::splat(SIMD_BOX_BLUR_BIAS);
+ 
+-        for x in (0..row_stride).step_by(16) {
+-            let count = (row_stride - x).min(16);
+-            let load = |base: usize| {
+-                if count == 16 {
+-                    u32x16::from(u16x16::from(simd_blur_load_u8x16(source, base + x)))
+-                } else {
+-                    let mut padded = [0u8; 16];
+-                    padded[..count].copy_from_slice(&source[base + x..base + x + count]);
+-                    u32x16::from(u16x16::from(u8x16::new(padded)))
+-                }
+-            };
+-            let sum = load(sum_top_base) + load(sum_middle_base) + load(sum_bottom_base);
+-            let edge = if fractional_weight == 0 {
+-                u32x16::splat(0)
++    for x in (0..row_stride).step_by(16) {
++        let count = (row_stride - x).min(16);
++        let load_row = |y: usize| {
++            let start = y * row_stride + x;
++            if count == 16 {
++                u32x16::from(u16x16::from(simd_blur_load_u8x16(source, start)))
+             } else {
+-                load(edge_top_base) + load(edge_bottom_base)
++                let mut padded = [0u8; 16];
++                padded[..count].copy_from_slice(&source[start..start + count]);
++                u32x16::from(u16x16::from(u8x16::new(padded)))
++            }
++        };
++
++        // Carry Pillow's three-row vertical accumulator forward. The edge
++        // rows are also the next entering rows, so each later output loads
++        // only one newly exposed source row instead of rebuilding the window.
++        let mut leaving = load_row(0);
++        let mut center = load_row(0);
++        let mut current = load_row(0);
++        let mut entering = load_row(1.min(last_y));
++        let mut far_edge = load_row(2.min(last_y));
++        let mut accumulator = leaving * u32x16::splat(3);
++
++        for y in 0..height {
++            accumulator = accumulator - leaving + entering;
++            let edge = if has_fractional_weight {
++                leaving + far_edge
++            } else {
++                u32x16::splat(0)
+             };
+-            let weighted = sum * u32x16::splat(whole_weight)
+-                + edge * u32x16::splat(fractional_weight)
+-                + u32x16::splat(SIMD_BOX_BLUR_BIAS);
++            let weighted = accumulator * whole_weight + edge * fractional_weight + rounding_bias;
+             let packed = simd_blur_pack_u32x16_to_bytes(weighted >> 24u32);
+-            destination[output_row + x..output_row + x + count].copy_from_slice(&packed[..count]);
++            let output_start = y * row_stride + x;
++            destination[output_start..output_start + count].copy_from_slice(&packed[..count]);
++
++            leaving = center;
++            center = current;
++            current = entering;
++            entering = far_edge;
++            far_edge = load_row(y.saturating_add(3).min(last_y));
+         }
+     }
+ }

@@ -1,0 +1,172 @@
+--- a/pillow-rs-py/src/lib.rs
++++ b/pillow-rs-py/src/lib.rs
+@@ -44,6 +44,64 @@
+ use std::path::PathBuf;
+ use std::sync::{Mutex, OnceLock};
+ 
++// Temporary 4,097-call attribution probe; exclude the 4,096 setup call.
++// Aggregate once per public call, never per output row; then remove this block.
++#[derive(Clone, Copy, Default)]
++struct GetColorsPhaseProbeTotals {
++    calls: u64,
++    rows: u64,
++    core_ns: u64,
++    detach_map_error_ns: u64,
++    conversion_ns: u64,
++}
++
++static GETCOLORS_PHASE_PROBE: Mutex<GetColorsPhaseProbeTotals> =
++    Mutex::new(GetColorsPhaseProbeTotals {
++        calls: 0,
++        rows: 0,
++        core_ns: 0,
++        detach_map_error_ns: 0,
++        conversion_ns: 0,
++    });
++
++fn getcolors_probe_elapsed_ns(start: std::time::Instant) -> u64 {
++    u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX)
++}
++
++fn record_getcolors_phase_probe(
++    core_ns: u64,
++    detach_map_error_ns: u64,
++    conversion_ns: u64,
++    rows: u64,
++) {
++    if let Ok(mut totals) = GETCOLORS_PHASE_PROBE.lock() {
++        totals.calls = totals.calls.saturating_add(1);
++        totals.rows = totals.rows.saturating_add(rows);
++        totals.core_ns = totals.core_ns.saturating_add(core_ns);
++        totals.detach_map_error_ns = totals
++            .detach_map_error_ns
++            .saturating_add(detach_map_error_ns);
++        totals.conversion_ns = totals.conversion_ns.saturating_add(conversion_ns);
++    }
++}
++
++#[pyfunction]
++fn _take_getcolors_phase_probe(py: Python<'_>) -> PyResult<Py<PyAny>> {
++    let mut totals = GETCOLORS_PHASE_PROBE
++        .lock()
++        .unwrap_or_else(|poisoned| poisoned.into_inner());
++    let snapshot = std::mem::take(&mut *totals);
++    drop(totals);
++
++    let result = PyDict::new(py);
++    result.set_item("calls", snapshot.calls)?;
++    result.set_item("rows", snapshot.rows)?;
++    result.set_item("core_ns", snapshot.core_ns)?;
++    result.set_item("detach_map_error_ns", snapshot.detach_map_error_ns)?;
++    result.set_item("conversion_ns", snapshot.conversion_ns)?;
++    Ok(result.into())
++}
++
+ mod gpu_batch;
+ mod putdata;
+ 
+@@ -1633,32 +1691,74 @@
+         py: Python<'_>,
+     ) -> PyResult<Option<Py<PyAny>>> {
+         let maxcolors = maxcolors.unwrap_or(256);
+-        let formatted = py
+-            .detach(|| self.inner.getcolors_formatted_with_signed_limit(maxcolors))
+-            .map_err(map_error)?;
+-        Python::attach(|py| match formatted {
+-            None => Ok(None),
+-            Some(results) => {
+-                let out = pyo3::types::PyList::empty(py);
+-                for (count, color) in results {
+-                    let color_value = match color {
+-                        pillow_rs::FormattedPixelValue::Scalar(value) => value.into_py_any(py)?,
+-                        pillow_rs::FormattedPixelValue::Integer(value) => value.into_py_any(py)?,
+-                        pillow_rs::FormattedPixelValue::Float(value) => value.into_py_any(py)?,
+-                        pillow_rs::FormattedPixelValue::Components(values) => {
+-                            PyTuple::new(py, values)?.into_py_any(py)?
++        let detach_window_started = std::time::Instant::now();
++        let (core_result, core_ns) = py.detach(|| {
++            let core_started = std::time::Instant::now();
++            let result = self.inner.getcolors_formatted_with_signed_limit(maxcolors);
++            (result, getcolors_probe_elapsed_ns(core_started))
++        });
++        let mapped_result = core_result.map_err(map_error);
++        let detach_map_error_ns = getcolors_probe_elapsed_ns(detach_window_started);
++        let formatted = match mapped_result {
++            Ok(formatted) => formatted,
++            Err(error) => {
++                if maxcolors == 4097 {
++                    record_getcolors_phase_probe(core_ns, detach_map_error_ns, 0, 0);
++                }
++                return Err(error);
++            }
++        };
++        let rows = formatted.as_ref().map_or(0, Vec::len);
++        let (converted, conversion_ns) = Python::attach(|py| {
++            let conversion_started = std::time::Instant::now();
++            let converted = (|| -> PyResult<Option<Py<PyAny>>> {
++                match formatted {
++                    None => Ok(None),
++                    Some(results) => {
++                        let out = pyo3::types::PyList::empty(py);
++                        for (count, color) in results {
++                            let color_value = match color {
++                                pillow_rs::FormattedPixelValue::Scalar(value) => {
++                                    value.into_py_any(py)?
++                                }
++                                pillow_rs::FormattedPixelValue::Integer(value) => {
++                                    value.into_py_any(py)?
++                                }
++                                pillow_rs::FormattedPixelValue::Float(value) => {
++                                    value.into_py_any(py)?
++                                }
++                                pillow_rs::FormattedPixelValue::Components(values) => {
++                                    PyTuple::new(py, values)?.into_py_any(py)?
++                                }
++                                pillow_rs::FormattedPixelValue::InlineComponents {
++                                    bytes,
++                                    bands,
++                                } => PyTuple::new(
++                                    py,
++                                    bytes.into_iter().take(usize::from(bands)),
++                                )?
++                                .into_py_any(py)?,
++                            };
++                            let entry = PyTuple::new(py, [count.into_py_any(py)?, color_value])?;
++                            out.append(entry)?;
+                         }
+-                        pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => {
+-                            PyTuple::new(py, bytes.into_iter().take(usize::from(bands)))?
+-                                .into_py_any(py)?
+-                        }
+-                    };
+-                    let entry = PyTuple::new(py, [count.into_py_any(py)?, color_value])?;
+-                    out.append(entry)?;
++                        Ok(Some(out.into_py_any(py)?))
++                    }
+                 }
+-                Ok(Some(out.into_py_any(py)?))
+-            }
+-        })
++            })();
++            (converted, getcolors_probe_elapsed_ns(conversion_started))
++        });
++        if maxcolors == 4097 {
++            record_getcolors_phase_probe(
++                core_ns,
++                detach_map_error_ns,
++                conversion_ns,
++                u64::try_from(rows).unwrap_or(u64::MAX),
++            );
++        }
++        converted
+     }
+ 
+     /// Return getdata formatted as PIL expects.
+@@ -2667,6 +2767,7 @@
+     m.add_function(wrap_pyfunction!(backend_enabled, m)?)?;
+     m.add_function(wrap_pyfunction!(set_pipeline_telemetry, m)?)?;
+     m.add_function(wrap_pyfunction!(take_pipeline_telemetry, m)?)?;
++    m.add_function(wrap_pyfunction!(_take_getcolors_phase_probe, m)?)?;
+     m.add_function(wrap_pyfunction!(set_gpu_shader_coverage, m)?)?;
+     m.add_function(wrap_pyfunction!(take_gpu_shader_coverage, m)?)?;
+ 

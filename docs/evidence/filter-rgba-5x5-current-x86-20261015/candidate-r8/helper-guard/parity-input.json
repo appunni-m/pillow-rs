@@ -1,0 +1,78 @@
+{
+  "cases": [
+    {
+      "assets": [],
+      "case_id": "PIL.Image.Image.filter.nuanced.performance-rgb-kernel-5x5-materialized-32x24",
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "observations": [
+        "call",
+        "materialize"
+      ],
+      "operation": "filter",
+      "steps": [
+        {
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": 0
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                32,
+                24
+              ]
+            }
+          },
+          "operation": "new",
+          "receiver": null,
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image"
+        },
+        {
+          "arguments": {},
+          "operation": "BLUR",
+          "receiver": null,
+          "step_id": "setup-filter-blur-2",
+          "surface": "PIL.ImageFilter"
+        },
+        {
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-blur-2"
+            }
+          },
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "step_id": "call",
+          "surface": "PIL.Image.Image"
+        },
+        {
+          "arguments": {},
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image"
+        }
+      ],
+      "surface": "PIL.Image.Image",
+      "target_profiles": [
+        "python-cpu"
+      ]
+    }
+  ],
+  "schema": "migration-parity/parity-input@1"
+}

@@ -1,0 +1,51 @@
+--- a/pillow-rs/src/compute/pool_cpu/ops/geometry.rs
++++ b/pillow-rs/src/compute/pool_cpu/ops/geometry.rs
+@@ -1744,12 +1744,46 @@
+ 
+             let source_width = source_width as usize;
+             let span_length = end - start;
+-            for (offset, pixel) in row[start_byte..end_byte].chunks_exact_mut(4).enumerate() {
++            let mut pixels = row[start_byte..end_byte].chunks_exact_mut(16);
++            let group_count = span_length / 4;
++            let tail_count = span_length % 4;
++            for (group_index, group) in pixels.by_ref().enumerate() {
++                let input_x = (source_x >> 16) as usize;
++                let input_y = (source_y >> 16) as usize;
++                let input_index = (input_y * source_width + input_x) * 4;
++                group[0..4].copy_from_slice(&source[input_index..input_index + 4]);
++                source_x += step_x_x;
++                source_y += step_x_y;
++
++                let input_x = (source_x >> 16) as usize;
++                let input_y = (source_y >> 16) as usize;
++                let input_index = (input_y * source_width + input_x) * 4;
++                group[4..8].copy_from_slice(&source[input_index..input_index + 4]);
++                source_x += step_x_x;
++                source_y += step_x_y;
++
++                let input_x = (source_x >> 16) as usize;
++                let input_y = (source_y >> 16) as usize;
++                let input_index = (input_y * source_width + input_x) * 4;
++                group[8..12].copy_from_slice(&source[input_index..input_index + 4]);
++                source_x += step_x_x;
++                source_y += step_x_y;
++
++                let input_x = (source_x >> 16) as usize;
++                let input_y = (source_y >> 16) as usize;
++                let input_index = (input_y * source_width + input_x) * 4;
++                group[12..16].copy_from_slice(&source[input_index..input_index + 4]);
++                if group_index + 1 < group_count || tail_count > 0 {
++                    source_x += step_x_x;
++                    source_y += step_x_y;
++                }
++            }
++            for (offset, pixel) in pixels.into_remainder().chunks_exact_mut(4).enumerate() {
+                 let input_x = (source_x >> 16) as usize;
+                 let input_y = (source_y >> 16) as usize;
+                 let input_index = (input_y * source_width + input_x) * 4;
+                 pixel.copy_from_slice(&source[input_index..input_index + 4]);
+-                if offset + 1 < span_length {
++                if offset + 1 < tail_count {
+                     source_x += step_x_x;
+                     source_y += step_x_y;
+                 }

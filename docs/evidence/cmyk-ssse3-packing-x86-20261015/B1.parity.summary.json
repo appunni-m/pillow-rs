@@ -1,0 +1,69 @@
+{
+  "source_path": "/home/appunni/pillow-rs-resize-trial-20261015/build/migration-parity/cmyk-packing-20261015/B1.parity.json",
+  "source_sha256": "ea8cec57a21c68e5ff0e82be2f0034ea6fcf575641fdf124c1621482423fecbe",
+  "source_bytes": 12586381,
+  "identity": {
+    "run_id": "migration-parity-benchmark-gate-fcec786e0a294ddcabcc150e1dc8d87c",
+    "started_at": "2026-10-15T05:49:35.132391Z",
+    "finished_at": "2026-10-15T05:49:37.486651Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.cmyk-packing-20261015.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "5467e5dc86b72b8cc89488d2b730db6ab9909a5371243f8d3ba0a2c7f37488fb"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/cmyk-packing-20261015.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "700400be34939e4492d3f54bd95f5e34e494b760fafd44ffb4827caadca97e0f"
+      }
+    ],
+    "assets": [],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-simd",
+        "target_id": "pillow-rs-python",
+        "revision": "f2b63f559e91022a85cb43f7264bdf8b586a448d",
+        "dirty": true,
+        "runtime": "3.12.3",
+        "backend": "simd",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-benchmark"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 300
+    }
+  },
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.Image.Image.convert.nuanced.material-cmyk-to-rgb-1024x768",
+      "target_profile": "python-simd",
+      "outcome": "pass"
+    }
+  ]
+}

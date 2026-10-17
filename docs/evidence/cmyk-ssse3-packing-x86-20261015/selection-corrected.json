@@ -1,0 +1,15 @@
+{
+  "case_contract_sha256": {
+    "PIL.Image.Image.convert.nuanced.material-cmyk-to-rgb-1024x768": "617f568c775ee839e4b9dd891492ff269ad935de1585279f331d0a93ab492a0a",
+    "PIL.Image.Image.convert.nuanced.mode-audit-CMYK-to-RGB-17x3": "172ee5e259202c381fecaa1add3a995ff6d89d9efe6cc10d4f2b94a397144935"
+  },
+  "workload_contract_sha256": {
+    "pipeline-op.convert-mode-cmyk-to-rgb-1024x768": "7f22310a72855ce3b3d2e1a256a966b27b0030b97bcbc70cc3b1d3df02abb0a0",
+    "pipeline-chain.convert.material-cmyk-to-rgb-1024x768": "7dcac0c6bd1b37b73bcc11a55784b3cc97503e99c9c8e7310dff6d86d3601b46"
+  },
+  "profiles": [
+    "python-simd"
+  ],
+  "note": "Only profile selection changes; original input content, observations, boundaries and sampling retained.",
+  "correction": "Case target_profiles and workload subjects restored to exact canonical definitions. SIMD-only execution selected through existing environment filters. First guard/benchmark attempts failed validation before any comparison/timing. Raw envelopes are authoritative per timing boundary because combined old producer report overwrites repeated case IDs."
+}

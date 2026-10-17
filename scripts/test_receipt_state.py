@@ -34,6 +34,7 @@ from scripts.run_migration_parity import (
     DEFAULT_MANIFEST,
     _benchmark_receipt_can_skip_observation_serialization,
     classify_pipeline_case,
+    direct_cpu_execution_receipt,
     load_cases,
     load_manifest,
     run_case,
@@ -151,6 +152,56 @@ class BenchmarkSuiteComparabilityTests(unittest.TestCase):
             },
         )
         self.assertTrue(suite_subject_is_comparable(proven, "python-cpu"))
+
+    def test_simd_requires_positive_vector_telemetry(self) -> None:
+        base_execution = {
+            "status": "completed",
+            "terminal_complete": True,
+            "requested_backend": "simd",
+            "actual_backend": "simd",
+            "actual_backend_counts": {"simd": 1},
+            "fallback_reason_counts": {},
+            "sample_count": 1,
+            "errors": [],
+        }
+        missing = self.subject("python-simd", dict(base_execution))
+        self.assertFalse(suite_subject_is_comparable(missing, "python-simd"))
+
+        zero = self.subject(
+            "python-simd",
+            {
+                **base_execution,
+                "operation_telemetry": [
+                    {
+                        "operation": "ExtractBand",
+                        "path": "scalar-gather",
+                        "vector_block_count": 0,
+                        "scalar_tail_count": 8,
+                        "mode_conversion_count": 0,
+                        "handoff_count": 0,
+                    }
+                ],
+            },
+        )
+        self.assertFalse(suite_subject_is_comparable(zero, "python-simd"))
+
+        vector = self.subject(
+            "python-simd",
+            {
+                **base_execution,
+                "operation_telemetry": [
+                    {
+                        "operation": "ExtractBand",
+                        "path": "neon-deinterleave",
+                        "vector_block_count": 1,
+                        "scalar_tail_count": 0,
+                        "mode_conversion_count": 0,
+                        "handoff_count": 0,
+                    }
+                ],
+            },
+        )
+        self.assertTrue(suite_subject_is_comparable(vector, "python-simd"))
 
     def test_target_host_control_is_not_comparable(self) -> None:
         host_controlled = self.subject(
@@ -1040,6 +1091,73 @@ class ReceiptStateTests(unittest.TestCase):
         self.assertTrue(result["terminal_complete"])
         self.assertEqual(result["actual_backend_counts"], {"gpu": 1})
 
+    def test_benchmark_execution_preserves_vector_and_zero_vector_operation_receipts(
+        self,
+    ) -> None:
+        record = benchmark_record(terminal_complete=True)
+        record["actual_backend"] = "simd"
+        operation_telemetry = [
+            {
+                "operation": "GetChannel",
+                "path": "neon-deinterleave",
+                "vector_block_count": 16,
+                "scalar_tail_count": 0,
+                "mode_conversion_count": 0,
+                "handoff_count": 0,
+            },
+            {
+                "operation": "GetChannel",
+                "path": "scalar-gather",
+                "vector_block_count": 0,
+                "scalar_tail_count": 0,
+                "mode_conversion_count": 0,
+                "handoff_count": 0,
+            },
+        ]
+        record["operation_telemetry"] = operation_telemetry
+
+        result = execution_result(
+            "target_profile", "python-simd", [record], aggregate_policy()
+        )
+
+        self.assertEqual(result["operation_telemetry"], operation_telemetry)
+        execution_receipt(result, "benchmark.execution")
+
+    def test_missing_operation_telemetry_stays_empty_and_cannot_imply_vector_work(
+        self,
+    ) -> None:
+        record = benchmark_record(terminal_complete=True)
+        record["actual_backend"] = "simd"
+        result = execution_result(
+            "target_profile", "python-simd", [record], aggregate_policy()
+        )
+
+        self.assertEqual(result["operation_telemetry"], [])
+        execution_receipt(result, "benchmark.execution")
+
+    def test_operation_telemetry_rejects_malformed_vector_counts(self) -> None:
+        receipt = execution_result(
+            "target_profile",
+            "python-simd",
+            [benchmark_record(terminal_complete=True)],
+            aggregate_policy(),
+        )
+        receipt["operation_telemetry"] = [
+            {
+                "operation": "GetChannel",
+                "path": "scalar-gather",
+                "vector_block_count": 0.5,
+                "scalar_tail_count": 0,
+                "mode_conversion_count": 0,
+                "handoff_count": 0,
+            }
+        ]
+        with self.assertRaisesRegex(
+            ValueError,
+            r"operation_telemetry\[0\]\.vector_block_count: expected non-negative integer",
+        ):
+            execution_receipt(receipt, "benchmark.execution")
+
     def test_representative_receipt_is_not_sliced_as_a_timing_warmup(self) -> None:
         record = benchmark_record(terminal_complete=True)
         record["actual_backend"] = "cpu"
@@ -1834,13 +1952,120 @@ class ReceiptStateTests(unittest.TestCase):
                     case,
                     {},
                     Path(directory),
+                    serialize_observations=False,
                     pipeline_execution_api=Telemetry(),
                     pipeline_execution_sink=sink,
                 )
         self.assertEqual(result["status"], "completed")
-        self.assertEqual(result["observations"], [{"step_id": "bytes", "status": "ok", "value": 7}])
+        self.assertEqual(result["observations"], [])
         self.assertEqual(len(sink), 1)
         self.assertTrue(sink[0]["terminal_complete"])
+
+    def test_draw_text_proof_receipt_is_cpu_execution_not_pipeline_work(self) -> None:
+        class Telemetry:
+            def take_pipeline_telemetry(self) -> None:
+                return None
+
+        case = {
+            "case_id": "direct-draw-text",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "call",
+                    "surface": "PIL.ImageDraw.ImageDraw",
+                    "operation": "text",
+                    "receiver": {"kind": "binding", "step_id": "draw"},
+                    "arguments": {},
+                },
+                {
+                    "step_id": "observe-image",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": {"kind": "binding", "step_id": "image"},
+                    "arguments": {},
+                },
+            ],
+            "observations": ["observe-image"],
+        }
+        sink: list[dict[str, object]] = []
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch("scripts.run_migration_parity.TARGET_BACKEND", "cpu"),
+                patch(
+                    "scripts.run_migration_parity.operation_definition",
+                    return_value={"source": {"result": {"shape": "scalar"}}},
+                ),
+                patch(
+                    "scripts.run_migration_parity.call_workflow_step",
+                    side_effect=[object(), object()],
+                ),
+                patch(
+                    "scripts.run_migration_parity.serialize_value",
+                    return_value=b"observed",
+                ),
+            ):
+                result = run_case(
+                    "target",
+                    case,
+                    {},
+                    Path(directory),
+                    pipeline_execution_api=Telemetry(),
+                    pipeline_execution_sink=sink,
+                )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(len(sink), 1)
+        self.assertEqual(sink[0]["actual_backend"], "cpu")
+        self.assertEqual(sink[0]["requested_backend"], "cpu")
+        self.assertEqual(sink[0]["operation_count"], 1)
+        self.assertTrue(sink[0]["terminal_complete"])
+        self.assertFalse(sink[0]["pipeline_relevant"])
+        self.assertEqual(
+            execution_result(
+                "target_profile", "python-cpu", sink, aggregate_policy()
+            )["status"],
+            "completed",
+        )
+        self.assertEqual(
+            classify_pipeline_case(case, sink, result=result)["status"],
+            "not_applicable",
+        )
+
+    def test_draw_text_non_cpu_profile_is_reported_as_cpu_fallback(self) -> None:
+        receipt = direct_cpu_execution_receipt(
+            "target",
+            {"surface": "PIL.ImageDraw.ImageDraw", "operation": "text"},
+            requested_backend="simd",
+        )
+        self.assertIsNotNone(receipt)
+        assert receipt is not None
+        self.assertEqual(receipt["requested_backend"], "simd")
+        self.assertEqual(receipt["actual_backend"], "cpu")
+        self.assertTrue(receipt["fallback_reason"])
+        self.assertFalse(receipt["pipeline_relevant"])
+
+        self.assertIsNone(
+            direct_cpu_execution_receipt(
+                "source",
+                {"surface": "PIL.ImageDraw.ImageDraw", "operation": "text"},
+                requested_backend="cpu",
+            )
+        )
+
+    def test_draw_text_parallel_cpu_profile_is_not_reported_as_parallel_execution(
+        self,
+    ) -> None:
+        receipt = direct_cpu_execution_receipt(
+            "target",
+            {"surface": "PIL.ImageDraw.ImageDraw", "operation": "text"},
+            requested_backend="cpu",
+            requested_profile="parallel-cpu",
+        )
+        self.assertIsNotNone(receipt)
+        assert receipt is not None
+        self.assertEqual(receipt["requested_backend"], "cpu")
+        self.assertEqual(receipt["actual_backend"], "cpu")
+        self.assertTrue(receipt["fallback_reason"])
 
     def test_zero_operation_observation_keeps_prior_receipt_terminal(self) -> None:
         """A zero-operation observation must not replace its real prefix."""

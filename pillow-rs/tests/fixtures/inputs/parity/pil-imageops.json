@@ -112658,6 +112658,70 @@
       ]
     },
     {
+      "case_id": "PIL.ImageOps.autocontrast.nuanced.performance-rgb-identity-lut-1024x768",
+      "surface": "PIL.ImageOps",
+      "operation": "autocontrast",
+      "covers": [
+        "PIL.ImageOps.autocontrast.performance.standard",
+        "PIL.ImageOps.autocontrast.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "autocontrast",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.ImageOps.autocontrast.nuanced.uniform-rgb-no-range",
       "surface": "PIL.ImageOps",
       "operation": "autocontrast",

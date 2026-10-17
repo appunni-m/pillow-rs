@@ -1,0 +1,81 @@
+{
+  "assets": [
+    {
+      "data": "pypDqBR/vR1n3msR1kMjjcJiYOtcPIXdzTAn+r2l/jh5iBz4IUmykl/OT3pL8J2nc2XD6prFCPgsZ7TO6XNiENY41BLn80J67BfaMLL62Fd2FKPYv8UwfnS/4ElMBzBdbK6H5//5N/Mf1waH6c3AnFb8umac3YTBnSV4HlOMJdO6ytXL+dJ/NLWtaSPYlx9GFZ82ub3sL4cCJp9S4+XihK/0FU5+kYvwJ+KuKbUhn12QFLMBPjqHLckJ/DtFFnKyzSW5CDE+ByhdtjtwEPJHejPaD5xkaPfv19IvwlypV1dKVL229WJon8wYkTo0hkS1DNclYipjYtVSeRbAp5pBm3UspXCyVd1a/OsZEekuPUVKfXf74Eh3DZeMulgVZv8hu4e/YUQ5fdSBTgJTnIeWPrLBLiWXQpV8gZYVdKCZSsM6TPOTCH/xBC13/03PFngzn0pKYmm4YqVpCeUqTerBZuxHcLs5HCjXoE2mptalTf+nRWb1h+NUB63WY2zFzKvYjwKITYCeTf5UjRP1VGE3I987NOMkEpka1UHZXVq/O2MvJQ3Iz6HvFHUaukmMvR4rESUCCDHGaqiqDfeODsbPObqjWypy9sRlcDaCMzxYvclLThMFmAELxghL58MOY43lyWI0hyq+wEo7UfZawyZ9cLJqZYp7pTQqiFtfrwMSxTfUr7aEsJCc6dPlAiTDIXYRL6ZOogjyu3NwkvtdAx+Q0y98mDHJM88cvpYz+n0d7qWt",
+      "encoding": "base64",
+      "id": "pixels",
+      "kind": "inline",
+      "media_type": "application/octet-stream",
+      "sha256": "8d45f26d25e6e249a1ddc7d4670ab1074d22ef72f157a4dab4d0e1fee0218665"
+    }
+  ],
+  "case_id": "PIL.Image.Image.rotate.nuanced.modes-RGB-0-arbitrary",
+  "covers": [
+    "PIL.Image.Image.rotate.behavior.default"
+  ],
+  "observations": [
+    "call",
+    "materialize"
+  ],
+  "operation": "rotate",
+  "steps": [
+    {
+      "arguments": {
+        "data": {
+          "asset_id": "pixels",
+          "kind": "asset"
+        },
+        "mode": {
+          "kind": "literal",
+          "value": "RGB"
+        },
+        "size": {
+          "kind": "literal",
+          "value": [
+            17,
+            11
+          ]
+        }
+      },
+      "operation": "frombytes",
+      "receiver": null,
+      "step_id": "image",
+      "surface": "PIL.Image"
+    },
+    {
+      "arguments": {
+        "angle": {
+          "kind": "literal",
+          "value": 37.5
+        },
+        "resample": {
+          "kind": "literal",
+          "value": 0
+        }
+      },
+      "operation": "rotate",
+      "receiver": {
+        "kind": "binding",
+        "step_id": "image"
+      },
+      "step_id": "call",
+      "surface": "PIL.Image.Image"
+    },
+    {
+      "arguments": {},
+      "operation": "tobytes",
+      "receiver": {
+        "kind": "binding",
+        "step_id": "call"
+      },
+      "step_id": "materialize",
+      "surface": "PIL.Image.Image"
+    }
+  ],
+  "surface": "PIL.Image.Image",
+  "target_profiles": [
+    "python-cpu",
+    "python-simd",
+    "python-gpu"
+  ]
+}

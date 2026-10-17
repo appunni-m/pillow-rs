@@ -1,0 +1,144 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "identity": {
+    "run_id": "migration-parity-9eddeae6026e46248c60823e69849e5a",
+    "started_at": "2026-10-15T10:57:40.081685Z",
+    "finished_at": "2026-10-15T10:57:41.360018Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "630ad23d4ba4d01aa25cb23a57fbfb308422c3c40618f2c063cccef01c8afc3b"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/pil-image-image.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "4dc6ada6553b7ac3916097e30f43ef0cc16f3ef092cacae44745d07631eb2ac3"
+      }
+    ],
+    "assets": [
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.convert.nuanced.mode-audit-F-to-I-17x3",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "7cc748f67093aecf36388710cfd0bbb1ab981a6ac7dccb6e14e4d5ce93b08184"
+      }
+    ],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-cpu",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "cpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-test"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 3600
+    }
+  },
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.Image.Image.convert.nuanced.mode-audit-F-to-I-17x3",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.convert.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.convert.nuanced.mode-audit-F-to-I-17x3",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "I",
+              "size": [
+                17,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "nP///6r///+4////xv///9P////h////7/////3///8KAAAAFwAAACUAAAAzAAAAQQAAAE4AAABcAAAAagAAAHgAAACFAAAAkwAAAKEAAACvAAAAvAAAAMoAAADYAAAA5gAAAPMAAAABAQAADwEAAB0BAAAqAQAAOAEAAEYBAABUAQAAYQEAAG8BAAB9AQAAiwEAAJgBAACmAQAAtAEAAMIBAADPAQAA3QEAAOsBAACh////r////73////L////2P///+b////0////"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "nP///6r///+4////xv///9P////h////7/////3///8KAAAAFwAAACUAAAAzAAAAQQAAAE4AAABcAAAAagAAAHgAAACFAAAAkwAAAKEAAACvAAAAvAAAAMoAAADYAAAA5gAAAPMAAAABAQAADwEAAB0BAAAqAQAAOAEAAEYBAABUAQAAYQEAAG8BAAB9AQAAiwEAAJgBAACmAQAAtAEAAMIBAADPAQAA3QEAAOsBAACh////r////73////L////2P///+b////0////"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.convert.nuanced.mode-audit-F-to-I-17x3",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "I",
+              "size": [
+                17,
+                3
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "nP///6r///+4////xv///9P////h////7/////3///8KAAAAFwAAACUAAAAzAAAAQQAAAE4AAABcAAAAagAAAHgAAACFAAAAkwAAAKEAAACvAAAAvAAAAMoAAADYAAAA5gAAAPMAAAABAQAADwEAAB0BAAAqAQAAOAEAAEYBAABUAQAAYQEAAG8BAAB9AQAAiwEAAJgBAACmAQAAtAEAAMIBAADPAQAA3QEAAOsBAACh////r////73////L////2P///+b////0////"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "nP///6r///+4////xv///9P////h////7/////3///8KAAAAFwAAACUAAAAzAAAAQQAAAE4AAABcAAAAagAAAHgAAACFAAAAkwAAAKEAAACvAAAAvAAAAMoAAADYAAAA5gAAAPMAAAABAQAADwEAAB0BAAAqAQAAOAEAAEYBAABUAQAAYQEAAG8BAAB9AQAAiwEAAJgBAACmAQAAtAEAAMIBAADPAQAA3QEAAOsBAACh////r////73////L////2P///+b////0////"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    }
+  ],
+  "infrastructure_errors": []
+}

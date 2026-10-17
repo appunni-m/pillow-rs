@@ -1,0 +1,35 @@
+{
+  "schema": "pillow-rs-performance-decision/v1",
+  "experiment": "convolution-column-sums-guards-20261015-03",
+  "candidate": "scalar Filter5x5 column sums",
+  "workload": "pipeline-chain.convolution.native.l-5x5-scale.1024x768",
+  "runner": "native Ryzen 5 2600X, CPU affinity 4",
+  "design": "four CPU-only whole-workflow reports, A-B-B-A, six raw samples per subject per report",
+  "workflow_links": "all four strict links passed; runtime, producer, build binding, actual terminal CPU/no-fallback, and exact parity proofs matched",
+  "control_cpu_median_ms": [5.498777, 5.856012],
+  "candidate_cpu_median_ms": [5.555502, 5.554396],
+  "control_pillow_median_ms": [12.903202, 14.330725],
+  "candidate_pillow_median_ms": [13.082156, 12.9705635],
+  "mean_cpu_median_ms": {
+    "control": 5.6773945,
+    "candidate": 5.554949
+  },
+  "candidate_over_control_absolute_latency": 0.9784328,
+  "mean_same_run_cpu_over_pillow": {
+    "control": 0.41739467,
+    "candidate": 0.42644673
+  },
+  "candidate_over_control_normalized_latency": 1.0216871,
+  "frozen_guard": "both absolute and same-run Pillow-normalized CPU latency must not regress",
+  "decision": "rejected: normalized latency regressed 2.17%, despite 2.16% lower absolute latency",
+  "completion_credit": "0/33",
+  "artifact_directory": "/Users/lazytrot/work/pillow-perfdb/evidence/convolution-column-sums-guards-20261015-03",
+  "validator_defect": {
+    "finding": "benchmark producer emits optional environment.runner_id, but strict result validator previously rejected it",
+    "fix": "accept the optional field only as a non-empty string",
+    "verification": "one focused unittest passed; no broader suite or parity rerun"
+  },
+  "coverage": "not run",
+  "commit": false,
+  "push": false
+}

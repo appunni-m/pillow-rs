@@ -1,0 +1,155 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.Image.Image.convert.nuanced.material-cmyk-to-rgb-1024x768",
+      "surface": "PIL.Image.Image",
+      "operation": "convert",
+      "covers": [
+        "PIL.Image.Image.convert.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                17,
+                83,
+                149,
+                211
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "convert",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.convert.nuanced.mode-audit-CMYK-to-RGB-17x3",
+      "surface": "PIL.Image.Image",
+      "operation": "convert",
+      "covers": [
+        "PIL.Image.Image.convert.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "yYnnWBq76Abdn4PqTQ+D0ScswHEZnrO86nLs02WPCecjC/UYuOGnQ7B1R3mZS8Auhr5Sw2A64FZSqpJIZek4lnt4Wr7f2KFCmpyOQwN2azyy6/oKHmbf5mZAmkqDewvTRUXvs5UmBeo/sCRK8z6hOed1GRtg2baKe6ZtDV7ABkCxj/tH3al0fqRhRkgMtiJA533s1BIbBBoWhAKNMO7cnbC9tEEl3wlEPvKBicn9mDdU9jGwt27Qvk2TudU91LNWYW7LdQDhdaxIHp9D",
+          "sha256": "d5354c37e23118712309d762250b5569632fba118a3dd6f07c2d2b58318eeee3",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                17,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "convert",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "materialize"
+      ]
+    }
+  ]
+}

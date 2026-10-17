@@ -1,0 +1,1 @@
+The first A2 benchmark attempt rejected the A1 parity attestation with: current target/python-simd runtime identity differs from reused parity. A focused material-case parity run was then generated for the restored A2 control binary and the benchmark completed.

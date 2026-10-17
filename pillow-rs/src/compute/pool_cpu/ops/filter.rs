@@ -7,6 +7,19 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
+
+#[cfg(not(feature = "parallel"))]
+#[path = "filter/uniform_box.rs"]
+mod uniform_box;
+
+#[cfg(not(feature = "parallel"))]
+#[path = "filter/rgb_blur_ring.rs"]
+mod rgb_blur_ring;
+
+#[cfg(all(test, not(feature = "parallel")))]
+#[path = "filter/uniform_box_tests.rs"]
+mod uniform_box_tests;
+
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
 #[cfg(not(feature = "parallel"))]
@@ -1643,6 +1656,7 @@ fn filter_5x5_byte_row(
     }
 }
 
+#[cfg_attr(not(feature = "parallel"), inline(never))]
 fn filter_5x5_byte_rows(
     raw: &[u8],
     out: &mut [u8],
@@ -1652,6 +1666,18 @@ fn filter_5x5_byte_rows(
     kernel: &[f32; 25],
     rounding_bias: f32,
 ) {
+    #[cfg(not(feature = "parallel"))]
+    if uniform_box::apply_if_uniform(
+        raw,
+        out,
+        width.max(0) as usize,
+        height.max(0) as usize,
+        channels,
+        kernel,
+        rounding_bias,
+    ) {
+        return;
+    }
     let row_stride = width.max(0) as usize * channels;
     if row_stride == 0 || height <= 0 {
         return;
@@ -1729,20 +1755,18 @@ pub(crate) fn binomial3x3_parameters_match(kernel: &[f32; 9], scale: f32, offset
     scale == 16.0 && offset == 0.0 && kernel == &WEIGHTS
 }
 
-/// Evaluate a constant native-byte 5x5 convolution with one computed interior
-/// tuple and the same untouched border contract as the regular scalar path.
-fn filter_5x5_constant_bytes(
-    raw: &[u8],
-    out: &mut [u8],
-    width: usize,
-    height: usize,
+/// Evaluate one constant native-byte 5x5 convolution tuple in the same tap and
+/// row-add order as [`filter_5x5_byte_row`].
+#[inline]
+fn filter_5x5_constant_pixel(
+    samples: &[u8],
     channels: usize,
     kernel: &[f32; 25],
     rounding_bias: f32,
-) {
+) -> [u8; 4] {
     let mut filtered = [0u8; 4];
     for channel in 0..channels {
-        let sample = raw[channel] as f32;
+        let sample = samples[channel] as f32;
         let row0 = pillow_kernel_row_5([sample; 5], &kernel[0..5]);
         let row1 = pillow_kernel_row_5([sample; 5], &kernel[5..10]);
         let row2 = pillow_kernel_row_5([sample; 5], &kernel[10..15]);
@@ -1756,6 +1780,21 @@ fn filter_5x5_constant_bytes(
         value += row4;
         filtered[channel] = clip8_filter(value);
     }
+    filtered
+}
+
+/// Evaluate a constant native-byte 5x5 convolution with one computed interior
+/// tuple and the same untouched border contract as the regular scalar path.
+fn filter_5x5_constant_bytes(
+    raw: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    kernel: &[f32; 25],
+    rounding_bias: f32,
+) {
+    let filtered = filter_5x5_constant_pixel(raw, channels, kernel, rounding_bias);
     let row_stride = width * channels;
     for y in 2..height.saturating_sub(2) {
         for x in 2..width.saturating_sub(2) {
@@ -1763,6 +1802,39 @@ fn filter_5x5_constant_bytes(
             out[base..base + channels].copy_from_slice(&filtered[..channels]);
         }
     }
+}
+
+/// Return whether a large RGBA raster is uniform and its exact 5x5 output
+/// tuple is byte-identical to the source tuple. The untouched two-pixel border
+/// is already preserved by the caller's output copy.
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_uniform_rgba_identity(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    rounding_bias: f32,
+) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    if pixel_count <= SMALL_UNIFORM_BYTE_MAX_PIXELS || width < 5 || height < 5 {
+        return false;
+    }
+    let Some(byte_count) = pixel_count.checked_mul(4) else {
+        return false;
+    };
+    if raw.len() != byte_count {
+        return false;
+    }
+    let Some(first_bytes) = raw.get(..4) else {
+        return false;
+    };
+    if !raw[4..].chunks_exact(4).all(|pixel| pixel == first_bytes) {
+        return false;
+    }
+    let filtered = filter_5x5_constant_pixel(first_bytes, 4, kernel, rounding_bias);
+    filtered.as_slice() == first_bytes
 }
 
 pub(crate) fn uniform5x5_parameters_match(kernel: &[f32; 25], scale: f32, offset: f32) -> bool {
@@ -1801,6 +1873,100 @@ fn filter_5x5_uniform_luma_rows(raw: &[u8], out: &mut [u8], width: usize, height
     for source_y in 0..5 {
         fill_row(source_y, &mut horizontal_rows[source_y]);
     }
+
+    let mut vertical_sums = vec![0u16; width];
+    for x in 2..width - 2 {
+        vertical_sums[x] = horizontal_rows[0][x]
+            + horizontal_rows[1][x]
+            + horizontal_rows[2][x]
+            + horizontal_rows[3][x]
+            + horizontal_rows[4][x];
+    }
+
+    for y in 2..height - 2 {
+        let output_row = y * width;
+        for x in 2..width - 2 {
+            out[output_row + x] = ((vertical_sums[x] + 12) / 25) as u8;
+        }
+
+        let next_y = y + 3;
+        if next_y < height {
+            // The ring slot for the outgoing row is also the incoming row's
+            // slot. Update each vertical total before replacing that sample.
+            let input_row = &raw[next_y * width..(next_y + 1) * width];
+            let outgoing_and_incoming = &mut horizontal_rows[(y - 2) % 5];
+            let mut horizontal_sum = u16::from(input_row[0])
+                + u16::from(input_row[1])
+                + u16::from(input_row[2])
+                + u16::from(input_row[3])
+                + u16::from(input_row[4]);
+            for x in 2..width - 2 {
+                if x > 2 {
+                    horizontal_sum =
+                        horizontal_sum - u16::from(input_row[x - 3]) + u16::from(input_row[x + 2]);
+                }
+                vertical_sums[x] = vertical_sums[x] - outgoing_and_incoming[x] + horizontal_sum;
+                outgoing_and_incoming[x] = horizontal_sum;
+            }
+        }
+    }
+    true
+}
+
+/// Apply the all-ones 5x5 kernel to a large native RGBA raster using exact
+/// rolling sums. The normalized f32 kernel's ordered accumulation can differ
+/// from the exact mean by less than 0.001; with a denominator of 25, an integer
+/// sum is at least 0.02 from a half-byte rounding boundary. Therefore Pillow's
+/// rounded byte is exactly `(sum + 12) / 25`. The untouched two-pixel border
+/// remains in the caller's output copy.
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_uniform_rgba_rows(raw: &[u8], out: &mut [u8], width: usize, height: usize) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    if pixel_count <= SMALL_UNIFORM_BYTE_MAX_PIXELS {
+        return false;
+    }
+    let Some(row_stride) = width.checked_mul(4) else {
+        return false;
+    };
+    let Some(total_bytes) = row_stride.checked_mul(height) else {
+        return false;
+    };
+    if raw.len() != total_bytes || out.len() != total_bytes {
+        return false;
+    }
+    if width < 5 || height < 5 {
+        return true;
+    }
+
+    let mut horizontal_rows: [Vec<u16>; 5] = std::array::from_fn(|_| vec![0; row_stride]);
+    let fill_horizontal_row = |source_y: usize, destination: &mut [u16]| {
+        let row_start = source_y * row_stride;
+        let row = &raw[row_start..row_start + row_stride];
+        let mut sums = [0u16; 4];
+        for channel in 0..4 {
+            sums[channel] = u16::from(row[channel])
+                + u16::from(row[4 + channel])
+                + u16::from(row[8 + channel])
+                + u16::from(row[12 + channel])
+                + u16::from(row[16 + channel]);
+            destination[8 + channel] = sums[channel];
+        }
+        for x in 3..width - 2 {
+            let leaving = (x - 3) * 4;
+            let entering = (x + 2) * 4;
+            for channel in 0..4 {
+                sums[channel] = sums[channel] - u16::from(row[leaving + channel])
+                    + u16::from(row[entering + channel]);
+                destination[x * 4 + channel] = sums[channel];
+            }
+        }
+    };
+
+    for source_y in 0..5 {
+        fill_horizontal_row(source_y, &mut horizontal_rows[source_y]);
+    }
     for y in 2..height - 2 {
         let rows = [
             &horizontal_rows[(y - 2) % 5],
@@ -1809,13 +1975,22 @@ fn filter_5x5_uniform_luma_rows(raw: &[u8], out: &mut [u8], width: usize, height
             &horizontal_rows[(y + 1) % 5],
             &horizontal_rows[(y + 2) % 5],
         ];
+        let output_row = y * row_stride;
         for x in 2..width - 2 {
-            let sum = rows[0][x] + rows[1][x] + rows[2][x] + rows[3][x] + rows[4][x];
-            out[y * width + x] = ((sum + 12) / 25) as u8;
+            let pixel = x * 4;
+            for channel in 0..4 {
+                let sum = rows[0][pixel + channel]
+                    + rows[1][pixel + channel]
+                    + rows[2][pixel + channel]
+                    + rows[3][pixel + channel]
+                    + rows[4][pixel + channel];
+                out[output_row + pixel + channel] = ((u32::from(sum) + 12) / 25) as u8;
+            }
         }
-        let next_y = y + 3;
-        if next_y < height {
-            fill_row(next_y, &mut horizontal_rows[next_y % 5]);
+
+        let next_source_y = y + 3;
+        if next_source_y < height {
+            fill_horizontal_row(next_source_y, &mut horizontal_rows[next_source_y % 5]);
         }
     }
     true
@@ -1829,6 +2004,200 @@ pub(crate) fn binomial5x5_parameters_match(kernel: &[f32; 25], scale: f32, offse
             .iter()
             .enumerate()
             .all(|(index, coefficient)| *coefficient == WEIGHTS[index / 5] * WEIGHTS[index % 5])
+}
+
+/// Apply the exact L-mode 5x5 binomial kernel in parallel row bands.
+///
+/// Each band owns its horizontal-sum ring and recomputes the four input rows
+/// shared with neighboring bands. The indexed block collector preserves row
+/// order; the copied source rows retain Pillow's unchanged two-pixel border.
+#[cfg(feature = "parallel")]
+fn filter_5x5_binomial_luma_parallel_rows(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+) -> Option<Vec<u8>> {
+    let pixel_count = width.checked_mul(height)?;
+    if raw.len() != pixel_count {
+        return None;
+    }
+    if width < 5 || height < 5 {
+        return Some(raw.to_vec());
+    }
+
+    const WEIGHTS: [u32; 5] = [1, 4, 6, 4, 1];
+    const BLOCK_ROWS: usize = 64;
+    let horizontal_len = width.checked_mul(5)?;
+    let interior_rows = height - 4;
+    let block_count = interior_rows.div_ceil(BLOCK_ROWS);
+    let blocks = crate::par_row_blocks_collect!(
+        block_count,
+        1,
+        || vec![0_u16; horizontal_len],
+        |horizontal_rows, block_index| {
+            let start_y = 2 + block_index * BLOCK_ROWS;
+            let end_y = (start_y + BLOCK_ROWS).min(height - 2);
+            let mut output = Vec::with_capacity((end_y - start_y) * width);
+            let fill_horizontal_row = |source_y: usize, destination: &mut [u16]| {
+                let row_start = source_y * width;
+                for x in 2..width - 2 {
+                    destination[x] = u16::from(raw[row_start + x - 2])
+                        + u16::from(raw[row_start + x - 1]) * 4
+                        + u16::from(raw[row_start + x]) * 6
+                        + u16::from(raw[row_start + x + 1]) * 4
+                        + u16::from(raw[row_start + x + 2]);
+                }
+            };
+
+            for source_y in start_y - 2..start_y + 3 {
+                let ring_start = (source_y % 5) * width;
+                fill_horizontal_row(
+                    source_y,
+                    &mut horizontal_rows[ring_start..ring_start + width],
+                );
+            }
+            for y in start_y..end_y {
+                let source_row = y * width;
+                output.extend_from_slice(&raw[source_row..source_row + width]);
+                let output_row = output.len() - width;
+                let row_starts = [
+                    ((y - 2) % 5) * width,
+                    ((y - 1) % 5) * width,
+                    (y % 5) * width,
+                    ((y + 1) % 5) * width,
+                    ((y + 2) % 5) * width,
+                ];
+                for x in 2..width - 2 {
+                    let sum = horizontal_rows[row_starts[0] + x] as u32 * WEIGHTS[0]
+                        + horizontal_rows[row_starts[1] + x] as u32 * WEIGHTS[1]
+                        + horizontal_rows[row_starts[2] + x] as u32 * WEIGHTS[2]
+                        + horizontal_rows[row_starts[3] + x] as u32 * WEIGHTS[3]
+                        + horizontal_rows[row_starts[4] + x] as u32 * WEIGHTS[4];
+                    output[output_row + x] = ((sum + 128) / 256) as u8;
+                }
+
+                let next_source_y = y + 3;
+                if next_source_y < height {
+                    let ring_start = (next_source_y % 5) * width;
+                    fill_horizontal_row(
+                        next_source_y,
+                        &mut horizontal_rows[ring_start..ring_start + width],
+                    );
+                }
+            }
+            output
+        }
+    );
+
+    let mut output = Vec::with_capacity(pixel_count);
+    output.extend_from_slice(&raw[..2 * width]);
+    for block in blocks {
+        output.extend_from_slice(&block);
+    }
+    output.extend_from_slice(&raw[(height - 2) * width..]);
+    (output.len() == pixel_count).then_some(output)
+}
+
+/// Apply the exact LA-mode 5x5 binomial kernel in parallel row bands.
+///
+/// Each band owns a five-row horizontal-sum ring for both interleaved bands.
+/// The block collector preserves row order, while copying source rows before
+/// updating interior pixels retains Pillow's unchanged two-pixel border.
+#[cfg(feature = "parallel")]
+fn filter_5x5_binomial_la_parallel_rows(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+) -> Option<Vec<u8>> {
+    let pixel_count = width.checked_mul(height)?;
+    let row_samples = width.checked_mul(2)?;
+    let sample_count = pixel_count.checked_mul(2)?;
+    if raw.len() != sample_count {
+        return None;
+    }
+    if width < 5 || height < 5 {
+        return Some(raw.to_vec());
+    }
+
+    const WEIGHTS: [u32; 5] = [1, 4, 6, 4, 1];
+    const BLOCK_ROWS: usize = 64;
+    let ring_len = row_samples.checked_mul(5)?;
+    let interior_rows = height - 4;
+    let block_count = interior_rows.div_ceil(BLOCK_ROWS);
+    let blocks = crate::par_row_blocks_collect!(
+        block_count,
+        1,
+        || vec![0_u16; ring_len],
+        |horizontal_rows, block_index| {
+            let start_y = 2 + block_index * BLOCK_ROWS;
+            let end_y = (start_y + BLOCK_ROWS).min(height - 2);
+            let mut output = Vec::with_capacity((end_y - start_y) * row_samples);
+            let fill_horizontal_row = |source_y: usize, destination: &mut [u16]| {
+                let row_start = source_y * row_samples;
+                for x in 2..width - 2 {
+                    let pixel = row_start + x * 2;
+                    for channel in 0..2 {
+                        let sample = pixel + channel;
+                        destination[x * 2 + channel] = u16::from(raw[sample - 4])
+                            + u16::from(raw[sample - 2]) * 4
+                            + u16::from(raw[sample]) * 6
+                            + u16::from(raw[sample + 2]) * 4
+                            + u16::from(raw[sample + 4]);
+                    }
+                }
+            };
+
+            for source_y in start_y - 2..start_y + 3 {
+                let ring_start = (source_y % 5) * row_samples;
+                fill_horizontal_row(
+                    source_y,
+                    &mut horizontal_rows[ring_start..ring_start + row_samples],
+                );
+            }
+            for y in start_y..end_y {
+                let source_row = y * row_samples;
+                output.extend_from_slice(&raw[source_row..source_row + row_samples]);
+                let output_row = output.len() - row_samples;
+                let row_starts = [
+                    ((y - 2) % 5) * row_samples,
+                    ((y - 1) % 5) * row_samples,
+                    (y % 5) * row_samples,
+                    ((y + 1) % 5) * row_samples,
+                    ((y + 2) % 5) * row_samples,
+                ];
+                for x in 2..width - 2 {
+                    let pixel = x * 2;
+                    for channel in 0..2 {
+                        let sample = pixel + channel;
+                        let sum = horizontal_rows[row_starts[0] + sample] as u32 * WEIGHTS[0]
+                            + horizontal_rows[row_starts[1] + sample] as u32 * WEIGHTS[1]
+                            + horizontal_rows[row_starts[2] + sample] as u32 * WEIGHTS[2]
+                            + horizontal_rows[row_starts[3] + sample] as u32 * WEIGHTS[3]
+                            + horizontal_rows[row_starts[4] + sample] as u32 * WEIGHTS[4];
+                        output[output_row + sample] = ((sum + 128) / 256) as u8;
+                    }
+                }
+
+                let next_source_y = y + 3;
+                if next_source_y < height {
+                    let ring_start = (next_source_y % 5) * row_samples;
+                    fill_horizontal_row(
+                        next_source_y,
+                        &mut horizontal_rows[ring_start..ring_start + row_samples],
+                    );
+                }
+            }
+            output
+        }
+    );
+
+    let mut output = Vec::with_capacity(sample_count);
+    output.extend_from_slice(&raw[..2 * row_samples]);
+    for block in blocks {
+        output.extend_from_slice(&block);
+    }
+    output.extend_from_slice(&raw[(height - 2) * row_samples..]);
+    (output.len() == sample_count).then_some(output)
 }
 
 /// Apply Pillow's 5x5 binomial blur to native L bytes using exact integer
@@ -1961,6 +2330,82 @@ fn filter_5x5_binomial_la_rows(raw: &[u8], out: &mut [u8], width: usize, height:
 const BOX_BLUR_SCALE: u32 = 1 << 24;
 const BOX_BLUR_BIAS: u32 = 1 << 23;
 const UNIFORM_BOX_BLUR_MAX_PIXELS: usize = 64 * 64;
+
+/// Return whether Pillow's fixed-point box pass leaves one constant byte
+/// unchanged for every position in a replicated-edge line.
+#[cfg(not(feature = "parallel"))]
+#[inline]
+fn box_blur_preserves_constant_byte(
+    value: u8,
+    radius: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) -> bool {
+    let Some(window_pixels) = radius
+        .checked_mul(2)
+        .and_then(|diameter| diameter.checked_add(1))
+        .and_then(|window| u32::try_from(window).ok())
+    else {
+        return false;
+    };
+
+    let mut weighted = u32::from(value)
+        .wrapping_mul(window_pixels)
+        .wrapping_mul(whole_weight);
+    if fractional_weight != 0 {
+        let far_pair = (u32::from(value) + u32::from(value)).wrapping_mul(fractional_weight);
+        weighted = weighted.wrapping_add(far_pair);
+    }
+    (weighted.wrapping_add(BOX_BLUR_BIAS) >> 24) as u8 == value
+}
+
+/// Prove that a large RGBA image is uniform and that one horizontal and one
+/// vertical fixed-point pass preserve each of its channel values. The full
+/// scan is intentional: sampled probes cannot prove that an arbitrary input
+/// is uniform.
+#[cfg(not(feature = "parallel"))]
+#[inline]
+fn uniform_rgba_box_blur_is_identity(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    horizontal: (usize, u32, u32),
+    vertical: (usize, u32, u32),
+) -> bool {
+    let Some(expected_len) = width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(4))
+    else {
+        return false;
+    };
+    if width == 0 || height == 0 || raw.len() != expected_len {
+        return false;
+    }
+    let first_pixel = &raw[..4];
+    if !first_pixel.iter().all(|&value| {
+        box_blur_preserves_constant_byte(value, horizontal.0, horizontal.1, horizontal.2)
+            && box_blur_preserves_constant_byte(value, vertical.0, vertical.1, vertical.2)
+    }) {
+        return false;
+    }
+
+    // Cheaply reject typical nonuniform images before the full proof scan.
+    // These points can reject a candidate, but only the complete scan below
+    // can prove uniformity.
+    let last_x = width - 1;
+    let last_y = height - 1;
+    for row in 0..=4 {
+        let y = (last_y / 4) * row + (last_y % 4) * row / 4;
+        for column in 0..=6 {
+            let x = (last_x / 6) * column + (last_x % 6) * column / 6;
+            let start = (y * width + x) * 4;
+            if &raw[start..start + 4] != first_pixel {
+                return false;
+            }
+        }
+    }
+    raw.chunks_exact(4).all(|pixel| pixel == first_pixel)
+}
 
 #[inline(always)]
 fn blur_line_step(
@@ -2591,6 +3036,104 @@ fn blur_rgb_radius_one_fractional_line(
     }
 }
 
+/// Blur one RGBA row for a radius-one fractional Gaussian box pass.
+#[cfg(not(feature = "parallel"))]
+fn blur_rgba_radius_one_fractional_line(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    debug_assert!(width > 0);
+    debug_assert!(source.len() >= width * 4);
+    debug_assert!(destination.len() >= width * 4);
+    debug_assert_ne!(fractional_weight, 0);
+
+    if width < 5 {
+        let mut accumulator = [0u32; 4];
+        blur_line(
+            source,
+            destination,
+            0,
+            width,
+            4,
+            1,
+            whole_weight,
+            fractional_weight,
+            &mut accumulator,
+        );
+        return;
+    }
+
+    for channel in 0..4 {
+        let first = u32::from(source[channel]);
+        store_radius_one_fractional_sample(
+            &mut destination[channel],
+            first * 2 + u32::from(source[4 + channel]),
+            first + u32::from(source[8 + channel]),
+            whole_weight,
+            fractional_weight,
+        );
+        store_radius_one_fractional_sample(
+            &mut destination[4 + channel],
+            first + u32::from(source[4 + channel]) + u32::from(source[8 + channel]),
+            first + u32::from(source[12 + channel]),
+            whole_weight,
+            fractional_weight,
+        );
+    }
+
+    let interior_destination = &mut destination[8..(width - 2) * 4];
+    let far_left_samples = &source[..(width - 4) * 4];
+    let left_samples = &source[4..(width - 3) * 4];
+    let center_samples = &source[8..(width - 2) * 4];
+    let right_samples = &source[12..(width - 1) * 4];
+    let far_right_samples = &source[16..];
+    for (((((output, far_left), left), center), right), far_right) in interior_destination
+        .chunks_exact_mut(4)
+        .zip(far_left_samples.chunks_exact(4))
+        .zip(left_samples.chunks_exact(4))
+        .zip(center_samples.chunks_exact(4))
+        .zip(right_samples.chunks_exact(4))
+        .zip(far_right_samples.chunks_exact(4))
+    {
+        for channel in 0..4 {
+            let whole_sum =
+                u32::from(left[channel]) + u32::from(center[channel]) + u32::from(right[channel]);
+            let far_sum = u32::from(far_left[channel]) + u32::from(far_right[channel]);
+            store_radius_one_fractional_sample(
+                &mut output[channel],
+                whole_sum,
+                far_sum,
+                whole_weight,
+                fractional_weight,
+            );
+        }
+    }
+
+    let penultimate = (width - 2) * 4;
+    let last = (width - 1) * 4;
+    for channel in 0..4 {
+        store_radius_one_fractional_sample(
+            &mut destination[penultimate + channel],
+            u32::from(source[penultimate - 4 + channel])
+                + u32::from(source[penultimate + channel])
+                + u32::from(source[last + channel]),
+            u32::from(source[penultimate - 8 + channel]) + u32::from(source[last + channel]),
+            whole_weight,
+            fractional_weight,
+        );
+        store_radius_one_fractional_sample(
+            &mut destination[last + channel],
+            u32::from(source[penultimate + channel]) + u32::from(source[last + channel]) * 2,
+            u32::from(source[penultimate - 4 + channel]) + u32::from(source[last + channel]),
+            whole_weight,
+            fractional_weight,
+        );
+    }
+}
+
 /// Run the three horizontal Gaussian box passes one interleaved row at a time.
 ///
 /// Horizontal filtering never reads another image row, so the intermediate
@@ -2613,6 +3156,8 @@ fn blur_interleaved_rows_three_passes<const CHANNELS: usize>(
     let mut accumulator = [0u32; 4];
     let rgb_radius_one_fractional =
         CHANNELS == 3 && radius == 1 && fractional_weight != 0 && width >= 5;
+    let rgba_radius_one_fractional =
+        CHANNELS == 4 && radius == 1 && fractional_weight != 0 && width >= 5;
 
     for row in 0..height {
         let start = row * row_length;
@@ -2634,6 +3179,28 @@ fn blur_interleaved_rows_three_passes<const CHANNELS: usize>(
                 fractional_weight,
             );
             blur_rgb_radius_one_fractional_line(
+                &second_intermediate,
+                destination_row,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+        } else if rgba_radius_one_fractional {
+            blur_rgba_radius_one_fractional_line(
+                source_row,
+                &mut first_intermediate,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+            blur_rgba_radius_one_fractional_line(
+                &first_intermediate,
+                &mut second_intermediate,
+                width,
+                whole_weight,
+                fractional_weight,
+            );
+            blur_rgba_radius_one_fractional_line(
                 &second_intermediate,
                 destination_row,
                 width,
@@ -2955,6 +3522,58 @@ fn blur_luma_vertical_radius_one_rows(
     }
 }
 
+/// Apply one interleaved vertical Gaussian box pass with five replicated-edge taps.
+#[cfg(not(feature = "parallel"))]
+fn blur_interleaved_vertical_radius_one_fractional_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_stride = width * channels;
+    debug_assert_eq!(source.len(), row_stride * height);
+    debug_assert_eq!(destination.len(), source.len());
+    debug_assert_ne!(fractional_weight, 0);
+    if width == 0 || height == 0 {
+        return;
+    }
+
+    let last_y = height - 1;
+    for y in 0..height {
+        let far_top = y.saturating_sub(2) * row_stride;
+        let top = y.saturating_sub(1) * row_stride;
+        let center = y * row_stride;
+        let bottom = y.saturating_add(1).min(last_y) * row_stride;
+        let far_bottom = y.saturating_add(2).min(last_y) * row_stride;
+        let far_top_row = &source[far_top..far_top + row_stride];
+        let top_row = &source[top..top + row_stride];
+        let center_row = &source[center..center + row_stride];
+        let bottom_row = &source[bottom..bottom + row_stride];
+        let far_bottom_row = &source[far_bottom..far_bottom + row_stride];
+        let destination_row = &mut destination[center..center + row_stride];
+
+        for (((((output, &far_top), &top), &center), &bottom), &far_bottom) in destination_row
+            .iter_mut()
+            .zip(far_top_row)
+            .zip(top_row)
+            .zip(center_row)
+            .zip(bottom_row)
+            .zip(far_bottom_row)
+        {
+            let whole = u32::from(top) + u32::from(center) + u32::from(bottom);
+            let fractional = u32::from(far_top) + u32::from(far_bottom);
+            let weighted = whole
+                .wrapping_mul(whole_weight)
+                .wrapping_add(fractional.wrapping_mul(fractional_weight))
+                .wrapping_add(BOX_BLUR_BIAS);
+            *output = (weighted >> 24) as u8;
+        }
+    }
+}
+
 #[cfg(feature = "parallel")]
 const VERTICAL_BLUR_TRANSPOSE_THRESHOLD: usize = 512 * 512;
 
@@ -3102,6 +3721,16 @@ fn blur_box_radius_one_horizontal_row(
     channels: usize,
     horizontal_weight: u32,
 ) {
+    if channels == 1 {
+        let source_start = row * row_bytes;
+        blur_box_radius_one_horizontal_l_row(
+            &source[source_start..source_start + row_bytes],
+            ring,
+            width,
+            horizontal_weight,
+        );
+        return;
+    }
     if channels == 3 {
         let source_start = row * row_bytes;
         blur_box_radius_one_horizontal_rgb_row(
@@ -3122,6 +3751,46 @@ fn blur_box_radius_one_horizontal_row(
         horizontal_weight,
         0,
     );
+}
+
+#[cfg(not(feature = "parallel"))]
+#[inline]
+fn blur_box_radius_one_horizontal_l_row(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    weight: u32,
+) {
+    debug_assert!(width > 0);
+    debug_assert_eq!(source.len(), width);
+    debug_assert_eq!(destination.len(), width);
+
+    let last = width - 1;
+    let mut sum = u32::from(source[0]) * 2 + u32::from(source[usize::from(width > 1)]);
+    destination[0] = (sum.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    if width == 1 {
+        return;
+    }
+
+    sum = sum
+        .wrapping_sub(u32::from(source[0]))
+        .wrapping_add(u32::from(source[2.min(last)]));
+    destination[1] = (sum.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    if width == 2 {
+        return;
+    }
+
+    for center in 2..last {
+        sum = sum
+            .wrapping_sub(u32::from(source[center - 2]))
+            .wrapping_add(u32::from(source[center + 1]));
+        destination[center] = (sum.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    }
+
+    sum = sum
+        .wrapping_sub(u32::from(source[width - 3]))
+        .wrapping_add(u32::from(source[last]));
+    destination[last] = (sum.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
 }
 
 #[cfg(not(feature = "parallel"))]
@@ -3407,14 +4076,9 @@ fn pil_box_blur_xy_impl(
 
     let (width, height) = (w_u32 as usize, h_u32 as usize);
 
-    // ImagingBoxBlur's replicated-edge average is identity for an image whose
-    // every pixel has the same channel tuple. Detect that common small-image
-    // case before allocating the horizontal/vertical work buffers; the
-    // fixed-point weights below sum to exactly 1.0, including fractional
-    // radii, so this preserves the byte result for every blur pass and native
-    // mode. Larger frames use the linear sliding-window recurrence directly;
-    // scanning and then cloning a full frame would add a memory-bandwidth pass
-    // that costs more than the blur itself.
+    // ImagingBoxBlur's replicated-edge average is identity for a uniform
+    // image when its rounded fixed-point result preserves every channel byte.
+    // Keep this small-image check before allocating the work buffers.
     if width.saturating_mul(height) <= UNIFORM_BOX_BLUR_MAX_PIXELS {
         let raw = img.as_bytes();
         let mut pixels = raw.chunks_exact(channels);
@@ -3433,6 +4097,29 @@ fn pil_box_blur_xy_impl(
     let (horizontal_radius, horizontal_weight, horizontal_fractional_weight) =
         blur_parameters(radius_x);
     let (vertical_radius, vertical_weight, vertical_fractional_weight) = blur_parameters(radius_y);
+
+    // A full uniformity scan is worthwhile for the large RGBA Gaussian path
+    // only when its exact fixed-point transform is an identity for the input
+    // tuple. In particular, fractional weights may sum to 2^24 - 1; checking
+    // the actual rounded result avoids assuming that they sum exactly to 1.
+    #[cfg(not(feature = "parallel"))]
+    if passes == 3
+        && width.saturating_mul(height) > UNIFORM_BOX_BLUR_MAX_PIXELS
+        && matches!(img, DynamicImage::ImageRgba8(_))
+        && uniform_rgba_box_blur_is_identity(
+            img.as_bytes(),
+            width,
+            height,
+            (
+                horizontal_radius,
+                horizontal_weight,
+                horizontal_fractional_weight,
+            ),
+            (vertical_radius, vertical_weight, vertical_fractional_weight),
+        )
+    {
+        return Ok(img.clone());
+    }
 
     #[cfg(not(feature = "parallel"))]
     if passes == 1
@@ -3472,8 +4159,15 @@ fn pil_box_blur_xy_impl(
     let la_gaussian_row_fusion = passes == 3 && matches!(img, DynamicImage::ImageLumaA8(_));
     #[cfg(feature = "parallel")]
     let la_gaussian_row_fusion = false;
+    #[cfg(not(feature = "parallel"))]
+    let rgba_gaussian_row_fusion = passes == 3 && matches!(img, DynamicImage::ImageRgba8(_));
+    #[cfg(feature = "parallel")]
+    let rgba_gaussian_row_fusion = false;
 
-    let mut work = if rgb_gaussian_row_fusion || luma_gaussian_row_fusion || la_gaussian_row_fusion
+    let mut work = if rgb_gaussian_row_fusion
+        || luma_gaussian_row_fusion
+        || la_gaussian_row_fusion
+        || rgba_gaussian_row_fusion
     {
         CheckedDims::new(w_u32, h_u32, channels as u8)?.alloc_buffer()
     } else {
@@ -3526,6 +4220,17 @@ fn pil_box_blur_xy_impl(
                 horizontal_fractional_weight,
             );
         }
+    } else if rgba_gaussian_row_fusion {
+        #[cfg(not(feature = "parallel"))]
+        blur_interleaved_rows_three_passes::<4>(
+            img.as_bytes(),
+            &mut work,
+            width,
+            height,
+            horizontal_radius,
+            horizontal_weight,
+            horizontal_fractional_weight,
+        );
     } else {
         for _ in 0..passes {
             blur_rows(
@@ -3609,6 +4314,20 @@ fn pil_box_blur_xy_impl(
                 &mut scratch,
                 width,
                 height,
+                vertical_weight,
+                vertical_fractional_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+    } else if rgba_gaussian_row_fusion && vertical_radius == 1 && vertical_fractional_weight != 0 {
+        #[cfg(not(feature = "parallel"))]
+        for _ in 0..passes {
+            blur_interleaved_vertical_radius_one_fractional_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                channels,
                 vertical_weight,
                 vertical_fractional_weight,
             );
@@ -4397,7 +5116,63 @@ pub fn execute_filter5x5(
     // tap groups in the same order as the original scalar implementation.
     let normalized_kernel: [f32; 25] = std::array::from_fn(|index| kernel[index] / scale);
     let rounding_bias = offset + 0.5;
+    #[cfg(not(feature = "parallel"))]
+    if matches!(img, DynamicImage::ImageRgb8(_))
+        && matches!(explicit_mode, None | Some("RGB"))
+        && rgb_blur_ring::parameters_match(kernel, scale, offset)
+        && let Some(out) = rgb_blur_ring::apply(raw, w_u32 as usize, h_u32 as usize)
+    {
+        let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
+    #[cfg(not(feature = "parallel"))]
+    if matches!(img, DynamicImage::ImageRgba8(_))
+        && matches!(explicit_mode, None | Some("RGBA"))
+        && uniform5x5_parameters_match(kernel, scale, offset)
+        && filter_5x5_uniform_rgba_identity(
+            raw,
+            w_u32 as usize,
+            h_u32 as usize,
+            &normalized_kernel,
+            rounding_bias,
+        )
+    {
+        let result = raw_bytes_to_image(w_u32, h_u32, raw.to_vec(), channels)?;
+        return Ok(preserve_mode(img, result));
+    }
+    #[cfg(feature = "parallel")]
+    if matches!(explicit_mode, None | Some("L"))
+        && matches!(img, DynamicImage::ImageLuma8(_))
+        && binomial5x5_parameters_match(kernel, scale, offset)
+    {
+        if let Some(out) =
+            filter_5x5_binomial_luma_parallel_rows(raw, w_u32 as usize, h_u32 as usize)
+        {
+            let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+            return Ok(preserve_mode(img, result));
+        }
+    }
+    #[cfg(feature = "parallel")]
+    if matches!(explicit_mode, None | Some("LA"))
+        && matches!(img, DynamicImage::ImageLumaA8(_))
+        && binomial5x5_parameters_match(kernel, scale, offset)
+    {
+        if let Some(out) = filter_5x5_binomial_la_parallel_rows(raw, w_u32 as usize, h_u32 as usize)
+        {
+            let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+            return Ok(preserve_mode(img, result));
+        }
+    }
     let mut out = raw.to_vec();
+    #[cfg(not(feature = "parallel"))]
+    if matches!(img, DynamicImage::ImageRgba8(_))
+        && matches!(explicit_mode, None | Some("RGBA"))
+        && uniform5x5_parameters_match(kernel, scale, offset)
+        && filter_5x5_uniform_rgba_rows(raw, &mut out, w_u32 as usize, h_u32 as usize)
+    {
+        let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
     let native_byte_layout = matches!(
         img,
         DynamicImage::ImageLuma8(_)
@@ -4486,13 +5261,17 @@ pub fn execute_filter5x5(
 
 /// Execute a Gaussian blur via 3 passes of PIL-style box blur.
 pub fn execute_gaussian_blur(img: &DynamicImage, sigma: f32) -> Result<DynamicImage, PilError> {
-    // PIL GaussianBlur: 3 passes of BoxBlur with computed fractional radius.
-    // Uses the "From Box Blur to Gaussian Blur" algorithm (Gwosdek et al. 2011).
-    // PIL's ImagingGaussianBlur uses f32 parameters but f64 in sqrt/promotion.
     let sigma = sigma.abs();
     if sigma == 0.0 {
         return Ok(img.clone());
     }
+    pil_box_blur(img, gaussian_blur_box_radius(sigma), 3)
+}
+
+/// Match Pillow's three-pass Gaussian-to-box radius calculation.
+fn gaussian_blur_box_radius(sigma: f32) -> f32 {
+    // Uses the "From Box Blur to Gaussian Blur" algorithm (Gwosdek et al. 2011).
+    // Pillow's ImagingGaussianBlur uses f32 parameters but f64 in sqrt/promotion.
     let passes = 3.0f64;
     let sigma2 = sigma as f64 * sigma as f64 / passes;
     let l_val = ((12.0 * sigma2 + 1.0).sqrt() - 1.0) / 2.0;
@@ -4504,8 +5283,7 @@ pub fn execute_gaussian_blur(img: &DynamicImage, sigma: f32) -> Result<DynamicIm
     let a_den = 6.0 * (sigma2 - l1 * l1);
     let a = a_num / a_den;
     // Assign back to f32 (PIL: result is float)
-    let blur_radius = (l + a) as f32;
-    pil_box_blur(img, blur_radius, 3)
+    (l + a) as f32
 }
 
 /// Execute a box blur with integer radius.
@@ -4569,12 +5347,108 @@ pub fn execute_rank_filter_with_mode(
 #[cfg(all(test, not(feature = "parallel")))]
 mod gaussian_blur_row_fusion_tests {
     use super::{
-        blur_columns, blur_interleaved_rows_three_passes, blur_la_radius_one_fractional_line,
+        blur_columns, blur_interleaved_rows_three_passes,
+        blur_interleaved_vertical_radius_one_fractional_rows, blur_la_radius_one_fractional_line,
         blur_line, blur_luma_radius_one_fractional_line, blur_luma_rows_three_passes,
         blur_luma_vertical_radius_one_rows, blur_parameters, blur_rgb_radius_one_fractional_line,
-        blur_rows, execute_gaussian_blur,
+        blur_rows, execute_gaussian_blur, gaussian_blur_box_radius,
+        uniform_rgba_box_blur_is_identity,
     };
-    use crate::raster::{DynamicImage, GrayAlphaImage};
+    use crate::raster::{DynamicImage, GrayAlphaImage, RgbaImage};
+
+    fn three_pass_rgba_reference(
+        source: &[u8],
+        width: usize,
+        height: usize,
+        radius: f32,
+    ) -> Vec<u8> {
+        let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
+        let mut work = source.to_vec();
+        let mut scratch = vec![0; source.len()];
+        for _ in 0..3 {
+            blur_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                4,
+                integer_radius,
+                whole_weight,
+                fractional_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+        let mut accumulator = vec![0u32; width * 4];
+        for _ in 0..3 {
+            blur_columns(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                4,
+                integer_radius,
+                whole_weight,
+                fractional_weight,
+                &mut accumulator,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+        work
+    }
+
+    #[test]
+    fn large_uniform_rgba_gaussian_blur_returns_exact_input() {
+        let (width, height) = (1024usize, 768usize);
+        let sample = [83, 149, 17, 191];
+        let raw = sample.repeat(width * height);
+        let radius = gaussian_blur_box_radius(7.5);
+        let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
+        assert_eq!(integer_radius, 7);
+        assert_eq!(whole_weight, 1_116_425);
+        assert_eq!(fractional_weight, 15_420);
+        assert!(uniform_rgba_box_blur_is_identity(
+            &raw,
+            width,
+            height,
+            (integer_radius, whole_weight, fractional_weight),
+            (integer_radius, whole_weight, fractional_weight),
+        ));
+
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(width as u32, height as u32, raw.clone())
+                .expect("valid uniform RGBA image"),
+        );
+        let actual = execute_gaussian_blur(&image, 7.5).expect("GaussianBlur");
+        assert_eq!(actual.as_bytes(), raw);
+    }
+
+    #[test]
+    fn large_rgba_gaussian_blur_full_scan_rejects_an_unsampled_pixel() {
+        let (width, height) = (67usize, 67usize);
+        let sample = [83, 149, 17, 191];
+        let mut raw = sample.repeat(width * height);
+        // This point is outside the 7-by-5 spaced rejection probes. The
+        // complete scan must still find it and let the real blur run.
+        raw[(width + 1) * 4..(width + 2) * 4].copy_from_slice(&[255, 0, 0, 0]);
+        let radius = gaussian_blur_box_radius(7.5);
+        let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
+        assert!(!uniform_rgba_box_blur_is_identity(
+            &raw,
+            width,
+            height,
+            (integer_radius, whole_weight, fractional_weight),
+            (integer_radius, whole_weight, fractional_weight),
+        ));
+
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(width as u32, height as u32, raw.clone())
+                .expect("valid adversarial RGBA image"),
+        );
+        let actual = execute_gaussian_blur(&image, 7.5).expect("GaussianBlur");
+        let expected = three_pass_rgba_reference(&raw, width, height, radius);
+        assert_eq!(actual.as_bytes(), expected);
+        assert_ne!(actual.as_bytes(), raw);
+    }
 
     #[test]
     fn two_channel_step_matches_direct_box_blur_reference() {
@@ -4824,6 +5698,47 @@ mod gaussian_blur_row_fusion_tests {
     }
 
     #[test]
+    fn interleaved_vertical_radius_one_fractional_rows_match_fixed_point_reference() {
+        let (radius, whole_weight, fractional_weight) = blur_parameters(1.375);
+        assert_eq!(radius, 1);
+        assert_ne!(fractional_weight, 0);
+
+        for (width, height) in [(1, 1), (1, 7), (2, 3), (5, 4), (17, 9), (65, 47)] {
+            for channels in [2, 3, 4] {
+                let len = width * height * channels;
+                let source = (0..len)
+                    .map(|index| ((index * 73 + index / 11 * 29 + 37) % 256) as u8)
+                    .collect::<Vec<_>>();
+                let mut actual = vec![0u8; len];
+                let mut expected = vec![0u8; len];
+
+                blur_interleaved_vertical_radius_one_fractional_rows(
+                    &source,
+                    &mut actual,
+                    width,
+                    height,
+                    channels,
+                    whole_weight,
+                    fractional_weight,
+                );
+                blur_columns(
+                    &source,
+                    &mut expected,
+                    width,
+                    height,
+                    channels,
+                    radius,
+                    whole_weight,
+                    fractional_weight,
+                    &mut vec![0u32; width * channels],
+                );
+
+                assert_eq!(actual, expected, "{width}x{height}, channels={channels}");
+            }
+        }
+    }
+
+    #[test]
     fn single_channel_step_matches_two_component_generic_reference() {
         for (width, height, radius) in [
             (1, 1, 1.375),
@@ -4887,7 +5802,7 @@ mod gaussian_blur_row_fusion_tests {
 
     #[test]
     fn interleaved_gaussian_horizontal_row_fusion_matches_three_full_frame_passes() {
-        for channels in [2, 3] {
+        for channels in [2, 3, 4] {
             for (width, height, radius) in
                 [(1, 1, 1.375), (2, 3, 1.375), (7, 5, 1.375), (65, 47, 1.375)]
             {
@@ -4897,8 +5812,8 @@ mod gaussian_blur_row_fusion_tests {
                     .collect::<Vec<_>>();
                 let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
                 let mut fused = vec![0; source.len()];
-                if channels == 2 {
-                    blur_interleaved_rows_three_passes::<2>(
+                match channels {
+                    2 => blur_interleaved_rows_three_passes::<2>(
                         &source,
                         &mut fused,
                         width,
@@ -4906,9 +5821,8 @@ mod gaussian_blur_row_fusion_tests {
                         integer_radius,
                         whole_weight,
                         fractional_weight,
-                    );
-                } else {
-                    blur_interleaved_rows_three_passes::<3>(
+                    ),
+                    3 => blur_interleaved_rows_three_passes::<3>(
                         &source,
                         &mut fused,
                         width,
@@ -4916,7 +5830,17 @@ mod gaussian_blur_row_fusion_tests {
                         integer_radius,
                         whole_weight,
                         fractional_weight,
-                    );
+                    ),
+                    4 => blur_interleaved_rows_three_passes::<4>(
+                        &source,
+                        &mut fused,
+                        width,
+                        height,
+                        integer_radius,
+                        whole_weight,
+                        fractional_weight,
+                    ),
+                    _ => unreachable!("test channels are 2, 3, or 4"),
                 }
 
                 let mut work = source.clone();
@@ -5695,6 +6619,62 @@ mod binomial5x5_native_byte_tests {
     }
 }
 
+#[cfg(all(test, feature = "parallel"))]
+mod parallel_binomial5x5_native_la_tests {
+    use super::{
+        binomial5x5_parameters_match, filter_5x5_binomial_la_parallel_rows, filter_5x5_byte_rows,
+    };
+
+    #[test]
+    fn banded_native_la_ring_matches_ordered_float_kernel_and_copied_borders() {
+        let weights = [1.0f32, 4.0, 6.0, 4.0, 1.0];
+        let kernel: [f32; 25] =
+            std::array::from_fn(|index| weights[index / 5] * weights[index % 5]);
+        let normalized = std::array::from_fn(|index| kernel[index] / 256.0);
+        assert!(binomial5x5_parameters_match(&kernel, 256.0, 0.0));
+        assert!(!binomial5x5_parameters_match(&kernel, 256.0, 1.0));
+
+        for (width, height) in [
+            (1usize, 1usize),
+            (4, 7),
+            (5, 5),
+            (7, 5),
+            (17, 67),
+            (19, 68),
+            (21, 69),
+            (23, 132),
+            (25, 133),
+        ] {
+            for pattern in 0..3 {
+                let raw: Vec<u8> = (0..width * height * 2)
+                    .map(|index| match pattern {
+                        0 => 0,
+                        1 => 255,
+                        _ => ((index * 73 + index / (width * 2) * 29 + 17) % 256) as u8,
+                    })
+                    .collect();
+                let mut expected = raw.clone();
+                filter_5x5_byte_rows(
+                    &raw,
+                    &mut expected,
+                    width as i32,
+                    height as i32,
+                    2,
+                    &normalized,
+                    0.5,
+                );
+
+                let actual = filter_5x5_binomial_la_parallel_rows(&raw, width, height)
+                    .expect("valid native LA dimensions");
+                assert_eq!(
+                    actual, expected,
+                    "native LA {width}x{height}, pattern {pattern}"
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod uniform5x5_native_luma_tests {
     use super::{filter_5x5_byte_rows, filter_5x5_uniform_luma_rows, uniform5x5_parameters_match};
@@ -5751,6 +6731,40 @@ mod uniform5x5_native_luma_tests {
             ));
             assert_eq!(actual, expected, "{width}x{height}");
         }
+    }
+}
+
+#[cfg(all(test, not(feature = "parallel")))]
+mod uniform5x5_native_rgba_tests {
+    use super::{filter_5x5_byte_rows, filter_5x5_uniform_rgba_rows};
+
+    #[test]
+    fn rolling_integer_rows_match_ordered_float_for_odd_width_and_copied_borders() {
+        let (width, height) = (67usize, 63usize);
+        let raw = (0..width * height * 4)
+            .map(|index| ((index * 73 + index / (width * 4) * 29 + 17) % 256) as u8)
+            .collect::<Vec<_>>();
+        let normalized = [1.0f32 / 25.0; 25];
+
+        let mut expected = raw.clone();
+        filter_5x5_byte_rows(
+            &raw,
+            &mut expected,
+            width as i32,
+            height as i32,
+            4,
+            &normalized,
+            0.5,
+        );
+
+        let mut actual = raw.clone();
+        assert!(filter_5x5_uniform_rgba_rows(
+            &raw,
+            &mut actual,
+            width,
+            height,
+        ));
+        assert_eq!(actual, expected, "native RGBA {width}x{height}");
     }
 }
 

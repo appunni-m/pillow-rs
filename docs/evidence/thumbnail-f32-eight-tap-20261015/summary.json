@@ -1,0 +1,191 @@
+{
+  "schema": "pillow-rs/optimization-trial-summary@1",
+  "issue": "pillow-rs#2gwf",
+  "date": "2026-10-15",
+  "candidate": "Prepare contiguous eight-tap F-mode horizontal coefficient spans once per pass, then route only the interior through the fixed-eight-tap CPU helper.",
+  "control": "Accepted F-mode Resize vertical accumulator-seeding change held constant across A1/B1/B2/A2.",
+  "source": {
+    "revision": "f2b63f559e91022a85cb43f7264bdf8b586a448d",
+    "dirty": true,
+    "candidate_geometry_sha256": "9c3f54155bb256f9a419ffcc7ed67bd845d1f3f177735ce05d6d12c6f68de8f6",
+    "candidate_patch_sha256": "0cd7bd70263662d8e7137a8cc6be6ba9792d2ca1bc017ad0fb1932d903b7f56c",
+    "manifest_sha256": "2eb8ce830826365fe37014f6196f88b7b2e29f78c62487ce17a307fa55e534f7"
+  },
+  "runner": {
+    "machine_id": "machine",
+    "os": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "architecture": "x86_64",
+    "cpu": "x86_64",
+    "memory_bytes": 0,
+    "power_mode": "unknown",
+    "toolchain": "3.12.3"
+  },
+  "measurement": {
+    "release": true,
+    "cache_state": "warm",
+    "warmup_iterations": 5,
+    "measurement_iterations": 20,
+    "samples": 5,
+    "sample_count_per_subject": 100,
+    "concurrency": 1,
+    "profile": "serial CPU only",
+    "boundary": "observed_steps",
+    "step_ids": {
+      "thumbnail": [
+        "call",
+        "observe-receiver"
+      ],
+      "resize_guard": [
+        "call",
+        "materialize"
+      ]
+    },
+    "latency_includes_allocations_inside_selected_calls_and_materialization": true
+  },
+  "results": {
+    "thumbnail": {
+      "A1": {
+        "pillow_median_ms": 8.5363945,
+        "cpu_median_ms": 6.3294565,
+        "pillow_over_cpu": 1.3486773311420972
+      },
+      "B1": {
+        "pillow_median_ms": 8.638189,
+        "cpu_median_ms": 6.024735,
+        "pillow_over_cpu": 1.4337873782000372
+      },
+      "B2": {
+        "pillow_median_ms": 8.660599000000001,
+        "cpu_median_ms": 6.02928,
+        "pillow_over_cpu": 1.4364234203752357
+      },
+      "A2": {
+        "pillow_median_ms": 8.807794,
+        "cpu_median_ms": 6.530272,
+        "pillow_over_cpu": 1.3487637268401682
+      },
+      "comparison": {
+        "control_mean_cpu_median_ms": 6.42986425,
+        "candidate_mean_cpu_median_ms": 6.0270075,
+        "candidate_latency_reduction_percent": 6.265400548697428
+      }
+    },
+    "resize_guard": {
+      "A1": {
+        "pillow_median_ms": 4.360965,
+        "cpu_median_ms": 4.171784000000001,
+        "pillow_over_cpu": 1.0453477457126255
+      },
+      "B1": {
+        "pillow_median_ms": 4.356115,
+        "cpu_median_ms": 3.8630975,
+        "pillow_over_cpu": 1.1276223289730585
+      },
+      "B2": {
+        "pillow_median_ms": 4.4118945,
+        "cpu_median_ms": 3.9235379999999997,
+        "pillow_over_cpu": 1.1244684007138455
+      },
+      "A2": {
+        "pillow_median_ms": 4.440085,
+        "cpu_median_ms": 4.3003540000000005,
+        "pillow_over_cpu": 1.0324929063979382
+      },
+      "comparison": {
+        "control_mean_cpu_median_ms": 4.2360690000000005,
+        "candidate_mean_cpu_median_ms": 3.8933177499999996,
+        "candidate_latency_reduction_percent": 8.091257484238357
+      }
+    }
+  },
+  "parity": {
+    "A1-control": {
+      "file": "A1-control-parity.json",
+      "sha256": "d42b7a29291a238a28216106a4ffa3de15cc8bd39f8c5d6746ba6e095d04d492",
+      "run_id": "migration-parity-benchmark-gate-170af6e927d94295a2cde77c9ceee3ca",
+      "selected": 2,
+      "executed": 2,
+      "passed": 2,
+      "failed": 0,
+      "cases": [
+        {
+          "case_id": "PIL.Image.Image.resize.nuanced.f-resize-bicubic-noise-1024x768",
+          "target_profile": "python-cpu",
+          "outcome": "pass"
+        },
+        {
+          "case_id": "PIL.Image.Image.thumbnail.nuanced.performance-large-f-2048x1536",
+          "target_profile": "python-cpu",
+          "outcome": "pass"
+        }
+      ]
+    },
+    "B1-candidate": {
+      "file": "B1-candidate-parity.json",
+      "sha256": "76723bd32b3e2d1d9ccf330d90ac2e0bc2997ff91904e798caaa19bbde3957a1",
+      "run_id": "migration-parity-benchmark-gate-227fd8c4e1274ff9868ec9a54496144b",
+      "selected": 2,
+      "executed": 2,
+      "passed": 2,
+      "failed": 0,
+      "cases": [
+        {
+          "case_id": "PIL.Image.Image.resize.nuanced.f-resize-bicubic-noise-1024x768",
+          "target_profile": "python-cpu",
+          "outcome": "pass"
+        },
+        {
+          "case_id": "PIL.Image.Image.thumbnail.nuanced.performance-large-f-2048x1536",
+          "target_profile": "python-cpu",
+          "outcome": "pass"
+        }
+      ]
+    },
+    "candidate-three-case": {
+      "file": "candidate-three-case-parity.json",
+      "sha256": "2f40800a642db9606fa16754db622245826dfaf8ad34a84f4d2c1217a2ad5716",
+      "run_id": "migration-parity-b8654a65d1554c529f95784677882f8d",
+      "selected": 3,
+      "executed": 3,
+      "passed": 3,
+      "failed": 0,
+      "cases": [
+        {
+          "case_id": "PIL.Image.Image.resize.nuanced.f-resize-bicubic-noise-1024x768",
+          "target_profile": "python-cpu",
+          "outcome": "pass"
+        },
+        {
+          "case_id": "PIL.Image.Image.resize.nuanced.modes-F-normal-4-gap-two",
+          "target_profile": "python-cpu",
+          "outcome": "pass"
+        },
+        {
+          "case_id": "PIL.Image.Image.thumbnail.nuanced.performance-large-f-2048x1536",
+          "target_profile": "python-cpu",
+          "outcome": "pass"
+        }
+      ]
+    }
+  },
+  "reports": {
+    "A1": {
+      "file": "A1-control.json",
+      "sha256": "200fcf8d1c31ca592be97445a7824c13c48070d432a286c0f8e8b8c8d3cf4c28"
+    },
+    "B1": {
+      "file": "B1-candidate.json",
+      "sha256": "9affcdfc4ecd915e1cd6c88333e3e18463defafe2b9790e8a763f0d9c5bbad6f"
+    },
+    "B2": {
+      "file": "B2-candidate.json",
+      "sha256": "3456f3d7b8ddf49a32ca1af5e8b97f9d19847e9ab534246c12750c9544ed6826"
+    },
+    "A2": {
+      "file": "A2-control.json",
+      "sha256": "eb7d299bcf91f3ee78e4f00c77c8e58f9b3859cac2d41ef63bb7b3235e45abad"
+    }
+  },
+  "disposition": "Retain this narrow CPU candidate as a repeatable measured gain. Thumbnail remains below 2x Pillow and operation-wide completion is not claimed.",
+  "allocation_note": "The per-pass fixed-width coefficient metadata Vec allocation is included in the end-to-end latency. The trial runner did not account for this internal Rust allocation in its separate host-allocation telemetry. No GPU or SIMD result is claimed."
+}

@@ -1,0 +1,394 @@
+{
+  "errors": [],
+  "execution_attestation_sha256": "c938080a0a39103f7711e6054118125dcc1abfa2509ec27b4a254623c0d5ad86",
+  "invocations": [
+    {
+      "errors": [],
+      "invocation_id": "44f20aacdc25424cadcb1261b9a481ef",
+      "receipt": {
+        "error": null,
+        "identity": {
+          "entrypoint": {
+            "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_parity.py",
+            "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+            "size": 198968
+          },
+          "files_sha256": "93aa43d23eccbd795be1cb13a003cdc753dfa08a51de41e8a245ce53508f0eb2",
+          "loaded_modules": [
+            {
+              "module": "__main__",
+              "origin": null,
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_parity.py",
+              "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+              "size": 198968
+            },
+            {
+              "module": "migration_execution_attestation",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_attestation.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_attestation.py",
+              "sha256": "207e6d5f3af45e60934a5365adeb6da53e5ad1bea7c0d6974d28df64e307fd7c",
+              "size": 20175
+            },
+            {
+              "module": "migration_execution_identity",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_identity.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_identity.py",
+              "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+              "size": 47103
+            },
+            {
+              "module": "migration_parity.display",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_parity/display.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_parity/display.py",
+              "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+              "size": 5820
+            },
+            {
+              "module": "migration_producer_attestation",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_attestation.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_attestation.py",
+              "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+              "size": 8459
+            },
+            {
+              "module": "migration_producer_identity",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_identity.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_identity.py",
+              "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+              "size": 32710
+            },
+            {
+              "module": "validate_migration_parity_contract",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/validate_migration_parity_contract.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/validate_migration_parity_contract.py",
+              "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+              "size": 58714
+            }
+          ],
+          "role": "child",
+          "schema": "migration-parity/producer-identity@1"
+        },
+        "invocation_id": "44f20aacdc25424cadcb1261b9a481ef",
+        "producer_bundle_sha256": "1d96d46917bc12299f770305d77b04f5b5f5141caf743d5b2f83ffb02e4930f1",
+        "schema": "migration-parity/child-producer-attestation@1",
+        "status": "complete"
+      }
+    },
+    {
+      "errors": [],
+      "invocation_id": "38b1d4d768dc4d9cb8ae45401ef02d6e",
+      "receipt": {
+        "error": null,
+        "identity": {
+          "entrypoint": {
+            "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_parity.py",
+            "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+            "size": 198968
+          },
+          "files_sha256": "93aa43d23eccbd795be1cb13a003cdc753dfa08a51de41e8a245ce53508f0eb2",
+          "loaded_modules": [
+            {
+              "module": "__main__",
+              "origin": null,
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_parity.py",
+              "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+              "size": 198968
+            },
+            {
+              "module": "migration_execution_attestation",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_attestation.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_attestation.py",
+              "sha256": "207e6d5f3af45e60934a5365adeb6da53e5ad1bea7c0d6974d28df64e307fd7c",
+              "size": 20175
+            },
+            {
+              "module": "migration_execution_identity",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_identity.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_identity.py",
+              "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+              "size": 47103
+            },
+            {
+              "module": "migration_parity.display",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_parity/display.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_parity/display.py",
+              "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+              "size": 5820
+            },
+            {
+              "module": "migration_producer_attestation",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_attestation.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_attestation.py",
+              "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+              "size": 8459
+            },
+            {
+              "module": "migration_producer_identity",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_identity.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_identity.py",
+              "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+              "size": 32710
+            },
+            {
+              "module": "validate_migration_parity_contract",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/validate_migration_parity_contract.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/validate_migration_parity_contract.py",
+              "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+              "size": 58714
+            }
+          ],
+          "role": "child",
+          "schema": "migration-parity/producer-identity@1"
+        },
+        "invocation_id": "38b1d4d768dc4d9cb8ae45401ef02d6e",
+        "producer_bundle_sha256": "1d96d46917bc12299f770305d77b04f5b5f5141caf743d5b2f83ffb02e4930f1",
+        "schema": "migration-parity/child-producer-attestation@1",
+        "status": "complete"
+      }
+    },
+    {
+      "errors": [],
+      "invocation_id": "79ddd3ac918f44e68caccb1fb59f3267",
+      "receipt": {
+        "error": null,
+        "identity": {
+          "entrypoint": {
+            "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_parity.py",
+            "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+            "size": 198968
+          },
+          "files_sha256": "93aa43d23eccbd795be1cb13a003cdc753dfa08a51de41e8a245ce53508f0eb2",
+          "loaded_modules": [
+            {
+              "module": "__main__",
+              "origin": null,
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_parity.py",
+              "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+              "size": 198968
+            },
+            {
+              "module": "migration_execution_attestation",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_attestation.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_attestation.py",
+              "sha256": "207e6d5f3af45e60934a5365adeb6da53e5ad1bea7c0d6974d28df64e307fd7c",
+              "size": 20175
+            },
+            {
+              "module": "migration_execution_identity",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_identity.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_identity.py",
+              "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+              "size": 47103
+            },
+            {
+              "module": "migration_parity.display",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_parity/display.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_parity/display.py",
+              "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+              "size": 5820
+            },
+            {
+              "module": "migration_producer_attestation",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_attestation.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_attestation.py",
+              "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+              "size": 8459
+            },
+            {
+              "module": "migration_producer_identity",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_identity.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_identity.py",
+              "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+              "size": 32710
+            },
+            {
+              "module": "validate_migration_parity_contract",
+              "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/validate_migration_parity_contract.py",
+              "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/validate_migration_parity_contract.py",
+              "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+              "size": 58714
+            }
+          ],
+          "role": "child",
+          "schema": "migration-parity/producer-identity@1"
+        },
+        "invocation_id": "79ddd3ac918f44e68caccb1fb59f3267",
+        "producer_bundle_sha256": "1d96d46917bc12299f770305d77b04f5b5f5141caf743d5b2f83ffb02e4930f1",
+        "schema": "migration-parity/child-producer-attestation@1",
+        "status": "complete"
+      }
+    }
+  ],
+  "parent_end": {
+    "entrypoint": {
+      "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_benchmark.py",
+      "sha256": "55e6be88698f2cd37f9afc9984e01f7b3d531540c88f60579c29b3fe07cbea3d",
+      "size": 97292
+    },
+    "files_sha256": "93aa43d23eccbd795be1cb13a003cdc753dfa08a51de41e8a245ce53508f0eb2",
+    "loaded_modules": [
+      {
+        "module": "__main__",
+        "origin": null,
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_benchmark.py",
+        "sha256": "55e6be88698f2cd37f9afc9984e01f7b3d531540c88f60579c29b3fe07cbea3d",
+        "size": 97292
+      },
+      {
+        "module": "migration_benchmark_adapter",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_benchmark_adapter.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_benchmark_adapter.py",
+        "sha256": "2b913005963c3fdbaf89010348ee9c76a459f16e17c8e177f6ebeda612220786",
+        "size": 2601
+      },
+      {
+        "module": "migration_benchmark_samples",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_benchmark_samples.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_benchmark_samples.py",
+        "sha256": "846cf4834c685fdc3571b5b984d9b0d3037cf855896b212b96654bef880a0620",
+        "size": 21051
+      },
+      {
+        "module": "migration_execution_attestation",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_attestation.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_attestation.py",
+        "sha256": "207e6d5f3af45e60934a5365adeb6da53e5ad1bea7c0d6974d28df64e307fd7c",
+        "size": 20175
+      },
+      {
+        "module": "migration_execution_identity",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_identity.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_identity.py",
+        "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+        "size": 47103
+      },
+      {
+        "module": "migration_parity.display",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_parity/display.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_parity/display.py",
+        "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+        "size": 5820
+      },
+      {
+        "module": "migration_producer_attestation",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_attestation.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_attestation.py",
+        "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+        "size": 8459
+      },
+      {
+        "module": "migration_producer_identity",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_identity.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_identity.py",
+        "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+        "size": 32710
+      },
+      {
+        "module": "run_migration_parity",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_parity.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_parity.py",
+        "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+        "size": 198968
+      },
+      {
+        "module": "validate_migration_parity_contract",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/validate_migration_parity_contract.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/validate_migration_parity_contract.py",
+        "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+        "size": 58714
+      }
+    ],
+    "role": "parent",
+    "schema": "migration-parity/producer-identity@1"
+  },
+  "parent_start": {
+    "entrypoint": {
+      "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_benchmark.py",
+      "sha256": "55e6be88698f2cd37f9afc9984e01f7b3d531540c88f60579c29b3fe07cbea3d",
+      "size": 97292
+    },
+    "files_sha256": "93aa43d23eccbd795be1cb13a003cdc753dfa08a51de41e8a245ce53508f0eb2",
+    "loaded_modules": [
+      {
+        "module": "__main__",
+        "origin": null,
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_benchmark.py",
+        "sha256": "55e6be88698f2cd37f9afc9984e01f7b3d531540c88f60579c29b3fe07cbea3d",
+        "size": 97292
+      },
+      {
+        "module": "migration_benchmark_adapter",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_benchmark_adapter.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_benchmark_adapter.py",
+        "sha256": "2b913005963c3fdbaf89010348ee9c76a459f16e17c8e177f6ebeda612220786",
+        "size": 2601
+      },
+      {
+        "module": "migration_benchmark_samples",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_benchmark_samples.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_benchmark_samples.py",
+        "sha256": "846cf4834c685fdc3571b5b984d9b0d3037cf855896b212b96654bef880a0620",
+        "size": 21051
+      },
+      {
+        "module": "migration_execution_attestation",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_attestation.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_attestation.py",
+        "sha256": "207e6d5f3af45e60934a5365adeb6da53e5ad1bea7c0d6974d28df64e307fd7c",
+        "size": 20175
+      },
+      {
+        "module": "migration_execution_identity",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_identity.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_execution_identity.py",
+        "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+        "size": 47103
+      },
+      {
+        "module": "migration_parity.display",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_parity/display.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_parity/display.py",
+        "sha256": "544558fd29862a67a9b3e92cffefdce033a874125483dd03a17bf82ad7ff446b",
+        "size": 5820
+      },
+      {
+        "module": "migration_producer_attestation",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_attestation.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_attestation.py",
+        "sha256": "c00c6e86a1aec2faf6cf7082173f872d327dcc4e76f7628bfc8ab48f896dad11",
+        "size": 8459
+      },
+      {
+        "module": "migration_producer_identity",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_identity.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/migration_producer_identity.py",
+        "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+        "size": 32710
+      },
+      {
+        "module": "run_migration_parity",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_parity.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/run_migration_parity.py",
+        "sha256": "3ea7b0b2fcb4fd015dd8e90a52b3e89162e236fcab9a89e36fc8cfdfb43d81a9",
+        "size": 198968
+      },
+      {
+        "module": "validate_migration_parity_contract",
+        "origin": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/validate_migration_parity_contract.py",
+        "path": "/tmp/pillow-rs-getchannel-x86-candidate-20261016/scripts/validate_migration_parity_contract.py",
+        "sha256": "539ad62fca1c6f50f477e4c8248688a5bafd24dd60b08640551e5a9b5afd4690",
+        "size": 58714
+      }
+    ],
+    "role": "parent",
+    "schema": "migration-parity/producer-identity@1"
+  },
+  "producer_bundle_sha256": "1d96d46917bc12299f770305d77b04f5b5f5141caf743d5b2f83ffb02e4930f1",
+  "report": {
+    "canonical_sha256": "98eacdb9dac8b7e035f4efd4620ca88a9b4736a51a172d87662593c7a6631468",
+    "run_id": "migration-benchmark-d9ee25a8a67a4ae8b2fb2eeb608ff996",
+    "schema": "migration-parity/benchmark-result@1"
+  },
+  "schema": "migration-parity/producer-attestation@1",
+  "status": "complete"
+}

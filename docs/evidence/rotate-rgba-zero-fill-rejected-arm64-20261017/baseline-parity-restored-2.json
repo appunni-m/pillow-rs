@@ -1,0 +1,223 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "identity": {
+    "run_id": "migration-parity-96d9e73947fe4aebbc82843c38a79314",
+    "started_at": "2026-10-16T22:50:11.045470Z",
+    "finished_at": "2026-10-16T22:50:12.095286Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/pil-image-image.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "c9cd37e39695fa309230dcbd497e3a7a47d2706378d756ec08fb3aad81e67d6d"
+      }
+    ],
+    "assets": [
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.rotate.nuanced.modes-CMYK-0-arbitrary",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "5fa009dd29ec37870faeca18481f4ca07f2614cf7c57fd80a5cb7bd61f0a76f6"
+      },
+      {
+        "input_path": "inputs/parity/pil-image-image.json",
+        "item_id": "PIL.Image.Image.rotate.nuanced.modes-RGBa-0-arbitrary",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "cddbf11f616aa12ac0af2151e1f0c72b95f0537f2b26339c742e768c0a40e61f"
+      }
+    ],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-cpu",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "cpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-test"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 3600
+    }
+  },
+  "status": "completed",
+  "summary": {
+    "selected": 2,
+    "executed": 2,
+    "passed": 2,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.Image.Image.rotate.nuanced.modes-CMYK-0-arbitrary",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.rotate.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.rotate.nuanced.modes-CMYK-0-arbitrary",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "CMYK",
+              "size": [
+                17,
+                11
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZI7WzjXM+GUN1lpJlyr5E9HcGZ727lL8l9STICbjOR1//SyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOI208Mz8vDas1k+dO2ibDh/WMTb4nkQs8l1JIRW78CorFgv6p7x+q0sVYp1AAAAAAAAAAAAAAAAAAAAAMcbG4Az5TTA3xkFFDjQctTNV2zfYavkDdYC1glDtKLFWn4sE1gO/fVd4zIlpCwasvZDERPvyWq5AAAAAAAAAABfyEg0xecNx+1aGLHlODnzQ/dEXn3kj+ljFiFl0DfAnmYxzk2jD8vE8DO15DoDCz15DTbXRYbXNO5lggIAAAAAGij9GUUSHZrdMbmrYoLRUGn3SCP13811LB5Z4rK7+Wn8Hllx0CS+t9asBL7plIWbltZgZR/HgAvuIX3rk55Zw0L25XGsWZWVKINlXrgeZxk9x4QKHd6oTVI2F3QeQmlc0gJ6Edr4eU/PLn3sVG2OpkNsq+cY8LOh4+dDPITu/+Ia93TJ7Iy4R36wj6I/Q3ZvHhYIuAckVqlBht69CGkwqUFeJmpfZhu3c6edXVgLFgXYhxcH/FGhJYgQ49Z8VotItQrtCQAAAABQp5rv1MqbRqDgFBiA+Yy0hHDMpoEDKr7p1qTz3ZbmRG8al9XlwS5aaynQlQqsVMlMIswjsIDlKvZ6wz4AAAAAAAAAAHxwvUxRqmB1THjBkAid/vAyJwb/evEcC/oB56sjGTT2Ax7l0iQYpNe1kMVcbfXdRC/jpjC6DCThAAAAAAAAAAAAAAAAAAAAAACoASnPvl9aZBq3ojY7H2JIPkuX26sfyRwxQ3+gm7R9lX+IkiO5TP7+b8toAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGXwQGWgbZjHuEeWlsJhc7WM5y2BbMIO9AHSl+c3TLb1frQ/hAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZI7WzjXM+GUN1lpJlyr5E9HcGZ727lL8l9STICbjOR1//SyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOI208Mz8vDas1k+dO2ibDh/WMTb4nkQs8l1JIRW78CorFgv6p7x+q0sVYp1AAAAAAAAAAAAAAAAAAAAAMcbG4Az5TTA3xkFFDjQctTNV2zfYavkDdYC1glDtKLFWn4sE1gO/fVd4zIlpCwasvZDERPvyWq5AAAAAAAAAABfyEg0xecNx+1aGLHlODnzQ/dEXn3kj+ljFiFl0DfAnmYxzk2jD8vE8DO15DoDCz15DTbXRYbXNO5lggIAAAAAGij9GUUSHZrdMbmrYoLRUGn3SCP13811LB5Z4rK7+Wn8Hllx0CS+t9asBL7plIWbltZgZR/HgAvuIX3rk55Zw0L25XGsWZWVKINlXrgeZxk9x4QKHd6oTVI2F3QeQmlc0gJ6Edr4eU/PLn3sVG2OpkNsq+cY8LOh4+dDPITu/+Ia93TJ7Iy4R36wj6I/Q3ZvHhYIuAckVqlBht69CGkwqUFeJmpfZhu3c6edXVgLFgXYhxcH/FGhJYgQ49Z8VotItQrtCQAAAABQp5rv1MqbRqDgFBiA+Yy0hHDMpoEDKr7p1qTz3ZbmRG8al9XlwS5aaynQlQqsVMlMIswjsIDlKvZ6wz4AAAAAAAAAAHxwvUxRqmB1THjBkAid/vAyJwb/evEcC/oB56sjGTT2Ax7l0iQYpNe1kMVcbfXdRC/jpjC6DCThAAAAAAAAAAAAAAAAAAAAAACoASnPvl9aZBq3ojY7H2JIPkuX26sfyRwxQ3+gm7R9lX+IkiO5TP7+b8toAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGXwQGWgbZjHuEeWlsJhc7WM5y2BbMIO9AHSl+c3TLb1frQ/hAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.rotate.nuanced.modes-CMYK-0-arbitrary",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "CMYK",
+              "size": [
+                17,
+                11
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZI7WzjXM+GUN1lpJlyr5E9HcGZ727lL8l9STICbjOR1//SyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOI208Mz8vDas1k+dO2ibDh/WMTb4nkQs8l1JIRW78CorFgv6p7x+q0sVYp1AAAAAAAAAAAAAAAAAAAAAMcbG4Az5TTA3xkFFDjQctTNV2zfYavkDdYC1glDtKLFWn4sE1gO/fVd4zIlpCwasvZDERPvyWq5AAAAAAAAAABfyEg0xecNx+1aGLHlODnzQ/dEXn3kj+ljFiFl0DfAnmYxzk2jD8vE8DO15DoDCz15DTbXRYbXNO5lggIAAAAAGij9GUUSHZrdMbmrYoLRUGn3SCP13811LB5Z4rK7+Wn8Hllx0CS+t9asBL7plIWbltZgZR/HgAvuIX3rk55Zw0L25XGsWZWVKINlXrgeZxk9x4QKHd6oTVI2F3QeQmlc0gJ6Edr4eU/PLn3sVG2OpkNsq+cY8LOh4+dDPITu/+Ia93TJ7Iy4R36wj6I/Q3ZvHhYIuAckVqlBht69CGkwqUFeJmpfZhu3c6edXVgLFgXYhxcH/FGhJYgQ49Z8VotItQrtCQAAAABQp5rv1MqbRqDgFBiA+Yy0hHDMpoEDKr7p1qTz3ZbmRG8al9XlwS5aaynQlQqsVMlMIswjsIDlKvZ6wz4AAAAAAAAAAHxwvUxRqmB1THjBkAid/vAyJwb/evEcC/oB56sjGTT2Ax7l0iQYpNe1kMVcbfXdRC/jpjC6DCThAAAAAAAAAAAAAAAAAAAAAACoASnPvl9aZBq3ojY7H2JIPkuX26sfyRwxQ3+gm7R9lX+IkiO5TP7+b8toAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGXwQGWgbZjHuEeWlsJhc7WM5y2BbMIO9AHSl+c3TLb1frQ/hAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZI7WzjXM+GUN1lpJlyr5E9HcGZ727lL8l9STICbjOR1//SyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOI208Mz8vDas1k+dO2ibDh/WMTb4nkQs8l1JIRW78CorFgv6p7x+q0sVYp1AAAAAAAAAAAAAAAAAAAAAMcbG4Az5TTA3xkFFDjQctTNV2zfYavkDdYC1glDtKLFWn4sE1gO/fVd4zIlpCwasvZDERPvyWq5AAAAAAAAAABfyEg0xecNx+1aGLHlODnzQ/dEXn3kj+ljFiFl0DfAnmYxzk2jD8vE8DO15DoDCz15DTbXRYbXNO5lggIAAAAAGij9GUUSHZrdMbmrYoLRUGn3SCP13811LB5Z4rK7+Wn8Hllx0CS+t9asBL7plIWbltZgZR/HgAvuIX3rk55Zw0L25XGsWZWVKINlXrgeZxk9x4QKHd6oTVI2F3QeQmlc0gJ6Edr4eU/PLn3sVG2OpkNsq+cY8LOh4+dDPITu/+Ia93TJ7Iy4R36wj6I/Q3ZvHhYIuAckVqlBht69CGkwqUFeJmpfZhu3c6edXVgLFgXYhxcH/FGhJYgQ49Z8VotItQrtCQAAAABQp5rv1MqbRqDgFBiA+Yy0hHDMpoEDKr7p1qTz3ZbmRG8al9XlwS5aaynQlQqsVMlMIswjsIDlKvZ6wz4AAAAAAAAAAHxwvUxRqmB1THjBkAid/vAyJwb/evEcC/oB56sjGTT2Ax7l0iQYpNe1kMVcbfXdRC/jpjC6DCThAAAAAAAAAAAAAAAAAAAAAACoASnPvl9aZBq3ojY7H2JIPkuX26sfyRwxQ3+gm7R9lX+IkiO5TP7+b8toAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGXwQGWgbZjHuEeWlsJhc7WM5y2BbMIO9AHSl+c3TLb1frQ/hAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.rotate.nuanced.modes-RGBa-0-arbitrary",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.rotate.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.rotate.nuanced.modes-RGBa-0-arbitrary",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGBa",
+              "size": [
+                17,
+                11
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZDLcudN2zm70faiAXSdLNMGqZbgB5HsC6nG9euYzTzpLy7IuAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJdVPsYWVepSLSlGJwnHZMk7qJZOcoZ6eS6JA8P+h0xHMDDOCYi3RC7rnxS4AAAAAAAAAAAAAAAAAAAAAJ4ruV4ozEzRy00+3oxv1C/GYYeBM+wzCzz6G/fHdQuBvwn3XWcFA/SxJZelI2WFoBbC7T85WGfWAAAAAAAAAAAZjkaAhfOq2BRJp8ItzIgrT2y19/0cDS3YQm/X3huaLwtz2f5XlgOYSsEH21X/qnhsxQ9YsIF4+nKC0G4AAAAACHBu1cdmZSC7B6sJpXeFh66yGIwSw/PUe8ZPWPE/Fk4qpq9CSgn7YDaM+YVT8ri/jPnRGlh1eGU8tC+bmjv4XsZWp/R5XDbuyEt11COq7yBqZHcOXmiH2W05yRjyf3NQCAbt+WSeLwKFrfpOn0WGQI/BHeL+gbmI98b8/zFqiDC6RJc4lpQQkVONy780arcODVETacjusx7mqQk10Pw9DsHnSyL+rh+zhb36MDO5StHG9ACTVS8i9cXzQYkU4uzQvLFZ+QAAAAAlAbcnqMzzbzyhzb15Q26qdD+agGZSJhf7ajLTVYrGQBKieOjcP582PkifnveoKu7dVgQHQvRMgJcqCSAAAAAAAAAAAJ7Cmr0SV9vkUNADAWci/gCa5WILK/SWkn55x0Z92DiY7RHIMicNMFYjx2jnjXhINzjunLUKSRokAAAAAAAAAAAAAAAAAAAAAG1p7CevOcxEFTt67AOtPSYe71k+IWf0IrGb6O1/gKf3jTMGosdeCD5/kfVQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPWZIW5Qrym6vwrReLBtpUUSZ3arzND8/F6QZh9phzscAKk8HwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZDLcudN2zm70faiAXSdLNMGqZbgB5HsC6nG9euYzTzpLy7IuAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJdVPsYWVepSLSlGJwnHZMk7qJZOcoZ6eS6JA8P+h0xHMDDOCYi3RC7rnxS4AAAAAAAAAAAAAAAAAAAAAJ4ruV4ozEzRy00+3oxv1C/GYYeBM+wzCzz6G/fHdQuBvwn3XWcFA/SxJZelI2WFoBbC7T85WGfWAAAAAAAAAAAZjkaAhfOq2BRJp8ItzIgrT2y19/0cDS3YQm/X3huaLwtz2f5XlgOYSsEH21X/qnhsxQ9YsIF4+nKC0G4AAAAACHBu1cdmZSC7B6sJpXeFh66yGIwSw/PUe8ZPWPE/Fk4qpq9CSgn7YDaM+YVT8ri/jPnRGlh1eGU8tC+bmjv4XsZWp/R5XDbuyEt11COq7yBqZHcOXmiH2W05yRjyf3NQCAbt+WSeLwKFrfpOn0WGQI/BHeL+gbmI98b8/zFqiDC6RJc4lpQQkVONy780arcODVETacjusx7mqQk10Pw9DsHnSyL+rh+zhb36MDO5StHG9ACTVS8i9cXzQYkU4uzQvLFZ+QAAAAAlAbcnqMzzbzyhzb15Q26qdD+agGZSJhf7ajLTVYrGQBKieOjcP582PkifnveoKu7dVgQHQvRMgJcqCSAAAAAAAAAAAJ7Cmr0SV9vkUNADAWci/gCa5WILK/SWkn55x0Z92DiY7RHIMicNMFYjx2jnjXhINzjunLUKSRokAAAAAAAAAAAAAAAAAAAAAG1p7CevOcxEFTt67AOtPSYe71k+IWf0IrGb6O1/gKf3jTMGosdeCD5/kfVQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPWZIW5Qrym6vwrReLBtpUUSZ3arzND8/F6QZh9phzscAKk8HwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.rotate.nuanced.modes-RGBa-0-arbitrary",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "RGBa",
+              "size": [
+                17,
+                11
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZDLcudN2zm70faiAXSdLNMGqZbgB5HsC6nG9euYzTzpLy7IuAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJdVPsYWVepSLSlGJwnHZMk7qJZOcoZ6eS6JA8P+h0xHMDDOCYi3RC7rnxS4AAAAAAAAAAAAAAAAAAAAAJ4ruV4ozEzRy00+3oxv1C/GYYeBM+wzCzz6G/fHdQuBvwn3XWcFA/SxJZelI2WFoBbC7T85WGfWAAAAAAAAAAAZjkaAhfOq2BRJp8ItzIgrT2y19/0cDS3YQm/X3huaLwtz2f5XlgOYSsEH21X/qnhsxQ9YsIF4+nKC0G4AAAAACHBu1cdmZSC7B6sJpXeFh66yGIwSw/PUe8ZPWPE/Fk4qpq9CSgn7YDaM+YVT8ri/jPnRGlh1eGU8tC+bmjv4XsZWp/R5XDbuyEt11COq7yBqZHcOXmiH2W05yRjyf3NQCAbt+WSeLwKFrfpOn0WGQI/BHeL+gbmI98b8/zFqiDC6RJc4lpQQkVONy780arcODVETacjusx7mqQk10Pw9DsHnSyL+rh+zhb36MDO5StHG9ACTVS8i9cXzQYkU4uzQvLFZ+QAAAAAlAbcnqMzzbzyhzb15Q26qdD+agGZSJhf7ajLTVYrGQBKieOjcP582PkifnveoKu7dVgQHQvRMgJcqCSAAAAAAAAAAAJ7Cmr0SV9vkUNADAWci/gCa5WILK/SWkn55x0Z92DiY7RHIMicNMFYjx2jnjXhINzjunLUKSRokAAAAAAAAAAAAAAAAAAAAAG1p7CevOcxEFTt67AOtPSYe71k+IWf0IrGb6O1/gKf3jTMGosdeCD5/kfVQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPWZIW5Qrym6vwrReLBtpUUSZ3arzND8/F6QZh9phzscAKk8HwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZDLcudN2zm70faiAXSdLNMGqZbgB5HsC6nG9euYzTzpLy7IuAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJdVPsYWVepSLSlGJwnHZMk7qJZOcoZ6eS6JA8P+h0xHMDDOCYi3RC7rnxS4AAAAAAAAAAAAAAAAAAAAAJ4ruV4ozEzRy00+3oxv1C/GYYeBM+wzCzz6G/fHdQuBvwn3XWcFA/SxJZelI2WFoBbC7T85WGfWAAAAAAAAAAAZjkaAhfOq2BRJp8ItzIgrT2y19/0cDS3YQm/X3huaLwtz2f5XlgOYSsEH21X/qnhsxQ9YsIF4+nKC0G4AAAAACHBu1cdmZSC7B6sJpXeFh66yGIwSw/PUe8ZPWPE/Fk4qpq9CSgn7YDaM+YVT8ri/jPnRGlh1eGU8tC+bmjv4XsZWp/R5XDbuyEt11COq7yBqZHcOXmiH2W05yRjyf3NQCAbt+WSeLwKFrfpOn0WGQI/BHeL+gbmI98b8/zFqiDC6RJc4lpQQkVONy780arcODVETacjusx7mqQk10Pw9DsHnSyL+rh+zhb36MDO5StHG9ACTVS8i9cXzQYkU4uzQvLFZ+QAAAAAlAbcnqMzzbzyhzb15Q26qdD+agGZSJhf7ajLTVYrGQBKieOjcP582PkifnveoKu7dVgQHQvRMgJcqCSAAAAAAAAAAAJ7Cmr0SV9vkUNADAWci/gCa5WILK/SWkn55x0Z92DiY7RHIMicNMFYjx2jnjXhINzjunLUKSRokAAAAAAAAAAAAAAAAAAAAAG1p7CevOcxEFTt67AOtPSYe71k+IWf0IrGb6O1/gKf3jTMGosdeCD5/kfVQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPWZIW5Qrym6vwrReLBtpUUSZ3arzND8/F6QZh9phzscAKk8HwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    }
+  ],
+  "infrastructure_errors": []
+}

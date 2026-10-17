@@ -1,0 +1,916 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "identity": {
+    "run_id": "migration-parity-92f62de05b3749fcbb66f1200adc3a23",
+    "started_at": "2026-10-13T22:42:58.408132Z",
+    "finished_at": "2026-10-13T22:42:59.549896Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "f2b8e5ad240adb336812da50bedd7bb11c23bb2e9111919003c0b734e7a4a51a"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/pil-image-image.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "68c947521644a1ed3533e2d8b9c77cdf17f1e02575831ccf6392eefead6ef7d5"
+      }
+    ],
+    "assets": [],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-cpu",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "cpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-test"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 3600
+    }
+  },
+  "status": "completed",
+  "summary": {
+    "selected": 12,
+    "executed": 12,
+    "passed": 12,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-012",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.parameter.channel"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-012",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAADjAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAADjAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-012",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAADjAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAADjAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-045",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.parameter.channel"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-045",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                6,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAACOAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAACOAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-045",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                6,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAACOAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAACOAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-056",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.parameter.channel"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-056",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                6
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAACLAAAAAAAAAAAAAAAA"
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAACLAAAAAAAAAAAAAAAA"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-056",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                6
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAACLAAAAAAAAAAAAAAAA"
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAACLAAAAAAAAAAAAAAAA"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-078",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.parameter.channel"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-078",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                7,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAADNAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAADNAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-la-078",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                7,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAADNAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAADNAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-014",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.parameter.channel"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-014",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                7,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-014",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                7,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-036",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.parameter.channel"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-036",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                5
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAB+AAAAAAAAAA=="
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAB+AAAAAAAAAA=="
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-036",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                5,
+                5
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAB+AAAAAAAAAA=="
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAB+AAAAAAAAAA=="
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-058",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.parameter.channel"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-058",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                7,
+                6
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB8AAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB8AAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-058",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                7,
+                6
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB8AAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB8AAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-069",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.parameter.channel"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-069",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                6,
+                5
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAbAAAAAAAAAAAA"
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAbAAAAAAAAAAAA"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getchannel.nuanced.coverage-batch-getchannel-extract-rgba-069",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                6,
+                5
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAbAAAAAAAAAAAA"
+            }
+          },
+          {
+            "step_id": "observe-result",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAbAAAAAAAAAAAA"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "pipeline-composition.getchannel-la-alpha-rgb",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.behavior.default"
+      ],
+      "source": {
+        "case_id": "pipeline-composition.getchannel-la-alpha-rgb",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "alpha",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                9,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "pipeline-composition.getchannel-la-alpha-rgb",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "alpha",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                9,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "pipeline-composition.getchannel-rgba-alpha-invert",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.behavior.default"
+      ],
+      "source": {
+        "case_id": "pipeline-composition.getchannel-rgba-alpha-invert",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "alpha",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                9,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "pipeline-composition.getchannel-rgba-alpha-invert",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "alpha",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                9,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "pipeline-composition.matrix-073",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.behavior.default"
+      ],
+      "source": {
+        "case_id": "pipeline-composition.matrix-073",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "alpha",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                9,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "pipeline-composition.matrix-073",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "alpha",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                9,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "pipeline-composition.matrix-074",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getchannel.behavior.default"
+      ],
+      "source": {
+        "case_id": "pipeline-composition.matrix-074",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "alpha",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                9,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "SEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhI"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "SEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhI"
+            }
+          }
+        ]
+      },
+      "target": {
+        "case_id": "pipeline-composition.matrix-074",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "alpha",
+            "status": "ok",
+            "value": {
+              "kind": "image",
+              "mode": "L",
+              "size": [
+                9,
+                7
+              ],
+              "format": null,
+              "info": {},
+              "palette": null,
+              "bytes": "SEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhI"
+            }
+          },
+          {
+            "step_id": "materialize",
+            "status": "ok",
+            "value": {
+              "kind": "bytes",
+              "encoding": "base64",
+              "data": "SEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhI"
+            }
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    }
+  ],
+  "infrastructure_errors": []
+}

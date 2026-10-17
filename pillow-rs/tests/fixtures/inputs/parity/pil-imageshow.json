@@ -1,0 +1,5338 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.ImageShow.register.behavior.default",
+      "surface": "PIL.ImageShow",
+      "operation": "register",
+      "covers": [
+        "PIL.ImageShow.register.behavior.default",
+        "PIL.ImageShow.register.parameter.viewer",
+        "PIL.ImageShow.register.parameter.order"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "class",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "display",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "display",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.register.performance.standard",
+      "surface": "PIL.ImageShow",
+      "operation": "register",
+      "covers": [
+        "PIL.ImageShow.register.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "class",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "display",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "display",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.behavior.default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default",
+        "PIL.ImageShow.show.parameter.image"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.parameter.title",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.parameter.title"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "capture title \"quotes\" and \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.parameter.options",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.parameter.options"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {
+                "capture_option": "forwarded"
+              }
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.performance.standard",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.1-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.1-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.1-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.l-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 109
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.l-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 109
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.l-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 109
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.la-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                109,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.la-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                109,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.la-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                109,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.p-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.p-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.p-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.pa-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                1,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.pa-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                1,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.pa-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                1,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.rgb-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.rgb-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.rgb-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.rgba-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.rgba-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.rgba-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.cmyk-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197,
+                11
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.cmyk-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197,
+                11
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.cmyk-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197,
+                11
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.ycbcr-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "YCbCr"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                109,
+                61,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.ycbcr-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "YCbCr"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                109,
+                61,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.ycbcr-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "YCbCr"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                109,
+                61,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.hsv-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "HSV"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.hsv-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "HSV"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.hsv-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "HSV"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.i-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 109
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.i-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 109
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.i-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 109
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.f-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "F"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 109.5
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.f-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "F"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 109.5
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.f-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "F"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 109.5
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.i16-show-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1027
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.i16-show_image-default",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1027
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.i16-show_image-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1027
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_image"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "callback title \u03bb"
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.prepend-short-circuit",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 0,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "register-1",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-1",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "register-2",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-2",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "register-1",
+        "register-2",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.append-after-decline",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 0,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "register-1",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-1",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "register-1",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.all-decline",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 0,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "register-1",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-1",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 0,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "register-1",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.register.capture.order--2",
+      "surface": "PIL.ImageShow",
+      "operation": "register",
+      "covers": [
+        "PIL.ImageShow.register.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 0,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": -2
+            }
+          }
+        },
+        {
+          "step_id": "register-1",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-1",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "display",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "register-1",
+        "display",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.register.capture.order-0",
+      "surface": "PIL.ImageShow",
+      "operation": "register",
+      "covers": [
+        "PIL.ImageShow.register.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 0,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "register-1",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-1",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "display",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "register-1",
+        "display",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.register.capture.order-1",
+      "surface": "PIL.ImageShow",
+      "operation": "register",
+      "covers": [
+        "PIL.ImageShow.register.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 0,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "register-1",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-1",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "display",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "register-1",
+        "display",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.register.capture.order-3",
+      "surface": "PIL.ImageShow",
+      "operation": "register",
+      "covers": [
+        "PIL.ImageShow.register.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                79,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 0,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        },
+        {
+          "step_id": "register-1",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-1",
+                "image_step_id": "image",
+                "format": null,
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "display",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "register-1",
+        "display",
+        "callbacks"
+      ]
+    }
+  ]
+}

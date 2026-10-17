@@ -866,14 +866,6 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-simd"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-gpu"
         }
       ],
       "input": {
@@ -922,14 +914,6 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-simd"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-gpu"
         }
       ],
       "input": {

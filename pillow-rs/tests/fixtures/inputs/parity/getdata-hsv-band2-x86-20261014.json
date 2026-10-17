@@ -1,0 +1,66 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.Image.Image.getdata.performance.material-hsv-band2-1024x768",
+      "surface": "PIL.Image.Image",
+      "operation": "getdata",
+      "covers": [
+        "PIL.Image.Image.getdata.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "HSV"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                109,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "band-data",
+          "surface": "PIL.Image.Image",
+          "operation": "getdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image"
+          },
+          "arguments": {
+            "band": {
+              "kind": "literal",
+              "value": 2
+            }
+          }
+        }
+      ],
+      "observations": [
+        "band-data"
+      ]
+    }
+  ]
+}

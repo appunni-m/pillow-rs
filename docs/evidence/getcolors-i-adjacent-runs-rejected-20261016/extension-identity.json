@@ -1,0 +1,441 @@
+{
+  "candidate": "Coalesce adjacent I runs in the generic counter after the byte-domain and long-prefix fast paths decline the input; constrained to large I images, small direct tables, and a repeated-pair prefix.",
+  "disposition": "rejected_no_demonstrated_cpu_win; source patch was reverted",
+  "source_revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+  "source_dirty": true,
+  "source_sha256": "2bf99a60ada316a7843759264bacbf336d8d2f61d63ac9c9c364e0a2d48a2a20",
+  "target_profile": "python-cpu",
+  "features": [
+    "pillow-rs-py/default",
+    "pillow-rs/default"
+  ],
+  "python_runtime": "3.12.13",
+  "pillow_version": "12.2.0",
+  "host": {
+    "machine_id": "Lazys-MacBook-Pro.local",
+    "os": "macOS-15.7.7-arm64-arm-64bit",
+    "architecture": "arm64",
+    "cpu": "arm",
+    "memory_bytes": 0,
+    "power_mode": "unknown",
+    "toolchain": "3.12.13"
+  },
+  "extension_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/_core.abi3.so",
+  "extension_sha256": "754d841aca1468e092295518068488c95cf834ed76c3ac69d5f9387472f11666",
+  "manifest_sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885",
+  "benchmark_run_id": "migration-benchmark-e0b6122a8da847458c535f5ed63a45a7",
+  "benchmark_gate_id": "migration-parity-benchmark-gate-24879a23cd18477380d20016ec355802",
+  "no_adjacent_guard_run_id": "migration-parity-580242ebbc0c4eeb87ec32333962c246",
+  "no_adjacent_guard_summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "workloads": [
+    {
+      "workload_id": "pipeline-chain.terminal-read.getcolors.scalar-i-1024x768",
+      "pillow_median_ms": 1.894333,
+      "pillow_p95_ms": 1.989125,
+      "cpu_median_ms": 0.1283335,
+      "cpu_p95_ms": 0.148125,
+      "correctness": {
+        "gate": "parity_pass",
+        "outcome": "pass",
+        "evidence_id": "migration-parity-benchmark-gate-24879a23cd18477380d20016ec355802"
+      },
+      "cpu_execution": {
+        "status": "completed",
+        "terminal_complete": true,
+        "requested_backend": "cpu",
+        "actual_backend": "cpu",
+        "actual_backend_counts": {
+          "cpu": 1
+        },
+        "fallback_reason_counts": {},
+        "operation_count": {
+          "sample_count": 1,
+          "min": 1,
+          "median": 1,
+          "mean": 1,
+          "max": 1,
+          "total": 1
+        },
+        "dispatch_count": {
+          "sample_count": 0,
+          "min": null,
+          "median": null,
+          "mean": null,
+          "max": null,
+          "total": null
+        },
+        "resize_coeff_cache_hits": {
+          "sample_count": 1,
+          "min": 0,
+          "median": 0,
+          "mean": 0,
+          "max": 0,
+          "total": 0
+        },
+        "resize_coeff_cache_misses": {
+          "sample_count": 1,
+          "min": 0,
+          "median": 0,
+          "mean": 0,
+          "max": 0,
+          "total": 0
+        },
+        "phase_timings_ns": {
+          "route_ns": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "validation_ns": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "backend_ns": {
+            "sample_count": 1,
+            "min": 125333,
+            "median": 125333,
+            "mean": 125333,
+            "max": 125333,
+            "total": 125333
+          }
+        },
+        "resource": {
+          "sample_count": 1,
+          "upload_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "readback_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "auxiliary_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "parameter_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "retained_cache_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "full_frame_copy_count": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "mode_conversion_count": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "host_buffer_count": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "host_buffer_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "peak_live_host_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "fused_operation_count": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "host_allocation_count": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "host_allocated_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          }
+        },
+        "sample_count": 1,
+        "cached_sample_count": 0,
+        "operation_telemetry": [
+          {
+            "operation": "GetColors",
+            "path": "cpu",
+            "vector_block_count": 0,
+            "scalar_tail_count": 0,
+            "mode_conversion_count": 0,
+            "handoff_count": 0
+          }
+        ],
+        "errors": []
+      },
+      "cpu_speedup_vs_pillow": 14.761017193484166
+    },
+    {
+      "workload_id": "pipeline-chain.terminal-read.getcolors.high-cardinality-signed-run-i-128x64",
+      "pillow_median_ms": 0.177041,
+      "pillow_p95_ms": 0.187625,
+      "cpu_median_ms": 0.179646,
+      "cpu_p95_ms": 0.195667,
+      "correctness": {
+        "gate": "parity_pass",
+        "outcome": "pass",
+        "evidence_id": "migration-parity-benchmark-gate-24879a23cd18477380d20016ec355802"
+      },
+      "cpu_execution": {
+        "status": "completed",
+        "terminal_complete": true,
+        "requested_backend": "cpu",
+        "actual_backend": "cpu",
+        "actual_backend_counts": {
+          "cpu": 1
+        },
+        "fallback_reason_counts": {},
+        "operation_count": {
+          "sample_count": 1,
+          "min": 1,
+          "median": 1,
+          "mean": 1,
+          "max": 1,
+          "total": 1
+        },
+        "dispatch_count": {
+          "sample_count": 0,
+          "min": null,
+          "median": null,
+          "mean": null,
+          "max": null,
+          "total": null
+        },
+        "resize_coeff_cache_hits": {
+          "sample_count": 1,
+          "min": 0,
+          "median": 0,
+          "mean": 0,
+          "max": 0,
+          "total": 0
+        },
+        "resize_coeff_cache_misses": {
+          "sample_count": 1,
+          "min": 0,
+          "median": 0,
+          "mean": 0,
+          "max": 0,
+          "total": 0
+        },
+        "phase_timings_ns": {
+          "route_ns": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "validation_ns": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "backend_ns": {
+            "sample_count": 1,
+            "min": 26500,
+            "median": 26500,
+            "mean": 26500,
+            "max": 26500,
+            "total": 26500
+          }
+        },
+        "resource": {
+          "sample_count": 1,
+          "upload_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "readback_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "auxiliary_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "parameter_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "retained_cache_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "full_frame_copy_count": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "mode_conversion_count": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "host_buffer_count": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "host_buffer_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "peak_live_host_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "fused_operation_count": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "host_allocation_count": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          },
+          "host_allocated_bytes": {
+            "sample_count": 1,
+            "min": 0,
+            "median": 0,
+            "mean": 0,
+            "max": 0,
+            "total": 0
+          }
+        },
+        "sample_count": 1,
+        "cached_sample_count": 0,
+        "operation_telemetry": [
+          {
+            "operation": "GetColors",
+            "path": "cpu",
+            "vector_block_count": 0,
+            "scalar_tail_count": 0,
+            "mode_conversion_count": 0,
+            "handoff_count": 0
+          }
+        ],
+        "errors": []
+      },
+      "cpu_speedup_vs_pillow": 0.9854992596550995
+    }
+  ]
+}

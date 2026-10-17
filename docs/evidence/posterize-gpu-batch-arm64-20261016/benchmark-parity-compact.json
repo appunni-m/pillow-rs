@@ -1,0 +1,116 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "status": "completed",
+  "summary": {
+    "selected": 3,
+    "executed": 3,
+    "passed": 3,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "identity": {
+    "run_id": "migration-parity-benchmark-gate-ea1bc127ed484210beb4a4c8ae424965",
+    "started_at": "2026-10-16T12:08:17.928035Z",
+    "finished_at": "2026-10-16T12:08:28.992183Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/pil-imageops.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "f9bc243391b4f5b3129319d8c792c59a12691df3363ff1aedb02ffb005923b2e"
+      }
+    ],
+    "assets": [
+      {
+        "input_path": "inputs/parity/pil-imageops.json",
+        "item_id": "PIL.ImageOps.posterize.nuanced.performance-large-l-noise-1024x768",
+        "asset_id": "image-noise",
+        "kind": "ref_bytes",
+        "locator": "generated/d9cc88816a9cab2ca448b29afb517357ea1639fffeee3ad11ed4802d4102e608.bin",
+        "sha256": "d9cc88816a9cab2ca448b29afb517357ea1639fffeee3ad11ed4802d4102e608"
+      }
+    ],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-cpu",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "cpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      },
+      {
+        "target_profile": "python-simd",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "simd",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      },
+      {
+        "target_profile": "python-gpu",
+        "target_id": "pillow-rs-python",
+        "revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+        "dirty": true,
+        "runtime": "3.12.13",
+        "backend": "gpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-benchmark"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 7200
+    }
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.ImageOps.posterize.nuanced.performance-large-l-noise-1024x768",
+      "target_profile": "python-cpu",
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageOps.posterize.nuanced.performance-large-l-noise-1024x768",
+      "target_profile": "python-simd",
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.ImageOps.posterize.nuanced.performance-large-l-noise-1024x768",
+      "target_profile": "python-gpu",
+      "outcome": "pass",
+      "diffs": []
+    }
+  ],
+  "raw_report_sha256": "31ab8dcfa3fbc3f73168e4ce959d49e1045f512c28245fd2552e926110d6147c",
+  "note": "Full report image observation payloads are omitted from this evidence bundle; see the report SHA-256 and bound execution attestation. The original /tmp report was retained locally."
+}

@@ -20,6 +20,7 @@ import base64
 import binascii
 from concurrent.futures import ThreadPoolExecutor
 import datetime as _dt
+from functools import wraps
 import gzip
 import hashlib
 import importlib
@@ -43,9 +44,28 @@ import yaml
 try:
     from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
     from validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
+    from migration_parity.display import (
+        build_capture_viewer,
+        isolated_viewer_registry,
+    )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity`` in tests
     from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
     from scripts.validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
+    from scripts.migration_parity.display import (
+        build_capture_viewer,
+        isolated_viewer_registry,
+    )
+
+try:
+    from migration_execution_attestation import (
+        AttestationCollector,
+        write_child_attestation_from_environment,
+    )
+except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity`` in tests
+    from scripts.migration_execution_attestation import (
+        AttestationCollector,
+        write_child_attestation_from_environment,
+    )
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -130,6 +150,66 @@ def target_profile_for_backend(backend: str) -> str:
             )
         return "python-parallel-cpu"
     return f"python-{backend}"
+
+
+def parity_attestation_context() -> dict[str, Any]:
+    """Return the untimed invocation context for a parity child."""
+
+    return {"lifecycle": "warm", "boundary": None, "step_ids": [], "repeat": 1}
+
+
+def parity_source_profile(implementation: str) -> str:
+    """Map public source names to the stable profiles used by parity evidence."""
+
+    profiles = {"Pillow": "pillow", "Pillow-SIMD": "pillow-simd"}
+    try:
+        return profiles[implementation]
+    except KeyError as exc:
+        raise ValueError(
+            f"unsupported parity source implementation: {implementation!r}"
+        ) from exc
+
+
+def collect_child_attestation(
+    collector: AttestationCollector | None,
+    environment: dict[str, str],
+) -> None:
+    """Collect identity evidence without changing the adapter's result or error."""
+
+    if collector is None:
+        return
+    try:
+        collector.collect(environment)
+    except Exception:
+        # Attestation is a separate evidence channel. In particular, a broken
+        # receipt must not replace the adapter's original failure.
+        return
+
+
+def finalize_parity_attestation(
+    collector: AttestationCollector | None,
+    report_path: Path,
+    *,
+    result: dict[str, Any],
+    comparison_rows: list[dict[str, str]],
+) -> None:
+    """Best-effort sidecar finalization that never changes the raw parity run."""
+
+    if collector is None:
+        return
+    selection = {
+        "case_profiles": [
+            {"case_id": row["case_id"], "target_profile": row["target_profile"]}
+            for row in comparison_rows
+        ],
+        "workload_profiles": [],
+    }
+    try:
+        collector.finalize(report_path, result=result, selection=selection)
+    except Exception:
+        # The raw parity report is authoritative. Missing or incomplete
+        # attestation can never alter its contents or return status.
+        return
 
 
 def effective_timing_steps(requested: Iterable[str] | None) -> set[str]:
@@ -500,6 +580,12 @@ class AssetStore:
         self._resolved[asset_id] = value
         return value
 
+    def prepare_timed_input_assets(self) -> None:
+        """Load serialized byte fixtures before timing public workflow calls."""
+        for asset_id, asset in self._assets.items():
+            if asset.get("kind") in {"inline", "ref_bytes"}:
+                self.resolve(asset_id)
+
     def _write_asset(self, asset_id: str, data: bytes, suffix: str) -> str:
         path = self._tempdir / f"{asset_id}{suffix}"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -557,6 +643,7 @@ SOURCE_MODULES = {
     "PIL.ImageEnhance": "PIL.ImageEnhance",
     "PIL.ImageFilter": "PIL.ImageFilter",
     "PIL.ImageFont": "PIL.ImageFont",
+    "PIL.ImageShow": "PIL.ImageShow",
     "PIL.ImageOps": "PIL.ImageOps",
     "PIL.ImagePalette": "PIL.ImagePalette",
     "PIL.ImageSequence": "PIL.ImageSequence",
@@ -575,6 +662,7 @@ TARGET_MODULES = {
     "PIL.ImageEnhance": "PIL.ImageEnhance",
     "PIL.ImageFilter": "PIL.ImageFilter",
     "PIL.ImageFont": "PIL.ImageFont",
+    "PIL.ImageShow": "PIL.ImageShow",
     "PIL.ImageOps": "PIL.ImageOps",
     "PIL.ImagePalette": "PIL.ImagePalette",
     "PIL.ImageSequence": "PIL.ImageSequence",
@@ -643,8 +731,16 @@ def resolve_descriptor(
 ) -> Any:
     kind = descriptor["kind"]
     if kind == "literal":
+        value = descriptor.get("value")
+        if isinstance(value, dict) and value.get("protocol") == "capture-viewer":
+            return build_capture_viewer(
+                value,
+                side=side,
+                bindings=bindings,
+                import_surface=import_surface,
+            )
         return decode_literal(
-            descriptor.get("value"),
+            value,
             side=side,
             preserve_lists=preserve_lists,
         )
@@ -1390,6 +1486,9 @@ def _descriptor_binding_steps(value: Any) -> set[str]:
     """Collect workflow step references from an input descriptor tree."""
 
     if isinstance(value, dict):
+        if value.get("protocol") == "capture-viewer":
+            image_step_id = value.get("image_step_id")
+            return {image_step_id} if isinstance(image_step_id, str) else set()
         if value.get("kind") == "binding":
             step_id = value.get("step_id")
             return {step_id} if isinstance(step_id, str) else set()
@@ -2438,6 +2537,61 @@ def normalized_public_error(
     return error
 
 
+def _isolate_display_workflow(function: Any) -> Any:
+    """Scope viewer registry mutation to one independently-run workflow."""
+
+    @wraps(function)
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        side = args[0] if args else kwargs["side"]
+        case = args[1] if len(args) > 1 else kwargs["case"]
+        with isolated_viewer_registry(side, case, import_surface):
+            return function(*args, **kwargs)
+
+    return wrapped
+
+
+def direct_cpu_execution_receipt(
+    side: str,
+    step: dict[str, Any],
+    *,
+    requested_backend: str,
+    requested_profile: str = "",
+) -> dict[str, Any] | None:
+    """Describe ImageDraw.text's direct CPU route in the untimed proof run."""
+
+    if (
+        side != "target"
+        or step.get("surface") != "PIL.ImageDraw.ImageDraw"
+        or step.get("operation") != "text"
+    ):
+        return None
+
+    requested_backend = requested_backend.strip().lower()
+    requested_profile = requested_profile.strip().lower()
+    fallback_reason = None
+    if requested_profile == "parallel-cpu":
+        fallback_reason = (
+            "PIL.ImageDraw.ImageDraw.text uses the serial direct CPU renderer; "
+            "it does not execute the Parallel CPU strategy"
+        )
+    elif requested_backend != "cpu":
+        fallback_reason = (
+            "PIL.ImageDraw.ImageDraw.text uses the direct CPU renderer while "
+            f"{requested_backend} was requested"
+        )
+    return {
+        "status": "completed",
+        "terminal_complete": False,
+        "pipeline_relevant": False,
+        "requested_backend": requested_backend,
+        "actual_backend": "cpu",
+        "operation_count": 1,
+        "dispatch_count": 0,
+        "fallback_reason": fallback_reason,
+    }
+
+
+@_isolate_display_workflow
 def run_case(
     side: str,
     case: dict[str, Any],
@@ -2452,13 +2606,20 @@ def run_case(
     pipeline_execution_api: Any | None = None,
     pipeline_execution_sink: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    case_started_ns = time.perf_counter_ns()
     step_receipts: list[dict[str, int]] = []
     assets = AssetStore(case.get("assets", []), FIXTURE_ROOT / "assets", tempdir)
+    if timing_sink is not None:
+        # The manifest's base64 or external-file representation is harness
+        # storage, not input work performed by either public implementation.
+        # Resolve raw-byte fixtures before the workflow timer; keep public
+        # Image.frombytes/open/filter/materialization calls inside it.
+        assets.prepare_timed_input_assets()
+    case_started_ns = time.perf_counter_ns()
     bindings: dict[str, Any] = {}
     step_results: dict[str, dict[str, Any]] = {}
     blocked_reason: str | None = None
     terminal_receipt_index: int | None = None
+    direct_execution_receipt_index: int | None = None
 
     def append_execution_receipt(
         receipt: dict[str, Any], *, status: str, step_id: str
@@ -2551,6 +2712,18 @@ def run_case(
                         # an earlier deferred operation that was never
                         # observed at this workflow boundary.
                         terminal_receipt_index = None
+                elif not any(
+                    receipt_is_meaningful(record)
+                    for record in pipeline_execution_sink
+                ) and (direct_receipt := direct_cpu_execution_receipt(
+                    side,
+                    step,
+                    requested_backend=TARGET_BACKEND,
+                    requested_profile=TARGET_PROFILE_OVERRIDE,
+                )) is not None:
+                    direct_receipt["step_id"] = step_id
+                    pipeline_execution_sink.append(direct_receipt)
+                    direct_execution_receipt_index = len(pipeline_execution_sink) - 1
                 elif (
                     step_index == len(case["steps"]) - 1
                     and step_id not in case.get("observations", [])
@@ -2734,7 +2907,9 @@ def run_case(
         ):
             timing_sink.append(time.perf_counter_ns() - group_started_ns)
             group_started_ns = None
-        phase_totals = _phase_totals(case, step_receipts, case_started_ns)
+        phase_totals = _phase_totals(
+            case, step_receipts, case_started_ns, timing_steps=timing_steps
+        )
         if telemetry_sink is not None:
             telemetry_sink.append(phase_totals)
         if blocked_reason is None and terminal_receipt_index is not None:
@@ -2742,6 +2917,18 @@ def run_case(
                 set_receipt_terminal_complete(
                     pipeline_execution_sink[terminal_receipt_index], True
                 )
+        elif (
+            blocked_reason is None
+            and not timed_observation_errors
+            and direct_execution_receipt_index is not None
+            and pipeline_execution_sink is not None
+        ):
+            # The benchmark proof pass skips observation serialization after
+            # parity has already established the result contract. A successful
+            # eager direct operation still completes its own execution receipt.
+            set_receipt_terminal_complete(
+                pipeline_execution_sink[direct_execution_receipt_index], True
+            )
         return {
             "case_id": case["case_id"],
             # Timing receipts are also the execution gate for benchmark-only
@@ -2840,6 +3027,14 @@ def run_case(
         set_receipt_terminal_complete(
             pipeline_execution_sink[terminal_receipt_index], True
         )
+    elif (
+        workflow_complete
+        and direct_execution_receipt_index is not None
+        and pipeline_execution_sink is not None
+    ):
+        set_receipt_terminal_complete(
+            pipeline_execution_sink[direct_execution_receipt_index], True
+        )
     if (
         group_started_ns is not None
         and timing_sink is not None
@@ -2847,7 +3042,9 @@ def run_case(
     ):
         timing_sink.append(time.perf_counter_ns() - group_started_ns)
         group_started_ns = None
-    phase_totals = _phase_totals(case, step_receipts, case_started_ns)
+    phase_totals = _phase_totals(
+        case, step_receipts, case_started_ns, timing_steps=timing_steps
+    )
     if telemetry_sink is not None:
         telemetry_sink.append(phase_totals)
     execution_errors = [
@@ -2873,9 +3070,12 @@ def _phase_totals(
     case: dict[str, Any],
     step_receipts: list[dict[str, int]] | None,
     case_started_ns: int,
+    *,
+    timing_steps: set[str] | None = None,
 ) -> dict[str, int]:
     """Aggregate adapter-visible setup, pipeline, terminal, and total phases."""
 
+    timed_steps = timing_steps or set()
     durations = {
         item["step_id"]: int(item["duration_ns"])
         for item in (step_receipts or [])
@@ -2885,12 +3085,16 @@ def _phase_totals(
     terminal = 0
     for step in case.get("steps", []):
         step_id = step["step_id"]
+        operation = step.get("operation")
         duration = durations.get(step_id, 0)
-        if step_id == "materialize" or step.get("operation") == "tobytes":
+        if step_id == "materialize" or operation == "tobytes":
             terminal += duration
         elif (
             str(step_id).startswith("setup")
-            or step.get("operation") in {"new", "open", "load"}
+            or (
+                step_id not in timed_steps
+                and operation in {"new", "open", "load", "frombytes", "frombuffer"}
+            )
         ):
             setup += duration
         else:
@@ -3034,6 +3238,7 @@ def _run_side_subprocess_batch(
     timeout_seconds: int,
     *,
     environment: dict[str, str | None] | None = None,
+    attestation: AttestationCollector | None = None,
 ) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     payload = json.dumps(cases, separators=(",", ":"))
     if side == "source" and os.environ.get(TIMED_SOURCE_FLAG) == "1":
@@ -3060,7 +3265,25 @@ def _run_side_subprocess_batch(
     # caches out of that source tree so a later wheel build contains only
     # tracked package files.
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    for key, value in (environment or {}).items():
+    child_attestation_environment: dict[str, str] = {}
+    if attestation is not None:
+        profile = (
+            parity_source_profile(timed_source_identity()[0])
+            if side == "source"
+            else target_profile_for_backend(TARGET_BACKEND)
+        )
+        child_attestation_environment = attestation.child_environment(
+            side=side,
+            profile=profile,
+            role="parity",
+            cases=cases,
+            context=parity_attestation_context(),
+        )
+    # The collector owns its unique receipt bindings; retain the existing
+    # execution and shader overrides beside them.
+    overrides = dict(environment or {})
+    overrides.update(child_attestation_environment)
+    for key, value in overrides.items():
         if value is None:
             env.pop(key, None)
         else:
@@ -3091,16 +3314,24 @@ def _run_side_subprocess_batch(
         "cwd": ROOT,
     }
     popen_kwargs.update(process_group_options())
-    process = subprocess.Popen(command, **popen_kwargs)
+    try:
+        process = subprocess.Popen(command, **popen_kwargs)
+    except OSError:
+        collect_child_attestation(attestation, child_attestation_environment)
+        raise
     try:
         stdout, stderr = process.communicate(input=payload, timeout=timeout_seconds)
     except subprocess.TimeoutExpired as exc:
-        stdout, stderr = reap_timed_out_process(process)
+        try:
+            stdout, stderr = reap_timed_out_process(process)
+        finally:
+            collect_child_attestation(attestation, child_attestation_environment)
         detail = (stderr or stdout or "").strip().replace("\n", " ")[-800:]
         suffix = f": {detail}" if detail else ""
         raise RuntimeError(
             f"{side} adapter timed out after {timeout_seconds}s{suffix}"
         ) from exc
+    collect_child_attestation(attestation, child_attestation_environment)
     if process.returncode != 0:
         detail = (stderr or "").strip().replace("\n", " ")[-800:]
         raise RuntimeError(f"{side} adapter exited {process.returncode}: {detail}")
@@ -3131,6 +3362,8 @@ def run_side_subprocess(
     manifest_path: Path,
     cases: list[dict[str, Any]],
     timeout_seconds: int,
+    *,
+    attestation: AttestationCollector | None = None,
 ) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     """Run one side while isolating process-global state per public case.
 
@@ -3150,7 +3383,11 @@ def run_side_subprocess(
     ]
     if len(batches) <= 1:
         return _run_side_subprocess_batch(
-            side, manifest_path, cases, timeout_seconds
+            side,
+            manifest_path,
+            cases,
+            timeout_seconds,
+            **({"attestation": attestation} if attestation is not None else {}),
         )
 
     final_execution = os.environ.get("MIGRATION_PARITY_EXECUTION_OUTPUT")
@@ -3179,6 +3416,7 @@ def run_side_subprocess(
                 batch,
                 timeout_seconds,
                 environment=overrides,
+                **({"attestation": attestation} if attestation is not None else {}),
             )
             if identity is None:
                 identity = batch_identity
@@ -3583,6 +3821,16 @@ def git_dirty() -> bool:
 
 
 def run_orchestrator(args: argparse.Namespace) -> int:
+    attestation_path = getattr(args, "attestation_output", None)
+    producer_output = getattr(args, "producer_attestation_output", None)
+    if producer_output is not None and attestation_path is None:
+        raise ValueError("--producer-attestation-output requires --attestation-output")
+    attestation = (
+        (AttestationCollector(Path(attestation_path), producer_output=Path(producer_output))
+         if producer_output is not None else AttestationCollector(Path(attestation_path)))
+        if attestation_path is not None
+        else None
+    )
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
     case_ids = set(args.case_id or [])
@@ -3612,6 +3860,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
             operation_index,
             target_timeout,
             batch_size,
+            **({"attestation": attestation} if attestation is not None else {}),
         )
     command = {"command_id": "parity", "argv": ["make", "migration-parity-test"], "cwd": ".", "timeout_seconds": target_timeout}
     identity = build_identity(
@@ -3630,18 +3879,36 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         # their child and parent representations never peak simultaneously.
         if os.environ.get("MIGRATION_PARITY_SERIAL") == "1":
             source_handshake, source_results = run_side_subprocess(
-                "source", manifest_path, cases, args.timeout
+                "source",
+                manifest_path,
+                cases,
+                args.timeout,
+                **({"attestation": attestation} if attestation is not None else {}),
             )
             target_handshake, target_results = run_side_subprocess(
-                "target", manifest_path, cases, target_timeout
+                "target",
+                manifest_path,
+                cases,
+                target_timeout,
+                **({"attestation": attestation} if attestation is not None else {}),
             )
         else:
             with ThreadPoolExecutor(max_workers=2, thread_name_prefix="parity-side") as executor:
                 source_future = executor.submit(
-                    run_side_subprocess, "source", manifest_path, cases, args.timeout
+                    run_side_subprocess,
+                    "source",
+                    manifest_path,
+                    cases,
+                    args.timeout,
+                    **({"attestation": attestation} if attestation is not None else {}),
                 )
                 target_future = executor.submit(
-                    run_side_subprocess, "target", manifest_path, cases, target_timeout
+                    run_side_subprocess,
+                    "target",
+                    manifest_path,
+                    cases,
+                    target_timeout,
+                    **({"attestation": attestation} if attestation is not None else {}),
                 )
                 source_handshake, source_results = source_future.result()
                 target_handshake, target_results = target_future.result()
@@ -3656,6 +3923,12 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         }
         write_result(args.output, result)
         write_summary_sidecar(args.output, result["summary"])
+        finalize_parity_attestation(
+            attestation,
+            args.output,
+            result=result,
+            comparison_rows=[],
+        )
         print(json.dumps(result["summary"], sort_keys=True))
         return 2
     if source_handshake.get("version") != ORACLE_VERSION:
@@ -3685,6 +3958,12 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     }
     write_result(args.output, result)
     write_summary_sidecar(args.output, result["summary"])
+    finalize_parity_attestation(
+        attestation,
+        args.output,
+        result=result,
+        comparison_rows=result["comparisons"],
+    )
     print(json.dumps(result["summary"], sort_keys=True))
     return 0 if failed == 0 and not_run == 0 else 1
 
@@ -3717,6 +3996,8 @@ def run_orchestrator_batched(
     operation_index: dict[tuple[str, str], dict[str, Any]],
     target_timeout: int,
     batch_size: int,
+    *,
+    attestation: AttestationCollector | None = None,
 ) -> int:
     """Run parity in bounded batches and stream the unchanged result schema.
 
@@ -3765,8 +4046,10 @@ def run_orchestrator_batched(
     failed = 0
     not_run = 0
     infrastructure_errors: list[dict[str, Any]] = []
+    comparison_selection: list[dict[str, str]] = []
     first_comparison = True
     status = "infrastructure_failed"
+    attestation_kwargs = {"attestation": attestation} if attestation is not None else {}
     try:
         # Keep the small identity object at the end of the stream so its
         # timestamps and final status are accurate even when a later batch
@@ -3778,10 +4061,10 @@ def run_orchestrator_batched(
             try:
                 if os.environ.get("MIGRATION_PARITY_SERIAL") == "1":
                     batch_source_handshake, source_results = run_side_subprocess(
-                        "source", manifest_path, batch, args.timeout
+                        "source", manifest_path, batch, args.timeout, **attestation_kwargs
                     )
                     batch_target_handshake, target_results = run_side_subprocess(
-                        "target", manifest_path, batch, target_timeout
+                        "target", manifest_path, batch, target_timeout, **attestation_kwargs
                     )
                 else:
                     with ThreadPoolExecutor(
@@ -3793,6 +4076,7 @@ def run_orchestrator_batched(
                             manifest_path,
                             batch,
                             args.timeout,
+                            **attestation_kwargs,
                         )
                         target_future = executor.submit(
                             run_side_subprocess,
@@ -3800,6 +4084,7 @@ def run_orchestrator_batched(
                             manifest_path,
                             batch,
                             target_timeout,
+                            **attestation_kwargs,
                         )
                         batch_source_handshake, source_results = source_future.result()
                         batch_target_handshake, target_results = target_future.result()
@@ -3859,6 +4144,12 @@ def run_orchestrator_batched(
                 json.dump(comparison, temporary, separators=(",", ":"))
                 first_comparison = False
                 comparisons += 1
+                comparison_selection.append(
+                    {
+                        "case_id": comparison["case_id"],
+                        "target_profile": comparison["target_profile"],
+                    }
+                )
             del source_results, target_results
         status = "completed" if not infrastructure_errors else "infrastructure_failed"
     except RuntimeError as exc:
@@ -3894,6 +4185,17 @@ def run_orchestrator_batched(
         temporary.close()
         os.replace(temporary_path, output)
         write_summary_sidecar(output, summary)
+    finalize_parity_attestation(
+        attestation,
+        output,
+        result={
+            "schema": "migration-parity/parity-result@1",
+            "identity": identity,
+            "status": status,
+            "comparisons": comparison_selection,
+        },
+        comparison_rows=comparison_selection,
+    )
     print(json.dumps(summary, sort_keys=True))
     if infrastructure_errors:
         return 2
@@ -4495,6 +4797,22 @@ def run_side(args: argparse.Namespace) -> int:
             execution,
             results=evidence_results,
         )
+    write_child_attestation_from_environment(
+        args.side,
+        handshake,
+        cases,
+        context={
+            "lifecycle": args.lifecycle,
+            "boundary": args.timing_boundary if args.timings else None,
+            "step_ids": (
+                sorted(effective_timing_steps(args.timing_step))
+                if args.timings
+                else []
+            ),
+            "repeat": args.repeat,
+        },
+        declared_features=(TARGET_FEATURES.copy() if args.side == "target" else []),
+    )
     envelope: dict[str, Any] = {"identity": handshake, "results": results}
     if args.timings or execution_output:
         envelope["timings_ns"] = timings
@@ -4508,6 +4826,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--attestation-output",
+        type=Path,
+        help="write an execution identity sidecar beside the parity report",
+    )
+    parser.add_argument("--producer-attestation-output", type=Path)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--case-id", action="append")
     parser.add_argument("--surface")

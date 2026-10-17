@@ -1,0 +1,44 @@
+{
+  "source_revision": "9230f5c55ddfe1eab865c1aa5e05ab7b87241c31",
+  "source_dirty": true,
+  "source_file": "pillow-rs/src/image.rs",
+  "source_sha256": "534e7eed49be4f22bbfed2d23982205f8702406972a5a56e82958bb7847e5e6b",
+  "target_profile": "python-cpu",
+  "features": [
+    "pillow-rs-py/default",
+    "pillow-rs/default"
+  ],
+  "python_runtime": "3.12.13",
+  "pillow_version": "12.2.0",
+  "host": {
+    "machine_id": "Lazys-MacBook-Pro.local",
+    "os": "macOS-15.7.7-arm64-arm-64bit",
+    "architecture": "arm64",
+    "cpu": "arm",
+    "memory_bytes": 0,
+    "power_mode": "unknown",
+    "toolchain": "3.12.13"
+  },
+  "extension_path": "/Users/lazytrot/work/pillow-rs/pillow-rs-py/python/pillow_rs/_core.abi3.so",
+  "extension_sha256": "d4630734b23d3d2c7bb2605d1e57ceced64d79c3ea5aac9e74d99d825c478de4",
+  "manifest_sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885",
+  "benchmark_input_sha256": "de981adb0ee12bd7bcb1d99d5b8779fe83e86598b9a786efcfa4d405c7d278dd",
+  "parity_input_sha256": "de981adb0ee12bd7bcb1d99d5b8779fe83e86598b9a786efcfa4d405c7d278dd",
+  "runs": [
+    {
+      "benchmark_run_id": "migration-benchmark-1d46e3e390be4c36bc58a57bd647f495",
+      "parity_gate_id": "migration-parity-benchmark-gate-13858a905a9f4eddb9b12d3c616a5315",
+      "workloads": [
+        "pipeline-chain.terminal-read.getcolors.scalar-i-1024x768",
+        "pipeline-chain.terminal-read.getcolors.scalar-f-1024x768"
+      ]
+    },
+    {
+      "benchmark_run_id": "migration-benchmark-8397ea41e4b94626ba5edef454c4a6e1",
+      "parity_gate_id": "migration-parity-benchmark-gate-8b17f72f6ec2416a8a63fc424f29e0c0",
+      "workloads": [
+        "pipeline-chain.terminal-read.getcolors.scalar-i-1024x768"
+      ]
+    }
+  ]
+}

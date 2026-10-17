@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "/home/appunni/pillow-rs-resize-trial-20261015/build/migration-parity/cmyk-packing-20261015/capture_benchmark.py", line 38, in <module>
+    raise SystemExit(module.main())
+                     ^^^^^^^^^^^^^
+  File "/home/appunni/pillow-rs-resize-trial-20261015/scripts/run_migration_benchmark.py", line 1928, in main
+    return run(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/appunni/pillow-rs-resize-trial-20261015/scripts/run_migration_benchmark.py", line 1322, in run
+    selected_workloads = apply_profile_to_workloads(selected_workloads)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/appunni/pillow-rs-resize-trial-20261015/scripts/run_migration_benchmark.py", line 1279, in apply_profile_to_workloads
+    selected["subjects"] = workload_subjects_for_profile(workload["subjects"])
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/appunni/pillow-rs-resize-trial-20261015/scripts/run_migration_benchmark.py", line 1255, in workload_subjects_for_profile
+    raise ValueError(
+ValueError: profiled benchmark input must start from the standard Pillow/CPU/SIMD/GPU subject contract

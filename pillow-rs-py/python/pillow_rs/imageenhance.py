@@ -40,6 +40,26 @@ class Color(_Enhance):
                     self.degenerate._info["transparency"] = image._rust_image.color_transparency(transparency)
 
     def enhance(self, factor: float):
+        # Blend(degenerate, image, 0.0) is an independent copy of degenerate.
+        # Keep Blend's mode/size validation and metadata-loading behavior on
+        # every path that cannot safely use this native RGB shortcut.
+        if (
+            type(factor) in (int, float)
+            and factor == 0.0
+            and type(self.image) is Image
+            and type(self.degenerate) is Image
+            and self.image.mode == "RGB"
+            and self.degenerate.mode == "RGB"
+            and self.image.size == self.degenerate.size
+            and not self.degenerate._transpose_loads_info
+        ):
+            result = self.degenerate.copy()
+            result._info = self.degenerate._info.copy()
+            result._native_info = self.degenerate._native_info
+            result._native_info_rebaseline = True
+            result._native_info_omitted = self.degenerate._native_info_omitted
+            return result
+
         # Blend(degenerate, image, 1.0) is an independent copy of image. Keep
         # Color's eagerly exposed degenerate snapshot and metadata validation,
         # but avoid routing that no-op second operation through the image

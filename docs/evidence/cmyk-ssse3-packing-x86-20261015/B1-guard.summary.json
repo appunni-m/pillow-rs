@@ -1,0 +1,78 @@
+{
+  "source_path": "/home/appunni/pillow-rs-resize-trial-20261015/build/migration-parity/cmyk-packing-20261015/B1-guard.json",
+  "source_sha256": "5a01fe2921412059b7815b71fbffc6feb95e5f1f967252bcc45bfa9579bdc179",
+  "source_bytes": 4586,
+  "identity": {
+    "run_id": "migration-parity-3918f9d478774d02a9f25795c3f21d0b",
+    "started_at": "2026-10-15T05:48:52.828527Z",
+    "finished_at": "2026-10-15T05:48:55.208153Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest.cmyk-packing-20261015.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "5467e5dc86b72b8cc89488d2b730db6ab9909a5371243f8d3ba0a2c7f37488fb"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/cmyk-packing-20261015.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "700400be34939e4492d3f54bd95f5e34e494b760fafd44ffb4827caadca97e0f"
+      }
+    ],
+    "assets": [
+      {
+        "input_path": "inputs/parity/cmyk-packing-20261015.json",
+        "item_id": "PIL.Image.Image.convert.nuanced.mode-audit-CMYK-to-RGB-17x3",
+        "asset_id": "pixels",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "d5354c37e23118712309d762250b5569632fba118a3dd6f07c2d2b58318eeee3"
+      }
+    ],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-simd",
+        "target_id": "pillow-rs-python",
+        "revision": "f2b63f559e91022a85cb43f7264bdf8b586a448d",
+        "dirty": true,
+        "runtime": "3.12.3",
+        "backend": "simd",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-test"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 300
+    }
+  },
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.Image.Image.convert.nuanced.mode-audit-CMYK-to-RGB-17x3",
+      "target_profile": "python-simd",
+      "outcome": "pass"
+    }
+  ]
+}

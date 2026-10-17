@@ -1,0 +1,6164 @@
+{
+  "revision": "310a6d643bdd4d06a7748cbd81466ab26caf4ede",
+  "measured_at": "2026-10-13T06:13:18.489241Z",
+  "clean": true,
+  "status": "completed",
+  "run_id": "migration-benchmark-071828b42d8f470e97f71a0d80207b92+migration-benchmark-5eec6e6a188247f0a8c71bad1a37e039",
+  "environment": {
+    "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "architecture": "x86_64",
+    "cpu": "x86_64",
+    "python_version": "3.12.10",
+    "power_mode": "unknown",
+    "rust_toolchain": "1.96.1",
+    "runner": "Ubuntu 24.04 \u00b7 x86_64",
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "image_version": "ubuntu24-20261004.327.1"
+  },
+  "policy_status": "Paired x86 cohort; pillow-rs CPU/SIMD correctness is gated against regular Pillow 12.1.1. Pillow-SIMD timings are compared only where its outputs also match regular Pillow.",
+  "notes": [
+    "This x86-only cohort compares pillow-rs CPU/SIMD, ordinary Pillow 12.1.1, and Pillow-SIMD 12.1.1.post0 on identical workloads and measurement policies.",
+    "Pillow-SIMD and Pillow were run in separate virtual environments because both install the PIL namespace. pillow-rs CPU/SIMD parity uses regular Pillow; Pillow-SIMD compatibility is checked separately and incompatible baseline cells remain visible with their speed ratios withheld.",
+    "The matched cohort covers 34 full-size, parity-backed individual-operation cases: all 29 current pipeline-op cases, the established RGB GaussianBlur case, and getchannel in L, LA, RGB, and RGBA. Every workload uses identical inputs and measurement policy across the three sources.",
+    "This cohort uses the Pillow-SIMD default SSE4 build. It is not comparable with the Apple ARM measurements on the main benchmark page.",
+    "Pillow-SIMD output differed from regular Pillow on 2 workload(s); those baseline cells are retained and no Pillow-SIMD speed ratio is accepted: pipeline-op.filter.material-l-noise-5x5-1024x768, pipeline-op.grayscale.material-rgb-noise-1024x768."
+  ],
+  "rows": [
+    {
+      "workload": "pipeline-op.boxblur.material-l-noise-1024x768-radius-1",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 4491.322999999999,
+      "p90_us": null,
+      "p95_us": 4538.195,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.boxblur.material-l-noise-1024x768-radius-1",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1803.2379999999998,
+      "p90_us": null,
+      "p95_us": 1838.319,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.boxblur.material-l-noise-1024x768-radius-1",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1418.893,
+      "p90_us": null,
+      "p95_us": 1476.346,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.boxblur.material-rgb-noise-1024x768-radius-1",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 13565.5035,
+      "p90_us": null,
+      "p95_us": 13983.684000000001,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.boxblur.material-rgb-noise-1024x768-radius-1",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 3420.127,
+      "p90_us": null,
+      "p95_us": 3488.365,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.boxblur.material-rgb-noise-1024x768-radius-1",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 2274.585,
+      "p90_us": null,
+      "p95_us": 2329.969,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.gaussianblur.material-l-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 9616.8385,
+      "p90_us": null,
+      "p95_us": 9688.376,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.gaussianblur.material-l-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 3458.379,
+      "p90_us": null,
+      "p95_us": 3495.0480000000002,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.gaussianblur.material-l-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 4634.494500000001,
+      "p90_us": null,
+      "p95_us": 4719.629,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.gaussianblur.material-la-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 32541.599000000006,
+      "p90_us": null,
+      "p95_us": 32767.485,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.gaussianblur.material-la-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 7267.943000000001,
+      "p90_us": null,
+      "p95_us": 7485.729,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.gaussianblur.material-la-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 7795.7215,
+      "p90_us": null,
+      "p95_us": 8136.813,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.unsharpmask.material-rgb-noise-1024x768-radius-2",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 44676.705,
+      "p90_us": null,
+      "p95_us": 44984.671,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.unsharpmask.material-rgb-noise-1024x768-radius-2",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 12261.4295,
+      "p90_us": null,
+      "p95_us": 12339.3,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.unsharpmask.material-rgb-noise-1024x768-radius-2",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 11650.164,
+      "p90_us": null,
+      "p95_us": 11770.669,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 5583.762500000001,
+      "p90_us": null,
+      "p95_us": 6046.916,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "CMYK",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1520.6305,
+      "p90_us": null,
+      "p95_us": 1563.6460000000002,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "CMYK",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 5309.157,
+      "p90_us": null,
+      "p95_us": 5375.786,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "CMYK",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.material-rgb-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 2296.413,
+      "p90_us": null,
+      "p95_us": 2339.744,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.material-rgb-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 288.2325,
+      "p90_us": null,
+      "p95_us": 316.29,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.material-rgb-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 571.11,
+      "p90_us": null,
+      "p95_us": 624.294,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.merge.material-rgb-l-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 2791.0460000000003,
+      "p90_us": null,
+      "p95_us": 3162.4880000000003,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.merge.material-rgb-l-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 2223.427,
+      "p90_us": null,
+      "p95_us": 2314.758,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.merge.material-rgb-l-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1733.078,
+      "p90_us": null,
+      "p95_us": 1932.105,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.posterize.material-l-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 570.97,
+      "p90_us": null,
+      "p95_us": 590.963,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.posterize.material-l-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 97.4665,
+      "p90_us": null,
+      "p95_us": 118.48100000000001,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.posterize.material-l-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 101.324,
+      "p90_us": null,
+      "p95_us": 120.99600000000001,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.posterize.material-rgb-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 3589.4295,
+      "p90_us": null,
+      "p95_us": 3716.382,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.posterize.material-rgb-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 539.4265,
+      "p90_us": null,
+      "p95_us": 566.8870000000001,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.posterize.material-rgb-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1162.9685,
+      "p90_us": null,
+      "p95_us": 1181.383,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-l-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 66711.64450000001,
+      "p90_us": null,
+      "p95_us": 67200.721,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-l-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 13022.873000000001,
+      "p90_us": null,
+      "p95_us": 13101.459,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-l-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 15356.32,
+      "p90_us": null,
+      "p95_us": 15481.379,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-la-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 134806.07499999998,
+      "p90_us": null,
+      "p95_us": 137576.358,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-la-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 23082.338499999998,
+      "p90_us": null,
+      "p95_us": 23283.764000000003,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-la-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 30653.4795,
+      "p90_us": null,
+      "p95_us": 30788.712,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-rgb-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 202060.0345,
+      "p90_us": null,
+      "p95_us": 204145.153,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-rgb-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 33051.454,
+      "p90_us": null,
+      "p95_us": 33506.592,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-rgb-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 46033.883,
+      "p90_us": null,
+      "p95_us": 46632.424999999996,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-rgb-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 146621.06449999998,
+      "p90_us": null,
+      "p95_us": 147657.298,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-rgb-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 25305.5205,
+      "p90_us": null,
+      "p95_us": 25476.04,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-rgb-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 21778.1965,
+      "p90_us": null,
+      "p95_us": 22379.276,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-rgb-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 144379.5985,
+      "p90_us": null,
+      "p95_us": 145706.168,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-rgb-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 25413.516,
+      "p90_us": null,
+      "p95_us": 25971.031,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-rgb-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 21757.632,
+      "p90_us": null,
+      "p95_us": 21959.544,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-l-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 48477.658500000005,
+      "p90_us": null,
+      "p95_us": 48707.562000000005,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-l-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 17172.097,
+      "p90_us": null,
+      "p95_us": 17393.064,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-l-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 7245.9085000000005,
+      "p90_us": null,
+      "p95_us": 7305.755,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-la-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 97862.0075,
+      "p90_us": null,
+      "p95_us": 98436.81999999999,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-la-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 21384.9155,
+      "p90_us": null,
+      "p95_us": 21633.559999999998,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-la-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 14438.646999999999,
+      "p90_us": null,
+      "p95_us": 15068.723,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-l-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 47721.669,
+      "p90_us": null,
+      "p95_us": 48229.345,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-l-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 17906.722,
+      "p90_us": null,
+      "p95_us": 18195.211,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-l-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 7205.838500000001,
+      "p90_us": null,
+      "p95_us": 7275.448,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-la-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 96462.841,
+      "p90_us": null,
+      "p95_us": 97284.875,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-la-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 21354.732500000002,
+      "p90_us": null,
+      "p95_us": 21527.855,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-la-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 14395.382000000001,
+      "p90_us": null,
+      "p95_us": 14506.313,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.grayscale.material-rgb-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 535.5935000000001,
+      "p90_us": null,
+      "p95_us": 547.361,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.grayscale.material-rgb-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 242.392,
+      "p90_us": null,
+      "p95_us": 265.014,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.grayscale.material-rgb-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 243.37900000000002,
+      "p90_us": null,
+      "p95_us": 268.281,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.grayscale.material-ycbcr-noise-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 165.7295,
+      "p90_us": null,
+      "p95_us": 182.56,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "YCbCr",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.grayscale.material-ycbcr-noise-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 99.566,
+      "p90_us": null,
+      "p95_us": 116.04599999999999,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "YCbCr",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.grayscale.material-ycbcr-noise-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 101.184,
+      "p90_us": null,
+      "p95_us": 118.131,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "YCbCr",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.native-f32-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1983.1599999999999,
+      "p90_us": null,
+      "p95_us": 2016.1319999999998,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.native-f32-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1199.3770000000002,
+      "p90_us": null,
+      "p95_us": 1338.096,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.native-f32-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1131.8964999999998,
+      "p90_us": null,
+      "p95_us": 1392.557,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.native-i32-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 5713.179,
+      "p90_us": null,
+      "p95_us": 5774.033,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.native-i32-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 2017.944,
+      "p90_us": null,
+      "p95_us": 2051.556,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.native-i32-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1793.6105,
+      "p90_us": null,
+      "p95_us": 1818.7720000000002,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-l-noise-5x5-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 12677.050000000001,
+      "p90_us": null,
+      "p95_us": 12821.28,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-l-noise-5x5-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1970.2839999999999,
+      "p90_us": null,
+      "p95_us": 2000.9709999999998,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-l-noise-5x5-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1229.5835,
+      "p90_us": null,
+      "p95_us": 1249.24,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-l-noise-flat-5x5-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 12662.1675,
+      "p90_us": null,
+      "p95_us": 12744.706,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-l-noise-flat-5x5-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 2815.1045,
+      "p90_us": null,
+      "p95_us": 2860.484,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-l-noise-flat-5x5-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 1249.6555,
+      "p90_us": null,
+      "p95_us": 1281.671,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-la-noise-5x5-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 27126.6,
+      "p90_us": null,
+      "p95_us": 27514.388,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-la-noise-5x5-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 8015.651999999999,
+      "p90_us": null,
+      "p95_us": 8081.55,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-la-noise-5x5-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 2102.0554999999995,
+      "p90_us": null,
+      "p95_us": 2135.6929999999998,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-la-noise-3x3-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 11605.6165,
+      "p90_us": null,
+      "p95_us": 11883.2,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-la-noise-3x3-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 4927.4435,
+      "p90_us": null,
+      "p95_us": 4996.577,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-la-noise-3x3-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 4849.9155,
+      "p90_us": null,
+      "p95_us": 5397.346,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-i-noise-5x5-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 14408.398,
+      "p90_us": null,
+      "p95_us": 14653.464,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-i-noise-5x5-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 5638.8555,
+      "p90_us": null,
+      "p95_us": 5761.1140000000005,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-i-noise-5x5-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 6121.247,
+      "p90_us": null,
+      "p95_us": 6223.938999999999,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-i-bounded-noise-5x5-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 14238.034,
+      "p90_us": null,
+      "p95_us": 14791.232,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-i-bounded-noise-5x5-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 5102.486,
+      "p90_us": null,
+      "p95_us": 5278.284000000001,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-i-bounded-noise-5x5-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 6076.504,
+      "p90_us": null,
+      "p95_us": 6168.525,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-imagefilter.gaussianblur.standard",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 32861.384,
+      "p90_us": null,
+      "p95_us": 33090.115,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-imagefilter.gaussianblur.standard",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 10943.033,
+      "p90_us": null,
+      "p95_us": 11024.355,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-imagefilter.gaussianblur.standard",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 10987.3045,
+      "p90_us": null,
+      "p95_us": 11110.189,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.l-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 114.59400000000001,
+      "p90_us": null,
+      "p95_us": 140.362,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.l-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 40.731,
+      "p90_us": null,
+      "p95_us": 45.333999999999996,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.l-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 84.588,
+      "p90_us": null,
+      "p95_us": 101.92,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.rgb-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 290.577,
+      "p90_us": null,
+      "p95_us": 311.44100000000003,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.rgb-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 382.0525,
+      "p90_us": null,
+      "p95_us": 401.339,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.rgb-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 139.1345,
+      "p90_us": null,
+      "p95_us": 154.949,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.la-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 291.674,
+      "p90_us": null,
+      "p95_us": 313.515,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.la-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 377.11400000000003,
+      "p90_us": null,
+      "p95_us": 396.369,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.la-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 126.46600000000002,
+      "p90_us": null,
+      "p95_us": 142.887,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.rgba-1024x768",
+      "subject": "pillow",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 290.206,
+      "p90_us": null,
+      "p95_us": 309.23699999999997,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGBA",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.rgba-1024x768",
+      "subject": "python-cpu",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 377.1335,
+      "p90_us": null,
+      "p95_us": 395.93899999999996,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGBA",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.rgba-1024x768",
+      "subject": "python-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 156.3465,
+      "p90_us": null,
+      "p95_us": 182.381,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGBA",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "parity_pass: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.boxblur.material-l-noise-1024x768-radius-1",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 4441.3324999999995,
+      "p90_us": null,
+      "p95_us": 4494.437,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.boxblur.material-rgb-noise-1024x768-radius-1",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 5719.1345,
+      "p90_us": null,
+      "p95_us": 5859.02,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.gaussianblur.material-l-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 9566.9945,
+      "p90_us": null,
+      "p95_us": 9651.702000000001,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.gaussianblur.material-la-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 8767.0775,
+      "p90_us": null,
+      "p95_us": 9357.502999999999,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.unsharpmask.material-rgb-noise-1024x768-radius-2",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 21296.3145,
+      "p90_us": null,
+      "p95_us": 21966.792999999998,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.convert-mode-cmyk-to-rgb-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 4013.3785,
+      "p90_us": null,
+      "p95_us": 4127.365,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "CMYK",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.material-rgb-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 646.977,
+      "p90_us": null,
+      "p95_us": 676.8420000000001,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.merge.material-rgb-l-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 2408.4905,
+      "p90_us": null,
+      "p95_us": 2591.311,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.posterize.material-l-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 573.1485,
+      "p90_us": null,
+      "p95_us": 585.813,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.posterize.material-rgb-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 3973.9745,
+      "p90_us": null,
+      "p95_us": 4176.5869999999995,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-l-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 68253.8535,
+      "p90_us": null,
+      "p95_us": 68967.7,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-la-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 137375.6025,
+      "p90_us": null,
+      "p95_us": 138859.93899999998,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.medianfilter.material-rgb-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 206184.5095,
+      "p90_us": null,
+      "p95_us": 208411.308,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-rgb-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 152088.17549999998,
+      "p90_us": null,
+      "p95_us": 153404.169,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-rgb-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 150436.294,
+      "p90_us": null,
+      "p95_us": 151977.712,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-l-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 50315.9505,
+      "p90_us": null,
+      "p95_us": 50763.384000000005,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.maxfilter.material-la-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 101326.0355,
+      "p90_us": null,
+      "p95_us": 102758.475,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-l-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 49574.686499999996,
+      "p90_us": null,
+      "p95_us": 50098.453,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.minfilter.material-la-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 100033.952,
+      "p90_us": null,
+      "p95_us": 101882.107,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.grayscale.material-rgb-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 361.21799999999996,
+      "p90_us": null,
+      "p95_us": 384.678,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: fail",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.grayscale.material-ycbcr-noise-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 166.6105,
+      "p90_us": null,
+      "p95_us": 185.23600000000002,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "YCbCr",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.native-f32-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 2029.6345000000001,
+      "p90_us": null,
+      "p95_us": 2100.636,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.thumbnail.native-i32-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 5743.8845,
+      "p90_us": null,
+      "p95_us": 5798.742,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-l-noise-5x5-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 4397.374,
+      "p90_us": null,
+      "p95_us": 4427.666,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: fail",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-l-noise-flat-5x5-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 4396.8585,
+      "p90_us": null,
+      "p95_us": 4441.762,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-la-noise-5x5-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 6639.633500000001,
+      "p90_us": null,
+      "p95_us": 7080.650000000001,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-la-noise-3x3-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 3948.652,
+      "p90_us": null,
+      "p95_us": 4045.9519999999998,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-i-noise-5x5-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 15290.581,
+      "p90_us": null,
+      "p95_us": 15659.925,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pipeline-op.filter.material-i-bounded-noise-5x5-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 15314.570499999998,
+      "p90_us": null,
+      "p95_us": 15585.727,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-imagefilter.gaussianblur.standard",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 9241.339,
+      "p90_us": null,
+      "p95_us": 9460.553000000002,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.l-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 115.31,
+      "p90_us": null,
+      "p95_us": 132.87699999999998,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.rgb-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 222.319,
+      "p90_us": null,
+      "p95_us": 246.449,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.la-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 224.4535,
+      "p90_us": null,
+      "p95_us": 241.881,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    },
+    {
+      "workload": "pil-image-image.getchannel.materialized.rgba-1024x768",
+      "subject": "pillow-simd",
+      "comparison_group": "default",
+      "status": "completed",
+      "median_us": 225.15,
+      "p90_us": null,
+      "p95_us": 246.118,
+      "sample_count": 100,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGBA",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "Pillow-SIMD compatibility: pass",
+      "requested_backend": "pillow-simd",
+      "actual_backend": "pillow-simd",
+      "terminal_complete": false,
+      "fallback_reasons": {},
+      "machine_id": "ubuntu-24.04-x86_64"
+    }
+  ],
+  "machine": {
+    "id": "ubuntu-24.04-x86_64",
+    "label": "Ubuntu 24.04 \u00b7 x86_64",
+    "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "architecture": "x86_64",
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "python_version": "3.12.10",
+    "rust_toolchain": "1.96.1",
+    "image_version": "ubuntu24-20261004.327.1"
+  },
+  "source_sha256": "a235e70f6b93d0df7551b4e3cc3c2a0d323cd82eb7bb469dc9a994f6699888fd",
+  "cohorts": [
+    {
+      "id": "pillow",
+      "run_id": "migration-benchmark-071828b42d8f470e97f71a0d80207b92",
+      "parity_run_id": "migration-parity-benchmark-gate-863f6d455701496fbcb852712a2fe2c8",
+      "version": "12.1.1"
+    },
+    {
+      "id": "pillow-simd",
+      "run_id": "migration-benchmark-5eec6e6a188247f0a8c71bad1a37e039",
+      "parity_run_id": "migration-parity-benchmark-gate-863f6d455701496fbcb852712a2fe2c8",
+      "version": "12.1.1.post0",
+      "compatibility_outcome": "fail"
+    }
+  ],
+  "schema": "public-docs/benchmark-snapshot@1",
+  "repository": "appunni-m/pillow-rs"
+}

@@ -4,7 +4,7 @@ scope:
   mode: full
   inventory:
     authority: scripts/migration_parity_inventory.py
-    revision: sha256:c9a9d982b52cc61f5c313f434b6c1da5a6e6e88bc64632642ee16749e72c2927+inventory-rule@1
+    revision: sha256:c9a9d982b52cc61f5c313f434b6c1da5a6e6e88bc64632642ee16749e72c2927+inventory-rule@2
     command_id: inventory
 oracles:
 - id: pillow
@@ -212,6 +212,7 @@ input_index:
   - inputs/parity/pil-imagepalette-imagepalette.json
   - inputs/parity/pil-imagesequence.json
   - inputs/parity/pil-imagesequence-iterator.json
+  - inputs/parity/pil-imageshow.json
   - inputs/parity/pil-imagestat.json
   - inputs/parity/pil-imagestat-stat.json
   coverage:
@@ -237,6 +238,7 @@ input_index:
   - inputs/coverage/pil-imagepalette-imagepalette.json
   - inputs/coverage/pil-imagesequence.json
   - inputs/coverage/pil-imagesequence-iterator.json
+  - inputs/coverage/pil-imageshow.json
   - inputs/coverage/pil-imagestat.json
   - inputs/coverage/pil-imagestat-stat.json
   benchmark:
@@ -262,6 +264,7 @@ input_index:
   - inputs/benchmark/pil-imagepalette-imagepalette.json
   - inputs/benchmark/pil-imagesequence.json
   - inputs/benchmark/pil-imagesequence-iterator.json
+  - inputs/benchmark/pil-imageshow.json
   - inputs/benchmark/pil-imagestat.json
   - inputs/benchmark/pil-imagestat-stat.json
   - inputs/benchmark/pipeline-operations.json
@@ -288,6 +291,25 @@ coverage_components:
   - pillow-rs/src/ops/transform.rs
   - pillow-rs/src/ops/transpose.rs
   - pillow-rs/src/compute/pool_cpu/ops/geometry.rs
+  dimensions:
+  - function
+  - line
+  - branch
+  - region
+  thresholds:
+  - dimension: function
+    minimum_percent: 100
+  - dimension: line
+    minimum_percent: 100
+  - dimension: branch
+    minimum_percent: 100
+  - dimension: region
+    minimum_percent: 100
+- id: image-show
+  target_profile: python-cpu
+  paths:
+  - pillow-rs-py/python/PIL/ImageShow.py
+  - pillow-rs-py/python/pillow_rs/imageshow.py
   dimensions:
   - function
   - line
@@ -10169,6 +10191,105 @@ surfaces:
       metrics:
       - latency
       - throughput
+  - id: show
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.Image.Image.show
+      signature: 'show(self, title: ''str | None'' = None) -> ''None'''
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      - id: title
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - string
+        omission:
+          kind: literal
+          value: null
+      result:
+        shape: none
+        observations:
+        - path: value
+          value_types:
+          - 'null'
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.Image.show
+      signature: show(self, title=None)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.Image.Image.show.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.Image.Image.show.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.show.parameter.title
+      dimension: parameter
+      description: Public parameter title with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.show.parameter-combination.legacy-001
+      dimension: parameter_combination
+      description: 'Deprecated-authority parameter combination: {}'
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.show.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.Image.Image.show.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-core
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
   - id: size
     kind: property_get
     classification: endpoint
@@ -14046,6 +14167,13 @@ surfaces:
       - coverage
       target_profiles:
       - python-cpu
+    - id: PIL.ImageChops.screen.backend.gpu-mode-l
+      dimension: backend
+      description: Exact public Screen output parity through the native GPU path for mode 'L'.
+      lanes:
+      - parity
+      target_profiles:
+      - python-gpu
     - id: PIL.ImageChops.screen.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
@@ -14054,6 +14182,13 @@ surfaces:
       - coverage
       target_profiles:
       - python-cpu
+    - id: PIL.ImageChops.screen.backend.gpu-mode-la
+      dimension: backend
+      description: Exact public Screen output parity through the native GPU path for mode 'LA'.
+      lanes:
+      - parity
+      target_profiles:
+      - python-gpu
     - id: PIL.ImageChops.screen.mode.rgb
       dimension: mode
       description: Public behavior for image mode 'RGB'.
@@ -14062,6 +14197,13 @@ surfaces:
       - coverage
       target_profiles:
       - python-cpu
+    - id: PIL.ImageChops.screen.backend.gpu-mode-rgb
+      dimension: backend
+      description: Exact public Screen output parity through the native GPU path for mode 'RGB'.
+      lanes:
+      - parity
+      target_profiles:
+      - python-gpu
     - id: PIL.ImageChops.screen.mode.rgba
       dimension: mode
       description: Public behavior for image mode 'RGBA'.
@@ -14070,6 +14212,13 @@ surfaces:
       - coverage
       target_profiles:
       - python-cpu
+    - id: PIL.ImageChops.screen.backend.gpu-mode-rgba
+      dimension: backend
+      description: Exact public Screen output parity through the native GPU path for mode 'RGBA'.
+      lanes:
+      - parity
+      target_profiles:
+      - python-gpu
     - id: PIL.ImageChops.screen.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageChops.screen.
@@ -14078,10 +14227,14 @@ surfaces:
       - benchmark
       target_profiles:
       - python-cpu
+      - python-simd
+      - python-gpu
     parity:
       applicability: required
       target_profiles:
       - python-cpu
+      - python-simd
+      - python-gpu
     coverage:
       applicability: required
       target_profiles:
@@ -14092,6 +14245,8 @@ surfaces:
       applicability: required
       target_profiles:
       - python-cpu
+      - python-simd
+      - python-gpu
       metrics:
       - latency
       - throughput
@@ -29668,6 +29823,223 @@ surfaces:
       - python-cpu
       component_ids:
       - image-sequence
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+- id: PIL.ImageShow
+  kind: namespace
+  source_path: PIL.ImageShow
+  storage_slug: pil-imageshow
+  operations:
+  - id: register
+    kind: function
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageShow.register
+      signature: 'register(viewer: ''type[Viewer] | Viewer'', order: ''int'' = 1) -> ''None'''
+      parameters:
+      - id: viewer
+        style: positional_or_keyword
+        value_types:
+        - handle
+        omission:
+          kind: required
+      - id: order
+        style: positional_or_keyword
+        value_types:
+        - integer
+        omission:
+          kind: literal
+          value: 1
+      result:
+        shape: none
+        observations:
+        - path: value
+          value_types:
+          - 'null'
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.imageshow.register
+      signature: 'register(viewer: ''type[Viewer] | Viewer'', order: ''int'' = 1) -> ''None'''
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageShow.register.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageShow.register.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageShow.register.parameter.viewer
+      dimension: parameter
+      description: Public parameter viewer with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageShow.register.parameter.order
+      dimension: parameter
+      description: Public parameter order with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageShow.register.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageShow.register.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-show
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+  - id: show
+    kind: function
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageShow.show
+      signature: 'show(image: ''Image.Image'', title: ''str | None'' = None, **options: ''Any'') -> ''bool'''
+      parameters:
+      - id: image
+        style: positional_or_keyword
+        value_types:
+        - image
+        omission:
+          kind: required
+      - id: title
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - string
+        omission:
+          kind: literal
+          value: null
+      - id: options
+        style: variadic_keyword
+        value_types:
+        - mapping
+        omission:
+          kind: literal
+          value: {}
+      result:
+        shape: scalar
+        observations:
+        - path: value
+          value_types:
+          - boolean
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.imageshow.show
+      signature: 'show(image: ''Image'', title: ''str | None'' = None, **options: ''Any'') -> ''bool'''
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageShow.show.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageShow.show.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageShow.show.parameter.image
+      dimension: parameter
+      description: Public parameter image with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageShow.show.parameter.title
+      dimension: parameter
+      description: Public parameter title with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageShow.show.parameter.options
+      dimension: parameter
+      description: Public parameter options with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageShow.show.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageShow.show.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-show
     benchmark:
       applicability: required
       target_profiles:

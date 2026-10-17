@@ -4276,8 +4276,7 @@
         "PIL.ImageChops.screen.behavior.default",
         "PIL.ImageChops.screen.parameter.image1",
         "PIL.ImageChops.screen.parameter.image2",
-        "PIL.ImageChops.screen.mode.rgb",
-        "PIL.ImageChops.screen.performance.standard"
+        "PIL.ImageChops.screen.mode.rgb"
       ],
       "target_profiles": [
         "python-cpu"
@@ -4431,6 +4430,85 @@
       ]
     },
     {
+      "case_id": "PIL.ImageChops.screen.backend.gpu-mode-l",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.screen.backend.gpu-mode-l"
+      ],
+      "target_profiles": [
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageChops.screen.mode.la",
       "surface": "PIL.ImageChops",
       "operation": "screen",
@@ -4510,6 +4588,164 @@
       ]
     },
     {
+      "case_id": "PIL.ImageChops.screen.backend.gpu-mode-la",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.screen.backend.gpu-mode-la"
+      ],
+      "target_profiles": [
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageChops.screen.backend.gpu-mode-rgb",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.screen.backend.gpu-mode-rgb"
+      ],
+      "target_profiles": [
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageChops.screen.mode.rgba",
       "surface": "PIL.ImageChops",
       "operation": "screen",
@@ -4553,6 +4789,166 @@
             "mode": {
               "kind": "literal",
               "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageChops.screen.backend.gpu-mode-rgba",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.screen.backend.gpu-mode-rgba"
+      ],
+      "target_profiles": [
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageChops.screen.performance.standard",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.screen.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
             },
             "size": {
               "kind": "literal",
@@ -5712,6 +6108,115 @@
       ],
       "observations": [
         "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageChops.screen.nuanced.performance-materialized-rgb-noise-1024x768",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.screen.performance.standard",
+        "PIL.ImageChops.screen.mode.rgb",
+        "PIL.ImageChops.screen.backend.gpu-mode-rgb"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "image1-noise",
+          "kind": "ref_bytes",
+          "path": "generated/a51ac6e42bdadb16b84038cfb6ec9d5c88c4e53c856beb722ee028f4de633585.bin",
+          "sha256": "a51ac6e42bdadb16b84038cfb6ec9d5c88c4e53c856beb722ee028f4de633585",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "image2-noise",
+          "kind": "ref_bytes",
+          "path": "generated/a51ac6e42bdadb16b84038cfb6ec9d5c88c4e53c856beb722ee028f4de633585.bin",
+          "sha256": "a51ac6e42bdadb16b84038cfb6ec9d5c88c4e53c856beb722ee028f4de633585",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image1-noise"
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image2-noise"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
       ]
     },
     {
@@ -11215,6 +11720,450 @@
             "image2": {
               "kind": "binding",
               "step_id": "setup-image2-3"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageChops.screen.nuanced.gpu-native-byte-tail-l-5x5",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.screen.backend.gpu-mode-l",
+        "PIL.ImageChops.screen.performance.standard",
+        "PIL.ImageChops.screen.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "image1-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "bGXh9gUUD2PYysl3/h13XB+KIrN5ishaDA==",
+          "sha256": "bc23fd84285b3429153b74249536d8c6f694c75ebab69288883b82fd6a45c6e4",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "image2-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "bGXh9gUUD2PYysl3/h13XB+KIrN5ishaDA==",
+          "sha256": "bc23fd84285b3429153b74249536d8c6f694c75ebab69288883b82fd6a45c6e4",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image1-noise"
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image2-noise"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageChops.screen.nuanced.gpu-native-byte-tail-la-5x5",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.screen.backend.gpu-mode-la",
+        "PIL.ImageChops.screen.performance.standard",
+        "PIL.ImageChops.screen.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "image1-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "RNKX41kydokbVR8B8bfRuMnuPdzXsR52DvNyoEtGgUwvzuTyJ5FGPlGcrzjusBshpS4=",
+          "sha256": "61ab55044223c12f101196bdae98729f01aba4244281e9d36cd098ea9ce26601",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "image2-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "RNKX41kydokbVR8B8bfRuMnuPdzXsR52DvNyoEtGgUwvzuTyJ5FGPlGcrzjusBshpS4=",
+          "sha256": "61ab55044223c12f101196bdae98729f01aba4244281e9d36cd098ea9ce26601",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image1-noise"
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image2-noise"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageChops.screen.nuanced.gpu-native-byte-tail-rgb-5x5",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.screen.backend.gpu-mode-rgb",
+        "PIL.ImageChops.screen.performance.standard",
+        "PIL.ImageChops.screen.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "image1-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "jw/gXT74qFr0yyxbXlOBoeZFAqdbBiu4pcOv/cJUe52ltM2k25q7JEZYtNXBE5OWnVGc2u0pTtYClPv7tEEtP8Rari/5TR1k/k4Y",
+          "sha256": "ca62dd42f766f88786992f0092f4c48501d414f69f776813f6ab6b73aa062b66",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "image2-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "jw/gXT74qFr0yyxbXlOBoeZFAqdbBiu4pcOv/cJUe52ltM2k25q7JEZYtNXBE5OWnVGc2u0pTtYClPv7tEEtP8Rari/5TR1k/k4Y",
+          "sha256": "ca62dd42f766f88786992f0092f4c48501d414f69f776813f6ab6b73aa062b66",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image1-noise"
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image2-noise"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageChops.screen.nuanced.gpu-native-byte-tail-rgba-5x5",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.screen.backend.gpu-mode-rgba",
+        "PIL.ImageChops.screen.performance.standard",
+        "PIL.ImageChops.screen.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "image1-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "Zqgg6jtxHIuDXxl6QDgmcWwgMfgAJzRXLhUQrDqWMR0o63Ty+9xlD/5mZQtEPJzPZhMEv7/kaDsndk1gKLdv0cxa6eRgg8LwoycLdnkVpESKxBf/ytDBd7I25HJPRjTaZ0pVEA==",
+          "sha256": "37a33246130f09adcd30969400d7c40e503ea13e1700c85b62f3a699bdcc4c90",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "image2-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "Zqgg6jtxHIuDXxl6QDgmcWwgMfgAJzRXLhUQrDqWMR0o63Ty+9xlD/5mZQtEPJzPZhMEv7/kaDsndk1gKLdv0cxa6eRgg8LwoycLdnkVpESKxBf/ytDBd7I25HJPRjTaZ0pVEA==",
+          "sha256": "37a33246130f09adcd30969400d7c40e503ea13e1700c85b62f3a699bdcc4c90",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image1-noise"
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image2-noise"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
             }
           }
         },
