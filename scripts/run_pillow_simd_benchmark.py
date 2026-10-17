@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+from functools import lru_cache
 import gzip
 import hashlib
 import json
@@ -95,6 +96,7 @@ PILLOW_VERSION = "12.1.1"
 PILLOW_SIMD_VERSION = "12.1.1.post0"
 
 
+@lru_cache(maxsize=1)
 def workload_contracts() -> dict[str, dict[str, Any]]:
     manifest = load_manifest(DEFAULT_MANIFEST)
     workloads, _, _ = load_benchmarks(manifest)
@@ -247,17 +249,61 @@ def validate_run(
     if parity.get("infrastructure_errors"):
         raise ValueError(f"{source_name} parity preflight has infrastructure errors")
     timed_source_id = "pillow-simd" if source_name == "Pillow-SIMD" else "pillow"
+    active_target_profiles = {
+        item.get("target_profile")
+        for item in identity.get("targets", [])
+        if isinstance(item, dict) and isinstance(item.get("target_profile"), str)
+    }
+    required_cohort_profiles = {"python-cpu", "python-simd"}
+    if active_target_profiles != required_cohort_profiles:
+        raise ValueError(
+            f"{source_name} result has an unexpected target profile set: "
+            f"expected {sorted(required_cohort_profiles)}, "
+            f"observed {sorted(active_target_profiles)}"
+        )
+    contracts = workload_contracts()
     for workload in result["workloads"]:
         if workload["correctness"].get("outcome") != "pass":
             raise ValueError(
                 f"{source_name} parity gate failed for {workload['workload_id']}"
             )
-        subjects = {item["id"]: item for item in workload["subjects"]}
-        if set(subjects) != {timed_source_id, "python-cpu", "python-simd"}:
-            raise ValueError(f"{source_name} result has an unexpected subject set")
+        workload_id = workload["workload_id"]
+        contract = contracts.get(workload_id)
+        if contract is None:
+            raise ValueError(
+                f"{source_name} result includes an undeclared workload: {workload_id}"
+            )
+        declared_target_profiles = {
+            subject["id"]
+            for subject in contract["subjects"]
+            if subject["kind"] == "target_profile"
+        }
+        expected_target_profiles = active_target_profiles & declared_target_profiles
+        expected_subject_kinds = {
+            timed_source_id: "oracle",
+            **{profile: "target_profile" for profile in expected_target_profiles},
+        }
+        raw_subjects = workload["subjects"]
+        subjects = {item["id"]: item for item in raw_subjects}
+        expected_subject_ids = set(expected_subject_kinds)
+        if len(subjects) != len(raw_subjects) or set(subjects) != expected_subject_ids:
+            raise ValueError(
+                f"{source_name} result has an unexpected subject set for {workload_id}: "
+                f"expected {sorted(expected_subject_ids)}, observed {sorted(subjects)}"
+            )
+        unexpected_kinds = {
+            subject_id: subjects[subject_id].get("kind")
+            for subject_id, expected_kind in expected_subject_kinds.items()
+            if subjects[subject_id].get("kind") != expected_kind
+        }
+        if unexpected_kinds:
+            raise ValueError(
+                f"{source_name} result has unexpected subject kinds for {workload_id}: "
+                f"{unexpected_kinds}"
+            )
         if any(subjects[name]["status"] != "completed" for name in subjects):
             raise ValueError(
-                f"{source_name} has an incomplete subject for {workload['workload_id']}"
+                f"{source_name} has an incomplete subject for {workload_id}"
             )
 
 

@@ -46,6 +46,7 @@ def run(
     offset: float = 0,
     source_id: str = "pillow",
 ) -> dict:
+    contracts = workload_contracts()
     targets = [
         {
             "target_profile": profile,
@@ -62,11 +63,18 @@ def run(
     for index, workload_id in enumerate(WORKLOAD_IDS):
         mode = "RGB" if index % 2 else "L"
         subjects = []
+        declared_targets = {
+            subject["id"]
+            for subject in contracts[workload_id]["subjects"]
+            if subject["kind"] == "target_profile"
+        }
         for subject_id, time in (
             (source_id, 2.0),
             ("python-cpu", 1.0),
             ("python-simd", 0.5),
         ):
+            if subject_id != source_id and subject_id not in declared_targets:
+                continue
             if subject_id in {"pillow", "pillow-simd"}:
                 execution = {
                     "requested_backend": subject_id,
@@ -83,6 +91,11 @@ def run(
                 }
             subjects.append(
                 {
+                    "kind": (
+                        "oracle"
+                        if subject_id in {"pillow", "pillow-simd"}
+                        else "target_profile"
+                    ),
                     "id": subject_id,
                     "status": "completed",
                     "measurements": [
@@ -141,6 +154,44 @@ def run(
 
 
 class PillowSimdBenchmarkTests(unittest.TestCase):
+    def test_subject_validation_uses_each_workloads_declared_profiles(self) -> None:
+        result = run("Pillow", PILLOW_VERSION, "regular-pillow")
+        parity = {
+            "status": "completed",
+            "summary": {"failed": 0},
+            "comparisons": [],
+            "infrastructure_errors": [],
+        }
+
+        validate_run(result, parity, "Pillow", PILLOW_VERSION, list(WORKLOAD_IDS))
+
+        cpu_only_id = "pipeline-op.rotate.material-rgba-nearest-37deg-noise-fill-1024x768"
+        cpu_only = next(
+            workload
+            for workload in result["workloads"]
+            if workload["workload_id"] == cpu_only_id
+        )
+        self.assertEqual(
+            {subject["id"] for subject in cpu_only["subjects"]},
+            {"pillow", "python-cpu"},
+        )
+
+        missing_simd = copy.deepcopy(result)
+        declared_both = missing_simd["workloads"][0]
+        declared_both["subjects"] = [
+            subject
+            for subject in declared_both["subjects"]
+            if subject["id"] != "python-simd"
+        ]
+        with self.assertRaisesRegex(ValueError, "python-simd"):
+            validate_run(
+                missing_simd,
+                parity,
+                "Pillow",
+                PILLOW_VERSION,
+                list(WORKLOAD_IDS),
+            )
+
     def test_operation_matrix_includes_verified_cpu_rows_from_both_snapshots(self) -> None:
         full_source = "github-pages/benchmark.json"
         pillow_simd_source = "github-pages/pillow-simd-benchmark.json"
@@ -310,7 +361,20 @@ class PillowSimdBenchmarkTests(unittest.TestCase):
             source_compatibility=self.compatibility(),
         )
         validate(snapshot, "appunni-m/pillow-rs")
-        self.assertEqual(len(snapshot["rows"]), len(WORKLOAD_IDS) * 4)
+        contracts = workload_contracts()
+        expected_row_count = sum(
+            2
+            + len(
+                {
+                    subject["id"]
+                    for subject in contracts[workload_id]["subjects"]
+                    if subject["kind"] == "target_profile"
+                    and subject["id"] in {"python-cpu", "python-simd"}
+                }
+            )
+            for workload_id in WORKLOAD_IDS
+        )
+        self.assertEqual(len(snapshot["rows"]), expected_row_count)
         self.assertEqual(snapshot["environment"]["architecture"], "x86_64")
         for workload in WORKLOAD_IDS:
             baseline = next(r for r in snapshot["rows"] if r["workload"] == workload and r["subject"] == "pillow")
