@@ -72,6 +72,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |-- src/
 |   |   |-- checked_dims.rs
 |   |   |-- color.rs
+|   |   |-- color_grayscale_allocation_tests.rs
 |   |   |-- compute/
 |   |   |   |-- mod.rs
 |   |   |   |-- pool_cpu/
@@ -79,9 +80,14 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- ops/
 |   |   |   |       |-- chops.rs
 |   |   |   |       |-- color.rs
+|   |   |   |       |-- color_convert_allocation_tests.rs
 |   |   |   |       |-- draw.rs
 |   |   |   |       |-- effects.rs
 |   |   |   |       |-- enhance.rs
+|   |   |   |       |-- filter/
+|   |   |   |       |   |-- rgb_blur_ring.rs
+|   |   |   |       |   |-- uniform_box.rs
+|   |   |   |       |   `-- uniform_box_tests.rs
 |   |   |   |       |-- filter.rs
 |   |   |   |       |-- geometry.rs
 |   |   |   |       |-- imageops.rs
@@ -242,6 +248,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- mod.rs
 |   |   |   |   `-- ops/
 |   |   |   |       |-- adapters/
+|   |   |   |       |   |-- box_blur_luma.rs
+|   |   |   |       |   |-- cmyk_packing_tests.rs
 |   |   |   |       |   |-- extract_band.rs
 |   |   |   |       |   |-- grayscale/
 |   |   |   |       |   |   `-- kernels/
@@ -250,6 +258,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- ycbcr.rs
 |   |   |   |       |   |-- grayscale.rs
+|   |   |   |       |   |-- median_filter.rs
 |   |   |   |       |   |-- merge.rs
 |   |   |   |       |   |-- native_thumbnail/
 |   |   |   |       |   |   |-- float.rs
@@ -283,6 +292,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   `-- pilfont.rs
 |   |   |-- format.rs
 |   |   |-- image.rs
+|   |   |-- image_getchannel_receipt_tests.rs
 |   |   |-- image_sequence.rs
 |   |   |-- image_utils.rs
 |   |   |-- lab.rs
@@ -353,6 +363,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |-- python/
 |   |   |-- PIL/
 |   |   |   |-- Image.py
+|   |   |   |-- ImageShow.py
 |   |   |   `-- __init__.py
 |   |   `-- pillow_rs/
 |   |       |-- __init__.py
@@ -368,6 +379,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |       |-- imageops.py
 |   |       |-- imagepalette.py
 |   |       |-- imagesequence.py
+|   |       |-- imageshow.py
 |   |       |-- imagestat.py
 |   |       `-- operations.py
 |   `-- src/
@@ -413,7 +425,17 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- generate_migration_parity_docs.py
     |-- lint.sh
     |-- migration_benchmark_adapter.py
+    |-- migration_benchmark_samples.py
+    |-- migration_build_witness.py
+    |-- migration_execution_attestation.py
+    |-- migration_execution_identity.py
+    |-- migration_parity/
+    |   |-- channel_inputs.py
+    |   |-- display.py
+    |   `-- display_inputs.py
     |-- migration_parity_inventory.py
+    |-- migration_producer_attestation.py
+    |-- migration_producer_identity.py
     |-- prepare_pypi_release.py
     |-- profile_migration_benchmark.py
     |-- reduce_migration_parity_cases.py
@@ -443,6 +465,8 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- run_pillow_simd_benchmark.py
     |-- run_transpose_throughput.py
     |-- select_docs_benchmark.py
+    |-- simd_evidence.py
+    |-- test_benchmark_gpu_batch_contract.py
     |-- test_chops_affine_parity.py
     |-- test_coverage_context.py
     |-- test_docs_benchmark_selection.py
@@ -455,12 +479,22 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_getdata_sequence_parity.py
     |-- test_gpu_batch.py
     |-- test_grayscale_rgb_domain.py
+    |-- test_migration_benchmark_attestation.py
+    |-- test_migration_benchmark_samples.py
     |-- test_migration_benchmark_selection.py
+    |-- test_migration_build_witness.py
+    |-- test_migration_execution_attestation.py
+    |-- test_migration_execution_identity.py
+    |-- test_migration_parity_attestation.py
+    |-- test_migration_parity_display.py
     |-- test_migration_parity_icc_timestamp.py
     |-- test_migration_parity_serialization.py
     |-- test_migration_parity_timing.py
+    |-- test_migration_producer_attestation.py
+    |-- test_migration_producer_identity.py
     |-- test_optimization_goals.py
     |-- test_parity_reduction.py
+    |-- test_performance_optimization_matrix.py
     |-- test_pillow_simd_benchmark.py
     |-- test_pillow_simd_suite_compatibility.py
     |-- test_profile_migration_benchmark.py
