@@ -3908,9 +3908,7 @@ impl Image {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
     #[wasm_bindgen(js_name = "show")]
-    pub fn show(&self) -> JsValue {
-        JsValue::from_str("show: use toBytes() for display")
-    }
+    pub fn show(&self) {}
     #[wasm_bindgen(js_name = "close")]
     pub fn close(&self) {}
     #[wasm_bindgen(js_name = "draftFn")]

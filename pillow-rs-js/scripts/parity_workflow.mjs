@@ -1625,7 +1625,92 @@ const chopsMap = {
     subtract_modulo: 'subtractModulo',
 };
 
-function staticMethod(wasm, surface, operation, args, receiver = null) {
+function imageShowBaseMode(mode) {
+    // Mirror PIL.ImageShow.Viewer.show's call to Image.getmodebase for the
+    // modes represented by the shared display workflows.
+    switch (mode) {
+        case '1':
+        case 'L':
+        case 'LA':
+        case 'I':
+        case 'F':
+        case 'I;16': return 'L';
+        case 'P': return 'P';
+        case 'PA':
+        case 'RGB':
+        case 'RGBA':
+        case 'CMYK':
+        case 'YCbCr':
+        case 'HSV': return 'RGB';
+        default: throw namedError('ValueError', `unsupported image mode ${mode}`);
+    }
+}
+
+function imageShowMethod(wasm, operation, args, viewers) {
+    if (operation === 'register') {
+        const viewer = args.viewer;
+        if (viewer?.protocol !== 'capture-viewer') {
+            throw unsupportedError('PIL.ImageShow viewer is not supported by this WASM workflow');
+        }
+        // Pillow instantiates a Viewer subclass during registration. The
+        // input-only capture protocol carries the resulting instance state.
+        if (Number(args.order ?? 1) > 0) viewers.push(viewer);
+        else viewers.unshift(viewer);
+        return null;
+    }
+    if (operation !== 'show') {
+        throw unsupportedError(`static operation is not exported by this WASM facade: PIL.ImageShow.${operation}`);
+    }
+
+    const image = args.image;
+    if (!isImage(image, wasm)) {
+        throw namedError('TypeError', 'image must be a Pillow image');
+    }
+    const options = args.options ?? {};
+    const callbackOptions = { title: args.title ?? null, ...options };
+    for (const viewer of viewers) {
+        let shownImage = image;
+        let convertedImage = null;
+        try {
+            // An override of Viewer.show receives the original image. An
+            // override of show_image still passes through Pillow's base
+            // Viewer.show mode conversion before its callback.
+            if (viewer.hook === 'show_image') {
+                const mode = image.mode;
+                const preserveMode = mode === '1' || mode === 'RGBA'
+                    || (viewer.format === 'PNG' && (mode === 'I;16' || mode === 'LA'));
+                const baseMode = imageShowBaseMode(mode);
+                if (!preserveMode && mode !== baseMode) {
+                    convertedImage = image.convertWithInput(baseMode, null, null, null, null);
+                    shownImage = convertedImage;
+                }
+            }
+
+            const info = imageInfoValue(image);
+            if (info.display_callbacks == null) info.display_callbacks = [];
+            if (!Array.isArray(info.display_callbacks)) {
+                throw namedError('TypeError', "image.info['display_callbacks'] must be a list");
+            }
+            info.display_callbacks.push({
+                viewer_id: viewer.viewer_id,
+                title: callbackOptions.title ?? null,
+                mode: String(shownImage.mode),
+                size: Array.from(shownImage.size()),
+                pixels: bytesRecord(shownImage.toBytes()),
+                options: callbackOptions,
+            });
+        } finally {
+            if (convertedImage) convertedImage.free();
+        }
+        if (Boolean(viewer.accept)) return true;
+    }
+    return false;
+}
+
+function staticMethod(wasm, surface, operation, args, receiver = null, displayViewers = []) {
+    if (surface === 'PIL.ImageShow') {
+        return imageShowMethod(wasm, operation, args, displayViewers);
+    }
     if (surface === 'PIL.ImageDraw' && operation === 'Outline') {
         return { protocol: 'outline', commands: [] };
     }
@@ -2134,7 +2219,7 @@ function staticMethod(wasm, surface, operation, args, receiver = null) {
     throw unsupportedError(`static operation is not exported by this WASM facade: ${surface}.${operation}`);
 }
 
-function callStep(wasm, step, bindings, operations, assets, owned) {
+function callStep(wasm, step, bindings, operations, assets, owned, displayViewers) {
     const args = argsOf(step, bindings, assets);
     let receiver = step.receiver ? resolveDescriptor(step.receiver, bindings, assets) : null;
     if (receiver?.__pillow_rs_image_with_info__) {
@@ -2207,6 +2292,16 @@ function callStep(wasm, step, bindings, operations, assets, owned) {
                     `'tuple' object has no attribute '${step.operation}'`,
                 );
             }
+            if (step.operation === 'show') {
+                imageShowMethod(wasm, 'show', {
+                    image: receiver,
+                    title: args.title ?? null,
+                    options: {},
+                }, displayViewers);
+                // PIL.Image.Image.show delegates to ImageShow.show but does
+                // not return the viewer's boolean result.
+                return receiver.show();
+            }
             const value = imageMethod(receiver, step.operation, args, wasm, owned);
             if (imageInfo.has(receiver)) imageInfoValue(receiver);
             return value;
@@ -2254,7 +2349,7 @@ function callStep(wasm, step, bindings, operations, assets, owned) {
             return receiver.image[method](Number(args.factor));
         }
     }
-    return staticMethod(wasm, step.surface, step.operation, args, receiver);
+    return staticMethod(wasm, step.surface, step.operation, args, receiver, displayViewers);
 }
 
 function jsonSafe(value) {
@@ -2627,6 +2722,7 @@ function runCase(wasm, item, operations, assets, executionSink) {
     let terminalReceiptIndex = null;
     const observationIds = item.observations ?? [];
     const owned = new Set();
+    const displayViewers = [];
     // A previous workflow cannot leave an unassociated receipt in a healthy
     // run, but clear it at the case boundary so a malformed host extension
     // cannot make the next case appear to have executed a pipeline.
@@ -2638,7 +2734,7 @@ function runCase(wasm, item, operations, assets, executionSink) {
         }
         let stepExecutionStatus = 'completed';
         try {
-            const value = callStep(wasm, step, bindings, operations, assets, owned);
+            const value = callStep(wasm, step, bindings, operations, assets, owned, displayViewers);
             if (value && typeof value.free === 'function') owned.add(value);
             bindings[step.step_id] = value;
             results[step.step_id] = { step_id: step.step_id, status: 'ok', value };
