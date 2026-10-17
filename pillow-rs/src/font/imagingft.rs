@@ -1660,6 +1660,18 @@ struct RenderedBitmap {
 
 /// Load each glyph WITHOUT rendering, collect advances and metrics.
 fn glyph_run(ttf: &FreeTypeFont, text: &str, load_flags: i32) -> Result<GlyphRun, PilError> {
+    glyph_run_with_slot_visitor(ttf, text, load_flags, |slot, _, _| {
+        drop(slot);
+        Ok(())
+    })
+}
+
+fn glyph_run_with_slot_visitor(
+    ttf: &FreeTypeFont,
+    text: &str,
+    load_flags: i32,
+    mut visit_slot: impl FnMut(ffi::FT_GlyphSlot, u32, i32) -> Result<(), PilError>,
+) -> Result<GlyphRun, PilError> {
     if text.is_empty() {
         return Ok(GlyphRun {
             glyphs: vec![],
@@ -1685,12 +1697,14 @@ fn glyph_run(ttf: &FreeTypeFont, text: &str, load_flags: i32) -> Result<GlyphRun
 
         let pen_before = pen;
         let adv = slot.metrics.horiAdvance as i32;
+        let layout_cbox = glyph_layout_cbox(&slot);
+        visit_slot(slot, g, pen_before)?;
 
         out.push(RunGlyph {
             glyph_index: g,
             pen_before,
             advance: adv,
-            layout_cbox: glyph_layout_cbox(&slot),
+            layout_cbox,
         });
 
         pen = pen.saturating_add(adv);
@@ -1795,7 +1809,15 @@ fn mask_from_run_with_start_and_bbox(
     load_flags: i32,
     start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32, i32, i32)), PilError> {
-    let run = glyph_run(ttf, text, load_flags)?;
+    let mut loaded_slots = Vec::new();
+    let run = if load_flags == TGT_NORM {
+        glyph_run_with_slot_visitor(ttf, text, load_flags, |slot, _, _| {
+            loaded_slots.push(slot);
+            Ok(())
+        })?
+    } else {
+        glyph_run(ttf, text, load_flags)?
+    };
     if run.glyphs.is_empty() {
         return Ok((0, 0, vec![], (0, 0, 0, 0)));
     }
@@ -1834,20 +1856,41 @@ fn mask_from_run_with_start_and_bbox(
     let mut x_min = 0;
     let mut y_max = 0;
 
-    for glyph in &run.glyphs {
-        let slot = ffi::FT_Load_Glyph(face, glyph.glyph_index, RDR | load_flags)
-            .map_err(ft_error_to_pil)?;
+    let reuse_loaded_slots = load_flags == TGT_NORM
+        && loaded_slots
+            .iter()
+            .all(|slot| slot.format == ffi::FT_GLYPH_FORMAT_OUTLINE);
+    if reuse_loaded_slots {
+        for (slot, glyph) in loaded_slots.into_iter().zip(&run.glyphs) {
+            let slot =
+                ffi::FT_Render_Glyph(slot, ffi::FT_RENDER_MODE_NORMAL).map_err(ft_error_to_pil)?;
+            x_min = x_min.min(round26(glyph.pen_before) + slot.bitmap_left as i32);
+            y_max = y_max.max(slot.bitmap_top as i32);
+            if let Some(bitmap) = slot.bitmap {
+                rendered.push(RenderedBitmap {
+                    pen_before: glyph.pen_before,
+                    bitmap_left: slot.bitmap_left as i32,
+                    bitmap_top: slot.bitmap_top as i32,
+                    bitmap,
+                });
+            }
+        }
+    } else {
+        for glyph in &run.glyphs {
+            let slot = ffi::FT_Load_Glyph(face, glyph.glyph_index, RDR | load_flags)
+                .map_err(ft_error_to_pil)?;
 
-        let px = round26(glyph.pen_before);
-        x_min = x_min.min(px + slot.bitmap_left as i32);
-        y_max = y_max.max(slot.bitmap_top as i32);
-        if let Some(bitmap) = slot.bitmap {
-            rendered.push(RenderedBitmap {
-                pen_before: glyph.pen_before,
-                bitmap_left: slot.bitmap_left as i32,
-                bitmap_top: slot.bitmap_top as i32,
-                bitmap,
-            });
+            let px = round26(glyph.pen_before);
+            x_min = x_min.min(px + slot.bitmap_left as i32);
+            y_max = y_max.max(slot.bitmap_top as i32);
+            if let Some(bitmap) = slot.bitmap {
+                rendered.push(RenderedBitmap {
+                    pen_before: glyph.pen_before,
+                    bitmap_left: slot.bitmap_left as i32,
+                    bitmap_top: slot.bitmap_top as i32,
+                    bitmap,
+                });
+            }
         }
     }
 

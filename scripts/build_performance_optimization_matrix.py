@@ -4,7 +4,8 @@
 The CSV preserves every row, including execution-only, failed, not-run,
 fallback, and dirty-snapshot observations. Only exact-parity rows with a clean
 source and a completed matching-backend receipt receive verified speedup or
-goal-status fields. Sustained throughput is not inferred from latency.
+goal-status fields. SIMD additionally requires recorded vector work. Sustained
+throughput is not inferred from latency.
 """
 
 from __future__ import annotations
@@ -17,6 +18,14 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+try:
+    from simd_evidence import SIMD_POSITIVE_VECTOR_PATHS, simd_vector_evidence
+except ModuleNotFoundError:  # imported as ``scripts.build_performance_optimization_matrix``
+    from scripts.simd_evidence import (
+        SIMD_POSITIVE_VECTOR_PATHS,
+        simd_vector_evidence,
+    )
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -72,6 +81,8 @@ FIELDS = (
     "requested_backend",
     "terminal_complete",
     "fallback_reasons",
+    "simd_vector_evidence",
+    "simd_baseline_vector_evidence",
     "evidence_status",
     "cpu_goal_status",
     "simd_2x_goal_status",
@@ -119,6 +130,7 @@ OPERATION_FIELDS = (
     "not_run_rows",
     "fallback_rows",
     "wrong_backend_rows",
+    "simd_vector_not_proven_rows",
     "pillow_simd_incompatible_rows",
     "pillow_simd_unproven_rows",
     "pillow_simd_snapshot_workloads",
@@ -250,6 +262,8 @@ def classify(row: dict[str, Any], source_clean: bool) -> str:
         return "wrong_or_unconfirmed_backend"
     if not row.get("terminal_complete"):
         return "terminal_not_complete"
+    if row.get("subject") == "python-simd" and simd_vector_evidence(row) != "positive_vector_work":
+        return "simd_vector_not_proven"
     return "parity_backend_verified"
 
 
@@ -356,7 +370,7 @@ def goal_status(speedup: float | None, evidence: str, threshold: float) -> str:
         return "baseline_incompatible"
     if evidence == "pillow_simd_compatibility_not_proven":
         return "parity_not_proven"
-    if evidence in {"execution_only", "parity_not_proven", "fallback", "dirty_snapshot"}:
+    if evidence in {"execution_only", "parity_not_proven", "fallback", "dirty_snapshot", "simd_vector_not_proven"}:
         return evidence
     if evidence == "parity_backend_verified":
         return "not_compared"
@@ -462,11 +476,16 @@ def matrix_rows(
                 "requested_backend": str(row.get("requested_backend") or ""),
                 "terminal_complete": str(row.get("terminal_complete", False)).lower(),
                 "fallback_reasons": json.dumps(row.get("fallback_reasons", {}), sort_keys=True, separators=(",", ":")),
+                "simd_vector_evidence": simd_vector_evidence(row),
+                "simd_baseline_vector_evidence": simd_vector_evidence(simd) if profile == "python-gpu" else "not_applicable",
                 "evidence_status": evidence,
                 "cpu_goal_status": goal_status(verified_pillow, evidence, 1.0) if profile == "python-cpu" else "",
                 "simd_2x_goal_status": goal_status(verified_pillow, evidence, 2.0) if profile == "python-simd" else "",
                 "simd_5x_goal_status": goal_status(verified_pillow, evidence, 5.0) if profile == "python-simd" else "",
-                "gpu_latency_goal_status": goal_status(verified_gpu, evidence, 1.0) if profile == "python-gpu" else "",
+                "gpu_latency_goal_status": (
+                    "simd_vector_not_proven" if classify(simd, source_clean) == "simd_vector_not_proven"
+                    else goal_status(verified_gpu, evidence, 1.0)
+                ) if profile == "python-gpu" else "",
                 "gpu_sustained_throughput_status": "not_measured" if profile == "python-gpu" else "",
             })
     return output
@@ -479,12 +498,20 @@ def operation_matrix_rows(
 ) -> list[dict[str, str]]:
     full_source = "github-pages/benchmark.json"
     pillow_simd_source = "github-pages/pillow-simd-benchmark.json"
+    published_sources = {full_source, pillow_simd_source}
     full_metadata = next(
         (row for row in workload_rows if row["source_snapshot"] == full_source), {}
     )
     pillow_simd_metadata = next(
         (row for row in workload_rows if row["source_snapshot"] == pillow_simd_source), {}
     )
+    pillow_simd_reference_states = {
+        (row["runner"], row.get("comparison_group", "default"), row["workload"]):
+        row["evidence_status"]
+        for row in workload_rows
+        if row["source_snapshot"] == pillow_simd_source
+        and row["profile"] == "pillow-simd"
+    }
     output: list[dict[str, str]] = []
     target_paths_by_operation: dict[str, list[str]] = {}
     for api in public_api_rows:
@@ -496,7 +523,7 @@ def operation_matrix_rows(
         published_workloads = {
             row["workload"]
             for row in workload_rows
-            if row["source_snapshot"] == full_source and row["workload"] in workload_ids
+            if row["source_snapshot"] in published_sources and row["workload"] in workload_ids
         }
         missing_workloads = sorted(set(workload_ids) - published_workloads)
         for profile in PROFILES:
@@ -515,7 +542,7 @@ def operation_matrix_rows(
 
             profile_rows = [
                 row for row in workload_rows
-                if row["source_snapshot"] == full_source
+                if row["source_snapshot"] in published_sources
                 and row["profile"] == profile
                 and row["workload"] in workload_ids
             ]
@@ -562,6 +589,16 @@ def operation_matrix_rows(
                 for row in simd_rows
                 if row.get("verified_speedup_vs_pillow_simd", "")
             ]
+            # Compatibility belongs to the timed source, not the target's
+            # regular-Pillow parity receipt. These rows are already flattened;
+            # classify() accepts raw snapshot rows and must not be reapplied.
+            simd_baseline_states = [
+                pillow_simd_reference_states.get(
+                    (row["runner"], row.get("comparison_group", "default"), row["workload"]),
+                    "not_compared",
+                )
+                for row in simd_rows
+            ]
             worst_simd = min(simd_verified, key=lambda item: item[0]) if simd_verified else None
             evidence_counts = {
                 state: sum(row["evidence_status"] == state for row in profile_rows)
@@ -572,6 +609,7 @@ def operation_matrix_rows(
                     "not_run",
                     "fallback",
                     "wrong_or_unconfirmed_backend",
+                    "simd_vector_not_proven",
                 )
             }
             output.append({
@@ -613,15 +651,14 @@ def operation_matrix_rows(
                 "not_run_rows": str(evidence_counts["not_run"]),
                 "fallback_rows": str(evidence_counts["fallback"]),
                 "wrong_backend_rows": str(evidence_counts["wrong_or_unconfirmed_backend"]),
+                "simd_vector_not_proven_rows": str(evidence_counts["simd_vector_not_proven"]),
                 "pillow_simd_incompatible_rows": str(sum(
-                    classify(row, pillow_simd_metadata.get("source_clean") == "true")
-                    == "pillow_simd_incompatible"
-                    for row in simd_rows
+                    state == "pillow_simd_incompatible"
+                    for state in simd_baseline_states
                 )),
                 "pillow_simd_unproven_rows": str(sum(
-                    classify(row, pillow_simd_metadata.get("source_clean") == "true")
-                    == "pillow_simd_compatibility_not_proven"
-                    for row in simd_rows
+                    state not in {"pillow-simd_reference", "pillow_simd_incompatible"}
+                    for state in simd_baseline_states
                 )),
                 "pillow_simd_snapshot_workloads": str(len({row["workload"] for row in simd_rows})),
                 "verified_pillow_simd_comparisons": str(len(simd_verified)),
@@ -685,6 +722,7 @@ def operation_matrix_rows(
                 "not_run_rows": "0",
                 "fallback_rows": "0",
                 "wrong_backend_rows": "0",
+                "simd_vector_not_proven_rows": "0",
                 "pillow_simd_incompatible_rows": "0",
                 "pillow_simd_unproven_rows": "0",
                 "pillow_simd_snapshot_workloads": "0",

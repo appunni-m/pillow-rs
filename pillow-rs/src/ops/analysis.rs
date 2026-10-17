@@ -19,6 +19,65 @@ pub enum ImageAnalysisMask {
     Invalid(String),
 }
 
+/// Finds the horizontal bounds of non-zero F-mode pixels in one tightly
+/// packed row. The raw-word predicate keeps negative zero observable.
+#[inline(always)]
+fn getbbox_f_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
+    let mut left = 0usize;
+    let mut right = row.len() / 4;
+    let is_nonzero = |x: usize| {
+        let offset = x * 4;
+        u32::from_le_bytes([
+            row[offset],
+            row[offset + 1],
+            row[offset + 2],
+            row[offset + 3],
+        ]) != 0
+    };
+
+    // Check both row edges first. Dense rows usually find both bounds in two
+    // reads; blank and sparse rows converge toward the center without reading
+    // any sample twice.
+    while left < right {
+        let right_x = right - 1;
+        let left_nonzero = is_nonzero(left);
+        let right_nonzero = if right_x == left {
+            left_nonzero
+        } else {
+            is_nonzero(right_x)
+        };
+
+        if left_nonzero && right_nonzero {
+            return Some((left as u32, right_x as u32));
+        }
+        if left_nonzero {
+            let mut x = right_x;
+            while x > left {
+                x -= 1;
+                if is_nonzero(x) {
+                    return Some((left as u32, x as u32));
+                }
+            }
+            return Some((left as u32, left as u32));
+        }
+        if right_nonzero {
+            let mut x = left;
+            while x < right_x {
+                x += 1;
+                if is_nonzero(x) {
+                    return Some((x as u32, right_x as u32));
+                }
+            }
+            return Some((right_x as u32, right_x as u32));
+        }
+
+        left += 1;
+        right -= 1;
+    }
+
+    None
+}
+
 /// Validate a Pillow transparency/statistics mask without touching host types.
 pub fn validate_transparency_mask(image: &Image, mask: &Image) -> Result<(), PilError> {
     let mode = mask.mode()?;
@@ -174,6 +233,40 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization fails.
     pub fn getbbox(&self, alpha_only: bool) -> Result<Option<(u32, u32, u32, u32)>, PilError> {
+        // Direct materialized images use this host scan as their terminal
+        // operation. Report that CPU execution only when the benchmark has
+        // enabled receipts. Leave lazy pipelines on their existing receipt
+        // path; their mixed materialization-plus-host-scan boundary needs a
+        // combined terminal fallback receipt before it can earn accelerated
+        // backend credit.
+        let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled()
+            && !matches!(self, Image::Pipeline { .. })
+        {
+            match crate::compute::preferred_active_backend() {
+                Ok(selected) => Some(crate::compute::begin_eager_cpu_operation_telemetry(
+                    "GetBBox",
+                    selected.map(|(backend, _)| backend),
+                )),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+        let result = self.getbbox_materialized(alpha_only);
+        if let Some(telemetry) = telemetry {
+            if result.is_ok() {
+                crate::compute::finish_eager_cpu_operation_telemetry(telemetry, 0);
+            } else {
+                crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+            }
+        }
+        result
+    }
+
+    fn getbbox_materialized(
+        &self,
+        alpha_only: bool,
+    ) -> Result<Option<(u32, u32, u32, u32)>, PilError> {
         let img = self.materialized_shared()?;
         let (img_w, img_h) = (img.width(), img.height());
 
@@ -182,7 +275,7 @@ impl Image {
         }
 
         let mode = self.mode_from_materialized(&img);
-        if mode == "I" || mode == "F" {
+        if mode == "I" {
             let mut left = img_w;
             let mut top = img_h;
             let mut right = 0u32;
@@ -198,20 +291,50 @@ impl Image {
                 }
             };
             // Materialization has already validated the four-byte scalar
-            // storage. Scan the retained frame directly so this read-only
+            // storage. Scan the retained I frame directly so this read-only
             // reduction does not allocate one decoded value per pixel.
-            if mode == "I" {
-                for (index, sample) in img.as_bytes().chunks_exact(4).enumerate() {
-                    let value = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-                    update(index, value != 0);
-                }
-            } else {
-                for (index, sample) in img.as_bytes().chunks_exact(4).enumerate() {
-                    let value = f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-                    update(index, value != 0.0);
-                }
+            for (index, sample) in img.as_bytes().chunks_exact(4).enumerate() {
+                let value = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+                update(index, value != 0);
             }
             return if left > right {
+                Ok(None)
+            } else {
+                Ok(Some((left, top, right + 1, bottom + 1)))
+            };
+        }
+
+        if mode == "F" {
+            let row_bytes = img_w as usize * 4;
+            let raw = img.as_bytes();
+            let mut left = img_w;
+            let mut top = img_h;
+            let mut right = 0u32;
+            let mut bottom = 0u32;
+            let mut full_width = false;
+            for (y, row) in raw.chunks_exact(row_bytes).enumerate() {
+                if let Some((row_left, row_right)) = getbbox_f_row_bounds(row) {
+                    left = left.min(row_left);
+                    top = top.min(y as u32);
+                    right = right.max(row_right);
+                    bottom = bottom.max(y as u32);
+                    if left == 0 && right == img_w - 1 {
+                        // No later row can widen the horizontal bounds. Stop
+                        // and find the bottom edge with a reverse row scan.
+                        full_width = true;
+                        break;
+                    }
+                }
+            }
+            if full_width {
+                for (y, row) in raw.chunks_exact(row_bytes).enumerate().rev() {
+                    if getbbox_f_row_bounds(row).is_some() {
+                        bottom = y as u32;
+                        break;
+                    }
+                }
+            }
+            return if top == img_h {
                 Ok(None)
             } else {
                 Ok(Some((left, top, right + 1, bottom + 1)))

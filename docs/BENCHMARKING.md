@@ -60,6 +60,12 @@ or bindings made no allocations. A result is usable only when its manifest/input
 hashes, runtime identity, requested/actual backend, and terminal receipts are
 compatible with the comparison.
 
+The untimed representative execution receipt also retains each operation's
+path and vector-block count. A positive count records vector blocks for that
+operation; a recorded zero keeps scalar-only paths explicit. Missing or empty
+operation telemetry does not establish vector-kernel execution, and these
+receipts do not add latency samples.
+
 `whole_workflow` timing includes the terminal result observation needed to
 realize the measured workflow. For a lazy final image result, the timing adapter
 must call its public materialization boundary (for example, `tobytes()`) before
@@ -3501,3 +3507,84 @@ matrix or its different host rows. The focused Grayscale Rust suite passed
 16/16, and the benchmark-selection checks passed 17/17 for each benchmark run.
 No genuine test defect was found, no coverage was run, and this structure trial
 earns no completed operation credit (commit/push batch remains 0/33).
+
+## Optional execution identity receipts
+
+The parity and benchmark runners support `--attestation-output PATH` alongside
+their existing case/workload selectors. Capture happens after public calls,
+outside image timers, and leaves raw result schemas unchanged. Use fresh output
+paths and the affected case/profile scope. See
+[execution identity capture](EXECUTION_ATTESTATION.md) for module ownership,
+native capture evidence, and the strict admission work that remains pending.
+
+### Retain ordered timing samples
+
+Add `--raw-samples-output PATH` to the benchmark runner arguments when the
+selected comparison needs ordered timing evidence. The parent retains timing
+and phase arrays after each timed child exits. The separate JSON includes
+warmups, measured samples, case/profile and input identities, and child
+invocation IDs when execution attestation is enabled. Proof children are
+excluded. The image timing boundary and repetition policy remain unchanged.
+
+Use a fresh path. Capture refuses existing files and attaches SHA-256 references
+to completed latency and derived throughput measurements only after the sample
+file is written successfully. A failed write may preserve a partial file; use
+a new path for a scoped retry. Reports produced without this option retain
+summary statistics with `raw_samples_ref: null`; their ordered samples cannot
+be reconstructed later. Keep the sample JSON beside its report when archiving
+or importing evidence. This option does not expand the selected workloads or
+parity scope.
+
+### Serial RGB nearest Rotate row-span clipping — 2026-10-16
+
+A serial-only clipped in-bounds span for RGB nearest affine rotation passed a
+source-matched ARM64 A–B–B–A trial. On the 1024×768 Rotate plus `tobytes`
+workload, mean CPU median improved from 3.439146 ms on control to 1.396177 ms
+on candidate (2.463× versus control). Candidate runs were 1.090× and 1.129×
+faster than same-run Pillow, so this is still below the 2×-Pillow target. The
+32×32 expanded-Rotate successful-execution guard did not regress. The final
+candidate rebuild passed the three focused exact parity cases; CPU receipts
+were actual, terminal-complete, and fallback-free.
+
+The path is admitted only for serial RGB when both horizontal fixed-point
+steps are positive; all other modes and the parallel path retain their prior
+implementation. This closes the bounded trial, not Rotate across all modes,
+sizes, SIMD, Parallel CPU, or GPU. The report and source/build identities are
+in [the Rotate row-span evidence](evidence/rotate-rowspan-abba-arm64-20261016/README.md),
+and the 16 Pillow/CPU rows are in
+[`performance-optimization-local-runs.csv`](evidence/performance-optimization-local-runs.csv).
+No coverage, commit, or push was run; this does not advance the 33-item batch.
+
+### RGB 5×5 BLUR ring source-matched CPU A–B–B–A — 2026-10-16
+
+The exact RGB 5×5 BLUR ring dispatch was bracketed on the same 1024×768 noisy
+input. The workload measured the whole public workflow through `tobytes`, warm
+release/default serial CPU, one warmup, 3×2 samples, concurrency one, and Pillow
+12.2.0. Exact parity passed for each control and candidate; receipts showed
+actual CPU execution, complete terminal materialization, and no fallback.
+
+| Run | Pillow median | CPU median | Pillow / CPU |
+| --- | ---: | ---: | ---: |
+| A1 control | 10.797 ms | 19.632 ms | 0.550× |
+| B1 ring | 10.634 ms | 2.213 ms | 4.804× |
+| B2 ring | 11.062 ms | 2.232 ms | 4.957× |
+| A2 control | 10.752 ms | 19.524 ms | 0.551× |
+
+The candidate averaged 2.223 ms versus 19.578 ms for the controls and beat
+same-run Pillow in both B runs. Candidate and control source hashes are
+`e224b1e8…2848da68` and `1b808317…7f2510aa`; loaded extension hashes are
+`8b0dda44…09d749` and `3c9d77f6…fa23a28`. The only control-source change was a
+constant-false ring-dispatch guard. The A2 parity proof was rerun because
+replacing the control extension changed runtime file-stat identity and the
+runner correctly rejected reuse; no timed work was run on the rejected attempt.
+
+The two ring helper tests and exact parameter admission test passed. A separate
+nonmatching-kernel case is present in an experiment input but inactive in the
+default manifest, so its attempted selector produced no parity comparison; it
+is not counted as a pass. This local ARM64 result covers the serial CPU path
+and this single workload. SIMD, Parallel CPU, GPU, other modes/sizes/edges, and
+a clean hosted matrix refresh remain open. Reports, raw samples, attestations,
+parity proofs, and hashes are in
+[`rgb-blur-ring-source-matched-abba-arm64-20261016`](evidence/rgb-blur-ring-source-matched-abba-arm64-20261016/README.md).
+Eight rows were added to the local run ledger; the published matrix was not
+changed. No coverage, commit, or push was run; the batch remains 0/33.

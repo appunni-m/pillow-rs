@@ -48,17 +48,6 @@ EXPECTED_MODULES = (
 EXPECTED_LEGACY_ROWS = 199
 EXPECTED_LEGACY_UNIQUE_ENDPOINTS = 197
 
-# ``Image.show`` is retained in the deprecated authority for accounting, but
-# it is not part of the active selected-scope contract.  Calling it can open
-# an external viewer or block indefinitely in headless parity/coverage runs.
-EXCLUDED_ENDPOINTS = {
-    "PIL.Image.Image::show": (
-        "Headless parity, coverage, and benchmark workflows must not invoke "
-        "the external Image.show viewer."
-    ),
-}
-
-
 @dataclass(frozen=True, order=True)
 class LegacyRef:
     module: str
@@ -238,6 +227,32 @@ CORRECTIONS: tuple[Endpoint, ...] = (
             ),
         )
         for class_name in ("Brightness", "Color", "Contrast", "Sharpness")
+    ),
+    Endpoint(
+        surface="PIL.ImageShow",
+        operation="register",
+        kind="function",
+        source_path="PIL.ImageShow.register",
+        classification="endpoint",
+        authority="workflow-correction",
+        legacy_refs=(),
+        correction_reason=(
+            "Public viewer registration is required to exercise the selected "
+            "headless Image.show capture workflow."
+        ),
+    ),
+    Endpoint(
+        surface="PIL.ImageShow",
+        operation="show",
+        kind="function",
+        source_path="PIL.ImageShow.show",
+        classification="endpoint",
+        authority="workflow-correction",
+        legacy_refs=(),
+        correction_reason=(
+            "Public viewer dispatch is required to exercise Image.show title "
+            "forwarding and the ImageShow result contract."
+        ),
     ),
 )
 
@@ -449,8 +464,6 @@ def iter_legacy_seeds(manifest: dict[str, Any]) -> Iterable[EndpointSeed]:
 
 def derive_inventory(
     authority_path: Path = AUTHORITY_PATH,
-    *,
-    include_excluded: bool = False,
 ) -> tuple[list[Endpoint], int]:
     manifest = load_authority(authority_path)
     seeds = list(iter_legacy_seeds(manifest))
@@ -524,12 +537,6 @@ def derive_inventory(
     ids = [endpoint.id for endpoint in endpoints]
     if len(ids) != len(set(ids)):
         raise ValueError("canonical endpoint IDs are not unique")
-    if not include_excluded:
-        endpoints = [
-            endpoint
-            for endpoint in endpoints
-            if endpoint.id not in EXCLUDED_ENDPOINTS
-        ]
     return endpoints, len(seeds)
 
 
@@ -557,20 +564,19 @@ def validate_inventory() -> dict[str, int]:
     """Run the frozen inventory invariants used to replace unit assertions."""
 
     endpoints, legacy_rows = derive_inventory()
-    all_endpoints, all_legacy_rows = derive_inventory(include_excluded=True)
     references = [
         reference.id
-        for endpoint in all_endpoints
+        for endpoint in endpoints
         for reference in endpoint.legacy_refs
     ]
-    if all_legacy_rows != EXPECTED_LEGACY_ROWS or len(references) != EXPECTED_LEGACY_ROWS:
+    if legacy_rows != EXPECTED_LEGACY_ROWS or len(references) != EXPECTED_LEGACY_ROWS:
         raise ValueError("legacy rows are not accounted for exactly once")
     if len(references) != len(set(references)):
         raise ValueError("legacy references are not unique")
 
     merged = {
         endpoint.id: tuple(reference.id for reference in endpoint.legacy_refs)
-        for endpoint in all_endpoints
+        for endpoint in endpoints
         if len(endpoint.legacy_refs) > 1
     }
     expected_merged = {
@@ -590,11 +596,12 @@ def validate_inventory() -> dict[str, int]:
     for endpoint in CORRECTIONS:
         if not endpoint.correction_reason or endpoint.legacy_refs:
             raise ValueError(f"correction {endpoint.id} is not explicit and reasoned")
-    excluded_ids = set(EXCLUDED_ENDPOINTS)
-    if not excluded_ids.issubset({endpoint.id for endpoint in all_endpoints}):
-        raise ValueError("excluded endpoint is absent from the authority expansion")
-    if excluded_ids & {endpoint.id for endpoint in endpoints}:
-        raise ValueError("excluded endpoint leaked into active scope")
+    endpoint_ids = {endpoint.id for endpoint in endpoints}
+    if "PIL.Image.Image::show" not in endpoint_ids:
+        raise ValueError("PIL.Image.Image::show is missing from active scope")
+    for endpoint_id in ("PIL.ImageShow::register", "PIL.ImageShow::show"):
+        if endpoint_id not in endpoint_ids:
+            raise ValueError(f"selected ImageShow endpoint is missing: {endpoint_id}")
     font_endpoints = [
         endpoint for endpoint in endpoints if endpoint.source_path.startswith("PIL.ImageFont")
     ]
@@ -603,13 +610,13 @@ def validate_inventory() -> dict[str, int]:
     ):
         raise ValueError("font endpoints are not on canonical public surfaces")
     payload = render_json(endpoints, legacy_rows)
-    if EXPECTED_AUTHORITY_SHA256 not in payload or '"endpoint_count": 209' not in payload:
+    if EXPECTED_AUTHORITY_SHA256 not in payload or '"endpoint_count": 212' not in payload:
         raise ValueError("diagnostic inventory does not record frozen authority metadata")
     return {
         "legacy_rows": legacy_rows,
         "legacy_unique_endpoints": EXPECTED_LEGACY_UNIQUE_ENDPOINTS,
         "correction_endpoints": len(correction_ids),
-        "excluded_endpoints": len(excluded_ids),
+        "excluded_endpoints": 0,
         "active_endpoints": len(endpoints),
     }
 

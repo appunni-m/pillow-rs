@@ -8,8 +8,12 @@
 use super::native_channel;
 use super::native_filter::{native_filter_5x5_binomial_la_rows, native_filter_5x5_i32_rows};
 
+mod box_blur_luma;
+#[cfg(all(test, target_arch = "x86_64"))]
+mod cmyk_packing_tests;
 mod extract_band;
 mod grayscale;
+mod median_filter;
 mod merge;
 mod native_thumbnail;
 mod projection;
@@ -11084,6 +11088,8 @@ fn native_cmyk_to_rgb_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
     {
         let mut output = Vec::with_capacity(output_capacity);
         let mut vector_blocks = 0u64;
+        #[cfg(target_arch = "x86_64")]
+        let pack_rgb_ssse3 = std::is_x86_feature_detected!("ssse3");
         for source_block in source.as_raw().chunks(64) {
             let active_pixels = source_block.len() / 4;
             let mut padded = [0u8; 64];
@@ -11106,6 +11112,16 @@ fn native_cmyk_to_rgb_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
             let red = simd_pack_u16x16(ink - muldiv255(c * ink)).to_array();
             let green = simd_pack_u16x16(ink - muldiv255(m * ink)).to_array();
             let blue = simd_pack_u16x16(ink - muldiv255(y * ink)).to_array();
+            #[cfg(target_arch = "x86_64")]
+            if active_pixels == 16 && pack_rgb_ssse3 {
+                // SAFETY: the runtime feature check above establishes SSSE3;
+                // all three lane arrays contain sixteen initialized samples.
+                let packed =
+                    unsafe { super::native_merge::rgb16_interleave_ssse3(&red, &green, &blue) };
+                output.extend_from_slice(&packed);
+                vector_blocks = vector_blocks.saturating_add(1);
+                continue;
+            }
             for pixel in 0..active_pixels {
                 output.extend_from_slice(&[red[pixel], green[pixel], blue[pixel]]);
             }
@@ -18591,6 +18607,7 @@ fn rank_filter_order_statistic_row(
     width: usize,
     height: usize,
     channels: usize,
+    use_luma_alpha_median_network: bool,
     size: usize,
     half: usize,
     area: usize,
@@ -18635,6 +18652,10 @@ fn rank_filter_order_statistic_row(
             }
             let selected = if matches!(channels, 1 | 2) && size == 3 && rank == 1 {
                 select_second_order_statistic_vector(&values[..area])
+            } else if channels == 1 && size == 3 && rank == 4 {
+                median_filter::median_of_nine_vectors(&mut values[..area])
+            } else if use_luma_alpha_median_network && size == 3 && rank == 4 {
+                median_filter::median_of_nine_vectors(&mut values[..area])
             } else if size <= SIMD_ORDER_STATISTIC_SORT_MAX_SIZE as usize {
                 sort_order_statistic_vectors(&mut values[..area]);
                 values[rank]
@@ -18655,6 +18676,9 @@ fn simd_order_statistic_filter(
 ) -> Result<DynamicImage, PilError> {
     let channels = native_filter_byte_layout(img, mode)
         .ok_or_else(|| simd_unsupported("MedianFilter/RankFilter"))?;
+    let use_luma_alpha_median_network = channels == 2
+        && matches!(img, DynamicImage::ImageLumaA8(_))
+        && matches!(mode, None | Some("LA"));
     let area = u64::from(size).saturating_mul(u64::from(size));
     if size == 0
         || size % 2 == 0
@@ -18701,6 +18725,7 @@ fn simd_order_statistic_filter(
                 width,
                 height,
                 channels,
+                use_luma_alpha_median_network,
                 size as usize,
                 half,
                 area,
@@ -18720,6 +18745,7 @@ fn simd_order_statistic_filter(
             width,
             height,
             channels,
+            use_luma_alpha_median_network,
             size as usize,
             half,
             area,
@@ -20613,6 +20639,35 @@ fn simd_pil_box_blur_xy(
         return Ok(preserve_mode(img, result));
     }
 
+    if channels == 1
+        && matches!(img, DynamicImage::ImageLuma8(_))
+        && matches!(mode, None | Some("L"))
+        && passes == 1
+        && radius_x == 1.0
+        && radius_y == 1.0
+    {
+        // Stream horizontally rounded rows through a three-row ring, keeping
+        // Pillow's separate horizontal and vertical fixed-point rounding.
+        debug_assert_eq!(horizontal_weight, SIMD_BOX_BLUR_SCALE / 3);
+        debug_assert_eq!(horizontal_fractional_weight, 0);
+        debug_assert_eq!(vertical_weight, SIMD_BOX_BLUR_SCALE / 3);
+        debug_assert_eq!(vertical_fractional_weight, 0);
+        let mut output = dimensions.alloc_buffer();
+        box_blur_luma::simd_luma_box_blur_radius_one_rows(
+            img.as_bytes(),
+            &mut output,
+            width,
+            height,
+        );
+        let result = crate::image_utils::raw_bytes_to_image(
+            dimensions.width,
+            dimensions.height,
+            output,
+            channels,
+        )?;
+        return Ok(preserve_mode(img, result));
+    }
+
     let mut work = img.as_bytes().to_vec();
     let mut scratch = dimensions.alloc_buffer();
     if channels == 4
@@ -20647,37 +20702,6 @@ fn simd_pil_box_blur_xy(
             dimensions.width,
             dimensions.height,
             work,
-            channels,
-        )?;
-        return Ok(preserve_mode(img, result));
-    }
-
-    if channels == 1
-        && matches!(img, DynamicImage::ImageLuma8(_))
-        && matches!(mode, None | Some("L"))
-        && passes == 1
-        && radius_x == 1.0
-        && radius_y == 1.0
-    {
-        // Keep both passes in row-major L storage. Adjacent SIMD lanes compute
-        // the horizontal radius-one average, then the vertical kernel gathers
-        // rows without transposing the full image.
-        debug_assert_eq!(horizontal_weight, SIMD_BOX_BLUR_SCALE / 3);
-        debug_assert_eq!(horizontal_fractional_weight, 0);
-        simd_luma_horizontal_radius_one_rows(&work, &mut scratch, width, height);
-        std::mem::swap(&mut work, &mut scratch);
-        simd_luma_vertical_radius_one_rows(
-            &work,
-            &mut scratch,
-            width,
-            height,
-            vertical_weight,
-            vertical_fractional_weight,
-        );
-        let result = crate::image_utils::raw_bytes_to_image(
-            dimensions.width,
-            dimensions.height,
-            scratch,
             channels,
         )?;
         return Ok(preserve_mode(img, result));

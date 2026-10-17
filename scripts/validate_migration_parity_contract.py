@@ -126,6 +126,15 @@ SUPPORT_STATUSES = {
     "not_applicable",
 }
 OUTPUT_KEYS = {"expected_output", "oracle_output", "target_output", "expected_result"}
+CAPTURE_VIEWER_LITERAL_FIELDS = {
+    "protocol",
+    "viewer_id",
+    "image_step_id",
+    "format",
+    "accept",
+    "registration",
+    "hook",
+}
 
 
 def _error(path: str, message: str) -> ValueError:
@@ -555,11 +564,71 @@ def validate_manifest(manifest: Any, *, manifest_path: Path | None = None) -> di
     return manifest
 
 
-def _validate_descriptor(value: Any, path: str, assets: set[str], prior_steps: set[str]) -> None:
+def _validate_capture_viewer_literal(
+    value: Any,
+    path: str,
+    prior_steps: set[str],
+    prior_image_steps: set[str],
+) -> None:
+    value = _exact(value, CAPTURE_VIEWER_LITERAL_FIELDS, path)
+    if value["protocol"] != "capture-viewer":
+        raise _error(f"{path}.protocol", "unsupported literal protocol")
+    _string(value["viewer_id"], f"{path}.viewer_id")
+    image_step_id = _string(value["image_step_id"], f"{path}.image_step_id")
+    if image_step_id not in prior_steps:
+        raise _error(
+            f"{path}.image_step_id",
+            "capture viewer must reference an earlier workflow step",
+        )
+    if image_step_id not in prior_image_steps:
+        raise _error(
+            f"{path}.image_step_id",
+            "capture viewer must reference an earlier image result",
+        )
+    if value["format"] is not None and value["format"] != "PNG":
+        raise _error(f"{path}.format", "expected null or 'PNG'")
+    if type(value["accept"]) not in {bool, int}:
+        raise _error(f"{path}.accept", "expected bool or integer")
+    if value["registration"] not in ("class", "instance"):
+        raise _error(f"{path}.registration", "expected class or instance")
+    if value["hook"] not in ("show", "show_image"):
+        raise _error(f"{path}.hook", "expected show or show_image")
+
+
+def _reject_nested_capture_viewer(value: Any, path: str, *, root: bool = True) -> None:
+    if isinstance(value, dict):
+        if not root and value.get("protocol") == "capture-viewer":
+            raise _error(path, "capture-viewer must be a top-level literal value")
+        for key, item in value.items():
+            _reject_nested_capture_viewer(item, f"{path}.{key}", root=False)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            _reject_nested_capture_viewer(item, f"{path}[{index}]", root=False)
+
+
+def _validate_descriptor(
+    value: Any,
+    path: str,
+    assets: set[str],
+    prior_steps: set[str],
+    prior_image_steps: set[str],
+) -> None:
     descriptor = _mapping(value, path)
     kind = descriptor.get("kind")
     if kind == "literal":
         _exact(descriptor, {"kind", "value"}, path)
+        literal = descriptor["value"]
+        _reject_nested_capture_viewer(literal, f"{path}.value")
+        if (
+            isinstance(literal, dict)
+            and literal.get("protocol") == "capture-viewer"
+        ):
+            _validate_capture_viewer_literal(
+                literal,
+                f"{path}.value",
+                prior_steps,
+                prior_image_steps,
+            )
     elif kind == "asset":
         _exact(descriptor, {"kind", "asset_id"}, path)
         if descriptor["asset_id"] not in assets:
@@ -648,6 +717,8 @@ def _literal_type(value: Any) -> str:
     if isinstance(value, list):
         return "sequence"
     if isinstance(value, dict):
+        if value.get("protocol") == "capture-viewer":
+            return "handle"
         if value.get("protocol") == "outline":
             return "handle"
         if value.get("protocol") == "list" and isinstance(value.get("items"), list):
@@ -784,20 +855,27 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
         steps = _list(case["steps"], f"{path}.steps")
         step_ids: set[str] = set()
         step_map: dict[str, dict[str, Any]] = {}
+        prior_image_steps: set[str] = set()
         for step_index, step in enumerate(steps):
             spath = f"{path}.steps[{step_index}]"
             step = _exact(step, {"step_id", "surface", "operation", "receiver", "arguments"}, spath)
             step_id = _string(step["step_id"], f"{spath}.step_id")
             if step_id in step_ids:
                 raise _error(f"{spath}.step_id", "duplicate step ID")
-            step_ids.add(step_id)
             step_surface = _string(step["surface"], f"{spath}.surface")
             step_operation = _string(step["operation"], f"{spath}.operation")
             operation_definition = operation_index.get((step_surface, step_operation))
             if operation_definition is None:
                 raise _error(spath, "unknown workflow operation")
+            prior_step_ids = step_ids
             if step["receiver"] is not None:
-                _validate_descriptor(step["receiver"], f"{spath}.receiver", asset_ids, step_ids - {step_id})
+                _validate_descriptor(
+                    step["receiver"],
+                    f"{spath}.receiver",
+                    asset_ids,
+                    prior_step_ids,
+                    prior_image_steps,
+                )
             arguments = _mapping(step["arguments"], f"{spath}.arguments")
             parameters = {parameter["id"]: parameter for parameter in operation_definition["source"]["parameters"]}
             unknown = set(arguments) - set(parameters)
@@ -807,10 +885,19 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
                 if parameter["omission"]["kind"] == "required" and parameter["style"] != "receiver" and parameter["id"] not in arguments:
                     raise _error(f"{spath}.arguments", f"missing required parameter {parameter['id']!r}")
             for name, descriptor in arguments.items():
-                _validate_descriptor(descriptor, f"{spath}.arguments.{name}", asset_ids, step_ids - {step_id})
+                _validate_descriptor(
+                    descriptor,
+                    f"{spath}.arguments.{name}",
+                    asset_ids,
+                    prior_step_ids,
+                    prior_image_steps,
+                )
                 if descriptor["kind"] == "literal" and not _literal_matches(descriptor.get("value"), parameters[name]["value_types"]):
                     raise _error(f"{spath}.arguments.{name}", "literal does not match declared parameter value_types")
             step_map[step_id] = step
+            step_ids.add(step_id)
+            if operation_definition["source"]["result"]["shape"] == "image":
+                prior_image_steps.add(step_id)
         observations = _id_array(case["observations"], f"{path}.observations")
         if not observations:
             raise _error(f"{path}.observations", "a parity case must observe at least one step")

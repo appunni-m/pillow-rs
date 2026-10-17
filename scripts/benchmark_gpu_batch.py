@@ -14,9 +14,12 @@ five subjects. JSON evidence
 is emitted to stdout only when requested with --json. The F Resize lane measures
 one native F bicubic resize with exact output comparison and CPU materialization.
 The Filter lane measures the exact native-LA binomial 3x3 Kernel operation.
+The Screen lane measures ImageChops.screen over two deterministic native images.
 The Merge lane measures three materialized L bands composed into RGB. Its
 direct GPU lane includes per-image synchronization and materialization; the
-current GpuBatchExecutor admission contract rejects this graph.
+current GpuBatchExecutor admission contract rejects this graph. Use
+``--operation median-only`` to measure MedianFilter(3) without the separate
+invert operation.
 """
 from __future__ import annotations
 import argparse
@@ -28,17 +31,84 @@ from pathlib import Path
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
 SUBJECTS = ("Pillow", "CPU", "SIMD", "GPU eager", "GPU queued")
 FILTER_3X3_BINOMIAL = (1, 2, 1, 2, 4, 2, 1, 2, 1)
+DEFAULT_BATCH_SIZES = (256, 1024)
 
 
-def child(subject, size, height, mode, images, samples, operation="median", max_jobs=16, max_in_flight=4, alpha_input_pattern="uniform"):
+def default_batch_modes(operation):
+    if operation == "alpha-composite-mirror":
+        return ("RGBA",)
+    if operation == "resize":
+        return ("F",)
+    if operation == "filter":
+        return ("L", "LA")
+    if operation == "merge":
+        return ("RGB",)
+    if operation == "screen":
+        return ("RGB",)
+    return ("L", "RGB")
+
+
+def resolve_selection(operation, subject, mode, modes, size, sizes):
+    """Resolve explicit selectors while preserving the default cohort matrix."""
+    if subject is not None:
+        if modes is not None or sizes is not None:
+            raise ValueError("--modes/--sizes are cohort selectors; use --mode/--size with --subject")
+        return (mode or "L",), (size if size is not None else 256,)
+    if mode is not None and modes is not None:
+        raise ValueError("choose either --mode or --modes, not both")
+    if size is not None and sizes is not None:
+        raise ValueError("choose either --size or --sizes, not both")
+    selected_modes = (mode,) if mode is not None else tuple(modes) if modes else default_batch_modes(operation)
+    selected_sizes = (size,) if size is not None else tuple(sizes) if sizes else DEFAULT_BATCH_SIZES
+    return selected_modes, selected_sizes
+
+
+def validate_queued_capacity(subjects, images, max_jobs, max_in_flight):
+    """Keep queued throughput assertions meaningful for every cohort window."""
+    if "GPU queued" in subjects and min(images, max_jobs, max_in_flight) < 2:
+        raise ValueError(
+            "GPU queued throughput requires at least 2 images, --max-jobs >= 2, "
+            "and --max-in-flight >= 2; use GPU eager for a one-image latency run"
+        )
+
+
+def batch_workload_id(operation, mode, size, height, alpha_input_pattern):
+    workload_id = f"pipeline-batch.{operation}.{mode.lower()}-{size}x{height}"
+    if operation == "alpha-composite-mirror":
+        workload_id += f".{alpha_input_pattern}"
+    return workload_id
+
+
+def expected_workload_ids(operation, modes, sizes, height, alpha_input_pattern):
+    return {
+        batch_workload_id(operation, mode, size, height or size, alpha_input_pattern)
+        for mode in modes
+        for size in sizes
+    }
+
+
+def extension_identity(module):
+    path = Path(module.__file__).resolve()
+    return {
+        "path": str(path),
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+
+
+def child(subject, size, height, mode, images, samples, operation="median", max_jobs=16, max_in_flight=4, alpha_input_pattern="uniform", capture_output_path=None):
     from importlib.metadata import version as distribution_version
     import PIL
-    from PIL import Image, ImageOps, ImageFilter
+    from PIL import Image, ImageOps, ImageFilter, ImageChops
+    loaded_core_identity = None
+    if subject != "Pillow":
+        import pillow_rs
+        loaded_core_identity = extension_identity(pillow_rs._core)
     channels = {"L": 1, "LA": 2, "RGB": 3, "CMYK": 4, "RGBA": 4, "F": 4}[mode]
     source_channels = 1 if operation == "merge" else channels
     length = size * height * source_channels
@@ -71,6 +141,14 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
             )
             for index in range(images)
         ]
+    elif operation == "screen":
+        sources = [
+            (
+                random.Random(index + size * 31 + height * 17 + channels).randbytes(length),
+                random.Random(index + size * 31 + height * 17 + channels + 1).randbytes(length),
+            )
+            for index in range(images)
+        ]
     else:
         sources = [
             random.Random(index + size * 31 + height * 17 + channels).randbytes(length)
@@ -93,6 +171,10 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
                 source = Image.frombytes("RGBA", (size, height), sources[index][1])
             result = Image.alpha_composite(destination, source)
             result = ImageOps.mirror(result)
+        elif operation == "screen":
+            left = Image.frombytes(mode, (size, height), sources[index][0])
+            right = Image.frombytes(mode, (size, height), sources[index][1])
+            result = ImageChops.screen(left, right)
         else:
             result = Image.frombytes(mode, (size, height), sources[index])
         if operation == "boxblur":
@@ -105,6 +187,8 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
             result = result.resize((max(1, size // 2), max(1, height // 2)), Image.Resampling.BICUBIC)
         elif operation == "median":
             result = ImageOps.invert(result).filter(ImageFilter.MedianFilter(3))
+        elif operation == "median-only":
+            result = result.filter(ImageFilter.MedianFilter(3))
         elif operation == "filter":
             result = result.filter(
                 ImageFilter.Kernel((3, 3), FILTER_3X3_BINOMIAL, scale=16, offset=0)
@@ -137,7 +221,7 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
         for result in executor.run((i, graph(i)) for i in range(images)):
             output[result.input_key] = result.image.tobytes()
         return [output[i] for i in range(images)]
-    times, digest = [], None
+    times, digest, reference_output = [], None, None
     receipt = None
     try:
         if core is not None:
@@ -157,17 +241,26 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
             started = time.perf_counter_ns()
             output = window()
             elapsed = time.perf_counter_ns() - started
+            if reference_output is None:
+                reference_output = output
+                if capture_output_path is not None:
+                    with open(capture_output_path, "wb") as capture:
+                        for image in output:
+                            capture.write(len(image).to_bytes(8, "little"))
+                            capture.write(image)
+            else:
+                assert output == reference_output, "fresh request output bytes changed"
             actual = [hashlib.sha256(image).hexdigest() for image in output]
-            if digest is not None: assert actual == digest, "fresh request outputs changed"
+            if digest is not None: assert actual == digest, "fresh request output digests changed"
             digest = actual
             times.append(elapsed / 1e9)
         stats = executor.stats if executor else None
         if stats:
             assert stats["gpu_bytes"] == stats["host_bytes"] == stats["live_jobs"] == 0, stats
             assert stats["submitted_jobs"] == (samples + 2) * images, stats
-            dispatches_per_job = 1 if operation in ("boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "filter", "merge") else 2
+            dispatches_per_job = 1 if operation in ("median-only", "screen", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "filter", "merge") else 2
             assert stats["dispatches"] == dispatches_per_job * stats["submitted_jobs"], stats
-            inputs_per_job = 3 if operation == "merge" else 2 if operation == "alpha-composite-mirror" else 1
+            inputs_per_job = 3 if operation == "merge" else 2 if operation in ("alpha-composite-mirror", "screen") else 1
             upload_bytes_per_job = length * inputs_per_job
             expected_bytes = stats["submitted_jobs"] * upload_bytes_per_job
             assert stats["upload_bytes"] == expected_bytes, stats
@@ -189,6 +282,7 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
                 "backend_receipt": receipt,
                 "pillow_version": PIL.__version__, "pillow_module": PIL.__file__,
                 "pillow_distribution_version": distribution_version("Pillow"),
+                "loaded_core_identity": loaded_core_identity,
                 "workload": {"operation": operation, "mode": mode, "size": [size, height],
                              "images_per_window": images, "samples": samples,
                              "parameters": (
@@ -205,6 +299,11 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
                                   "offset": 0,
                                   "input_pattern": "deterministic native-LA noise"}
                                  if operation == "filter" else
+                                 {"filter": "MedianFilter(3)",
+                                  "input_pattern": f"deterministic native-{mode} noise"}
+                                 if operation == "median-only" else
+                                 {"input_pattern": f"two deterministic native-{mode} noise images"}
+                                 if operation == "screen" else
                                  {"channel": 0 if mode == "L" else "G"}
                                  if operation == "getchannel" else None
                              ),
@@ -216,23 +315,59 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
         if executor: executor.close()
 
 
-def isolated(subject, size, height, mode, images, samples, operation, max_jobs=16, max_in_flight=4, alpha_input_pattern="uniform"):
+def isolated(subject, size, height, mode, images, samples, operation, max_jobs=16, max_in_flight=4, alpha_input_pattern="uniform", capture_output_path=None):
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
     if subject != "Pillow": env["PYTHONPATH"] = str(ROOT / "pillow-rs-py/python")
-    process = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--subject", subject,
-        "--operation", operation, "--size", str(size), "--height", str(height), "--mode", mode, "--images", str(images), "--samples", str(samples), "--max-jobs", str(max_jobs), "--max-in-flight", str(max_in_flight), "--alpha-input-pattern", alpha_input_pattern],
-        env=env, capture_output=True, text=True)
+    command = [sys.executable, str(Path(__file__).resolve()), "--subject", subject,
+        "--operation", operation, "--size", str(size), "--height", str(height), "--mode", mode, "--images", str(images), "--samples", str(samples), "--max-jobs", str(max_jobs), "--max-in-flight", str(max_in_flight), "--alpha-input-pattern", alpha_input_pattern]
+    if capture_output_path is not None:
+        command.extend(("--capture-output", str(capture_output_path)))
+    process = subprocess.run(command, env=env, capture_output=True, text=True)
     if process.returncode: raise RuntimeError(process.stderr)
     return json.loads(process.stdout)
+
+
+def exact_output_files_equal(left_path, right_path):
+    with open(left_path, "rb") as left, open(right_path, "rb") as right:
+        while True:
+            left_chunk = left.read(1024 * 1024)
+            right_chunk = right.read(1024 * 1024)
+            if left_chunk != right_chunk:
+                return False
+            if not left_chunk:
+                return True
 
 
 def pillow_identity(subject):
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
     if subject != "Pillow": env["PYTHONPATH"] = str(ROOT / "pillow-rs-py/python")
+    identity_script = """
+from importlib.metadata import version
+import hashlib
+import json
+from pathlib import Path
+import sys
+import PIL
+
+identity = {
+    "distribution_version": version("Pillow"),
+    "module_version": PIL.__version__,
+    "module": PIL.__file__,
+    "core": None,
+}
+if sys.argv[1] != "Pillow":
+    import pillow_rs
+    core_path = Path(pillow_rs._core.__file__).resolve()
+    identity["core"] = {
+        "path": str(core_path),
+        "sha256": hashlib.sha256(core_path.read_bytes()).hexdigest(),
+    }
+print(json.dumps(identity))
+"""
     process = subprocess.run(
-        [sys.executable, "-c", "from importlib.metadata import version; import json, PIL; print(json.dumps({'distribution_version': version('Pillow'), 'module_version': PIL.__version__, 'module': PIL.__file__}))"],
+        [sys.executable, "-c", identity_script, subject],
         env=env, capture_output=True, text=True,
     )
     if process.returncode: raise RuntimeError(process.stderr)
@@ -244,18 +379,23 @@ def main():
     parser.add_argument("--subject", choices=SUBJECTS)
     parser.add_argument(
         "--operation",
-        choices=("median", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "resize", "filter", "merge"),
+        choices=("median", "median-only", "screen", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "resize", "filter", "merge"),
         default="median",
     )
-    parser.add_argument("--size", type=int, default=256)
+    parser.add_argument("--size", type=int,
+                        help="select one size in cohort mode; defaults to the standard matrix")
     parser.add_argument("--height", type=int)
-    parser.add_argument("--mode", choices=("L", "LA", "RGB", "CMYK", "RGBA", "F"), default="L")
+    parser.add_argument("--mode", choices=("L", "LA", "RGB", "CMYK", "RGBA", "F"),
+                        help="select one mode in cohort mode; defaults to the operation matrix")
     parser.add_argument("--images", type=int, default=32)
     parser.add_argument("--samples", type=int, default=5)
     parser.add_argument("--modes", nargs="+", choices=("L", "LA", "RGB", "CMYK", "RGBA", "F"))
-    parser.add_argument("--sizes", nargs="+", type=int, default=(256, 1024))
+    parser.add_argument("--sizes", nargs="+", type=int,
+                        help="select multiple sizes; conflicts with --size")
     parser.add_argument("--max-jobs", type=int, default=16)
     parser.add_argument("--max-in-flight", type=int, default=4)
+    parser.add_argument("--capture-output", type=Path,
+                        help=argparse.SUPPRESS)
     parser.add_argument(
         "--alpha-input-pattern",
         choices=("uniform", "noise"),
@@ -266,18 +406,12 @@ def main():
                         help="emit machine-readable timing, parity, backend, and batch receipts")
     args = parser.parse_args()
     if args.images < 1 or args.samples < 1: parser.error("images/samples must be positive")
-    default_modes = (
-        ("RGBA",) if args.operation == "alpha-composite-mirror"
-        else ("F",) if args.operation == "resize"
-        else ("L", "LA") if args.operation == "filter"
-        else ("RGB",) if args.operation == "merge"
-        else ("L", "RGB")
-    )
-    selected_modes = (
-        (args.mode,)
-        if args.subject
-        else tuple(args.modes) if args.modes else default_modes
-    )
+    try:
+        selected_modes, selected_sizes = resolve_selection(
+            args.operation, args.subject, args.mode, args.modes, args.size, args.sizes
+        )
+    except ValueError as error:
+        parser.error(str(error))
     if args.operation == "alpha-composite-mirror" and selected_modes != ("RGBA",):
         parser.error("alpha-composite-mirror requires RGBA")
     if args.operation == "merge" and selected_modes != ("RGB",):
@@ -296,16 +430,32 @@ def main():
         parser.error("CMYK batching is currently supported only for grayscale")
     if args.operation == "getchannel" and any(mode not in ("L", "RGB") for mode in selected_modes):
         parser.error("GetChannel batching currently supports L/RGB inputs")
+    if args.operation == "screen" and any(mode not in ("L", "RGB") for mode in selected_modes):
+        parser.error("Screen batching currently supports native L/RGB inputs")
     if args.subject:
-        print(json.dumps(child(args.subject, args.size, args.height or args.size, args.mode, args.images, args.samples, args.operation, args.max_jobs, args.max_in_flight, args.alpha_input_pattern)))
+        try:
+            validate_queued_capacity(
+                (args.subject,), args.images, args.max_jobs, args.max_in_flight
+            )
+        except ValueError as error:
+            parser.error(str(error))
+        mode = selected_modes[0]
+        size = selected_sizes[0]
+        print(json.dumps(child(args.subject, size, args.height or size, mode, args.images, args.samples, args.operation, args.max_jobs, args.max_in_flight, args.alpha_input_pattern, args.capture_output)))
         return
     subjects = (
         ("Pillow", "GPU eager", "GPU queued")
         if args.operation == "median"
+        else ("Pillow", "SIMD", "GPU queued")
+        if args.operation == "median-only"
         else ("Pillow", "CPU", "SIMD", "GPU eager")
         if args.operation == "merge"
         else SUBJECTS
     )
+    try:
+        validate_queued_capacity(subjects, args.images, args.max_jobs, args.max_in_flight)
+    except ValueError as error:
+        parser.error(str(error))
     identities = {subject: pillow_identity(subject) for subject in subjects}
     versions = {identity["distribution_version"] for identity in identities.values()}
     if len(versions) != 1:
@@ -332,6 +482,7 @@ def main():
             "started_at_unix_ns": started_at,
             "source_revision": source_revision,
             "source_dirty": source_dirty,
+            "benchmark_script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             "environment": {
                 "host": __import__("platform").node(),
                 "os": __import__("platform").platform(),
@@ -346,6 +497,7 @@ def main():
                     if args.operation == "merge"
                     else "completed_batch_window"
                 ),
+                "parity_method": "length-prefixed output bytes compared exactly across subjects and all measured windows",
                 "steps": (
                     ["construct-image-and-graph", "execute", "synchronize", "materialize", "export-bytes"]
                     if args.operation == "merge"
@@ -379,7 +531,7 @@ def main():
         print(f"Warm completed-work diagnostic: {args.operation}; two warmup windows; "
               f"{args.samples} median samples; no host threads. GPU batch submission is not proof of concurrent kernels.")
     if not args.json:
-        if args.operation in ("boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "filter"):
+        if args.operation in ("screen", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "filter"):
             print("| Mode/size | Pillow img/s | CPU img/s | SIMD img/s | Eager GPU img/s | Queued GPU img/s | Queued / SIMD | Queued / Pillow | Jobs/submission | Dispatches/job |")
             print("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
         elif args.operation == "merge":
@@ -388,16 +540,39 @@ def main():
         else:
             print("| Mode/size | Pillow images/s | Eager GPU images/s | Queued GPU images/s | Queued / Pillow | Queued / eager | Max jobs/submission |")
             print("| --- | ---: | ---: | ---: | ---: | ---: | ---: |")
+    capture_directory = tempfile.TemporaryDirectory(prefix="pillow-rs-gpu-batch-parity-")
+    capture_root = Path(capture_directory.name)
     for mode in selected_modes:
-        for size in args.sizes:
+        for size in selected_sizes:
             height = args.height or size
-            runs = [isolated(subject, size, height, mode, args.images, args.samples, args.operation, args.max_jobs, args.max_in_flight, args.alpha_input_pattern) for subject in subjects]
+            workload_id = batch_workload_id(
+                args.operation, mode, size, height, args.alpha_input_pattern
+            )
+            capture_paths = {
+                subject: capture_root / f"{mode}-{size}-{subject.replace(' ', '-')}.bin"
+                for subject in subjects
+            }
+            runs = [isolated(subject, size, height, mode, args.images, args.samples, args.operation, args.max_jobs, args.max_in_flight, args.alpha_input_pattern, capture_paths[subject]) for subject in subjects]
             for run in runs:
                 identity = identities[run["workload"]["subject"]]
                 assert run["pillow_version"] == identity["module_version"], identity
                 assert run["pillow_module"] == identity["module"], identity
                 assert run["pillow_distribution_version"] == identity["distribution_version"], identity
-            assert all(run["digests"] == runs[0]["digests"] for run in runs), f"exact parity failed: {mode} {size}x{height}"
+                expected_core_identity = identity["core"]
+                actual_core_identity = run["loaded_core_identity"]
+                if actual_core_identity != expected_core_identity:
+                    raise AssertionError(
+                        f"loaded extension identity changed for {run['workload']['subject']}: "
+                        f"expected={expected_core_identity}, actual={actual_core_identity}"
+                    )
+            assert all(run["digests"] == runs[0]["digests"] for run in runs), f"output digest mismatch: {mode} {size}x{height}"
+            assert all(path.is_file() and path.stat().st_size > 0 for path in capture_paths.values()), (
+                f"missing exact output capture: {mode} {size}x{height}"
+            )
+            assert all(
+                exact_output_files_equal(capture_paths[subjects[0]], capture_paths[subject])
+                for subject in subjects[1:]
+            ), f"byte-for-byte output parity failed: {mode} {size}x{height}"
             rates = [args.images / run["seconds"] for run in runs]
             operation_count = args.images * (args.samples + 2)
 
@@ -411,10 +586,7 @@ def main():
 
             if args.json:
                 report["workloads"].append({
-                    "workload_id": (
-                        f"pipeline-batch.{args.operation}.{mode.lower()}-{size}x{height}"
-                        + (f".{args.alpha_input_pattern}" if args.operation == "alpha-composite-mirror" else "")
-                    ),
+                    "workload_id": workload_id,
                     "mode": mode,
                     "size": [size, height],
                     "parameters": (
@@ -431,10 +603,16 @@ def main():
                          "offset": 0,
                          "input_pattern": "deterministic native-LA noise"}
                         if args.operation == "filter" else
+                        {"filter": "MedianFilter(3)",
+                         "input_pattern": f"deterministic native-{mode} noise"}
+                        if args.operation == "median-only" else
+                        {"input_pattern": f"two deterministic native-{mode} noise images"}
+                        if args.operation == "screen" else
                         {"channel": 0 if mode == "L" else "G"}
                         if args.operation == "getchannel" else None
                     ),
                     "parity_status": "exact_bytes_pass",
+                    "parity_method": "length-prefixed output bytes compared exactly across subjects and all measured windows",
                     "parity_comparison_count": args.images,
                     "subjects": [
                         {
@@ -442,6 +620,7 @@ def main():
                             "pillow_version": run["pillow_version"],
                             "pillow_module": run["pillow_module"],
                             "pillow_distribution_version": run["pillow_distribution_version"],
+                            "loaded_core_identity": run["loaded_core_identity"],
                             "requested_backend": (
                                 run["backend_receipt"]["requested_backend"]
                                 if run["backend_receipt"]
@@ -518,7 +697,7 @@ def main():
                 print(f"| {mode} {size}×{height} | {rates[0]:.1f} | {rates[1]:.1f} | {rates[2]:.1f} | {rates[3]:.1f} | "
                       f"{rates[3]/rates[2]:.2f}× | unsupported at admission |", flush=True)
                 continue
-            if args.operation in ("boxblur", "grayscale", "getchannel", "filter"):
+            if args.operation in ("screen", "boxblur", "grayscale", "getchannel", "filter"):
                 queued_stats = runs[4]["stats"]
                 print(f"| {mode} {size}×{height} | {rates[0]:.1f} | {rates[1]:.1f} | {rates[2]:.1f} | {rates[3]:.1f} | {rates[4]:.1f} | "
                       f"{rates[4]/rates[2]:.2f}× | {rates[4]/rates[0]:.2f}× | {queued_stats['largest_submission']} | "
@@ -526,7 +705,17 @@ def main():
             else:
                 print(f"| {mode} {size}² | {rates[0]:.1f} | {rates[1]:.1f} | {rates[2]:.1f} | "
                       f"{rates[2]/rates[0]:.2f}× | {rates[2]/rates[1]:.2f}× | {runs[2]['stats']['largest_submission']} |", flush=True)
+    capture_directory.cleanup()
     if args.json:
+        actual_workload_ids = {item["workload_id"] for item in report["workloads"]}
+        wanted_workload_ids = expected_workload_ids(
+            args.operation, selected_modes, selected_sizes, args.height, args.alpha_input_pattern
+        )
+        if actual_workload_ids != wanted_workload_ids:
+            raise AssertionError(
+                f"emitted workload IDs differ from selected scope: "
+                f"expected={sorted(wanted_workload_ids)}, actual={sorted(actual_workload_ids)}"
+            )
         report["finished_at_unix_ns"] = time.time_ns()
         print(json.dumps(report, sort_keys=True, separators=(",", ":")))
 

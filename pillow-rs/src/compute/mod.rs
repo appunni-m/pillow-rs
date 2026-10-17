@@ -1342,11 +1342,18 @@ pub(crate) fn execute_eager_cpu_image_operation(
     };
     let backend_ns = elapsed_ns(backend_start);
     if timed {
+        // Match pipeline boundary accounting for the actual physical color
+        // change without adding work to telemetry-disabled eager calls.
+        let mode_conversion_count = u64::from(input.color() != result.color());
         begin_pipeline_operation_telemetry(operation);
         record_pipeline_operation_path("cpu");
+        record_pipeline_operation_mode_conversion(mode_conversion_count);
         finish_pipeline_operation_telemetry();
 
         let mut resource = host_resource_telemetry(input);
+        resource.mode_conversion_count = resource
+            .mode_conversion_count
+            .saturating_add(mode_conversion_count);
         let output_bytes = result.as_bytes().len();
         let output_bytes_u64 = output_bytes as u64;
         resource.host_buffer_count = resource

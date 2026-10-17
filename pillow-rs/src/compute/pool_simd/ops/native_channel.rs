@@ -46,6 +46,12 @@ pub(crate) fn gather_channel_into<const CHANNELS: usize, const CHANNEL: usize>(
     if CHANNELS == 4 {
         return gather_rgba_channel_neon_into::<CHANNEL>(source, output);
     }
+    #[cfg(target_arch = "x86_64")]
+    if let Some((vector_blocks, scalar_tail)) =
+        crate::color::gather_interleaved_channel_ssse3_into(source, output, CHANNELS, CHANNEL)
+    {
+        return (vector_blocks, scalar_tail);
+    }
     let (gathered, vector_blocks, scalar_tail) =
         crate::compute::pool_cpu::ops::imageops::gather_native_channel::<CHANNELS, CHANNEL>(source);
     output.copy_from_slice(&gathered);

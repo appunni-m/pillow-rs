@@ -132,13 +132,15 @@ def execution_receipt(value: dict[str, Any], label: str) -> None:
         "sample_count",
         "cached_sample_count",
     }
-    legacy_allowed = (required, required | {"errors"})
-    current_required = required | {"terminal_complete"}
-    current_allowed = (current_required, current_required | {"errors"})
-    if not isinstance(value, dict) or set(value) not in legacy_allowed + current_allowed:
+    optional = {"terminal_complete", "errors", "operation_telemetry"}
+    if (
+        not isinstance(value, dict)
+        or not required <= set(value)
+        or not set(value) <= required | optional
+    ):
         raise ValueError(
             f"{label}: expected execution receipt keys {sorted(required)}"
-            " plus terminal_complete, with optional errors"
+            " with optional terminal_complete, errors, and operation_telemetry"
         )
     explicit_terminal_state = "terminal_complete" in value
     if explicit_terminal_state and type(value["terminal_complete"]) is not bool:
@@ -230,6 +232,33 @@ def execution_receipt(value: dict[str, Any], label: str) -> None:
         summary(value["resource"][field], f"{label}.resource.{field}")
     non_negative_int(value["sample_count"], f"{label}.sample_count")
     non_negative_int(value["cached_sample_count"], f"{label}.cached_sample_count")
+    if "operation_telemetry" in value:
+        telemetry = value["operation_telemetry"]
+        if not isinstance(telemetry, list):
+            raise ValueError(f"{label}.operation_telemetry: expected array")
+        for index, item in enumerate(telemetry):
+            telemetry_label = f"{label}.operation_telemetry[{index}]"
+            exact(
+                item,
+                {
+                    "operation",
+                    "path",
+                    "vector_block_count",
+                    "scalar_tail_count",
+                    "mode_conversion_count",
+                    "handoff_count",
+                },
+                telemetry_label,
+            )
+            string(item["operation"], f"{telemetry_label}.operation")
+            string(item["path"], f"{telemetry_label}.path")
+            for field in (
+                "vector_block_count",
+                "scalar_tail_count",
+                "mode_conversion_count",
+                "handoff_count",
+            ):
+                non_negative_int(item[field], f"{telemetry_label}.{field}")
     if "errors" in value:
         if not isinstance(value["errors"], list):
             raise ValueError(f"{label}.errors: expected array")
@@ -975,7 +1004,19 @@ def benchmark(result: dict[str, Any]) -> None:
     if result["status"] not in {"completed", "infrastructure_failed", "cancelled", "invalid"}:
         raise ValueError("benchmark.status: invalid artifact status")
     identity(result["identity"])
-    exact(result["environment"], {"machine_id", "os", "architecture", "cpu", "memory_bytes", "power_mode", "toolchain"}, "benchmark.environment")
+    environment_fields = {"machine_id", "os", "architecture", "cpu", "memory_bytes", "power_mode", "toolchain"}
+    environment = result["environment"]
+    if not isinstance(environment, dict) or set(environment) not in (
+        environment_fields,
+        environment_fields | {"runner_id"},
+    ):
+        actual = sorted(environment) if isinstance(environment, dict) else type(environment).__name__
+        raise ValueError(
+            f"benchmark.environment: expected keys {sorted(environment_fields)} "
+            f"with optional runner_id, got {actual}"
+        )
+    if "runner_id" in environment:
+        string(environment["runner_id"], "benchmark.environment.runner_id")
     for field in ("machine_id", "os", "architecture", "cpu", "power_mode", "toolchain"):
         string(result["environment"][field], f"benchmark.environment.{field}")
     non_negative_int(result["environment"]["memory_bytes"], "benchmark.environment.memory_bytes")

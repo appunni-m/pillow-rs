@@ -889,6 +889,41 @@ impl PillowColorCounts {
         }
     }
 
+    fn count_repeated(
+        &mut self,
+        colors: &mut usize,
+        pixel: u32,
+        repetitions: usize,
+        maxcolors: usize,
+        code_mask: u32,
+        code_polynomial: u32,
+    ) -> Option<bool> {
+        if repetitions <= 1 {
+            return Some(self.count(colors, pixel, maxcolors, code_mask, code_polynomial));
+        }
+        let repetitions = u32::try_from(repetitions).ok()?;
+        match self {
+            Self::Direct(slots) => count_pillow_color_direct_repeated(
+                slots,
+                colors,
+                pixel,
+                repetitions,
+                maxcolors,
+                code_mask,
+                code_polynomial,
+            ),
+            Self::Sparse(table) => count_pillow_color_sparse_repeated(
+                table,
+                colors,
+                pixel,
+                repetitions,
+                maxcolors,
+                code_mask,
+                code_polynomial,
+            ),
+        }
+    }
+
     fn into_slot_order(self, distinct_colors: usize) -> Vec<(u32, (u32, u32))> {
         match self {
             Self::Direct(slots) => {
@@ -1003,6 +1038,149 @@ fn count_pillow_color_sparse(
     }
 }
 
+/// Count scalar pixels after the prefix check has ruled out adjacent runs.
+/// Match the storage representation once instead of redispatching through the
+/// enum for every sample.
+fn count_pillow_color_scalar_samples(
+    counts: &mut PillowColorCounts,
+    colors: &mut usize,
+    bytes: &[u8],
+    maxcolors: usize,
+    code_mask: u32,
+    code_polynomial: u32,
+) -> bool {
+    match counts {
+        PillowColorCounts::Direct(slots) => {
+            for sample in bytes.chunks_exact(4) {
+                let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
+                if !count_pillow_color_direct(
+                    slots,
+                    colors,
+                    pixel,
+                    maxcolors,
+                    code_mask,
+                    code_polynomial,
+                ) {
+                    return false;
+                }
+            }
+        }
+        PillowColorCounts::Sparse(table) => {
+            for sample in bytes.chunks_exact(4) {
+                let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
+                if !count_pillow_color_sparse(
+                    table,
+                    colors,
+                    pixel,
+                    maxcolors,
+                    code_mask,
+                    code_polynomial,
+                ) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+/// Count an adjacent run with the same Pillow probe sequence as scalar inserts.
+/// `None` asks the caller to replay the run through `count`, preserving the
+/// scalar counter-overflow behavior.
+fn count_pillow_color_direct_repeated(
+    slots: &mut [u64],
+    colors: &mut usize,
+    pixel: u32,
+    repetitions: u32,
+    maxcolors: usize,
+    code_mask: u32,
+    code_polynomial: u32,
+) -> Option<bool> {
+    let mut slot = (!pixel) & code_mask;
+    let mut increment = 0u32;
+    let mut first_conflict = true;
+
+    loop {
+        let entry = &mut slots[slot as usize];
+        if *entry == 0 {
+            if *colors == maxcolors {
+                return Some(false);
+            }
+            *entry = (u64::from(repetitions) << 32) | u64::from(pixel);
+            *colors += 1;
+            return Some(true);
+        }
+        if *entry as u32 == pixel {
+            let count = (*entry >> 32) as u32;
+            let count = count.checked_add(repetitions)?;
+            *entry = (u64::from(count) << 32) | u64::from(pixel);
+            return Some(true);
+        }
+
+        if first_conflict {
+            increment = (pixel ^ (pixel >> 3)) & code_mask;
+            if increment == 0 {
+                increment = code_mask;
+            }
+            first_conflict = false;
+        } else {
+            increment <<= 1;
+            if increment > code_mask {
+                increment ^= code_polynomial;
+            }
+        }
+        slot = (slot + increment) & code_mask;
+    }
+}
+
+/// Count an adjacent run in sparse Pillow slots without changing slot order.
+/// `None` asks the caller to replay the run through `count` on counter overflow.
+fn count_pillow_color_sparse_repeated(
+    table: &mut std::collections::HashMap<u32, (u32, u32)>,
+    colors: &mut usize,
+    pixel: u32,
+    repetitions: u32,
+    maxcolors: usize,
+    code_mask: u32,
+    code_polynomial: u32,
+) -> Option<bool> {
+    let mut slot = (!pixel) & code_mask;
+    let mut increment = 0u32;
+    let mut first_conflict = true;
+
+    loop {
+        match table.get_mut(&slot) {
+            Some((stored_pixel, count)) if *stored_pixel == pixel => {
+                *count = count.checked_add(repetitions)?;
+                return Some(true);
+            }
+            Some(_) => {}
+            None => {
+                if *colors == maxcolors {
+                    return Some(false);
+                }
+                table.insert(slot, (pixel, repetitions));
+                *colors += 1;
+                return Some(true);
+            }
+        }
+
+        if first_conflict {
+            increment = (pixel ^ (pixel >> 3)) & code_mask;
+            if increment == 0 {
+                increment = code_mask;
+            }
+            first_conflict = false;
+        } else {
+            increment <<= 1;
+            if increment > code_mask {
+                increment ^= code_polynomial;
+            }
+        }
+        slot = (slot + increment) & code_mask;
+    }
+}
+
 fn pillow_color_components(pixel: u32, bands: usize) -> FormattedPixelValue {
     let bytes = pixel.to_ne_bytes();
     match bands {
@@ -1044,6 +1222,268 @@ enum RgbGrayscaleColorCounts {
     NotGrayscale,
     TooManyColors,
     Colors(Vec<(u32, FormattedPixelValue)>),
+}
+
+enum ScalarColorDomainCounts {
+    NotApplicable,
+    TooManyColors,
+    Colors(Vec<(u32, FormattedPixelValue)>),
+}
+
+fn scalar_byte_domain_index(mode: &str, pixel: u32) -> Option<usize> {
+    match mode {
+        "I" => {
+            let value = i32::from_ne_bytes(pixel.to_ne_bytes());
+            if (0..=255).contains(&value) {
+                usize::try_from(value).ok()
+            } else {
+                None
+            }
+        }
+        "F" => {
+            if pixel == 0 {
+                return Some(0);
+            }
+            if pixel >> 31 != 0 {
+                return None;
+            }
+            let exponent = (pixel >> 23) & 0xff;
+            if !(127..=134).contains(&exponent) {
+                return None;
+            }
+            let shift = 23 - (exponent - 127);
+            let significand = (1 << 23) | (pixel & 0x7f_ffff);
+            let fractional_mask = (1 << shift) - 1;
+            if significand & fractional_mask != 0 {
+                return None;
+            }
+            let value = significand >> shift;
+            if value <= 255 {
+                usize::try_from(value).ok()
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn scalar_byte_domain_is_plausible(mode: &str, bytes: &[u8]) -> bool {
+    let sample_count = bytes.len() / 4;
+    if sample_count == 0 {
+        return true;
+    }
+    let last_index = sample_count - 1;
+    let base_step = last_index / 15;
+    let remainder = last_index % 15;
+    for ordinal in 0..=15usize {
+        let Some(sample_index) = base_step
+            .checked_mul(ordinal)
+            .and_then(|base| base.checked_add((remainder * ordinal) / 15))
+        else {
+            return false;
+        };
+        let Some(start) = sample_index.checked_mul(4) else {
+            return false;
+        };
+        let Some(end) = start.checked_add(4) else {
+            return false;
+        };
+        let Some(sample) = bytes.get(start..end) else {
+            return false;
+        };
+        let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
+        if scalar_byte_domain_index(mode, pixel).is_none() {
+            return false;
+        }
+    }
+    true
+}
+
+fn getcolors_scalar_byte_domain(
+    mode: &str,
+    bytes: &[u8],
+    maxcolors: usize,
+    code_mask: u32,
+    code_polynomial: u32,
+) -> ScalarColorDomainCounts {
+    let mut histogram = [0u32; 256];
+    let mut first_seen = Vec::<u8>::with_capacity(256);
+    for sample in bytes.chunks_exact(4) {
+        let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
+        let Some(index) = scalar_byte_domain_index(mode, pixel) else {
+            return ScalarColorDomainCounts::NotApplicable;
+        };
+        let count = histogram[index];
+        let Some(next_count) = count.checked_add(1) else {
+            return ScalarColorDomainCounts::NotApplicable;
+        };
+        if count == 0 {
+            if first_seen.len() == maxcolors {
+                return ScalarColorDomainCounts::TooManyColors;
+            }
+            let Ok(index) = u8::try_from(index) else {
+                return ScalarColorDomainCounts::NotApplicable;
+            };
+            first_seen.push(index);
+        }
+        histogram[index] = next_count;
+    }
+
+    // Preserve Pillow's first-insertion probe sequence without allocating its
+    // maxcolors-sized direct table for this bounded scalar domain.
+    let mut counts =
+        PillowColorCounts::Sparse(std::collections::HashMap::with_capacity(first_seen.len()));
+    let mut distinct_colors = 0usize;
+    for value in first_seen {
+        let index = usize::from(value);
+        let pixel = if mode == "I" {
+            u32::from_ne_bytes(i32::from(value).to_ne_bytes())
+        } else {
+            f32::from(value).to_bits()
+        };
+        let Ok(repetitions) = usize::try_from(histogram[index]) else {
+            return ScalarColorDomainCounts::NotApplicable;
+        };
+        let Some(counted) = counts.count_repeated(
+            &mut distinct_colors,
+            pixel,
+            repetitions,
+            maxcolors,
+            code_mask,
+            code_polynomial,
+        ) else {
+            return ScalarColorDomainCounts::NotApplicable;
+        };
+        if !counted {
+            return ScalarColorDomainCounts::TooManyColors;
+        }
+    }
+
+    ScalarColorDomainCounts::Colors(
+        counts
+            .into_slot_order(distinct_colors)
+            .into_iter()
+            .map(|(_, (pixel, count))| {
+                let value = if mode == "I" {
+                    FormattedPixelValue::Integer(i32::from_ne_bytes(pixel.to_ne_bytes()))
+                } else {
+                    FormattedPixelValue::Float(f32::from_bits(pixel) as f64)
+                };
+                (count, value)
+            })
+            .collect(),
+    )
+}
+
+const SCALAR_I_SPARSE_RUN_COLOR_LIMIT: usize = 4096;
+const SCALAR_I_REPEATED_RUN_MIN_PREFIX_SAMPLES: usize = 256;
+const SCALAR_I_REPEATED_RUN_MIN_DIRECT_SLOTS: usize = 65_536;
+
+fn getcolors_scalar_i_repeated_runs(
+    bytes: &[u8],
+    maxcolors: usize,
+    code_mask: u32,
+    code_polynomial: u32,
+) -> ScalarColorDomainCounts {
+    let exact_len = bytes.len() / 4 * 4;
+    let mut counts = PillowColorCounts::Sparse(std::collections::HashMap::with_capacity(256));
+    let mut distinct_colors = 0usize;
+    let mut offset = 0usize;
+
+    while offset < exact_len {
+        let sample = &bytes[offset..offset + 4];
+        let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
+
+        let pattern = [
+            sample[0], sample[1], sample[2], sample[3], sample[0], sample[1], sample[2], sample[3],
+            sample[0], sample[1], sample[2], sample[3], sample[0], sample[1], sample[2], sample[3],
+        ];
+        let mut run_end = offset;
+        while let Some(end) = run_end.checked_add(pattern.len()) {
+            if end > exact_len || bytes[run_end..end] != pattern[..] {
+                break;
+            }
+            run_end = end;
+        }
+        while let Some(end) = run_end.checked_add(4) {
+            if end > exact_len || bytes[run_end..end] != sample[..] {
+                break;
+            }
+            run_end = end;
+        }
+
+        let repetitions = (run_end - offset) / 4;
+        match counts.count_repeated(
+            &mut distinct_colors,
+            pixel,
+            repetitions,
+            maxcolors,
+            code_mask,
+            code_polynomial,
+        ) {
+            Some(true) => {}
+            Some(false) => return ScalarColorDomainCounts::TooManyColors,
+            None => {
+                for _ in 0..repetitions {
+                    if !counts.count(
+                        &mut distinct_colors,
+                        pixel,
+                        maxcolors,
+                        code_mask,
+                        code_polynomial,
+                    ) {
+                        return ScalarColorDomainCounts::TooManyColors;
+                    }
+                }
+            }
+        }
+        if distinct_colors > SCALAR_I_SPARSE_RUN_COLOR_LIMIT {
+            return ScalarColorDomainCounts::NotApplicable;
+        }
+        offset = run_end;
+    }
+
+    ScalarColorDomainCounts::Colors(
+        counts
+            .into_slot_order(distinct_colors)
+            .into_iter()
+            .map(|(_, (pixel, count))| {
+                (
+                    count,
+                    FormattedPixelValue::Integer(i32::from_ne_bytes(pixel.to_ne_bytes())),
+                )
+            })
+            .collect(),
+    )
+}
+
+fn scalar_prefix_has_repeated_samples(bytes: &[u8]) -> bool {
+    let mut samples = bytes.chunks_exact(4).take(64);
+    let Some(mut previous) = samples.next() else {
+        return false;
+    };
+    let mut repeated_pairs = 0usize;
+    for sample in samples {
+        if sample == previous {
+            repeated_pairs += 1;
+            if repeated_pairs >= 4 {
+                return true;
+            }
+        }
+        previous = sample;
+    }
+    false
+}
+
+fn scalar_i_prefix_has_long_run(bytes: &[u8]) -> bool {
+    let Some(first) = bytes.get(..4) else {
+        return false;
+    };
+    bytes
+        .chunks_exact(4)
+        .take(SCALAR_I_REPEATED_RUN_MIN_PREFIX_SAMPLES)
+        .all(|sample| sample == first)
 }
 
 fn getcolors_rgb8_grayscale(
@@ -1123,10 +1563,106 @@ fn getcolors_rgb8_grayscale(
 mod pillow_color_counts_tests {
     use super::{
         Image, PILLOW_COLOR_DIRECT_TABLE_MAX_BYTES, PillowColorCounts, RgbGrayscaleColorCounts,
-        getcolors_rgb8_grayscale, pillow_color_components, pillow_color_direct_table_slots,
-        pillow_color_pixel, pillow_color_table_parameters,
+        SCALAR_I_REPEATED_RUN_MIN_PREFIX_SAMPLES, SCALAR_I_SPARSE_RUN_COLOR_LIMIT,
+        ScalarColorDomainCounts, getcolors_rgb8_grayscale, getcolors_scalar_i_repeated_runs,
+        pillow_color_components, pillow_color_direct_table_slots, pillow_color_pixel,
+        pillow_color_table_parameters, scalar_i_prefix_has_long_run,
+        scalar_prefix_has_repeated_samples,
     };
     use crate::raster::{DynamicImage, RgbImage};
+
+    fn scalar_i_bytes(runs: &[(i32, usize)]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for &(value, repetitions) in runs {
+            for _ in 0..repetitions {
+                bytes.extend_from_slice(&value.to_ne_bytes());
+            }
+        }
+        bytes
+    }
+
+    #[test]
+    fn scalar_i_repeated_runs_match_scalar_inserts_and_preserve_slot_order() {
+        let bytes = scalar_i_bytes(&[
+            (7, 3_072),
+            (2, 1_001),
+            (7, 19),
+            (0, 5),
+            (255, 4_096),
+            (-1, 3),
+        ]);
+        let maxcolors = 1_000_000;
+        let (code_mask, code_polynomial) =
+            pillow_color_table_parameters(maxcolors).expect("test limit has a Pillow table");
+        let actual = getcolors_scalar_i_repeated_runs(
+            &bytes,
+            maxcolors as usize,
+            code_mask,
+            code_polynomial,
+        );
+        let mut expected = PillowColorCounts::Direct(vec![0; code_mask as usize + 1]);
+        let mut expected_colors = 0usize;
+        for sample in bytes.chunks_exact(4) {
+            let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
+            assert!(expected.count(
+                &mut expected_colors,
+                pixel,
+                maxcolors as usize,
+                code_mask,
+                code_polynomial,
+            ));
+        }
+        let expected = expected
+            .into_slot_order(expected_colors)
+            .into_iter()
+            .map(|(_, (pixel, count))| {
+                (
+                    count,
+                    super::FormattedPixelValue::Integer(i32::from_ne_bytes(pixel.to_ne_bytes())),
+                )
+            })
+            .collect::<Vec<_>>();
+        let ScalarColorDomainCounts::Colors(actual) = actual else {
+            panic!("repeated I input must produce colors");
+        };
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn scalar_i_repeated_runs_preserve_maxcolors_limit() {
+        let bytes = scalar_i_bytes(&[(1, 8), (2, 8), (3, 8)]);
+        let (code_mask, code_polynomial) =
+            pillow_color_table_parameters(2).expect("test limit has a Pillow table");
+        assert!(matches!(
+            getcolors_scalar_i_repeated_runs(&bytes, 2, code_mask, code_polynomial),
+            ScalarColorDomainCounts::TooManyColors
+        ));
+    }
+
+    #[test]
+    fn scalar_i_repeated_runs_yield_to_general_path_after_sparse_limit() {
+        let mut runs = vec![(0, SCALAR_I_REPEATED_RUN_MIN_PREFIX_SAMPLES)];
+        runs.extend((1..=SCALAR_I_SPARSE_RUN_COLOR_LIMIT).map(|value| (value as i32, 1)));
+        let bytes = scalar_i_bytes(&runs);
+        let maxcolors = 100_000;
+        let (code_mask, code_polynomial) =
+            pillow_color_table_parameters(maxcolors as u32).expect("test limit has a Pillow table");
+
+        assert!(matches!(
+            getcolors_scalar_i_repeated_runs(&bytes, maxcolors, code_mask, code_polynomial,),
+            ScalarColorDomainCounts::NotApplicable
+        ));
+    }
+
+    #[test]
+    fn scalar_i_prefix_gate_rejects_short_run_before_high_cardinality_tail() {
+        let mut runs = vec![(0, 64)];
+        runs.extend((1..=192).map(|value| (value, 1)));
+        let bytes = scalar_i_bytes(&runs);
+
+        assert!(!scalar_i_prefix_has_long_run(&bytes));
+        assert!(scalar_prefix_has_repeated_samples(&bytes));
+    }
 
     #[test]
     fn dense_table_admission_is_bounded_by_memory_and_scan_size() {
@@ -6115,10 +6651,14 @@ impl Image {
     /// while loading or materializing the image.
     pub fn getdata_band_len(&self, band: i32) -> Result<usize, PilError> {
         let mode = self.mode()?;
-        if is_l16_mode(&mode) || mode == "I" || mode == "F" {
+        self.getdata_band_len_for_mode(&mode, band)
+    }
+
+    fn getdata_band_len_for_mode(&self, mode: &str, band: i32) -> Result<usize, PilError> {
+        if is_l16_mode(mode) || mode == "I" || mode == "F" {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
-        let band_count = pillow_band_count(&mode);
+        let band_count = pillow_band_count(mode);
         if band < 0 || band as usize >= band_count {
             return Err(PilError::ValueError("band index out of range".into()));
         }
@@ -6153,7 +6693,16 @@ impl Image {
                 );
                 Ok(Some(data.indices.as_raw()))
             }
-            Image::Loaded(data) if matches!(self.mode()?.as_str(), "1" | "L") => {
+            // Preserve `mode()` precedence while avoiding its owned String in
+            // this eligibility-only check.
+            Image::Loaded(data)
+                if matches!(
+                    data.explicit_mode
+                        .as_deref()
+                        .unwrap_or_else(|| image_mode_name(data.decoded_mode)),
+                    "1" | "L"
+                ) =>
+            {
                 let values: Option<&[u8]> = match data.image.as_ref() {
                     DynamicImage::ImageLuma8(image) => Some(image.as_raw().as_slice()),
                     _ => None,
@@ -6186,7 +6735,7 @@ impl Image {
     pub fn getdata_band_into(&self, band: i32, output: &mut [u8]) -> Result<(), PilError> {
         let mode_name = self.mode()?;
         let mode = mode_name.as_str();
-        let expected = self.getdata_band_len(band)?;
+        let expected = self.getdata_band_len_for_mode(mode, band)?;
         if output.len() != expected {
             return Err(PilError::InternalError(
                 "getdata band output length mismatch".into(),
@@ -6896,7 +7445,9 @@ impl Image {
                         Some(crate::compute::execute_eager_cpu_image_operation(
                             "ExtractBand",
                             img.as_ref(),
-                            true,
+                            // The ExtractBand kernel records its output
+                            // allocation; manual accounting would count it twice.
+                            false,
                             || {
                                 crate::compute::registry::execute_cpu(
                                     &operation,
@@ -7071,6 +7622,12 @@ impl Image {
         &self,
         maxcolors: u32,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        // GetColors over scalar samples is an eager host-CPU scan. Emit a
+        // selected-step receipt only when the pixels were already materialized:
+        // a first-time pipeline materialization has its own backend receipt and
+        // must not be overwritten by this terminal CPU scan.
+        let eager_receipt_eligible =
+            crate::compute::Backend::pipeline_telemetry_enabled() && self.is_materialized();
         let mode = self.mode()?;
         if is_l16_mode(&mode) {
             // Pillow's ImagingCore rejects unsigned 16-bit luma modes here;
@@ -7079,7 +7636,26 @@ impl Image {
         }
         let img = self.materialized_shared()?;
         if mode == "I" || mode == "F" {
-            return Self::getcolors_scalar(maxcolors, &mode, &img);
+            let telemetry = if eager_receipt_eligible {
+                match crate::compute::preferred_active_backend() {
+                    Ok(selected) => Some(crate::compute::begin_eager_cpu_operation_telemetry(
+                        "GetColors",
+                        selected.map(|(backend, _)| backend),
+                    )),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            };
+            let result = Self::getcolors_scalar(maxcolors, &mode, &img);
+            if let Some(telemetry) = telemetry {
+                if result.is_ok() {
+                    crate::compute::finish_eager_cpu_operation_telemetry(telemetry, 0);
+                } else {
+                    crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+                }
+            }
+            return result;
         }
         // For 1, L, P modes, PIL uses histogram (pixel value ascending)
         if mode == "1" || mode == "L" || mode == "P" {
@@ -7341,19 +7917,111 @@ impl Image {
         let (code_mask, code_polynomial) = pillow_color_table_parameters(maxcolors)
             .ok_or_else(|| PilError::MemoryError(String::new()))?;
         let max_distinct_colors = maxcolors as usize;
-        let initial_capacity = if maxcolors <= 256 && img.as_bytes().len() >= 64 * 1024 {
+        let bytes = img.as_bytes();
+        let pixel_count = pillow_image_pixel_count(img);
+        let has_repeated_prefix = if mode == "I" {
+            scalar_i_prefix_has_long_run(bytes)
+        } else {
+            scalar_prefix_has_repeated_samples(bytes)
+        };
+        let direct_table_slots = pillow_color_direct_table_slots(code_mask, pixel_count);
+        if mode == "I"
+            && pixel_count >= 4096
+            && has_repeated_prefix
+            && direct_table_slots
+                .is_some_and(|slots| slots > SCALAR_I_REPEATED_RUN_MIN_DIRECT_SLOTS)
+            && scalar_byte_domain_is_plausible("I", bytes)
+        {
+            match getcolors_scalar_i_repeated_runs(
+                bytes,
+                max_distinct_colors,
+                code_mask,
+                code_polynomial,
+            ) {
+                ScalarColorDomainCounts::NotApplicable => {}
+                ScalarColorDomainCounts::TooManyColors => return Ok(None),
+                ScalarColorDomainCounts::Colors(colors) => return Ok(Some(colors)),
+            }
+        }
+        if pixel_count >= 4096
+            && !has_repeated_prefix
+            && scalar_byte_domain_is_plausible(mode, bytes)
+        {
+            match getcolors_scalar_byte_domain(
+                mode,
+                bytes,
+                max_distinct_colors,
+                code_mask,
+                code_polynomial,
+            ) {
+                ScalarColorDomainCounts::NotApplicable => {}
+                ScalarColorDomainCounts::TooManyColors => return Ok(None),
+                ScalarColorDomainCounts::Colors(colors) => return Ok(Some(colors)),
+            }
+        }
+        let initial_capacity = if maxcolors <= 256 && bytes.len() >= 64 * 1024 {
             max_distinct_colors + 1
         } else {
             0
         };
-        let mut counts =
-            PillowColorCounts::new(code_mask, initial_capacity, pillow_image_pixel_count(img));
+        let mut counts = PillowColorCounts::new(code_mask, initial_capacity, pixel_count);
         let mut distinct_colors = 0usize;
-        for sample in img.as_bytes().chunks_exact(4) {
-            let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
-            if !counts.count(
+        if has_repeated_prefix {
+            let mut samples = bytes.chunks_exact(4).peekable();
+            while let Some(sample) = samples.next() {
+                let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
+                let mut repetitions = 1usize;
+                while let Some(next) = samples.peek() {
+                    if *next != sample {
+                        break;
+                    }
+                    samples.next();
+                    repetitions += 1;
+                }
+
+                if repetitions == 1 {
+                    if !counts.count(
+                        &mut distinct_colors,
+                        pixel,
+                        max_distinct_colors,
+                        code_mask,
+                        code_polynomial,
+                    ) {
+                        return Ok(None);
+                    }
+                    continue;
+                }
+
+                match counts.count_repeated(
+                    &mut distinct_colors,
+                    pixel,
+                    repetitions,
+                    max_distinct_colors,
+                    code_mask,
+                    code_polynomial,
+                ) {
+                    Some(true) => {}
+                    Some(false) => return Ok(None),
+                    None => {
+                        for _ in 0..repetitions {
+                            if !counts.count(
+                                &mut distinct_colors,
+                                pixel,
+                                max_distinct_colors,
+                                code_mask,
+                                code_polynomial,
+                            ) {
+                                return Ok(None);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            if !count_pillow_color_scalar_samples(
+                &mut counts,
                 &mut distinct_colors,
-                pixel,
+                bytes,
                 max_distinct_colors,
                 code_mask,
                 code_polynomial,
@@ -8085,7 +8753,27 @@ impl Image {
         {
             return Ok(projection);
         }
-        Self::getprojection_from_materialized(img.as_ref(), mode.as_str())
+        if !crate::compute::Backend::pipeline_telemetry_enabled() {
+            return Self::getprojection_from_materialized(img.as_ref(), mode.as_str());
+        }
+
+        let selected = crate::compute::preferred_active_backend().ok().flatten();
+        let requested_backend = selected
+            .filter(|(_, only_active_backend)| *only_active_backend)
+            .map(|(backend, _)| backend);
+        let fallback_reason = requested_backend
+            .filter(|backend| *backend != crate::compute::Backend::Cpu)
+            .map(|backend| {
+                format!(
+                    "GetProjection materialized pipeline used the host CPU while {backend:?} was requested"
+                )
+            });
+        crate::compute::execute_eager_cpu_getprojection(
+            img.as_ref(),
+            requested_backend,
+            fallback_reason,
+            || Self::getprojection_from_materialized(img.as_ref(), mode.as_str()),
+        )
     }
 
     fn try_getprojection_eager_backend(
@@ -8177,35 +8865,79 @@ impl Image {
         let (w, h) = (img.width() as usize, img.height() as usize);
         let mut h_proj = vec![0u32; w];
         let mut v_proj = vec![0u32; h];
-        let mut mark = |index: usize| {
-            let x = index % w;
-            let y = index / w;
-            h_proj[x] = 1;
-            v_proj[y] = 1;
-        };
 
         // Pillow's ImagingGetProjection checks source bands for non-zero
         // samples. Converting RGB/RGBA to luma first loses low red/blue and
         // alpha-only pixels, even though Pillow projects those pixels.
         if matches!(mode, "I" | "F") {
             // Materialization validates scalar storage, so decode each sample
-            // from the retained frame while marking the result-sized vectors.
-            if mode == "I" {
-                for (index, sample) in img.as_bytes().chunks_exact(4).enumerate() {
-                    let value = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-                    if value != 0 {
-                        mark(index);
-                    }
-                }
-            } else {
-                for (index, sample) in img.as_bytes().chunks_exact(4).enumerate() {
-                    let value = f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-                    if value != 0.0 {
-                        mark(index);
+            // from the retained frame a row at a time. Projection only records
+            // whether a column and row contain any non-zero word, so direct
+            // coordinates avoid a division/modulo and repeated row writes per
+            // sample. Once every column is marked, each remaining row needs
+            // only its first non-zero sample to determine its vertical bit.
+            let row_bytes = w.checked_mul(std::mem::size_of::<u32>()).ok_or_else(|| {
+                PilError::DimensionError("getprojection row byte count overflow".into())
+            })?;
+            if row_bytes != 0 {
+                let raw = img.as_bytes();
+                let mut remaining_columns = w;
+                for (y, row) in raw.chunks_exact(row_bytes).take(h).enumerate() {
+                    let row_nonzero = if remaining_columns == 0 {
+                        row.chunks_exact(4).any(|sample| {
+                            u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) != 0
+                        })
+                    } else {
+                        let mut row_nonzero = false;
+                        if mode == "I" {
+                            for (x, sample) in row.chunks_exact(4).enumerate() {
+                                let value = i32::from_le_bytes([
+                                    sample[0], sample[1], sample[2], sample[3],
+                                ]);
+                                if value != 0 {
+                                    row_nonzero = true;
+                                    if h_proj[x] == 0 {
+                                        h_proj[x] = 1;
+                                        remaining_columns -= 1;
+                                    }
+                                    if remaining_columns == 0 {
+                                        break;
+                                    }
+                                }
+                            }
+                        } else {
+                            for (x, sample) in row.chunks_exact(4).enumerate() {
+                                // Pillow projects F samples by their stored
+                                // word: -0.0's sign bit makes it nonzero.
+                                let value = u32::from_le_bytes([
+                                    sample[0], sample[1], sample[2], sample[3],
+                                ]);
+                                if value != 0 {
+                                    row_nonzero = true;
+                                    if h_proj[x] == 0 {
+                                        h_proj[x] = 1;
+                                        remaining_columns -= 1;
+                                    }
+                                    if remaining_columns == 0 {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        row_nonzero
+                    };
+                    if row_nonzero {
+                        v_proj[y] = 1;
                     }
                 }
             }
         } else {
+            let mut mark = |index: usize| {
+                let x = index % w;
+                let y = index / w;
+                h_proj[x] = 1;
+                v_proj[y] = 1;
+            };
             match img {
                 crate::raster::DynamicImage::ImageLuma8(image)
                     if matches!(mode, "L" | "1" | "P") =>
@@ -9621,3 +10353,7 @@ mod compatibility_info_tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "image_getchannel_receipt_tests.rs"]
+mod getchannel_receipt_tests;

@@ -10844,10 +10844,10 @@ impl GpuInner {
             // ping-pong the same two storage buffers; keeping them in one
             // pass leaves the second dispatch racing the first on some
             // drivers, producing a stale row while the host coefficients
-            // themselves remain exact.  Keep the boundary for the F-mode
-            // exact-arithmetic path as well as the historical I-mode nearest
-            // path; the ordinary byte path retains its grouped pass for the
-            // existing throughput contract.
+            // themselves remain exact. Keep the boundary for F/I typed paths
+            // and tall nearest byte-mode Resize/ResizeBoxed; the ordinary byte
+            // path retains its grouped pass for the existing throughput
+            // contract.
             if matches!(pipeline, ResolvedPipeline::Resize { .. })
                 && (logical_mode == Some("F")
                     && matches!(
@@ -10870,6 +10870,21 @@ impl GpuInner {
                         && matches!(
                             ops.get(index),
                             Some(PipelineOp::Resize { .. } | PipelineOp::ResizeBoxed { .. })
+                        )
+                    || matches!(logical_mode, Some("L" | "LA" | "RGB" | "RGBA"))
+                        && prepared.input_dims[index].1
+                            > prepared.input_dims[index].0.saturating_mul(100)
+                        && matches!(
+                            ops.get(index),
+                            Some(
+                                PipelineOp::Resize {
+                                    filter: ResampleFilter::Nearest,
+                                    ..
+                                } | PipelineOp::ResizeBoxed {
+                                    filter: ResampleFilter::Nearest,
+                                    ..
+                                }
+                            )
                         ))
             {
                 let ResolvedPipeline::Resize {
@@ -17713,8 +17728,10 @@ fn gpu_dispatch_count(
         } else if matches!(&ops[index], PipelineOp::Autocontrast { .. }) {
             // Autocontrast still clears its histogram with a compute dispatch.
             4
-        } else if matches!(&ops[index], PipelineOp::Fit { .. })
-            || matches!(&ops[index], PipelineOp::Resize { filter, .. }
+        } else if matches!(
+            &ops[index],
+            PipelineOp::Fit { .. } | PipelineOp::ResizeBoxed { .. }
+        ) || matches!(&ops[index], PipelineOp::Resize { filter, .. }
             if !matches!(filter, ResampleFilter::Nearest)
                 || gpu_resize_nearest_uses_coefficients(logical_mode))
         {
@@ -42099,6 +42116,23 @@ mod tests {
             assert_eq!(
                 gpu_pad_geometry(&op, source_dimensions.0, source_dimensions.1),
                 None
+            );
+        }
+    }
+
+    #[test]
+    fn boxed_nearest_resize_dispatch_count_covers_horizontal_and_vertical_passes() {
+        for mode in ["L", "LA", "RGB", "RGBA"] {
+            let boxed_nearest = PipelineOp::ResizeBoxed {
+                w: 5,
+                h: 3,
+                filter: ResampleFilter::Nearest,
+                box_coords: (0.25, 1.5, 1.75, 202.0),
+            };
+            assert_eq!(
+                gpu_dispatch_count(std::slice::from_ref(&boxed_nearest), Some(mode), (2, 203)),
+                2,
+                "{mode} ResizeBoxed nearest must account for H and V dispatches"
             );
         }
     }

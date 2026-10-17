@@ -276,6 +276,7 @@ class BenchmarkTests(unittest.TestCase):
         self.assertIsNone(row["median_us"])
         self.assertEqual(row["actual_backend"], "cpu")
         self.assertFalse(row["terminal_complete"])
+        self.assertIsNone(row["operation_telemetry"])
         self.assertNotIn("private-host", json.dumps(snapshot))
         snapshot.update(schema=SCHEMA, repository="owner/repo", source_sha256="b" * 64)
         validate(snapshot, "owner/repo")
@@ -285,6 +286,55 @@ class BenchmarkTests(unittest.TestCase):
         duplicate["rows"].append(duplicate["rows"][0])
         with self.assertRaises(ValueError):
             validate(duplicate, "owner/repo")
+
+    def test_published_benchmark_rows_preserve_operation_telemetry(self) -> None:
+        telemetry = [
+            {
+                "operation": "GetChannel",
+                "path": "neon-deinterleave",
+                "vector_block_count": 16,
+                "scalar_tail_count": 0,
+                "mode_conversion_count": 0,
+                "handoff_count": 0,
+            },
+            {
+                "operation": "GetChannel",
+                "path": "scalar-gather",
+                "vector_block_count": 0,
+                "scalar_tail_count": 0,
+                "mode_conversion_count": 0,
+                "handoff_count": 0,
+            },
+        ]
+        source = {
+            "schema": "migration-parity/benchmark-result@1",
+            "identity": {
+                "targets": [{"revision": "a" * 40, "dirty": False}],
+                "finished_at": "2026-10-14T00:00:00Z",
+                "run_id": "run",
+            },
+            "status": "completed",
+            "environment": {"os": "test", "architecture": "arm64"},
+            "workloads": [
+                {
+                    "workload_id": "getchannel",
+                    "measurement_policy": {"boundary": "whole_workflow"},
+                    "correctness": {"gate": "parity_pass", "outcome": "pass"},
+                    "subjects": [
+                        {
+                            "id": "python-simd",
+                            "status": "completed",
+                            "measurements": [],
+                            "execution": {"operation_telemetry": telemetry},
+                        }
+                    ],
+                }
+            ],
+        }
+
+        snapshot = project_pillow(source)
+
+        self.assertEqual(snapshot["rows"][0]["operation_telemetry"], telemetry)
 
 
 if __name__ == "__main__":

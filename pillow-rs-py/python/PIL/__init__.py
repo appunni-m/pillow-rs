@@ -44,6 +44,17 @@ from pillow_rs.gpu_batch import GpuBatchExecutor, GpuImage, BatchResult, BatchEr
 
 __version__ = _pillow_rs.__version__
 
+
+def __getattr__(name):
+    if name == "ImageShow":
+        from importlib import import_module
+
+        module = import_module(f"{__name__}.ImageShow")
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 # These modules are implemented in the internal binding package, but register
 # under their public Pillow names so ``import PIL.ImageOps`` and
 # ``from PIL import ImageOps`` behave identically.
@@ -76,6 +87,7 @@ __all__ = [
     "ImagePalette",
     "ImageStat",
     "ImageSequence",
+    "ImageShow",
     "Resampling",
     "Transpose",
     "Dither",

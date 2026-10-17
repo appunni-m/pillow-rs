@@ -469,6 +469,10 @@ unsafe fn grayscale_rgb_avx2_inner(source: &[u8], expected_pixels: usize) -> (Ve
     (output, vector_blocks)
 }
 
+#[cfg(test)]
+#[path = "color_grayscale_allocation_tests.rs"]
+mod la_conversion_allocation_receipts;
+
 /// Converts an image to Pillow-compatible `L` grayscale.
 ///
 /// The conversion uses Pillow's rounded BT.601 fixed-point formula, not the
@@ -510,6 +514,34 @@ pub(crate) fn gather_interleaved_channel_ssse3_bytes(
     Some(unsafe { gather_interleaved_channel_ssse3(source, channels, channel) })
 }
 
+/// Gather a selected byte directly into the caller's final output buffer.
+///
+/// Returns `None` when the layout, output shape, or CPU does not support the
+/// SSSE3 path, allowing the caller to retain its existing fallback.
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+pub(crate) fn gather_interleaved_channel_ssse3_into(
+    source: &[u8],
+    output: &mut [u8],
+    channels: usize,
+    channel: usize,
+) -> Option<(u64, u64)> {
+    if !(2..=4).contains(&channels)
+        || channel >= channels
+        || source.len() % channels != 0
+        || output.len() != source.len() / channels
+        || !std::is_x86_feature_detected!("ssse3")
+    {
+        return None;
+    }
+
+    // SAFETY: the checks above validate the packed layout, exact output size,
+    // and runtime SSSE3 support before entering the target-feature loop.
+    Some(unsafe {
+        gather_interleaved_channel_ssse3_into_raw(source, output.as_mut_ptr(), channels, channel)
+    })
+}
+
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "ssse3")]
 #[allow(unsafe_code)]
@@ -518,6 +550,35 @@ unsafe fn gather_interleaved_channel_ssse3(
     channels: usize,
     channel: usize,
 ) -> (Vec<u8>, u64, u64) {
+    let pixel_count = source.len() / channels;
+    let mut output = Vec::<u8>::with_capacity(pixel_count);
+    // SAFETY: the public wrapper checked the channel layout and SSSE3
+    // support, and the vector has capacity for every output pixel.
+    let (vector_blocks, scalar_tail) = unsafe {
+        gather_interleaved_channel_ssse3_into_raw(source, output.as_mut_ptr(), channels, channel)
+    };
+    // SAFETY: the raw helper initializes all `pixel_count` output bytes before
+    // returning successfully.
+    unsafe { output.set_len(pixel_count) };
+    debug_assert_eq!(output.len(), pixel_count);
+    (output, vector_blocks, scalar_tail)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "ssse3")]
+#[allow(unsafe_code)]
+/// # Safety
+///
+/// The caller must establish SSSE3 support, validate `channels` as 2 through
+/// 4, validate `channel < channels`, ensure the source length is divisible by
+/// `channels`, provide writable output for every source pixel, and ensure the
+/// output region does not overlap the source region.
+unsafe fn gather_interleaved_channel_ssse3_into_raw(
+    source: &[u8],
+    output: *mut u8,
+    channels: usize,
+    channel: usize,
+) -> (u64, u64) {
     use core::arch::x86_64::{
         _mm_loadu_si128, _mm_or_si128, _mm_setzero_si128, _mm_shuffle_epi8, _mm_storeu_si128,
     };
@@ -535,13 +596,11 @@ unsafe fn gather_interleaved_channel_ssse3(
             }
         })
     });
-    let mut output = Vec::<u8>::with_capacity(pixel_count);
-
-    // SAFETY: runtime dispatch established SSSE3. For each complete group of
-    // sixteen output pixels, `channels * 16` source bytes are available; each
-    // unaligned load stays in that range, each selector is a readable 16-byte
-    // stack array, and the 16-byte store fits the output capacity. `set_len`
-    // is called only after every vector output byte has been initialized.
+    // SAFETY: the caller proved runtime SSSE3 support and non-overlapping
+    // source/output regions. For each complete group of sixteen output pixels,
+    // `channels * 16` source bytes are available; each unaligned load stays in
+    // that range, each selector is a readable 16-byte stack array, and the
+    // 16-byte store fits the writable output region.
     unsafe {
         for pixel in (0..vector_pixels).step_by(LANES) {
             let source_ptr = source.as_ptr().add(pixel * channels);
@@ -551,17 +610,13 @@ unsafe fn gather_interleaved_channel_ssse3(
                 let selector = _mm_loadu_si128(selectors[block].as_ptr().cast());
                 selected = _mm_or_si128(selected, _mm_shuffle_epi8(input, selector));
             }
-            _mm_storeu_si128(output.as_mut_ptr().add(pixel).cast(), selected);
+            _mm_storeu_si128(output.add(pixel).cast(), selected);
         }
-        output.set_len(vector_pixels);
+        for pixel in vector_pixels..pixel_count {
+            *output.add(pixel) = source[pixel * channels + channel];
+        }
     }
-
-    for pixel in vector_pixels..pixel_count {
-        output.push(source[pixel * channels + channel]);
-    }
-    debug_assert_eq!(output.len(), pixel_count);
     (
-        output,
         (vector_pixels / LANES) as u64,
         (pixel_count - vector_pixels) as u64,
     )
@@ -656,8 +711,21 @@ fn pil_grayscale_inner(
         DynamicImage::ImageRgba8(source) => {
             grayscale_rgb_bytes::<4>(source.as_raw(), dims, rounding)
         }
-        _ => grayscale_rgb_bytes::<3>(img.to_rgb8().as_raw(), dims, rounding),
+        _ => {
+            let rgb = img.to_rgb8();
+            if rgb.as_raw().capacity() != 0 {
+                crate::compute::record_pipeline_allocation(rgb.as_raw().capacity());
+            }
+            grayscale_rgb_bytes::<3>(rgb.as_raw(), dims, rounding)
+        }
     };
+    // Every branch owns one grayscale Vec, including native L/LA copies.
+    // Record its actual capacity here so RGB paths are counted once and empty
+    // buffers do not manufacture an allocation. The fallback's RGB temporary
+    // is a separate allocation recorded at its creation above.
+    if gray.capacity() != 0 {
+        crate::compute::record_pipeline_allocation(gray.capacity());
+    }
 
     crate::raster::GrayImage::from_raw(w, h, gray)
         .ok_or_else(|| PilError::InternalError("pil_grayscale buffer mismatch".to_string()))
@@ -700,7 +768,6 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
     // output before overwriting it. Keep the former zero-fill behavior if an
     // internal caller supplies a truncated buffer.
     gray.resize(expected_pixels, 0);
-    crate::compute::record_pipeline_allocation(expected_pixels);
     gray
 }
 
@@ -1980,6 +2047,8 @@ pub fn palette_getcolor_validate_input(
 #[cfg(test)]
 mod tests {
     #[cfg(target_arch = "x86_64")]
+    use super::gather_interleaved_channel_ssse3_into;
+    #[cfg(target_arch = "x86_64")]
     use super::grayscale_rgb_avx2;
     use super::{
         ColorValue, cmyk_muldiv255_byte, cmyk_to_grayscale, f_to_i, f_to_l, getcolor,
@@ -1990,6 +2059,43 @@ mod tests {
     use crate::compute::Backend;
     use crate::error::PilError;
     use crate::raster::{DynamicImage, RgbaImage};
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn ssse3_direct_channel_gather_covers_vector_boundaries() {
+        if !std::is_x86_feature_detected!("ssse3") {
+            return;
+        }
+
+        for channels in 2..=4 {
+            for pixel_count in [0, 1, 15, 16, 17, 31, 32, 33] {
+                let source: Vec<u8> = (0..pixel_count * channels)
+                    .map(|index| u8::try_from((index * 73 + 19) % 256).expect("sample byte fits"))
+                    .collect();
+                for channel in 0..channels {
+                    let mut output = vec![0xA5; pixel_count];
+                    let (vector_blocks, scalar_tail) = gather_interleaved_channel_ssse3_into(
+                        &source,
+                        &mut output,
+                        channels,
+                        channel,
+                    )
+                    .expect("SSSE3 must be available on this test CPU");
+                    let expected: Vec<u8> = source
+                        .chunks_exact(channels)
+                        .map(|pixel| pixel[channel])
+                        .collect();
+
+                    assert_eq!(
+                        output, expected,
+                        "channels={channels} channel={channel} pixels={pixel_count}"
+                    );
+                    assert_eq!(vector_blocks, (pixel_count / 16) as u64);
+                    assert_eq!(scalar_tail, (pixel_count % 16) as u64);
+                }
+            }
+        }
+    }
 
     #[test]
     fn getcolor_accepts_pillow_mapping_and_lowercase_alpha_modes() {

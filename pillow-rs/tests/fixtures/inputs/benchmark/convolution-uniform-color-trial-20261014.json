@@ -1,0 +1,901 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "workloads": [
+    {
+      "workload_id": "pipeline-chain.convolution.material.rgb-5x5-pad.256x256",
+      "covers": [
+        "PIL.ImageFilter.Kernel.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  256,
+                  256
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  17,
+                  83,
+                  149
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "setup-filter",
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "receiver": null,
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": [
+                  5,
+                  5
+                ]
+              },
+              "kernel": {
+                "kind": "literal",
+                "value": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "scale": {
+                "kind": "literal",
+                "value": 25.0
+              }
+            }
+          },
+          {
+            "step_id": "filtered",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "filter": {
+                "kind": "binding",
+                "step_id": "setup-filter"
+              }
+            }
+          },
+          {
+            "step_id": "padded",
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "receiver": null,
+            "arguments": {
+              "image": {
+                "kind": "binding",
+                "step_id": "filtered"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  16,
+                  14
+                ]
+              },
+              "method": {
+                "kind": "literal",
+                "value": 0
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  7,
+                  8,
+                  9
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "padded"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "setup-filter",
+          "filtered",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.convolution.native.rgb-5x5-pad.1024x768",
+      "covers": [
+        "PIL.ImageFilter.Kernel.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  17,
+                  83,
+                  149
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "setup-filter",
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "receiver": null,
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": [
+                  5,
+                  5
+                ]
+              },
+              "kernel": {
+                "kind": "literal",
+                "value": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "scale": {
+                "kind": "literal",
+                "value": 25.0
+              }
+            }
+          },
+          {
+            "step_id": "filtered",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "filter": {
+                "kind": "binding",
+                "step_id": "setup-filter"
+              }
+            }
+          },
+          {
+            "step_id": "padded",
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "receiver": null,
+            "arguments": {
+              "image": {
+                "kind": "binding",
+                "step_id": "filtered"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  16,
+                  14
+                ]
+              },
+              "method": {
+                "kind": "literal",
+                "value": 0
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  7,
+                  8,
+                  9
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "padded"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "setup-filter",
+          "filtered",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.convolution.native.la-5x5-mirror.1024x768",
+      "covers": [
+        "PIL.ImageFilter.Kernel.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "LA"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  173,
+                  127
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "setup-filter",
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "receiver": null,
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": [
+                  5,
+                  5
+                ]
+              },
+              "kernel": {
+                "kind": "literal",
+                "value": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "scale": {
+                "kind": "literal",
+                "value": 25.0
+              }
+            }
+          },
+          {
+            "step_id": "filtered",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "filter": {
+                "kind": "binding",
+                "step_id": "setup-filter"
+              }
+            }
+          },
+          {
+            "step_id": "mirrored",
+            "surface": "PIL.ImageOps",
+            "operation": "mirror",
+            "receiver": null,
+            "arguments": {
+              "image": {
+                "kind": "binding",
+                "step_id": "filtered"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "mirrored"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "setup-filter",
+          "filtered",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "LA",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.convolution.native.rgba-5x5-invert.1024x768",
+      "covers": [
+        "PIL.ImageFilter.Kernel.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGBA"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  17,
+                  83,
+                  149,
+                  127
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "setup-filter",
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "receiver": null,
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": [
+                  5,
+                  5
+                ]
+              },
+              "kernel": {
+                "kind": "literal",
+                "value": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "scale": {
+                "kind": "literal",
+                "value": 25.0
+              }
+            }
+          },
+          {
+            "step_id": "filtered",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "filter": {
+                "kind": "binding",
+                "step_id": "setup-filter"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "filtered"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "setup-filter",
+          "filtered",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGBA",
+        "chain_length": 1,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.convolution.native.l-5x5-scale.1024x768",
+      "covers": [
+        "PIL.ImageFilter.Kernel.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "L"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 127
+              }
+            }
+          },
+          {
+            "step_id": "setup-filter",
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "receiver": null,
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": [
+                  5,
+                  5
+                ]
+              },
+              "kernel": {
+                "kind": "literal",
+                "value": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "scale": {
+                "kind": "literal",
+                "value": 25.0
+              }
+            }
+          },
+          {
+            "step_id": "filtered",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "filter": {
+                "kind": "binding",
+                "step_id": "setup-filter"
+              }
+            }
+          },
+          {
+            "step_id": "scaled",
+            "surface": "PIL.ImageOps",
+            "operation": "scale",
+            "receiver": null,
+            "arguments": {
+              "image": {
+                "kind": "binding",
+                "step_id": "filtered"
+              },
+              "factor": {
+                "kind": "literal",
+                "value": 1.5
+              },
+              "resample": {
+                "kind": "literal",
+                "value": "NEAREST"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "scaled"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "setup-filter",
+          "filtered",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    }
+  ],
+  "suites": []
+}
