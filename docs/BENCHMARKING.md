@@ -491,8 +491,8 @@ enumerates the loaded `PIL` facade, the native extension, each module's explicit
 `__all__` exports or locally defined public functions and classes, public class
 methods and properties, and the selected manifest mapping. Imported aliases
 aren't repeated as new API paths in every module. The [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
-has four profile rows for each of its 330 paths: 209 paths map to the selected
-manifest and 121 outside paths remain explicit as `not_mapped_to_benchmark`.
+has four profile rows for each of its 408 paths: 209 paths map to the selected
+manifest and 199 outside paths remain explicit as `not_mapped_to_benchmark`.
 Those inventory-only rows are unmeasured gaps, not evidence that a profile
 supports or has run the operation.
 The matrix keeps successful, failed, not-run, fallback, and dirty-snapshot rows.
@@ -514,43 +514,49 @@ python3 scripts/build_performance_optimization_matrix.py \
   --public-api-inventory docs/evidence/performance-optimization-public-api.csv
 ```
 
-The current published workload matrix records 8,954 rows: 8,918 full-benchmark
-rows across 686 workloads and 36 Pillow-SIMD rows across 9 workloads. The full
-snapshot is clean at revision
-`10352de697c03fdbbda515fc5ae6cd1e440aeed8`, measured
-`2026-10-13T03:13:20.493672Z`, with JSON SHA-256
-`c1c4f2c3126e4c25f5282d21e1541a4c041dbd5996f5018e2dd771fc9ee8c124`, from the
-[published benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json).
-The operation matrix has 1,320 rows for 330 public paths and four profiles;
-209 paths map to the benchmark manifest and 121 remain explicit inventory
-gaps. Only rows with exact parity and completed backend receipts are eligible
-for speed claims.
+The current published workload matrix has 9,376 rows: 9,229 records from the
+clean full snapshot across 707 workloads and 147 records from the separate
+Pillow-SIMD snapshot across 37 workloads. Both snapshots identify clean
+revision `df92b7e78baa7a54264b8d1903958d7518990fde`. The full JSON was measured
+`2026-10-17T12:38:46.453082Z` (SHA-256
+`d660e749aac667f062ed75e4965ff15b483b15df070b4ca47d961504d6c36b14`); the
+Pillow-SIMD JSON was measured `2026-10-17T12:34:18.150813Z` (SHA-256
+`c9e5970408edf59a58ec586734d8e6e0452b590c80908876c2584037a521d9bd`). The
+operation matrix has 1,632 rows for 408 public API paths; 209 map to the
+selected manifest and 199 remain explicit inventory gaps. The generated
+workload and operation matrices have SHA-256 values
+`f71bd72144921f417496e0ecffb5256a4c4a58619917447b43d94cf41c31bc40` and
+`9644df7dc7039af7029ba5f8271a63c107b23bf5748b05ff0c8dd3dc32e977e1`.
+Only rows with exact parity, completed execution, no fallback, and backend
+receipts are eligible for speed claims.
 
-Across the 192 verified serial CPU workload-runner pairs, one is slower than
-Pillow and 62 are below 2×. The below-Pillow row is RGB `Image.merge` from
-three native L bands at 1024×768 (0.905218× on Ubuntu x86_64; Pillow 2,107.790
-µs, CPU 2,328.487 µs). The weakest following API minima are Resize (1.269×),
-Grayscale (1.326×), Thumbnail (1.486×), GetData (1.643×), Posterize (1.645×),
-BoxBlur (1.658×), and Convert (1.678×). Each minimum retains its runner, mode,
-workload, and input size in the matrix.
+The workload matrix contains 319 evidence-backed serial CPU ratios; 22 are
+slower than Pillow and 112 are below 2×. The worst verified rows include
+YCbCr Grayscale at 0.226829× on the paired Ubuntu x86_64 cohort, YCbCr
+Grayscale at 0.503471× on Ubuntu ARM64, and the RGBA-to-RGB conversion plus
+three-channel-extraction chain at 0.520673× on macOS ARM64. RGB Grayscale is
+0.662085× on Ubuntu x86_64, and that same three-channel chain is 0.694033× on
+Ubuntu x86_64. The exact workload, mode, runner, and paired medians remain in
+the matrix. The GetChannel chain creates RGBA input, seeds four corners,
+converts to RGB, extracts R/G/B, and materializes each result; its ratio is not
+an isolated GetChannel measurement. One
+`analysis-scalar-if` row at 0.800506× is a composed chain containing GetBBox,
+GetColors, GetExtrema, GetPixel, and GetProjection; it does not isolate any one
+of those APIs as the cause.
 
-SIMD has 174 verified pairs: none are slower than Pillow, 56 are below 2×, and
-143 are below the repository's 5× target. The weakest API minima are
-GaussianBlur (1.034×), UnsharpMask (1.049×), Merge (1.159×), Convert (1.186×),
-and Resize (1.252×). The separately built Parallel CPU profile uses the opt-in
-Cargo `parallel` feature; 15 of its 192 verified pairs are slower than Pillow
-and 77 are below 2×. GPU has 53 verified comparisons against Pillow and 51
-comparable latency pairs against SIMD; 36 are slower than SIMD, 15 meet the
-per-call latency target, and 11 profile rows are fallback observations.
-Sustained GPU throughput remains unmeasured. The
-operation matrix's GPU latency baseline is SIMD; its GPU
-`below_baseline_comparisons` field and per-operation ratios must not be read as
-Pillow comparisons.
+SIMD has 261 evidence-backed ratios: 32 are slower than Pillow, 93 are below
+2×, and 203 are below the repository's 5× goal. The separately built Parallel
+CPU profile has 245 evidence-backed ratios, 33 slower than Pillow and 109
+below 2×. Keep Parallel CPU separate from serial CPU and SIMD. GPU has 56
+verified latency ratios against SIMD; 37 are slower than SIMD and sustained GPU
+throughput remains unmeasured. The operation matrix's GPU latency baseline is
+SIMD; its `below_baseline_comparisons` field is not a Pillow comparison.
 
-The published Pillow-SIMD snapshot is dirty and partial (9 of 34 declared
-workloads), so there are no verified Pillow-SIMD comparisons to rank. The
-Pillow-SIMD speed ratios are excluded until a clean matched cohort is
-published.
+The version-matched Pillow-SIMD snapshot now covers 37 workloads. Compatibility
+and ratio eligibility are workload-specific; incompatible source rows remain
+visible without eligible ratios. The operation matrix records 32 eligible
+Pillow-SIMD comparisons. Use those matched rows to prioritize Pillow-SIMD gaps
+only after the verified CPU misses clear the CPU sequencing gate.
 
 ### Rejected CPU alpha-composite-plus-mirror fusion trial
 
