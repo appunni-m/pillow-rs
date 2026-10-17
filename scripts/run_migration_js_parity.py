@@ -116,6 +116,7 @@ IMAGE_METHODS = {
     "remap_palette",
     "resize",
     "rotate",
+    "show",
     "split",
     "thumbnail",
     "tobitmap",
@@ -125,7 +126,7 @@ IMAGE_METHODS = {
     "unsharp_mask",
     "verify",
 }
-IMAGE_PROPERTIES = {"height", "mode", "size", "width"}
+IMAGE_PROPERTIES = {"height", "info", "mode", "size", "width"}
 CHOPS_METHODS = {
     "add",
     "add_modulo",
@@ -554,18 +555,44 @@ def compatible_case(
             pass
         elif surface == "PIL.ImageDraw" and operation == "Draw":
             pass
+        elif surface == "PIL.ImageShow" and operation in {"register", "show"}:
+            pass
         else:
             return f"surface-not-exported:{surface}.{operation}"
 
-        descriptors = list(step.get("arguments", {}).values())
+        descriptors = list(step.get("arguments", {}).items())
         if step.get("receiver") is not None:
-            descriptors.append(step["receiver"])
-        for descriptor in descriptors:
+            descriptors.append((None, step["receiver"]))
+        for argument_name, descriptor in descriptors:
             if descriptor["kind"] in {"binding", "bindings"}:
                 continue
             if descriptor["kind"] == "asset":
                 # Assets are transported by ``js_asset_payload`` and are part
                 # of the same public input workflow.  They are not pending.
+                continue
+            if (
+                surface == "PIL.ImageShow"
+                and operation == "register"
+                and argument_name == "viewer"
+                and descriptor["kind"] == "literal"
+                and isinstance(descriptor.get("value"), dict)
+                and descriptor["value"].get("protocol") == "capture-viewer"
+            ):
+                # This bounded host protocol is validated in parity inputs and
+                # resolved by the WASM workflow adapter; it is not an arbitrary
+                # host object embedded in a literal.
+                continue
+            if (
+                surface == "PIL.ImageShow"
+                and operation == "show"
+                and argument_name == "options"
+                and descriptor["kind"] == "literal"
+                and isinstance(descriptor.get("value"), dict)
+                and all(
+                    isinstance(name, str) and plain_json(value)
+                    for name, value in descriptor["value"].items()
+                )
+            ):
                 continue
             if descriptor["kind"] != "literal" or not plain_json(descriptor.get("value")):
                 return "host-value-not-representable-in-js"

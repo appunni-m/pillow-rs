@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from scripts import run_migration_js_parity
 from scripts import run_migration_parity
 from scripts import validate_migration_parity_contract as contract
 from scripts.migration_parity.display import (
@@ -98,6 +99,48 @@ def display_case():
 class MigrationParityDisplayTests(unittest.TestCase):
     def setUp(self):
         FakeViewer.launched = 0
+
+    def test_js_workflow_recognizes_the_display_capture_adapter(self):
+        operations = {
+            ("PIL.Image.Image", "show"): {},
+            ("PIL.Image.Image", "info"): {},
+            ("PIL.ImageShow", "register"): {},
+            ("PIL.ImageShow", "show"): {},
+        }
+        case = {
+            "steps": [
+                {
+                    "surface": "PIL.ImageShow",
+                    "operation": "register",
+                    "receiver": None,
+                    "arguments": {
+                        "viewer": {
+                            "kind": "literal",
+                            "value": capture_spec(),
+                        },
+                        "order": {"kind": "literal", "value": 0},
+                    },
+                },
+                {
+                    "surface": "PIL.Image.Image",
+                    "operation": "show",
+                    "receiver": {"kind": "binding", "step_id": "image"},
+                    "arguments": {"title": {"kind": "literal", "value": None}},
+                },
+                {
+                    "surface": "PIL.ImageShow",
+                    "operation": "show",
+                    "receiver": None,
+                    "arguments": {
+                        "image": {"kind": "binding", "step_id": "image"},
+                        "title": {"kind": "literal", "value": None},
+                        "options": {"kind": "literal", "value": {}},
+                    },
+                },
+            ]
+        }
+
+        self.assertIsNone(run_migration_js_parity.compatible_case(case, operations))
 
     def build_capture(self, image, module=None, **overrides):
         module = FakeImageShow() if module is None else module
