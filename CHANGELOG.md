@@ -3,6 +3,13 @@
 All notable user-facing changes are recorded here. Stable release scope,
 parity status, and backend limitations are described in the documentation.
 
+## 12.2.2 - 2026-10-18
+
+- Improve mode- and architecture-specific CPU paths for filtering, resizing,
+  grayscale, and color conversion, with parity-backed regression coverage.
+- Correct Node and browser WebAssembly `ImageShow` behavior to match Pillow's
+  display workflows.
+
 ## 12.2.1 - 2026-10-07
 
 - Remove the unshipped ImageBatch prototype and update documentation to describe

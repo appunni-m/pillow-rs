@@ -40,7 +40,7 @@ from .operations import (
 
 from .gpu_batch import GpuBatchExecutor, GpuImage, BatchResult, BatchError, QueueFull, ResultBackpressure, Results
 
-__version__ = "12.2.1"
+__version__ = "12.2.2"
 
 __all__ = [
     "GpuBatchExecutor", "GpuImage", "BatchResult", "BatchError", "QueueFull", "ResultBackpressure", "Results",
