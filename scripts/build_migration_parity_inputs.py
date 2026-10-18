@@ -4004,6 +4004,28 @@ class WorkflowBuilder:
                 },
                 step_id=self.next_step_id("setup-varied-pixel"),
             )
+        elif self.edge in {
+            "nonzero-pixel-center",
+            "nonzero-pixel-bottom-right",
+        } and label in {"image", "image1"}:
+            if self.scenario_pixel is None:
+                raise ValueError(f"{self.edge} edge requires a scenario pixel")
+            width, height = self.scenario_size or [16, 16]
+            xy = (
+                [width // 2, height // 2]
+                if self.edge == "nonzero-pixel-center"
+                else [max(0, width - 1), max(0, height - 1)]
+            )
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal(xy),
+                    "value": literal(self.scenario_pixel),
+                },
+                step_id=self.next_step_id("setup-target-pixel"),
+            )
         elif self.edge == "nonzero-pixel-safe" and label in {"image", "image1"}:
             if self.scenario_pixel is None:
                 raise ValueError("nonzero-pixel-safe edge requires a scenario pixel")
@@ -12698,11 +12720,11 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     """Return input-only RGB edge cases for GetChannel parity.
 
     These workflows cover all three RGB selectors at logical row tails,
-    degenerate image dimensions, and an RGB image produced by public mode
-    conversion. They are added to parity inputs only; they do not participate
-    in managed coverage plans. GPU profiles are omitted from the empty-image
-    cases because the GPU channel extraction path cannot launch a zero-pixel
-    shader grid.
+    degenerate image dimensions, an RGB image produced by public mode
+    conversion, and copy-on-write behavior after branching a channel. They are
+    added to parity inputs only; they do not participate in managed coverage
+    plans. GPU profiles are omitted from the empty-image cases because the GPU
+    channel extraction path cannot launch a zero-pixel shader grid.
     """
 
     if surface_id != "PIL.Image.Image":
@@ -12903,6 +12925,56 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             nonempty_profiles,
             steps,
             observations,
+        )
+    )
+
+    steps = [new_image("rgba-input", "RGBA", [3, 2], [17, 83, 149, 211])]
+    steps.append(
+        {
+            "step_id": "rgb-converted",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": binding("rgba-input"),
+            "arguments": {"mode": literal("RGB")},
+        }
+    )
+    steps.extend(
+        [
+            {
+                "step_id": "green-channel",
+                "surface": "PIL.Image.Image",
+                "operation": "getchannel",
+                "receiver": binding("rgb-converted"),
+                "arguments": {"channel": literal(1)},
+            },
+            putpixel(
+                "mutate-parent-after-channel-branch",
+                "rgb-converted",
+                [1, 0],
+                [201, 7, 33],
+            ),
+            {
+                "step_id": "green-channel-bytes",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("green-channel"),
+                "arguments": {},
+            },
+            {
+                "step_id": "mutated-parent-bytes",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("rgb-converted"),
+                "arguments": {},
+            },
+        ]
+    )
+    cases.append(
+        case(
+            "pipeline-parent-mutation-after-channel-branch",
+            nonempty_profiles,
+            steps,
+            ["green-channel", "green-channel-bytes", "mutated-parent-bytes"],
         )
     )
     return cases
@@ -32854,6 +32926,50 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "getbbox",
+            "requirement_suffix": "performance.standard",
+            "name": "materialized-i-filled-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "uniform-fill",
+            "pixel": 1,
+            "target_profiles": ["python-cpu"],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "performance.standard",
+            "name": "materialized-i-blank-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "uniform-fill",
+            "pixel": 0,
+            "target_profiles": ["python-cpu"],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "performance.standard",
+            "name": "materialized-i-single-center-negative-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "nonzero-pixel-center",
+            "pixel": -17,
+            "target_profiles": ["python-cpu"],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "performance.standard",
+            "name": "materialized-i-single-bottom-right-negative-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "nonzero-pixel-bottom-right",
+            "pixel": -17,
+            "target_profiles": ["python-cpu"],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
             "requirement_suffix": "parameter.alpha-only",
             "name": "la-zero-rgb-nonzero-alpha",
             "mode": "LA",
@@ -45572,7 +45688,21 @@ def la_filter_materialized_parity_cases(
             "media_type": "application/octet-stream",
         },
     )
-    return [material, nonmatching, edge]
+
+    nonmatching_edge = copy.deepcopy(edge)
+    nonmatching_edge["case_id"] = (
+        f"{surface_id}.filter.nuanced."
+        f"la-mode-kernel-5x5-nonmatching-odd-width-{edge_width}x{edge_height}"
+    )
+    nonmatching_filter_step = next(
+        step for step in nonmatching_edge["steps"] if step["step_id"] == "setup-filter"
+    )
+    nonmatching_filter_step["arguments"].update(
+        kernel=literal([1.0] * 24 + [2.0]),
+        scale=literal(25.0),
+        offset=literal(0),
+    )
+    return [material, nonmatching, edge, nonmatching_edge]
 
 
 def la_filter3x3_materialized_parity_cases(
@@ -56700,6 +56830,57 @@ def build_inputs(
                             "workload_id": workload_id,
                             "covers": [requirement["id"]],
                             "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"getbbox-{slug(name)}",
+                                surface=surface_id,
+                                operation="getbbox",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
+                for name, case_name in (
+                    ("i-filled-1024x768", "materialized-i-filled-1024x768"),
+                    ("i-blank-1024x768", "materialized-i-blank-1024x768"),
+                    (
+                        "i-single-center-negative-1024x768",
+                        "materialized-i-single-center-negative-1024x768",
+                    ),
+                    (
+                        "i-single-bottom-right-negative-1024x768",
+                        "materialized-i-single-bottom-right-negative-1024x768",
+                    ),
+                ):
+                    workload_id = (
+                        f"{storage_slug}.getbbox.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.Image.Image.getbbox.nuanced." f"{case_name}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": [
+                                {"kind": "oracle", "id": "pillow"},
+                                {"kind": "target_profile", "id": "python-cpu"},
+                            ],
                             "input": {
                                 "kind": "parity_case",
                                 "case_id": case_id,

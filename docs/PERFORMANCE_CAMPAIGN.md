@@ -128,6 +128,94 @@ in the per-operation matrix. Source incompatibilities and missing proofs stay
 visible without a ratio. Use the matched Pillow-SIMD JSON comparisons only after
 the verified CPU misses clear the CPU sequencing gate.
 
+### Native-LA Filter5x5 x86 CPU verification — 2026-10-17
+
+The retained `[1.0; 24] + [2.0]` kernel specialization was measured on native
+x86 for `pipeline-op.filter.material-la-nonmatching-5x5-1024x768`. The public
+`call;materialize` boundary measured 6.453 ms median / 6.528 ms p95 for serial
+CPU versus 23.145 ms / 25.263 ms for Pillow (3.587× median speedup). The
+receipt confirms actual CPU execution, terminal completion, one Filter5x5
+operation, and no fallback. Full-size benchmark parity passed, and a newly
+added odd-width 7×5 parity guard passed 1/1 on strict CPU.
+
+This was one candidate run, not an x86 A-B-B-A comparison; it establishes the
+current matched-host performance result but not a causal x86 improvement over
+an x86 baseline. Raw timing samples were not retained. SIMD, GPU latency and
+sustained throughput, Parallel CPU, and other modes/sizes remain open. The
+working tree was dirty because of focused fixture changes, while the measured
+`filter.rs` matched its committed hash. Evidence is in
+`docs/evidence/filter5x5-la-single-outlier-x86-20261017/`; the run is also
+listed in `docs/evidence/performance-optimization-local-runs.csv`. It does not
+change the clean published matrix.
+
+### GetBBox-I SSE4.1 screening A/B/B/A — 2026-10-17
+
+A focused native x86_64 A/B/B/A compared the scalar control with an SSE4.1
+screen on four 1024×768 `I` workloads. Each leg used the existing public
+`call` boundary, serial CPU, warm cache, 5 warmups, 20 × 5 samples, and
+concurrency one. Candidate strict parity passed 10/10, the focused width and
+tail test passed 1/1, and all benchmark receipts show completed CPU execution
+with no fallback.
+
+The filled workload improved from 3.470 ms control mean to 7.520 µs candidate
+mean (461.5× over control and 1.066× versus Pillow). Blank and two sparse
+workloads each improved about 1.36× over control but remain about 1.50× slower
+than Pillow. Since three of four selected `I` cases still miss the CPU target,
+this does not complete GetBBox or earn operation-level credit. The candidate
+source was restored after the second control leg; no code change is retained.
+
+The baseline and candidate extension hashes match within their respective
+A/B legs. Pillow's first-run stable ID differs because of metadata identity
+churn, while its tree and loaded `_imaging` content hashes match across legs.
+Full reports, parity artifacts, attestations, raw samples, and the local-run
+CSV entries are retained in
+`docs/evidence/getbbox-i-sse41-abba-x86-20261017/`. This local A/B/B/A result
+does not alter the clean published matrix or the current 0/33 commit batch.
+
+### Reject YCbCr Grayscale SSSE3 four-block unroll — 2026-10-17
+
+A native x86 screen tested four-way unrolling of the existing 16-pixel SSSE3
+YCbCr gather for `pipeline-op.grayscale.material-ycbcr-noise-1024x768`. The
+public `call;observe-result` boundary measured 818.637 µs CPU / 1,169.077 µs
+Pillow in A1, 840.667 / 1,170.428 µs in B1, 819.217 / 1,160.898 µs in B2, and
+849.377 / 1,189.933 µs in A2. Exact parity passed for all legs; B2 reused B1's
+matching parity. The focused vector-boundary and tail test passed once.
+
+The candidate mean was only 0.49% faster than the two control medians, below a
+useful signal. More importantly, A1 and A2 target runtime identities differ,
+so this is not a valid causal A/B/B/A comparison; the harness correctly
+rejected reuse of A1 parity for A2, which then passed a fresh parity run. The
+unroll and its test were reverted. This no-go does not alter the clean
+published matrix or the 0/33 commit batch. Detailed reports and identity notes
+are in `docs/evidence/grayscale-ycbcr-ssse3-unroll-x86-20261017/`.
+
+### GetBBox-I portable row-OR A–B–B–A — native x86 — 2026-10-18
+
+Replaced the rejected inward scan with a portable row strategy: OR four
+independent `u64` accumulators across each 32-byte block to skip blank rows,
+then inspect only hit rows with the exact signed `i32 != 0` test. Once a hit row
+proves the horizontal bounds span the image, scan rows in reverse to find the
+last nonzero row. F mode remains unchanged, including negative-zero-as-data.
+
+On the AMD Ryzen 5 2600X, the candidate passed 10/10 selected strict parity
+cases, including I-mode patterns and negative values plus the F negative-zero
+control. Four materialized 1024×768 I direct-call workloads passed in each
+A/B/B/A leg. Candidate CPU medians were 7.320–7.545 µs filled (1.060–1.094×
+Pillow) and 49.971–53.035 µs blank/sparse (5.531–5.870× Pillow). All target
+receipts show actual CPU execution and no fallback. The portable implementation
+uses no architecture intrinsics, so this is CPU evidence and earns no SIMD
+credit.
+
+The baseline source bytes match in A1/A2, but the rebuilt loaded-runtime
+fingerprints differ. The harness refused to reuse A1 parity for A2; A2 passed a
+fresh parity run. Keep that identity caveat attached to the result. Focused Rust
+row tests cover widths 1–19, blank rows, signed values, single hits, and grouped
+tails. Evidence and raw samples are in
+[`getbbox-i-rowor-portable-abba-x86-20261018`](evidence/getbbox-i-rowor-portable-abba-x86-20261018/README.md);
+32 subject rows are in the local-run ledger. This closes only the selected
+serial-CPU I cases. Other modes and sizes, SIMD, GPU latency, and sustained
+throughput remain open. Kata: `pillow-rs#pd3w`.
+
 ### Require recorded SIMD vector work — 2026-10-14
 
 An untimed local GetChannel diagnostic reported SIMD `scalar-gather` and zero
@@ -31273,4 +31361,57 @@ adjacent-run, direct-table finalization, and binding-construction trials remain
 rejected; the read-only audit found no distinct safe change. No implementation
 was changed and the operation stays open. No coverage, commit, or push ran;
 the batch remains 0/33.
+
+## GetChannel cached RGB parent branch A–B–B–A — ARM64 — 2026-10-18
+
+Branching `getchannel()` from the already-materialized non-paletted parent
+reduced the selected all-band RGB workflow's CPU median by 52.2% and SIMD
+median by 72.3% versus source-matched A–B–B–A controls. Both candidate CPU runs
+beat Pillow (1.23× and 1.49×). Candidate SIMD remains about 4× slower than
+Pillow, so this is partial progress, not operation completion. The benchmark
+receipts prove actual CPU/SIMD execution, terminal completion, and no fallback;
+SIMD used the NEON deinterleave path with 49,152 vector blocks.
+
+One execution resource receipt per run reports candidate host-buffer bytes
+falling from 9,437,184 to 3,145,728, peak live host bytes from 6,291,456 to
+3,145,728, and mode conversions from two to one. Both variants report one
+786,432-byte host allocation. These are receipt counters, not timing-sample
+means. A separate parent-mutation copy-on-write parity case passed on CPU,
+SIMD, and GPU; its tiny SIMD gather is only a correctness guard. GPU latency and
+sustained throughput were not measured in this cohort.
+
+The explicit backend lock is reapplied to the branched pipeline. The focused
+Rust guard passed, and the candidate was built with `make build-parity`. Evidence
+is in
+[`getchannel-rgb-materialized-branch-abba-arm64-20261017-18`](evidence/getchannel-rgb-materialized-branch-abba-arm64-20261017-18/README.md);
+twelve subject rows were added to
+`docs/evidence/performance-optimization-local-runs.csv`. The finding and limits
+are also recorded in the reusable performance-parity skill and Kata
+`pillow-rs#jpj6`. GetChannel remains open across modes, sizes, GPU latency, and
+sustained throughput.
+
+## Native-L 5×5 Parallel CPU x86 current-source rebaseline — 2026-10-18
+
+Rechecked the historical x86 Parallel CPU miss on clean source
+`1c9203b11e789059b139bbd4772bc3184cf37511`, using only
+`pipeline-op.filter.material-l-noise-5x5-1024x768` and its exact binomial-L
+parity case plus the flat-kernel admission guard. On the native x86_64 runner,
+CPython 3.12.11, Pillow 12.2.0, warm `call;materialize`, 5 warmups and 20×5
+samples at concurrency one, Pillow measured 9.422411 ms median / 9.699967 ms
+p95; Parallel CPU measured 0.304787 ms / 0.396981 ms (30.9147× median).
+Both selected parity cases passed 1/1. The target report proves the
+`python-parallel-cpu` build features, actual CPU execution, one completed
+Filter5x5 and no fallback. The exact mode/kernel predicate selects the 64-row
+L helper, which calls the Rayon row-block iterator.
+
+Pillow was timed in a separate source adapter under the same host, interpreter,
+workload and sample policy; the target-only Parallel CPU report has no Pillow
+subject, so retain the ratio as a local paired measurement rather than a
+same-report database rank. The old 22.734 ms x86 Parallel CPU row is about
+74.6× slower than this current result, but its extension and feature identities
+were missing; this rebaseline does not establish a causal A–B–B–A delta. The
+receipt has no Rayon-specific counter, and the reported 3,280.985 ops/s at
+concurrency one is not sustained throughput. Serial CPU, SIMD, GPU and the
+remaining mode/size matrix are still open. Full focused artifacts are in
+[`filter-l5x5-parallel-current-x86-20261018`](evidence/filter-l5x5-parallel-current-x86-20261018/README.md).
 *** End of File

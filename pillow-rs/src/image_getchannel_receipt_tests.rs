@@ -130,6 +130,27 @@ fn cpu_getchannel_preserves_alpha_through_native_la_raw_prefix() -> Result<(), P
 }
 
 #[test]
+fn pipeline_getchannel_preserves_explicit_backend_lock_after_materialized_branch()
+-> Result<(), PilError> {
+    let _backends = CpuOnlyBackendsGuard::new()?;
+    let root = Image::frombytes("RGBA", (2, 1), &[11, 22, 33, 44, 55, 66, 77, 88])?;
+    let pipeline = Image::push_op(
+        &root,
+        PipelineOp::Convert {
+            mode: ColorMode::RGB,
+            matrix: None,
+            dither: None,
+        },
+    )
+    .use_backend(Backend::Cpu);
+
+    let green = pipeline.getchannel(1)?;
+    assert_eq!(green.backend(), Some(Backend::Cpu));
+    assert_eq!(green.tobytes()?, vec![22, 66]);
+    Ok(())
+}
+
+#[test]
 fn loaded_tiny_rgb_cpu_getchannel_reports_one_output_buffer_allocation() -> Result<(), PilError> {
     let _backends = CpuOnlyBackendsGuard::new()?;
     let image = Image::frombytes("RGB", (3, 2), &RGB_BYTES)?;

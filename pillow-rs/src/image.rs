@@ -7502,11 +7502,23 @@ impl Image {
                 }
             }
         }
-        // Defer extraction via pipeline
-        Ok(Image::push_op(
-            self,
+        // The validation above has already materialized a pending pipeline.
+        // Branch from those resolved pixels so extracting multiple channels
+        // does not replay a mode-changing parent pipeline for every band.
+        let extraction_source =
+            if matches!(self, Image::Pipeline { .. }) && !self.has_palette_samples() {
+                self.materialized_branch()?
+            } else {
+                self.clone()
+            };
+        let extracted = Image::push_op(
+            &extraction_source,
             PipelineOp::ExtractBand { index: ch as u8 },
-        ))
+        );
+        Ok(match self.backend() {
+            Some(backend) => extracted.use_backend(backend),
+            None => extracted,
+        })
     }
 
     /// Resolves a numeric or named public channel selector before extraction.
