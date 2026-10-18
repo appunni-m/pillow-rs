@@ -8,7 +8,7 @@
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/appunni-m)
 
 <!-- release:summary -->
-**Latest release: [12.2.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.1).**
+**Latest release: [12.2.2](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.2).**
 <!-- /release:summary -->
 
 Rust image processing with a familiar Python `PIL` interface and one npm package
@@ -35,7 +35,7 @@ so install them in separate environments.
 <!-- release:python -->
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install pillow-rs==12.2.1
+.venv/bin/python -m pip install pillow-rs==12.2.2
 ```
 <!-- /release:python -->
 

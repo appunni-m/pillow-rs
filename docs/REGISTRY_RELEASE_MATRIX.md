@@ -1,6 +1,39 @@
 # Historical artifacts and release evidence
 
-## Current accepted release: 12.2.1, 2026-10-07
+## Current accepted release: 12.2.2, 2026-10-18
+
+The stable [`v12.2.2` GitHub release](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.2)
+points to commit `5d6751a7f968cb0d9ee823ed7bea1c945cbc7dfa`. Its [main CI run](https://github.com/appunni-m/pillow-rs/actions/runs/39089675232)
+passed all nine jobs. Python 3.10, Python 3.12, Node WebAssembly, and browser
+WebAssembly each passed 17,280/17,280 live Pillow comparisons. The [Pillow-SIMD
+benchmark](https://github.com/appunni-m/pillow-rs/actions/runs/39089675233)
+passed its parity-gated x86 benchmark.
+
+The [release workflow](https://github.com/appunni-m/pillow-rs/actions/runs/39091349641)
+completed successfully, published the packages below, and attested the release
+artifacts. The GitHub Release contains the checksum manifest and Cargo, Python,
+and npm artifacts; GitHub reports the checksum manifest asset digest as
+`491d46888ee6b66ed28065f094458f289a98b4069e5a8718cd5bdc95854d6ff5`. The
+candidate's [Documentation run](https://github.com/appunni-m/pillow-rs/actions/runs/39089675226)
+and its [post-Pillow-SIMD documentation run](https://github.com/appunni-m/pillow-rs/actions/runs/39090399496)
+both passed, including Pages deployment. Registry metadata and published-package
+quickstarts were checked after publication with
+`make docs-release-check docs-registry-examples`.
+
+| Registry | Published artifacts observed | Notes |
+| --- | --- | --- |
+| crates.io | `pillow-rs` 12.2.2 | The exact version is visible; the docs quickstart compiled the public crate from crates.io. |
+| PyPI | `pillow-rs` 12.2.2: 3 platform wheels and 1 source distribution; `pillow-rs-parallel` 12.2.2: 3 platform wheels | Linux x86-64, macOS ARM64, and Windows x86-64. The `parallel` extra selects the matching companion wheel; release consumers passed. |
+| npm | `pillow-rs` 12.2.2 | The exact version is visible; the docs quickstart installed and exercised the published package. |
+
+The full operation/pipeline benchmark was not triggered by this version-only
+release commit; its path filter excludes package-version and changelog changes.
+The latest full benchmark for the unchanged image implementation is the
+[successful run on source commit `0d6c7b69473cf731973cebcfd61af6a1e2d1b8de`](https://github.com/appunni-m/pillow-rs/actions/runs/39082168656).
+This records release verification and does not claim that the broader
+performance campaign is complete.
+
+## Previous accepted release: 12.2.1, 2026-10-07
 
 The stable [`v12.2.1` GitHub release](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.1)
 points to commit `0f804aa4ec15b787e223497c63d954d0227596e6`. Its

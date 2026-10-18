@@ -129,7 +129,7 @@ alpha.5 remained the latest accepted release. Alpha.6 was partially published
 and failed a packaged-crate font check; see the
 [release evidence](REGISTRY_RELEASE_MATRIX.md#alpha6-partial-publication-2026-10-05).
 The later stable 12.2.1 release and current registry state are recorded in the
-[current release entry](REGISTRY_RELEASE_MATRIX.md#current-accepted-release-1221-2026-10-07).
+[12.2.1 release entry](REGISTRY_RELEASE_MATRIX.md#previous-accepted-release-1221-2026-10-07).
 The full Python CPU campaign passed **17,105/17,105**. The first full SIMD
 campaign passed **17,086/17,105**, with **19 failures** and zero infrastructure
 errors. These failures initially blocked push, tagging, and publication. They all concern `Image.convert` from `1`, `L`, `LA`, or `I;16N` into
