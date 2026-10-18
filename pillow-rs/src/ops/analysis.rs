@@ -78,6 +78,62 @@ fn getbbox_f_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
     None
 }
 
+/// Finds the horizontal bounds of non-zero I-mode pixels in one tightly
+/// packed row. Grouped raw-word ORs cheaply skip blank rows; hit rows are
+/// resolved with the exact signed-integer nonzero predicate.
+#[inline]
+fn getbbox_i_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
+    let mut groups = row.chunks_exact(32);
+    let (mut word0, mut word1, mut word2, mut word3) = (0u64, 0u64, 0u64, 0u64);
+    for group in &mut groups {
+        word0 |= u64::from_le_bytes(group[0..8].try_into().expect("8-byte word"));
+        word1 |= u64::from_le_bytes(group[8..16].try_into().expect("8-byte word"));
+        word2 |= u64::from_le_bytes(group[16..24].try_into().expect("8-byte word"));
+        word3 |= u64::from_le_bytes(group[24..32].try_into().expect("8-byte word"));
+    }
+    if word0 | word1 | word2 | word3 == 0 && !groups.remainder().iter().any(|&byte| byte != 0) {
+        return None;
+    }
+
+    let mut samples = row.chunks_exact(4);
+    let is_nonzero =
+        |sample: &[u8]| u32::from_le_bytes(sample.try_into().expect("4-byte I-mode sample")) != 0;
+    let left = samples.clone().position(is_nonzero)?;
+    let right = samples.rposition(is_nonzero).unwrap_or(left);
+    Some((left as u32, right as u32))
+}
+
+#[cfg(test)]
+mod getbbox_i_row_tests {
+    use super::getbbox_i_row_bounds;
+
+    #[test]
+    fn grouped_row_scan_preserves_nonzero_bounds_with_tails() {
+        for width in 1..=19 {
+            let mut row = vec![0u8; width * 4];
+            assert_eq!(getbbox_i_row_bounds(&row), None, "blank width {width}");
+
+            let left = width / 3;
+            let right = width - 1;
+            row[left * 4..left * 4 + 4].copy_from_slice(&(-17i32).to_le_bytes());
+            row[right * 4..right * 4 + 4].copy_from_slice(&i32::MIN.to_le_bytes());
+            assert_eq!(
+                getbbox_i_row_bounds(&row),
+                Some((left as u32, right as u32)),
+                "nonzero width {width}"
+            );
+
+            row.fill(0);
+            row[(width / 2) * 4..(width / 2) * 4 + 4].copy_from_slice(&i32::MAX.to_le_bytes());
+            assert_eq!(
+                getbbox_i_row_bounds(&row),
+                Some(((width / 2) as u32, (width / 2) as u32)),
+                "single hit width {width}"
+            );
+        }
+    }
+}
+
 /// Validate a Pillow transparency/statistics mask without touching host types.
 pub fn validate_transparency_mask(image: &Image, mask: &Image) -> Result<(), PilError> {
     let mode = mask.mode()?;
@@ -276,26 +332,36 @@ impl Image {
 
         let mode = self.mode_from_materialized(&img);
         if mode == "I" {
+            let width = img_w as usize;
+            let row_bytes = width * 4;
+            let raw = img.as_bytes();
+            let rows = raw.chunks_exact(row_bytes);
             let mut left = img_w;
             let mut top = img_h;
             let mut right = 0u32;
             let mut bottom = 0u32;
-            let mut update = |index: usize, is_nonzero: bool| {
-                if is_nonzero {
-                    let x = (index % img_w as usize) as u32;
-                    let y = (index / img_w as usize) as u32;
-                    left = left.min(x);
-                    top = top.min(y);
-                    right = right.max(x);
-                    bottom = bottom.max(y);
-                }
-            };
             // Materialization has already validated the four-byte scalar
-            // storage. Scan the retained I frame directly so this read-only
-            // reduction does not allocate one decoded value per pixel.
-            for (index, sample) in img.as_bytes().chunks_exact(4).enumerate() {
-                let value = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-                update(index, value != 0);
+            // storage. Group raw words by row so blank rows avoid per-pixel
+            // coordinate updates. If a row establishes full-width bounds,
+            // only a reverse scan for the last nonzero row remains.
+            for (y, row) in rows.clone().enumerate() {
+                if let Some((row_left, row_right)) = getbbox_i_row_bounds(row) {
+                    left = left.min(row_left);
+                    top = top.min(y as u32);
+                    right = right.max(row_right);
+                    bottom = y as u32;
+                    if left == 0 && right == img_w - 1 {
+                        if let Some((last_y, _)) = rows
+                            .clone()
+                            .enumerate()
+                            .rev()
+                            .find(|(_, row)| getbbox_i_row_bounds(row).is_some())
+                        {
+                            bottom = last_y as u32;
+                        }
+                        break;
+                    }
+                }
             }
             return if left > right {
                 Ok(None)

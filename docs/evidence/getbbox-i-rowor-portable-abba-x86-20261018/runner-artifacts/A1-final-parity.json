@@ -1,0 +1,218 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "identity": {
+    "run_id": "migration-parity-benchmark-gate-cff1499118f14b379acca644fd6faf40",
+    "started_at": "2026-10-17T19:34:22.252739Z",
+    "finished_at": "2026-10-17T19:34:22.943451Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest-getbbox-i-rowor-20261018.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "ce48708709c1681ccce600c04d19a450761abc31fe864208e75d61b39c41e8d7"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/getbbox-i-rowor-20261018.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "b16c11e6b596eac0d8f4ce379799ad6e2dc8c3fdf594c5ef35323592ba778fc3"
+      }
+    ],
+    "assets": [],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-cpu",
+        "target_id": "pillow-rs-python",
+        "revision": "1c9203b11e789059b139bbd4772bc3184cf37511",
+        "dirty": true,
+        "runtime": "3.12.11",
+        "backend": "cpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-benchmark"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 7200
+    }
+  },
+  "status": "completed",
+  "summary": {
+    "selected": 4,
+    "executed": 4,
+    "passed": 4,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-blank-1024x768",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-blank-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": null
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-blank-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": null
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-filled-1024x768",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-filled-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              0,
+              0,
+              1024,
+              768
+            ]
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-filled-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              0,
+              0,
+              1024,
+              768
+            ]
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-bottom-right-negative-1024x768",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-bottom-right-negative-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              1023,
+              767,
+              1024,
+              768
+            ]
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-bottom-right-negative-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              1023,
+              767,
+              1024,
+              768
+            ]
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-center-negative-1024x768",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-center-negative-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              512,
+              384,
+              513,
+              385
+            ]
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-center-negative-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              512,
+              384,
+              513,
+              385
+            ]
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    }
+  ],
+  "infrastructure_errors": []
+}

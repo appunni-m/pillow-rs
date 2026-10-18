@@ -1,0 +1,695 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.nonzero-i",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 200
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.nonzero-f",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "F"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 200.5
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.coverage-batch-analysis-pattern-getbbox-i-8",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                10,
+                9
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image-pixel-3",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                9,
+                0
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 15409
+            }
+          }
+        },
+        {
+          "step_id": "setup-image-pixel-4",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                8
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 24907
+            }
+          }
+        },
+        {
+          "step_id": "setup-image-pixel-5",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                9,
+                8
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 34405
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "alpha_only": {
+              "kind": "literal",
+              "value": false
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.blank-i",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.blank-f",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "F"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.parity.f-negative-zero-is-data",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "f-negative-zero-sample",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "AAAAAAAAAAAAAAAAAAAAgA==",
+          "sha256": "8ab3bf6e8bfac3771707cd4a013bdeef828f62ff73a9290720d0f4112902bf9b",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "F"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "f-negative-zero-sample"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-filled-1024x768",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-blank-1024x768",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-center-negative-1024x768",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-pixel",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                512,
+                384
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": -17
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-bottom-right-negative-1024x768",
+      "surface": "PIL.Image.Image",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-pixel",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                1023,
+                767
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": -17
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    }
+  ]
+}

@@ -8893,6 +8893,7 @@
           "PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-noise-1024x768",
           "PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-nonmatching-noise-1024x768",
           "PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-odd-width-7x5",
+          "PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-nonmatching-odd-width-7x5",
           "PIL.Image.Image.filter.nuanced.la-mode-kernel-3x3-smooth-noise-1024x768",
           "PIL.Image.Image.filter.nuanced.la-mode-kernel-3x3-sobel-odd-width-7x5",
           "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-noise-1024x768",

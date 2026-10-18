@@ -1,0 +1,63 @@
+diff --git a/pillow-rs/src/image.rs b/pillow-rs/src/image.rs
+index 89490d5d5..505c3fa58 100644
+--- a/pillow-rs/src/image.rs
++++ b/pillow-rs/src/image.rs
+@@ -7502,10 +7502,23 @@ impl Image {
+                 }
+             }
+         }
+-        // Defer extraction via pipeline
+-        Ok(Image::push_op(
+-            self,
++        // The validation above has already materialized a pending pipeline.
++        // Branch from those resolved pixels so extracting multiple channels
++        // does not replay a mode-changing parent pipeline for every band.
++        let extraction_source = if matches!(self, Image::Pipeline { .. })
++            && !self.has_palette_samples()
++        {
++            self.materialized_branch()?
++        } else {
++            self.clone()
++        };
++        let extracted = Image::push_op(
++            &extraction_source,
+             PipelineOp::ExtractBand { index: ch as u8 },
+-        ))
++        );
++        Ok(match self.backend() {
++            Some(backend) => extracted.use_backend(backend),
++            None => extracted,
++        })
+     }
+     /// Resolves a numeric or named public channel selector before extraction.
+diff --git a/pillow-rs/src/image_getchannel_receipt_tests.rs b/pillow-rs/src/image_getchannel_receipt_tests.rs
+index 12dc3010c..50df5087d 100644
+--- a/pillow-rs/src/image_getchannel_receipt_tests.rs
++++ b/pillow-rs/src/image_getchannel_receipt_tests.rs
+@@ -129,5 +129,26 @@ fn cpu_getchannel_preserves_alpha_through_native_la_raw_prefix() -> Result<(), P
+     Ok(())
+ }
++#[test]
++fn pipeline_getchannel_preserves_explicit_backend_lock_after_materialized_branch(
++) -> Result<(), PilError> {
++    let _backends = CpuOnlyBackendsGuard::new()?;
++    let root = Image::frombytes("RGBA", (2, 1), &[11, 22, 33, 44, 55, 66, 77, 88])?;
++    let pipeline = Image::push_op(
++        &root,
++        PipelineOp::Convert {
++            mode: ColorMode::RGB,
++            matrix: None,
++            dither: None,
++        },
++    )
++    .use_backend(Backend::Cpu);
++
++    let green = pipeline.getchannel(1)?;
++    assert_eq!(green.backend(), Some(Backend::Cpu));
++    assert_eq!(green.tobytes()?, vec![22, 66]);
++    Ok(())
++}
++
+ #[test]
+ fn loaded_tiny_rgb_cpu_getchannel_reports_one_output_buffer_allocation() -> Result<(), PilError> {
+     let _backends = CpuOnlyBackendsGuard::new()?;

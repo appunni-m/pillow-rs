@@ -1,0 +1,148 @@
+{
+  "cases": {
+    "PIL.Image.Image.getchannel.nuanced.pipeline-parent-mutation-after-channel-branch": [
+      {
+        "actual_backend": "gpu",
+        "backend_ns": 7238083,
+        "dispatch_count": 1,
+        "fallback_reason": null,
+        "operation_count": 1,
+        "operation_telemetry": [],
+        "requested_backend": "gpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 1,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 18,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 0,
+          "host_buffer_count": 0,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 256,
+          "peak_live_host_bytes": 0,
+          "readback_bytes": 24,
+          "retained_cache_bytes": 6464,
+          "upload_bytes": 24
+        },
+        "route_ns": 41,
+        "status": "completed",
+        "step_id": "green-channel",
+        "terminal_complete": false,
+        "validation_ns": 17833542
+      },
+      {
+        "actual_backend": "gpu",
+        "backend_ns": 1022875,
+        "dispatch_count": 1,
+        "fallback_reason": null,
+        "operation_count": 1,
+        "operation_telemetry": [],
+        "requested_backend": "gpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 1,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 6,
+          "host_allocation_count": 1,
+          "host_buffer_bytes": 0,
+          "host_buffer_count": 0,
+          "mode_conversion_count": 0,
+          "parameter_bytes": 256,
+          "peak_live_host_bytes": 0,
+          "readback_bytes": 8,
+          "retained_cache_bytes": 6464,
+          "upload_bytes": 20
+        },
+        "route_ns": 0,
+        "status": "completed",
+        "step_id": "green-channel-bytes",
+        "terminal_complete": false,
+        "validation_ns": 1417
+      },
+      {
+        "actual_backend": "gpu",
+        "backend_ns": 1285334,
+        "dispatch_count": 2,
+        "fallback_reason": null,
+        "operation_count": 2,
+        "operation_telemetry": [],
+        "requested_backend": "gpu",
+        "resize_coeff_cache_hits": 0,
+        "resize_coeff_cache_misses": 0,
+        "resource": {
+          "auxiliary_bytes": 0,
+          "full_frame_copy_count": 2,
+          "fused_operation_count": 0,
+          "host_allocated_bytes": 36,
+          "host_allocation_count": 2,
+          "host_buffer_bytes": 0,
+          "host_buffer_count": 0,
+          "mode_conversion_count": 1,
+          "parameter_bytes": 512,
+          "peak_live_host_bytes": 0,
+          "readback_bytes": 48,
+          "retained_cache_bytes": 6464,
+          "upload_bytes": 48
+        },
+        "route_ns": 41,
+        "status": "completed",
+        "step_id": "mutated-parent-bytes",
+        "terminal_complete": true,
+        "validation_ns": 709
+      }
+    ]
+  },
+  "errors": {},
+  "identity": {
+    "backend": "gpu",
+    "backend_state": {
+      "active": [
+        "gpu"
+      ],
+      "available": [
+        "cpu",
+        "gpu",
+        "simd"
+      ],
+      "requested": "gpu"
+    },
+    "implementation": "pillow-rs",
+    "side": "target"
+  },
+  "pipeline_case_status": {
+    "PIL.Image.Image.getchannel.nuanced.pipeline-parent-mutation-after-channel-branch": {
+      "reason": "terminal-complete receipt recorded",
+      "status": "complete"
+    }
+  },
+  "reason": "Normal parity workflows collected completed pipeline receipts for workflow calls and observations.  Each selected case also carries an explicit pipeline/receipt classification; only high-confidence non-pipeline cases are outside the backend-proof cohort, while missing, partial, and indeterminate cases remain gaps.",
+  "schema": "migration-parity/pipeline-execution-evidence@2",
+  "scope": {
+    "case_ids_sha256": "88aec8a5265eae1392526cfb6e3df84f80f121d27f384ff3f5c356e235c0440c",
+    "kind": "public-parity-corpus",
+    "selected": 1
+  },
+  "status": "measured",
+  "summary": {
+    "actual_backend_counts": {
+      "gpu": 1
+    },
+    "completed_receipts": 3,
+    "fallback_reason_counts": {},
+    "not_recorded_cases": 0,
+    "pipeline_applicable_cases": 1,
+    "pipeline_complete_cases": 1,
+    "pipeline_indeterminate_cases": 0,
+    "pipeline_missing_receipt_cases": 0,
+    "pipeline_not_applicable_cases": 0,
+    "pipeline_partial_receipt_cases": 0,
+    "receipt_cases": 1,
+    "selected": 1,
+    "terminal_complete_receipts": 1,
+    "terminal_incomplete_cases": 0
+  }
+}

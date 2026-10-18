@@ -1,0 +1,453 @@
+{
+  "schema": "migration-parity/parity-result@1",
+  "identity": {
+    "run_id": "migration-parity-16627c02dc794c3290f68e4945be2582",
+    "started_at": "2026-10-17T19:36:47.938274Z",
+    "finished_at": "2026-10-17T19:36:48.525616Z",
+    "manifest": {
+      "path": "pillow-rs/tests/fixtures/manifest-getbbox-i-rowor-20261018.yaml",
+      "schema": "migration-parity/manifest@2",
+      "sha256": "ce48708709c1681ccce600c04d19a450761abc31fe864208e75d61b39c41e8d7"
+    },
+    "inputs": [
+      {
+        "path": "inputs/parity/getbbox-i-rowor-20261018.json",
+        "schema": "migration-parity/parity-input@1",
+        "sha256": "b16c11e6b596eac0d8f4ce379799ad6e2dc8c3fdf594c5ef35323592ba778fc3"
+      }
+    ],
+    "assets": [
+      {
+        "input_path": "inputs/parity/getbbox-i-rowor-20261018.json",
+        "item_id": "PIL.Image.Image.getbbox.parity.f-negative-zero-is-data",
+        "asset_id": "f-negative-zero-sample",
+        "kind": "inline",
+        "locator": null,
+        "sha256": "8ab3bf6e8bfac3771707cd4a013bdeef828f62ff73a9290720d0f4112902bf9b"
+      }
+    ],
+    "oracles": [
+      {
+        "oracle_id": "pillow",
+        "name": "Pillow",
+        "version": "12.2.0",
+        "runtime": "CPython 3.12"
+      }
+    ],
+    "targets": [
+      {
+        "target_profile": "python-cpu",
+        "target_id": "pillow-rs-python",
+        "revision": "1c9203b11e789059b139bbd4772bc3184cf37511",
+        "dirty": true,
+        "runtime": "3.12.11",
+        "backend": "cpu",
+        "features": [
+          "pillow-rs-py/default",
+          "pillow-rs/default"
+        ]
+      }
+    ],
+    "command": {
+      "command_id": "parity",
+      "argv": [
+        "make",
+        "migration-parity-test"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 3600
+    }
+  },
+  "status": "completed",
+  "summary": {
+    "selected": 10,
+    "executed": 10,
+    "passed": 10,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_errors": 0
+  },
+  "comparisons": [
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.blank-f",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.blank-f",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": null
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.blank-f",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": null
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.blank-i",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.blank-i",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": null
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.blank-i",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": null
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.coverage-batch-analysis-pattern-getbbox-i-8",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.coverage-batch-analysis-pattern-getbbox-i-8",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              0,
+              0,
+              10,
+              9
+            ]
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.coverage-batch-analysis-pattern-getbbox-i-8",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              0,
+              0,
+              10,
+              9
+            ]
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-blank-1024x768",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-blank-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": null
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-blank-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": null
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-filled-1024x768",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-filled-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              0,
+              0,
+              1024,
+              768
+            ]
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-filled-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              0,
+              0,
+              1024,
+              768
+            ]
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-bottom-right-negative-1024x768",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-bottom-right-negative-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              1023,
+              767,
+              1024,
+              768
+            ]
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-bottom-right-negative-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              1023,
+              767,
+              1024,
+              768
+            ]
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-center-negative-1024x768",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.performance.standard"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-center-negative-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              512,
+              384,
+              513,
+              385
+            ]
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.materialized-i-single-center-negative-1024x768",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              512,
+              384,
+              513,
+              385
+            ]
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.nonzero-f",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.nonzero-f",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              2,
+              3,
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.nonzero-f",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              2,
+              3,
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.nuanced.nonzero-i",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.nonzero-i",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              2,
+              3,
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.nuanced.nonzero-i",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              2,
+              3,
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    },
+    {
+      "case_id": "PIL.Image.Image.getbbox.parity.f-negative-zero-is-data",
+      "target_profile": "python-cpu",
+      "requirements": [
+        "PIL.Image.Image.getbbox.behavior.default"
+      ],
+      "source": {
+        "case_id": "PIL.Image.Image.getbbox.parity.f-negative-zero-is-data",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              1,
+              1,
+              2,
+              2
+            ]
+          }
+        ]
+      },
+      "target": {
+        "case_id": "PIL.Image.Image.getbbox.parity.f-negative-zero-is-data",
+        "status": "completed",
+        "observations": [
+          {
+            "step_id": "call",
+            "status": "ok",
+            "value": [
+              1,
+              1,
+              2,
+              2
+            ]
+          }
+        ]
+      },
+      "outcome": "pass",
+      "diffs": []
+    }
+  ],
+  "infrastructure_errors": []
+}
