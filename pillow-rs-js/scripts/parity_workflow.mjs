@@ -1646,6 +1646,39 @@ function imageShowBaseMode(mode) {
     }
 }
 
+function pngZlibFlevel(encoded) {
+    if (!(encoded instanceof Uint8Array)
+        || encoded.length < 8
+        || encoded[0] !== 0x89
+        || encoded[1] !== 0x50
+        || encoded[2] !== 0x4e
+        || encoded[3] !== 0x47
+        || encoded[4] !== 0x0d
+        || encoded[5] !== 0x0a
+        || encoded[6] !== 0x1a
+        || encoded[7] !== 0x0a) {
+        return null;
+    }
+    let cursor = 8;
+    while (cursor + 12 <= encoded.length) {
+        const length = encoded[cursor] * 0x1000000
+            + (encoded[cursor + 1] << 16)
+            + (encoded[cursor + 2] << 8)
+            + encoded[cursor + 3];
+        const dataStart = cursor + 8;
+        const chunkEnd = dataStart + length + 4;
+        if (chunkEnd > encoded.length) return null;
+        if (encoded[cursor + 4] === 0x49
+            && encoded[cursor + 5] === 0x44
+            && encoded[cursor + 6] === 0x41
+            && encoded[cursor + 7] === 0x54) {
+            return encoded[dataStart + 1] >> 6;
+        }
+        cursor = chunkEnd;
+    }
+    return null;
+}
+
 function imageShowMethod(wasm, operation, args, viewers) {
     if (operation === 'register') {
         const viewer = args.viewer;
@@ -1672,17 +1705,43 @@ function imageShowMethod(wasm, operation, args, viewers) {
         let shownImage = image;
         let convertedImage = null;
         try {
-            // An override of Viewer.show receives the original image. An
-            // override of show_image still passes through Pillow's base
-            // Viewer.show mode conversion before its callback.
-            if (viewer.hook === 'show_image') {
+            const saveOptions = viewer.format === 'PNG'
+                ? { compress_level: 1, save_all: true }
+                : {};
+            // Overrides of show_image and show_file pass through Pillow's
+            // base Viewer.show mode conversion. PPM files then apply the
+            // additional L/RGB conversion performed by ImageShow._dump_image.
+            if (viewer.hook !== 'show') {
                 const mode = image.mode;
                 const preserveMode = mode === '1' || mode === 'RGBA'
                     || (viewer.format === 'PNG' && (mode === 'I;16' || mode === 'LA'));
                 const baseMode = imageShowBaseMode(mode);
-                if (!preserveMode && mode !== baseMode) {
-                    convertedImage = image.convertWithInput(baseMode, null, null, null, null);
+                let outputMode = preserveMode ? mode : baseMode;
+                if (viewer.hook === 'show_file' && viewer.format !== 'PNG') {
+                    if (outputMode === '1') outputMode = 'L';
+                    else if (outputMode !== 'L' && outputMode !== 'RGB') outputMode = 'RGB';
+                }
+                if (mode !== outputMode) {
+                    convertedImage = image.convertWithInput(outputMode, null, null, null, null);
                     shownImage = convertedImage;
+                }
+            }
+
+            const callback = {
+                viewer_id: viewer.viewer_id,
+                title: callbackOptions.title ?? null,
+                mode: String(shownImage.mode),
+                size: Array.from(shownImage.size()),
+                pixels: bytesRecord(shownImage.toBytes()),
+                options: callbackOptions,
+                save_options: saveOptions,
+            };
+            if (viewer.hook === 'show_file') {
+                callback.file_format = viewer.format ?? 'PPM';
+                if (viewer.format === 'PNG') {
+                    const encoded = shownImage.saveWithOptions('PNG', ['compress_level', '1']);
+                    const flevel = pngZlibFlevel(encoded);
+                    if (flevel !== null) callback.png_zlib_flevel = flevel;
                 }
             }
 
@@ -1691,14 +1750,7 @@ function imageShowMethod(wasm, operation, args, viewers) {
             if (!Array.isArray(info.display_callbacks)) {
                 throw namedError('TypeError', "image.info['display_callbacks'] must be a list");
             }
-            info.display_callbacks.push({
-                viewer_id: viewer.viewer_id,
-                title: callbackOptions.title ?? null,
-                mode: String(shownImage.mode),
-                size: Array.from(shownImage.size()),
-                pixels: bytesRecord(shownImage.toBytes()),
-                options: callbackOptions,
-            });
+            info.display_callbacks.push(callback);
         } finally {
             if (convertedImage) convertedImage.free();
         }
