@@ -20,16 +20,16 @@ python3 -m venv .venv
 <!-- /release:python -->
 
 On Windows, replace `.venv/bin/python` with `.venv\Scripts\python.exe`.
-Save the [first-image example](../README.md#make-your-first-image) as `first_image.py`
+Save the [first-image example](../README.md#first-image) as `first_image.py`
 and run it with that environment's Python.
 
 The normal wheel keeps Rayon disabled. Supported operations can still use the
 compiled SIMD or GPU route through automatic backend selection. To install the
-separately built Rayon-backed **Parallel CPU** extension from the 12.2.1
-release, use the optional `parallel` extra:
+separately built Rayon-backed **Parallel CPU** extension for this release, use
+the optional `parallel` extra:
 
 ```sh
-.venv/bin/python -m pip install 'pillow-rs[parallel]==12.2.1'
+.venv/bin/python -m pip install 'pillow-rs[parallel]==12.2.3'
 ```
 
 The extra installs `pillow-rs-parallel`, which contains the distinct native

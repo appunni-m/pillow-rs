@@ -26,11 +26,6 @@
       "audience": "user"
     },
     {
-      "source": "docs/GPU_BATCH_VALIDATION.md",
-      "output": "gpu-batch-validation.md",
-      "audience": "contributor"
-    },
-    {
       "source": "pillow-rs-js/README.md",
       "output": "javascript.md",
       "audience": "user"
@@ -46,58 +41,13 @@
       "audience": "user"
     },
     {
-      "source": "docs/COVERAGE.md",
-      "output": "coverage.md",
-      "audience": "contributor"
-    },
-    {
-      "source": "docs/BENCHMARKING.md",
-      "output": "benchmarking.md",
-      "audience": "contributor"
-    },
-    {
       "source": "docs/PILLOW_SIMD_BENCHMARKS.md",
       "output": "pillow-simd-benchmarks.md",
       "audience": "contributor"
     },
     {
-      "source": "docs/PIPELINE_ROADMAP.md",
-      "output": "pipeline-roadmap.md",
-      "audience": "contributor"
-    },
-    {
       "source": "CONTRIBUTING.md",
       "output": "contributing.md",
-      "audience": "contributor"
-    },
-    {
-      "source": "docs/COMMANDS.md",
-      "output": "commands.md",
-      "audience": "contributor"
-    },
-    {
-      "source": "docs/ARCHITECTURE.md",
-      "output": "architecture.md",
-      "audience": "contributor"
-    },
-    {
-      "source": "docs/IMPLEMENTATION_STRUCTURE.md",
-      "output": "implementation-structure.md",
-      "audience": "contributor"
-    },
-    {
-      "source": "docs/UNREACHABLE_CODE_AUDIT.md",
-      "output": "unreachable-code-audit.md",
-      "audience": "contributor"
-    },
-    {
-      "source": "docs/DOCUMENTATION_CHECKLIST.md",
-      "output": "documentation.md",
-      "audience": "contributor"
-    },
-    {
-      "source": "RELEASING.md",
-      "output": "releasing.md",
       "audience": "contributor"
     },
     {
