@@ -4791,6 +4791,7 @@ def run_resident_case(
                     )
                 else:
                     receipt["status"] = "completed"
+                    receipt["step_id"] = step["step_id"]
                     if not receipt_has_pipeline_work(receipt):
                         receipt["pipeline_relevant"] = False
                     set_receipt_terminal_complete(receipt)

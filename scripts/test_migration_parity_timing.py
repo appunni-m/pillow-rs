@@ -2,11 +2,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from scripts.run_migration_benchmark import execution_operation_telemetry
 from scripts.run_migration_parity import (
     _phase_totals,
     _run_side_subprocess_batch,
     build_argument_parser,
     effective_timing_steps,
+    run_resident_case,
 )
 
 
@@ -86,6 +88,59 @@ class MigrationParityTimingTests(unittest.TestCase):
 
         self.assertEqual(actual_identity, identity)
         self.assertEqual(actual_results, {"filter-case": result})
+
+    def test_resident_telemetry_receipt_keeps_the_step_that_emitted_it(self):
+        receipt = {
+            "operation_count": 1,
+            "actual_backend": "simd",
+            "operation_telemetry": [
+                {"operation": "Quantize", "path": "vector"}
+            ],
+        }
+        telemetry_api = Mock(take_pipeline_telemetry=Mock(side_effect=[None, receipt]))
+        execution = []
+        case = {
+            "case_id": "resident-quantize",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                },
+                {
+                    "step_id": "quantize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "quantize",
+                },
+            ],
+        }
+
+        with patch("scripts.run_migration_parity.AssetStore"), patch(
+            "scripts.run_migration_parity.operation_definition", return_value={}
+        ), patch(
+            "scripts.run_migration_parity.call_workflow_step", return_value=object()
+        ), patch(
+            "scripts.run_migration_parity.should_lock_target_backend", return_value=False
+        ):
+            run_resident_case(
+                "target",
+                case,
+                {},
+                Path("unused"),
+                repeat=1,
+                timing_steps={"quantize"},
+                timing_sink=[],
+                telemetry_sink=[],
+                execution_sink=execution,
+                timing_boundary="observed_steps",
+                telemetry_api=telemetry_api,
+            )
+
+        self.assertEqual(execution[0]["step_id"], "quantize")
+        self.assertEqual(
+            execution_operation_telemetry(execution)[0]["step_id"], "quantize"
+        )
 
 
 if __name__ == "__main__":
