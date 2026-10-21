@@ -540,10 +540,14 @@ def contract_code(path: str, signature: str) -> str:
 def render_benchmarks(root: Path, config: dict, output: Path) -> str:
     source = root / config["benchmark"]["source"]
     if not source.exists():
-        (output / "benchmark-details.md").write_text("# Benchmark measurement details\n\nNo measurement is available. [Contributor benchmark guide](benchmarking.md).\n")
+        (output / "benchmark-details.md").write_text(
+            "# Benchmark measurement details\n\nNo measurement is available. "
+            "See the [contributor benchmark guide](contributing.md#performance-work).\n"
+        )
         return ("# Benchmark results\n\nNo benchmark snapshot has been published for this project yet. "
                 "This is **unmeasured**, not a zero-duration result or a performance claim.\n\n"
-                "See the [measurement protocol](benchmarking.md) for the maintained command and CI artifact.\n")
+                "See the [contributor benchmark guide](contributing.md#performance-work) "
+                "for the maintained command and CI artifact.\n")
     snapshot = json.loads(source.read_text())
     snapshot = normalize_parallel_cpu_snapshot(snapshot)
     simd_source = config.get("pillow_simd_benchmark", {}).get("snapshot")
@@ -570,7 +574,8 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
     if simd_note:
         lines.extend([f'<p class="bench-run-note">{cell(simd_note)}</p>', ""])
     details = ["# Benchmark measurement details", "", status, "",
-             "[View the results](benchmarks.md) · [Run benchmarks](benchmarking.md)", "",
+             "[View the results](benchmarks.md) · "
+             "[Contributor benchmark guide](contributing.md#performance-work)", "",
              "| Measurement identity | Value |", "| --- | --- |",
              f"| Source revision | `{snapshot['revision']}` |", f"| Measured at | {cell(snapshot['measured_at'])} |",
              f"| Result status | {cell(snapshot['status'])} |", f"| Source document SHA-256 | `{snapshot['source_sha256']}` |",
@@ -598,29 +603,16 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
     details += [f"- {cell(note)}" for note in snapshot["notes"]]
     from docs_benchmark_view import render_dashboard
     lines += [render_dashboard(snapshot, config), ""]
-    details += ["", "## Full measurements", "",
-                "| Workload | Runner | Subject | Median µs | P90 µs | P95 µs | Samples | Result / correctness | Requested → actual | Terminal receipt |",
-                "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |"]
-    for row in snapshot["rows"]:
-        machine_id = row.get("machine_id", "")
-        runner = next((machine["label"] for machine in machines if machine["id"] == machine_id),
-                      snapshot.get("machine", {}).get("label", "Runner not recorded"))
-        route = f"{row['requested_backend']} → {row['actual_backend']}"
-        result = f"{row['status']}; {row['correctness']}"
-        terminal = "Complete" if row["terminal_complete"] is True else "Not proven" if row["terminal_complete"] is False else "Not measured" if row["requested_backend"] == "gpu" else "Not applicable"
-        details.append("| " + " | ".join(cell(v) for v in (row["workload"], runner, row["subject"], row["median_us"], row["p90_us"], row["p95_us"], row["sample_count"], result, route, terminal)) + " |")
     lines += ["", "[Measurement details and hardware](benchmark-details.md) · "
-              "[Download results](assets/benchmark.json) · [Contributor benchmark guide](benchmarking.md)", ""]
-    details += ["", "## Workload boundaries", "", "Repeat counts, dimensions, modes, and cache states are retained per workload:", ""]
-    seen = set()
-    for row in snapshot["rows"]:
-        if row["workload"] in seen:
-            continue
-        seen.add(row["workload"])
-        details += [f"### {cell(row['workload'])}", "", f"Sample unit: {cell(row['sample_unit'])}.", "", "```json",
-                  json.dumps({"context": row["context"], "measurement_policy": row["policy"]}, indent=2), "```", ""]
-    details += ["## Reproduce and interpret", "", "Use the [benchmark protocol](benchmarking.md). "
-              "Correctness, native dispatch, timing regressions, process memory, and artifact size are separate claims.", ""]
+              "[Download results](assets/benchmark.json) · "
+              "[Contributor benchmark guide](contributing.md#performance-work)", ""]
+    details += ["", "## Scope", "",
+                "The linked snapshot retains each recorded workload, context, timing, correctness result, "
+                "and backend receipt. Its workload set is historical and does not represent the current "
+                "generated public-operation inventory. Use it for the recorded run only; do not interpret "
+                "its aggregate counts as current API coverage.", "",
+                "Correctness, native dispatch, timing regressions, process memory, and artifact size are "
+                "separate claims.", ""]
     (output / "benchmark-details.md").write_text("\n".join(details))
     return "\n".join(lines)
 
@@ -698,7 +690,7 @@ def render_pillow_simd_benchmarks(source: Path, output: Path) -> str:
             "",
             f"Source revision: `{snapshot['revision']}` · Run: `{cell(snapshot['run_id'])}` · Policy: {cell(snapshot['policy_status'])}.",
             "",
-            "Download the [public measurement data](assets/pillow-simd-benchmark.json) or follow the [benchmark protocol](benchmarking.md).",
+            "Download the [public measurement data](assets/pillow-simd-benchmark.json) or see the [contributor benchmark guide](contributing.md#performance-work).",
             "",
         ]
     )

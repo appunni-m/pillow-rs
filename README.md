@@ -11,26 +11,24 @@
 **Latest release: [12.2.3](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.3).**
 <!-- /release:summary -->
 
-Rust image processing with a familiar Python `PIL` interface and one npm package
-for Node.js and browsers. This stable release supports a selected set of common
-image operations;
-[check compatibility](https://appunni-m.github.io/pillow-rs/compatibility/) before replacing Pillow.
+Rust image processing with Python's familiar `PIL` interface and a shared
+WebAssembly package for Node.js and browsers. The project supports a selected
+set of Pillow-compatible APIs; check the [supported APIs and limitations](https://appunni-m.github.io/pillow-rs/compatibility/)
+before replacing Pillow.
 
 [Documentation](https://appunni-m.github.io/pillow-rs/) ·
-[Supported APIs](https://appunni-m.github.io/pillow-rs/compatibility/) ·
-[What pillow-rs adds beyond Pillow](https://appunni-m.github.io/pillow-rs/compatibility/#pillow-rs-additions-beyond-pillow) ·
-[Benchmark results](https://appunni-m.github.io/pillow-rs/benchmarks/)
+[Supported APIs](https://appunni-m.github.io/pillow-rs/compatibility/)
 
 ## Install
 
 | Your application | Package manager | Guide |
 | --- | --- | --- |
-| Python | pip: `pillow-rs`; import `PIL` | [Python installation](https://appunni-m.github.io/pillow-rs/installation/#python) |
-| Node.js or browser | npm: `pillow-rs` | [JavaScript quickstart](https://appunni-m.github.io/pillow-rs/javascript/) |
-| Rust | Cargo: `pillow-rs`; import `pillow_rs` | [Rust quickstart](https://appunni-m.github.io/pillow-rs/rust/) |
+| Python | `pip install pillow-rs`; import `PIL` | [Installation](https://appunni-m.github.io/pillow-rs/installation/) |
+| Node.js or browser | `npm install pillow-rs` | [JavaScript quickstart](https://appunni-m.github.io/pillow-rs/javascript/) |
+| Rust | Cargo dependency `pillow-rs`; import `pillow_rs` | [Rust quickstart](https://appunni-m.github.io/pillow-rs/rust/) |
 
-For Python, create a fresh environment. Pillow and pillow-rs both provide `PIL`,
-so install them in separate environments.
+For Python, use a fresh environment. Pillow and pillow-rs both provide the
+`PIL` namespace, so install them in separate environments.
 
 <!-- release:python -->
 ```sh
@@ -40,14 +38,10 @@ python3 -m venv .venv
 <!-- /release:python -->
 
 On Windows, use `.venv\Scripts\python.exe` instead of `.venv/bin/python`.
-See [installation requirements](https://appunni-m.github.io/pillow-rs/installation/) for supported platforms.
-The separately built Rayon-backed **Parallel CPU** wheel is available for the
-supported platforms through the `parallel` extra. The ordinary wheel remains
-serial CPU. See the
-[release matrix](https://github.com/appunni-m/pillow-rs/blob/main/docs/REGISTRY_RELEASE_MATRIX.md)
-for package availability.
+See [installation requirements](https://appunni-m.github.io/pillow-rs/installation/)
+for supported platforms and the optional Parallel CPU package.
 
-## Make your first image
+## First image
 
 ```python
 from io import BytesIO
@@ -61,86 +55,26 @@ assert image.size == (6, 4)
 assert output.getvalue().startswith(b"\x89PNG\r\n\x1a\n")
 ```
 
-This creates, mirrors, resizes, and encodes an RGB image entirely in memory.
-Continue with [Python recipes](https://appunni-m.github.io/pillow-rs/python/).
+This creates, mirrors, resizes, and encodes an RGB image in memory. Continue
+with [Python recipes](https://appunni-m.github.io/pillow-rs/python/).
 
-## What can I use?
+## Supported behavior
 
-- Create, read, save, crop, resize, rotate, and convert images.
-- Use supported drawing, filtering, color, palette, and statistics operations.
-- Load fonts and render text within the documented font limitations.
-- Use the [compatibility guide](https://appunni-m.github.io/pillow-rs/compatibility/) to check modes, formats, and unsupported integrations.
-
-The version prefix identifies the targeted Pillow version. It does not promise
-complete Pillow API or mode compatibility; check the documented support before
-replacing Pillow.
-
-## What pillow-rs adds beyond Pillow
-
-Pillow is the behavior reference for the selected compatibility surface.
-The items below are first-party runtime and contributor-tooling additions that
-upstream Pillow does not bundle as equivalents.
-
-**For applications**
-
-- A Rust-owned image, font, and codec runtime, available as a Rust crate and
-  through the Python `PIL` facade. Runtime processing does not call back into
-  Pillow, FreeType, or native codec libraries.
-- Rust consumers can select image codecs with Cargo features. This changes
-  build composition; the codecs and image formats are not unique to pillow-rs.
-- Deferred image-operation pipelines in the Rust core, so supported chained
-  operations can execute when pixels are requested rather than after every
-  individual call; compatible sibling chains can reuse an already materialized
-  shared prefix.
-- Selectable CPU, architecture-specific SIMD, and GPU execution routes, with
-  controls to inspect and enable or disable compiled routes. A compiled route
-  does not guarantee that every operation or device uses it.
-- [Explicit GPU batching](docs/IMAGE_BATCHING.md) schedules existing lazy image
-  graphs and streams keyed CPU or resident outputs within resource budgets.
-  It is available in 12.2.1 through `GpuBatchExecutor` and remains separate
-  from normal Image routing.
-- An opt-in Rayon **Parallel CPU** profile, separate from ordinary CPU, SIMD,
-  and GPU execution. Install its matching companion wheel with
-  `pillow-rs[parallel]`; see the
-  [installation guide](https://appunni-m.github.io/pillow-rs/installation/#python).
-- A published JavaScript package for Node.js and browser WebAssembly.
-- Optional pipeline receipts that report the requested and actual backend,
-  per-operation paths, fallback, timing, and available resource details. Rust
-  and WebAssembly expose these hooks; Python exposes them only through its
-  internal binding module.
-
-**For contributors**
-
-- An isolated, pinned Pillow oracle and generated manifest for selected API
-  parity inputs.
-- Separate individual-operation and composed-pipeline benchmark reports,
-  with backend and mode details and a separately labeled Parallel CPU profile.
-  Parallel CPU reuses the ordinary Pillow measurement as its comparison
-  baseline; it does not time a separate threaded Pillow run.
-- GPU shader-dispatch evidence for distinguishing an actual kernel run from a
-  requested route that fell back.
-
-The [feature comparison and limits](https://appunni-m.github.io/pillow-rs/compatibility/#pillow-rs-additions-beyond-pillow)
-records where each capability is available and what it does not guarantee.
-These system additions do not mean the image operations themselves are unique
-to pillow-rs; the selected compatibility surface and unsupported cases are
-listed in the [compatibility guide](https://appunni-m.github.io/pillow-rs/compatibility/).
-
-## Performance
-
-[View benchmark results](https://appunni-m.github.io/pillow-rs/benchmarks/) for
-per-workload comparisons. Each result identifies whether it measures the current
-release or an older revision; performance depends on the input and hardware.
+The supported surface includes image creation and file I/O, geometry and mode
+conversion, drawing, filters, color operations, palettes, statistics, and font
+rendering. Availability depends on the API, mode, format, and platform; the
+[compatibility guide](https://appunni-m.github.io/pillow-rs/compatibility/)
+lists the supported combinations and known limits. The version prefix targets
+Pillow 12.2.0 and does not promise complete Pillow compatibility.
 
 ## Contribute and get help
 
-[Contributing](https://appunni-m.github.io/pillow-rs/contributing/) covers source
-builds, tests, and benchmark development.
-[Support](https://appunni-m.github.io/pillow-rs/support/) ·
-[Security](https://appunni-m.github.io/pillow-rs/security/) ·
-[Releases](https://github.com/appunni-m/pillow-rs/releases) ·
-[Changelog](https://appunni-m.github.io/pillow-rs/changelog/) ·
-[Code of conduct](https://appunni-m.github.io/pillow-rs/conduct/)
+[Contributing](https://appunni-m.github.io/pillow-rs/contributing/) covers
+building the project and proposing changes. For help, see
+[support](https://appunni-m.github.io/pillow-rs/support/),
+[security reporting](https://appunni-m.github.io/pillow-rs/security/),
+[releases](https://github.com/appunni-m/pillow-rs/releases), and the
+[changelog](https://appunni-m.github.io/pillow-rs/changelog/).
 
 See [LICENSE](LICENSE) for terms.
 

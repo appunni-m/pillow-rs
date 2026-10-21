@@ -66,6 +66,13 @@ It includes multiple backends, Node/browser execution, and reverse Pillow
 coverage; it needs the matching host capabilities. Failed and unmeasured
 backends remain explicit.
 
+## Performance work
+
+Choose explicit workload IDs and backend profiles, then follow the
+[benchmarking guide](docs/BENCHMARKING.md). Keep serial CPU, SIMD, Parallel CPU,
+and GPU measurements separate, and retain each workload's parity and backend
+evidence.
+
 [Coverage](docs/COVERAGE.md) explains collection receipts and changed-line
 claims. [Benchmarking](docs/BENCHMARKING.md) explains controlled comparisons.
 

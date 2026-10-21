@@ -1,182 +1,27 @@
-# Historical artifacts and release evidence
+# Registry release matrix
 
-## Current accepted release: 12.2.2, 2026-10-18
+## Current release: 12.2.3
 
-The stable [`v12.2.2` GitHub release](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.2)
-points to commit `5d6751a7f968cb0d9ee823ed7bea1c945cbc7dfa`. Its [main CI run](https://github.com/appunni-m/pillow-rs/actions/runs/39089675232)
-passed all nine jobs. Python 3.10, Python 3.12, Node WebAssembly, and browser
-WebAssembly each passed 17,280/17,280 live Pillow comparisons. The [Pillow-SIMD
-benchmark](https://github.com/appunni-m/pillow-rs/actions/runs/39089675233)
-passed its parity-gated x86 benchmark.
+Verified 2026-10-21. See the [v12.2.3 GitHub release](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.3)
+for its release record and attached artifacts.
 
-The [release workflow](https://github.com/appunni-m/pillow-rs/actions/runs/39091349641)
-completed successfully, published the packages below, and attested the release
-artifacts. The GitHub Release contains the checksum manifest and Cargo, Python,
-and npm artifacts; GitHub reports the checksum manifest asset digest as
-`491d46888ee6b66ed28065f094458f289a98b4069e5a8718cd5bdc95854d6ff5`. The
-candidate's [Documentation run](https://github.com/appunni-m/pillow-rs/actions/runs/39089675226)
-and its [post-Pillow-SIMD documentation run](https://github.com/appunni-m/pillow-rs/actions/runs/39090399496)
-both passed, including Pages deployment. Registry metadata and published-package
-quickstarts were checked after publication with
-`make docs-release-check docs-registry-examples`.
-
-| Registry | Published artifacts observed | Notes |
-| --- | --- | --- |
-| crates.io | `pillow-rs` 12.2.2 | The exact version is visible; the docs quickstart compiled the public crate from crates.io. |
-| PyPI | `pillow-rs` 12.2.2: 3 platform wheels and 1 source distribution; `pillow-rs-parallel` 12.2.2: 3 platform wheels | Linux x86-64, macOS ARM64, and Windows x86-64. The `parallel` extra selects the matching companion wheel; release consumers passed. |
-| npm | `pillow-rs` 12.2.2 | The exact version is visible; the docs quickstart installed and exercised the published package. |
-
-The full operation/pipeline benchmark was not triggered by this version-only
-release commit; its path filter excludes package-version and changelog changes.
-The latest full benchmark for the unchanged image implementation is the
-[successful run on source commit `0d6c7b69473cf731973cebcfd61af6a1e2d1b8de`](https://github.com/appunni-m/pillow-rs/actions/runs/39082168656).
-This records release verification and does not claim that the broader
-performance campaign is complete.
-
-## Previous accepted release: 12.2.1, 2026-10-07
-
-The stable [`v12.2.1` GitHub release](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.1)
-points to commit `0f804aa4ec15b787e223497c63d954d0227596e6`. Its
-[main CI run](https://github.com/appunni-m/pillow-rs/actions/runs/37601786409)
-passed all jobs. The four live Pillow parity lanes—Python 3.10, Python 3.12,
-Node WebAssembly, and browser WebAssembly—each passed 17,108/17,108 cases.
-The [release workflow](https://github.com/appunni-m/pillow-rs/actions/runs/37605383379)
-completed successfully and published the packages below.
-
-| Registry | Published artifacts observed | Notes |
-| --- | --- | --- |
-| crates.io | `pillow-rs` 12.2.1 | Published by the accepted release workflow; crate source revision matches the tag. |
-| PyPI | `pillow-rs` 12.2.1: 3 platform wheels and 1 source distribution; `pillow-rs-parallel` 12.2.1: 3 platform wheels | Linux x86-64, macOS ARM64, and Windows x86-64. The `parallel` extra selects the matching companion wheel. |
-| npm | `pillow-rs` 12.2.1 | Registry metadata and provenance attestations are present. |
-
-The release preflight and package-consumer checks passed before publishing.
-This records CI and registry evidence; it does not claim parity beyond the
-listed cases or platforms. The sections below are older historical artifacts.
-
-The three projects publish from their own GitHub repositories through OIDC.
-The observations below describe earlier releases verified on 2026-09-16.
-They are retained for audit and do not identify the newest installable versions.
-For current packages, use the release lists for
-[pillow-rs](https://github.com/appunni-m/pillow-rs/releases),
-[fontdone](https://github.com/appunni-m/fontdone/releases), and
-[image-slash-star](https://github.com/appunni-m/image-slash-star/releases).
-
-| Project | Accepted version | Registries | Release evidence |
+| Registry | Package | Version | Published artifacts |
 | --- | --- | --- | --- |
-| fontdone | 2.14.3-alpha.10 | One Cargo crate; one npm package; native C SDK on GitHub | [Release run](https://github.com/appunni-m/fontdone/actions/runs/35002120087), [tag CI](https://github.com/appunni-m/fontdone/actions/runs/35002119892) |
-| image-slash-star | 0.1.2 | Cargo only | [Release run](https://github.com/appunni-m/image-slash-star/actions/runs/35010129246), [main CI](https://github.com/appunni-m/image-slash-star/actions/runs/35007807946) |
-| pillow-rs | 0.1.3 | Cargo, PyPI, npm | [Release run](https://github.com/appunni-m/pillow-rs/actions/runs/35017008075), [main CI](https://github.com/appunni-m/pillow-rs/actions/runs/35014896711) |
+| crates.io | [`pillow-rs`](https://crates.io/crates/pillow-rs/12.2.3) | 12.2.3 | Rust crate |
+| PyPI | [`pillow-rs`](https://pypi.org/project/pillow-rs/12.2.3/) | 12.2.3 | Source distribution and wheels for Linux x86-64, macOS ARM64, and Windows x86-64 |
+| PyPI | [`pillow-rs-parallel`](https://pypi.org/project/pillow-rs-parallel/12.2.3/) | 12.2.3 | Companion wheels for Linux x86-64, macOS ARM64, and Windows x86-64 |
+| npm | [`pillow-rs`](https://www.npmjs.com/package/pillow-rs/v/12.2.3) | 12.2.3 | Shared Node.js and browser WebAssembly package |
 
-Fontdone's C and raw WASM workspace packages are private Cargo build members.
-Pillow-rs's npm package serves both Node and browsers; its Python import is
-`from PIL import Image`. Compare it with Pillow in separate environments.
+The standard Python wheel uses serial CPU. The `parallel` extra installs the
+separately built Parallel CPU companion wheel; it does not change Cargo features
+in an already installed wheel. See [installation](INSTALLATION.md) for package
+selection and the supported-platform requirements.
 
-## Artifact identity
+The PyPI release page contains all four `pillow-rs` files and all three
+`pillow-rs-parallel` wheels for 12.2.3. The `pillow-rs` page's embedded project
+description still shows a 12.2.2 install example; this repository documentation
+update does not change the description already attached to the published artifact.
 
-All six pillow-rs registry artifacts were downloaded and matched to the
-[GitHub release checksum manifest](https://github.com/appunni-m/pillow-rs/releases/tag/v0.1.3).
-Cargo and npm provenance identify commit
-`fd78eb80402a0d6d99e6b696d0a1ebf9ba11d5fb` and the accepted release run.
-[PyPI provenance](https://pypi.org/integrity/pillow-rs/0.1.3/pillow_rs-0.1.3.tar.gz/provenance)
-identifies the repository's `release.yml` publisher and `pypi` environment.
-This verifies published metadata and artifact digests; it is not an independent
-signature-chain audit.
-
-Fontdone Cargo/npm provenance identifies
-`cb90d41a863f8569335d8ed775a4038d23c79dc5` and its release run.
-Image-slash-star's registry/GitHub crate SHA-256 is
-`e53037e57d0c5cae052ba94851c8cf72a80b9dfe195cd21b166506ab7bdbeb3b`.
-
-## Acceptance limits
-
-Pillow-rs's four runtime lanes each passed 11,348 cases at the released commit.
-Its source-bound coverage has 24 plans and 11,328 target executions with zero
-failures; all 25 measured changed Rust lines are covered. See
-[coverage](COVERAGE.md) for the denominator and digest.
-
-Fontdone remains alpha: runnable parity is 20,357/20,357, three undefined-C
-inputs remain named pending cases, C-contract adoption is incomplete, and
-benchmark thresholds are not yet accepted.
-
-Image-slash-star's release floors are 59% lines, 46% branches, 52% functions,
-and 58% regions. Its 2026-09-15 all-feature report records 95,473/161,451 lines,
-14,912/32,258 branches, 4,859/9,244 functions, and 140,609/241,503 regions.
-These floors do not imply complete source coverage; its complete-coverage
-target retains the full denominator.
-
-The [release process](../RELEASING.md) follows the same separation of validation,
-artifact identity, and OIDC publishing used by
-[coverage-mcp's reference release](https://github.com/appunni-m/coverage-mcp/actions/runs/33979588689).
-
-## Alpha.6 partial publication, 2026-10-05
-
-**Alpha.6 is not an accepted release.** The annotated `v12.2.0-alpha.6` tag
-identifies `a0c7ffc45996ddd8a5e287fb78125d2a25fd2630`.
-[Main CI](https://github.com/appunni-m/pillow-rs/actions/runs/37297480408)
-passed all nine jobs on that exact commit. Python 3.10, Python 3.12, Node WASM,
-and browser WASM each passed 17,105 live Pillow comparisons. The separate
-[local evidence](GPU_BATCH_VALIDATION.md) records CPU, SIMD, GPU, Parallel CPU,
-and explicit batch results; those source results do not prove the registry
-crate's runtime behavior.
-
-The [release run](https://github.com/appunni-m/pillow-rs/actions/runs/37301043651)
-failed in the PyPI publishing step. Crates.io and npm jobs succeeded; the
-GitHub release job was skipped. Registry checks found three standard Python
-wheels, no Python sdist, and no same-version `pillow-rs-parallel` distribution.
-The public annotation only states that attestations were being generated and
-uploaded. The exact error is unavailable here: the signed-out browser cannot
-expand logs, and the GitHub job-log API returned HTTP 403, requiring repository
-admin rights. No publisher configuration change or retry has been justified by
-that evidence.
-
-The published Rust crate's SHA-256 is
-`262a20e0a3df9734224c81d474f7bb999bf69ea88caa2841207f91f558a53b72`.
-Its embedded `.cargo_vcs_info.json` matches the tag, but Cargo's normalized
-manifest selects the registry `fontdone = "=2.14.3-alpha.12"`. That dependency's
-downloaded archive embeds VCS revision
-`fccab6837ccc959f49a7a5d13d058466fbf204a0`; this is archive metadata, not
-independent provenance. The source build selects Git revision
-`e2ff6ede3246b1568a087ef3bcf3dd848692d4bb`. The latter contains
-later malformed-font error and cached-face teardown fixes. The charmap
-registration fix is present in both revisions.
-
-Public `FreeTypeFont::from_bytes` probes using `0xff` bytes returned:
-
-| Input length | Live Pillow 12.2.0 / pinned source | Published Rust crate |
-| ---: | --- | --- |
-| 1 | `invalid stream operation` | `invalid stream operation` |
-| 16 | `invalid stream operation` | `unknown file format` |
-| 17 | `broken file` | `unknown file format` |
-| 32 | `broken file` | `unknown file format` |
-
-Loading the embedded default font on a Rust thread then exiting aborted the
-published-crate process during TLS destruction (shell exit 133 on macOS).
-The same public probe passed against the pinned source. Do not recommend the
-alpha.6 Rust crate or install its unavailable Parallel CPU extra.
-
-Recovery requires a new fontdone registry version containing the fixes already
-on its remote main, followed by consistent exact Git/registry dependency pins
-and a new pillow-rs version. The fontdone release workflow requires successful
-tag CI, including coverage. No new fontdone tag or release was started, and no
-existing gate was bypassed. Diagnose the PyPI failure with an authenticated
-job log before another publication. Preserve the alpha.6 tag and distributed
-artifacts; changed source or artifact bytes require a new version.
-
-The recovery consumer in `scripts/check_release_crate.py` now exercises the
-normalized archive before packaging acceptance and before upload authentication.
-Its failure blocks another push/publication until the dependency is corrected.
-This guard was added after the alpha.6 tag; it was not executed by that release.
-
-Recovery checks ran locally after the failure:
-
-| Command / scope | Result |
-| --- | --- |
-| `make docs-lint docs-test docs-build release-tools-test PYTHON=.venv/bin/python` | Passed; 44 documentation tests, 13 release-tool tests, strict site build |
-| Open Source `audit_documentation.py --strict` | Zero errors; ten review prompts in existing skills, external environment files, and qualified compatibility/performance wording |
-| `make repo-map-update repo-map-check PYTHON=.venv/bin/python` | Passed after adding the consumer file |
-| `RUSTC_WRAPPER= .venv/bin/python scripts/check_release_crate.py --offline --archive /private/tmp/pillow-alpha6-published-crate/pillow-rs.crate` | Failed both public probes; three wrong font errors and TLS teardown abort |
-| Same Rust probe source against the workspace Git dependency, separately invoked with `errors` and `thread` | Both passed |
-
-The consumer disables core default features to isolate font behavior. These
-recovery checks do not rerun the six image backend campaigns or establish
-registry-crate GPU, SIMD, or Parallel CPU parity. No coverage was collected.
+Previous versions and their release records are available from the
+[GitHub release list](https://github.com/appunni-m/pillow-rs/releases). The
+maintainer workflow is documented in [`RELEASING.md`](../RELEASING.md).

@@ -45,8 +45,12 @@ class ReleaseDocumentationTests(unittest.TestCase):
                 len({(row['workload'], row.get('machine_id')) for row in snapshot['rows']}),
             )
             details=(output/'benchmark-details.md').read_text()
-            for row in snapshot['rows']:
-                self.assertIn(row['workload'],details)
+            self.assertIn('does not represent the current',details)
+            published=json.loads((output/'assets/benchmark.json').read_text())
+            self.assertEqual(
+                {row['workload'] for row in published['rows']},
+                {row['workload'] for row in snapshot['rows']},
+            )
 
     def test_latest_includes_prereleases_and_excludes_drafts(self):
         rows=[{'tag_name':'v0.9.0','published_at':'2026-09-01T00:00:00Z'},
