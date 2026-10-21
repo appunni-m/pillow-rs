@@ -101,6 +101,21 @@
 - Record subtle reference behavior beside the implementation. Keep user guides
   separate from contributor procedures, and retain README acknowledgements.
 
+## Git integration
+
+- Default to one completed work item per commit/push checkpoint. Count an item
+  after its focused verification; keep separate in-progress experiments out of
+  that checkpoint. Increase the batch only when the user explicitly requests it.
+- Keep `main` as the integration branch. Fetch `origin/main` before integrating,
+  and bring completed, scoped-verified work into `main` at the agreed batch
+  boundary so it does not remain only on a topic branch or worktree.
+- Before integration, inventory attached worktrees and local refs, including
+  recovery refs and branches not reachable from `main`. Preserve them; do not
+  prune or delete dangling refs during routine cleanup. Review unique branch
+  work individually and merge only validated changes; do not bulk-merge stale
+  experiments. Preserve dirty worktrees unless their changes are explicitly
+  incorporated.
+
 ## Verification before Git push only
 
 Run this checklist immediately before an authorized `git push`, or when the user
