@@ -34,6 +34,17 @@ from migration_parity_inventory import (
     load_authority,
 )
 
+try:
+    from migration_parity.parallel_cpu_inputs import (
+        PARALLEL_CPU_PROFILE,
+        parallel_cpu_contract_for_operation,
+    )
+except ModuleNotFoundError:
+    from scripts.migration_parity.parallel_cpu_inputs import (
+        PARALLEL_CPU_PROFILE,
+        parallel_cpu_contract_for_operation,
+    )
+
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = (
@@ -57,6 +68,7 @@ BENCHMARK_TARGET_PROFILE_OVERRIDES = {
 PARITY_TARGET_PROFILE_OVERRIDES = {
     "PIL.Image.Image.getprojection": ["python-cpu", "python-simd", "python-gpu"],
     "PIL.ImageChops.screen": ["python-cpu", "python-simd", "python-gpu"],
+    "PIL.ImageOps.posterize": ["python-cpu", PARALLEL_CPU_PROFILE],
 }
 CPU_ONLY_API_BENCHMARK_ENDPOINTS = {
     "PIL.Image.Image::show",
@@ -914,6 +926,19 @@ def operation_requirements(
                 "error_path" if looks_like_error(str(edge)) else "boundary",
                 f"Deprecated-authority edge case {edge!r}.",
                 ["parity", "coverage"],
+            )
+        )
+    parallel_cpu_contract = parallel_cpu_contract_for_operation(
+        endpoint.source_path
+    )
+    if parallel_cpu_contract is not None:
+        requirements.append(
+            requirement(
+                parallel_cpu_contract["requirement_id"],
+                "backend",
+                parallel_cpu_contract["description"],
+                ["parity"],
+                target_profiles=[PARALLEL_CPU_PROFILE],
             )
         )
     if benchmark_applicable:

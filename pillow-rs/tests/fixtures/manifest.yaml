@@ -28600,6 +28600,13 @@ surfaces:
       - coverage
       target_profiles:
       - python-cpu
+    - id: PIL.ImageOps.posterize.backend.parallel-cpu
+      dimension: backend
+      description: Exact L-mode posterize output through opt-in Parallel CPU.
+      lanes:
+      - parity
+      target_profiles:
+      - python-parallel-cpu
     - id: PIL.ImageOps.posterize.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageOps.posterize.
@@ -28612,6 +28619,7 @@ surfaces:
       applicability: required
       target_profiles:
       - python-cpu
+      - python-parallel-cpu
     coverage:
       applicability: required
       target_profiles:

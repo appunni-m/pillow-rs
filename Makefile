@@ -41,6 +41,7 @@ FIXTURES_DIR := pillow-rs/tests/fixtures
 REPORT       := /tmp/report.json
 TIMEOUT      := 300
 MIGRATION_PARITY_OUTPUT ?= build/migration-parity/parity-result.json
+MIGRATION_PARALLEL_CPU_PARITY_OUTPUT ?= build/migration-parity/parity-result-parallel-cpu.json
 MIGRATION_PARITY_ARGS ?=
 MIGRATION_PARITY_CASE_IDS ?=
 MIGRATION_PARITY_CASE_ID_LIST = $(strip $(subst $(MIGRATION_COMMA),$(MIGRATION_SPACE),$(MIGRATION_PARITY_CASE_IDS)))
@@ -211,6 +212,7 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-benchmark-pillow-simd$(NC) Compare matched x86 Pillow-SIMD workloads\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run the all-backend public parity campaign\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
+	@printf "  $(CYAN)make migration-parity-test-parallel-cpu$(NC) Run parity with the opt-in Parallel CPU profile\n"
 	@printf "  $(CYAN)make migration-parity-test-gpu-strict$(NC) Audit GPU-only capability coverage (not the normal fallback lane)\n"
 	@printf "  $(CYAN)make migration-parity-test-simd-strict$(NC) Audit SIMD-only capability coverage (not the automatic CPU fallback lane)\n"
 	@printf "  $(CYAN)make migration-parity-case CASE_ID=...$(NC) Run one public parity case for fast iteration\n"
@@ -486,7 +488,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
-.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: migration-parity-test migration-parity-test-parallel-cpu migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -507,6 +509,11 @@ migration-parity-test: ## Run canonical input-only parity against live Pillow
 	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
+
+migration-parity-test-parallel-cpu: build-parity-parallel-cpu ## Run live Pillow parity through the opt-in Parallel CPU profile
+	MIGRATION_TARGET_BACKEND=cpu MIGRATION_TARGET_PROFILE=parallel-cpu \
+		$(MAKE) migration-parity-test \
+		MIGRATION_PARITY_OUTPUT="$(MIGRATION_PARALLEL_CPU_PARITY_OUTPUT)"
 
 migration-parity-test-gpu-strict: build-dev ## Audit GPU-only capability coverage without CPU fallback
 	$(MAKE) migration-parity-test \
