@@ -272,9 +272,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |       |-- rgba_avx2.rs
 |   |   |   |   |   |   |       `-- rgba_neon.rs
 |   |   |   |   |   |   |-- box_blur.rs
-|   |   |   |   |   |   |-- cmyk_packing_tests.rs
 |   |   |   |   |   |   |-- convert/
 |   |   |   |   |   |   |   |-- cmyk.rs
+|   |   |   |   |   |   |   |-- cmyk_packing_tests.rs
 |   |   |   |   |   |   |   `-- kernels/
 |   |   |   |   |   |   |       |-- mod.rs
 |   |   |   |   |   |   |       |-- rgba_rgb_neon.rs
