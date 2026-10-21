@@ -14,16 +14,18 @@
   as `1`, `L`, `LA`, `P`, `PA`, `RGB`, and `RGBA` directly where their
   semantics allow it. Do not convert everything to RGBA merely to share an
   implementation.
-- Keep `pool_simd/ops/adapters.rs` a dispatch and re-export facade. Make each
-  family adapter a fine orchestrator whose validation, mode selection, backend
-  receipt, and result materialization are clear at a glance. Put mode-specific
-  hot loops in focused kernel modules and shared low-level helpers in the
-  shared native layer. Reuse must preserve specialized loops, inlining, and
-  direct backend selection; do not add generic or dynamic dispatch to pixel
-  paths merely to reduce source duplication. When a reuse change affects the
-  executed path, compare full public-call latency and reject regressions.
-  Prefer one adapter per coherent family, not one file per operation unless
-  their contracts require it.
+- Preserve specialized hot loops, inlining, and direct backend selection; do
+  not add generic or dynamic dispatch to pixel paths merely to reduce source
+  duplication. When a reuse change affects the executed path, compare full
+  public-call latency and reject regressions. Follow the shared structure guide
+  as the sole authority for adapter, family, and kernel placement and roles.
+- Use [the repository implementation structure guide](docs/IMPLEMENTATION_STRUCTURE.md)
+  as the single source for placement of maintained files across source, tests,
+  tools, docs, evidence, fixtures, assets, and workflows. Other documents may
+  map ownership or link to it, but must not define a competing path grammar.
+  Treat existing outliers as migration debt and align a touched area only when
+  behavior and performance are preserved. Keep uncertain or architecture-
+  specific reachability findings reviewable; never delete them automatically.
 - The `parallel` Cargo feature is opt-in and must stay out of default features
   in both `pillow-rs` and its bindings. A normal Python build must not silently
   enable Rayon.
@@ -65,6 +67,16 @@
 
 ## Development workflow
 
+- Use root `make quality` as the consolidated static quality gate; `make lint`
+  is a compatibility alias. `make ci` adds fixture, parity, and coverage
+  verification.
+- Keep first-party Rust files under 1,000 physical lines and functions under
+  100 lines. Review files at 800 lines and functions at 60 lines. Existing
+  over-limit files/functions are ratcheted against a checked-in baseline;
+  new over-limit code and growth beyond that baseline fail the quality gate.
+  Include first-party tests and exclude generated/vendor sources only through
+  the checker's explicit rules. After reviewed reductions, use
+  `make checkstyle-update-baseline` and inspect the resulting baseline diff.
 - Read the affected code and its callers first. Reuse existing functions, types,
   and backend paths before adding new implementations.
 - Make the smallest cohesive change that solves the problem. Preserve existing
@@ -127,7 +139,9 @@ exists. Add a target only when repeated use justifies maintaining it.
 - Site changes: also `make docs-test docs-build`.
 - Rust changes: affected tests and `make fmt clippy`.
 - Behavior changes: affected parity lanes.
-- Added, moved, or removed files: `make repo-map-update repo-map-check`.
+- Added, moved, or removed files:
+  `make implementation-structure-audit implementation-structure-inventory
+  repo-map-update repo-map-check`.
 
 Check the final changes once; repeat only affected checks after further changes
 or failures. Broader campaigns are needed only when the push affects their
@@ -143,6 +157,8 @@ runs; linked contributor checklists are not additional development chores.
 - [Command reference](docs/COMMANDS.md): targets, prerequisites, and side effects.
 - [Architecture](docs/ARCHITECTURE.md) and [repository map](docs/REPO_MAP.md):
   ownership.
+- [Repository implementation structure](docs/IMPLEMENTATION_STRUCTURE.md):
+  family, adapter, kernel, binding, parity, and evidence placement rules.
 - [Coverage](docs/COVERAGE.md) and [benchmarking](docs/BENCHMARKING.md):
   evidence collection and interpretation.
 - [Releasing](RELEASING.md): version synchronization, package checks, and

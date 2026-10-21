@@ -32,6 +32,10 @@ class MigrationBuildWitnessTests(unittest.TestCase):
         for package in ("pillow-rs", "pillow-rs-py", "pillow-rs-js"):
             self._write(f"{package}/Cargo.toml", f"[package]\nname='{package}'\n")
             self._write(f"{package}/src/lib.rs", "pub fn fixture() {}\n")
+        self._write(
+            "pillow-rs-py/pyproject.toml",
+            "[tool.maturin]\nfeatures=['pyo3/extension-module']\n",
+        )
 
     def _write(self, relative: str, content: str | bytes) -> Path:
         path = self.root / relative
@@ -41,12 +45,37 @@ class MigrationBuildWitnessTests(unittest.TestCase):
             stream.write(content)
         return path
 
+    def test_benchmark_workflow_witness_uses_macos_extension_linker_flags(self):
+        repository = Path(witness.__file__).resolve().parents[1]
+        workflow = (repository / ".github" / "workflows" / "benchmark.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(
+            workflow.count('if test "$RUNNER_OS" = "macOS"; then'),
+            2,
+        )
+        self.assertEqual(
+            workflow.count(
+                'export RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"'
+            ),
+            2,
+        )
+        self.assertIn("--features pyo3/extension-module \\", workflow)
+        self.assertIn("--features pyo3/extension-module,parallel \\", workflow)
+        self.assertIn("scripts/migration_materialization_witness.py", workflow)
+        self.assertIn('-- "${maturin_command[@]}"', workflow)
+        self.assertIn("make migration-parity-benchmark-run", workflow)
+        self.assertIn("make migration-parity-benchmark-parallel-cpu-run", workflow)
+        self.assertIn("--release --locked \\", workflow)
+        self.assertIn("--features parallel)", workflow)
+
     def test_snapshot_hashes_sorted_files_and_is_stable(self):
         first = witness.capture_source_snapshot(self.root)
         second = witness.capture_source_snapshot(self.root)
         self.assertEqual(first, second)
         paths = [record["path"] for record in first["files"]]
         self.assertEqual(paths, sorted(paths))
+        self.assertIn("pillow-rs-py/pyproject.toml", paths)
         self.assertEqual(
             first["sha256"],
             hashlib.sha256(

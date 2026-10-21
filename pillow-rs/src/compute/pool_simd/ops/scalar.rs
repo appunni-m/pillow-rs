@@ -16,8 +16,8 @@ pub fn invert(pixels: &mut [u32], mode: u32) {
     let mask_b: u32 = 0x00FF_0000;
     let mask_a: u32 = 0xFF00_0000;
 
-    let has_gb = mode >= 2; // RGB or RGBA
-    let has_a = mode == 1 || mode == 3; // LA or RGBA
+    let has_gb = super::mode_has_green_blue(mode); // RGB or RGBA
+    let has_a = super::mode_has_alpha(mode); // LA or RGBA
 
     for p in pixels.iter_mut() {
         let r = *p & mask_r;
@@ -37,8 +37,8 @@ pub fn invert(pixels: &mut [u32], mode: u32) {
 /// Grayscale: BT.601 luma, writes to R always, to G/B only if mode >= 2.
 #[inline]
 pub fn grayscale(pixels: &mut [u32], mode: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     for p in pixels.iter_mut() {
         let r = *p & 0x0000_00FF;
@@ -62,8 +62,8 @@ pub fn grayscale(pixels: &mut [u32], mode: u32) {
 #[inline]
 pub fn solarize(pixels: &mut [u32], mode: u32, threshold: u8) {
     let t = threshold as u32;
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     for p in pixels.iter_mut() {
         let r = *p & 0xFF;
@@ -84,8 +84,8 @@ pub fn solarize(pixels: &mut [u32], mode: u32, threshold: u8) {
 /// Mode 4 is CMYK, stored as C/M/Y/K in the packed RGBA lanes.
 #[inline]
 pub fn brightness(pixels: &mut [u32], mode: u32, factor_fp: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let has_cmyk = mode == 4;
 
     for p in pixels.iter_mut() {
@@ -115,8 +115,8 @@ pub fn brightness(pixels: &mut [u32], mode: u32, factor_fp: u32) {
 /// Contrast with the rounded Pillow image mean as its midpoint.
 #[inline]
 pub fn contrast(pixels: &mut [u32], mode: u32, factor: f64, mean: f64) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     for p in pixels.iter_mut() {
         let r = *p & 0xFF;
@@ -140,7 +140,7 @@ pub fn contrast(pixels: &mut [u32], mode: u32, factor: f64, mean: f64) {
 /// Flip: vertical coordinate remap. output[y][x] = input[H-1-y][x]
 #[inline]
 pub fn flip(pixels: &mut [u32], w: u32, h: u32, mode: u32) {
-    let has_a = mode == 1 || mode == 3;
+    let has_a = super::mode_has_alpha(mode);
     let row_size = w as usize;
     // Process top half, swap with bottom half
     for y in 0..(h as usize / 2) {
@@ -169,7 +169,7 @@ pub fn flip(pixels: &mut [u32], w: u32, h: u32, mode: u32) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn duplicate(pixels: &mut [u32], mode: u32) {
-    let has_a = mode == 1 || mode == 3;
+    let has_a = super::mode_has_alpha(mode);
     for p in pixels.iter_mut() {
         let r = *p & 0xFF;
         let g = (*p >> 8) & 0xFF;
@@ -188,8 +188,8 @@ pub fn duplicate(pixels: &mut [u32], mode: u32) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn invert_chops(pixels: &mut [u32], mode: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for p in pixels.iter_mut() {
         let r = *p & 0xFF;
         let g = (*p >> 8) & 0xFF;
@@ -214,8 +214,8 @@ pub fn invert_chops(pixels: &mut [u32], mode: u32) {
 /// Multiply: (a * b) / 255 per channel. PIL ImageChops.multiply formula.
 #[inline]
 pub fn multiply(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -242,8 +242,8 @@ pub fn multiply(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// Screen: 255 - ((255-a) * (255-b) / 255) per channel. PIL ImageChops.screen formula.
 #[inline]
 pub fn screen(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -278,8 +278,8 @@ pub fn screen(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// Darker: min(a, b) per channel. PIL ImageChops.darker formula.
 #[inline]
 pub fn darker(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -306,8 +306,8 @@ pub fn darker(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// Lighter: max(a, b) per channel. PIL ImageChops.lighter formula.
 #[inline]
 pub fn lighter(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -334,8 +334,8 @@ pub fn lighter(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// Difference: abs(a - b) per channel. PIL ImageChops.difference formula.
 #[inline]
 pub fn difference(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -372,8 +372,8 @@ pub fn difference(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn add_modulo(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -405,8 +405,8 @@ pub fn add_modulo(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn subtract_modulo(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -438,8 +438,8 @@ pub fn subtract_modulo(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn logical_and(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -471,8 +471,8 @@ pub fn logical_and(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn logical_or(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -504,8 +504,8 @@ pub fn logical_or(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn logical_xor(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -542,7 +542,7 @@ pub fn color_saturation(pixels: &mut [u32], mode: u32, factor_fp: u32) {
     if mode < 2 {
         return;
     }
-    let has_a = mode == 3;
+    let has_a = super::mode_is_rgba(mode);
 
     for p in pixels.iter_mut() {
         let r = *p & 0xFF;
@@ -577,7 +577,7 @@ pub fn color_saturation(pixels: &mut [u32], mode: u32, factor_fp: u32) {
 /// must use every LUT channel rather than preserving the source G/B lanes.
 #[inline]
 pub fn colorize(pixels: &mut [u32], mode: u32, lut: &[[u8; 256]; 3]) {
-    let has_gb = mode >= 2;
+    let has_gb = super::mode_has_green_blue(mode);
 
     for p in pixels.iter_mut() {
         let r = *p & 0xFF;
@@ -606,8 +606,8 @@ pub fn colorize(pixels: &mut [u32], mode: u32, lut: &[[u8; 256]; 3]) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn constant(pixels: &mut [u32], mode: u32, value: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     let val_r = value & 0xFF;
     let val_g = (value >> 8) & 0xFF;
@@ -635,8 +635,8 @@ pub fn constant(pixels: &mut [u32], mode: u32, value: u32) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn overlay(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -677,8 +677,8 @@ pub fn overlay(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn hard_light(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -720,8 +720,8 @@ pub fn hard_light(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn soft_light(pixels: &mut [u32], mode: u32, other: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
         let ag = (*p >> 8) & 0xFF;
@@ -760,8 +760,8 @@ pub fn soft_light(pixels: &mut [u32], mode: u32, other: &[u32]) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn blend(pixels: &mut [u32], mode: u32, other: &[u32], alpha: f64) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     // Pillow's ImagingBlend does not clamp alpha before interpolation. The
     // final channel clamp below handles extrapolated values such as 1.5.
     let a_f = alpha as f32;
@@ -850,8 +850,8 @@ fn clip8_filter(value: f32) -> u32 {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn median_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let half = (size / 2) as i32;
     let w_i = w as i32;
     let h_i = h as i32;
@@ -929,8 +929,8 @@ pub fn median_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn max_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let half = (size / 2) as i32;
     let w_i = w as i32;
     let h_i = h as i32;
@@ -994,8 +994,8 @@ pub fn max_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn min_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let half = (size / 2) as i32;
     let w_i = w as i32;
     let h_i = h as i32;
@@ -1074,8 +1074,8 @@ fn select_rank_histogram(histogram: &[usize; 256], rank: usize) -> u32 {
 
 #[inline]
 pub fn rank_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32, rank: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let half = (size / 2) as i32;
     let w_i = w as i32;
     let h_i = h as i32;
@@ -1173,8 +1173,8 @@ pub fn filter_3x3(
     if w < 3 || h < 3 {
         return;
     }
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let src = pixels.to_vec();
     let w_i = w as i32;
     let h_i = h as i32;
@@ -1255,8 +1255,8 @@ pub fn filter_5x5(
     if w < 5 || h < 5 {
         return;
     }
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let src = pixels.to_vec();
     let w_i = w as i32;
     let h_i = h as i32;
@@ -1342,8 +1342,8 @@ pub fn filter_5x5(
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK
 #[inline]
 pub fn sharpness(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let is_cmyk = mode == 4;
     let src = pixels.to_vec();
     let w_i = w as i32;
@@ -1448,8 +1448,8 @@ pub fn sharpness(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) 
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn mirror(pixels: &mut [u32], w: u32, h: u32, mode: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let row_size = w as usize;
     let half_w = w as usize / 2;
     for y in 0..(h as usize) {
@@ -1509,7 +1509,7 @@ pub fn transpose(
     mode: u32,
     method: &TransposeMethod,
 ) -> (Vec<u32>, u32, u32) {
-    let has_a = mode == 3;
+    let has_a = super::mode_is_rgba(mode);
     let w_us = w as usize;
     let h_us = h as usize;
 
@@ -1631,8 +1631,8 @@ pub fn box_blur(pixels: &mut [u32], w: u32, h: u32, mode: u32, radius: u32) {
     if radius == 0 {
         return;
     }
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let r = radius as i32;
     let w_i = w as i32;
     let h_i = h as i32;
@@ -1806,8 +1806,8 @@ fn resize_box(
     box_right: f64,
     box_bottom: f64,
 ) -> (Vec<u32>, u32, u32) {
-    let has_gb = mode >= 2; // RGB or RGBA
-    let has_a = mode == 1 || mode == 3; // LA or RGBA
+    let has_gb = super::mode_has_green_blue(mode); // RGB or RGBA
+    let has_a = super::mode_has_alpha(mode); // LA or RGBA
 
     // Guard against empty dimensions (avoids div-by-zero and u32 underflow)
     if src_w == 0 || src_h == 0 || dst_w == 0 || dst_h == 0 {
@@ -2166,8 +2166,8 @@ pub fn pad(
     centering_y: f64,
     fill_rgba: u32,
 ) -> (Vec<u32>, u32, u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     // ImageOps.pad first contains the source in the destination, using the
     // requested resampling filter, then pastes that resized image according to
@@ -2269,8 +2269,8 @@ pub fn expand(
     border: u32,
     fill_rgba: u32,
 ) -> (Vec<u32>, u32, u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let b = border as i32;
     let new_w = w + 2 * border;
     let new_h = h + 2 * border;
@@ -2336,8 +2336,8 @@ pub fn expand(
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn crop_border(pixels: &[u32], w: u32, h: u32, mode: u32, border: u32) -> (Vec<u32>, u32, u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let new_w = w.saturating_sub(2 * border);
     let new_h = h.saturating_sub(2 * border);
     let w_us = w as usize;
@@ -2453,8 +2453,8 @@ pub fn rotate(
     expand: bool,
     fill_rgba: u32,
 ) -> (Vec<u32>, u32, u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     let sw = w as f64;
     let sh = h as f64;
@@ -2670,8 +2670,8 @@ pub fn rotate(
 /// mode: 0=L (P-mode encoding), 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn remap_palette(pixels: &[u32], mode: u32, inverse_map: &[u8; 256]) -> Vec<u32> {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let mut out = Vec::with_capacity(pixels.len());
 
     for &p in pixels.iter() {
@@ -2709,8 +2709,8 @@ pub fn equalize(pixels: &mut [u32], w: u32, h: u32, mode: u32) {
         return;
     }
 
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     if has_gb {
         // RGB/RGBA: equalize R, G, B independently
@@ -2791,8 +2791,8 @@ pub fn transform(
     filter: u32,
     fill_rgba: u32,
 ) -> (Vec<u32>, u32, u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let has_fourth = mode == 1 || mode == 3 || mode == 4;
     let nearest = filter == 0;
 
@@ -3039,8 +3039,8 @@ pub fn put_pixel(pixels: &mut [u32], w: u32, mode: u32, x: u32, y: u32, color_rg
         return;
     }
 
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     let r = color_rgba & 0xFF;
     let g = (color_rgba >> 8) & 0xFF;
@@ -3160,8 +3160,8 @@ pub fn composite_module(
     mask_height: u32,
     mask_alpha: bool,
 ) -> Vec<u32> {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let mut out = other.to_vec();
     let overlap_width = width.min(other_width).min(mask_width);
     let overlap_height = height.min(other_height).min(mask_height);
@@ -3221,8 +3221,8 @@ pub fn paste(
     mask: Option<&[u32]>,
     mask_alpha: bool,
 ) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     // Compute paste region clamped to destination bounds.
     // x_start/y_start = first source pixel visible in dest (0 if paste_x >= 0).
@@ -3371,8 +3371,8 @@ pub fn alpha_composite(
     src_x: i32,
     src_y: i32,
 ) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     // Clamp rectangle starts to valid range
     let d_x = dest_x.max(0) as u32;
@@ -3467,8 +3467,8 @@ pub fn alpha_composite(
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn eval(pixels: &mut [u32], mode: u32, lut: &[u8; 1024]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
 
     for p in pixels.iter_mut() {
         let r = (*p & 0xFF) as usize;
@@ -3571,7 +3571,7 @@ pub fn merge(pixels: &mut [u32], mode: u32, bands: &[&[u32]]) {
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn autocontrast(pixels: &mut [u32], w: u32, h: u32, mode: u32, cutoff: u32) {
-    let has_a = mode == 1 || mode == 3;
+    let has_a = super::mode_has_alpha(mode);
     let total = (w * h) as usize;
     if total == 0 {
         return;
@@ -3703,7 +3703,7 @@ pub fn crop(
     right: u32,
     bottom: u32,
 ) -> (Vec<u32>, u32, u32) {
-    let has_a = mode == 1 || mode == 3;
+    let has_a = super::mode_has_alpha(mode);
     let new_w = right.saturating_sub(left);
     let new_h = bottom.saturating_sub(top);
     let mut out = vec![0u32; (new_w * new_h) as usize];
@@ -3775,7 +3775,7 @@ pub fn thumbnail(
 
     if new_w >= w && new_h >= h {
         // No shrink needed — return a copy with alpha clamping
-        let has_a = mode == 1 || mode == 3;
+        let has_a = super::mode_has_alpha(mode);
         let out: Vec<u32> = pixels
             .iter()
             .map(|&p| {
@@ -3822,7 +3822,7 @@ pub fn reduce(
 ) -> (Vec<u32>, u32, u32) {
     if x_factor < 2 && y_factor < 2 {
         // Cannot reduce — return copy with alpha clamping
-        let has_a = mode == 1 || mode == 3;
+        let has_a = super::mode_has_alpha(mode);
         let out: Vec<u32> = pixels
             .iter()
             .map(|&p| {
@@ -3834,8 +3834,8 @@ pub fn reduce(
         return (out, w, h);
     }
 
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_gb = super::mode_has_green_blue(mode);
+    let has_a = super::mode_has_alpha(mode);
     let fx = x_factor;
     let fy = y_factor;
     // Pillow Reduce.c computes ceil(w/xscale) x ceil(h/yscale).

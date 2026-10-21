@@ -338,6 +338,18 @@ def now_rfc3339() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def current_command_argv() -> list[str]:
+    """Return the interpreter and arguments that actually invoked this runner."""
+
+    return [sys.executable, *sys.argv]
+
+
+def current_command_cwd() -> str:
+    """Return the working directory of the process producing this report."""
+
+    return os.getcwd()
+
+
 def json_safe(value: Any) -> Any:
     """Convert ordinary Python containers without interpreting public shape."""
 
@@ -984,6 +996,143 @@ def _metadata(value: Any, name: str) -> Any:
         return None
 
 
+def _decode_display_file_captures(
+    value: Any,
+    *,
+    side: str,
+    import_surface_fn: Any = import_surface,
+) -> Any:
+    """Compare captured viewer files by decoded pixels outside timed calls."""
+
+    if not isinstance(value, dict):
+        return value
+    events = value.get("display_callbacks")
+    if not isinstance(events, list) or not any(
+        isinstance(event, dict) and "_encoded_file" in event for event in events
+    ):
+        return value
+
+    image_module = None
+    normalized_events = []
+    for event in events:
+        if not isinstance(event, dict) or "_encoded_file" not in event:
+            normalized_events.append(event)
+            continue
+        encoded_file = event["_encoded_file"]
+        if not isinstance(encoded_file, bytes):
+            raise TypeError("captured viewer file must be bytes")
+        decoded_record = _decode_binary_ppm_capture(encoded_file)
+        if decoded_record is None:
+            if image_module is None:
+                image_module = import_surface_fn(side, "PIL.Image")
+            decoded = image_module.open(io.BytesIO(encoded_file))
+            try:
+                decoded.load()
+                decoded_record = {
+                    "file_format": getattr(decoded, "format", None),
+                    "mode": str(getattr(decoded, "mode", "")),
+                    "size": getattr(decoded, "size", None),
+                    "pixels": bytes(decoded.tobytes()),
+                }
+            finally:
+                close = getattr(decoded, "close", None)
+                if callable(close):
+                    close()
+        if decoded_record.get("file_format") == "PNG":
+            flevel = _png_zlib_flevel(encoded_file)
+            if flevel is not None:
+                decoded_record["png_zlib_flevel"] = flevel
+        normalized_event = {
+            key: item for key, item in event.items() if key != "_encoded_file"
+        }
+        normalized_event.update(decoded_record)
+        normalized_events.append(normalized_event)
+    return {**value, "display_callbacks": normalized_events}
+
+
+def _png_zlib_flevel(encoded_file: bytes) -> int | None:
+    """Return the RFC 1950 compression hint from a PNG's first IDAT chunk."""
+    if not encoded_file.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    cursor = 8
+    while cursor + 12 <= len(encoded_file):
+        length = int.from_bytes(encoded_file[cursor : cursor + 4], "big")
+        chunk_type = encoded_file[cursor + 4 : cursor + 8]
+        data_start = cursor + 8
+        data_end = data_start + length
+        chunk_end = data_end + 4
+        if chunk_end > len(encoded_file):
+            return None
+        if chunk_type == b"IDAT":
+            if length < 2:
+                return None
+            cmf, flg = encoded_file[data_start : data_start + 2]
+            if cmf & 0x0F != 8 or ((cmf << 8) | flg) % 31 != 0:
+                return None
+            return (flg >> 6) & 0x03
+        cursor = chunk_end
+    return None
+
+
+def _decode_binary_ppm_capture(encoded_file: bytes) -> dict[str, Any] | None:
+    """Decode the P5/P6 display fallback without adding codecs to either side."""
+
+    def token_at(cursor: int) -> tuple[bytes, int] | None:
+        while cursor < len(encoded_file):
+            if encoded_file[cursor] in b" \t\r\n\v\f":
+                cursor += 1
+                continue
+            if encoded_file[cursor] == ord("#"):
+                newline = encoded_file.find(b"\n", cursor)
+                if newline < 0:
+                    return None
+                cursor = newline + 1
+                continue
+            break
+        start = cursor
+        while cursor < len(encoded_file) and encoded_file[cursor] not in b" \t\r\n\v\f#":
+            cursor += 1
+        if start == cursor:
+            return None
+        return encoded_file[start:cursor], cursor
+
+    cursor = 0
+    tokens: list[bytes] = []
+    for _ in range(4):
+        token = token_at(cursor)
+        if token is None:
+            return None
+        value, cursor = token
+        tokens.append(value)
+    magic, width_bytes, height_bytes, maximum_bytes = tokens
+    if magic not in (b"P5", b"P6"):
+        return None
+    try:
+        width, height, maximum = (
+            int(width_bytes), int(height_bytes), int(maximum_bytes)
+        )
+    except ValueError:
+        return None
+    if width < 1 or height < 1 or maximum != 255 or cursor >= len(encoded_file):
+        return None
+    if encoded_file[cursor] not in b" \t\r\n\v\f":
+        return None
+    if encoded_file[cursor : cursor + 2] == b"\r\n":
+        cursor += 2
+    else:
+        cursor += 1
+    channels = 1 if magic == b"P5" else 3
+    pixels = encoded_file[cursor:]
+    if len(pixels) != width * height * channels:
+        return None
+    return {
+        "file_format": "PPM",
+        "mode": "L" if channels == 1 else "RGB",
+        "size": (width, height),
+        "pixels": pixels,
+    }
+
+
 def _is_public_image(value: Any) -> bool:
     """Return whether a value exposes the public image record interface."""
 
@@ -1158,6 +1307,8 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
                 "fill": False,
             }
         if isinstance(value, dict):
+            if surface == "PIL.Image.Image" and operation == "info":
+                value = _decode_display_file_captures(value, side=side)
             return json_safe(value)
         attrs = getattr(value, "__dict__", None)
         if isinstance(attrs, dict):
@@ -1260,10 +1411,18 @@ def receipt_has_pipeline_work(receipt: dict[str, Any]) -> bool:
     """
 
     operation_count = receipt.get("operation_count")
+    operation_telemetry = receipt.get("operation_telemetry")
+    if operation_count is None:
+        # Some diagnostics-only receipts omit the count field entirely.  A
+        # backend identity or operation record still proves work for older
+        # producers, but phase diagnostics alone do not.
+        return bool(operation_telemetry) or isinstance(
+            receipt.get("actual_backend"), str
+        )
     return not (
         type(operation_count) is int
         and operation_count == 0
-        and not receipt.get("operation_telemetry")
+        and not operation_telemetry
     )
 
 
@@ -3121,12 +3280,14 @@ def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: 
     validate_fixed_inputs(manifest, FIXTURE_ROOT, lane="parity")
     cases: list[dict[str, Any]] = []
     case_inputs: dict[str, str] = {}
+    known_case_ids: set[str] = set()
     for relative in manifest["input_index"]["parity"]:
         path = ROOT / "pillow-rs" / "tests" / "fixtures" / relative
         payload = json.loads(path.read_text(encoding="utf-8"))
         if payload.get("schema") != "migration-parity/parity-input@1":
             raise ValueError(f"{relative}: invalid parity input schema")
         for case in payload["cases"]:
+            known_case_ids.add(case["case_id"])
             if case_ids and case["case_id"] not in case_ids:
                 continue
             if surface and case["surface"] != surface:
@@ -3135,6 +3296,12 @@ def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: 
                 raise ValueError(f"duplicate active case ID: {case['case_id']}")
             cases.append(case)
             case_inputs[case["case_id"]] = relative
+    unknown_case_ids = sorted((case_ids or set()) - known_case_ids)
+    if unknown_case_ids:
+        raise ValueError(
+            "unknown requested parity case ID(s): "
+            + ", ".join(unknown_case_ids)
+        )
     cases.sort(key=lambda item: item["case_id"])
     return cases, case_inputs
 
@@ -3862,7 +4029,12 @@ def run_orchestrator(args: argparse.Namespace) -> int:
             batch_size,
             **({"attestation": attestation} if attestation is not None else {}),
         )
-    command = {"command_id": "parity", "argv": ["make", "migration-parity-test"], "cwd": ".", "timeout_seconds": target_timeout}
+    command = {
+        "command_id": "parity",
+        "argv": current_command_argv(),
+        "cwd": current_command_cwd(),
+        "timeout_seconds": target_timeout,
+    }
     identity = build_identity(
         manifest_path,
         sorted(set(case_inputs.values())),
@@ -4009,8 +4181,8 @@ def run_orchestrator_batched(
 
     command = {
         "command_id": "parity",
-        "argv": ["make", "migration-parity-test"],
-        "cwd": ".",
+        "argv": current_command_argv(),
+        "cwd": current_command_cwd(),
         "timeout_seconds": target_timeout,
     }
     identity = build_identity(
@@ -4797,16 +4969,19 @@ def run_side(args: argparse.Namespace) -> int:
             execution,
             results=evidence_results,
         )
+    attested_execution_scope = bool(args.timings or execution_output)
     write_child_attestation_from_environment(
         args.side,
         handshake,
         cases,
         context={
             "lifecycle": args.lifecycle,
-            "boundary": args.timing_boundary if args.timings else None,
+            "boundary": (
+                args.timing_boundary if attested_execution_scope else None
+            ),
             "step_ids": (
                 sorted(effective_timing_steps(args.timing_step))
-                if args.timings
+                if attested_execution_scope
                 else []
             ),
             "repeat": args.repeat,

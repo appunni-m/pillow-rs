@@ -180,6 +180,34 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn(("python-simd", "pillow", 4), pairs)
         self.assertIn(("python-simd", "pillow-simd", 2), pairs)
         self.assertIn(("pillow-simd", "pillow", 2), pairs)
+        snapshot = dict(
+            rows=rows,
+            machines=[machines[machine]],
+            environment={"os": "Ubuntu 24.04", "architecture": "x86_64"},
+            measured_at="2026-10-18",
+        )
+        rendered = render_dashboard(snapshot, {"benchmark": {"kind": "pillow"}})
+        self.assertIn('value="python-simd::pillow-simd"', rendered)
+        self.assertIn('data-ratio-primary="4.0"', rendered)
+        self.assertIn('data-ratio-pillow-simd="2.0"', rendered)
+        self.assertIn('data-note-pillow-simd="Output comparison passed"', rendered)
+
+    def test_selector_omits_pillow_simd_without_matched_measurements(self):
+        machine = "linux-main"
+        rows = [
+            row("pillow", 20, workload="pipeline-op.invert", machine_id=machine,
+                correctness="parity_pass: pass", requested_backend="pillow", actual_backend="pillow"),
+            row("python-cpu", 10, workload="pipeline-op.invert", machine_id=machine,
+                correctness="parity_pass: pass", requested_backend="cpu", actual_backend="cpu"),
+        ]
+        snapshot = dict(
+            rows=rows,
+            machines=[{"id": machine, "label": "Ubuntu 24.04 · x86_64"}],
+            environment={"os": "Ubuntu 24.04", "architecture": "x86_64"},
+            measured_at="2026-10-18",
+        )
+        rendered = render_dashboard(snapshot, {"benchmark": {"kind": "pillow"}})
+        self.assertNotIn('data-baseline="pillow-simd"', rendered)
 
     def test_pillow_simd_mismatch_withholds_only_that_baseline_ratio(self):
         machine = "linux-pillow-simd"

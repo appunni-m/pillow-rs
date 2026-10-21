@@ -45,12 +45,14 @@ BENCHMARK_BACKENDS = ("cpu", "simd", "gpu")
 DEFAULT_TARGET_FEATURES = ["pillow-rs-py/default", "pillow-rs/default"]
 TARGET_ID = "pillow-rs-python"
 ORACLE_ID = "pillow"
-# These endpoints have explicit three-backend performance requirements in
-# the fixed fixture manifest; preserve that scope when regenerating it.
+# These endpoints have explicit non-default benchmark profile coverage in the
+# fixed fixture manifest; preserve that scope when regenerating it.
 BENCHMARK_TARGET_PROFILE_OVERRIDES = {
+    "PIL.ImageOps.grayscale": ["python-cpu", "python-simd", "python-gpu"],
     "PIL.ImageOps.mirror": ["python-cpu", "python-simd", "python-gpu"],
     "PIL.Image.Image.getprojection": ["python-cpu", "python-simd", "python-gpu"],
     "PIL.ImageChops.screen": ["python-cpu", "python-simd", "python-gpu"],
+    "PIL.Image.Image.filter": ["python-cpu", "python-simd"],
 }
 PARITY_TARGET_PROFILE_OVERRIDES = {
     "PIL.Image.Image.getprojection": ["python-cpu", "python-simd", "python-gpu"],
@@ -775,6 +777,14 @@ def requirement(
     }
 
 
+def benchmark_target_profiles(endpoint: Endpoint) -> list[str]:
+    if endpoint.id in CPU_ONLY_API_BENCHMARK_ENDPOINTS:
+        return [TARGET_PROFILE]
+    return BENCHMARK_TARGET_PROFILE_OVERRIDES.get(
+        endpoint.source_path, [TARGET_PROFILE]
+    )
+
+
 def looks_like_error(edge: str) -> bool:
     return any(
         token in edge.lower()
@@ -907,11 +917,7 @@ def operation_requirements(
             )
         )
     if benchmark_applicable:
-        benchmark_profiles = (
-            [TARGET_PROFILE]
-            if endpoint.id in CPU_ONLY_API_BENCHMARK_ENDPOINTS
-            else BENCHMARK_TARGET_PROFILE_OVERRIDES.get(endpoint.source_path)
-        )
+        benchmark_profiles = benchmark_target_profiles(endpoint)
         requirements.append(
             requirement(
                 f"{prefix}.performance.standard",
@@ -1182,9 +1188,7 @@ def operation_contract(
             "target_profiles": list(
                 [TARGET_PROFILE]
                 if endpoint.id in CPU_ONLY_API_BENCHMARK_ENDPOINTS
-                else PARITY_TARGET_PROFILE_OVERRIDES.get(
-                    endpoint.source_path, [TARGET_PROFILE]
-                )
+            else benchmark_target_profiles(endpoint)
             ),
             "metrics": ["latency", "throughput"],
         }

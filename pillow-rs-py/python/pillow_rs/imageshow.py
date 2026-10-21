@@ -91,11 +91,12 @@ def _dump_image(
     format: str | None = None,
     **options: Any,
 ) -> str:
-    """Save an image to a temporary file using the target Rust encoder.
+    """Save an image to a temporary file for a registered viewer.
 
     Pillow's private ``Image._dump`` writes PPM data directly when no format
-    is supplied (or ``format == "PPM"``). The Rust-backed facade exposes that
-    encoder through its PNM format name, so use it for the same fallback.
+    is supplied (or ``format == "PPM"``). The core codec set has no PPM
+    encoder, so write its simple binary L/RGB representation at this host I/O
+    boundary instead of routing through an unavailable Rust format.
     """
     suffix = f".{format}" if format else ""
     if not file:
@@ -108,14 +109,31 @@ def _dump_image(
 
     image.load()
     if not format or format == "PPM":
-        image.save(filename, "PNM")
+        _save_ppm(image, filename)
     else:
-        # The Python save wrapper currently accepts these options but the
-        # Rust binding only receives the path and format. Keep passing them at
-        # this boundary so a future encoder-option implementation can honor
-        # Viewer.options without changing the Viewer contract.
+        # PNG compression options flow through Image.save to the Rust encoder.
+        # `save_all` is inert for this still-image API.
         image.save(filename, format, **options)
     return filename
+
+
+def _save_ppm(image: Image, filename: str) -> None:
+    """Write the binary PPM variant used by Pillow's display fallback."""
+    if image.mode == "1":
+        image = image.convert("L")
+    elif image.mode in ("P", "RGBA") or image.mode not in ("L", "RGB"):
+        image = image.convert("RGB")
+
+    width, height = image.size
+    if image.mode == "L":
+        header = f"P5\n{width} {height}\n255\n".encode("ascii")
+    elif image.mode == "RGB":
+        header = f"P6\n{width} {height}\n255\n".encode("ascii")
+    else:
+        raise ValueError(f"unsupported PPM display mode: {image.mode}")
+    with open(filename, "wb") as output:
+        output.write(header)
+        output.write(image.tobytes())
 
 
 class Viewer:

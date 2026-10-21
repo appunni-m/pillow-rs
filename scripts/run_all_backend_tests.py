@@ -361,10 +361,17 @@ def receipt_has_pipeline_work(receipt: dict[str, Any]) -> bool:
     """Return whether a receipt records an executed pipeline operation."""
 
     operation_count = receipt.get("operation_count")
+    operation_telemetry = receipt.get("operation_telemetry")
+    if operation_count is None:
+        # Phase-only diagnostics can omit the count field; require an actual
+        # operation record or backend identity before treating them as work.
+        return bool(operation_telemetry) or isinstance(
+            receipt.get("actual_backend"), str
+        )
     return not (
         type(operation_count) is int
         and operation_count == 0
-        and not receipt.get("operation_telemetry")
+        and not operation_telemetry
     )
 
 

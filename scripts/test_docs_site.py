@@ -252,6 +252,26 @@ class BenchmarkTests(unittest.TestCase):
                 config = read_config(root)
             self.assertEqual(config["pillow_simd_benchmark"]["snapshot"], "snapshot.json")
 
+    def test_committed_pillow_simd_snapshot_is_used_without_download(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "documentation.json").write_text(json.dumps({
+                "repository": "owner/repo",
+                "pillow_simd_benchmark": {"snapshot": "docs/evidence/pillow-simd-benchmark.json"},
+            }))
+            env = {
+                "DOCS_BENCHMARK_SNAPSHOT": "",
+                "DOCS_BENCHMARK_REVISION": "",
+                "DOCS_PILLOW_SIMD_BENCHMARK_SNAPSHOT": "",
+                "DOCS_PILLOW_SIMD_BENCHMARK_REVISION": "",
+            }
+            with patch.dict("os.environ", env):
+                config = read_config(root)
+            self.assertEqual(
+                config["pillow_simd_benchmark"]["snapshot"],
+                "docs/evidence/pillow-simd-benchmark.json",
+            )
+
     def test_missing_and_invalid_measurements_never_become_zero(self) -> None:
         self.assertIsNone(number(None))
         self.assertEqual(cell(None), "Not measured")
@@ -290,6 +310,7 @@ class BenchmarkTests(unittest.TestCase):
     def test_published_benchmark_rows_preserve_operation_telemetry(self) -> None:
         telemetry = [
             {
+                "step_id": "call",
                 "operation": "GetChannel",
                 "path": "neon-deinterleave",
                 "vector_block_count": 16,
@@ -298,6 +319,7 @@ class BenchmarkTests(unittest.TestCase):
                 "handoff_count": 0,
             },
             {
+                "step_id": "call",
                 "operation": "GetChannel",
                 "path": "scalar-gather",
                 "vector_block_count": 0,
@@ -325,7 +347,10 @@ class BenchmarkTests(unittest.TestCase):
                             "id": "python-simd",
                             "status": "completed",
                             "measurements": [],
-                            "execution": {"operation_telemetry": telemetry},
+                            "execution": {
+                                "operation_telemetry": telemetry,
+                                "selected_step_ids": ["call"],
+                            },
                         }
                     ],
                 }
@@ -335,6 +360,7 @@ class BenchmarkTests(unittest.TestCase):
         snapshot = project_pillow(source)
 
         self.assertEqual(snapshot["rows"][0]["operation_telemetry"], telemetry)
+        self.assertEqual(snapshot["rows"][0]["selected_step_ids"], ["call"])
 
 
 if __name__ == "__main__":

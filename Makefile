@@ -7,6 +7,12 @@
 PYTHON       ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PYTHON_EXECUTABLE := $(abspath $(shell command -v $(PYTHON)))
 PYTHON_COMPAT ?= $(PYTHON)
+# Preserve the first Make invocation across recursive Make recipes. The
+# benchmark runner's argv remains the actual Python process argv; this context
+# records the effective outer Make executable and top-level goals separately.
+PILLOW_RS_OUTER_MAKE_EXECUTABLE ?= $(MAKE)
+PILLOW_RS_OUTER_MAKE_GOALS ?= $(if $(strip $(MAKECMDGOALS)),$(MAKECMDGOALS),$(.DEFAULT_GOAL))
+export PILLOW_RS_OUTER_MAKE_EXECUTABLE PILLOW_RS_OUTER_MAKE_GOALS
 PIP          := $(PYTHON) -m pip
 MATURIN      := $(PYTHON) -m maturin
 MATURIN_DEVELOP_FLAGS ?=
@@ -161,7 +167,8 @@ help: ## Show common contributor commands
 	  "  make build-parity   Build without replacing the Pillow oracle" \
 	  "  make build          Install the replacement for application use" \
 	  "  make test           Full backend and Node/browser campaign" \
-	  "  make fmt / clippy   Check Rust formatting / lint" \
+	  "  make quality        Run consolidated static quality gates" \
+	  "  make fmt / clippy   Check Rust formatting / lint individually" \
 	  "  make bench          Run the declared benchmark cohort" \
 	  "  make docs-setup     Install hash-locked site tools" \
 	  "  make docs-build     Build and validate the public site" \
@@ -237,6 +244,11 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-docs$(NC) Generate specification and evidence documentation\n"
 	@printf "  $(CYAN)make migration-parity-inventory$(NC) Print the canonical selected-scope endpoint inventory\n"
 	@printf "  $(CYAN)make migration-parity-inventory-check$(NC) Verify endpoint authority expansion and alias accounting\n"
+	@printf "  $(CYAN)make operation-source-crosswalk$(NC) Generate the operation crosswalk and Rust module inventory\n"
+	@printf "  $(CYAN)make operation-source-crosswalk-test$(NC) Check crosswalk, Rust module parser, and completeness contracts\n"
+	@printf "  $(CYAN)make implementation-structure-inventory$(NC) Inventory all maintained paths against the shared structure standard\n"
+	@printf "  $(CYAN)make implementation-structure-audit$(NC) Audit added and moved paths against the shared structure standard\n"
+	@printf "  $(CYAN)make implementation-structure-audit-test$(NC) Check path rules and whole-tree inventory behavior\n"
 	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs Font + fontdone unified parity\n"
 	@printf "\n$(BOLD)pillow-rs / core crate$(NC)\n"
 	@printf "  $(CYAN)make pillow-rs-help$(NC) Show crate-local pillow-rs targets\n"
@@ -269,10 +281,13 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-receipt-test$(NC) Verify terminal-complete receipt state transitions\n"
 	@printf "  $(CYAN)make migration-parity-inputs$(NC) Build parity, coverage, and benchmark inputs\n"
 	@printf "\n$(BOLD)Lint$(NC)\n"
+	@printf "  $(CYAN)make quality$(NC)       Run Rust, repository, and source-policy quality gates\n"
+	@printf "  $(CYAN)make checkstyle$(NC)     Check Rust file/function size limits and baseline growth\n"
+	@printf "  $(CYAN)make checkstyle-update-baseline$(NC) Re-record current legacy size baselines\n"
 	@printf "  $(CYAN)make fmt$(NC)            Check Rust formatting\n"
 	@printf "  $(CYAN)make fmt-fix$(NC)        Fix Rust formatting\n"
 	@printf "  $(CYAN)make clippy$(NC)         Run clippy (all targets, all features)\n"
-	@printf "  $(CYAN)make lint$(NC)           fmt + clippy\n"
+	@printf "  $(CYAN)make lint$(NC)           Compatibility alias for make quality\n"
 	@printf "\n$(BOLD)Coverage$(NC)\n"
 	@printf "  $(CYAN)make coverage$(NC)       Run tests + compute coverage\n"
 	@printf "  $(CYAN)make coverage-python-abi-rust$(NC) Run Pillow parity through PyO3 with Rust LLVM coverage\n"
@@ -681,6 +696,10 @@ migration-parity-profile-all: ## Capture bounded CPU, SIMD, and GPU adapter prof
 	$(MAKE) migration-parity-profile MIGRATION_PROFILE_BACKEND=gpu
 
 migration-parity-benchmark: build-parity ## Build the checkout facade without replacing the Pillow oracle, then run correctness-gated benchmark workloads
+	$(MAKE) migration-parity-benchmark-run
+
+.PHONY: migration-parity-benchmark-run migration-parity-benchmark-parallel-cpu-run
+migration-parity-benchmark-run: ## Run correctness-gated benchmark workloads using the already-built checkout facade
 	$(PYTHON) -m unittest discover -s scripts -p 'test_migration_benchmark_selection.py' -v
 	@test "$(MIGRATION_BENCHMARK_PROFILE)" = standard -o "$(MIGRATION_BENCHMARK_PROFILE)" = quick -o "$(MIGRATION_BENCHMARK_PROFILE)" = release -o "$(MIGRATION_BENCHMARK_PROFILE)" = pipeline || { \
 		printf "MIGRATION_BENCHMARK_PROFILE must be 'standard', 'quick', 'release', or 'pipeline'.\n" >&2; \
@@ -699,6 +718,11 @@ migration-parity-benchmark: build-parity ## Build the checkout facade without re
 migration-parity-benchmark-parallel-cpu: MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/benchmark-result-parallel-cpu.json
 migration-parity-benchmark-parallel-cpu: MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/benchmark-parity-result-parallel-cpu.json
 migration-parity-benchmark-parallel-cpu: build-parity-parallel-cpu ## Benchmark opt-in Rayon separately as Parallel CPU
+	$(MAKE) migration-parity-benchmark-parallel-cpu-run
+
+migration-parity-benchmark-parallel-cpu-run: MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/benchmark-result-parallel-cpu.json
+migration-parity-benchmark-parallel-cpu-run: MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/benchmark-parity-result-parallel-cpu.json
+migration-parity-benchmark-parallel-cpu-run: ## Run the Parallel CPU workload using the already-built checkout facade
 	MIGRATION_TARGET_PROFILE=parallel-cpu $(PYTHON) -m unittest discover -s scripts -p 'test_migration_benchmark_selection.py' -v
 	@test "$(MIGRATION_BENCHMARK_PROFILE)" = standard -o "$(MIGRATION_BENCHMARK_PROFILE)" = quick -o "$(MIGRATION_BENCHMARK_PROFILE)" = release -o "$(MIGRATION_BENCHMARK_PROFILE)" = pipeline || { \
 		printf "MIGRATION_BENCHMARK_PROFILE must be 'standard', 'quick', 'release', or 'pipeline'.\n" >&2; \
@@ -927,6 +951,7 @@ image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-fixtures-check migration-parity-inputs-check migration-parity-crash-quarantine-check migration-parity-evidence-check migration-parity-receipt-test
+.PHONY: operation-source-crosswalk operation-source-crosswalk-test implementation-structure-audit implementation-structure-inventory implementation-structure-audit-test
 
 fixtures: migration-parity-fixtures ## Build the active manifest and input specifications
 
@@ -935,6 +960,21 @@ migration-parity-inventory: ## Print canonical selected-scope endpoint inventory
 
 migration-parity-inventory-check: ## Verify endpoint authority expansion and alias accounting
 	$(PYTHON) scripts/migration_parity_inventory.py --format check
+
+operation-source-crosswalk: ## Generate the operation crosswalk and Rust module inventory
+	$(PYTHON) scripts/build_operation_source_crosswalk.py --output target/operation-source-crosswalk.json
+
+operation-source-crosswalk-test: ## Check crosswalk, Rust module parser, and completeness contracts
+	$(PYTHON) -m unittest scripts.source_crosswalk.test_operation_source_crosswalk scripts.source_crosswalk.test_evidence -v
+
+implementation-structure-audit: ## Generate review-only path findings for added and moved maintained files
+	$(PYTHON) scripts/check_implementation_structure.py
+
+implementation-structure-inventory: ## Inventory every maintained path against the shared file-structure standard
+	$(PYTHON) scripts/check_implementation_structure.py --scope tree --fail-on-unclassified --output target/implementation-structure-inventory.json
+
+implementation-structure-audit-test: ## Check focused implementation-structure path contracts
+	$(PYTHON) -m unittest scripts.implementation_structure.test_audit -v
 
 migration-parity-manifest: ## Build fixed project-wide manifest from frozen authority
 	$(PYTHON) scripts/build_migration_parity_manifest.py
@@ -996,25 +1036,32 @@ migration-parity-changed-line-coverage: ## Attribute changed Rust lines to sourc
 
 
 # ── Lint ──────────────────────────────────────────────────────────────────────
-.PHONY: fmt fmt-fix clippy clippy-core lint
+.PHONY: fmt fmt-fix clippy clippy-core checkstyle checkstyle-update-baseline quality lint
 
-fmt: ## Check Rust formatting
-	python3 scripts/check_public_api_boundary.py
+fmt: pillow-rs-public-api-boundary ## Check Rust formatting
 	$(CARGO) fmt --check
 
 fmt-fix: ## Fix Rust formatting
 	$(CARGO) fmt
 	python3 scripts/check_public_api_boundary.py
 
-clippy: ## Run clippy on all targets
-	python3 scripts/check_public_api_boundary.py
-	$(CARGO) clippy --all-targets --all-features -- -D deprecated
+clippy: pillow-rs-public-api-boundary ## Run workspace Clippy and function-size ratchet
+	$(PYTHON) scripts/run_clippy_quality.py
 
-clippy-core: ## Run clippy on core only
-	python3 scripts/check_public_api_boundary.py
-	$(CARGO) clippy -p $(CORE_SRC) -- -D deprecated
+clippy-core: pillow-rs-public-api-boundary ## Run core Clippy and function-size ratchet
+	$(PYTHON) scripts/run_clippy_quality.py --package $(CORE_SRC)
 
-lint: fmt clippy ## Run fmt + clippy
+checkstyle: clippy ## Check Rust file/function limits and growth against legacy baselines
+	$(PYTHON) scripts/check_rust_file_sizes.py
+
+checkstyle-update-baseline: ## Re-record existing over-limit files/functions; review the baseline diff
+	$(PYTHON) scripts/run_clippy_quality.py --update-baseline
+	$(PYTHON) scripts/check_rust_file_sizes.py --update-baseline
+
+quality: repo-map-check docs-lint fmt checkstyle ## Run consolidated static quality checks
+	PYTHON="$(PYTHON)" CARGO="$(CARGO)" bash scripts/lint.sh --supplemental
+
+lint: quality ## Compatibility alias for the consolidated quality gate
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
 .PHONY: coverage coverage-validate coverage-report coverage-wasm
@@ -1045,7 +1092,7 @@ repo-map-check: ## Validate docs/REPO_MAP.md generated tree
 repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 	$(PYTHON) scripts/check_repo_map.py --write
 
-docs-check: docs-lint docs-test repo-map-check migration-parity-inputs-check migration-parity-pipeline-roadmap-check release-tools-test ## Validate documentation, inputs, and release configuration
+docs-check: docs-lint docs-test repo-map-check implementation-structure-audit-test implementation-structure-inventory operation-source-crosswalk-test migration-parity-inputs-check migration-parity-pipeline-roadmap-check release-tools-test ## Validate documentation, inputs, structure, and release configuration
 
 .PHONY: migration-parity-pipeline-roadmap-check
 migration-parity-pipeline-roadmap-check: ## Validate all 64 public roadmap IDs without claiming benchmark execution
@@ -1062,7 +1109,7 @@ migration-parity-pipeline-roadmap-check: ## Validate all 64 public roadmap IDs w
 # ── CI ────────────────────────────────────────────────────────────────────────
 .PHONY: ci verify
 
-ci: repo-map-check fmt clippy migration-parity-fixtures-check migration-parity-test-all-backends migration-parity-coverage ## Full CI pipeline
+ci: quality migration-parity-fixtures-check migration-parity-test-all-backends migration-parity-coverage ## Full CI pipeline
 	@echo "=== done ==="
 
 verify: ci fontdone-parity ## Full workspace CI plus FreeType parity

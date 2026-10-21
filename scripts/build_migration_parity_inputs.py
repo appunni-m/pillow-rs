@@ -6559,13 +6559,42 @@ class WorkflowBuilder:
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
-            elif chain == "filter-i-cross-smooth-varied":
+            elif chain in {
+                "filter-i-cross-smooth-varied",
+                "filter-i-cross-smooth-varied-material",
+                "filter-i-cross-smooth-int32-edges",
+            }:
                 image_step = self.ensure_image()
-                for step_id, xy, value in (
-                    ("setup-i-varied-top-left", [0, 0], -11),
-                    ("setup-i-varied-center", [16, 12], 91),
-                    ("setup-i-varied-bottom-right", [31, 23], 204),
-                ):
+                if chain == "filter-i-cross-smooth-varied-material":
+                    width, height = self.scenario_size or [1024, 768]
+                    updates = (
+                        ("setup-i-varied-top-left", [0, 0], -11),
+                        (
+                            "setup-i-varied-center",
+                            [max(0, width // 2 - 1), max(0, height // 2 - 1)],
+                            91,
+                        ),
+                        (
+                            "setup-i-varied-bottom-right",
+                            [width - 1, height - 1],
+                            204,
+                        ),
+                    )
+                elif chain == "filter-i-cross-smooth-int32-edges":
+                    updates = (
+                        ("setup-i-cross-top", [1, 0], -(1 << 31)),
+                        ("setup-i-cross-left", [0, 1], (1 << 31) - 1),
+                        ("setup-i-cross-center", [1, 1], (1 << 24) + 1),
+                        ("setup-i-cross-right", [2, 1], -((1 << 24) + 1)),
+                        ("setup-i-cross-bottom", [1, 2], (1 << 31) - 1),
+                    )
+                else:
+                    updates = (
+                        ("setup-i-varied-top-left", [0, 0], -11),
+                        ("setup-i-varied-center", [16, 12], 91),
+                        ("setup-i-varied-bottom-right", [31, 23], 204),
+                    )
+                for step_id, xy, value in updates:
                     self.add_step(
                         "PIL.Image.Image",
                         "putpixel",
@@ -25452,6 +25481,19 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
+            "name": "la-two-tuple-out-of-range-fallback",
+            "observe_receiver": True,
+            "mode": "LA",
+            "size": [2, 2],
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([-1, 256]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
             "name": "pa-scalar",
             "observe_receiver": True,
             "mode": "PA",
@@ -32582,6 +32624,30 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "filter",
             "requirement_suffix": "behavior.default",
+            "name": "i-mode-cross-smooth-varied-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "uniform-fill",
+            "pixel": 37,
+            "chain": "filter-i-cross-smooth-varied-material",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-cross-smooth-int32-edges",
+            "mode": "I",
+            "size": [3, 3],
+            "edge": "uniform-fill",
+            "pixel": 0,
+            "chain": "filter-i-cross-smooth-int32-edges",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
             "name": "l-mode-detail-fused-row",
             "mode": "L",
             "size": [3, 3],
@@ -32900,6 +32966,17 @@ def build_nuanced_cases(
             "name": "zero-height",
             "mode": "RGB",
             "edge": "zero-height",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-rgb-blank-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "uniform-fill",
+            "pixel": 0,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -54968,6 +55045,34 @@ def build_inputs(
             active_assets_root,
             surface_id,
         )
+        if surface_id == "PIL.Image.Image":
+            # The full-size native F resize parity case is the exact public
+            # workflow used by its standard benchmark workload. Carry that
+            # requirement onto the case so evidence admission can prove the
+            # measured workload without relaxing the proof check.
+            f_resize_case_id = (
+                "PIL.Image.Image.resize.nuanced.f-resize-bicubic-noise-1024x768"
+            )
+            f_resize_case = next(
+                (
+                    case
+                    for case in nuanced_cases
+                    if case["case_id"] == f_resize_case_id
+                ),
+                None,
+            )
+            if f_resize_case is None:
+                raise ValueError(
+                    f"F resize benchmark coverage case is missing: "
+                    f"{f_resize_case_id}"
+                )
+            f_resize_requirement = _performance_requirement(
+                operations,
+                "PIL.Image.Image",
+                "resize",
+            )
+            if f_resize_requirement not in f_resize_case["covers"]:
+                f_resize_case["covers"].append(f_resize_requirement)
         existing_signatures = {case_signature(case) for case in parity_cases}
         added_nuanced_cases = 0
         appended_nuanced: list[dict[str, Any]] = []
@@ -56814,6 +56919,7 @@ def build_inputs(
             if getbbox_benchmark is not None:
                 operation, requirement = getbbox_benchmark
                 for name in (
+                    "rgb-blank-1024x768",
                     "rgb-filled-1024x768",
                     "rgb-noise-1024x768",
                 ):

@@ -304,171 +304,6 @@ const GRAYSCALE_GREEN_CONTRIBUTIONS: [u32; 256] = grayscale_contribution_table(3
 #[cfg(any(test, target_arch = "x86_64"))]
 const GRAYSCALE_BLUE_CONTRIBUTIONS: [u32; 256] = grayscale_contribution_table(7471);
 
-/// Convert interleaved RGB bytes with AVX2 when the running CPU supports it.
-///
-/// Returns `None` when the operation cannot use the kernel. The output keeps
-/// the scalar path's short-buffer behavior: missing pixels are zero-filled,
-/// trailing incomplete RGB samples are ignored, and excess samples are unused.
-#[cfg(target_arch = "x86_64")]
-#[allow(unsafe_code)] // Isolated target-feature entry point for the checked SIMD kernel.
-pub(crate) fn grayscale_rgb_avx2(source: &[u8], expected_pixels: usize) -> Option<(Vec<u8>, u64)> {
-    if !std::is_x86_feature_detected!("avx2") {
-        return None;
-    }
-
-    // SAFETY: runtime feature detection established AVX2 support. The inner
-    // function reads complete 48-byte blocks from `source` or a fully
-    // initialized 48-byte tail buffer and stores into a 16-byte local array.
-    Some(unsafe { grayscale_rgb_avx2_inner(source, expected_pixels) })
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx2")]
-#[allow(unsafe_code)] // The safe wrapper checks AVX2 and the inner loop bounds every load.
-unsafe fn grayscale_rgb_avx2_inner(source: &[u8], expected_pixels: usize) -> (Vec<u8>, u64) {
-    use std::arch::x86_64::{
-        _mm_loadu_si128, _mm_or_si128, _mm_packus_epi16, _mm_setr_epi8, _mm_shuffle_epi8,
-        _mm_storeu_si128, _mm256_add_epi16, _mm256_castsi256_si128, _mm256_cvtepu8_epi16,
-        _mm256_extracti128_si256, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_srli_epi16,
-        _mm256_sub_epi16,
-    };
-
-    let (
-        red_0,
-        red_1,
-        red_2,
-        green_0,
-        green_1,
-        green_2,
-        blue_0,
-        blue_1,
-        blue_2,
-        bias,
-        coeff_77,
-        coeff_150,
-        coeff_29,
-        coeff_70,
-        coeff_47,
-        coeff_117,
-    ) = (
-        _mm_setr_epi8(0, 3, 6, 9, 12, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1),
-        _mm_setr_epi8(-1, -1, -1, -1, -1, -1, 2, 5, 8, 11, 14, -1, -1, -1, -1, -1),
-        _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 4, 7, 10, 13),
-        _mm_setr_epi8(1, 4, 7, 10, 13, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1),
-        _mm_setr_epi8(-1, -1, -1, -1, -1, 0, 3, 6, 9, 12, 15, -1, -1, -1, -1, -1),
-        _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 2, 5, 8, 11, 14),
-        _mm_setr_epi8(2, 5, 8, 11, 14, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1),
-        _mm_setr_epi8(-1, -1, -1, -1, -1, 1, 4, 7, 10, 13, -1, -1, -1, -1, -1, -1),
-        _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 3, 6, 9, 12, 15),
-        _mm256_set1_epi16(i16::MIN),
-        _mm256_set1_epi16(77),
-        _mm256_set1_epi16(150),
-        _mm256_set1_epi16(29),
-        _mm256_set1_epi16(70),
-        _mm256_set1_epi16(47),
-        _mm256_set1_epi16(117),
-    );
-
-    let valid_pixels = expected_pixels.min(source.len() / 3);
-    let full_blocks = valid_pixels / 16;
-    let tail_pixels = valid_pixels % 16;
-    let mut output = Vec::with_capacity(expected_pixels);
-
-    macro_rules! append_block {
-        ($input:expr, $count:expr) => {{
-            let input: *const u8 = $input;
-            let mut packed = [0u8; 16];
-
-            // SAFETY: the safe wrapper checked AVX2. Every caller supplies
-            // 48 initialized bytes, so these three unaligned loads stay in
-            // bounds; `packed` has exactly sixteen writable bytes.
-            unsafe {
-                let source_0 = _mm_loadu_si128(input.cast());
-                let source_1 = _mm_loadu_si128(input.add(16).cast());
-                let source_2 = _mm_loadu_si128(input.add(32).cast());
-
-                let red = _mm_or_si128(
-                    _mm_or_si128(
-                        _mm_shuffle_epi8(source_0, red_0),
-                        _mm_shuffle_epi8(source_1, red_1),
-                    ),
-                    _mm_shuffle_epi8(source_2, red_2),
-                );
-                let green = _mm_or_si128(
-                    _mm_or_si128(
-                        _mm_shuffle_epi8(source_0, green_0),
-                        _mm_shuffle_epi8(source_1, green_1),
-                    ),
-                    _mm_shuffle_epi8(source_2, green_2),
-                );
-                let blue = _mm_or_si128(
-                    _mm_or_si128(
-                        _mm_shuffle_epi8(source_0, blue_0),
-                        _mm_shuffle_epi8(source_1, blue_1),
-                    ),
-                    _mm_shuffle_epi8(source_2, blue_2),
-                );
-
-                let red = _mm256_cvtepu8_epi16(red);
-                let green = _mm256_cvtepu8_epi16(green);
-                let blue = _mm256_cvtepu8_epi16(blue);
-
-                // Exact Pillow coefficients decompose as 19595=77*256-117,
-                // 38470=150*256+70, and 7471=29*256+47. The biased residual
-                // stays in 2933..62603; base plus its carry stays below 65536.
-                let base = _mm256_add_epi16(
-                    _mm256_add_epi16(
-                        _mm256_mullo_epi16(red, coeff_77),
-                        _mm256_mullo_epi16(green, coeff_150),
-                    ),
-                    _mm256_mullo_epi16(blue, coeff_29),
-                );
-                let residual = _mm256_add_epi16(
-                    _mm256_sub_epi16(
-                        _mm256_add_epi16(
-                            _mm256_mullo_epi16(green, coeff_70),
-                            _mm256_mullo_epi16(blue, coeff_47),
-                        ),
-                        _mm256_mullo_epi16(red, coeff_117),
-                    ),
-                    bias,
-                );
-                let luma = _mm256_srli_epi16::<8>(_mm256_add_epi16(
-                    base,
-                    _mm256_srli_epi16::<8>(residual),
-                ));
-                let luma = _mm_packus_epi16(
-                    _mm256_castsi256_si128(luma),
-                    _mm256_extracti128_si256::<1>(luma),
-                );
-                _mm_storeu_si128(packed.as_mut_ptr().cast(), luma);
-            }
-
-            output.extend_from_slice(&packed[..$count]);
-        }};
-    }
-
-    for block in 0..full_blocks {
-        let offset = block * 48;
-        // SAFETY: `full_blocks` is derived from `source.len() / 3`, so each
-        // offset has a complete 48-byte RGB block available.
-        let input = unsafe { source.as_ptr().add(offset) };
-        append_block!(input, 16);
-    }
-
-    if tail_pixels != 0 {
-        let tail_bytes = tail_pixels * 3;
-        let tail_start = full_blocks * 48;
-        let mut padded = [0u8; 48];
-        padded[..tail_bytes].copy_from_slice(&source[tail_start..tail_start + tail_bytes]);
-        append_block!(padded.as_ptr(), tail_pixels);
-    }
-
-    let vector_blocks = (full_blocks + usize::from(tail_pixels != 0)) as u64;
-    output.resize(expected_pixels, 0);
-    (output, vector_blocks)
-}
-
 #[cfg(test)]
 #[path = "color_grayscale_allocation_tests.rs"]
 mod la_conversion_allocation_receipts;
@@ -622,68 +457,6 @@ unsafe fn gather_interleaved_channel_ssse3_into_raw(
     )
 }
 
-/// Gather the first byte from native YCbCr triples using SSSE3 when present.
-///
-/// The returned counters describe sixteen-pixel vector blocks and scalar-tail
-/// pixels. Callers must still validate that the source length matches the
-/// image dimensions before constructing an image from the output.
-#[cfg(target_arch = "x86_64")]
-#[allow(unsafe_code)]
-pub(crate) fn ycbcr_luma_ssse3_bytes(source: &[u8]) -> Option<(Vec<u8>, u64, u64)> {
-    if source.len() % 3 != 0 || !std::is_x86_feature_detected!("ssse3") {
-        return None;
-    }
-    // SAFETY: the runtime feature check above proves SSSE3 is available.
-    Some(unsafe { gather_ycbcr_luma_ssse3(source) })
-}
-
-#[cfg(target_arch = "x86_64")]
-#[allow(unsafe_code)]
-#[target_feature(enable = "ssse3")]
-unsafe fn gather_ycbcr_luma_ssse3(source: &[u8]) -> (Vec<u8>, u64, u64) {
-    use core::arch::x86_64::{
-        _mm_loadu_si128, _mm_or_si128, _mm_setr_epi8, _mm_shuffle_epi8, _mm_storeu_si128,
-    };
-
-    const LANES: usize = 16;
-    let pixel_count = source.len() / 3;
-    let vector_pixels = pixel_count / LANES * LANES;
-    let mut output = Vec::<u8>::with_capacity(pixel_count);
-
-    // SAFETY: the caller checked SSSE3. Each loop reads three consecutive
-    // sixteen-byte ranges for sixteen complete three-byte pixels. The final
-    // load ends at or before source.len(), and the store initializes exactly
-    // sixteen bytes within the output capacity.
-    unsafe {
-        let from_first = _mm_setr_epi8(0, 3, 6, 9, 12, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-        let from_second =
-            _mm_setr_epi8(-1, -1, -1, -1, -1, -1, 2, 5, 8, 11, 14, -1, -1, -1, -1, -1);
-        let from_third = _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 4, 7, 10, 13);
-        for pixel in (0..vector_pixels).step_by(LANES) {
-            let offset = pixel * 3;
-            let first = _mm_loadu_si128(source.as_ptr().add(offset).cast());
-            let second = _mm_loadu_si128(source.as_ptr().add(offset + 16).cast());
-            let third = _mm_loadu_si128(source.as_ptr().add(offset + 32).cast());
-            let y0 = _mm_shuffle_epi8(first, from_first);
-            let y1 = _mm_shuffle_epi8(second, from_second);
-            let y2 = _mm_shuffle_epi8(third, from_third);
-            let y = _mm_or_si128(_mm_or_si128(y0, y1), y2);
-            _mm_storeu_si128(output.as_mut_ptr().add(pixel).cast(), y);
-        }
-        output.set_len(vector_pixels);
-    }
-
-    for pixel in vector_pixels..pixel_count {
-        output.push(source[pixel * 3]);
-    }
-    debug_assert_eq!(output.len(), pixel_count);
-    (
-        output,
-        (vector_pixels / LANES) as u64,
-        (pixel_count - vector_pixels) as u64,
-    )
-}
-
 fn pil_grayscale_inner(
     img: &DynamicImage,
     round: bool,
@@ -737,28 +510,6 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
     rounding: u32,
 ) -> Vec<u8> {
     let expected_pixels = dims.total_pixels();
-
-    #[cfg(target_arch = "x86_64")]
-    // The same AVX2 kernel is used by strict SIMD on AVX-512 hosts. Try it in
-    // the CPU path too; runtime AVX2 detection retains the exact scalar fallback.
-    let mut gray: Vec<u8> = if CHANNELS == 3 && rounding == 32768 {
-        grayscale_rgb_avx2(source, expected_pixels)
-            .map(|(gray, _)| gray)
-            .unwrap_or_else(|| {
-                source
-                    .chunks_exact(CHANNELS)
-                    .take(expected_pixels)
-                    .map(|pixel| grayscale_rgb_pixel(pixel, rounding))
-                    .collect()
-            })
-    } else {
-        source
-            .chunks_exact(CHANNELS)
-            .take(expected_pixels)
-            .map(|pixel| grayscale_rgb_pixel(pixel, rounding))
-            .collect()
-    };
-    #[cfg(not(target_arch = "x86_64"))]
     let mut gray: Vec<u8> = source
         .chunks_exact(CHANNELS)
         .take(expected_pixels)
@@ -1310,7 +1061,7 @@ pub fn palette_getcolor_append(
     } else {
         vec![r, g, b]
     };
-    palette_getcolor_validate(palette, &color, mode)
+    palette_getcolor_validate_impl(palette, &color, mode).map_err(palette_error_message)
 }
 
 /// Formats a palette as Pillow-compatible text.
@@ -1957,9 +1708,11 @@ fn palette_getcolor_validate_impl(
     palette: &mut Vec<u8>,
     color: &[u8],
     mode: &str,
-) -> Result<usize, String> {
+) -> Result<usize, PilError> {
     if mode == "RGB" && color.len() >= 4 && color[3] != 255 {
-        return Err("cannot add non-opaque RGBA color to RGB palette".into());
+        return Err(PilError::ValueError(
+            "cannot add non-opaque RGBA color to RGB palette".into(),
+        ));
     }
     // Pillow's Python `getcolor` appends the tuple bytes up to the mode band
     // count without padding (RGBA pads a 3-tuple to opaque), and matches
@@ -1992,7 +1745,9 @@ fn palette_getcolor_validate_impl(
     }
     let idx = entries;
     if idx >= 256 {
-        return Err("cannot allocate more than 256 colors".into());
+        return Err(PilError::ValueError(
+            "cannot allocate more than 256 colors".into(),
+        ));
     }
     palette.extend_from_slice(&stored);
     Ok(idx)
@@ -2004,7 +1759,14 @@ pub fn palette_getcolor_validate(
     color: &[u8],
     mode: &str,
 ) -> Result<usize, String> {
-    palette_getcolor_validate_impl(palette, color, mode)
+    palette_getcolor_validate_impl(palette, color, mode).map_err(palette_error_message)
+}
+
+fn palette_error_message(error: PilError) -> String {
+    match error {
+        PilError::ValueError(message) => message,
+        other => other.to_string(),
+    }
 }
 
 /// Host-neutral input for `ImagePalette.getcolor`.
@@ -2023,33 +1785,27 @@ pub fn palette_getcolor_validate_input(
     color: PaletteColorInput,
     mode: &str,
 ) -> Result<usize, String> {
-    match color {
+    let result = match color {
         PaletteColorInput::Components(color)
             if (mode == "RGB" && color.len() == 3)
                 || (mode == "RGBA" && matches!(color.len(), 3 | 4)) =>
         {
-            palette_getcolor_append(
-                palette,
-                color[0],
-                color[1],
-                color[2],
-                color.get(3).copied().unwrap_or(255),
-                mode,
-            )
+            palette_getcolor_validate_impl(palette, &color, mode)
         }
         PaletteColorInput::Components(color) => {
             palette_getcolor_validate_impl(palette, &color, mode)
         }
-        PaletteColorInput::Invalid(repr) => Err(format!("unknown color specifier: {repr}")),
-    }
+        PaletteColorInput::Invalid(repr) => Err(PilError::ValueError(format!(
+            "unknown color specifier: {repr}"
+        ))),
+    };
+    result.map_err(palette_error_message)
 }
 
 #[cfg(test)]
 mod tests {
     #[cfg(target_arch = "x86_64")]
     use super::gather_interleaved_channel_ssse3_into;
-    #[cfg(target_arch = "x86_64")]
-    use super::grayscale_rgb_avx2;
     use super::{
         ColorValue, cmyk_muldiv255_byte, cmyk_to_grayscale, f_to_i, f_to_l, getcolor,
         grayscale_rgb_bytes, grayscale_rgb_pixel, grayscale_rgb_pixel_delta,
@@ -2265,50 +2021,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[cfg(target_arch = "x86_64")]
-    #[test]
-    fn grayscale_rgb_avx2_matches_every_color_and_handles_tails() {
-        if !std::is_x86_feature_detected!("avx2") {
-            return;
-        }
-
-        const PIXELS: usize = 1 << 24;
-        let mut source = Vec::with_capacity(PIXELS * 3);
-        for value in 0..PIXELS {
-            source.push((value >> 16) as u8);
-            source.push((value >> 8) as u8);
-            source.push(value as u8);
-        }
-        let (actual, vector_blocks) =
-            grayscale_rgb_avx2(&source, PIXELS).expect("AVX2 grayscale kernel");
-        assert_eq!(vector_blocks, (PIXELS / 16) as u64);
-        assert_eq!(actual.len(), PIXELS);
-        for (index, pixel) in source.chunks_exact(3).enumerate() {
-            assert_eq!(
-                actual[index],
-                rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]),
-                "RGB pixel {index}: {pixel:?}"
-            );
-        }
-
-        let short_source: Vec<u8> = (0..59).map(|index| (index * 37 + 11) as u8).collect();
-        let (tail, vector_blocks) =
-            grayscale_rgb_avx2(&short_source, 21).expect("AVX2 tail kernel");
-        let mut expected: Vec<u8> = short_source
-            .chunks_exact(3)
-            .take(21)
-            .map(|pixel| rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]))
-            .collect();
-        expected.resize(21, 0);
-        assert_eq!(tail, expected);
-        assert_eq!(vector_blocks, 2);
-
-        let (prefix, vector_blocks) =
-            grayscale_rgb_avx2(&short_source, 5).expect("AVX2 bounded kernel");
-        assert_eq!(prefix, expected[..5]);
-        assert_eq!(vector_blocks, 1);
     }
 
     #[test]

@@ -80,7 +80,143 @@ class ProducerAttestationTests(unittest.TestCase):
         self.assertEqual(result["producer_bundle_sha256"], hashlib.sha256(collector.bundle_path.read_bytes()).hexdigest())
         self.assertEqual(result["parent_start"]["role"], "parent")
         self.assertEqual(result["parent_end"]["role"], "parent")
+        self.assertTrue(result["observed_invocation"]["runner_argv"])
+        self.assertIn("effective_make_context", result["observed_invocation"])
         self.assertEqual(result["invocations"][0]["receipt"]["identity"]["role"], "child")
+
+    def test_backend_merge_binds_the_merged_report_execution_and_children(self):
+        backend_artifacts = []
+        invocation_ids = ["cpu-invocation", "simd-invocation"]
+        for index, invocation_id in enumerate(invocation_ids):
+            report_path = self.root / f"backend-{index}.json"
+            backend_report = {
+                "schema": "migration-parity/parity-result@1",
+                "status": "completed",
+                "identity": {"run_id": f"backend-run-{index}"},
+            }
+            report_path.write_text(json.dumps(backend_report), encoding="utf-8")
+            backend_execution_path = self.root / f"backend-{index}.execution.json"
+            backend_execution = {
+                "schema": execution.SCHEMA,
+                "status": "complete",
+                "report": {
+                    "canonical_sha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
+                    "schema": backend_report["schema"],
+                    "run_id": backend_report["identity"]["run_id"],
+                },
+                "invocations": [{"invocation_id": invocation_id}],
+            }
+            execution._publish(backend_execution_path, backend_execution)
+
+            collector = self.collector(f"backend-{index}.producer.json")
+            self.child_receipt(collector, invocation_id)
+            producer_path = collector.output
+            producer = collector.finalize(backend_execution_path, backend_execution)
+            self.assertEqual(producer["status"], "complete")
+            backend_artifacts.append(
+                (
+                    producer_path,
+                    backend_execution_path,
+                    collector.bundle_path,
+                )
+            )
+
+        merged_report_path = self.root / "merged.json"
+        merged_report = {
+            "schema": "migration-parity/parity-result@1",
+            "status": "completed",
+            "identity": {"run_id": "merged-run"},
+        }
+        merged_report_path.write_text(json.dumps(merged_report), encoding="utf-8")
+        merged_execution_path = self.root / "merged.execution.json"
+        merged_execution = {
+            "schema": execution.SCHEMA,
+            "status": "complete",
+            "report": {
+                **execution.report_fingerprint(merged_report_path),
+                "schema": merged_report["schema"],
+                "run_id": merged_report["identity"]["run_id"],
+            },
+            "invocations": [{"invocation_id": item} for item in invocation_ids],
+            "errors": [],
+        }
+        execution._publish(merged_execution_path, merged_execution)
+        output = self.root / "merged.producer.json"
+
+        result = companion.merge_backend_attestations(
+            output,
+            merged_report_path,
+            merged_execution_path,
+            merged_report,
+            backend_artifacts,
+        )
+
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(
+            [item["invocation_id"] for item in result["invocations"]], invocation_ids
+        )
+        self.assertEqual(
+            result["execution_attestation_sha256"],
+            hashlib.sha256(merged_execution_path.read_bytes()).hexdigest(),
+        )
+        bundle_path = output.with_name(output.name + ".bundle.json")
+        self.assertEqual(
+            result["producer_bundle_sha256"],
+            hashlib.sha256(bundle_path.read_bytes()).hexdigest(),
+        )
+
+    def test_backend_merge_rejects_bundle_changes_before_publication(self):
+        report_path = self.root / "backend.json"
+        report = {
+            "schema": "migration-parity/parity-result@1",
+            "status": "completed",
+            "identity": {"run_id": "backend-run"},
+        }
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+        backend_execution_path = self.root / "backend.execution.json"
+        backend_execution = {
+            "schema": execution.SCHEMA,
+            "status": "complete",
+            "report": {
+                "canonical_sha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
+                "schema": report["schema"],
+                "run_id": report["identity"]["run_id"],
+            },
+            "invocations": [{"invocation_id": "one"}],
+        }
+        execution._publish(backend_execution_path, backend_execution)
+        collector = self.collector("backend.producer.json")
+        self.child_receipt(collector)
+        producer_path = collector.output
+        collector.finalize(backend_execution_path, backend_execution)
+        collector.bundle_path.write_bytes(collector.bundle_path.read_bytes() + b" ")
+
+        merged_report_path = self.root / "merged.json"
+        merged_report_path.write_text(json.dumps(report), encoding="utf-8")
+        merged_execution_path = self.root / "merged.execution.json"
+        merged_execution = {
+            "schema": execution.SCHEMA,
+            "status": "complete",
+            "report": {
+                **execution.report_fingerprint(merged_report_path),
+                "schema": report["schema"],
+                "run_id": "merged-run",
+            },
+            "invocations": [{"invocation_id": "one"}],
+            "errors": [],
+        }
+        execution._publish(merged_execution_path, merged_execution)
+        output = self.root / "merged.producer.json"
+
+        with self.assertRaisesRegex(ValueError, "bundle hash differs"):
+            companion.merge_backend_attestations(
+                output,
+                merged_report_path,
+                merged_execution_path,
+                {**report, "identity": {"run_id": "merged-run"}},
+                [(producer_path, backend_execution_path, collector.bundle_path)],
+            )
+        self.assertFalse(output.exists())
 
     def test_missing_corrupt_uncollected_and_mismatched_children_are_unproven(self):
         for index, mode in enumerate(["missing", "corrupt", "uncollected", "wrong-invocation", "wrong-bundle"]):
@@ -183,6 +319,14 @@ class ProducerAttestationTests(unittest.TestCase):
         for run in [run_migration_benchmark.run, run_migration_parity.run_orchestrator]:
             with self.subTest(run=run.__name__), self.assertRaisesRegex(ValueError, "requires --attestation-output"):
                 run(args)
+
+        parity_args = argparse.Namespace(
+            attestation_output=None,
+            producer_attestation_output=None,
+            parity_producer_attestation_output=Path("parity.producer.json"),
+        )
+        with self.assertRaisesRegex(ValueError, "requires --parity-attestation-output"):
+            run_migration_benchmark.run(parity_args)
 
 
 if __name__ == "__main__":

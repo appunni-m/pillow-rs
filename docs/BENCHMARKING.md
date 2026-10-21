@@ -61,10 +61,14 @@ hashes, runtime identity, requested/actual backend, and terminal receipts are
 compatible with the comparison.
 
 The untimed representative execution receipt also retains each operation's
-path and vector-block count. A positive count records vector blocks for that
-operation; a recorded zero keeps scalar-only paths explicit. Missing or empty
-operation telemetry does not establish vector-kernel execution, and these
-receipts do not add latency samples.
+path, vector-block count, and originating timed `step_id`, plus the receipt's
+`selected_step_ids`. A positive count records vector blocks for that operation;
+a recorded zero keeps scalar-only paths explicit. The benchmark filters records
+to the workload's selected steps before collecting telemetry; report validation
+keeps those IDs within the workload's measurement policy. Consumers can verify
+each vector event belongs to that selection. Missing, empty, or unscoped
+operation telemetry does not establish vector-kernel execution. These receipts
+do not add latency samples.
 
 `whole_workflow` timing includes the terminal result observation needed to
 realize the measured workflow. For a lazy final image result, the timing adapter
@@ -304,6 +308,15 @@ make migration-parity-benchmark
 
 The runner applies the workload filter inside the pipeline selection and tests
 that behavior before each benchmark run.
+
+Result `identity.command.argv` and `cwd` record the actual Python runner
+process. The canonical `command_id` remains a stable recipe label. The
+`producer-attestation@2` companion separately records `observed_invocation`:
+the runner argv and, for Make-launched runs, the effective top-level Make
+executable and goals. Make does not expose the original raw process argv
+portably, so this Make context must not be presented as a literal argv; use the
+runner argv and selected workload/profile fields to identify the executed run.
+Historical `producer-attestation@1` artifacts remain valid without this field.
 
 To retain every declared public operation against the CPU ≤ Pillow, single-
 thread SIMD ≤ half of Pillow latency, and GPU ≤ SIMD latency goals, generate the
@@ -1124,6 +1137,16 @@ pipeline names, workload IDs, modes, and sizes; type filters narrow each table,
 and timing headers sort numerically. Parallel CPU is its own column, built with
 the opt-in `parallel` Cargo feature and compared directly with the ordinary
 Pillow oracle. It is not relabeled as SIMD or merged into serial CPU.
+
+For a focused GitHub Actions dispatch, provide one or more exact
+`workload_ids`; the workflow validates them against the benchmark inputs before
+starting runner jobs. Choose `target_profile` (`python-cpu`, `python-simd`,
+`python-gpu`, or `python-parallel-cpu`) and `runner_id` to avoid launching
+unneeded backends or architectures. GPU dispatch is limited to macOS ARM64.
+Focused dispatch requires explicit workload IDs; type `all` to opt into the
+full cohort. Pushes and scheduled publication runs keep the full matrix. A
+focused run does not publish partial benchmark snapshots, and x86 kernel guard
+tests run only when the selected workload/profile needs them.
 
 The public Benchmark workflow uses the full `standard` fixture selection, then
 runs the same selected workloads with the separately compiled Parallel CPU

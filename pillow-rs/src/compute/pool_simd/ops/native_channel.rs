@@ -6,6 +6,13 @@
 
 use wide::u8x16;
 
+#[cfg(target_arch = "x86_64")]
+#[path = "native_channel/cmyk_ssse3.rs"]
+mod cmyk_ssse3;
+
+#[cfg(target_arch = "x86_64")]
+pub(crate) use cmyk_ssse3::deinterleave_cmyk_16_ssse3;
+
 /// Gather one byte channel from a small set of interleaved SIMD blocks.
 ///
 /// This helper is shared by grayscale, alpha, and CMYK kernels. It performs
@@ -77,6 +84,20 @@ pub(crate) fn gather_channel<const CHANNELS: usize, const CHANNEL: usize>(
     crate::compute::pool_cpu::ops::imageops::gather_native_channel::<CHANNELS, CHANNEL>(source)
 }
 
+/// Return one RGB channel in newly allocated, fully initialized storage.
+/// Const-specialized dispatch keeps channel selection outside the pixel loop.
+pub(crate) fn extract_rgb_channel_bytes(
+    source: &[u8],
+    channel: usize,
+) -> Option<(Vec<u8>, u64, u64)> {
+    match channel {
+        0 => Some(gather_channel::<3, 0>(source)),
+        1 => Some(gather_channel::<3, 1>(source)),
+        2 => Some(gather_channel::<3, 2>(source)),
+        _ => None,
+    }
+}
+
 /// Extract one selected byte from packed RGB with one NEON structure load.
 /// `vld3q_u8` deinterleaves 16 RGB pixels directly into three byte vectors,
 /// avoiding the temporary lane arrays and three separate swizzles in the
@@ -88,15 +109,54 @@ fn gather_rgb_channel_neon_into<const CHANNEL: usize>(
     source: &[u8],
     output: &mut [u8],
 ) -> (u64, u64) {
-    const CHANNELS: usize = 3;
+    let pixel_count = source.len() / 3;
+    debug_assert_eq!(output.len(), pixel_count);
+    debug_assert_eq!(source.len() % 3, 0);
+
+    // SAFETY: the source has complete RGB triples and the caller provides a
+    // distinct writable output slice with one initialized byte per pixel.
+    unsafe { gather_rgb_channel_neon_raw::<CHANNEL>(source, output.as_mut_ptr()) }
+}
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn gather_rgb_channel_neon<const CHANNEL: usize>(source: &[u8]) -> (Vec<u8>, u64, u64) {
+    let pixel_count = source.len() / 3;
+    let mut output = Vec::<u8>::with_capacity(pixel_count);
+    debug_assert_eq!(source.len() % 3, 0);
+
+    // SAFETY: the vector reserves one byte per pixel; the kernel below writes
+    // every output byte before the vector length is published.
+    let (vector_blocks, scalar_tail) =
+        unsafe { gather_rgb_channel_neon_raw::<CHANNEL>(source, output.as_mut_ptr()) };
+    // SAFETY: the kernel initializes the complete vector prefix and scalar
+    // tail before returning.
+    unsafe { output.set_len(pixel_count) };
+    (output, vector_blocks, scalar_tail)
+}
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+unsafe fn gather_rgb_channel_neon_raw<const CHANNEL: usize>(
+    source: &[u8],
+    output: *mut u8,
+) -> (u64, u64) {
     const LANES: usize = 16;
+    const CHANNELS: usize = 3;
     let pixel_count = source.len() / CHANNELS;
     let vector_pixels = pixel_count / LANES * LANES;
-    debug_assert_eq!(output.len(), pixel_count);
+    debug_assert_eq!(source.len() % CHANNELS, 0);
+    debug_assert!(CHANNEL < CHANNELS);
 
     macro_rules! extract_rgb_block {
         ($pixel:expr) => {{
-            let input = core::arch::aarch64::vld3q_u8(source.as_ptr().add($pixel * CHANNELS));
+            // SAFETY: callers reserve or provide `pixel_count` output bytes,
+            // and every block is bounded by `vector_pixels`. The source offset
+            // reads exactly 48 initialized bytes from a complete RGB block.
+            let input =
+                unsafe { core::arch::aarch64::vld3q_u8(source.as_ptr().add($pixel * CHANNELS)) };
             let channel = if CHANNEL == 0 {
                 input.0
             } else if CHANNEL == 1 {
@@ -104,45 +164,35 @@ fn gather_rgb_channel_neon_into<const CHANNEL: usize>(
             } else {
                 input.2
             };
-            core::arch::aarch64::vst1q_u8(output.as_mut_ptr().add($pixel), channel);
+            // SAFETY: the selected store writes 16 bytes within the validated
+            // output prefix at `$pixel`.
+            unsafe { core::arch::aarch64::vst1q_u8(output.add($pixel), channel) };
         }};
     }
 
-    // SAFETY: Each structure load starts at `3 * pixel` and reads exactly
-    // `3 * LANES` initialized source bytes. Both loops use aligned pixel
-    // offsets within `vector_pixels`, which is a multiple of LANES and bounded
-    // by `source.len() / 3`; each load and 16-byte store therefore fits its
-    // backing allocation. The caller validates an output slice with exactly
-    // `pixel_count` initialized writable bytes. The channel index is clamped by
-    // `simd_extract_band_into` before this helper is called.
-    unsafe {
-        let unrolled_pixels = vector_pixels / (LANES * 4) * (LANES * 4);
-        for pixel in (0..unrolled_pixels).step_by(LANES * 4) {
-            extract_rgb_block!(pixel);
-            extract_rgb_block!(pixel + LANES);
-            extract_rgb_block!(pixel + LANES * 2);
-            extract_rgb_block!(pixel + LANES * 3);
-        }
-        for pixel in (unrolled_pixels..vector_pixels).step_by(LANES) {
-            extract_rgb_block!(pixel);
+    let unrolled_pixels = vector_pixels / (LANES * 4) * (LANES * 4);
+    for pixel in (0..unrolled_pixels).step_by(LANES * 4) {
+        extract_rgb_block!(pixel);
+        extract_rgb_block!(pixel + LANES);
+        extract_rgb_block!(pixel + LANES * 2);
+        extract_rgb_block!(pixel + LANES * 3);
+    }
+    for pixel in (unrolled_pixels..vector_pixels).step_by(LANES) {
+        extract_rgb_block!(pixel);
+    }
+    for pixel in vector_pixels..pixel_count {
+        // SAFETY: `pixel` is within `pixel_count`, the caller guarantees
+        // writable storage for every pixel, and the source/output do not
+        // overlap.
+        unsafe {
+            output.add(pixel).write(source[pixel * CHANNELS + CHANNEL]);
         }
     }
 
-    for pixel in vector_pixels..pixel_count {
-        output[pixel] = source[pixel * CHANNELS + CHANNEL];
-    }
     (
         (vector_pixels / LANES) as u64,
         (pixel_count - vector_pixels) as u64,
     )
-}
-
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[inline]
-fn gather_rgb_channel_neon<const CHANNEL: usize>(source: &[u8]) -> (Vec<u8>, u64, u64) {
-    let mut output = vec![0; source.len() / 3];
-    let (vector_blocks, scalar_tail) = gather_rgb_channel_neon_into::<CHANNEL>(source, &mut output);
-    (output, vector_blocks, scalar_tail)
 }
 
 /// Extract one selected byte from packed LA with one NEON structure load.

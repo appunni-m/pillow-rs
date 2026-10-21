@@ -47,6 +47,12 @@ jobs:
           python-version: '3.12.10'
       - name: Install the hash-locked documentation tools
         run: make docs-setup PYTHON=python
+      - name: Check repository path standard and crosswalk contracts
+        run: >-
+          make implementation-structure-audit-test
+          implementation-structure-inventory
+          operation-source-crosswalk-test
+          PYTHON=.venv-docs/bin/python
       - name: Verify the documented published release
         if: github.event_name != 'pull_request'
         env:

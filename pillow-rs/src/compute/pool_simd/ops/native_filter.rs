@@ -1,16 +1,28 @@
-//! Shared native SIMD neighborhood kernels used by backend dispatchers.
-//!
-//! Kernels live outside the general adapter registry so CPU and SIMD entry
-//! points can reuse one implementation without growing `adapters.rs`.
+//! Shared low-level native SIMD helpers used by neighborhood kernels.
 
 use wide::{f32x8, i16x8, u8x16, u16x16};
 
 #[inline]
-fn pack_u16x16(value: u16x16) -> u8x16 {
+pub(crate) fn pack_u16x16(value: u16x16) -> u8x16 {
     let [low, high]: [wide::u16x8; 2] = bytemuck::cast(value);
     let low: i16x8 = bytemuck::cast(low);
     let high: i16x8 = bytemuck::cast(high);
     u8x16::narrow_i16x8(low, high)
+}
+
+/// Load up to eight contiguous byte samples as float lanes.
+#[inline]
+pub(crate) fn native_filter_load_byte_block(
+    raw: &[u8],
+    start: usize,
+    active_bytes: usize,
+) -> f32x8 {
+    debug_assert!(active_bytes <= 8);
+    let mut values = [0.0f32; 8];
+    for lane in 0..active_bytes {
+        values[lane] = raw[start + lane] as f32;
+    }
+    f32x8::from(values)
 }
 
 /// Filter native interleaved LA pixels with the exact binomial kernel. One

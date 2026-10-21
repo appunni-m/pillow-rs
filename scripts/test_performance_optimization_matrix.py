@@ -26,12 +26,20 @@ def measured_row(subject="python-simd"):
         "requested_backend": backend,
         "terminal_complete": True,
         "fallback_reasons": {},
+        "selected_step_ids": ["call"],
     }
 
 
 def vector_event(path, count):
-    return {"operation": "ExtractBand", "path": path, "vector_block_count": count,
-            "scalar_tail_count": 0, "mode_conversion_count": 0, "handoff_count": 0}
+    return {
+        "step_id": "call",
+        "operation": "ExtractBand",
+        "path": path,
+        "vector_block_count": count,
+        "scalar_tail_count": 0,
+        "mode_conversion_count": 0,
+        "handoff_count": 0,
+    }
 
 
 class SimdVectorEvidenceTests(unittest.TestCase):
@@ -58,6 +66,15 @@ class SimdVectorEvidenceTests(unittest.TestCase):
         row["fallback_reasons"] = {"unsupported input": 1}
         self.assertEqual(classify(row, True), "fallback")
 
+    def test_vector_event_from_unselected_step_is_not_acceleration(self):
+        row = measured_row()
+        row["operation_telemetry"] = [
+            vector_event("scalar-gather", 0),
+            {**vector_event("neon-deinterleave", 64), "step_id": "unselected-step"},
+        ]
+        self.assertEqual(simd_vector_evidence(row), "invalid")
+        self.assertEqual(classify(row, True), "simd_vector_not_proven")
+
     def test_positive_vector_work_requires_a_current_supported_path(self):
         expected_paths = {
             "native-copy",
@@ -69,6 +86,7 @@ class SimdVectorEvidenceTests(unittest.TestCase):
             "neon-interleave",
             "neon-la-l-blend",
             "neon-rgba-l-blend",
+            "avx2-transpose",
             "rgba-l-mask-vector",
             "ssse3-deinterleave",
             "ssse3-gather",

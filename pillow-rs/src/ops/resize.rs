@@ -290,9 +290,9 @@ impl Image {
     ) -> Result<(), PilError> {
         // Pillow's in-place thumbnail loads the source before returning from
         // the public call. Keep that boundary for decode-backed images and
-        // every operation prefix except the CPU RGB PutPixel case whose work
-        // can be folded exactly into its reducing-gap pass.
-        let deferable_putpixel_prefix = self.has_deferable_cpu_rgb_putpixel_prefix();
+        // every operation prefix except RGB PutPixel cases whose selected
+        // backend can fold the writes exactly into its reducing-gap pass.
+        let deferable_putpixel_prefix = self.has_deferable_rgb_putpixel_prefix();
         let source_size = if deferable_putpixel_prefix {
             self.size()?
         } else {
@@ -346,7 +346,7 @@ impl Image {
             return Err(PilError::ValueError("height and width must be > 0".into()));
         }
         if deferable_putpixel_prefix
-            && !self.can_defer_cpu_rgb_putpixel_thumbnail(dimensions.0, dimensions.1, filter)
+            && !self.can_defer_rgb_putpixel_thumbnail(dimensions.0, dimensions.1, filter)
         {
             self.materialized_shared()?;
         }
@@ -545,7 +545,7 @@ mod tests {
     use super::{Image, PilError};
     use crate::compute::Backend;
     use crate::image::Image as CoreImage;
-    use crate::pipeline::PipelineOp;
+    use crate::pipeline::{PipelineOp, ResampleFilter};
 
     #[test]
     fn cpu_rgb_thumbnail_keeps_valid_putpixel_prefix_in_the_same_batch() {
@@ -571,7 +571,7 @@ mod tests {
                 ..
             }
         )));
-        assert!(image.has_deferable_cpu_rgb_putpixel_prefix());
+        assert!(image.has_deferable_rgb_putpixel_prefix());
 
         let mut image = image;
         image
@@ -598,6 +598,30 @@ mod tests {
             .unwrap();
         let expected = expected.materialize().unwrap();
         assert_eq!(actual.as_bytes(), expected.as_bytes());
+    }
+
+    #[test]
+    fn simd_rgb_thumbnail_keeps_fusible_putpixel_prefix_until_materialization() {
+        let mut image = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
+        image.putpixel(2, 3, 180, 120, 60, 255).unwrap();
+        let image = image.use_backend(Backend::Simd);
+        assert!(image.has_deferable_rgb_putpixel_prefix());
+        assert!(image.can_defer_rgb_putpixel_thumbnail(256, 192, ResampleFilter::Bicubic));
+
+        let mut image = image;
+        image
+            .thumbnail((256, 256), Some(super::ResampleInput::Code(2)))
+            .unwrap();
+        let CoreImage::Pipeline {
+            ops, materialized, ..
+        } = &image
+        else {
+            panic!("thumbnail must remain a lazy pipeline until observed");
+        };
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(ops[0], PipelineOp::PutPixel { .. }));
+        assert!(matches!(ops[1], PipelineOp::Thumbnail { .. }));
+        assert!(materialized.get().is_none());
     }
 
     #[test]

@@ -15,6 +15,7 @@ import tempfile
 from unittest.mock import patch
 
 from run_migration_benchmark import (
+    FROZEN_TARGET_PROFILES,
     PARALLEL_CPU_PROFILE,
     TARGET_BACKENDS,
     TARGET_PROFILES,
@@ -45,7 +46,9 @@ from validate_migration_parity_result import execution_receipt
 
 class BenchmarkExecutionProofScopeTests(unittest.TestCase):
     @staticmethod
-    def receipt(step_id, operation, *, terminal_complete):
+    def receipt(
+        step_id, operation, *, terminal_complete, path="cpu", vector_blocks=0
+    ):
         return {
             "step_id": step_id,
             "status": "completed",
@@ -56,8 +59,8 @@ class BenchmarkExecutionProofScopeTests(unittest.TestCase):
             "operation_telemetry": [
                 {
                     "operation": operation,
-                    "path": "cpu",
-                    "vector_block_count": 0,
+                    "path": path,
+                    "vector_block_count": vector_blocks,
                     "scalar_tail_count": 0,
                     "mode_conversion_count": 0,
                     "handoff_count": 0,
@@ -88,6 +91,137 @@ class BenchmarkExecutionProofScopeTests(unittest.TestCase):
             [item["operation"] for item in result["operation_telemetry"]],
             ["GetColors"],
         )
+        self.assertEqual(result["selected_step_ids"], ["i-getcolors"])
+        self.assertEqual(
+            [item["step_id"] for item in result["operation_telemetry"]],
+            ["i-getcolors"],
+        )
+
+    def test_vector_telemetry_is_bound_to_selected_timed_step(self):
+        result = execution_result(
+            "target_profile",
+            "python-simd",
+            [
+                self.receipt(
+                    "i-getcolors",
+                    "GetColors",
+                    terminal_complete=False,
+                    path="scalar-gather",
+                ),
+                self.receipt(
+                    "f-getprojection",
+                    "GetProjection",
+                    terminal_complete=True,
+                    path="ssse3-gather",
+                    vector_blocks=64,
+                ),
+            ],
+            {"boundary": "observed_steps", "step_ids": ["i-getcolors"]},
+        )
+
+        self.assertEqual(result["selected_step_ids"], ["i-getcolors"])
+        self.assertEqual(
+            result["operation_telemetry"],
+            [
+                {
+                    "operation": "GetColors",
+                    "path": "scalar-gather",
+                    "vector_block_count": 0,
+                    "scalar_tail_count": 0,
+                    "mode_conversion_count": 0,
+                    "handoff_count": 0,
+                    "step_id": "i-getcolors",
+                }
+            ],
+        )
+
+    def test_selected_vector_step_retains_its_step_identity(self):
+        result = execution_result(
+            "target_profile",
+            "python-simd",
+            [
+                self.receipt(
+                    "i-getcolors",
+                    "GetColors",
+                    terminal_complete=False,
+                    path="ssse3-gather",
+                    vector_blocks=64,
+                ),
+                self.receipt(
+                    "f-getprojection",
+                    "GetProjection",
+                    terminal_complete=True,
+                    path="cpu",
+                ),
+            ],
+            {"boundary": "observed_steps", "step_ids": ["i-getcolors"]},
+        )
+
+        self.assertEqual(result["selected_step_ids"], ["i-getcolors"])
+        self.assertEqual(len(result["operation_telemetry"]), 1)
+        self.assertEqual(result["operation_telemetry"][0]["step_id"], "i-getcolors")
+        self.assertEqual(result["operation_telemetry"][0]["vector_block_count"], 64)
+
+    def test_validator_rejects_telemetry_for_an_unselected_step(self):
+        result = execution_result(
+            "target_profile",
+            "python-simd",
+            [
+                self.receipt(
+                    "i-getcolors",
+                    "GetColors",
+                    terminal_complete=True,
+                    path="ssse3-gather",
+                    vector_blocks=64,
+                )
+            ],
+            {"boundary": "whole_workflow", "step_ids": []},
+        )
+        result["operation_telemetry"][0]["step_id"] = "unselected-step"
+
+        with self.assertRaisesRegex(ValueError, "not in selected_step_ids"):
+            execution_receipt(result, "benchmark.execution")
+
+    def test_validator_rejects_receipts_outside_workload_step_selection(self):
+        result = execution_result(
+            "target_profile",
+            "python-simd",
+            [
+                self.receipt(
+                    "i-getcolors",
+                    "GetColors",
+                    terminal_complete=True,
+                    path="ssse3-gather",
+                    vector_blocks=64,
+                )
+            ],
+            {"boundary": "observed_steps", "step_ids": ["i-getcolors"]},
+        )
+
+        with self.assertRaisesRegex(ValueError, "outside workload measurement_policy"):
+            execution_receipt(
+                result,
+                "benchmark.execution",
+                allowed_step_ids={"f-getprojection"},
+            )
+
+    def test_operation_telemetry_without_step_identity_is_rejected(self):
+        selected = self.receipt(
+            "i-getcolors",
+            "GetColors",
+            terminal_complete=True,
+            path="ssse3-gather",
+            vector_blocks=64,
+        )
+        selected.pop("step_id")
+
+        with self.assertRaisesRegex(ValueError, "step_id: expected non-empty string"):
+            execution_result(
+                "target_profile",
+                "python-simd",
+                [selected],
+                {"boundary": "whole_workflow", "step_ids": []},
+            )
 
     def test_observed_step_without_its_own_receipt_is_not_attributed_later(self):
         result = execution_result(
@@ -909,11 +1043,19 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 command[command.index("--attestation-output") + 1]
             )
             attestation_path.write_text(json.dumps({"sidecar": "captured"}))
+            producer_path = Path(
+                command[command.index("--producer-attestation-output") + 1]
+            )
+            producer_path.write_text(json.dumps({"producer": "captured"}))
+            producer_path.with_name(producer_path.name + ".bundle.json").write_text(
+                json.dumps({"bundle": "captured"})
+            )
             return 0, "{}", ""
 
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "parity.json"
             attestation_output = Path(directory) / "parity.attestation.json"
+            producer_attestation_output = Path(directory) / "parity.producer.json"
             report_binding = {
                 "path": "",
                 "canonical_sha256": "a" * 64,
@@ -946,6 +1088,9 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                     "run_migration_benchmark.merge_parity_attestations",
                     side_effect=assert_report_released,
                 ) as merge_attestations,
+                patch(
+                    "run_migration_benchmark.merge_backend_attestations"
+                ) as merge_producers,
             ):
                 result = run_migration_benchmark.run_parity(
                     run_migration_benchmark.DEFAULT_MANIFEST,
@@ -953,12 +1098,15 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                     30,
                     [{"case_id": "fixture", "target_profiles": ["python-cpu"]}],
                     attestation_output=attestation_output,
+                    producer_attestation_output=producer_attestation_output,
                 )
 
         self.assertIs(result, merged_result)
         command = observed_commands[0]
         self.assertIn("--attestation-output", command)
         self.assertIn(".attestation.json", command[command.index("--attestation-output") + 1])
+        self.assertIn("--producer-attestation-output", command)
+        self.assertIn(".producer.json", command[command.index("--producer-attestation-output") + 1])
         write_artifact.assert_called_once_with(output, merged_result)
         merge_attestations.assert_called_once_with(
             attestation_output,
@@ -972,11 +1120,25 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 )
             ],
         )
+        merge_producers.assert_called_once()
+        producer_call = merge_producers.call_args.args
+        self.assertEqual(producer_call[:4], (
+            producer_attestation_output,
+            output,
+            attestation_output,
+            merged_result,
+        ))
+        self.assertEqual(len(producer_call[4]), 1)
+        self.assertTrue(producer_call[4][0][0].name.endswith(".producer.json"))
+        self.assertTrue(producer_call[4][0][1].name.endswith(".attestation.json"))
+        self.assertTrue(producer_call[4][0][2].name.endswith(".producer.json.bundle.json"))
 
     def test_reused_parity_accepts_only_attested_passing_supersets(self) -> None:
+        # Keep this synthetic case valid when the environment narrows the
+        # benchmark's active profiles (for example, to SIMD only).
         case = {
             "case_id": "selected",
-            "target_profiles": ["python-cpu"],
+            "target_profiles": list(FROZEN_TARGET_PROFILES),
         }
         selected_profiles = [
             profile
@@ -993,6 +1155,16 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
         runtime_identity_hashes = [(('source', 'pillow'), source_sha256)] + [
             (('target', profile), target_sha256) for profile in selected_profiles
         ]
+        comparison_rows = [
+            {
+                "case_id": case_id,
+                "target_profile": profile,
+                "outcome": "pass",
+            }
+            for profile in selected_profiles
+            for case_id in ("selected", "extra-passing-guard")
+        ]
+        comparison_count = len(comparison_rows)
         parity = {
             "schema": "migration-parity/parity-result@1",
             "status": "completed",
@@ -1018,22 +1190,14 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 ],
             },
             "summary": {
-                "selected": 2,
-                "executed": 2,
-                "passed": 2,
+                "selected": comparison_count,
+                "executed": comparison_count,
+                "passed": comparison_count,
                 "failed": 0,
                 "not_run": 0,
                 "infrastructure_errors": 0,
             },
-            "comparisons": [
-                {
-                    "case_id": case_id,
-                    "target_profile": profile,
-                    "outcome": "pass",
-                }
-                for profile in selected_profiles
-                for case_id in ("selected", "extra-passing-guard")
-            ],
+            "comparisons": comparison_rows,
             "infrastructure_errors": [],
         }
         attestation = {
@@ -1086,7 +1250,12 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 row for row in incomplete["comparisons"]
                 if row["case_id"] != "selected"
             ]
-            incomplete["summary"].update(selected=1, executed=1, passed=1)
+            incomplete_count = len(incomplete["comparisons"])
+            incomplete["summary"].update(
+                selected=incomplete_count,
+                executed=incomplete_count,
+                passed=incomplete_count,
+            )
             with self.assertRaisesRegex(ValueError, "does not cover"):
                 validate_reused_parity(
                     incomplete,
@@ -1112,7 +1281,12 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
 
             duplicate = copy.deepcopy(parity)
             duplicate["comparisons"].append(copy.deepcopy(duplicate["comparisons"][0]))
-            duplicate["summary"].update(selected=3, executed=3, passed=3)
+            duplicate_count = len(duplicate["comparisons"])
+            duplicate["summary"].update(
+                selected=duplicate_count,
+                executed=duplicate_count,
+                passed=duplicate_count,
+            )
             with self.assertRaisesRegex(ValueError, "duplicate"):
                 validate_reused_parity(
                     duplicate,

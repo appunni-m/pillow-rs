@@ -36,6 +36,70 @@ document.addEventListener('DOMContentLoaded', () => {
       return selectedComparison ? new Set([selectedComparison.target, selectedComparison.baseline]) : null;
     };
     const selected = cell => !selectedPair || selectedPair.has(cell.dataset.subject);
+    const updateComparisonLabels = () => {
+      const comparison = comparisonFor(subject.selectedOptions[0]);
+      for (const header of dashboard.querySelectorAll('th[data-subject]')) {
+        const label = header.querySelector('small[data-default-label]');
+        if (!label) continue;
+        if (!comparison) {
+          label.textContent = label.dataset.defaultLabel;
+        } else if (header.dataset.subject === comparison.baseline) {
+          label.textContent = 'Selected baseline';
+        } else if (header.dataset.subject === comparison.target) {
+          label.textContent = `Median · vs ${displayName(comparison.baseline)}`;
+        } else {
+          label.textContent = label.dataset.defaultLabel;
+        }
+      }
+      for (const row of rows) {
+        for (const cell of cells(row)) {
+          const ratioLabel = cell.querySelector('.bench-ratio');
+          const track = cell.querySelector('.bench-track');
+          if (!ratioLabel || !track) continue;
+          if (comparison && cell.dataset.subject === comparison.baseline) {
+            cell.dataset.ratio = '';
+            cell.dataset.direction = 'baseline';
+            cell.dataset.quality = 'baseline';
+            cell.dataset.note = 'Selected baseline';
+            ratioLabel.textContent = 'Baseline';
+            ratioLabel.className = 'bench-ratio baseline';
+            track.className = 'bench-track is-baseline';
+            continue;
+          }
+          if (cell.dataset.role === 'baseline' || (comparison && cell.dataset.subject !== comparison.target)) {
+            if (cell.dataset.role === 'baseline') {
+              cell.dataset.ratio = '';
+              cell.dataset.direction = 'baseline';
+              cell.dataset.quality = 'baseline';
+              cell.dataset.note = 'Baseline';
+              ratioLabel.textContent = 'Baseline';
+              ratioLabel.className = 'bench-ratio baseline';
+              track.className = 'bench-track is-baseline';
+            }
+            continue;
+          }
+          const useSimdBaseline = comparison?.baseline === 'pillow-simd';
+          const ratioKey = useSimdBaseline ? 'ratioPillowSimd' : 'ratioPrimary';
+          const qualityKey = useSimdBaseline ? 'qualityPillowSimd' : 'qualityPrimary';
+          const noteKey = useSimdBaseline ? 'notePillowSimd' : 'note';
+          const ratioText = cell.dataset[ratioKey];
+          const ratio = cell.dataset[qualityKey] === 'checked' && ratioText ? Number(ratioText) : NaN;
+          const direction = Number.isFinite(ratio) && ratio > 0
+            ? ratio > 1 ? 'faster' : ratio < 1 ? 'slower' : 'tie'
+            : 'unavailable';
+          const note = cell.dataset[noteKey] || 'Comparison unavailable';
+          cell.dataset.ratio = Number.isFinite(ratio) && ratio > 0 ? ratioText : '';
+          cell.dataset.direction = direction;
+          cell.dataset.quality = cell.dataset[qualityKey] || 'unavailable';
+          cell.dataset.note = note;
+          ratioLabel.textContent = cell.dataset.ratio ? speedLabel(ratio) : 'Not comparable';
+          ratioLabel.className = `bench-ratio ${direction}`;
+          track.className = `bench-track ${direction}`;
+          const srOnly = cell.querySelector('.bench-sr-only');
+          if (srOnly) srOnly.textContent = `${displayName(cell.dataset.subject)}. ${note}.`;
+        }
+      }
+    };
     const number = (row, key) => {
       const cell = cells(row).find(item => item.dataset.subject === key);
       return cell?.dataset.value ? Number(cell.dataset.value) : null;
@@ -248,6 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const update = () => {
       const query = search.value.trim().toLocaleLowerCase();
       selectedPair = pairedSubjects();
+      updateComparisonLabels();
       let visible = 0;
       for (const cell of columns) cell.hidden = !selected(cell);
       for (const row of rows) {
@@ -260,7 +325,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!row.hidden) {
           visible += 1;
         }
-        const comparable = cells(row).filter(cell => selected(cell) && cell.dataset.ratio);
+        const comparison = comparisonFor(subject.selectedOptions[0]);
+        const comparisonTarget = comparison && cells(row).find(cell => cell.dataset.subject === comparison.target);
+        const selectedPairComparable = !comparison || !!(
+          comparisonTarget
+          && comparisonTarget.dataset.quality === 'checked'
+          && comparisonTarget.dataset.ratio
+        );
+        const comparable = cells(row).filter(cell => selected(cell) && cell.dataset.value
+          && (comparison ? selectedPairComparable : !!cell.dataset.ratio));
         const minimum = Math.min(...comparable.map(cell => Number(cell.dataset.value)));
         const headerFor = key => row.closest('table').querySelector(`thead [data-subject="${CSS.escape(key)}"]`);
         const names = comparable.filter(cell => Number(cell.dataset.value) === minimum).map(cell => {
@@ -272,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
         row.querySelector('[data-fastest]').textContent = comparable.length > 1 ? names.join(' / ') : 'Not comparable';
         const notes = cells(row).filter(cell => selected(cell) && cell.dataset.role === 'target').map(cell => cell.dataset.note || 'Not measured');
         row.querySelector('[data-quality-summary]').textContent = [...new Set(notes)].join('; ') || 'Comparison unavailable';
-        for (const cell of cells(row)) cell.classList.toggle('bench-lowest', comparable.length > 1 && selected(cell) && !!cell.dataset.ratio && Number(cell.dataset.value) === minimum);
+        for (const cell of cells(row)) cell.classList.toggle('bench-lowest', comparable.length > 1 && selected(cell) && comparable.includes(cell) && Number(cell.dataset.value) === minimum);
       }
       dashboard.querySelector('#bench-count').textContent = `${visible} of ${rows.length} workloads shown`;
       dashboard.querySelector('#bench-empty').hidden = visible !== 0;

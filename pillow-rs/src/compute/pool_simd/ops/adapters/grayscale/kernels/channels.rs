@@ -199,7 +199,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_grayscale_bytes(
             #[cfg(target_arch = "x86_64")]
             {
                 if let Some((output, vector_blocks)) =
-                    crate::color::grayscale_rgb_avx2(source, pixels)
+                    super::rgb_avx2::grayscale_rgb_avx2(source, pixels)
                 {
                     (output, vector_blocks)
                 } else {

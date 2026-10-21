@@ -63,6 +63,32 @@ pub(super) fn supports_for_shape(
     })
 }
 
+fn extract_band_path(_channels: usize, pixel_count: usize, vector_blocks: u64) -> &'static str {
+    if pixel_count == 0 {
+        "scalar-control"
+    } else if vector_blocks != 0 {
+        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+        {
+            if matches!(_channels, 2..=4) {
+                "neon-deinterleave"
+            } else {
+                "vector-gather"
+            }
+        }
+        #[cfg(target_arch = "x86_64")]
+        {
+            "ssse3-gather"
+        }
+        #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+        #[cfg(not(target_arch = "x86_64"))]
+        {
+            "vector-gather"
+        }
+    } else {
+        "scalar-gather"
+    }
+}
+
 /// Extract one channel from a native 8-bit image without expanding it to
 /// packed RGBA storage.  The public `getchannel` operation is a byte-domain
 /// copy for L/LA/RGB/RGBA (and CMYK, which uses the four-byte RGBA storage in
@@ -79,9 +105,38 @@ pub fn simd_extract_band(
     };
 
     let (width, height) = img.dimensions();
-    let mut output = CheckedDims::new_allow_empty(width, height, 1)?.alloc_buffer();
-    let (vector_blocks, scalar_tail, path) =
-        simd_extract_band_into(img, *index, mode, &mut output)?;
+    let dimensions = CheckedDims::new_allow_empty(width, height, 1)?;
+    let pixel_count = dimensions.total_bytes();
+    let channels =
+        native_extract_layout(img, mode).ok_or_else(|| simd_unsupported("ExtractBand"))?;
+    let (output, vector_blocks, scalar_tail, path) = if channels == 3 {
+        let source = img.as_bytes();
+        let source_len = pixel_count
+            .checked_mul(channels)
+            .ok_or_else(|| PilError::InternalError("ExtractBand source length overflow".into()))?;
+        if source.len() != source_len {
+            return Err(PilError::InternalError(
+                "ExtractBand source buffer shape mismatch".into(),
+            ));
+        }
+        let channel = usize::from(*index).min(channels - 1);
+        let (output, vector_blocks, scalar_tail) =
+            native_channel_kernels::extract_rgb_channel_bytes(source, channel)
+                .ok_or_else(|| simd_unsupported("ExtractBand"))?;
+        if output.len() != pixel_count {
+            return Err(PilError::InternalError(
+                "SIMD ExtractBand buffer shape mismatch".into(),
+            ));
+        }
+        crate::compute::record_pipeline_allocation(output.len());
+        let path = extract_band_path(channels, pixel_count, vector_blocks);
+        (output, vector_blocks, scalar_tail, path)
+    } else {
+        let mut output = dimensions.alloc_buffer();
+        let (vector_blocks, scalar_tail, path) =
+            simd_extract_band_into(img, *index, mode, &mut output)?;
+        (output, vector_blocks, scalar_tail, path)
+    };
     if vector_blocks != 0 {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     }
@@ -137,29 +192,7 @@ pub fn simd_extract_band_into(
     // block.
     let (vector_blocks, scalar_tail) =
         native_channel_kernels::extract_channel_into(source, output, channels, channel);
-    let path = if pixel_count == 0 {
-        "scalar-control"
-    } else if vector_blocks != 0 {
-        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-        {
-            if matches!(channels, 2..=4) {
-                "neon-deinterleave"
-            } else {
-                "vector-gather"
-            }
-        }
-        #[cfg(target_arch = "x86_64")]
-        {
-            "ssse3-gather"
-        }
-        #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-        #[cfg(not(target_arch = "x86_64"))]
-        {
-            "vector-gather"
-        }
-    } else {
-        "scalar-gather"
-    };
+    let path = extract_band_path(channels, pixel_count, vector_blocks);
     Ok((vector_blocks, scalar_tail, path))
 }
 

@@ -29,8 +29,11 @@ help:
 	@printf "\nLint:\n"
 	@printf "  make fmt              Check rustfmt\n"
 	@printf "  make fmt-fix          Apply rustfmt\n"
-	@printf "  make clippy           Run clippy with warnings denied\n"
-	@printf "  make lint             Run fmt + clippy\n"
+	@printf "  make clippy           Run Clippy with the workspace lint policy\n"
+	@printf "  make quality          Run the workspace's consolidated quality gate\n"
+	@printf "  make checkstyle       Check Rust source-size ratchets\n"
+	@printf "  make checkstyle-update-baseline  Re-record legacy size baselines\n"
+	@printf "  make lint             Compatibility alias for make quality\n"
 	@printf "\nBenchmark:\n"
 	@printf "  make bench            Run pillow-rs operation benchmarks\n"
 	@printf "\nCI:\n"
@@ -88,18 +91,29 @@ fmt-fix:
 	python3 ../scripts/check_public_api_boundary.py
 
 .PHONY: clippy
-clippy: public-api-boundary
-	$(CARGO) clippy --all-targets --all-features --locked -- -D warnings
+clippy:
+	$(MAKE) -C .. clippy-core
 
-.PHONY: lint
-lint: fmt clippy
+.PHONY: checkstyle
+checkstyle:
+	$(MAKE) -C .. checkstyle
+
+.PHONY: checkstyle-update-baseline
+checkstyle-update-baseline:
+	$(MAKE) -C .. checkstyle-update-baseline
+
+.PHONY: quality lint
+quality:
+	$(MAKE) -C .. quality
+
+lint: quality
 
 .PHONY: bench
 bench:
 	$(CARGO) bench
 
 .PHONY: ci
-ci: lint test
+ci: quality test
 
 .PHONY: clean
 clean:
