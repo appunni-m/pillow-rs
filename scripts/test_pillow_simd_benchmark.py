@@ -26,6 +26,8 @@ from run_pillow_simd_benchmark import (
     combine_results,
     run_source_compatibility,
     run_source_cohort,
+    output_paths,
+    select_workload_ids,
     validate_run,
     workload_contracts,
     write_parity_failure_diagnostics,
@@ -154,6 +156,73 @@ def run(
 
 
 class PillowSimdBenchmarkTests(unittest.TestCase):
+    def test_workload_selection_is_scoped_validated_and_canonical(self) -> None:
+        selected = select_workload_ids([WORKLOAD_IDS[20], WORKLOAD_IDS[1]])
+        self.assertEqual(selected, [WORKLOAD_IDS[1], WORKLOAD_IDS[20]])
+        self.assertEqual(select_workload_ids(None), list(WORKLOAD_IDS))
+        with self.assertRaisesRegex(ValueError, "unknown Pillow-SIMD workload IDs"):
+            select_workload_ids(["not-a-declared-workload"])
+        with self.assertRaisesRegex(ValueError, "must not be repeated"):
+            select_workload_ids([WORKLOAD_IDS[0], WORKLOAD_IDS[0]])
+
+    def test_partial_output_paths_do_not_reuse_full_cohort_artifacts(self) -> None:
+        full_output, full_artifacts = output_paths(None, None)
+        selected_output, selected_artifacts = output_paths(None, [WORKLOAD_IDS[19]])
+        self.assertNotEqual(selected_output, full_output)
+        self.assertNotEqual(selected_artifacts, full_artifacts)
+        self.assertIn("pillow-simd-selected-", selected_output.name)
+        self.assertEqual(selected_artifacts.name, selected_output.stem + ".artifacts")
+
+    def test_merge_exports_only_requested_workloads(self) -> None:
+        selected_workload = WORKLOAD_IDS[19]
+        pillow = run("Pillow", PILLOW_VERSION, "normal")
+        simd = run(
+            "Pillow",
+            PILLOW_VERSION,
+            "simd",
+            source_id="pillow-simd",
+        )
+        pillow["workloads"] = [
+            item for item in pillow["workloads"] if item["workload_id"] == selected_workload
+        ]
+        simd["workloads"] = [
+            item for item in simd["workloads"] if item["workload_id"] == selected_workload
+        ]
+        snapshot = combine_results(
+            pillow,
+            simd,
+            "c" * 64,
+            source_compatibility={
+                selected_workload: {"outcome": "pass", "differences": []}
+            },
+            workload_ids=[selected_workload],
+        )
+        self.assertEqual({row["workload"] for row in snapshot["rows"]}, {selected_workload})
+        self.assertEqual(snapshot["selection"]["workload_ids"], [selected_workload])
+        self.assertFalse(snapshot["selection"]["complete_catalog"])
+
+    def test_merge_rejects_unselected_workloads_in_source_reports(self) -> None:
+        selected_workload = WORKLOAD_IDS[19]
+        with self.assertRaisesRegex(ValueError, "exactly match the selected workload set"):
+            combine_results(
+                run("Pillow", PILLOW_VERSION, "normal"),
+                run("Pillow", PILLOW_VERSION, "simd", source_id="pillow-simd"),
+                "c" * 64,
+                source_compatibility={selected_workload: {"outcome": "pass"}},
+                workload_ids=[selected_workload],
+            )
+
+    def test_merge_rejects_compatibility_for_unselected_workloads(self) -> None:
+        selected_workload = WORKLOAD_IDS[19]
+        with self.assertRaisesRegex(ValueError, "compatibility evidence does not match"):
+            combine_results(
+                run("Pillow", PILLOW_VERSION, "normal"),
+                run("Pillow", PILLOW_VERSION, "simd", source_id="pillow-simd"),
+                "c" * 64,
+                source_compatibility=self.compatibility(),
+                workload_ids=[selected_workload],
+            )
+
     def test_subject_validation_uses_each_workloads_declared_profiles(self) -> None:
         result = run("Pillow", PILLOW_VERSION, "regular-pillow")
         parity = {

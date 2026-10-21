@@ -37,6 +37,7 @@ from scripts.run_migration_parity import (
     direct_cpu_execution_receipt,
     load_cases,
     load_manifest,
+    receipt_has_pipeline_work,
     run_case,
     write_pipeline_execution_evidence,
 )
@@ -162,6 +163,7 @@ class BenchmarkSuiteComparabilityTests(unittest.TestCase):
             "actual_backend_counts": {"simd": 1},
             "fallback_reason_counts": {},
             "sample_count": 1,
+            "selected_step_ids": ["call"],
             "errors": [],
         }
         missing = self.subject("python-simd", dict(base_execution))
@@ -173,6 +175,7 @@ class BenchmarkSuiteComparabilityTests(unittest.TestCase):
                 **base_execution,
                 "operation_telemetry": [
                     {
+                        "step_id": "call",
                         "operation": "ExtractBand",
                         "path": "scalar-gather",
                         "vector_block_count": 0,
@@ -191,6 +194,7 @@ class BenchmarkSuiteComparabilityTests(unittest.TestCase):
                 **base_execution,
                 "operation_telemetry": [
                     {
+                        "step_id": "call",
                         "operation": "ExtractBand",
                         "path": "neon-deinterleave",
                         "vector_block_count": 1,
@@ -202,6 +206,25 @@ class BenchmarkSuiteComparabilityTests(unittest.TestCase):
             },
         )
         self.assertTrue(suite_subject_is_comparable(vector, "python-simd"))
+
+        unrelated = self.subject(
+            "python-simd",
+            {
+                **base_execution,
+                "operation_telemetry": [
+                    {
+                        "step_id": "unselected-step",
+                        "operation": "ExtractBand",
+                        "path": "neon-deinterleave",
+                        "vector_block_count": 1,
+                        "scalar_tail_count": 0,
+                        "mode_conversion_count": 0,
+                        "handoff_count": 0,
+                    }
+                ],
+            },
+        )
+        self.assertFalse(suite_subject_is_comparable(unrelated, "python-simd"))
 
     def test_target_host_control_is_not_comparable(self) -> None:
         host_controlled = self.subject(
@@ -289,6 +312,80 @@ class BenchmarkIdentityTests(unittest.TestCase):
             (Path(__file__).resolve().parents[1] / "pillow-rs-py" / "python").resolve()
         )
         self.assertNotIn(target_python, environment.get("PYTHONPATH", "").split(os.pathsep))
+
+    def test_target_execution_proof_keeps_the_selected_observation_scope(self) -> None:
+        payload = {
+            "identity": {
+                "side": "target",
+                "implementation": "pillow-rs",
+                "backend": "cpu",
+                "backend_state": {"requested": "cpu", "active": ["cpu"]},
+            },
+            "results": [],
+            "timings_ns": {},
+            "telemetry": {},
+            "execution": {},
+        }
+        commands: list[list[str]] = []
+        contexts: list[dict[str, object]] = []
+
+        class Attestation:
+            def child_environment(self, **kwargs: object) -> dict[str, str]:
+                context = kwargs.get("context")
+                assert isinstance(context, dict)
+                contexts.append(context)
+                return {}
+
+            def collect(self, _overrides: dict[str, str]) -> None:
+                return None
+
+        def fake_run_process(
+            command: list[str], *, env: dict[str, str], **_kwargs: object
+        ) -> tuple[int, str, str]:
+            commands.append(command)
+            execution_path = env.get("MIGRATION_PARITY_EXECUTION_OUTPUT")
+            if execution_path is not None:
+                Path(execution_path).write_text("{}", encoding="utf-8")
+            return 0, json.dumps(payload), ""
+
+        with patch.object(benchmark_runner, "run_process", side_effect=fake_run_process):
+            benchmark_runner.run_timed_side(
+                "target",
+                Path("manifest.json"),
+                [{"case_id": "fixture"}],
+                1,
+                1,
+                backend="cpu",
+                timing_boundary="observed_steps",
+                timing_steps=["call", "observe-result"],
+                attestation=Attestation(),
+            )
+
+        proof_command = commands[1]
+        self.assertNotIn("--timings", proof_command)
+        self.assertEqual(
+            contexts[1],
+            {
+                "lifecycle": "warm",
+                "boundary": "observed_steps",
+                "step_ids": ["call", "observe-result"],
+                "repeat": 1,
+            },
+        )
+        self.assertEqual(
+            proof_command[
+                proof_command.index("--timing-boundary") + 1
+            ],
+            "observed_steps",
+        )
+        self.assertEqual(
+            [
+                proof_command[index + 1]
+                for index, argument in enumerate(proof_command[:-1])
+                if argument == "--timing-step"
+            ],
+            ["call", "observe-result"],
+        )
 
     def test_all_backend_wasm_lane_streams_large_result_envelopes(self) -> None:
         """The combined local runner must use the bounded WASM writer."""
@@ -450,6 +547,7 @@ class BenchmarkReportPathTests(unittest.TestCase):
 
 def benchmark_record(*, terminal_complete: bool) -> dict[str, object]:
     return {
+        "step_id": "operation",
         "status": "completed",
         "terminal_complete": terminal_complete,
         "actual_backend": "gpu",
@@ -877,7 +975,7 @@ def error_at_deferred_call_case(
                 "surface": "PIL.Image.Image",
                 "operation": "resize",
                 "receiver": {"kind": "binding", "step_id": "new"},
-                "arguments": {"size": {"kind": "literal", "value": [1, 1]}},
+                "arguments": {"size": {"kind": "literal", "value": [2, 2]}},
             }
         )
         if materialized:
@@ -947,6 +1045,19 @@ def eager_exif_transpose_case(*, in_place: bool = False) -> dict[str, object]:
 
 
 class ReceiptStateTests(unittest.TestCase):
+    def test_phase_only_receipt_without_operation_count_is_not_pipeline_work(self) -> None:
+        diagnostics_only = {"phase_diagnostics_ns": {"python_bytes_copy_ns": 17}}
+        legacy_backend_receipt = {"actual_backend": "cpu"}
+
+        self.assertFalse(receipt_has_pipeline_work(diagnostics_only))
+        self.assertFalse(
+            all_backends_runner.receipt_has_pipeline_work(diagnostics_only)
+        )
+        self.assertTrue(receipt_has_pipeline_work(legacy_backend_receipt))
+        self.assertTrue(
+            all_backends_runner.receipt_has_pipeline_work(legacy_backend_receipt)
+        )
+
     def test_backend_coverage_requires_terminal_and_requested_backend_receipts(self) -> None:
         lanes = [
             coverage_lane(
@@ -1134,7 +1245,10 @@ class ReceiptStateTests(unittest.TestCase):
             "target_profile", "python-simd", [record], aggregate_policy()
         )
 
-        self.assertEqual(result["operation_telemetry"], operation_telemetry)
+        self.assertEqual(
+            result["operation_telemetry"],
+            [{**event, "step_id": "operation"} for event in operation_telemetry],
+        )
         execution_receipt(result, "benchmark.execution")
 
     def test_missing_operation_telemetry_stays_empty_and_cannot_imply_vector_work(
@@ -1158,6 +1272,7 @@ class ReceiptStateTests(unittest.TestCase):
         )
         receipt["operation_telemetry"] = [
             {
+                "step_id": "operation",
                 "operation": "GetChannel",
                 "path": "scalar-gather",
                 "vector_block_count": 0.5,
@@ -1352,7 +1467,13 @@ class ReceiptStateTests(unittest.TestCase):
         self.assertEqual(
             classify_pipeline_case(
                 partial,
-                [{"status": "partial", "terminal_complete": False}],
+                [
+                    {
+                        "status": "partial",
+                        "terminal_complete": False,
+                        "actual_backend": "cpu",
+                    }
+                ],
             ),
             {
                 "status": "partial_receipt",
@@ -1362,7 +1483,13 @@ class ReceiptStateTests(unittest.TestCase):
         self.assertEqual(
             classify_pipeline_case(
                 deferred,
-                [{"status": "completed", "terminal_complete": True}],
+                [
+                    {
+                        "status": "completed",
+                        "terminal_complete": True,
+                        "actual_backend": "cpu",
+                    }
+                ],
             )["status"],
             "complete",
         )
@@ -1705,11 +1832,14 @@ class ReceiptStateTests(unittest.TestCase):
                         "step_id": "resize",
                         "status": "completed",
                         "terminal_complete": False,
+                        "actual_backend": "cpu",
+                        "operation_count": 1,
                     },
                     {
                         "step_id": "call",
                         "status": "partial",
                         "terminal_complete": False,
+                        "actual_backend": "cpu",
                     },
                 ],
                 result=result,
@@ -1805,7 +1935,13 @@ class ReceiptStateTests(unittest.TestCase):
         self.assertEqual(
             classify_pipeline_case(
                 error_at_deferred_call_case(earlier_deferred=True),
-                [{"status": "partial", "terminal_complete": False}],
+                [
+                    {
+                        "status": "partial",
+                        "terminal_complete": False,
+                        "actual_backend": "cpu",
+                    }
+                ],
                 result={
                     "status": "completed",
                     "observations": [
@@ -2533,11 +2669,13 @@ class ReceiptStateTests(unittest.TestCase):
                     "step_id": "new",
                     "status": "completed",
                     "terminal_complete": False,
+                    "actual_backend": "cpu",
                 },
                 {
                     "step_id": "call",
                     "status": "partial",
                     "terminal_complete": False,
+                    "actual_backend": "cpu",
                 },
             ]
         }

@@ -1,7 +1,9 @@
 # Repository map
 
 Use this map to locate maintained source and generators. [Architecture](ARCHITECTURE.md)
-explains ownership; [Contributing](../CONTRIBUTING.md) explains the workflow.
+explains ownership, and [implementation structure](IMPLEMENTATION_STRUCTURE.md)
+defines the shared path layout. [Contributing](../CONTRIBUTING.md) explains the
+workflow.
 
 | Path | Responsibility |
 | --- | --- |

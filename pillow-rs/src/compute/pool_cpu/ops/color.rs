@@ -21,7 +21,7 @@ pub fn op_convert(
     source_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     match mode {
-        ColorMode::L => super::imageops::op_grayscale(img, source_mode),
+        ColorMode::L => super::grayscale::op_grayscale(img, source_mode),
         ColorMode::LA => {
             let gray = pil_grayscale(img)?;
             let (w, h) = gray.dimensions();
@@ -81,37 +81,8 @@ pub fn op_convert(
             }
             Ok(DynamicImage::ImageRgba8(rgba))
         }
-        ColorMode::I => {
-            // RGB-family sources use the deferred exact converter for I.
-            // CMYK/I/F source normalization is handled by Image::convert
-            // before this operation is queued.
-            let rgb = img.to_rgb8();
-            let (w, h) = rgb.dimensions();
-            let mut out = crate::raster::RgbaImage::new(w, h);
-            for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
-                let r = px[0] as i32;
-                let g = px[1] as i32;
-                let b = px[2] as i32;
-                // PIL's rounded luma: (19595*R + 38470*G + 7471*B + 32768) >> 16
-                let val = (19595i32 * r + 38470i32 * g + 7471i32 * b + 32768) >> 16;
-                *op = crate::raster::Rgba(val.to_le_bytes());
-            }
-            Ok(DynamicImage::ImageRgba8(out))
-        }
-        ColorMode::F => {
-            // RGB-family sources use the deferred exact converter for F.
-            // CMYK/I/F source normalization is handled by Image::convert
-            // before this operation is queued.
-            let rgb = img.to_rgb8();
-            let (w, h) = rgb.dimensions();
-            let mut out = crate::raster::RgbaImage::new(w, h);
-            for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
-                let sum = px[0] as i32 * 299 + px[1] as i32 * 587 + px[2] as i32 * 114;
-                let val = sum as f32 / 1000.0_f32;
-                *op = crate::raster::Rgba(val.to_le_bytes());
-            }
-            Ok(DynamicImage::ImageRgba8(out))
-        }
+        ColorMode::I => Ok(convert_rgb_to_i(img)),
+        ColorMode::F => Ok(convert_rgb_to_f(img)),
         ColorMode::CMYK => {
             // Pillow's Convert.c routes luma sources ("L", "LA") through the
             // gray branch: C=M=Y=0 and K=255-gray.  Every other source goes
@@ -185,6 +156,39 @@ pub fn op_convert(
             "deferred conversion mode must be materialized first".into(),
         )),
     }
+}
+
+/// Convert an RGB-family source to Pillow's signed integer luma storage.
+#[inline(always)]
+fn convert_rgb_to_i(img: &DynamicImage) -> DynamicImage {
+    // CMYK/I/F normalization happens before this deferred operation is queued.
+    let rgb = img.to_rgb8();
+    let (w, h) = rgb.dimensions();
+    let mut out = crate::raster::RgbaImage::new(w, h);
+    for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
+        let r = px[0] as i32;
+        let g = px[1] as i32;
+        let b = px[2] as i32;
+        // PIL's rounded luma: (19595*R + 38470*G + 7471*B + 32768) >> 16
+        let val = (19595i32 * r + 38470i32 * g + 7471i32 * b + 32768) >> 16;
+        *op = crate::raster::Rgba(val.to_le_bytes());
+    }
+    DynamicImage::ImageRgba8(out)
+}
+
+/// Convert an RGB-family source to Pillow's floating point luma storage.
+#[inline(always)]
+fn convert_rgb_to_f(img: &DynamicImage) -> DynamicImage {
+    // CMYK/I/F normalization happens before this deferred operation is queued.
+    let rgb = img.to_rgb8();
+    let (w, h) = rgb.dimensions();
+    let mut out = crate::raster::RgbaImage::new(w, h);
+    for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
+        let sum = px[0] as i32 * 299 + px[1] as i32 * 587 + px[2] as i32 * 114;
+        let val = sum as f32 / 1000.0_f32;
+        *op = crate::raster::Rgba(val.to_le_bytes());
+    }
+    DynamicImage::ImageRgba8(out)
 }
 
 #[cfg(test)]

@@ -3,7 +3,10 @@
 Useful contributions include small reproductions, API cases, documentation
 corrections, portability fixes, and implementation work. Start with
 [maturity](docs/COMPATIBILITY.md) to see the promised scope and
-[architecture](docs/ARCHITECTURE.md) to find the right component.
+[architecture](docs/ARCHITECTURE.md) to find the right component. Follow the
+[repository implementation structure](docs/IMPLEMENTATION_STRUCTURE.md) for
+the shared file and family layout across maintained source, tests, tools,
+documentation, evidence, fixtures, assets, and workflows.
 
 For a large API or dependency change, describe the intended behavior in a
 GitHub issue first. A focused fix with a reproducible failing case can go

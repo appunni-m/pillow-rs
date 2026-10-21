@@ -19,10 +19,16 @@ enabled.
 | Review repetitive cases | `make migration-parity-reduction MIGRATION_REDUCTION_ARGS='--candidates <pairs.json> --output-dir <directory>'` | Measures removal batches and binary restoration against separate CPU/SIMD/GPU baselines; see [coverage](COVERAGE.md#reduce-repetitive-parity-inputs) |
 | Complete runtime campaign | `make test` | Runs backend, Node/browser, and reverse Pillow coverage lanes |
 | Format check / fix | `make fmt` / `make fmt-fix` | Checks / changes Rust formatting |
-| Rust lint | `make clippy` | Runs workspace Clippy checks |
-| Full lint | `make lint` | Runs Rust, binding, dependency, and input checks |
+| Consolidated quality gate | `make quality` | Runs rustfmt, Clippy, Rust file/function size ratchets, API-boundary and architecture checks, repository-map and documentation checks, and source/binding/spec policies |
+| Compatibility lint command | `make lint` | Alias for `make quality` |
+| Rust checkstyle | `make checkstyle` | Reports files/functions over 800/60 lines and fails on new code over 1,000/100 lines or growth beyond a legacy baseline |
+| Checkstyle baseline maintenance | `make checkstyle-update-baseline` | Re-records current over-limit files/functions after reviewed reductions; inspect the baseline diff |
+| Rust lint | `make clippy` | Runs workspace Clippy, reports functions over 60 lines, and fails on new functions over 100 lines or growth beyond a legacy baseline |
 | Source map | `make repo-map-update` / `make repo-map-check` | Regenerates / validates the tracked source inventory |
+| Operation source crosswalk | `make operation-source-crosswalk` / `make operation-source-crosswalk-test` | Generates the ignored manifest→Python→PyO3→backend crosswalk, maps declared parity cases and benchmark workloads to public operations, includes the Rust module inventory, and checks focused contracts; input declarations never count as execution |
+| Implementation structure | `make implementation-structure-inventory` / `make implementation-structure-audit` / `make implementation-structure-audit-test` | Inventories every maintained path, audits additions and moves against the same guide, and checks path-classification and inventory-scope contracts |
 | Full operation and pipeline benchmark | `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark` | Benchmarks every declared operation and pipeline workload against Pillow, CPU, SIMD, and GPU; see the protocol |
+| Selected Pillow-SIMD workloads | `PILLOW_ORACLE_PYTHON=<pillow-python> PILLOW_SIMD_PYTHON=<pillow-simd-python> .venv/bin/python scripts/run_pillow_simd_benchmark.py --workload-id <id>` | Runs only the named full-size parity-backed x86 workload, with separate result and parity artifacts; repeat `--workload-id` for additional cases |
 | Parallel CPU comparison | `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark-parallel-cpu` | Builds the opt-in Rayon feature and compares Parallel CPU with ordinary Pillow across the same full workload set |
 | Benchmark smoke test | `make bench MIGRATION_BENCHMARK_PROFILE=quick` | Runs the maintained smoke cohort; see the protocol |
 | Documentation setup | `make docs-setup` | Installs the hash-locked documentation tools into `.venv-docs` |

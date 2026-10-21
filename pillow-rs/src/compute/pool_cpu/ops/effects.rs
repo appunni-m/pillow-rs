@@ -1667,7 +1667,6 @@ pub fn op_merge(
 
     // Get pixel data from each byte band.
     let mut band_pixels: Vec<Vec<u8>> = Vec::new();
-    // First band is the current image
     let first_gray = img.to_luma8();
     let (w, h) = first_gray.dimensions();
     band_pixels.push(first_gray.into_raw());

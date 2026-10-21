@@ -1,0 +1,43 @@
+{
+  "schema": "migration-parity/direct-operation-parity-link@2",
+  "benchmark": {
+    "report_sha256": "4cc032552abbf9493cf44aae7c0be539e0b5b19b143ea056e8a6b630aaadab5e",
+    "run_id": "migration-benchmark-dd9a63713f24429f9b5716ffb4653420",
+    "workload_id": "pil-image-image.getbbox.materialized.rgb-blank-1024x768",
+    "input": {
+      "path": "inputs/benchmark/getbbox-rgb-blank-x86-selected.json",
+      "schema": "migration-parity/benchmark-input@1",
+      "sha256": "5f04fe35cb5f4c00c05de6eb1007d2f6f23f0a3bf7e923818d4490254bdaab13"
+    },
+    "attestation_sha256": "f14afb5c967a10f76416ca5cc9a48349e98109b5340b16ea89f1dfb2d3d49560"
+  },
+  "parity": {
+    "report_sha256": "2abfc1412842b9b67ce1adcd3207d218db67dd53a0a9ebadc81785fb6003927a",
+    "run_id": "migration-parity-benchmark-gate-704303bb33f244f495760d1b1025b6ac",
+    "case_id": "PIL.Image.Image.getbbox.nuanced.performance-rgb-blank-1024x768",
+    "input": {
+      "path": "inputs/parity/getbbox-rgb-blank-x86-selected.json",
+      "schema": "migration-parity/parity-input@1",
+      "sha256": "e3f24585fb176f7c3123d7dfd1c9ef23924221b10e4ea42f3325d6b63d4072b7"
+    },
+    "attestation_sha256": "803fb511d15cfe57b3f0b70817d172f920fa5b547a5a4ece592eb2828726df25"
+  },
+  "target_profile": "python-cpu",
+  "manifest": {
+    "path": "pillow-rs/tests/fixtures/manifest.yaml",
+    "schema": "migration-parity/manifest@2",
+    "sha256": "f740fbfba2f2ea927a3b14413e1fab65bc9da1daeddef061612f68fed155ee41"
+  },
+  "producer": {
+    "tool": "scripts/run_migration_benchmark.py",
+    "version": "sha256-673544187b40af1842a2e157e2b2b2ea1fb7c6b03c7e551f5768f3e4eab536cb",
+    "source_sha256": "c856117188ab4222b375b7c69dc1e66e8a218574e4d27898617f50b1ccc56dec"
+  },
+  "source_build": {
+    "receipt_sha256": "c569221e62d0e15e624cd80f21ce1ebafa45b0766b055ed67a89d1e458652cef"
+  },
+  "producer_attestations": {
+    "benchmark_sha256": "12a9ccc5d2db78cc43f951aa40180cc26961409967791ae652888aba8fa5e4f5",
+    "parity_sha256": "adbe0a920fa67ea65104034c9e5f98e05b1cba232500539632c6f1e53009e58c"
+  }
+}

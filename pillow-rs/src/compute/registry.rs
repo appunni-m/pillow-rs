@@ -1368,8 +1368,8 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     };
     use crate::compute::pool_cpu::ops::imageops::{
         op_autocontrast, op_colorize, op_contain, op_cover, op_crop_border, op_equalize,
-        op_equalize_with_mask, op_expand, op_fit, op_flip, op_grayscale, op_invert, op_mirror,
-        op_pad, op_posterize, op_scale, op_solarize,
+        op_equalize_with_mask, op_expand, op_fit, op_flip, op_invert, op_mirror, op_pad,
+        op_posterize, op_scale, op_solarize,
     };
 
     // ── Geometry ──
@@ -1827,7 +1827,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
              mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if matches!(op, PipelineOp::Grayscale) {
-                    op_grayscale(img, mode)
+                    crate::compute::pool_cpu::ops::grayscale::op_grayscale(img, mode)
                 } else {
                     Err(PilError::ValueError("expected Grayscale op".into()))
                 }

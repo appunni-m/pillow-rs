@@ -1,0 +1,43 @@
+{
+  "benchmark": {
+    "attestation_sha256": "49cea1f28a73da82a73651478ed64d5e5e03765e2602edacf7b6dae1a435a1a0",
+    "input": {
+      "path": "inputs/benchmark/pipeline-operations.json",
+      "schema": "migration-parity/benchmark-input@1",
+      "sha256": "9f0a8fdbef7c4eb921ac9897a7ddd1810c213df4fe962fb8e7d9870f541202a8"
+    },
+    "report_sha256": "b3cef3bb3aacd13b212b8eb84ab8d6c7bc8272e90df69aeb89c7d8fb4406cd37",
+    "run_id": "migration-benchmark-a00ba850e7d04e868df9d813d839d3ea",
+    "workload_id": "pipeline-chain.terminal-read.getcolors.high-cardinality-signed-run-i-128x64"
+  },
+  "manifest": {
+    "path": "pillow-rs/tests/fixtures/manifest.yaml",
+    "schema": "migration-parity/manifest@2",
+    "sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885"
+  },
+  "parity": {
+    "attestation_sha256": "12e6e775a3f32a0274baae0d0ca898ee6b56640519e8a371733149b2385ca98a",
+    "case_id": "PIL.Image.Image.getcolors.nuanced.i-high-cardinality-signed-run-fallback-128x64",
+    "input": {
+      "path": "inputs/parity/pil-image-image.json",
+      "schema": "migration-parity/parity-input@1",
+      "sha256": "ae4e8e2160df8fd0c06aa00838bfa9e1bd03dbfdc0cd4b9c694b9defb0463bda"
+    },
+    "report_sha256": "050353c2577cc5b2a1b31a71a2f06a5a62dc08c7f3f063ac45ac280a8f6a4320",
+    "run_id": "migration-parity-0ef716867587472581dce80db199c073"
+  },
+  "producer": {
+    "source_sha256": "7113861b9dfddaf3237016fb9b0fe24106939f2dcb68d3b47180f44351df4d35",
+    "tool": "migration-benchmark",
+    "version": "1"
+  },
+  "producer_attestations": {
+    "benchmark_sha256": "ccd31a49db95752cf00176b15278c0532719b44e214df0ea48654ca2aca903a2",
+    "parity_sha256": "1e42cd6c8964963b9b130c90c778464c3456ef5811defc823015e991edf365b6"
+  },
+  "schema": "migration-parity/direct-operation-parity-link@2",
+  "source_build": {
+    "receipt_sha256": "2ee87c10138a86876f0f2c9bafbfb6ad0caa89a65493d639d942c2fae7e1bc9a"
+  },
+  "target_profile": "python-cpu"
+}

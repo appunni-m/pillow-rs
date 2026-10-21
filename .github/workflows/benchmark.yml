@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/benchmark.yml'
       - 'scripts/run_migration_benchmark.py'
+      - 'scripts/build_perfdb_selected_run.py'
+      - 'scripts/migration_build_witness.py'
+      - 'scripts/migration_materialization_witness.py'
+      - 'scripts/migration_producer_attestation.py'
       - 'scripts/build_migration_parity_inputs.py'
       - 'scripts/report_pipeline_*.py'
       - 'pillow-rs/src/**'
@@ -23,10 +27,52 @@ on:
       - 'site-assets/docs.css'
   workflow_dispatch:
     inputs:
-      baseline_run_id:
-        description: Optional prior successful full operation run ID for budget comparison
+      workload_ids:
+        description: Comma- or whitespace-separated workload IDs; type all to opt into the full cohort
         required: false
         type: string
+      target_profile:
+        description: Backend profile for a focused run; choose all only when measuring every profile
+        required: false
+        type: choice
+        options:
+          - python-cpu
+          - python-simd
+          - python-gpu
+          - python-parallel-cpu
+          - all
+        default: python-cpu
+      runner_id:
+        description: Runner for a focused run; choose all only when measuring every architecture
+        required: false
+        type: choice
+        options:
+          - macos-15-arm64
+          - ubuntu-24.04-x86_64
+          - ubuntu-24.04-arm64
+          - all
+        default: ubuntu-24.04-x86_64
+      baseline_run_id:
+        description: Optional prior compatible operation run ID for budget comparison
+        required: false
+        type: string
+      perfdb_baseline_name:
+        description: Optional existing per-workload PerfDB channel; captures proof closure for one direct-operation workload
+        required: false
+        type: string
+      perfdb_target_policy:
+        description: Target policy used by the generated PerfDB selected-run admission
+        required: false
+        type: choice
+        options:
+          - tracking
+          - strict
+        default: tracking
+      perfdb_max_regression_percent:
+        description: Maximum selected-run regression accepted by the PerfDB channel
+        required: false
+        type: number
+        default: 0
   schedule:
     - cron: "17 3 * * 1"
 
@@ -43,32 +89,205 @@ env:
   RUST_BACKTRACE: 1
   RUST_TOOLCHAIN: 1.96.1
   RUSTC_WRAPPER: ""
-  # The public benchmark snapshot must contain both the individual-operation
-  # and composed-pipeline cohorts. Quick runs remain available through Make.
-  MIGRATION_BENCHMARK_PROFILE: pipeline
+  MIGRATION_DISPATCH_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.target_profile || 'all' }}
+  # Focused dispatches pass explicit workload IDs. Other triggers keep the full
+  # individual-operation and composed-pipeline cohorts used for publication.
+  MIGRATION_BENCHMARK_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.workload_ids != '' && inputs.workload_ids != 'all' && 'standard' || 'pipeline' }}
 
 jobs:
+  prepare:
+    name: validate focused selection and choose runner matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.selection.outputs.matrix }}
+      workload_args: ${{ steps.selection.outputs.workload_args }}
+      is_focused: ${{ steps.selection.outputs.is_focused }}
+      single_workload_id: ${{ steps.selection.outputs.single_workload_id }}
+      proof_capture: ${{ steps.selection.outputs.proof_capture }}
+      f32_resize_guard: ${{ steps.selection.outputs.f32_resize_guard }}
+      f32_filter_guard: ${{ steps.selection.outputs.f32_filter_guard }}
+      grayscale_simd_guard: ${{ steps.selection.outputs.grayscale_simd_guard }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ inputs.workload_ids != '' && inputs.workload_ids != 'all' }}
+        with:
+          persist-credentials: false
+          sparse-checkout: pillow-rs/tests/fixtures/inputs/benchmark
+          sparse-checkout-cone-mode: false
+      - name: validate selection and construct matrix
+        id: selection
+        env:
+          SELECTED_WORKLOAD_IDS: ${{ inputs.workload_ids }}
+          SELECTED_PROFILE: ${{ inputs.target_profile || 'all' }}
+          SELECTED_RUNNER_ID: ${{ inputs.runner_id || 'all' }}
+          PERFDB_BASELINE_NAME: ${{ inputs.perfdb_baseline_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          runners = [
+              {
+                  "id": "macos-15-arm64",
+                  "runner": "macos-15",
+                  "architecture": "arm64",
+                  "label": "macOS 15 · arm64",
+                  "backends": "cpu,simd,gpu",
+              },
+              {
+                  "id": "ubuntu-24.04-x86_64",
+                  "runner": "ubuntu-24.04",
+                  "architecture": "x86_64",
+                  "label": "Ubuntu 24.04 · x86_64",
+                  "backends": "cpu,simd",
+              },
+              {
+                  "id": "ubuntu-24.04-arm64",
+                  "runner": "ubuntu-24.04-arm",
+                  "architecture": "aarch64",
+                  "label": "Ubuntu 24.04 · arm64",
+                  "backends": "cpu,simd",
+              },
+          ]
+          profile = os.environ["SELECTED_PROFILE"]
+          runner_id = os.environ["SELECTED_RUNNER_ID"]
+          raw_workload_ids = os.environ["SELECTED_WORKLOAD_IDS"].strip()
+          full_requested = raw_workload_ids == "all"
+          workload_ids = [] if full_requested else [
+              item for item in re.split(r"[\s,]+", raw_workload_ids) if item
+          ]
+
+          if profile not in {
+              "all", "python-cpu", "python-simd", "python-gpu", "python-parallel-cpu"
+          }:
+              raise SystemExit(f"Unsupported target profile: {profile!r}")
+          if runner_id not in {"all", *(runner["id"] for runner in runners)}:
+              raise SystemExit(f"Unsupported runner ID: {runner_id!r}")
+          if full_requested and (profile != "all" or runner_id != "all"):
+              raise SystemExit("The 'all' workload selection requires all profiles and runners")
+          if os.environ["EVENT_NAME"] == "workflow_dispatch" and not workload_ids and not full_requested:
+              raise SystemExit("Provide selected workload_ids, or type 'all' to opt into the full cohort")
+          if (profile != "all" or runner_id != "all") and not workload_ids:
+              raise SystemExit("A focused profile or runner requires explicit workload_ids")
+          if len(workload_ids) != len(set(workload_ids)):
+              raise SystemExit("Workload IDs must be unique")
+          invalid = [
+              item for item in workload_ids
+              if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", item)
+          ]
+          if invalid:
+              raise SystemExit(f"Invalid workload ID syntax: {invalid[0]!r}")
+
+          selected_operations = set()
+          selected_modes = set()
+          selected_workloads = []
+          if workload_ids:
+              available = {}
+              for path in Path("pillow-rs/tests/fixtures/inputs/benchmark").glob("*.json"):
+                  document = json.loads(path.read_text(encoding="utf-8"))
+                  for workload in document.get("workloads", []):
+                      available[workload["workload_id"]] = workload
+              unknown = [item for item in workload_ids if item not in available]
+              if unknown:
+                  raise SystemExit(f"Unknown benchmark workload ID: {unknown[0]!r}")
+              for workload_id in workload_ids:
+                  workload = available[workload_id]
+                  selected_workloads.append(workload)
+                  context = workload.get("context", {})
+                  mode = context.get("mode")
+                  if isinstance(mode, str):
+                      selected_modes.add(mode)
+                  for cover in workload.get("covers", []):
+                      if isinstance(cover, str):
+                          selected_operations.update(
+                              token.lower() for token in re.split(r"[^A-Za-z0-9]+", cover)
+                          )
+                  for step in workload.get("input", {}).get("steps", []):
+                      operation = step.get("operation")
+                      if isinstance(operation, str):
+                          selected_operations.add(operation.lower())
+          if profile == "python-gpu" and runner_id not in {"all", "macos-15-arm64"}:
+              raise SystemExit("python-gpu is available only on macos-15-arm64")
+
+          selected = [
+              runner for runner in runners
+              if runner_id == "all" or runner["id"] == runner_id
+          ]
+          if profile == "python-gpu":
+              selected = [runner for runner in selected if runner["id"] == "macos-15-arm64"]
+
+          backend_for_profile = {
+              "python-cpu": "cpu",
+              "python-simd": "simd",
+              "python-gpu": "gpu",
+          }
+          include = []
+          for runner in selected:
+              item = dict(runner)
+              if profile in backend_for_profile:
+                  item["backends"] = backend_for_profile[profile]
+              item["run_benchmark"] = profile != "python-parallel-cpu"
+              item["run_parallel_cpu"] = profile in {"all", "python-parallel-cpu"}
+              include.append(item)
+
+          if workload_ids:
+              args = " ".join(f"--workload-id {item}" for item in workload_ids)
+              print("Selected workload IDs:")
+              print("\n".join(workload_ids))
+          else:
+              args = ""
+              print("No focused workload selection; retaining the full cohort.")
+
+          matrix = json.dumps({"include": include}, separators=(",", ":"))
+          is_focused = bool(workload_ids)
+          single_workload_id = workload_ids[0] if len(workload_ids) == 1 else ""
+          proof_capture = (
+              is_focused
+              and len(selected_workloads) == 1
+              and selected_workloads[0].get("input", {}).get("kind") == "parity_case"
+              and bool(os.environ.get("PERFDB_BASELINE_NAME", "").strip())
+          )
+          perfdb_baseline_name = os.environ.get("PERFDB_BASELINE_NAME", "").strip()
+          if perfdb_baseline_name and not proof_capture:
+              raise SystemExit(
+                  "A PerfDB baseline channel requires exactly one selected workload "
+                  "with input.kind=parity_case; provide one eligible workload ID."
+              )
+          run_cpu = profile in {"all", "python-cpu", "python-parallel-cpu"}
+          run_simd = profile in {"all", "python-simd"}
+          f32_resize_guard = is_focused and run_cpu and "resize" in selected_operations and "F" in selected_modes
+          f32_filter_guard = is_focused and run_cpu and "filter" in selected_operations and "F" in selected_modes
+          grayscale_simd_guard = is_focused and run_simd and "grayscale" in selected_operations
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"matrix={matrix}\n")
+              output.write(f"workload_args={args}\n")
+              output.write(f"is_focused={str(is_focused).lower()}\n")
+              output.write(f"single_workload_id={single_workload_id}\n")
+              output.write(f"proof_capture={str(proof_capture).lower()}\n")
+              output.write(f"f32_resize_guard={str(f32_resize_guard).lower()}\n")
+              output.write(f"f32_filter_guard={str(f32_filter_guard).lower()}\n")
+              output.write(f"grayscale_simd_guard={str(grayscale_simd_guard).lower()}\n")
+          print(f"Selected runner jobs: {', '.join(item['id'] for item in selected)}")
+          print(f"Selected target profile: {profile}")
+          PY
+
   benchmark:
-    name: full operation and pipeline benchmark (${{ matrix.label }})
+    name: ${{ inputs.workload_ids != '' && inputs.workload_ids != 'all' && 'focused workload benchmark' || 'full operation and pipeline benchmark' }} (${{ matrix.label }})
+    needs: [prepare]
+    env:
+      MIGRATION_BENCHMARK_ARGS: ${{ needs.prepare.outputs.workload_args }}
+      PERFDB_PROOF_CAPTURE: ${{ needs.prepare.outputs.proof_capture }}
+      PERFDB_SELECTED_WORKLOAD_ID: ${{ needs.prepare.outputs.single_workload_id }}
+      PERFDB_BASELINE_NAME: ${{ inputs.perfdb_baseline_name }}
+      PERFDB_TARGET_POLICY: ${{ inputs.perfdb_target_policy }}
+      PERFDB_MAX_REGRESSION_PERCENT: ${{ inputs.perfdb_max_regression_percent }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - id: macos-15-arm64
-            runner: macos-15
-            architecture: arm64
-            label: macOS 15 · arm64
-            backends: cpu,simd,gpu
-          - id: ubuntu-24.04-x86_64
-            runner: ubuntu-24.04
-            architecture: x86_64
-            label: Ubuntu 24.04 · x86_64
-            backends: cpu,simd
-          - id: ubuntu-24.04-arm64
-            runner: ubuntu-24.04-arm
-            architecture: aarch64
-            label: Ubuntu 24.04 · arm64
-            backends: cpu,simd
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 360
     steps:
@@ -101,26 +320,188 @@ jobs:
               cpu_model="$(awk -F: '/^Hardware/ {sub(/^ /, "", $2); print $2; exit}' /proc/cpuinfo)"
             fi
           fi
-          printf 'cpu_model=%s\n' "${cpu_model:-not-recorded}" >> "$GITHUB_OUTPUT"
+          test -n "$cpu_model" || { echo "Could not identify the benchmark runner CPU model" >&2; exit 1; }
+          printf 'cpu_model=%s\n' "$cpu_model" >> "$GITHUB_OUTPUT"
           printf 'image_version=%s-%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
-      - name: verify runtime x86 FMA matches portable fused arithmetic
-        if: matrix.architecture == 'x86_64'
+          printf 'MIGRATION_BENCHMARK_RUNNER_ID=%s\n' '${{ matrix.id }}' >> "$GITHUB_ENV"
+          printf 'MIGRATION_BENCHMARK_CPU_MODEL=%s\n' "$cpu_model" >> "$GITHUB_ENV"
+      - name: verify selected x86 F32 Resize FMA guards
+        if: ${{ matrix.architecture == 'x86_64' && (needs.prepare.outputs.is_focused != 'true' || needs.prepare.outputs.f32_resize_guard == 'true') }}
         run: |
           cargo test --locked -p pillow-rs --lib runtime_x86_fma_matches_portable_fused_operation
           cargo test --locked -p pillow-rs --lib runtime_x86_fma_boxed_resize_matches_portable_fused_operations
-          cargo test --locked -p pillow-rs --lib runtime_x86_f32_fma_matches_portable_fused_operation
           cargo test --locked -p pillow-rs --lib finite_x86_f_resize_path_matches_checked_reference
           cargo test --locked -p pillow-rs --lib finite_x86_fma_boxed_resize_matches_portable_and_rejects_nonfinite_samples
+      - name: verify selected x86 F32 Filter FMA guard
+        if: ${{ matrix.architecture == 'x86_64' && (needs.prepare.outputs.is_focused != 'true' || needs.prepare.outputs.f32_filter_guard == 'true') }}
+        run: cargo test --locked -p pillow-rs --lib runtime_x86_f32_fma_matches_portable_fused_operation
       - name: verify AVX2 grayscale across every RGB color and vector tail
-        if: matrix.architecture == 'x86_64'
+        if: ${{ matrix.architecture == 'x86_64' && (needs.prepare.outputs.is_focused != 'true' || needs.prepare.outputs.grayscale_simd_guard == 'true') }}
         run: cargo test --locked -p pillow-rs --lib grayscale_rgb_avx2_matches_every_color_and_handles_tails
-      - name: run full correctness-gated CPU, SIMD, and GPU benchmark
+      - name: run correctness-gated CPU, SIMD, and GPU workload set
+        if: ${{ matrix.run_benchmark }}
         env:
           MIGRATION_BENCHMARK_BACKENDS: ${{ matrix.backends }}
-        run: make migration-parity-benchmark
-      - name: run separately gated Parallel CPU benchmark
-        run: make migration-parity-benchmark-parallel-cpu
-      - name: generate benchmark evidence
+          PYO3_PYTHON: ${{ github.workspace }}/.venv/bin/python
+        run: |
+          set -o pipefail
+          if test "$PERFDB_PROOF_CAPTURE" = true; then
+            export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target/perfdb-selected"
+            # A direct Cargo cdylib build on macOS needs the same unresolved
+            # Python-symbol lookup flags Maturin supplies for extension modules.
+            if test "$RUNNER_OS" = "macOS"; then
+              export RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"
+            fi
+            python3 scripts/migration_build_witness.py \
+              --root "$GITHUB_WORKSPACE" \
+              --output build/migration-parity/source-build-witness-cargo.json \
+              --set-env "PYO3_PYTHON=$PYO3_PYTHON" \
+              -- cargo build \
+                --manifest-path pillow-rs-py/Cargo.toml \
+                --release --locked --features pyo3/extension-module \
+                --message-format json-render-diagnostics
+            maturin_log=build/migration-parity/maturin-build.log
+            maturin_command=("$PYO3_PYTHON" -m maturin develop --skip-install \
+              --manifest-path pillow-rs-py/Cargo.toml --release --locked)
+            set +e
+            "${maturin_command[@]}" 2>&1 | tee "$maturin_log"
+            maturin_status=${PIPESTATUS[0]}
+            set -e
+            python3 scripts/migration_materialization_witness.py \
+              --root "$GITHUB_WORKSPACE" \
+              --cargo-witness build/migration-parity/source-build-witness-cargo.json \
+              --output build/migration-parity/source-build-witness.json \
+              --maturin-log "$maturin_log" \
+              --maturin-python "$PYO3_PYTHON" \
+              --maturin-exit-code "$maturin_status" \
+              --module pillow-rs-py/python/pillow_rs/_core.abi3.so \
+              -- "${maturin_command[@]}"
+            export MIGRATION_BENCHMARK_ARGS="$MIGRATION_BENCHMARK_ARGS \
+              --attestation-output build/migration-parity/benchmark-result.attestation.json \
+              --producer-attestation-output build/migration-parity/benchmark-result.producer.json \
+              --parity-attestation-output build/migration-parity/benchmark-parity-result.attestation.json \
+              --parity-producer-attestation-output build/migration-parity/benchmark-parity-result.producer.json"
+          fi
+          if test "$PERFDB_PROOF_CAPTURE" = true; then
+            make migration-parity-benchmark-run
+          else
+            make migration-parity-benchmark
+          fi
+      - name: run separately gated Parallel CPU workload set
+        if: ${{ matrix.run_parallel_cpu }}
+        env:
+          PYO3_PYTHON: ${{ github.workspace }}/.venv/bin/python
+        run: |
+          set -o pipefail
+          if test "$PERFDB_PROOF_CAPTURE" = true; then
+            export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target/perfdb-selected"
+            # Keep the witnessed Cargo build and the subsequent Maturin build
+            # on the same macOS extension-module link configuration.
+            if test "$RUNNER_OS" = "macOS"; then
+              export RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"
+            fi
+            python3 scripts/migration_build_witness.py \
+              --root "$GITHUB_WORKSPACE" \
+              --output build/migration-parity/source-build-witness-parallel-cpu-cargo.json \
+              --set-env "PYO3_PYTHON=$PYO3_PYTHON" \
+              -- cargo build \
+                --manifest-path pillow-rs-py/Cargo.toml \
+                --release --locked --features pyo3/extension-module,parallel \
+                --message-format json-render-diagnostics
+            maturin_log=build/migration-parity/maturin-build-parallel-cpu.log
+            maturin_command=("$PYO3_PYTHON" -m maturin develop --skip-install \
+              --manifest-path pillow-rs-py/Cargo.toml --release --locked \
+              --features parallel)
+            set +e
+            "${maturin_command[@]}" 2>&1 | tee "$maturin_log"
+            maturin_status=${PIPESTATUS[0]}
+            set -e
+            python3 scripts/migration_materialization_witness.py \
+              --root "$GITHUB_WORKSPACE" \
+              --cargo-witness build/migration-parity/source-build-witness-parallel-cpu-cargo.json \
+              --output build/migration-parity/source-build-witness-parallel-cpu.json \
+              --maturin-log "$maturin_log" \
+              --maturin-python "$PYO3_PYTHON" \
+              --maturin-exit-code "$maturin_status" \
+              --module pillow-rs-py/python/pillow_rs/_core.abi3.so \
+              --parallel -- "${maturin_command[@]}"
+            export MIGRATION_BENCHMARK_ARGS="$MIGRATION_BENCHMARK_ARGS \
+              --attestation-output build/migration-parity/benchmark-result-parallel-cpu.attestation.json \
+              --producer-attestation-output build/migration-parity/benchmark-result-parallel-cpu.producer.json \
+              --parity-attestation-output build/migration-parity/benchmark-parity-result-parallel-cpu.attestation.json \
+              --parity-producer-attestation-output build/migration-parity/benchmark-parity-result-parallel-cpu.producer.json"
+          fi
+          if test "$PERFDB_PROOF_CAPTURE" = true; then
+            make migration-parity-benchmark-parallel-cpu-run
+          else
+            make migration-parity-benchmark-parallel-cpu
+          fi
+      - name: package per-profile selected PerfDB admissions
+        if: ${{ needs.prepare.outputs.proof_capture == 'true' && success() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_count=0
+          package_profile() {
+            local report_suffix="$1"
+            local report_name="benchmark-result${report_suffix}.json"
+            local parity_name="benchmark-parity-result${report_suffix}.json"
+            local witness_name="source-build-witness${report_suffix}.json"
+            local target_profile="$2"
+            local output_dir="build/migration-parity/perfdb-selected/$target_profile"
+            python3 scripts/build_perfdb_selected_run.py \
+              --benchmark-report "build/migration-parity/$report_name" \
+              --benchmark-attestation "build/migration-parity/$report_name.attestation.json" \
+              --benchmark-producer "build/migration-parity/$report_name.producer.json" \
+              --benchmark-bundle "build/migration-parity/$report_name.producer.json.bundle.json" \
+              --parity-report "build/migration-parity/$parity_name" \
+              --parity-attestation "build/migration-parity/$parity_name.attestation.json" \
+              --parity-producer "build/migration-parity/$parity_name.producer.json" \
+              --parity-bundle "build/migration-parity/$parity_name.producer.json.bundle.json" \
+              --manifest pillow-rs/tests/fixtures/manifest.yaml \
+              --source-build "build/migration-parity/$witness_name" \
+              --workload-id "$PERFDB_SELECTED_WORKLOAD_ID" \
+              --target-profile "$target_profile" \
+              --baseline-name "$PERFDB_BASELINE_NAME" \
+              --target-policy "$PERFDB_TARGET_POLICY" \
+              --max-regression-percent "$PERFDB_MAX_REGRESSION_PERCENT" \
+              --output-dir "$output_dir"
+            if ! test -s "$output_dir/selected-run.json"; then
+              echo "PerfDB package was not produced for $target_profile" >&2
+              return 1
+            fi
+            package_count=$((package_count + 1))
+          }
+          if test -f build/migration-parity/benchmark-result.json; then
+            profiles="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("build/migration-parity/benchmark-result.json").read_text())
+          workload_id = "${{ needs.prepare.outputs.single_workload_id }}"
+          workloads = [item for item in report["workloads"] if item["workload_id"] == workload_id]
+          if len(workloads) != 1:
+              raise SystemExit("selected benchmark workload is absent or duplicated")
+          print("\n".join(item["id"] for item in workloads[0]["subjects"] if item["kind"] == "target_profile"))
+          PY
+          )"
+            if test -z "$profiles"; then
+              echo "Selected benchmark workload has no target profiles to package" >&2
+              exit 1
+            fi
+            while IFS= read -r profile; do
+              test -n "$profile" || continue
+              package_profile "" "$profile"
+            done <<< "$profiles"
+          fi
+          if test -f build/migration-parity/benchmark-result-parallel-cpu.json; then
+            package_profile "-parallel-cpu" "python-parallel-cpu"
+          fi
+          if test "$package_count" -eq 0; then
+            echo "PerfDB capture was requested but no selected-run packages were produced" >&2
+            exit 1
+          fi
+      - name: generate full benchmark evidence
+        if: ${{ needs.prepare.outputs.is_focused != 'true' }}
         run: |
           make migration-parity-pipeline-report
           make migration-parity-pipeline-roadmap-status
@@ -140,10 +521,16 @@ jobs:
         id: budget
         shell: bash
         run: |
-          baseline="$(find baseline-artifact -type f -name benchmark-result.json -print -quit)"
+          candidate_report=build/migration-parity/benchmark-result.json
+          baseline_name=benchmark-result.json
+          if test "$MIGRATION_DISPATCH_PROFILE" = python-parallel-cpu; then
+            candidate_report=build/migration-parity/benchmark-result-parallel-cpu.json
+            baseline_name=benchmark-result-parallel-cpu.json
+          fi
+          baseline="$(find baseline-artifact -type f -name "$baseline_name" -print -quit)"
           test -n "$baseline"
           set +e
-          MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/benchmark-result.json \
+          MIGRATION_BENCHMARK_OUTPUT="$candidate_report" \
           MIGRATION_BENCHMARK_BUDGET_BASELINE="$baseline" \
           MIGRATION_BENCHMARK_BUDGET_OUTPUT=build/migration-parity/pipeline-budget-check.json \
           make migration-parity-pipeline-budget-check
@@ -180,6 +567,7 @@ jobs:
         if: ${{ inputs.baseline_run_id != '' && steps.download_baseline.outcome != 'success' }}
         run: echo "No artifact was available for this runner in the selected baseline run; its timing budget was not compared."
       - name: Export both benchmark cohorts for the public view
+        if: ${{ needs.prepare.outputs.is_focused != 'true' }}
         env:
           DOCS_BENCHMARK_RUNNER_ID: ${{ matrix.id }}
           DOCS_BENCHMARK_RUNNER_LABEL: ${{ matrix.label }}
@@ -192,6 +580,7 @@ jobs:
           DOCS_BENCHMARK_PARALLEL_SOURCE=build/migration-parity/benchmark-result-parallel-cpu.json
           DOCS_BENCHMARK_OUTPUT=target/public-benchmark/snapshot.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ needs.prepare.outputs.is_focused != 'true' }}
         with:
           name: public-benchmark-${{ matrix.id }}
           path: target/public-benchmark/snapshot.json
@@ -208,10 +597,16 @@ jobs:
             build/migration-parity/pipeline-performance-report.json
             build/migration-parity/pipeline-roadmap-status.json
             build/migration-parity/pipeline-budget-check.json
+            build/migration-parity/source-build-witness*.json
+            build/migration-parity/*.attestation.json
+            build/migration-parity/*.producer.json
+            build/migration-parity/*.producer.json.bundle.json
+            build/migration-parity/perfdb-selected/**
           if-no-files-found: error
 
   aggregate:
     name: assemble runner-specific benchmark snapshots
+    if: ${{ inputs.workload_ids == '' || inputs.workload_ids == 'all' }}
     needs: [benchmark]
     runs-on: ubuntu-24.04
     timeout-minutes: 10

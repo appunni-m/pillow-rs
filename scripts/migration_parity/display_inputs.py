@@ -80,12 +80,16 @@ def display_case(
 
 def default_display_case(surface, operation, requirement, case_id):
     """Keep default requirement generation safe for the display family."""
+    registrations = None
+    if operation["id"] == "register":
+        registrations = ({"order": 1, "registration": "class"},)
+    else:
+        registrations = ({"hook": "show_file"},)
     return display_case(
         surface, operation["id"], case_id, [requirement["id"]],
         size=(1024, 768) if requirement["dimension"] == "performance" else (2, 1),
         title="capture title \"quotes\" and λ" if ".parameter.title" in requirement["id"] else None,
-        registrations=({"order": 1, "registration": "class"},)
-        if operation["id"] == "register" else None,
+        registrations=registrations,
         options={"capture_option": "forwarded"}
         if ".parameter.options" in requirement["id"] else None,
     )
@@ -105,6 +109,11 @@ def nuanced_display_cases(surface, operations):
                 cases.append(display_case(surface, operation, f"{prefix}.order-{order}", [requirement],
                     registrations=({"order": order, "accept": 0}, {"order": 1, "accept": 1})))
             continue
+        cases.append(display_case(
+            surface, operation, f"{prefix}.la-file-PNG", [requirement],
+            mode="LA", color=(109, 233),
+            registrations=({"hook": "show_file", "format": "PNG"},),
+        ))
         for mode, color in (
             ("1", 1), ("L", 109), ("LA", (109, 233)), ("P", 1),
             ("PA", (1, 233)), ("RGB", (31, 79, 197)),

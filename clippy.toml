@@ -1,0 +1,2 @@
+# Report function growth before it reaches the hard 100-line ratchet.
+too-many-lines-threshold = 60

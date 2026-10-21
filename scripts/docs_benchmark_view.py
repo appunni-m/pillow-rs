@@ -411,9 +411,14 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
         targets = list(dict.fromkeys(row["subject"] for row in snapshot["rows"] if row["subject"] != primary_baseline))
         baseline_ids = [primary_baseline]
     comparisons = [(subject, BASELINE_FOR.get(subject, primary_baseline)) for subject in targets]
-    if kind == "pillow":
+    if kind == "pillow" and "pillow-simd" in all_subjects:
         comparisons.extend((subject, "pillow-simd") for subject in ("python-cpu", "python-simd") if subject in targets)
-    measured_comparisons = [pair for pair in comparisons if pair[0] in all_subjects and pair[1] in all_subjects]
+    observations = workload_comparisons(grouped, machines, targets, kind)
+    available_comparisons = {
+        (item["subject"], item["baseline"]) for item in observations
+    }
+    comparisons = [pair for pair in comparisons if pair in available_comparisons]
+    measured_comparisons = comparisons
     default_comparison = next((pair for pair in measured_comparisons if pair == ("python-cpu", "pillow")),
                               measured_comparisons[0] if measured_comparisons else comparisons[0] if comparisons else None)
     subjects = [primary_baseline]
@@ -444,9 +449,9 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
             baseline_id = BASELINE_FOR.get(subject, primary_baseline)
             baseline = row if is_baseline else by_subject.get(baseline_id)
             ratio, quality, note = (None, "baseline", "Baseline") if is_baseline else compare(row, baseline)
-            simd_ratio, simd_quality = None, "unavailable"
+            simd_ratio, simd_quality, simd_note = None, "unavailable", "Baseline not measured"
             if subject in {"python-cpu", "python-simd"} and not is_baseline and "pillow-simd" in by_subject:
-                simd_ratio, simd_quality, _ = compare(row, by_subject["pillow-simd"])
+                simd_ratio, simd_quality, simd_note = compare(row, by_subject["pillow-simd"])
             direction = "unavailable" if ratio is None else "faster" if ratio > 1 else "slower" if ratio < 1 else "tie"
             if not is_baseline:
                 quality_labels.add(note)
@@ -472,7 +477,7 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
                 f' data-observed-ratio-primary="{ratio if ratio is not None else ""}" data-quality-primary="{quality}"'
                 f' data-ratio-pillow-simd="{pillow_simd_ratio if pillow_simd_ratio is not None else ""}"'
                 f' data-observed-ratio-pillow-simd="{simd_ratio if simd_ratio is not None else ""}"'
-                f' data-quality-pillow-simd="{simd_quality}" data-direction="',
+                f' data-quality-pillow-simd="{simd_quality}" data-note-pillow-simd="{escape(simd_note)}" data-direction="',
                 1,
             )
         # A row can be numerically fastest without providing matched-output proof.
@@ -510,7 +515,7 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
         f'{escape(NAMES.get(subject, subject))} vs {escape(NAMES.get(baseline, baseline))}</option>'
         for subject, baseline in comparisons
     )
-    headers = ''.join(f'<th scope="col" data-subject="{escape(subject)}" data-baseline-for="{escape(BASELINE_FOR.get(subject, subject))}" aria-sort="none"><button type="button" class="bench-sort" data-sort="{escape(subject)}">{escape(NAMES.get(subject, subject))}<span aria-hidden="true"> ↕</span></button><small>{"Baseline" if subject in baseline_ids else "Median · vs " + escape(NAMES.get(BASELINE_FOR.get(subject, primary_baseline), primary_baseline))}</small></th>' for subject in subjects)
+    headers = ''.join(f'<th scope="col" data-subject="{escape(subject)}" data-baseline-for="{escape(BASELINE_FOR.get(subject, subject))}" aria-sort="none"><button type="button" class="bench-sort" data-sort="{escape(subject)}">{escape(NAMES.get(subject, subject))}<span aria-hidden="true"> ↕</span></button><small data-default-label="{"Baseline" if subject in baseline_ids else "Median · vs " + escape(NAMES.get(BASELINE_FOR.get(subject, primary_baseline), primary_baseline))}">{"Baseline" if subject in baseline_ids else "Median · vs " + escape(NAMES.get(BASELINE_FOR.get(subject, primary_baseline), primary_baseline))}</small></th>' for subject in subjects)
     environment = snapshot["environment"]
     host = environment.get("platforms") or environment.get("runner") or environment.get("os") or environment.get("platform") or "Runner not recorded"
     table_head = ('<thead><tr>'
@@ -521,7 +526,6 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
             + headers + '<th scope="col">Lowest median<small>Among comparable implementations</small></th></tr></thead>')
     pipeline_count = sum(1 for rows in grouped.values() if facets(rows[0], kind)[0] == "pipelines")
     operation_count = len(grouped) - pipeline_count
-    observations = workload_comparisons(grouped, machines, targets, kind)
     selected_observations = [item for item in observations if (item["subject"], item["baseline"]) == default_comparison]
     reader_summary = render_reader_summary(selected_observations)
     workload_plot = render_workload_plot(selected_observations)

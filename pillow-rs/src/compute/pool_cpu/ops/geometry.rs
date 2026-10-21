@@ -11,6 +11,11 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
+#[cfg(not(feature = "parallel"))]
+use crate::ops::rotate::nearest_contiguous_rgb_run_len;
+#[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
+#[path = "geometry/kernels/transpose_rgba/x86_64.rs"]
+mod transpose_rgba_x86_64;
 #[cfg(target_arch = "x86_64")]
 use crate::ops::pil_resize::X86FmaToken;
 use crate::ops::pil_resize::{
@@ -20,6 +25,17 @@ use crate::ops::pil_resize::{
     precompute_coeffs_f64_boxed, premultiply_alpha, round_up, unpremultiply_alpha,
 };
 use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
+
+#[path = "geometry/float_resize.rs"]
+mod float_resize;
+#[cfg(all(test, not(feature = "parallel")))]
+#[path = "geometry/float_resize_tests.rs"]
+mod float_resize_tests;
+#[path = "geometry/native_transpose.rs"]
+mod native_transpose;
+#[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
+#[path = "geometry/transpose.rs"]
+mod transpose;
 
 // ── PIL-compatible filter kernels (f64 precision) ──
 
@@ -477,19 +493,14 @@ fn f_resize_vertical_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
         for (destination_y, row) in output.chunks_mut(destination_width).enumerate() {
             let source_y = coefficients.xmin[destination_y];
             let weights = &coefficients.weights[destination_y];
-            accumulators.fill(0.0);
-            for (offset, &weight) in weights.iter().enumerate() {
-                let source_row_start = (source_y + offset as i64) as usize * destination_width;
-                let source_row = &source[source_row_start..source_row_start + destination_width];
-                for (accumulator, &sample) in accumulators.iter_mut().zip(source_row) {
-                    *accumulator = f_resize_mul_add::<FINITE_OPERANDS, _>(
-                        fma,
-                        weight,
-                        f64::from(sample),
-                        *accumulator,
-                    );
-                }
-            }
+            float_resize::accumulate_row::<FINITE_OPERANDS, _>(
+                source,
+                destination_width,
+                source_y,
+                weights,
+                &mut accumulators,
+                fma,
+            );
             for (output, &accumulator) in row.iter_mut().zip(&accumulators) {
                 // Preserve Pillow's f32 pass boundary, including signed zero.
                 *output = accumulator as f32;
@@ -714,61 +725,8 @@ fn resize_f_with_fma<F: F64MulAdd>(
         return Ok(DynamicImage::ImageRgba8(out));
     }
 
-    // Pillow's F-mode NEAREST resize uses the affine point-sampling path,
-    // not the BOX convolution path used by the other filters. The source
-    // coordinate advances cumulatively from half a destination pixel, which
-    // is observable when a narrow impulse falls between sampled rows.
     if matches!(filter, ResampleFilter::Nearest) {
-        let scale_x = sw as f64 / dst_w as f64;
-        let scale_y = sh as f64 / dst_h as f64;
-        let mut xintab = Vec::with_capacity(dst_w as usize);
-        let mut source_x = scale_x * 0.5;
-        for _ in 0..dst_w {
-            let sx = source_x as u32;
-            xintab.push(sx.min(sw - 1));
-            source_x += scale_x;
-        }
-        // Pillow's `libImaging/Geometry.c::ImagingScaleAffine` initializes the
-        // vertical coordinate once and advances it after each row. Keep that
-        // cumulative f64 sequence
-        // instead of recomputing `(y + 0.5) * scale_y`: the two expressions
-        // differ at exact-integer boundaries (for example, 2 / 7 reaches
-        // 1.0 when multiplied directly but remains just below 1.0 after
-        // three cumulative additions), changing the selected source row.
-        let mut yintab = Vec::with_capacity(dst_h as usize);
-        let mut source_y = scale_y * 0.5;
-        for _ in 0..dst_h {
-            let sy = source_y as u32;
-            yintab.push(sy.min(sh - 1));
-            source_y += scale_y;
-        }
-        let mut out_floats = vec![0.0f32; (dst_w * dst_h) as usize];
-        #[cfg(feature = "parallel")]
-        crate::par_rows_mut_typed!(
-            &mut out_floats,
-            dst_w as usize,
-            dst_h as usize,
-            |_row_start, _row_end, y, row| {
-                let sy = yintab[y as usize];
-                for (out, &sx) in row.iter_mut().zip(&xintab) {
-                    *out = src_floats[(sy * sw + sx) as usize];
-                }
-            }
-        );
-        #[cfg(not(feature = "parallel"))]
-        for (y, row) in out_floats.chunks_mut(dst_w as usize).enumerate() {
-            let sy = yintab[y];
-            for (out, &sx) in row.iter_mut().zip(&xintab) {
-                *out = src_floats[(sy * sw + sx) as usize];
-            }
-        }
-        let rgba_bytes: Vec<u8> = out_floats.iter().flat_map(|f| f.to_le_bytes()).collect();
-        // The loop emits exactly four bytes per checked output pixel, so a
-        // shape failure here indicates an internal arithmetic regression, not
-        // a public input error.
-        let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
-            .expect("resize_f nearest output shape must match its dimensions");
-        return Ok(DynamicImage::ImageRgba8(out));
+        return Ok(float_resize::nearest(&src_floats, (sw, sh), (dst_w, dst_h)));
     }
 
     // Pillow's high-level Image.resize takes a vertical-first path for very
@@ -836,6 +794,24 @@ fn resize_f_with_fma<F: F64MulAdd>(
             let source_start = sy * sw as usize;
             row.copy_from_slice(&src_floats[source_start..source_start + sw as usize]);
         }
+    }
+
+    // On the serial CPU route, the vertical pass is the final F32 stage. Write
+    // each rounded sample into its packed pixel slot and flatten the array
+    // vector without copying, instead of allocating an F32 output and then
+    // allocating and filling a second byte vector.
+    #[cfg(not(feature = "parallel"))]
+    if needs_vertical {
+        return float_resize::packed_vertical_output(
+            &intermediate,
+            sh,
+            dst_w,
+            dst_h,
+            needs_horizontal,
+            finite_source_samples,
+            filter,
+            fma,
+        );
     }
 
     let out_floats: Vec<f32> = if needs_vertical {
@@ -1494,47 +1470,6 @@ fn nearest_positive_step_in_bounds_span(
     let source_y = i64::try_from(i128::from(row_y).checked_add(y_offset)?).ok()?;
 
     Some((start, end, source_x, source_y))
-}
-
-#[cfg(not(feature = "parallel"))]
-fn nearest_contiguous_rgb_run_len(
-    source_x: i64,
-    source_y: i64,
-    step_x_x: i64,
-    step_x_y: i64,
-    max_len: usize,
-) -> Option<usize> {
-    if max_len == 0 || step_x_x <= 0 || step_x_y < 0 {
-        return None;
-    }
-
-    let fixed_one = 1_i128 << 16;
-    let fixed_last = fixed_one - 1;
-    let x_fraction = i128::from(source_x).rem_euclid(fixed_one);
-    let y_fraction = i128::from(source_y).rem_euclid(fixed_one);
-    let x_delta_from_one = i128::from(step_x_x) - fixed_one;
-    let remaining = i128::try_from(max_len).ok()?;
-
-    // For a contiguous source slice, each destination step must advance the
-    // integer source x by exactly one. Bound the run where the fractional
-    // error relative to 1.0 remains in the current fixed-point pixel.
-    let x_run = if x_delta_from_one > 0 {
-        (fixed_last - x_fraction) / x_delta_from_one + 1
-    } else if x_delta_from_one < 0 {
-        x_fraction / -x_delta_from_one + 1
-    } else {
-        remaining
-    };
-
-    // The source y coordinate must stay on one row for the same run.
-    let y_step = i128::from(step_x_y);
-    let y_run = if y_step == 0 {
-        remaining
-    } else {
-        (fixed_last - y_fraction) / y_step + 1
-    };
-
-    usize::try_from(x_run.min(y_run).min(remaining)).ok()
 }
 
 #[cfg(not(feature = "parallel"))]
@@ -2892,106 +2827,11 @@ pub fn execute_transpose(
     img: &DynamicImage,
     method: &TransposeMethod,
 ) -> Result<DynamicImage, PilError> {
-    if matches!(
-        method,
-        TransposeMethod::FlipLeftRight
-            | TransposeMethod::FlipTopBottom
-            | TransposeMethod::Rotate180
-    ) && matches!(
-        img.color(),
-        crate::raster::ColorType::L8
-            | crate::raster::ColorType::La8
-            | crate::raster::ColorType::Rgb8
-            | crate::raster::ColorType::Rgba8
-    ) {
-        let (width, height) = img.dimensions();
-        if width != 0 && height != 0 {
-            let channels = img.color().channel_count() as usize;
-            let dimensions = CheckedDims::new(width, height, channels as u8)?;
-            let mut output = dimensions.alloc_buffer();
-            let reverse_x = !matches!(method, TransposeMethod::FlipTopBottom);
-            let reverse_y = !matches!(method, TransposeMethod::FlipLeftRight);
-            macro_rules! copy_rows {
-                ($channels:literal) => {
-                    transpose_bytes_rows::<$channels>(
-                        img.as_bytes(),
-                        &mut output,
-                        &dimensions,
-                        reverse_x,
-                        reverse_y,
-                    )
-                };
-            }
-            match channels {
-                1 => copy_rows!(1),
-                2 => copy_rows!(2),
-                3 => copy_rows!(3),
-                4 => copy_rows!(4),
-                _ => unreachable!("native byte image has one to four channels"),
-            }
-            return raw_bytes_to_image(width, height, output, channels);
-        }
+    if let Some(output) = native_transpose::execute_flip(img, method)? {
+        return Ok(output);
     }
-    if matches!(
-        method,
-        TransposeMethod::Rotate90
-            | TransposeMethod::Rotate270
-            | TransposeMethod::Transpose
-            | TransposeMethod::Transverse
-    ) && matches!(
-        img.color(),
-        crate::raster::ColorType::L8
-            | crate::raster::ColorType::La8
-            | crate::raster::ColorType::Rgb8
-            | crate::raster::ColorType::Rgba8
-    ) {
-        let (width, height) = img.dimensions();
-        if width != 0 && height != 0 && (width != 1 || height != 1) {
-            let channels = img.color().channel_count() as usize;
-            let output_dims = CheckedDims::new(height, width, channels as u8)?;
-            let mut output = output_dims.alloc_buffer();
-            #[cfg(feature = "parallel")]
-            let transpose_tile_size = TRANSPOSE_TILE_SIZE;
-            #[cfg(not(feature = "parallel"))]
-            let transpose_tile_size = if channels == 4 {
-                TRANSPOSE_RGBA_TILE_SIZE
-            } else {
-                TRANSPOSE_TILE_SIZE
-            };
-            // Specialize the opaque pixel size once per image so each tile
-            // copies a fixed-size sample instead of calling a variable-size
-            // slice copy for every pixel.
-            macro_rules! transpose_bytes {
-                ($channels:literal) => {
-                    if should_tile_transpose(width, height) {
-                        transpose_bytes_tiled::<$channels>(
-                            img.as_bytes(),
-                            &mut output,
-                            width,
-                            height,
-                            method,
-                            transpose_tile_size,
-                        );
-                    } else {
-                        transpose_bytes_serial::<$channels>(
-                            img.as_bytes(),
-                            &mut output,
-                            width,
-                            height,
-                            method,
-                        );
-                    }
-                };
-            }
-            match channels {
-                1 => transpose_bytes!(1),
-                2 => transpose_bytes!(2),
-                3 => transpose_bytes!(3),
-                4 => transpose_bytes!(4),
-                _ => unreachable!("native byte image has one to four channels"),
-            }
-            return raw_bytes_to_image(height, width, output, channels);
-        }
+    if let Some(output) = native_transpose::execute_axis_swap(img, method)? {
+        return Ok(output);
     }
     match method {
         TransposeMethod::FlipLeftRight => Ok(img.fliph()),

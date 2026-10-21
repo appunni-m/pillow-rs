@@ -441,6 +441,69 @@ class MigrationParityAttestationTests(unittest.TestCase):
         )
         self.assertEqual(context_seen[0]["declared_features"], parity.TARGET_FEATURES)
 
+    def test_untimed_execution_proof_attests_the_selected_step_scope(self):
+        case = {"case_id": "case-a", "steps": []}
+        handshake = {"side": "target", "version": "target-version"}
+        context_seen: list[dict[str, object]] = []
+        output = io.StringIO()
+        args = argparse.Namespace(
+            side="target",
+            manifest=Path("manifest.yaml"),
+            lifecycle="warm",
+            repeat=1,
+            timing_step=["call", "observe-result"],
+            timing_boundary="observed_steps",
+            timings=False,
+        )
+
+        class TargetCore:
+            def set_pipeline_telemetry(self, enabled: bool) -> None:
+                pass
+
+            def take_pipeline_telemetry(self):
+                return None
+
+        def child_attestation(_side, _handshake, _cases, *, context, **_kwargs):
+            context_seen.append(context)
+
+        environment = {
+            "MIGRATION_PARITY_EXECUTION_OUTPUT": "/tmp/execution-proof.json",
+            PREFIX + "OUTPUT": "/tmp/child-attestation-proof.json",
+            PREFIX + "INVOCATION_ID": "invocation-proof",
+            PREFIX + "ROLE": "benchmark_execution_proof",
+            PREFIX + "PROFILE": "python-cpu",
+        }
+        with patch.dict(parity.os.environ, environment, clear=False), patch(
+            "scripts.run_migration_parity.load_manifest", return_value={}
+        ), patch("scripts.run_migration_parity.build_operation_index", return_value={}), patch(
+            "scripts.run_migration_parity.side_identity", return_value=handshake
+        ), patch(
+            "scripts.run_migration_parity.run_resident_case",
+            return_value={"case_id": "case-a", "status": "completed", "observations": []},
+        ), patch(
+            "scripts.run_migration_parity.write_pipeline_execution_evidence"
+        ), patch(
+            "scripts.run_migration_parity.write_child_attestation_from_environment",
+            side_effect=child_attestation,
+        ), patch(
+            "scripts.run_migration_parity.importlib.import_module",
+            return_value=TargetCore(),
+        ), patch.object(
+            parity.sys, "stdin", io.StringIO(json.dumps([case]))
+        ), patch.object(parity.sys, "stdout", output):
+            status = parity.run_side(args)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(
+            context_seen[0],
+            {
+                "lifecycle": "warm",
+                "boundary": "observed_steps",
+                "step_ids": ["call", "observe-result"],
+                "repeat": 1,
+            },
+        )
+
     def test_child_without_attestation_environment_emits_no_receipt(self):
         case = {"case_id": "case-a", "steps": []}
         handshake = {"side": "source", "version": parity.ORACLE_VERSION}

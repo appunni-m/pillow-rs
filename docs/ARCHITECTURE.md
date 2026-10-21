@@ -2,6 +2,13 @@
 
 pillow-rs has one Rust image implementation and language bindings. The
 [repository map](REPO_MAP.md) locates the maintained source and generators.
+The [implementation structure guide](IMPLEMENTATION_STRUCTURE.md) defines the
+shared operation-family layout used to trace code across core, backends,
+bindings, parity inputs, and performance evidence. The generated
+[operation/source crosswalk](IMPLEMENTATION_STRUCTURE.md)
+helps locate mapped and review-only code; its current reachability limits and
+investigation findings are recorded in the
+[unreachable-code audit ledger](UNREACHABLE_CODE_AUDIT.md).
 
 | Component | Owns | Public entry |
 | --- | --- | --- |

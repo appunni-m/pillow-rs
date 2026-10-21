@@ -1,0 +1,2971 @@
+{
+  "artifact": {
+    "crate_types": [
+      "cdylib"
+    ],
+    "package_id": "path+file:///Users/lazytrot/work/pillow-rs/pillow-rs-py#12.2.2",
+    "path": "/Users/lazytrot/work/pillow-rs/target/getcolors-build-witness-final-arm64-20261019/release/lib_core.dylib",
+    "sha256": "5a42dd70babf1242df00a534b250b57e640734789e09bceca178a0532d304ba3",
+    "size": 10020080,
+    "target": "_core"
+  },
+  "build": {
+    "argv": [
+      "cargo",
+      "build",
+      "--release",
+      "--locked",
+      "--manifest-path",
+      "pillow-rs-py/Cargo.toml",
+      "--message-format=json-render-diagnostics",
+      "--target-dir",
+      "target/getcolors-build-witness-final-arm64-20261019",
+      "-j",
+      "4"
+    ],
+    "cargo_version": "cargo 1.96.1 (356927216 2026-06-26)\nrelease: 1.96.1\ncommit-hash: 356927216a2d746168cf76e5e88cc3f4b58e029d\ncommit-date: 2026-06-26\nhost: aarch64-apple-darwin\nlibgit2: 1.9.2 (sys:0.20.4 vendored)\nlibcurl: 8.7.1 (sys:0.4.87+curl-8.19.0 system ssl:(SecureTransport) LibreSSL/3.3.6)\nssl: OpenSSL 3.5.4 30 Sep 2025\nos: Mac OS 15.7.7 [64-bit]",
+    "cwd": "/Users/lazytrot/work/pillow-rs",
+    "environment": {
+      "CARGO_BUILD_TARGET": null,
+      "CARGO_ENCODED_RUSTFLAGS": null,
+      "CARGO_TARGET_DIR": null,
+      "PYO3_PYTHON": null,
+      "RUSTC_WRAPPER": null,
+      "RUSTFLAGS": "-C link-arg=-undefined -C link-arg=dynamic_lookup -C link-arg=-Wl,-install_name,@rpath/pillow_rs._core.abi3.so"
+    },
+    "exit_code": 0,
+    "features": {
+      "pillow-rs": [
+        "default",
+        "gpu",
+        "image-codecs-all",
+        "pollster",
+        "wgpu"
+      ],
+      "pillow-rs-py": [
+        "default"
+      ]
+    },
+    "fresh_packages": [
+      "pillow-rs",
+      "pillow-rs-py"
+    ],
+    "log": {
+      "path": "/Users/lazytrot/work/pillow-rs/docs/evidence/getcolors/current-source-i-high-cardinality-cpu-arm64-20261019/build-witness-final.json.log",
+      "sha256": "0241c0ebbfe65d4b19ca2056b70c0598440b56bb82d9657dca978fa97719a278",
+      "size": 115908
+    },
+    "rustc_version": "rustc 1.96.1 (31fca3adb 2026-06-26)\nbinary: rustc\ncommit-hash: 31fca3adb283cc9dfd56b49cdee9a96eb9c96ffd\ncommit-date: 2026-06-26\nhost: aarch64-apple-darwin\nrelease: 1.96.1\nLLVM version: 22.1.2",
+    "target_triple": "aarch64-apple-darwin"
+  },
+  "errors": [],
+  "schema": "pillow-rs/build-witness@1",
+  "source": {
+    "after": {
+      "files": [
+        {
+          "path": ".cargo/config.toml",
+          "sha256": "1432363e60b718fa7de9a08091192c01a64a711f9ee6afa60a0f1ba882cbab15",
+          "size": 360
+        },
+        {
+          "path": "Cargo.lock",
+          "sha256": "95edfd4fa4978ed95dfbdcfc4355004e4368cba94a3fae14d4156829b2377328",
+          "size": 39490
+        },
+        {
+          "path": "Cargo.toml",
+          "sha256": "d8e534fc20b7e2e9253bb78edeead8da80c4adcdbf2ccba8ba10dda6a3cb47b6",
+          "size": 3477
+        },
+        {
+          "path": "pillow-rs-js/Cargo.toml",
+          "sha256": "8fb4b6c10c4c700f12a1af76c262905b439dbbaa3df7c4d71db6f64f6f39a805",
+          "size": 1224
+        },
+        {
+          "path": "pillow-rs-js/src/lib.rs",
+          "sha256": "45926ca78c1934ec18a2cf2fb69f3a6adfac07d3449932652aafc7633b0fb2d8",
+          "size": 186139
+        },
+        {
+          "path": "pillow-rs-py/Cargo.toml",
+          "sha256": "9bd621750a3975976bed9da27d156e23fcdd19f5c65ef74c087e9883cbc4c8df",
+          "size": 796
+        },
+        {
+          "path": "pillow-rs-py/src/gpu_batch.rs",
+          "sha256": "9b92e4d65cecd78e18eac6076d032bda5e09bd172c1817277d17026ef1298726",
+          "size": 5694
+        },
+        {
+          "path": "pillow-rs-py/src/lib.rs",
+          "sha256": "068c22d3b7964dd917584118860de0034623b7f19683e36a87d997b8e8b3ca24",
+          "size": 174568
+        },
+        {
+          "path": "pillow-rs-py/src/putdata.rs",
+          "sha256": "df6b14bf4acdeee302762b90b284bdae9c0b86c582ce10d2a897bdaf7b55aa25",
+          "size": 11156
+        },
+        {
+          "path": "pillow-rs/Cargo.toml",
+          "sha256": "b0891fe5a8f44b25468e5754e8cfe1ea08b8576eb059b9d64fb506eda76a39f5",
+          "size": 2365
+        },
+        {
+          "path": "pillow-rs/src/checked_dims.rs",
+          "sha256": "995d42c14c52eabde5995cbce911eec3e5d3caab12e7ee09288ed60b85e3caed",
+          "size": 8678
+        },
+        {
+          "path": "pillow-rs/src/color.rs",
+          "sha256": "c9e447edf8573ac9e20f10565c3a66a9486abce4aaea75cb81dfbaa706b6851a",
+          "size": 83558
+        },
+        {
+          "path": "pillow-rs/src/color_grayscale_allocation_tests.rs",
+          "sha256": "dbbd664cf3d0ff74c738de771e1504dbf75c625eb062817261334cb19d6bd29a",
+          "size": 3466
+        },
+        {
+          "path": "pillow-rs/src/compute/mod.rs",
+          "sha256": "a947d6f5aea936625e2d254d74d2262d97bad18e26d8896d1aeccf920c140d15",
+          "size": 128381
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/mod.rs",
+          "sha256": "aea865826712c8d8bb5d88bb76918c9ebff810a441a5c4a38455e5247db78261",
+          "size": 32529
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/chops.rs",
+          "sha256": "d1a1e3dd08ff3e2475a30fca22136f7cae8a9e063fb11c877053cf142a70bdb5",
+          "size": 16151
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/color.rs",
+          "sha256": "1e0536eeccdde70eac33495bbdc1553749021f4f63a81a5e1d9acf6daa7dc732",
+          "size": 19505
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/color_convert_allocation_tests.rs",
+          "sha256": "c67451d9009cd1ca10f32a49e8dd743e5500d8042e0ab29f2cb8b2885756644a",
+          "size": 5666
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/draw.rs",
+          "sha256": "f2a4c8ead9d75cc298dd1d1f4c92cfbd832bb9918a00dd626f40948c0ede250a",
+          "size": 53191
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+          "sha256": "1f37a51c36416f7f73cb2479de96b5d1067df4dfe4943a0a6923c680e3891882",
+          "size": 250467
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/enhance.rs",
+          "sha256": "0bb522bd3bb3886561eef8f9eda579012350b8e0f34904a7acba403ac1bda154",
+          "size": 20497
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
+          "sha256": "0452fd48c8f486bcb97666abfe178cc38e2504192ec8a890706b52c22d4c0110",
+          "size": 246770
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter/kernels/i32_cross_smooth.rs",
+          "sha256": "e064466951d141db6aed6ac798cefa76f5f7bf213a00fd6353aa1adc10dc9149",
+          "size": 4228
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter/kernels/mod.rs",
+          "sha256": "b4f341363d4c4853ec2dfc43bf5fea14d6d7c54ef81da369c518d4d116ef8903",
+          "size": 320
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter/rgb_blur_ring.rs",
+          "sha256": "c7457cc47f53231c7276cdfbf20bf769102d3bb596e70f3f69eb4ddf2e8cfd4e",
+          "size": 7219
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter/uniform_box.rs",
+          "sha256": "f99f8921128c0dd408b2a4122064a30be6d8d4dc29732d58f22c476b868ea3d9",
+          "size": 4521
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter/uniform_box_tests.rs",
+          "sha256": "70bf9bbba2ab5837d64a4c1911bb389c97f2eb559bbd0d2769dba4ae8234b0b3",
+          "size": 6686
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+          "sha256": "8e2852743becd04ad63e607a897c9fcfc56cfef4b4c27a0dafb580fd71f89500",
+          "size": 232764
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/grayscale.rs",
+          "sha256": "9ef2e0694fa43c8cf33a824e06b9c5205378ff8aee2385c439f6a5a6a603f48d",
+          "size": 8685
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/imageops.rs",
+          "sha256": "35343722d9c71f2ac4c40d0c0de49ad5e32beb49f319fd8e9318498314684fdf",
+          "size": 99666
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/mod.rs",
+          "sha256": "b113aeb6e9c5bbf0ae459f53377edbf515b5289a183b4fa43e5fcf280c154a23",
+          "size": 212
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+          "sha256": "9be8ab650c575030cec5435984ab928aa2205d2ffa6834d9d0f1cb7f1a538a8c",
+          "size": 1745046
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/add.wgsl",
+          "sha256": "032fb50de7576fd25d88683b03fecdd2ca9dfd79f9a242b8204adc1de6d05d3f",
+          "size": 2061
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/add_modulo.wgsl",
+          "sha256": "5e3295d1f202fca2014e5c63623637c5ed8a1a8ad4b2ce503190b4818a317015",
+          "size": 1864
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/alpha_composite.wgsl",
+          "sha256": "ec8840d1e51ae42ea8328bfb32efa1877d9ea77c094ba21a3ef6204e09e82469",
+          "size": 4040
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/alpha_composite_mirror.wgsl",
+          "sha256": "32a828f9e311b21b500c1a766ae42095ee769f43b9a2aeb2e810a9f2b71c8d01",
+          "size": 2550
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/autocontrast.wgsl",
+          "sha256": "7853426bd878fe176239767cca56d9afb0366e4290e9820c0793a5008d1c0d45",
+          "size": 1851
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/autocontrast_cutoff.wgsl",
+          "sha256": "d8ca5123bf32cc1f7a82df16ad7f1a861f2bf1dc1444ac11e47d2af3d0bd0710",
+          "size": 4784
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/autocontrast_remap.wgsl",
+          "sha256": "09da77724ca9f711794ee77f40999ed5bad5e52c30cae868bda22fbdd18e157e",
+          "size": 1857
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/blend_module.wgsl",
+          "sha256": "10082cbbea8746da619ead3123e996f7b6b7ad5d6383d14393bbcb12c76f3c6d",
+          "size": 2289
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur.wgsl",
+          "sha256": "368c715138fe4f61d4305b773c28e6f767a3f1333f59c88743fd6fad7a1852f3",
+          "size": 3271
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_h.wgsl",
+          "sha256": "0f91488b0f5ac1eb275d84ace6d99c0865097fed9319ad717e70175475874bbb",
+          "size": 4121
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_h_la_packed.wgsl",
+          "sha256": "6d3db26c7a9413a9fd7fc03f2f40d79222fe951bb438401d2962ebd64565a0ef",
+          "size": 3230
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_h_luma_packed.wgsl",
+          "sha256": "a0c3de3be2b7ef8e6ddaf6dd81d2f1e843377bcbfce1d146ef7aac7248d330df",
+          "size": 4405
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_h_rgb_packed.wgsl",
+          "sha256": "9fb82b869b9a4830ce649ea7b9c153abafbf90f870db1e7a4467594ed99b0eab",
+          "size": 4236
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_hv_luma_radius_one_packed.wgsl",
+          "sha256": "2a923de24b89840d2a326d69838ba1ed82437cb4310db82b87d6fc6dd520c59a",
+          "size": 4004
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_hv_rgb_radius_one_packed.wgsl",
+          "sha256": "9143ae1f8f0343773fcded77ec57e10534b21e332c6da5215c54e0897274859d",
+          "size": 5868
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_v.wgsl",
+          "sha256": "5e9af4336cff2646e264aeecc07ce458f74d8db4b25978d0718416121939ff1b",
+          "size": 3953
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_v_la_packed.wgsl",
+          "sha256": "ac9ee56e0cf9011215b8b5cee0508e2607bd42cd6b334b482ab4ab9f2dd6dea4",
+          "size": 3263
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_v_luma_packed.wgsl",
+          "sha256": "0ccd87a6be76bbe270a8501a0a2eece84a9abe57879cc1d58da9f0f9daa2b457",
+          "size": 5940
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_v_rgb_packed.wgsl",
+          "sha256": "af09f9bc1c82f2e64058ffd3b5de5fe11700c7730e7c95b05d639c06acd2e178",
+          "size": 4172
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/brightness.wgsl",
+          "sha256": "592b7b521b381cb697f5f85292fccf23b1a5896e86f95ae6400a24bfe78b0c5a",
+          "size": 1944
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/brightness_native.wgsl",
+          "sha256": "d18b739161c60a36078703ad0f7887d3554042dbc9f9710a200f9234b94efad3",
+          "size": 1388
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/color_3dlut.wgsl",
+          "sha256": "8202af1bb38a53694b011902f753793baf618d018a22a4ba446b8585a348f70f",
+          "size": 3206
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/color_saturation.wgsl",
+          "sha256": "ea603ffae4220ad0d3a43232ef578b74b2e2bf5edcab31e06d685993843df0b4",
+          "size": 2908
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/colorize.wgsl",
+          "sha256": "322ac109f32a1d0889033b1ce62a3cb02bca9e6dc7fcb42f90f959fb1f786c34",
+          "size": 898
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/composite_module.wgsl",
+          "sha256": "2e21c9dc3385e62234fa7510a4e7404388e5f11f735b5cbc544808ade44192d6",
+          "size": 3107
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/composite_native.wgsl",
+          "sha256": "f91ae99a7492d9a5a6f68611b8648220a387142b0e25eafb00db6d27c4254616",
+          "size": 2160
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/constant.wgsl",
+          "sha256": "c4097bf8dc8edf13888931425ab4c910cbf3d0b9610c38172861ced743e0f564",
+          "size": 884
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/contain.wgsl",
+          "sha256": "6095cb313f05bafa32227aaece8869cd85538390af006dc96c47658055315a17",
+          "size": 3956
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/contrast.wgsl",
+          "sha256": "a2d25f5e9f9968f7220a72b2fe50f55e7e684a4f5a0baac393ffffcc8c9addcc",
+          "size": 2195
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/convert.wgsl",
+          "sha256": "342850c72daeddcd485c5082cae196570d969992639f41bad5614628a276d74b",
+          "size": 16030
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/cover.wgsl",
+          "sha256": "7160c9d54ce7bbcbb4019e47364a7813c7a7b799f85a54591a53e7ab5f4b0a6c",
+          "size": 4382
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/crop.wgsl",
+          "sha256": "12c54e9fdff043e73949ba137b3e8b07d1142b9ad066f7be722188eed731caa7",
+          "size": 2643
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/crop_border.wgsl",
+          "sha256": "dd141663acb6b68528037b0fe101ac70fc0b8503c9466ec1cd01b49b099384e6",
+          "size": 1953
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/crop_native_rgb.wgsl",
+          "sha256": "66651c89a5c1a1fd378e0cc4b159e589c5f18eefde7cf17aba214d68140571bc",
+          "size": 2657
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/darker.wgsl",
+          "sha256": "070419996fbcbea193b1b51e1f0ffe29f9055da7eb3339731130740d55343638",
+          "size": 1837
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/difference.wgsl",
+          "sha256": "53b107cbc9e0a979cd2405e50f7beda04de2369815b9d410859c9d74c97b843c",
+          "size": 2018
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/draw.wgsl",
+          "sha256": "a96fa2360daa2f414a23249e5c3f1c711d5a1b2478e322aee92b60c6a2b93596",
+          "size": 779
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/duplicate.wgsl",
+          "sha256": "b9794d594684aef1403f2cff884848e1d4b91c4ec392e4d8db781b433f492c61",
+          "size": 1477
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/effect_noise.wgsl",
+          "sha256": "ec354d49069944c3e4b6940e8b86893e271b7f0e7964b8d1cc3a4be0f8e6f76c",
+          "size": 787
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/effect_spread.wgsl",
+          "sha256": "953f1a4ad84cfe296114d9cb72b9af53e94e25e82f452e11fb0c4ca508181dd6",
+          "size": 945
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize.wgsl",
+          "sha256": "b83c3e8648ca286272c818ce4169186931ec5d8a331288e248393154b5e68cda",
+          "size": 1452
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_cdf.wgsl",
+          "sha256": "963dd227750d825828d88c6a2aa818dccdcd69e0f40d3fb28669e4711e330d80",
+          "size": 2523
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_histogram.wgsl",
+          "sha256": "78a2bf891df79bf99a6f390a4b1af052fac2edfc84b5eddbdefb04ede18610cb",
+          "size": 3338
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_histogram_l_packed.wgsl",
+          "sha256": "c5633e80c2858c45ca72354a97c1c1e2c9f65e81f92cfc018a9b19d3338bb35e",
+          "size": 1536
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_histogram_rgb_packed.wgsl",
+          "sha256": "c48008ad3f23a3cadd23ce1420083d63e3c5ad5d333f761485171a7fbe72e9b6",
+          "size": 3128
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_remap.wgsl",
+          "sha256": "dd8a8b59e30eba05e2336bed44107c132c891df7653d17af835e08fab044dfba",
+          "size": 1531
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_remap_l_packed.wgsl",
+          "sha256": "c9059894e40534b053c38235057dd6e43121aca9386fba1fa38fc035f6c8f9d8",
+          "size": 1156
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/eval.wgsl",
+          "sha256": "1b80a2e982b03e4198409184fb404686be7f67731b9fa637f06c52763e27702d",
+          "size": 2003
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/expand.wgsl",
+          "sha256": "0007f1303e21845574efce23fa790a69a75984bc5a03687d6fbb298357d6d859",
+          "size": 6107
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/extract_band.wgsl",
+          "sha256": "2a80607a3583d17fd50440b62d2554d91b391a070fccb58083263fc64466c84e",
+          "size": 2265
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/filter_3x3.wgsl",
+          "sha256": "817e3ddf709da8687ff075003080064cf594ed3b13f7752d012558385088673c",
+          "size": 11714
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/filter_3x3_la_binomial_packed.wgsl",
+          "sha256": "7b46c908f8502974a4c6a46387150cc7c7d4082e9362742341c8d0f4a2396008",
+          "size": 2271
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/filter_5x5.wgsl",
+          "sha256": "252b2f073c4cbaa149e3638554efd4b951f3e710e4d6fcf67a93110ab38fc102",
+          "size": 18971
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/filter_5x5_la_packed.wgsl",
+          "sha256": "9920b1814c9f6780c9d9c5b2748b3f82a8342aa2cad35adc2439cd9b45e55c7c",
+          "size": 5412
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/filter_5x5_luma_packed.wgsl",
+          "sha256": "142df26d2579d821e2412f4d8b046387a5d2ba3964deea497bd01ea7468b8bf6",
+          "size": 5032
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/fit.wgsl",
+          "sha256": "368556387e365efe4fbf7ac344bbd69a32b67c42b9d2561f26ed0365b7b161b2",
+          "size": 5432
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/flip.wgsl",
+          "sha256": "1652c3438ea3809c7a5702e8454d2735975c565ef774d54bc58ac2373e37af38",
+          "size": 1568
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/flip_native_byte_rows.wgsl",
+          "sha256": "b457a01591f4cb68c95de9b8b642479228bdf3520e13cc58f698038fa75bd5d6",
+          "size": 1244
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/gaussian_blur.wgsl",
+          "sha256": "3ce6dd9032816f20d7ef3483c587663c509cffc44a59d79f5b8081b059c7521d",
+          "size": 4206
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/getprojection_atomic.wgsl",
+          "sha256": "fd7af46377b18e9657fc2fe6d1300042397fba645c204623bdc8ceb544d5cfa1",
+          "size": 3795
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/getprojection_cmyk.wgsl",
+          "sha256": "9ddd992e408e72c3694c30b2593bc2fec35b060d789a550d2daf9e66bcf87d29",
+          "size": 3667
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/grayscale.wgsl",
+          "sha256": "d4e81e415cf39577c84db56d9fa6c0c9b5901e8e4960308921d0ec941e33a69a",
+          "size": 5438
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/hard_light.wgsl",
+          "sha256": "65ec8b873d57c68f8c98ab4a9c8b76303422a51bda06ae5725bc515ea5775eef",
+          "size": 2298
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/histogram_clear.wgsl",
+          "sha256": "d63273208da78ba6cf699fc3897849ddb473b3b422a6c9b1398bbc1457c0e040",
+          "size": 1310
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/invert.wgsl",
+          "sha256": "31267fd57874bf2c9203b5f0a0e4c55313425849c7c8d6df792b03093205eca5",
+          "size": 1624
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/invert_chops.wgsl",
+          "sha256": "a6b3d19da3c0e7fff7f03de50758817571f21c611c32a34b2f68cbc2be2aea63",
+          "size": 1623
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/lighter.wgsl",
+          "sha256": "1f9755e1a7dea98e20f6fd2f1e0afcf5fb27d5b90758fd21d4dd31f1e6e7fa2a",
+          "size": 1838
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/logical_and.wgsl",
+          "sha256": "fcf3a55bdd8864704766deb600c238ed6b10b874e853e64e8c740e7a882dc33c",
+          "size": 2467
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/logical_or.wgsl",
+          "sha256": "722fd02a2a0c213172ff0b7592f8dbfe32841fcd4390ddd09f93b5e99eb90899",
+          "size": 2309
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/logical_xor.wgsl",
+          "sha256": "609593fcb6a2f1f12bb5c07e7da082d303306c0de4974092a546965f3e9a30a3",
+          "size": 2409
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/max_filter.wgsl",
+          "sha256": "ebbbe9672763827b35411a377c8bfdf62368f6a0f4b6242cc8b364b75f50e7ba",
+          "size": 3420
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/max_filter_3x3_la_packed.wgsl",
+          "sha256": "44fa0e93d50fe8983f41adc4935fcdd05a2d92bf58d12b2b9fdfa64940436382",
+          "size": 2746
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/max_filter_3x3_luma_packed.wgsl",
+          "sha256": "2586330d86b04a0f3e735ebe84c75fdf1527ca0e0acdad9055c553e61a85d41a",
+          "size": 2758
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/max_filter_3x3_rgb_packed.wgsl",
+          "sha256": "536620484e6759602dfb3be17cd5423f1c252e5b071cf08c0369ffd5198e062b",
+          "size": 6659
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/median_filter.wgsl",
+          "sha256": "cb732786c6b74054488261b0c39f390fbc63826c9190b4bcad1a0060775e1eba",
+          "size": 4912
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/median_filter_3x3.wgsl",
+          "sha256": "b4ba5271bb33a68c9a094dc51f42d6b7b9cb8ae773b9aea29a2382e1c39fc580",
+          "size": 3081
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/median_filter_3x3_la_packed.wgsl",
+          "sha256": "c0c42f1f8527785b647c24853d38e5b3dd7612113e33b7cd547ba2d01b755702",
+          "size": 3141
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/median_filter_3x3_luma_packed.wgsl",
+          "sha256": "f493d9fb91887e7308167d5ce103fe013fd0412d808015b10322c332efb4e145",
+          "size": 3329
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/median_filter_3x3_rgb_packed.wgsl",
+          "sha256": "12d2830d9f0231d8b524b84961923ae2348bbffc967d1801195d6f4c860c4eed",
+          "size": 8949
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/merge.wgsl",
+          "sha256": "eb04aa42683bf28536d226e97df52b27a9f019f2a601ae633550131810240dbb",
+          "size": 3628
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/min_filter.wgsl",
+          "sha256": "deb59c9195d788be0bb2f57559f487778b37981e9be80e090b3700a7845a4545",
+          "size": 3416
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/min_filter_3x3_la_packed.wgsl",
+          "sha256": "1d57035421f4e8622ec634ec01d6d0a6296c3247a9ebce0c643397a5a13998d6",
+          "size": 2746
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/min_filter_3x3_luma_packed.wgsl",
+          "sha256": "21024299a70cf8f9b42d3e02a9415d811947aa23696a54878db4dfedbdf711f6",
+          "size": 2758
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/min_filter_3x3_rgb_packed.wgsl",
+          "sha256": "2b405fb1afbef519753d718a894c1f8aca3701cdf63deef0b0441400b1e4ab07",
+          "size": 6659
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/mirror.wgsl",
+          "sha256": "065ff8162dddae0ca9d16b24011e2921d37db9796f5e72770bf5a53a27bf3364",
+          "size": 1603
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/multiply.wgsl",
+          "sha256": "3ca7e741f36cb452780473aeb2387f84e9392c9714a462dcb60373ffb6f03ad1",
+          "size": 1904
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/multiply_screen.wgsl",
+          "sha256": "ae04fa5633fb856c4836326b903b5b2ac5c12fe4ba6f392283977dfa7c6f5dd6",
+          "size": 2065
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/offset.wgsl",
+          "sha256": "32d086ded1814f45b938edae6da11f289b20623c1432d45e157328457ceaab22",
+          "size": 4465
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/overlay.wgsl",
+          "sha256": "6deff25cb0fc54342782d3ef37cbfaccd1210ae47d2673ed251014e73597a99b",
+          "size": 2462
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/pad.wgsl",
+          "sha256": "d2577aa1d217eaec81f079595381d55501796b6cf4ed725299bb4e9a320f6db2",
+          "size": 2878
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/pad_hsv_native_rgb.wgsl",
+          "sha256": "f93bca97f62ab6c24066302e887f2c404063c3b9762d85a73a3cf024233128ca",
+          "size": 1916
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/pad_la_packed.wgsl",
+          "sha256": "41fa5fbff5f62acf75cae71d470eb6d7647efce630c199b5f6cf520e71a989dd",
+          "size": 2044
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/pad_luma_packed.wgsl",
+          "sha256": "8ad06598add93bc308117e39d319248e904b722c2b4c6d63fd9a5f6112e43c7e",
+          "size": 1769
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste.wgsl",
+          "sha256": "3d72b4e438bc87b00faedb0f2c3ea4de40f1b6469e0efd820465c3826fa240e4",
+          "size": 7708
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_bytes.wgsl",
+          "sha256": "86e85b9094382d370a57b30ac270ae410b43ee3994a6100d9403ed8d55159c47",
+          "size": 6316
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_masked_l.wgsl",
+          "sha256": "cfadc7279f56368167996ba0259cd342e87b9424abccd699f50c0b4f1247daf4",
+          "size": 3569
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_masked_la.wgsl",
+          "sha256": "3d3504c0199b76a2d41e16a8c917bf48d03fb2ede28d90c3b248b78903e0480c",
+          "size": 3871
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_masked_pa.wgsl",
+          "sha256": "55e2ee4ee3a45a97a59a07584e9841d411d4661a4ad31f4fe9d44fe07ed6ee89",
+          "size": 3976
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_masked_rgb.wgsl",
+          "sha256": "a3ccf5b93c946887eb264263df7eac8b451b82f0fa4361cb7d5493be931f970e",
+          "size": 4751
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_masked_rgba.wgsl",
+          "sha256": "6bd313313dc7b98aa9e8459a1dfda6a08cd6c387245e23da3032579367638e03",
+          "size": 3388
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_rgb_to_rgba.wgsl",
+          "sha256": "ac226e328582e584cc28efce11ee5d23cc1a7c487f0c65cef0f5571cc348d147",
+          "size": 2874
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/point_luma_packed.wgsl",
+          "sha256": "a03158fca5fe494ea2fb46283ca044b378ac4962c885273e5ad12921100db0c3",
+          "size": 1139
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/point_op.wgsl",
+          "sha256": "d14f695e20e4cacf4601f00ee7bcd9d0ba34b7a33fef9ab9f8654e51f8b6d406",
+          "size": 2057
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/point_rgb_packed.wgsl",
+          "sha256": "4cdab7f6f2d725b5b13b67fdec578b493e60b81ffc3b39b93102b3330d5012f3",
+          "size": 2911
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/posterize.wgsl",
+          "sha256": "ad6cb5465af3c9931b5a06e1a812d33a2d12f7491c65df2f096e6ecb783047aa",
+          "size": 2003
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha.wgsl",
+          "sha256": "3e3240466470844111fcfc27f26c0d8f519f45add7ee703bf4499a0240f0af1d",
+          "size": 1708
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha_data.wgsl",
+          "sha256": "3b47620230bb8957178b502d8ffddfa53bd8c44cda51d03ad709a11e8cde7db1",
+          "size": 1976
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha_data_native_rgb.wgsl",
+          "sha256": "87582bbd72cf30c553463aa86b9db2faa6893325834b55d49e428a6f9c9cf2b2",
+          "size": 1450
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha_data_native_rgba.wgsl",
+          "sha256": "0e6fc3e92a923b543fe607840cc21546917041451cca1e57e888d8dbbe5cea55",
+          "size": 998
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha_native_la.wgsl",
+          "sha256": "d975c815bdd32a973b488f33fb15b54f83a6f2cae7ecba92caa55265e0e68104",
+          "size": 944
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha_native_rgb.wgsl",
+          "sha256": "c855f7bd7e707c1ccb2dc18ae811110417f292b9eff3a7e9eca319c8594a1d92",
+          "size": 1170
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_data.wgsl",
+          "sha256": "e33d53af1ccac4fb65ec2d6138d52a56ed95bbe617ffae16515ace128c5ae674",
+          "size": 2761
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_data_luma_packed.wgsl",
+          "sha256": "e5f6e267f6dd01b212a810d87324c575062532fb9ef2a7f634b6c98f3891aaf3",
+          "size": 1979
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_pixel.wgsl",
+          "sha256": "44ea020f61a7d01f9add1f7f67c7a8c8c357e9d3ebdfe978537dfa5f04aaa8e3",
+          "size": 2440
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rank_filter.wgsl",
+          "sha256": "514671597fdf88dcee32f068425a6cbccc61f3dba9146edac937a990d85a1d3d",
+          "size": 4964
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rank_filter_3x3_la_packed.wgsl",
+          "sha256": "108dfe3dafcee7ff3abf4cbbf7888c9a93f0cced33de8c4b7c0901a81f909720",
+          "size": 4234
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rank_filter_3x3_luma_packed.wgsl",
+          "sha256": "36f3f96200b9aa22c0cdfd4615f7eb6058a589bb497e1419ecf60e2121d7b6c0",
+          "size": 3167
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rank_filter_9x9_luma_packed.wgsl",
+          "sha256": "4cb4cfb1c5624b668b744ada9a93c276c698f39da30b77e5d5e38435f4e43f7a",
+          "size": 3947
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rank_filter_9x9_luma_row_packed.wgsl",
+          "sha256": "38b138558705e140c896688c6759c40782e47271471faf6f15ea8561fb042fa2",
+          "size": 3745
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/reduce.wgsl",
+          "sha256": "6dcbb253d25863fba1981cd066321cd43eb9e5533c1114543613161e0f14331d",
+          "size": 6033
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/relocate_native_bytes.wgsl",
+          "sha256": "8d36f17f5a4fb4ddbe772fd07911a4142376faf721ea7b247028c269b5075f58",
+          "size": 2535
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/remap_palette.wgsl",
+          "sha256": "728f76b7a15953eb141b9b5182fe20f65c3eba7826e9dbefc36179f2aa40dbd2",
+          "size": 1707
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/resize_bilinear.wgsl",
+          "sha256": "34e9e19c05fdd7c9d26104ff45dc0be75599a441e1ddb57b7018358e2f78458e",
+          "size": 4221
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/resize_convolution_h.wgsl",
+          "sha256": "9c95a2b6f73ddc23515a6fd5762b3b9dfc99228e226c9f19be7481ec13573a29",
+          "size": 52942
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/resize_convolution_v.wgsl",
+          "sha256": "89578725c738551f0f669aba7229d83df3e9787da58d9f39e4a73dedb7afcc08",
+          "size": 50673
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/resize_convolution_v_pad_rgbx.wgsl",
+          "sha256": "41b7e5b2158a6ff7e75d6fc60f93a68b000808a51f1009a3995e86a7d17439e8",
+          "size": 2752
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/resize_nearest.wgsl",
+          "sha256": "d8da8c96dc794519c9f3dbec002212bb403febb54bc31a2c1132c154bd22cd44",
+          "size": 2592
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rgb_to_lab.wgsl",
+          "sha256": "1a536dbd38415765cce081427064b8850aeade0cc9e5c33557d8e2522ebc2a65",
+          "size": 3052
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rotate.wgsl",
+          "sha256": "c618f0b3c2270eb7a42395f51216c4df12decef58e2ddb3fe816580d6335cc37",
+          "size": 4204
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/scale.wgsl",
+          "sha256": "529ee9535226c4b5bf33d790a3c240c287c80ecfbb33ad5fb7111884d3d92fae",
+          "size": 2394
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/screen.wgsl",
+          "sha256": "a789cec4b5f08d3eea6d2bcb673c44cff43a30d8ac41db95d63e4f72a8564bd8",
+          "size": 2020
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/sharpness.wgsl",
+          "sha256": "bdb85f5baaa92c89dd76c2344cd6a7bdf9958f18a41139ab36d89e034360ec3f",
+          "size": 6281
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/sharpness_l_native.wgsl",
+          "sha256": "1b0ca6f7bf63819af721f717f5c5a4932d0f4607af967ece91ed6af0b8f562b4",
+          "size": 5664
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/sharpness_la_native.wgsl",
+          "sha256": "b54408cadcf20361415acfcdf9869d84f383cee02586a2b68c49218bbb68a71c",
+          "size": 2435
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/sharpness_rgb_native.wgsl",
+          "sha256": "1b1a561068598646d224307c211863179ad0c70be7cd386f2874610c4306533c",
+          "size": 2904
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/soft_light.wgsl",
+          "sha256": "010eb6350eaef80792ba05b182a2f3aa9b9616bc243d0ff9c033d46502c9d88f",
+          "size": 2117
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/solarize.wgsl",
+          "sha256": "817a4cf5879486eab70993f2c4ef2d1db5349460ea270b628b1805d47ee50469",
+          "size": 1835
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/subtract.wgsl",
+          "sha256": "497c19af70d0dfc2c075bc9cedbc6b344ba44a48aa23dcc74346daab17d5d2fd",
+          "size": 2094
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/subtract_modulo.wgsl",
+          "sha256": "a6b257fc49177e8896ffaa95677ad891f4a34e66a0f94bac3144e7fb315a6cbc",
+          "size": 1903
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/thumbnail.wgsl",
+          "sha256": "76e8bfadcee0aea9864460f6d0408ef8b44bcc74bbb0cfece3d19f5a4171535f",
+          "size": 3958
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transform.wgsl",
+          "sha256": "61bb7bd90a14c152c2bb43723fb8f58cfdf08caeeecdc9d99bde05b07aa1f75d",
+          "size": 34538
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transform_geometry.wgsl",
+          "sha256": "e1999e39f520bc5e54dd59179f119570b5cbc34d7c8b2c648d4fdb52d1151fff",
+          "size": 25736
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transform_l_nearest_packed.wgsl",
+          "sha256": "af5fb0fcebb3b9f25a3cc046bc4e9934ab17c5423770568fe76da7ad7eb6e3b9",
+          "size": 3857
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transform_la_nearest_packed.wgsl",
+          "sha256": "2ae1f56b97ac11542c117c8ae95348b4a3eb708b6657728d0845c15be9b56318",
+          "size": 5015
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transform_rgb_nearest_packed.wgsl",
+          "sha256": "0d50b112589a244d13a663032f81f26b121a34e416421d5d3c8e78c0a23eef56",
+          "size": 5185
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transpose.wgsl",
+          "sha256": "2c330ba56eb26d6822efa1d7c6b7a8da437157871654df1e781855f191cf8415",
+          "size": 4233
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transpose_rgb.wgsl",
+          "sha256": "14d308a5efaf1430ce0431d4bf40d90747bf90a18e3b79422a47470d1f8ec562",
+          "size": 3019
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transpose_rgb_tiled.wgsl",
+          "sha256": "45eef428595f6deeaedad38dd6e9184a8467c944dc5f8f72036431f49727aff6",
+          "size": 3020
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/stream.rs",
+          "sha256": "f39471d7eaa6229ceb007598d014ef82a7b521e9775e1989dce83b0ce22d34e0",
+          "size": 89665
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/mod.rs",
+          "sha256": "3f5a4ac950e23fb11105f4145eb6411cfd6beb6b78d7d7b6577d9c2bbe19d03d",
+          "size": 48072
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+          "sha256": "ac0e621b0918fe913341b2c7ed5df9892b1dca2cdf241d4aecece6a528f97c37",
+          "size": 1378191
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/box_blur_luma.rs",
+          "sha256": "9197f517d0e776d6403522cca3d6d2901be95b2fd57b2780b1f46b0c0ad1b507",
+          "size": 2869
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/box_blur_rgba_avx2.rs",
+          "sha256": "98556b968ba32738c350c212cc0ba894fbb8d078614702e9c6bd48db2af78a0f",
+          "size": 6723
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/box_blur_rgba_neon.rs",
+          "sha256": "7649aa692c011ed1d76d90f6845db5bffc56008cd7bb6a2296359871de2927ec",
+          "size": 9621
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/cmyk_packing_tests.rs",
+          "sha256": "77a7e7ba202c88e8dc1d25fddbe883599e5cb757725dba08e03f8c700eccc224",
+          "size": 2574
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/convert.rs",
+          "sha256": "47b57e8884b8943eea6fff9132dca1b3a7a4391617054dc91f3d9b456f032a67",
+          "size": 6909
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/convert/kernels/mod.rs",
+          "sha256": "f0e6f9b23916fbb0f8ed9107093e4442db20b79d43ab167eb8fcc678677142c4",
+          "size": 1042
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/convert/kernels/rgba_rgb_neon.rs",
+          "sha256": "a5bf924fa43116d84456556ef43abea4ad5812554a9fc7b1211f8f1403979be4",
+          "size": 3329
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/convert/kernels/rgba_rgb_ssse3.rs",
+          "sha256": "05f92f7e75e7068f84e3e307854ce031311aa9b59034521941c33f77326d31a1",
+          "size": 5202
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/extract_band.rs",
+          "sha256": "01e7b0da0007ab1d816442f4df58f0b70902931e1733e819807da74ef698bbbc",
+          "size": 17521
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter.rs",
+          "sha256": "a4950c462e460ac3ba203440079a9e005b0490d8db5091c4fd26c302a9e71077",
+          "size": 14407
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/byte_layouts.rs",
+          "sha256": "0cce71d57891c3631e179edc82e2deb8b0952cae7b7581b440a599a836d66275",
+          "size": 7031
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/l.rs",
+          "sha256": "929b99ad3f71627bd681c901569f7cec7b60f855960be9c918ef731df9df29e2",
+          "size": 11142
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/la.rs",
+          "sha256": "8d0bfa51361b116205fa655a1e2e423e2c16f9ca9b37c4c7ad04666e8909f442",
+          "size": 8082
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/mod.rs",
+          "sha256": "bec4424db6f7fabd8144a8c172196b9500c7aea9c9d73e65b74ccc9097a35659",
+          "size": 1360
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/rgb_blur_ring.rs",
+          "sha256": "eb5bf84a14d9efd07133a981d7f1dd72486d67233a4451931415a20f5ff9f8a9",
+          "size": 7936
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/uniform_rgb.rs",
+          "sha256": "bb2664d3588da83e9e8a1141eeef95717749c04044b7c9f87806a1c326bb94d8",
+          "size": 4301
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/gaussian_rgba_uniform.rs",
+          "sha256": "bf7e45fa56ebab76b6263f97463722088a527529b2d5fed7a8a7947076840689",
+          "size": 6592
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale.rs",
+          "sha256": "93674c82b7bee71fd647eb5e75ef0f085ddf468f6d2c1b072abb0aea5a8b6660",
+          "size": 5653
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/channels.rs",
+          "sha256": "6ef271a48854020d59b41ba80f971ac7806053b097b8cea7557f46e36a248fdd",
+          "size": 8920
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/cmyk.rs",
+          "sha256": "4d7377af0695c35ecf727e38cc5f9b3e6af0a59a14af5549ba248fb4ffe448d5",
+          "size": 8343
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/mod.rs",
+          "sha256": "deb54f7aa6ffa269424a2fd116c6ff0235d403934d442ca651f08ab69e419df3",
+          "size": 539
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/rgb_avx2.rs",
+          "sha256": "72779ad6df7271de98a2cb6833100b00ea0acf4dc03e1b98b69af420d9224ab6",
+          "size": 8670
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/ycbcr.rs",
+          "sha256": "cfc040f63fb19db6780189618257c22bdbe7c442c6a6c1d144019c961d2c751c",
+          "size": 5198
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/ycbcr_ssse3.rs",
+          "sha256": "a4ebfb9a978e260ac328ea7c5d9afaf1094bffbff1fa2184e8a15379ceb65712",
+          "size": 2777
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/median_filter.rs",
+          "sha256": "40f9b4e5250cfcfa46eeb6eae223b282b33b85f2d6b744ede6360a9ba1f0a9ef",
+          "size": 3294
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/merge.rs",
+          "sha256": "ed13bf3e8c677ab314c310a8f0c9ad98ff8f2b865fbfff7f05c4ef7cb27eb8e9",
+          "size": 11680
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_put_pixel.rs",
+          "sha256": "8021c36ddd1dac2ce5827b65b9db3c224554159e2a13a8538f0f283b73f82753",
+          "size": 7715
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail.rs",
+          "sha256": "15c3c3de9fd09731c3038be50fa1238919084f29059e2ea08d985c9ded1b96fe",
+          "size": 29833
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail/float.rs",
+          "sha256": "e0ca4418e7fa6ea24516315de8bdf89d555100ec50d7d447fddefe1d2b4dead2",
+          "size": 13330
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail/integer.rs",
+          "sha256": "859c3afa5a1ba76f7fb53fb04c6adde220315130c45314a27b0033586385ba6a",
+          "size": 12126
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/projection.rs",
+          "sha256": "8d8961d772b6b78b23227d2f17d361ab76f6d162932b914a49d5608faa869b63",
+          "size": 9152
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/resize_i32.rs",
+          "sha256": "cb0f0dd6dfec359685e5544e57aab009b27d45ae6dfdc06e2f5fa49938da5ffa",
+          "size": 23438
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/resize_i32/neon.rs",
+          "sha256": "1bfa598cff4f04cd95150581a277e3c24ccb82945cc6cff1b67d4eeed74de7a2",
+          "size": 12392
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/transpose.rs",
+          "sha256": "60306ecb8ebd6ac26f2ee979a8da5045ef7bb1760a378d3a3ad0fd9fef9c9f26",
+          "size": 912
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/transpose/kernels.rs",
+          "sha256": "dc0a1a468424d575cbf75f88afe690955205c43f09d22085bf989e71153d8c05",
+          "size": 345
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/transpose/kernels/rgba_avx2.rs",
+          "sha256": "a66fb6b97212b0504bb355d2501c84113c1e787b08f58e0f28507722937bf3ff",
+          "size": 6480
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/mod.rs",
+          "sha256": "a9bb1b8e649c048bd3776dc636c0f9622658aa8691b45d3736a2e3779abb8ba8",
+          "size": 674
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/native_channel.rs",
+          "sha256": "68beef7f015a267c1fffaff3afb7d5a2a24cfea394d4bca88074e731e58b416a",
+          "size": 14233
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/native_filter.rs",
+          "sha256": "938ef09bc7c0949224761cd81f8d888f3b9150bc50d6aa9fc8dd15b15e4c9fed",
+          "size": 10749
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/native_merge.rs",
+          "sha256": "7315b869c262136582213ef10165db36be7e7089e8bbb4182d839e470b089685",
+          "size": 14595
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/scalar.rs",
+          "sha256": "d291e7539020190691495457df8bfd7851541426c8da9e1d9ba0eb353ae03978",
+          "size": 145566
+        },
+        {
+          "path": "pillow-rs/src/compute/registry.rs",
+          "sha256": "c85deb6f6ba7467003c87a01238b497ec9d6bf5676a930460ac00f26ce780dd1",
+          "size": 110118
+        },
+        {
+          "path": "pillow-rs/src/data/lab-identity-profile.icc",
+          "sha256": "44a75dfa14e4fbe2c73e4a05eb6f778356d6f12bd55337229131125224e19e09",
+          "size": 572
+        },
+        {
+          "path": "pillow-rs/src/data/lcms-lab-lut.u16le",
+          "sha256": "547dd2ec6110be9f5d389fe5a50a5ede19ea528fdbdcfdae075f623771749e97",
+          "size": 215622
+        },
+        {
+          "path": "pillow-rs/src/draw/mod.rs",
+          "sha256": "988d46896eaa77cb8a41078bb52d56cbd44d514e51fd751ef2dde946c0b9ed3e",
+          "size": 121671
+        },
+        {
+          "path": "pillow-rs/src/error.rs",
+          "sha256": "d718c8e15e6640ac47263d549780db472d2b9e5451e0d7bc1de471527ff2b08a",
+          "size": 6500
+        },
+        {
+          "path": "pillow-rs/src/font/courb08.luma",
+          "sha256": "ff78f1b6d98ed40932e795d3786d0154fb1c2b874c191e3c662676c615846742",
+          "size": 15960
+        },
+        {
+          "path": "pillow-rs/src/font/courb08.pil",
+          "sha256": "5e85438582f0e790b6b115d1afd66fa439d9fc45875af5cc760af7034d67187a",
+          "size": 5143
+        },
+        {
+          "path": "pillow-rs/src/font/courb08.png",
+          "sha256": "afdc82adb778486c71c5cc9c6f88623b3c7e5044e80ff7b32d973663eff31ed0",
+          "size": 1273
+        },
+        {
+          "path": "pillow-rs/src/font/default_aileron.LICENSE.txt",
+          "sha256": "5ea183192a19db4959777614e7a74260549b4dbadce12e37f2167ec4d450b50e",
+          "size": 777
+        },
+        {
+          "path": "pillow-rs/src/font/default_aileron.rs",
+          "sha256": "41ae42f625883a1ed341b22f1d2dfe87d1ff1a2436525f828adff4f1ed06b49f",
+          "size": 698
+        },
+        {
+          "path": "pillow-rs/src/font/default_aileron.ttf",
+          "sha256": "69853909b940023570964e29cffe30da95aea8de3627736b5cd15ab30143169f",
+          "size": 12676
+        },
+        {
+          "path": "pillow-rs/src/font/imagingft.rs",
+          "sha256": "b44fee7667a7cb949ac0cc07d371142bbb8f75efb89dfc15db549076cde4b9a4",
+          "size": 89650
+        },
+        {
+          "path": "pillow-rs/src/font/mod.rs",
+          "sha256": "b2456c3ad16e4cb01137ed985b74d0553bd55fec7a70d542c02ca796b4719670",
+          "size": 34881
+        },
+        {
+          "path": "pillow-rs/src/font/pilfont.rs",
+          "sha256": "8eb11eb66392e5306788e8f113db5544371035d283d8b71b9cca5af95d3374b9",
+          "size": 30979
+        },
+        {
+          "path": "pillow-rs/src/format.rs",
+          "sha256": "131635d265736648529f52a1974a3586d0fe2f27f91f3e7f1f2ae331e7447752",
+          "size": 784
+        },
+        {
+          "path": "pillow-rs/src/image.rs",
+          "sha256": "423f9d54b312afb31fdf10b294309fafcf12e5a375ece9887d2b2e238db547e3",
+          "size": 414000
+        },
+        {
+          "path": "pillow-rs/src/image_getchannel_receipt_tests.rs",
+          "sha256": "f5517bd54a743ec7f6db25c79c72b1920a25b59057aadba2a3a9996c4c9d46e1",
+          "size": 8367
+        },
+        {
+          "path": "pillow-rs/src/image_sequence.rs",
+          "sha256": "a7507d15efd5fa14877bf229004b565af5a3a54c7d0de9909509420b156e618a",
+          "size": 1176
+        },
+        {
+          "path": "pillow-rs/src/image_utils.rs",
+          "sha256": "4a2e540fb32969e95846cc50db81f5b075163d9f72e2a4ec0599f4e670b05914",
+          "size": 4218
+        },
+        {
+          "path": "pillow-rs/src/lab.rs",
+          "sha256": "791704d79107449362ac96deafb549107e9d9a8ed0cd03a83e890f2428eee060",
+          "size": 10465
+        },
+        {
+          "path": "pillow-rs/src/lib.rs",
+          "sha256": "40ccc22adbc06857bef97a68f5a0317c0ef6143123f2e031e47bee16f9dfe43c",
+          "size": 40226
+        },
+        {
+          "path": "pillow-rs/src/ops/analysis.rs",
+          "sha256": "f6cd352a0a1b122eb4d086207e908bbd89b91d7fb3477da506f9e214ecf3746e",
+          "size": 34132
+        },
+        {
+          "path": "pillow-rs/src/ops/array.rs",
+          "sha256": "177e6987fde718ae48001542736be7fe24ce7ca72f40d583a1e2d1b81bd49010",
+          "size": 11688
+        },
+        {
+          "path": "pillow-rs/src/ops/chops.rs",
+          "sha256": "990ffb9f2ad834b19731c8e58447ccaee09e031a2dcdd1f74f067af0f98e46ad",
+          "size": 12161
+        },
+        {
+          "path": "pillow-rs/src/ops/convert.rs",
+          "sha256": "43f60a540d258b2460f40ed79b8dd5ee30a46fbd3b607c969090f3e3e58e30fc",
+          "size": 66856
+        },
+        {
+          "path": "pillow-rs/src/ops/crop.rs",
+          "sha256": "f012e9edbe22fff5ab5049e81b31cc71d26302df04b9b5a3a74ad8b650e1412c",
+          "size": 9638
+        },
+        {
+          "path": "pillow-rs/src/ops/enhance.rs",
+          "sha256": "fc09b4b3967ce14f57462ce2fb59127665f1e2b3cb6f5493bbba9d76df32f18b",
+          "size": 15370
+        },
+        {
+          "path": "pillow-rs/src/ops/filter.rs",
+          "sha256": "b9a090099ad4270b8117ce6f53eb5e9d36f82237b109940c7cd3b90b7ac21e71",
+          "size": 11297
+        },
+        {
+          "path": "pillow-rs/src/ops/imageops.rs",
+          "sha256": "c0606b3154095c8fcb0c2f9b032cebed9b534302b0a2c1f50d16ebc3658dc641",
+          "size": 70373
+        },
+        {
+          "path": "pillow-rs/src/ops/lut_hardlight.bin",
+          "sha256": "8dbd3733ca41004196798d49ee3604ef4715b23af3532888d02d6f11c610dcb2",
+          "size": 65536
+        },
+        {
+          "path": "pillow-rs/src/ops/lut_overlay.bin",
+          "sha256": "3445b33eb78975a5fe9b176ef9d657dea51ad52e0427d4837d78f9944eb58745",
+          "size": 65536
+        },
+        {
+          "path": "pillow-rs/src/ops/lut_softlight.bin",
+          "sha256": "486b4815fbfa878d1414dd3eadfcf0dab0ce5c75a3bc2e20fb0082eb48ae809d",
+          "size": 65536
+        },
+        {
+          "path": "pillow-rs/src/ops/mod.rs",
+          "sha256": "d80f102dbe012c2d3e3818a36ce78f235e7c0556b74d65edd1dcb46c82b5b703",
+          "size": 1464
+        },
+        {
+          "path": "pillow-rs/src/ops/module_fns.rs",
+          "sha256": "712beb44af8dfe37c711c83c312e78065cecdb67b62d9a5234b487125bde5720",
+          "size": 41004
+        },
+        {
+          "path": "pillow-rs/src/ops/param_filters.rs",
+          "sha256": "e21d561b76ccd45417c6b95e66d1ebcfce4a849da1337ab5bb032803b90a806a",
+          "size": 30494
+        },
+        {
+          "path": "pillow-rs/src/ops/paste.rs",
+          "sha256": "449c35d952e745878fe8632f7c6170ab76e088c2488fa018375d2a1acd98928d",
+          "size": 33408
+        },
+        {
+          "path": "pillow-rs/src/ops/pil_resize.rs",
+          "sha256": "c2174fd05d57e27b06e5d22a8d7638cf8492f4949f2c4b65910bcbf39d0587da",
+          "size": 227549
+        },
+        {
+          "path": "pillow-rs/src/ops/quantize.rs",
+          "sha256": "d15638fd452c6b920bcb9a4b43fcd5b5a5a5d7971f3683dfecf6706d91c5b21b",
+          "size": 89897
+        },
+        {
+          "path": "pillow-rs/src/ops/resize.rs",
+          "sha256": "2db8c86a26b2c99db50a8a68ba2a547e5d2f7b1bcbd1f396aa46b561e1bfc9ea",
+          "size": 27454
+        },
+        {
+          "path": "pillow-rs/src/ops/rotate.rs",
+          "sha256": "5e4ad1b097c3b0d11cb9b9fa12da314303da976715c1de2ea495e9ac2c67a5c6",
+          "size": 11201
+        },
+        {
+          "path": "pillow-rs/src/ops/split.rs",
+          "sha256": "118c1b763f349d98b9d43e6dabfdab315a229181f8c5650a5041c6dc6e42c44d",
+          "size": 4393
+        },
+        {
+          "path": "pillow-rs/src/ops/transform.rs",
+          "sha256": "610b5b5a50ddfa232b256d719fe51b4fa4380f225c01022a2c50a2d70faf7b26",
+          "size": 33400
+        },
+        {
+          "path": "pillow-rs/src/ops/transpose.rs",
+          "sha256": "b88d4cf1c6c18652fc2e88b2fe308892090f400282d8a0430823db0efa2ae959",
+          "size": 4146
+        },
+        {
+          "path": "pillow-rs/src/ops/utils.rs",
+          "sha256": "b99b6a9b317a03aad80f5d3983d8a4e034a6be61b0f1f30ce45ca080a68ab4c4",
+          "size": 2766
+        },
+        {
+          "path": "pillow-rs/src/par.rs",
+          "sha256": "12c89ca10f6373eb3d0aea69b883bd5dc5481ebf4512dca6a717f78208fafcdf",
+          "size": 8907
+        },
+        {
+          "path": "pillow-rs/src/pipeline.rs",
+          "sha256": "76bc61818ac19fb31db4b81fe6d7311e4e224f75cbc6a0618d8fe24f7f4d843d",
+          "size": 33795
+        },
+        {
+          "path": "pillow-rs/src/raster/buffer.rs",
+          "sha256": "bc2a10cd2539c06af324c423c018cd176da795701bc176f9bd6200da99e147d4",
+          "size": 35824
+        },
+        {
+          "path": "pillow-rs/src/raster/color/blend.rs",
+          "sha256": "0025717a5a7d2bbb2e560bf990f4a23c0285afab10b07b659a4f2b0f66c84c7e",
+          "size": 2963
+        },
+        {
+          "path": "pillow-rs/src/raster/color/from_color.rs",
+          "sha256": "264461c175674427da823a89e68ae3d7bb7b38dc10a00932323498ca647edb2c",
+          "size": 5971
+        },
+        {
+          "path": "pillow-rs/src/raster/color/from_primitive.rs",
+          "sha256": "fa865f49a43032a0de4f2860c7e87c4c56ea9ebbaa6632c143ef0bd00dbaf728",
+          "size": 2802
+        },
+        {
+          "path": "pillow-rs/src/raster/color/invert.rs",
+          "sha256": "53005874b81ed04e4501eb002a88a49634ff4781513b8dc6bd3b70bbde5535c7",
+          "size": 1248
+        },
+        {
+          "path": "pillow-rs/src/raster/color/mod.rs",
+          "sha256": "cbb74b97cc00963a964b0b2ad1a8296bc9e5f28e3b171be9bfda65919713ffda",
+          "size": 681
+        },
+        {
+          "path": "pillow-rs/src/raster/color/pixel_luma.rs",
+          "sha256": "1e9d4219d307c13fd62125feae854b68af434afa07809a1707f5ddfc8035eea4",
+          "size": 5738
+        },
+        {
+          "path": "pillow-rs/src/raster/color/pixel_rgb.rs",
+          "sha256": "3bfe45c87eacbe4b7577805cd351f3247550e427ad90ad65b43bf24d04f14f58",
+          "size": 5719
+        },
+        {
+          "path": "pillow-rs/src/raster/color/types.rs",
+          "sha256": "96cb960ea3564bebc0cf6b295c9e3633584dc97435fe61769686bc7b64f6b57e",
+          "size": 9805
+        },
+        {
+          "path": "pillow-rs/src/raster/dynamic.rs",
+          "sha256": "a650147cbb7c1d64ace85aaff18318da9f664a0800073b55532ee38d0fa3b06e",
+          "size": 44500
+        },
+        {
+          "path": "pillow-rs/src/raster/error.rs",
+          "sha256": "94621793de2ed12e7ac39618aa2551958650ed40aae09f8813ca8134b8f255ee",
+          "size": 741
+        },
+        {
+          "path": "pillow-rs/src/raster/mod.rs",
+          "sha256": "4fc66edbd268da955328ff1973d2b17b23e54aca926bb5061414af6746668c75",
+          "size": 910
+        },
+        {
+          "path": "pillow-rs/src/raster/traits/mod.rs",
+          "sha256": "dca7b70b0832351274c90dbab4f1025f62477bdd38a196f3707c80022076696e",
+          "size": 547
+        },
+        {
+          "path": "pillow-rs/src/raster/traits/pixel.rs",
+          "sha256": "f17c2e27d33f9ea56fccd06a619891b5801ffd407a8c70ae8d0f465311a4facb",
+          "size": 3601
+        },
+        {
+          "path": "pillow-rs/src/raster/traits/primitive.rs",
+          "sha256": "f7a03867835654464a32b71550bdd42240f1174214dfc2346172c6de20b98090",
+          "size": 9527
+        },
+        {
+          "path": "pillow-rs/src/raster/traits/view.rs",
+          "sha256": "f7deda02e0b2ff65a01f5f3fa4c38d89475f5e5a9fc986f5ff334df38528367c",
+          "size": 7132
+        },
+        {
+          "path": "pillow-rs/tests/fixtures/assets/image/rgb-small.jpg",
+          "sha256": "c4eac9a1418c51055cec8c68c907eab4115f8b9bd6ef42e4516b7300519ecf03",
+          "size": 647
+        },
+        {
+          "path": "pillow-rs/tests/fixtures/assets/image/rgb-small.webp",
+          "sha256": "a604c170ddee575e5c10228cfe64ffa01911362c598f94549dd18829d8cfa4f7",
+          "size": 66
+        },
+        {
+          "path": "rust-toolchain.toml",
+          "sha256": "9540b7539084cec826155fb724843e3b3e54c37c97186b558faa01c3849705e3",
+          "size": 103
+        }
+      ],
+      "sha256": "d4521f32d9a64706a99366105b7f9e553799e9ebf6a8e6f7bc82e8292af69ec1"
+    },
+    "before": {
+      "files": [
+        {
+          "path": ".cargo/config.toml",
+          "sha256": "1432363e60b718fa7de9a08091192c01a64a711f9ee6afa60a0f1ba882cbab15",
+          "size": 360
+        },
+        {
+          "path": "Cargo.lock",
+          "sha256": "95edfd4fa4978ed95dfbdcfc4355004e4368cba94a3fae14d4156829b2377328",
+          "size": 39490
+        },
+        {
+          "path": "Cargo.toml",
+          "sha256": "d8e534fc20b7e2e9253bb78edeead8da80c4adcdbf2ccba8ba10dda6a3cb47b6",
+          "size": 3477
+        },
+        {
+          "path": "pillow-rs-js/Cargo.toml",
+          "sha256": "8fb4b6c10c4c700f12a1af76c262905b439dbbaa3df7c4d71db6f64f6f39a805",
+          "size": 1224
+        },
+        {
+          "path": "pillow-rs-js/src/lib.rs",
+          "sha256": "45926ca78c1934ec18a2cf2fb69f3a6adfac07d3449932652aafc7633b0fb2d8",
+          "size": 186139
+        },
+        {
+          "path": "pillow-rs-py/Cargo.toml",
+          "sha256": "9bd621750a3975976bed9da27d156e23fcdd19f5c65ef74c087e9883cbc4c8df",
+          "size": 796
+        },
+        {
+          "path": "pillow-rs-py/src/gpu_batch.rs",
+          "sha256": "9b92e4d65cecd78e18eac6076d032bda5e09bd172c1817277d17026ef1298726",
+          "size": 5694
+        },
+        {
+          "path": "pillow-rs-py/src/lib.rs",
+          "sha256": "068c22d3b7964dd917584118860de0034623b7f19683e36a87d997b8e8b3ca24",
+          "size": 174568
+        },
+        {
+          "path": "pillow-rs-py/src/putdata.rs",
+          "sha256": "df6b14bf4acdeee302762b90b284bdae9c0b86c582ce10d2a897bdaf7b55aa25",
+          "size": 11156
+        },
+        {
+          "path": "pillow-rs/Cargo.toml",
+          "sha256": "b0891fe5a8f44b25468e5754e8cfe1ea08b8576eb059b9d64fb506eda76a39f5",
+          "size": 2365
+        },
+        {
+          "path": "pillow-rs/src/checked_dims.rs",
+          "sha256": "995d42c14c52eabde5995cbce911eec3e5d3caab12e7ee09288ed60b85e3caed",
+          "size": 8678
+        },
+        {
+          "path": "pillow-rs/src/color.rs",
+          "sha256": "c9e447edf8573ac9e20f10565c3a66a9486abce4aaea75cb81dfbaa706b6851a",
+          "size": 83558
+        },
+        {
+          "path": "pillow-rs/src/color_grayscale_allocation_tests.rs",
+          "sha256": "dbbd664cf3d0ff74c738de771e1504dbf75c625eb062817261334cb19d6bd29a",
+          "size": 3466
+        },
+        {
+          "path": "pillow-rs/src/compute/mod.rs",
+          "sha256": "a947d6f5aea936625e2d254d74d2262d97bad18e26d8896d1aeccf920c140d15",
+          "size": 128381
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/mod.rs",
+          "sha256": "aea865826712c8d8bb5d88bb76918c9ebff810a441a5c4a38455e5247db78261",
+          "size": 32529
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/chops.rs",
+          "sha256": "d1a1e3dd08ff3e2475a30fca22136f7cae8a9e063fb11c877053cf142a70bdb5",
+          "size": 16151
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/color.rs",
+          "sha256": "1e0536eeccdde70eac33495bbdc1553749021f4f63a81a5e1d9acf6daa7dc732",
+          "size": 19505
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/color_convert_allocation_tests.rs",
+          "sha256": "c67451d9009cd1ca10f32a49e8dd743e5500d8042e0ab29f2cb8b2885756644a",
+          "size": 5666
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/draw.rs",
+          "sha256": "f2a4c8ead9d75cc298dd1d1f4c92cfbd832bb9918a00dd626f40948c0ede250a",
+          "size": 53191
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+          "sha256": "1f37a51c36416f7f73cb2479de96b5d1067df4dfe4943a0a6923c680e3891882",
+          "size": 250467
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/enhance.rs",
+          "sha256": "0bb522bd3bb3886561eef8f9eda579012350b8e0f34904a7acba403ac1bda154",
+          "size": 20497
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
+          "sha256": "0452fd48c8f486bcb97666abfe178cc38e2504192ec8a890706b52c22d4c0110",
+          "size": 246770
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter/kernels/i32_cross_smooth.rs",
+          "sha256": "e064466951d141db6aed6ac798cefa76f5f7bf213a00fd6353aa1adc10dc9149",
+          "size": 4228
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter/kernels/mod.rs",
+          "sha256": "b4f341363d4c4853ec2dfc43bf5fea14d6d7c54ef81da369c518d4d116ef8903",
+          "size": 320
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter/rgb_blur_ring.rs",
+          "sha256": "c7457cc47f53231c7276cdfbf20bf769102d3bb596e70f3f69eb4ddf2e8cfd4e",
+          "size": 7219
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter/uniform_box.rs",
+          "sha256": "f99f8921128c0dd408b2a4122064a30be6d8d4dc29732d58f22c476b868ea3d9",
+          "size": 4521
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/filter/uniform_box_tests.rs",
+          "sha256": "70bf9bbba2ab5837d64a4c1911bb389c97f2eb559bbd0d2769dba4ae8234b0b3",
+          "size": 6686
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+          "sha256": "8e2852743becd04ad63e607a897c9fcfc56cfef4b4c27a0dafb580fd71f89500",
+          "size": 232764
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/grayscale.rs",
+          "sha256": "9ef2e0694fa43c8cf33a824e06b9c5205378ff8aee2385c439f6a5a6a603f48d",
+          "size": 8685
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/imageops.rs",
+          "sha256": "35343722d9c71f2ac4c40d0c0de49ad5e32beb49f319fd8e9318498314684fdf",
+          "size": 99666
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_cpu/ops/mod.rs",
+          "sha256": "b113aeb6e9c5bbf0ae459f53377edbf515b5289a183b4fa43e5fcf280c154a23",
+          "size": 212
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+          "sha256": "9be8ab650c575030cec5435984ab928aa2205d2ffa6834d9d0f1cb7f1a538a8c",
+          "size": 1745046
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/add.wgsl",
+          "sha256": "032fb50de7576fd25d88683b03fecdd2ca9dfd79f9a242b8204adc1de6d05d3f",
+          "size": 2061
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/add_modulo.wgsl",
+          "sha256": "5e3295d1f202fca2014e5c63623637c5ed8a1a8ad4b2ce503190b4818a317015",
+          "size": 1864
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/alpha_composite.wgsl",
+          "sha256": "ec8840d1e51ae42ea8328bfb32efa1877d9ea77c094ba21a3ef6204e09e82469",
+          "size": 4040
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/alpha_composite_mirror.wgsl",
+          "sha256": "32a828f9e311b21b500c1a766ae42095ee769f43b9a2aeb2e810a9f2b71c8d01",
+          "size": 2550
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/autocontrast.wgsl",
+          "sha256": "7853426bd878fe176239767cca56d9afb0366e4290e9820c0793a5008d1c0d45",
+          "size": 1851
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/autocontrast_cutoff.wgsl",
+          "sha256": "d8ca5123bf32cc1f7a82df16ad7f1a861f2bf1dc1444ac11e47d2af3d0bd0710",
+          "size": 4784
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/autocontrast_remap.wgsl",
+          "sha256": "09da77724ca9f711794ee77f40999ed5bad5e52c30cae868bda22fbdd18e157e",
+          "size": 1857
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/blend_module.wgsl",
+          "sha256": "10082cbbea8746da619ead3123e996f7b6b7ad5d6383d14393bbcb12c76f3c6d",
+          "size": 2289
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur.wgsl",
+          "sha256": "368c715138fe4f61d4305b773c28e6f767a3f1333f59c88743fd6fad7a1852f3",
+          "size": 3271
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_h.wgsl",
+          "sha256": "0f91488b0f5ac1eb275d84ace6d99c0865097fed9319ad717e70175475874bbb",
+          "size": 4121
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_h_la_packed.wgsl",
+          "sha256": "6d3db26c7a9413a9fd7fc03f2f40d79222fe951bb438401d2962ebd64565a0ef",
+          "size": 3230
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_h_luma_packed.wgsl",
+          "sha256": "a0c3de3be2b7ef8e6ddaf6dd81d2f1e843377bcbfce1d146ef7aac7248d330df",
+          "size": 4405
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_h_rgb_packed.wgsl",
+          "sha256": "9fb82b869b9a4830ce649ea7b9c153abafbf90f870db1e7a4467594ed99b0eab",
+          "size": 4236
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_hv_luma_radius_one_packed.wgsl",
+          "sha256": "2a923de24b89840d2a326d69838ba1ed82437cb4310db82b87d6fc6dd520c59a",
+          "size": 4004
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_hv_rgb_radius_one_packed.wgsl",
+          "sha256": "9143ae1f8f0343773fcded77ec57e10534b21e332c6da5215c54e0897274859d",
+          "size": 5868
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_v.wgsl",
+          "sha256": "5e9af4336cff2646e264aeecc07ce458f74d8db4b25978d0718416121939ff1b",
+          "size": 3953
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_v_la_packed.wgsl",
+          "sha256": "ac9ee56e0cf9011215b8b5cee0508e2607bd42cd6b334b482ab4ab9f2dd6dea4",
+          "size": 3263
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_v_luma_packed.wgsl",
+          "sha256": "0ccd87a6be76bbe270a8501a0a2eece84a9abe57879cc1d58da9f0f9daa2b457",
+          "size": 5940
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/box_blur_v_rgb_packed.wgsl",
+          "sha256": "af09f9bc1c82f2e64058ffd3b5de5fe11700c7730e7c95b05d639c06acd2e178",
+          "size": 4172
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/brightness.wgsl",
+          "sha256": "592b7b521b381cb697f5f85292fccf23b1a5896e86f95ae6400a24bfe78b0c5a",
+          "size": 1944
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/brightness_native.wgsl",
+          "sha256": "d18b739161c60a36078703ad0f7887d3554042dbc9f9710a200f9234b94efad3",
+          "size": 1388
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/color_3dlut.wgsl",
+          "sha256": "8202af1bb38a53694b011902f753793baf618d018a22a4ba446b8585a348f70f",
+          "size": 3206
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/color_saturation.wgsl",
+          "sha256": "ea603ffae4220ad0d3a43232ef578b74b2e2bf5edcab31e06d685993843df0b4",
+          "size": 2908
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/colorize.wgsl",
+          "sha256": "322ac109f32a1d0889033b1ce62a3cb02bca9e6dc7fcb42f90f959fb1f786c34",
+          "size": 898
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/composite_module.wgsl",
+          "sha256": "2e21c9dc3385e62234fa7510a4e7404388e5f11f735b5cbc544808ade44192d6",
+          "size": 3107
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/composite_native.wgsl",
+          "sha256": "f91ae99a7492d9a5a6f68611b8648220a387142b0e25eafb00db6d27c4254616",
+          "size": 2160
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/constant.wgsl",
+          "sha256": "c4097bf8dc8edf13888931425ab4c910cbf3d0b9610c38172861ced743e0f564",
+          "size": 884
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/contain.wgsl",
+          "sha256": "6095cb313f05bafa32227aaece8869cd85538390af006dc96c47658055315a17",
+          "size": 3956
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/contrast.wgsl",
+          "sha256": "a2d25f5e9f9968f7220a72b2fe50f55e7e684a4f5a0baac393ffffcc8c9addcc",
+          "size": 2195
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/convert.wgsl",
+          "sha256": "342850c72daeddcd485c5082cae196570d969992639f41bad5614628a276d74b",
+          "size": 16030
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/cover.wgsl",
+          "sha256": "7160c9d54ce7bbcbb4019e47364a7813c7a7b799f85a54591a53e7ab5f4b0a6c",
+          "size": 4382
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/crop.wgsl",
+          "sha256": "12c54e9fdff043e73949ba137b3e8b07d1142b9ad066f7be722188eed731caa7",
+          "size": 2643
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/crop_border.wgsl",
+          "sha256": "dd141663acb6b68528037b0fe101ac70fc0b8503c9466ec1cd01b49b099384e6",
+          "size": 1953
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/crop_native_rgb.wgsl",
+          "sha256": "66651c89a5c1a1fd378e0cc4b159e589c5f18eefde7cf17aba214d68140571bc",
+          "size": 2657
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/darker.wgsl",
+          "sha256": "070419996fbcbea193b1b51e1f0ffe29f9055da7eb3339731130740d55343638",
+          "size": 1837
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/difference.wgsl",
+          "sha256": "53b107cbc9e0a979cd2405e50f7beda04de2369815b9d410859c9d74c97b843c",
+          "size": 2018
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/draw.wgsl",
+          "sha256": "a96fa2360daa2f414a23249e5c3f1c711d5a1b2478e322aee92b60c6a2b93596",
+          "size": 779
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/duplicate.wgsl",
+          "sha256": "b9794d594684aef1403f2cff884848e1d4b91c4ec392e4d8db781b433f492c61",
+          "size": 1477
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/effect_noise.wgsl",
+          "sha256": "ec354d49069944c3e4b6940e8b86893e271b7f0e7964b8d1cc3a4be0f8e6f76c",
+          "size": 787
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/effect_spread.wgsl",
+          "sha256": "953f1a4ad84cfe296114d9cb72b9af53e94e25e82f452e11fb0c4ca508181dd6",
+          "size": 945
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize.wgsl",
+          "sha256": "b83c3e8648ca286272c818ce4169186931ec5d8a331288e248393154b5e68cda",
+          "size": 1452
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_cdf.wgsl",
+          "sha256": "963dd227750d825828d88c6a2aa818dccdcd69e0f40d3fb28669e4711e330d80",
+          "size": 2523
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_histogram.wgsl",
+          "sha256": "78a2bf891df79bf99a6f390a4b1af052fac2edfc84b5eddbdefb04ede18610cb",
+          "size": 3338
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_histogram_l_packed.wgsl",
+          "sha256": "c5633e80c2858c45ca72354a97c1c1e2c9f65e81f92cfc018a9b19d3338bb35e",
+          "size": 1536
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_histogram_rgb_packed.wgsl",
+          "sha256": "c48008ad3f23a3cadd23ce1420083d63e3c5ad5d333f761485171a7fbe72e9b6",
+          "size": 3128
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_remap.wgsl",
+          "sha256": "dd8a8b59e30eba05e2336bed44107c132c891df7653d17af835e08fab044dfba",
+          "size": 1531
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/equalize_remap_l_packed.wgsl",
+          "sha256": "c9059894e40534b053c38235057dd6e43121aca9386fba1fa38fc035f6c8f9d8",
+          "size": 1156
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/eval.wgsl",
+          "sha256": "1b80a2e982b03e4198409184fb404686be7f67731b9fa637f06c52763e27702d",
+          "size": 2003
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/expand.wgsl",
+          "sha256": "0007f1303e21845574efce23fa790a69a75984bc5a03687d6fbb298357d6d859",
+          "size": 6107
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/extract_band.wgsl",
+          "sha256": "2a80607a3583d17fd50440b62d2554d91b391a070fccb58083263fc64466c84e",
+          "size": 2265
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/filter_3x3.wgsl",
+          "sha256": "817e3ddf709da8687ff075003080064cf594ed3b13f7752d012558385088673c",
+          "size": 11714
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/filter_3x3_la_binomial_packed.wgsl",
+          "sha256": "7b46c908f8502974a4c6a46387150cc7c7d4082e9362742341c8d0f4a2396008",
+          "size": 2271
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/filter_5x5.wgsl",
+          "sha256": "252b2f073c4cbaa149e3638554efd4b951f3e710e4d6fcf67a93110ab38fc102",
+          "size": 18971
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/filter_5x5_la_packed.wgsl",
+          "sha256": "9920b1814c9f6780c9d9c5b2748b3f82a8342aa2cad35adc2439cd9b45e55c7c",
+          "size": 5412
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/filter_5x5_luma_packed.wgsl",
+          "sha256": "142df26d2579d821e2412f4d8b046387a5d2ba3964deea497bd01ea7468b8bf6",
+          "size": 5032
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/fit.wgsl",
+          "sha256": "368556387e365efe4fbf7ac344bbd69a32b67c42b9d2561f26ed0365b7b161b2",
+          "size": 5432
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/flip.wgsl",
+          "sha256": "1652c3438ea3809c7a5702e8454d2735975c565ef774d54bc58ac2373e37af38",
+          "size": 1568
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/flip_native_byte_rows.wgsl",
+          "sha256": "b457a01591f4cb68c95de9b8b642479228bdf3520e13cc58f698038fa75bd5d6",
+          "size": 1244
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/gaussian_blur.wgsl",
+          "sha256": "3ce6dd9032816f20d7ef3483c587663c509cffc44a59d79f5b8081b059c7521d",
+          "size": 4206
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/getprojection_atomic.wgsl",
+          "sha256": "fd7af46377b18e9657fc2fe6d1300042397fba645c204623bdc8ceb544d5cfa1",
+          "size": 3795
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/getprojection_cmyk.wgsl",
+          "sha256": "9ddd992e408e72c3694c30b2593bc2fec35b060d789a550d2daf9e66bcf87d29",
+          "size": 3667
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/grayscale.wgsl",
+          "sha256": "d4e81e415cf39577c84db56d9fa6c0c9b5901e8e4960308921d0ec941e33a69a",
+          "size": 5438
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/hard_light.wgsl",
+          "sha256": "65ec8b873d57c68f8c98ab4a9c8b76303422a51bda06ae5725bc515ea5775eef",
+          "size": 2298
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/histogram_clear.wgsl",
+          "sha256": "d63273208da78ba6cf699fc3897849ddb473b3b422a6c9b1398bbc1457c0e040",
+          "size": 1310
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/invert.wgsl",
+          "sha256": "31267fd57874bf2c9203b5f0a0e4c55313425849c7c8d6df792b03093205eca5",
+          "size": 1624
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/invert_chops.wgsl",
+          "sha256": "a6b3d19da3c0e7fff7f03de50758817571f21c611c32a34b2f68cbc2be2aea63",
+          "size": 1623
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/lighter.wgsl",
+          "sha256": "1f9755e1a7dea98e20f6fd2f1e0afcf5fb27d5b90758fd21d4dd31f1e6e7fa2a",
+          "size": 1838
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/logical_and.wgsl",
+          "sha256": "fcf3a55bdd8864704766deb600c238ed6b10b874e853e64e8c740e7a882dc33c",
+          "size": 2467
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/logical_or.wgsl",
+          "sha256": "722fd02a2a0c213172ff0b7592f8dbfe32841fcd4390ddd09f93b5e99eb90899",
+          "size": 2309
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/logical_xor.wgsl",
+          "sha256": "609593fcb6a2f1f12bb5c07e7da082d303306c0de4974092a546965f3e9a30a3",
+          "size": 2409
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/max_filter.wgsl",
+          "sha256": "ebbbe9672763827b35411a377c8bfdf62368f6a0f4b6242cc8b364b75f50e7ba",
+          "size": 3420
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/max_filter_3x3_la_packed.wgsl",
+          "sha256": "44fa0e93d50fe8983f41adc4935fcdd05a2d92bf58d12b2b9fdfa64940436382",
+          "size": 2746
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/max_filter_3x3_luma_packed.wgsl",
+          "sha256": "2586330d86b04a0f3e735ebe84c75fdf1527ca0e0acdad9055c553e61a85d41a",
+          "size": 2758
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/max_filter_3x3_rgb_packed.wgsl",
+          "sha256": "536620484e6759602dfb3be17cd5423f1c252e5b071cf08c0369ffd5198e062b",
+          "size": 6659
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/median_filter.wgsl",
+          "sha256": "cb732786c6b74054488261b0c39f390fbc63826c9190b4bcad1a0060775e1eba",
+          "size": 4912
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/median_filter_3x3.wgsl",
+          "sha256": "b4ba5271bb33a68c9a094dc51f42d6b7b9cb8ae773b9aea29a2382e1c39fc580",
+          "size": 3081
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/median_filter_3x3_la_packed.wgsl",
+          "sha256": "c0c42f1f8527785b647c24853d38e5b3dd7612113e33b7cd547ba2d01b755702",
+          "size": 3141
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/median_filter_3x3_luma_packed.wgsl",
+          "sha256": "f493d9fb91887e7308167d5ce103fe013fd0412d808015b10322c332efb4e145",
+          "size": 3329
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/median_filter_3x3_rgb_packed.wgsl",
+          "sha256": "12d2830d9f0231d8b524b84961923ae2348bbffc967d1801195d6f4c860c4eed",
+          "size": 8949
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/merge.wgsl",
+          "sha256": "eb04aa42683bf28536d226e97df52b27a9f019f2a601ae633550131810240dbb",
+          "size": 3628
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/min_filter.wgsl",
+          "sha256": "deb59c9195d788be0bb2f57559f487778b37981e9be80e090b3700a7845a4545",
+          "size": 3416
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/min_filter_3x3_la_packed.wgsl",
+          "sha256": "1d57035421f4e8622ec634ec01d6d0a6296c3247a9ebce0c643397a5a13998d6",
+          "size": 2746
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/min_filter_3x3_luma_packed.wgsl",
+          "sha256": "21024299a70cf8f9b42d3e02a9415d811947aa23696a54878db4dfedbdf711f6",
+          "size": 2758
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/min_filter_3x3_rgb_packed.wgsl",
+          "sha256": "2b405fb1afbef519753d718a894c1f8aca3701cdf63deef0b0441400b1e4ab07",
+          "size": 6659
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/mirror.wgsl",
+          "sha256": "065ff8162dddae0ca9d16b24011e2921d37db9796f5e72770bf5a53a27bf3364",
+          "size": 1603
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/multiply.wgsl",
+          "sha256": "3ca7e741f36cb452780473aeb2387f84e9392c9714a462dcb60373ffb6f03ad1",
+          "size": 1904
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/multiply_screen.wgsl",
+          "sha256": "ae04fa5633fb856c4836326b903b5b2ac5c12fe4ba6f392283977dfa7c6f5dd6",
+          "size": 2065
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/offset.wgsl",
+          "sha256": "32d086ded1814f45b938edae6da11f289b20623c1432d45e157328457ceaab22",
+          "size": 4465
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/overlay.wgsl",
+          "sha256": "6deff25cb0fc54342782d3ef37cbfaccd1210ae47d2673ed251014e73597a99b",
+          "size": 2462
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/pad.wgsl",
+          "sha256": "d2577aa1d217eaec81f079595381d55501796b6cf4ed725299bb4e9a320f6db2",
+          "size": 2878
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/pad_hsv_native_rgb.wgsl",
+          "sha256": "f93bca97f62ab6c24066302e887f2c404063c3b9762d85a73a3cf024233128ca",
+          "size": 1916
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/pad_la_packed.wgsl",
+          "sha256": "41fa5fbff5f62acf75cae71d470eb6d7647efce630c199b5f6cf520e71a989dd",
+          "size": 2044
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/pad_luma_packed.wgsl",
+          "sha256": "8ad06598add93bc308117e39d319248e904b722c2b4c6d63fd9a5f6112e43c7e",
+          "size": 1769
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste.wgsl",
+          "sha256": "3d72b4e438bc87b00faedb0f2c3ea4de40f1b6469e0efd820465c3826fa240e4",
+          "size": 7708
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_bytes.wgsl",
+          "sha256": "86e85b9094382d370a57b30ac270ae410b43ee3994a6100d9403ed8d55159c47",
+          "size": 6316
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_masked_l.wgsl",
+          "sha256": "cfadc7279f56368167996ba0259cd342e87b9424abccd699f50c0b4f1247daf4",
+          "size": 3569
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_masked_la.wgsl",
+          "sha256": "3d3504c0199b76a2d41e16a8c917bf48d03fb2ede28d90c3b248b78903e0480c",
+          "size": 3871
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_masked_pa.wgsl",
+          "sha256": "55e2ee4ee3a45a97a59a07584e9841d411d4661a4ad31f4fe9d44fe07ed6ee89",
+          "size": 3976
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_masked_rgb.wgsl",
+          "sha256": "a3ccf5b93c946887eb264263df7eac8b451b82f0fa4361cb7d5493be931f970e",
+          "size": 4751
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_masked_rgba.wgsl",
+          "sha256": "6bd313313dc7b98aa9e8459a1dfda6a08cd6c387245e23da3032579367638e03",
+          "size": 3388
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/paste_native_rgb_to_rgba.wgsl",
+          "sha256": "ac226e328582e584cc28efce11ee5d23cc1a7c487f0c65cef0f5571cc348d147",
+          "size": 2874
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/point_luma_packed.wgsl",
+          "sha256": "a03158fca5fe494ea2fb46283ca044b378ac4962c885273e5ad12921100db0c3",
+          "size": 1139
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/point_op.wgsl",
+          "sha256": "d14f695e20e4cacf4601f00ee7bcd9d0ba34b7a33fef9ab9f8654e51f8b6d406",
+          "size": 2057
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/point_rgb_packed.wgsl",
+          "sha256": "4cdab7f6f2d725b5b13b67fdec578b493e60b81ffc3b39b93102b3330d5012f3",
+          "size": 2911
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/posterize.wgsl",
+          "sha256": "ad6cb5465af3c9931b5a06e1a812d33a2d12f7491c65df2f096e6ecb783047aa",
+          "size": 2003
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha.wgsl",
+          "sha256": "3e3240466470844111fcfc27f26c0d8f519f45add7ee703bf4499a0240f0af1d",
+          "size": 1708
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha_data.wgsl",
+          "sha256": "3b47620230bb8957178b502d8ffddfa53bd8c44cda51d03ad709a11e8cde7db1",
+          "size": 1976
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha_data_native_rgb.wgsl",
+          "sha256": "87582bbd72cf30c553463aa86b9db2faa6893325834b55d49e428a6f9c9cf2b2",
+          "size": 1450
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha_data_native_rgba.wgsl",
+          "sha256": "0e6fc3e92a923b543fe607840cc21546917041451cca1e57e888d8dbbe5cea55",
+          "size": 998
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha_native_la.wgsl",
+          "sha256": "d975c815bdd32a973b488f33fb15b54f83a6f2cae7ecba92caa55265e0e68104",
+          "size": 944
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_alpha_native_rgb.wgsl",
+          "sha256": "c855f7bd7e707c1ccb2dc18ae811110417f292b9eff3a7e9eca319c8594a1d92",
+          "size": 1170
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_data.wgsl",
+          "sha256": "e33d53af1ccac4fb65ec2d6138d52a56ed95bbe617ffae16515ace128c5ae674",
+          "size": 2761
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_data_luma_packed.wgsl",
+          "sha256": "e5f6e267f6dd01b212a810d87324c575062532fb9ef2a7f634b6c98f3891aaf3",
+          "size": 1979
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/put_pixel.wgsl",
+          "sha256": "44ea020f61a7d01f9add1f7f67c7a8c8c357e9d3ebdfe978537dfa5f04aaa8e3",
+          "size": 2440
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rank_filter.wgsl",
+          "sha256": "514671597fdf88dcee32f068425a6cbccc61f3dba9146edac937a990d85a1d3d",
+          "size": 4964
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rank_filter_3x3_la_packed.wgsl",
+          "sha256": "108dfe3dafcee7ff3abf4cbbf7888c9a93f0cced33de8c4b7c0901a81f909720",
+          "size": 4234
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rank_filter_3x3_luma_packed.wgsl",
+          "sha256": "36f3f96200b9aa22c0cdfd4615f7eb6058a589bb497e1419ecf60e2121d7b6c0",
+          "size": 3167
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rank_filter_9x9_luma_packed.wgsl",
+          "sha256": "4cb4cfb1c5624b668b744ada9a93c276c698f39da30b77e5d5e38435f4e43f7a",
+          "size": 3947
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rank_filter_9x9_luma_row_packed.wgsl",
+          "sha256": "38b138558705e140c896688c6759c40782e47271471faf6f15ea8561fb042fa2",
+          "size": 3745
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/reduce.wgsl",
+          "sha256": "6dcbb253d25863fba1981cd066321cd43eb9e5533c1114543613161e0f14331d",
+          "size": 6033
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/relocate_native_bytes.wgsl",
+          "sha256": "8d36f17f5a4fb4ddbe772fd07911a4142376faf721ea7b247028c269b5075f58",
+          "size": 2535
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/remap_palette.wgsl",
+          "sha256": "728f76b7a15953eb141b9b5182fe20f65c3eba7826e9dbefc36179f2aa40dbd2",
+          "size": 1707
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/resize_bilinear.wgsl",
+          "sha256": "34e9e19c05fdd7c9d26104ff45dc0be75599a441e1ddb57b7018358e2f78458e",
+          "size": 4221
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/resize_convolution_h.wgsl",
+          "sha256": "9c95a2b6f73ddc23515a6fd5762b3b9dfc99228e226c9f19be7481ec13573a29",
+          "size": 52942
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/resize_convolution_v.wgsl",
+          "sha256": "89578725c738551f0f669aba7229d83df3e9787da58d9f39e4a73dedb7afcc08",
+          "size": 50673
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/resize_convolution_v_pad_rgbx.wgsl",
+          "sha256": "41b7e5b2158a6ff7e75d6fc60f93a68b000808a51f1009a3995e86a7d17439e8",
+          "size": 2752
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/resize_nearest.wgsl",
+          "sha256": "d8da8c96dc794519c9f3dbec002212bb403febb54bc31a2c1132c154bd22cd44",
+          "size": 2592
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rgb_to_lab.wgsl",
+          "sha256": "1a536dbd38415765cce081427064b8850aeade0cc9e5c33557d8e2522ebc2a65",
+          "size": 3052
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/rotate.wgsl",
+          "sha256": "c618f0b3c2270eb7a42395f51216c4df12decef58e2ddb3fe816580d6335cc37",
+          "size": 4204
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/scale.wgsl",
+          "sha256": "529ee9535226c4b5bf33d790a3c240c287c80ecfbb33ad5fb7111884d3d92fae",
+          "size": 2394
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/screen.wgsl",
+          "sha256": "a789cec4b5f08d3eea6d2bcb673c44cff43a30d8ac41db95d63e4f72a8564bd8",
+          "size": 2020
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/sharpness.wgsl",
+          "sha256": "bdb85f5baaa92c89dd76c2344cd6a7bdf9958f18a41139ab36d89e034360ec3f",
+          "size": 6281
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/sharpness_l_native.wgsl",
+          "sha256": "1b0ca6f7bf63819af721f717f5c5a4932d0f4607af967ece91ed6af0b8f562b4",
+          "size": 5664
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/sharpness_la_native.wgsl",
+          "sha256": "b54408cadcf20361415acfcdf9869d84f383cee02586a2b68c49218bbb68a71c",
+          "size": 2435
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/sharpness_rgb_native.wgsl",
+          "sha256": "1b1a561068598646d224307c211863179ad0c70be7cd386f2874610c4306533c",
+          "size": 2904
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/soft_light.wgsl",
+          "sha256": "010eb6350eaef80792ba05b182a2f3aa9b9616bc243d0ff9c033d46502c9d88f",
+          "size": 2117
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/solarize.wgsl",
+          "sha256": "817a4cf5879486eab70993f2c4ef2d1db5349460ea270b628b1805d47ee50469",
+          "size": 1835
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/subtract.wgsl",
+          "sha256": "497c19af70d0dfc2c075bc9cedbc6b344ba44a48aa23dcc74346daab17d5d2fd",
+          "size": 2094
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/subtract_modulo.wgsl",
+          "sha256": "a6b257fc49177e8896ffaa95677ad891f4a34e66a0f94bac3144e7fb315a6cbc",
+          "size": 1903
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/thumbnail.wgsl",
+          "sha256": "76e8bfadcee0aea9864460f6d0408ef8b44bcc74bbb0cfece3d19f5a4171535f",
+          "size": 3958
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transform.wgsl",
+          "sha256": "61bb7bd90a14c152c2bb43723fb8f58cfdf08caeeecdc9d99bde05b07aa1f75d",
+          "size": 34538
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transform_geometry.wgsl",
+          "sha256": "e1999e39f520bc5e54dd59179f119570b5cbc34d7c8b2c648d4fdb52d1151fff",
+          "size": 25736
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transform_l_nearest_packed.wgsl",
+          "sha256": "af5fb0fcebb3b9f25a3cc046bc4e9934ab17c5423770568fe76da7ad7eb6e3b9",
+          "size": 3857
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transform_la_nearest_packed.wgsl",
+          "sha256": "2ae1f56b97ac11542c117c8ae95348b4a3eb708b6657728d0845c15be9b56318",
+          "size": 5015
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transform_rgb_nearest_packed.wgsl",
+          "sha256": "0d50b112589a244d13a663032f81f26b121a34e416421d5d3c8e78c0a23eef56",
+          "size": 5185
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transpose.wgsl",
+          "sha256": "2c330ba56eb26d6822efa1d7c6b7a8da437157871654df1e781855f191cf8415",
+          "size": 4233
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transpose_rgb.wgsl",
+          "sha256": "14d308a5efaf1430ce0431d4bf40d90747bf90a18e3b79422a47470d1f8ec562",
+          "size": 3019
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/shaders/transpose_rgb_tiled.wgsl",
+          "sha256": "45eef428595f6deeaedad38dd6e9184a8467c944dc5f8f72036431f49727aff6",
+          "size": 3020
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_gpu/stream.rs",
+          "sha256": "f39471d7eaa6229ceb007598d014ef82a7b521e9775e1989dce83b0ce22d34e0",
+          "size": 89665
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/mod.rs",
+          "sha256": "3f5a4ac950e23fb11105f4145eb6411cfd6beb6b78d7d7b6577d9c2bbe19d03d",
+          "size": 48072
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+          "sha256": "ac0e621b0918fe913341b2c7ed5df9892b1dca2cdf241d4aecece6a528f97c37",
+          "size": 1378191
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/box_blur_luma.rs",
+          "sha256": "9197f517d0e776d6403522cca3d6d2901be95b2fd57b2780b1f46b0c0ad1b507",
+          "size": 2869
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/box_blur_rgba_avx2.rs",
+          "sha256": "98556b968ba32738c350c212cc0ba894fbb8d078614702e9c6bd48db2af78a0f",
+          "size": 6723
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/box_blur_rgba_neon.rs",
+          "sha256": "7649aa692c011ed1d76d90f6845db5bffc56008cd7bb6a2296359871de2927ec",
+          "size": 9621
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/cmyk_packing_tests.rs",
+          "sha256": "77a7e7ba202c88e8dc1d25fddbe883599e5cb757725dba08e03f8c700eccc224",
+          "size": 2574
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/convert.rs",
+          "sha256": "47b57e8884b8943eea6fff9132dca1b3a7a4391617054dc91f3d9b456f032a67",
+          "size": 6909
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/convert/kernels/mod.rs",
+          "sha256": "f0e6f9b23916fbb0f8ed9107093e4442db20b79d43ab167eb8fcc678677142c4",
+          "size": 1042
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/convert/kernels/rgba_rgb_neon.rs",
+          "sha256": "a5bf924fa43116d84456556ef43abea4ad5812554a9fc7b1211f8f1403979be4",
+          "size": 3329
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/convert/kernels/rgba_rgb_ssse3.rs",
+          "sha256": "05f92f7e75e7068f84e3e307854ce031311aa9b59034521941c33f77326d31a1",
+          "size": 5202
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/extract_band.rs",
+          "sha256": "01e7b0da0007ab1d816442f4df58f0b70902931e1733e819807da74ef698bbbc",
+          "size": 17521
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter.rs",
+          "sha256": "a4950c462e460ac3ba203440079a9e005b0490d8db5091c4fd26c302a9e71077",
+          "size": 14407
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/byte_layouts.rs",
+          "sha256": "0cce71d57891c3631e179edc82e2deb8b0952cae7b7581b440a599a836d66275",
+          "size": 7031
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/l.rs",
+          "sha256": "929b99ad3f71627bd681c901569f7cec7b60f855960be9c918ef731df9df29e2",
+          "size": 11142
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/la.rs",
+          "sha256": "8d0bfa51361b116205fa655a1e2e423e2c16f9ca9b37c4c7ad04666e8909f442",
+          "size": 8082
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/mod.rs",
+          "sha256": "bec4424db6f7fabd8144a8c172196b9500c7aea9c9d73e65b74ccc9097a35659",
+          "size": 1360
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/rgb_blur_ring.rs",
+          "sha256": "eb5bf84a14d9efd07133a981d7f1dd72486d67233a4451931415a20f5ff9f8a9",
+          "size": 7936
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/filter/kernels/uniform_rgb.rs",
+          "sha256": "bb2664d3588da83e9e8a1141eeef95717749c04044b7c9f87806a1c326bb94d8",
+          "size": 4301
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/gaussian_rgba_uniform.rs",
+          "sha256": "bf7e45fa56ebab76b6263f97463722088a527529b2d5fed7a8a7947076840689",
+          "size": 6592
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale.rs",
+          "sha256": "93674c82b7bee71fd647eb5e75ef0f085ddf468f6d2c1b072abb0aea5a8b6660",
+          "size": 5653
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/channels.rs",
+          "sha256": "6ef271a48854020d59b41ba80f971ac7806053b097b8cea7557f46e36a248fdd",
+          "size": 8920
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/cmyk.rs",
+          "sha256": "4d7377af0695c35ecf727e38cc5f9b3e6af0a59a14af5549ba248fb4ffe448d5",
+          "size": 8343
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/mod.rs",
+          "sha256": "deb54f7aa6ffa269424a2fd116c6ff0235d403934d442ca651f08ab69e419df3",
+          "size": 539
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/rgb_avx2.rs",
+          "sha256": "72779ad6df7271de98a2cb6833100b00ea0acf4dc03e1b98b69af420d9224ab6",
+          "size": 8670
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/ycbcr.rs",
+          "sha256": "cfc040f63fb19db6780189618257c22bdbe7c442c6a6c1d144019c961d2c751c",
+          "size": 5198
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/grayscale/kernels/ycbcr_ssse3.rs",
+          "sha256": "a4ebfb9a978e260ac328ea7c5d9afaf1094bffbff1fa2184e8a15379ceb65712",
+          "size": 2777
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/median_filter.rs",
+          "sha256": "40f9b4e5250cfcfa46eeb6eae223b282b33b85f2d6b744ede6360a9ba1f0a9ef",
+          "size": 3294
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/merge.rs",
+          "sha256": "ed13bf3e8c677ab314c310a8f0c9ad98ff8f2b865fbfff7f05c4ef7cb27eb8e9",
+          "size": 11680
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_put_pixel.rs",
+          "sha256": "8021c36ddd1dac2ce5827b65b9db3c224554159e2a13a8538f0f283b73f82753",
+          "size": 7715
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail.rs",
+          "sha256": "15c3c3de9fd09731c3038be50fa1238919084f29059e2ea08d985c9ded1b96fe",
+          "size": 29833
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail/float.rs",
+          "sha256": "e0ca4418e7fa6ea24516315de8bdf89d555100ec50d7d447fddefe1d2b4dead2",
+          "size": 13330
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail/integer.rs",
+          "sha256": "859c3afa5a1ba76f7fb53fb04c6adde220315130c45314a27b0033586385ba6a",
+          "size": 12126
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/projection.rs",
+          "sha256": "8d8961d772b6b78b23227d2f17d361ab76f6d162932b914a49d5608faa869b63",
+          "size": 9152
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/resize_i32.rs",
+          "sha256": "cb0f0dd6dfec359685e5544e57aab009b27d45ae6dfdc06e2f5fa49938da5ffa",
+          "size": 23438
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/resize_i32/neon.rs",
+          "sha256": "1bfa598cff4f04cd95150581a277e3c24ccb82945cc6cff1b67d4eeed74de7a2",
+          "size": 12392
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/transpose.rs",
+          "sha256": "60306ecb8ebd6ac26f2ee979a8da5045ef7bb1760a378d3a3ad0fd9fef9c9f26",
+          "size": 912
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/transpose/kernels.rs",
+          "sha256": "dc0a1a468424d575cbf75f88afe690955205c43f09d22085bf989e71153d8c05",
+          "size": 345
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/adapters/transpose/kernels/rgba_avx2.rs",
+          "sha256": "a66fb6b97212b0504bb355d2501c84113c1e787b08f58e0f28507722937bf3ff",
+          "size": 6480
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/mod.rs",
+          "sha256": "a9bb1b8e649c048bd3776dc636c0f9622658aa8691b45d3736a2e3779abb8ba8",
+          "size": 674
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/native_channel.rs",
+          "sha256": "68beef7f015a267c1fffaff3afb7d5a2a24cfea394d4bca88074e731e58b416a",
+          "size": 14233
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/native_filter.rs",
+          "sha256": "938ef09bc7c0949224761cd81f8d888f3b9150bc50d6aa9fc8dd15b15e4c9fed",
+          "size": 10749
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/native_merge.rs",
+          "sha256": "7315b869c262136582213ef10165db36be7e7089e8bbb4182d839e470b089685",
+          "size": 14595
+        },
+        {
+          "path": "pillow-rs/src/compute/pool_simd/ops/scalar.rs",
+          "sha256": "d291e7539020190691495457df8bfd7851541426c8da9e1d9ba0eb353ae03978",
+          "size": 145566
+        },
+        {
+          "path": "pillow-rs/src/compute/registry.rs",
+          "sha256": "c85deb6f6ba7467003c87a01238b497ec9d6bf5676a930460ac00f26ce780dd1",
+          "size": 110118
+        },
+        {
+          "path": "pillow-rs/src/data/lab-identity-profile.icc",
+          "sha256": "44a75dfa14e4fbe2c73e4a05eb6f778356d6f12bd55337229131125224e19e09",
+          "size": 572
+        },
+        {
+          "path": "pillow-rs/src/data/lcms-lab-lut.u16le",
+          "sha256": "547dd2ec6110be9f5d389fe5a50a5ede19ea528fdbdcfdae075f623771749e97",
+          "size": 215622
+        },
+        {
+          "path": "pillow-rs/src/draw/mod.rs",
+          "sha256": "988d46896eaa77cb8a41078bb52d56cbd44d514e51fd751ef2dde946c0b9ed3e",
+          "size": 121671
+        },
+        {
+          "path": "pillow-rs/src/error.rs",
+          "sha256": "d718c8e15e6640ac47263d549780db472d2b9e5451e0d7bc1de471527ff2b08a",
+          "size": 6500
+        },
+        {
+          "path": "pillow-rs/src/font/courb08.luma",
+          "sha256": "ff78f1b6d98ed40932e795d3786d0154fb1c2b874c191e3c662676c615846742",
+          "size": 15960
+        },
+        {
+          "path": "pillow-rs/src/font/courb08.pil",
+          "sha256": "5e85438582f0e790b6b115d1afd66fa439d9fc45875af5cc760af7034d67187a",
+          "size": 5143
+        },
+        {
+          "path": "pillow-rs/src/font/courb08.png",
+          "sha256": "afdc82adb778486c71c5cc9c6f88623b3c7e5044e80ff7b32d973663eff31ed0",
+          "size": 1273
+        },
+        {
+          "path": "pillow-rs/src/font/default_aileron.LICENSE.txt",
+          "sha256": "5ea183192a19db4959777614e7a74260549b4dbadce12e37f2167ec4d450b50e",
+          "size": 777
+        },
+        {
+          "path": "pillow-rs/src/font/default_aileron.rs",
+          "sha256": "41ae42f625883a1ed341b22f1d2dfe87d1ff1a2436525f828adff4f1ed06b49f",
+          "size": 698
+        },
+        {
+          "path": "pillow-rs/src/font/default_aileron.ttf",
+          "sha256": "69853909b940023570964e29cffe30da95aea8de3627736b5cd15ab30143169f",
+          "size": 12676
+        },
+        {
+          "path": "pillow-rs/src/font/imagingft.rs",
+          "sha256": "b44fee7667a7cb949ac0cc07d371142bbb8f75efb89dfc15db549076cde4b9a4",
+          "size": 89650
+        },
+        {
+          "path": "pillow-rs/src/font/mod.rs",
+          "sha256": "b2456c3ad16e4cb01137ed985b74d0553bd55fec7a70d542c02ca796b4719670",
+          "size": 34881
+        },
+        {
+          "path": "pillow-rs/src/font/pilfont.rs",
+          "sha256": "8eb11eb66392e5306788e8f113db5544371035d283d8b71b9cca5af95d3374b9",
+          "size": 30979
+        },
+        {
+          "path": "pillow-rs/src/format.rs",
+          "sha256": "131635d265736648529f52a1974a3586d0fe2f27f91f3e7f1f2ae331e7447752",
+          "size": 784
+        },
+        {
+          "path": "pillow-rs/src/image.rs",
+          "sha256": "423f9d54b312afb31fdf10b294309fafcf12e5a375ece9887d2b2e238db547e3",
+          "size": 414000
+        },
+        {
+          "path": "pillow-rs/src/image_getchannel_receipt_tests.rs",
+          "sha256": "f5517bd54a743ec7f6db25c79c72b1920a25b59057aadba2a3a9996c4c9d46e1",
+          "size": 8367
+        },
+        {
+          "path": "pillow-rs/src/image_sequence.rs",
+          "sha256": "a7507d15efd5fa14877bf229004b565af5a3a54c7d0de9909509420b156e618a",
+          "size": 1176
+        },
+        {
+          "path": "pillow-rs/src/image_utils.rs",
+          "sha256": "4a2e540fb32969e95846cc50db81f5b075163d9f72e2a4ec0599f4e670b05914",
+          "size": 4218
+        },
+        {
+          "path": "pillow-rs/src/lab.rs",
+          "sha256": "791704d79107449362ac96deafb549107e9d9a8ed0cd03a83e890f2428eee060",
+          "size": 10465
+        },
+        {
+          "path": "pillow-rs/src/lib.rs",
+          "sha256": "40ccc22adbc06857bef97a68f5a0317c0ef6143123f2e031e47bee16f9dfe43c",
+          "size": 40226
+        },
+        {
+          "path": "pillow-rs/src/ops/analysis.rs",
+          "sha256": "f6cd352a0a1b122eb4d086207e908bbd89b91d7fb3477da506f9e214ecf3746e",
+          "size": 34132
+        },
+        {
+          "path": "pillow-rs/src/ops/array.rs",
+          "sha256": "177e6987fde718ae48001542736be7fe24ce7ca72f40d583a1e2d1b81bd49010",
+          "size": 11688
+        },
+        {
+          "path": "pillow-rs/src/ops/chops.rs",
+          "sha256": "990ffb9f2ad834b19731c8e58447ccaee09e031a2dcdd1f74f067af0f98e46ad",
+          "size": 12161
+        },
+        {
+          "path": "pillow-rs/src/ops/convert.rs",
+          "sha256": "43f60a540d258b2460f40ed79b8dd5ee30a46fbd3b607c969090f3e3e58e30fc",
+          "size": 66856
+        },
+        {
+          "path": "pillow-rs/src/ops/crop.rs",
+          "sha256": "f012e9edbe22fff5ab5049e81b31cc71d26302df04b9b5a3a74ad8b650e1412c",
+          "size": 9638
+        },
+        {
+          "path": "pillow-rs/src/ops/enhance.rs",
+          "sha256": "fc09b4b3967ce14f57462ce2fb59127665f1e2b3cb6f5493bbba9d76df32f18b",
+          "size": 15370
+        },
+        {
+          "path": "pillow-rs/src/ops/filter.rs",
+          "sha256": "b9a090099ad4270b8117ce6f53eb5e9d36f82237b109940c7cd3b90b7ac21e71",
+          "size": 11297
+        },
+        {
+          "path": "pillow-rs/src/ops/imageops.rs",
+          "sha256": "c0606b3154095c8fcb0c2f9b032cebed9b534302b0a2c1f50d16ebc3658dc641",
+          "size": 70373
+        },
+        {
+          "path": "pillow-rs/src/ops/lut_hardlight.bin",
+          "sha256": "8dbd3733ca41004196798d49ee3604ef4715b23af3532888d02d6f11c610dcb2",
+          "size": 65536
+        },
+        {
+          "path": "pillow-rs/src/ops/lut_overlay.bin",
+          "sha256": "3445b33eb78975a5fe9b176ef9d657dea51ad52e0427d4837d78f9944eb58745",
+          "size": 65536
+        },
+        {
+          "path": "pillow-rs/src/ops/lut_softlight.bin",
+          "sha256": "486b4815fbfa878d1414dd3eadfcf0dab0ce5c75a3bc2e20fb0082eb48ae809d",
+          "size": 65536
+        },
+        {
+          "path": "pillow-rs/src/ops/mod.rs",
+          "sha256": "d80f102dbe012c2d3e3818a36ce78f235e7c0556b74d65edd1dcb46c82b5b703",
+          "size": 1464
+        },
+        {
+          "path": "pillow-rs/src/ops/module_fns.rs",
+          "sha256": "712beb44af8dfe37c711c83c312e78065cecdb67b62d9a5234b487125bde5720",
+          "size": 41004
+        },
+        {
+          "path": "pillow-rs/src/ops/param_filters.rs",
+          "sha256": "e21d561b76ccd45417c6b95e66d1ebcfce4a849da1337ab5bb032803b90a806a",
+          "size": 30494
+        },
+        {
+          "path": "pillow-rs/src/ops/paste.rs",
+          "sha256": "449c35d952e745878fe8632f7c6170ab76e088c2488fa018375d2a1acd98928d",
+          "size": 33408
+        },
+        {
+          "path": "pillow-rs/src/ops/pil_resize.rs",
+          "sha256": "c2174fd05d57e27b06e5d22a8d7638cf8492f4949f2c4b65910bcbf39d0587da",
+          "size": 227549
+        },
+        {
+          "path": "pillow-rs/src/ops/quantize.rs",
+          "sha256": "d15638fd452c6b920bcb9a4b43fcd5b5a5a5d7971f3683dfecf6706d91c5b21b",
+          "size": 89897
+        },
+        {
+          "path": "pillow-rs/src/ops/resize.rs",
+          "sha256": "2db8c86a26b2c99db50a8a68ba2a547e5d2f7b1bcbd1f396aa46b561e1bfc9ea",
+          "size": 27454
+        },
+        {
+          "path": "pillow-rs/src/ops/rotate.rs",
+          "sha256": "5e4ad1b097c3b0d11cb9b9fa12da314303da976715c1de2ea495e9ac2c67a5c6",
+          "size": 11201
+        },
+        {
+          "path": "pillow-rs/src/ops/split.rs",
+          "sha256": "118c1b763f349d98b9d43e6dabfdab315a229181f8c5650a5041c6dc6e42c44d",
+          "size": 4393
+        },
+        {
+          "path": "pillow-rs/src/ops/transform.rs",
+          "sha256": "610b5b5a50ddfa232b256d719fe51b4fa4380f225c01022a2c50a2d70faf7b26",
+          "size": 33400
+        },
+        {
+          "path": "pillow-rs/src/ops/transpose.rs",
+          "sha256": "b88d4cf1c6c18652fc2e88b2fe308892090f400282d8a0430823db0efa2ae959",
+          "size": 4146
+        },
+        {
+          "path": "pillow-rs/src/ops/utils.rs",
+          "sha256": "b99b6a9b317a03aad80f5d3983d8a4e034a6be61b0f1f30ce45ca080a68ab4c4",
+          "size": 2766
+        },
+        {
+          "path": "pillow-rs/src/par.rs",
+          "sha256": "12c89ca10f6373eb3d0aea69b883bd5dc5481ebf4512dca6a717f78208fafcdf",
+          "size": 8907
+        },
+        {
+          "path": "pillow-rs/src/pipeline.rs",
+          "sha256": "76bc61818ac19fb31db4b81fe6d7311e4e224f75cbc6a0618d8fe24f7f4d843d",
+          "size": 33795
+        },
+        {
+          "path": "pillow-rs/src/raster/buffer.rs",
+          "sha256": "bc2a10cd2539c06af324c423c018cd176da795701bc176f9bd6200da99e147d4",
+          "size": 35824
+        },
+        {
+          "path": "pillow-rs/src/raster/color/blend.rs",
+          "sha256": "0025717a5a7d2bbb2e560bf990f4a23c0285afab10b07b659a4f2b0f66c84c7e",
+          "size": 2963
+        },
+        {
+          "path": "pillow-rs/src/raster/color/from_color.rs",
+          "sha256": "264461c175674427da823a89e68ae3d7bb7b38dc10a00932323498ca647edb2c",
+          "size": 5971
+        },
+        {
+          "path": "pillow-rs/src/raster/color/from_primitive.rs",
+          "sha256": "fa865f49a43032a0de4f2860c7e87c4c56ea9ebbaa6632c143ef0bd00dbaf728",
+          "size": 2802
+        },
+        {
+          "path": "pillow-rs/src/raster/color/invert.rs",
+          "sha256": "53005874b81ed04e4501eb002a88a49634ff4781513b8dc6bd3b70bbde5535c7",
+          "size": 1248
+        },
+        {
+          "path": "pillow-rs/src/raster/color/mod.rs",
+          "sha256": "cbb74b97cc00963a964b0b2ad1a8296bc9e5f28e3b171be9bfda65919713ffda",
+          "size": 681
+        },
+        {
+          "path": "pillow-rs/src/raster/color/pixel_luma.rs",
+          "sha256": "1e9d4219d307c13fd62125feae854b68af434afa07809a1707f5ddfc8035eea4",
+          "size": 5738
+        },
+        {
+          "path": "pillow-rs/src/raster/color/pixel_rgb.rs",
+          "sha256": "3bfe45c87eacbe4b7577805cd351f3247550e427ad90ad65b43bf24d04f14f58",
+          "size": 5719
+        },
+        {
+          "path": "pillow-rs/src/raster/color/types.rs",
+          "sha256": "96cb960ea3564bebc0cf6b295c9e3633584dc97435fe61769686bc7b64f6b57e",
+          "size": 9805
+        },
+        {
+          "path": "pillow-rs/src/raster/dynamic.rs",
+          "sha256": "a650147cbb7c1d64ace85aaff18318da9f664a0800073b55532ee38d0fa3b06e",
+          "size": 44500
+        },
+        {
+          "path": "pillow-rs/src/raster/error.rs",
+          "sha256": "94621793de2ed12e7ac39618aa2551958650ed40aae09f8813ca8134b8f255ee",
+          "size": 741
+        },
+        {
+          "path": "pillow-rs/src/raster/mod.rs",
+          "sha256": "4fc66edbd268da955328ff1973d2b17b23e54aca926bb5061414af6746668c75",
+          "size": 910
+        },
+        {
+          "path": "pillow-rs/src/raster/traits/mod.rs",
+          "sha256": "dca7b70b0832351274c90dbab4f1025f62477bdd38a196f3707c80022076696e",
+          "size": 547
+        },
+        {
+          "path": "pillow-rs/src/raster/traits/pixel.rs",
+          "sha256": "f17c2e27d33f9ea56fccd06a619891b5801ffd407a8c70ae8d0f465311a4facb",
+          "size": 3601
+        },
+        {
+          "path": "pillow-rs/src/raster/traits/primitive.rs",
+          "sha256": "f7a03867835654464a32b71550bdd42240f1174214dfc2346172c6de20b98090",
+          "size": 9527
+        },
+        {
+          "path": "pillow-rs/src/raster/traits/view.rs",
+          "sha256": "f7deda02e0b2ff65a01f5f3fa4c38d89475f5e5a9fc986f5ff334df38528367c",
+          "size": 7132
+        },
+        {
+          "path": "pillow-rs/tests/fixtures/assets/image/rgb-small.jpg",
+          "sha256": "c4eac9a1418c51055cec8c68c907eab4115f8b9bd6ef42e4516b7300519ecf03",
+          "size": 647
+        },
+        {
+          "path": "pillow-rs/tests/fixtures/assets/image/rgb-small.webp",
+          "sha256": "a604c170ddee575e5c10228cfe64ffa01911362c598f94549dd18829d8cfa4f7",
+          "size": 66
+        },
+        {
+          "path": "rust-toolchain.toml",
+          "sha256": "9540b7539084cec826155fb724843e3b3e54c37c97186b558faa01c3849705e3",
+          "size": 103
+        }
+      ],
+      "sha256": "d4521f32d9a64706a99366105b7f9e553799e9ebf6a8e6f7bc82e8292af69ec1"
+    }
+  },
+  "status": "complete",
+  "workspace": {
+    "dirty": true,
+    "git_head": "418d5f0cde51ca64a97cbd007ea731da72d68abf",
+    "root": "/Users/lazytrot/work/pillow-rs"
+  }
+}

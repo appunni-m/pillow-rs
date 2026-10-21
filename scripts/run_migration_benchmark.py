@@ -35,6 +35,7 @@ try:
         report_fingerprint as execution_report_fingerprint,
         validate_attestation,
     )
+    from migration_producer_attestation import merge_backend_attestations
     from migration_benchmark_samples import RawSampleCollector
     from simd_evidence import simd_vector_evidence
     from migration_benchmark_adapter import (
@@ -61,6 +62,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` i
         report_fingerprint as execution_report_fingerprint,
         validate_attestation,
     )
+    from scripts.migration_producer_attestation import merge_backend_attestations
     from scripts.migration_benchmark_samples import RawSampleCollector
     from scripts.simd_evidence import simd_vector_evidence
     from scripts.migration_benchmark_adapter import (
@@ -245,6 +247,7 @@ def suite_subject_is_comparable(
         {
             "subject": subject_id,
             "operation_telemetry": execution.get("operation_telemetry"),
+            "selected_step_ids": execution.get("selected_step_ids"),
         }
     ) != "positive_vector_work":
         return False
@@ -365,6 +368,47 @@ def now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def current_command_argv() -> list[str]:
+    """Return the interpreter and arguments that actually invoked this runner."""
+
+    return [sys.executable, *sys.argv]
+
+
+def current_command_cwd() -> str:
+    """Return the working directory of the process producing this report."""
+
+    return os.getcwd()
+
+
+def is_benchmark_runner_argv(argv: Any) -> bool:
+    """Recognize current and legacy identities for benchmark-produced parity."""
+
+    return argv == ["make", "migration-parity-benchmark"] or (
+        isinstance(argv, list)
+        and len(argv) >= 2
+        and isinstance(argv[1], str)
+        and Path(argv[1]).name == "run_migration_benchmark.py"
+    )
+
+
+def benchmark_environment() -> dict[str, Any]:
+    environment: dict[str, Any] = {
+        "machine_id": platform.node() or "unknown",
+        "os": platform.platform(),
+        "architecture": platform.machine(),
+        "cpu": os.environ.get("MIGRATION_BENCHMARK_CPU_MODEL", "").strip()
+        or platform.processor()
+        or "unknown",
+        "memory_bytes": 0,
+        "power_mode": "unknown",
+        "toolchain": platform.python_version(),
+    }
+    runner_id = os.environ.get("MIGRATION_BENCHMARK_RUNNER_ID", "").strip()
+    if runner_id:
+        environment["runner_id"] = runner_id
+    return environment
+
+
 def sha256(path: Path) -> str:
     import hashlib
 
@@ -462,8 +506,8 @@ def merge_parity_results(results: list[dict[str, Any]], timeout: int) -> dict[st
         ),
         "command": {
             "command_id": "parity",
-            "argv": ["make", "migration-parity-benchmark"],
-            "cwd": ".",
+            "argv": current_command_argv(),
+            "cwd": current_command_cwd(),
             "timeout_seconds": timeout,
         },
     }
@@ -576,8 +620,9 @@ def validate_reused_parity(
             attestation,
             result=parity,
             allow_duplicate_parity_sources=(
-                identity.get("command", {}).get("argv")
-                == ["make", "migration-parity-benchmark"]
+                is_benchmark_runner_argv(
+                    identity.get("command", {}).get("argv")
+                )
             ),
         )
         current_report = execution_report_fingerprint(report_path)
@@ -658,13 +703,17 @@ def run_parity(
     cases: list[dict[str, Any]],
     *,
     attestation_output: Path | None = None,
+    producer_attestation_output: Path | None = None,
 ) -> dict[str, Any]:
+    if producer_attestation_output is not None and attestation_output is None:
+        raise ValueError("parity producer attestations require execution attestations")
     script = ROOT / "scripts" / "run_migration_parity.py"
     output.parent.mkdir(parents=True, exist_ok=True)
     backend_results: list[dict[str, Any]] = []
     backend_attestations: list[
         tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
     ] = []
+    backend_producer_artifacts: list[tuple[Path, Path, Path]] = []
     with tempfile.TemporaryDirectory(prefix="migration-benchmark-parity-") as directory:
         temporary = Path(directory)
         for backend in TARGET_BACKENDS:
@@ -686,6 +735,7 @@ def run_parity(
             # too; only the decoded result remains in memory for aggregation.
             backend_output = temporary / f"{backend}.json.gz"
             backend_attestation = temporary / f"{backend}.attestation.json"
+            backend_producer_attestation = temporary / f"{backend}.producer.json"
             backend_timeout = (
                 min(timeout, 300) if backend == "gpu" else timeout
             )
@@ -716,6 +766,14 @@ def run_parity(
                     *(
                         ["--attestation-output", str(backend_attestation)]
                         if attestation_output is not None
+                        else []
+                    ),
+                    *(
+                        [
+                            "--producer-attestation-output",
+                            str(backend_producer_attestation),
+                        ]
+                        if producer_attestation_output is not None
                         else []
                     ),
                     *[
@@ -782,6 +840,21 @@ def run_parity(
                 backend_attestations.append(
                     (attestation_document, result, report_binding)
                 )
+                if producer_attestation_output is not None:
+                    producer_bundle = backend_producer_attestation.with_name(
+                        backend_producer_attestation.name + ".bundle.json"
+                    )
+                    if not backend_producer_attestation.is_file() or not producer_bundle.is_file():
+                        raise RuntimeError(
+                            f"{backend} parity preflight did not emit its producer closure"
+                        )
+                    backend_producer_artifacts.append(
+                        (
+                            backend_producer_attestation,
+                            backend_attestation,
+                            producer_bundle,
+                        )
+                    )
             if returncode not in {0, 1}:
                 detail = stderr.strip().replace("\n", " ")[-800:]
                 raise RuntimeError(
@@ -801,6 +874,14 @@ def run_parity(
                 merged,
                 backend_attestations,
             )
+            if producer_attestation_output is not None:
+                merge_backend_attestations(
+                    producer_attestation_output,
+                    output,
+                    attestation_output,
+                    merged,
+                    backend_producer_artifacts,
+                )
     return merged
 
 
@@ -851,9 +932,10 @@ def run_timed_side(
             lifecycle,
         ]
         if include_timings:
-            command.extend(("--timings", "--timing-boundary", timing_boundary))
-            for step_id in timing_steps:
-                command.extend(("--timing-step", step_id))
+            command.append("--timings")
+        command.extend(("--timing-boundary", timing_boundary))
+        for step_id in timing_steps:
+            command.extend(("--timing-step", step_id))
         return command
 
     def execute(
@@ -881,10 +963,12 @@ def run_timed_side(
                 cases=child_cases,
                 context={
                     "lifecycle": lifecycle,
-                    "boundary": timing_boundary if include_timings else None,
+                    "boundary": (
+                        timing_boundary if include_timings or collect_execution else None
+                    ),
                     "step_ids": (
                         (sorted(set(timing_steps)) or ["call"])
-                        if include_timings
+                        if include_timings or collect_execution
                         else []
                     ),
                     "repeat": child_repeat,
@@ -1136,7 +1220,7 @@ def execution_resource_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def execution_operation_telemetry(records: list[dict[str, Any]]) -> list[Any]:
-    """Preserve operation-level route and vector counts from proof receipts."""
+    """Preserve route and vector counts with the timed step that produced them."""
     telemetry: list[Any] = []
     for index, record in enumerate(records):
         if "operation_telemetry" not in record:
@@ -1146,7 +1230,19 @@ def execution_operation_telemetry(records: list[dict[str, Any]]) -> list[Any]:
             raise ValueError(
                 f"execution_records[{index}].operation_telemetry: expected array"
             )
-        telemetry.extend(record_telemetry)
+        step_id = record.get("step_id")
+        if record_telemetry and (not isinstance(step_id, str) or not step_id):
+            raise ValueError(
+                f"execution_records[{index}].step_id: expected non-empty string "
+                "when operation telemetry is present"
+            )
+        for operation in record_telemetry:
+            if not isinstance(operation, dict):
+                raise ValueError(
+                    f"execution_records[{index}].operation_telemetry: "
+                    "expected objects"
+                )
+            telemetry.append({**operation, "step_id": step_id})
     return telemetry
 
 
@@ -1317,9 +1413,15 @@ def execution_result(
     # unrelated workflow terminal cannot make a partial or unproven workload
     # complete; keep the explicit terminal bit aligned with the report schema.
     terminal_complete = terminal_complete and status == "completed"
+    selected_step_ids: list[str] = []
+    for record in completed:
+        step_id = record.get("step_id")
+        if isinstance(step_id, str) and step_id and step_id not in selected_step_ids:
+            selected_step_ids.append(step_id)
     return {
         "status": status,
         "terminal_complete": terminal_complete,
+        "selected_step_ids": selected_step_ids,
         "requested_backend": requested_backend,
         "actual_backend": (
             actual_backends[0]
@@ -1451,8 +1553,8 @@ def identity(
         "targets": benchmark_target_identities(parity_identity, target_profiles),
         "command": {
             "command_id": "benchmark",
-            "argv": ["make", "migration-parity-benchmark"],
-            "cwd": ".",
+            "argv": current_command_argv(),
+            "cwd": current_command_cwd(),
             "timeout_seconds": timeout,
         },
     }
@@ -1851,6 +1953,7 @@ def run(args: argparse.Namespace) -> int:
     producer_output = getattr(args, "producer_attestation_output", None)
     raw_samples_output = getattr(args, "raw_samples_output", None)
     parity_attestation_output = getattr(args, "parity_attestation_output", None)
+    parity_producer_output = getattr(args, "parity_producer_attestation_output", None)
     reuse_parity_path = getattr(args, "reuse_parity", None)
     reuse_attestation_path = getattr(args, "reuse_parity_attestation", None)
     if reuse_parity_path is not None:
@@ -1866,6 +1969,14 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError(
             "--parity-attestation-output is only available when parity runs in this process"
         )
+    if reuse_parity_path is not None and parity_producer_output is not None:
+        raise ValueError(
+            "--parity-producer-attestation-output is only available when parity runs in this process"
+        )
+    if parity_producer_output is not None and parity_attestation_output is None:
+        raise ValueError(
+            "--parity-producer-attestation-output requires --parity-attestation-output"
+        )
     if producer_output is not None and attestation_output is None:
         raise ValueError("--producer-attestation-output requires --attestation-output")
     output_paths = [Path(args.output).resolve(), Path(args.parity_output).resolve()]
@@ -1876,6 +1987,7 @@ def run(args: argparse.Namespace) -> int:
             producer_output,
             raw_samples_output,
             parity_attestation_output,
+            parity_producer_output,
         )
         if path is not None
     )
@@ -2031,6 +2143,11 @@ def run(args: argparse.Namespace) -> int:
                 if parity_attestation_output is not None
                 else None
             ),
+            producer_attestation_output=(
+                parity_producer_output.resolve()
+                if parity_producer_output is not None
+                else None
+            ),
         )
     else:
         started = now()
@@ -2057,8 +2174,8 @@ def run(args: argparse.Namespace) -> int:
             ),
             "command": {
                 "command_id": "benchmark",
-                "argv": ["make", "migration-parity-benchmark"],
-                "cwd": ".",
+                "argv": current_command_argv(),
+                "cwd": current_command_cwd(),
                 "timeout_seconds": args.timeout,
             },
         }
@@ -2711,18 +2828,7 @@ def run(args: argparse.Namespace) -> int:
         if any(subject["status"] == "completed" for subject in item["subjects"])
     )
     not_run = len(workload_results) - measured
-    environment = {
-        "machine_id": platform.node() or "unknown",
-        "os": platform.platform(),
-        "architecture": platform.machine(),
-        "cpu": platform.processor() or "unknown",
-        "memory_bytes": 0,
-        "power_mode": "unknown",
-        "toolchain": platform.python_version(),
-    }
-    runner_id = os.environ.get("MIGRATION_BENCHMARK_RUNNER_ID", "").strip()
-    if runner_id:
-        environment["runner_id"] = runner_id
+    environment = benchmark_environment()
     result = {
         "schema": "migration-parity/benchmark-result@1",
         "identity": result_identity,
@@ -2819,6 +2925,11 @@ def main() -> int:
         "--parity-attestation-output",
         type=Path,
         help="write a report-bound execution attestation for a fresh parity run",
+    )
+    parser.add_argument(
+        "--parity-producer-attestation-output",
+        type=Path,
+        help="write a producer receipt and bundle for a fresh parity run",
     )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--workload-id", action="append")

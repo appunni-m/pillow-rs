@@ -3,6 +3,17 @@
 All notable user-facing changes are recorded here. Stable release scope,
 parity status, and backend limitations are described in the documentation.
 
+## 12.2.3 - 2026-10-21
+
+- Organize CPU and SIMD operation implementations into family adapters and
+  focused mode- and architecture-specific kernels, preserving direct backend
+  selection and specialized hot loops.
+- Improve selected filtering, grayscale, channel extraction, rotation,
+  transpose, thumbnail, and pixel-update paths with parity-backed execution
+  receipts and focused benchmark evidence.
+- Expand operation-to-source traceability, implementation-structure checks,
+  and backend execution validation for the performance campaign.
+
 ## 12.2.2 - 2026-10-18
 
 - Improve mode- and architecture-specific CPU paths for filtering, resizing,

@@ -26,7 +26,10 @@ async function main() {
   try {
     browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
     const urls = process.argv.slice(2);
-    if (!urls.length) urls.push(`http://127.0.0.1:${server.address().port}/benchmarks/`);
+    if (!urls.length) urls.push(
+      `http://127.0.0.1:${server.address().port}/benchmarks/`,
+      `http://127.0.0.1:${server.address().port}/pillow-simd-benchmarks/`,
+    );
     const output = path.join(root, 'target/docs-preview');
     await fs.mkdir(output, { recursive: true });
     for (const [index, url] of urls.entries()) {
@@ -63,8 +66,13 @@ async function main() {
         const tableKinds = await page.$$eval('.bench-comparison', tables => tables.map(table => table.closest('[data-table-kind]').dataset.tableKind));
         if (tableKinds.join(',') !== 'pipelines,operations') throw new Error(`Expected pipeline and operation tables, got ${tableKinds.join(',')}`);
         const fixtureRunner = await page.evaluate(() => {
+          const select = document.querySelector('#bench-subject');
+          const hasSimdComparison = [...select.options].some(item =>
+            item.dataset.target === 'python-cpu' && item.dataset.baseline === 'pillow-simd');
           const row = [...document.querySelectorAll('.bench-workload')].find(item =>
-            item.querySelector('[data-subject="pillow"]') && item.querySelector('[data-subject="python-cpu"]'));
+            item.querySelector('[data-subject="pillow"]') &&
+            item.querySelector('[data-subject="python-cpu"]') &&
+            (!hasSimdComparison || item.querySelector('[data-subject="pillow-simd"]')));
           if (!row) throw new Error('No workload row can exercise the ratio plot');
           const baseline = row.querySelector('[data-subject="pillow"]');
           const target = row.querySelector('[data-subject="python-cpu"]');
@@ -75,14 +83,23 @@ async function main() {
           target.dataset.qualityPrimary = 'checked';
           target.dataset.direction = 'faster';
           target.dataset.scoreDirection = 'faster';
+          const simdBaseline = row.querySelector('[data-subject="pillow-simd"]');
+          if (simdBaseline) {
+            simdBaseline.dataset.value = '8';
+            simdBaseline.querySelector('.bench-time').textContent = '8 µs';
+            target.dataset.ratioPillowSimd = '1.6';
+            target.dataset.observedRatioPillowSimd = '1.6';
+            target.dataset.qualityPillowSimd = 'checked';
+            target.dataset.notePillowSimd = 'Pillow-SIMD output matched regular Pillow';
+          }
           row.dataset.name = 'Browser fixture invert RGBA';
           row.dataset.search = 'browser fixture invert rgba';
           row.dataset.mode = 'RGBA';
-          document.querySelector('#bench-subject').value = 'python-cpu';
+          select.value = 'python-cpu';
           const search = document.querySelector('#evidence-filter');
           search.value = 'browser fixture invert rgba';
           search.dispatchEvent(new Event('input', { bubbles: true }));
-          document.querySelector('#bench-subject').dispatchEvent(new Event('change', { bubbles: true }));
+          select.dispatchEvent(new Event('change', { bubbles: true }));
           return row.dataset.machine;
         });
         const initialPlot = await page.$$eval('.bench-workload-plot-svg', nodes => {
@@ -100,6 +117,34 @@ async function main() {
             !initialSummary.includes('Typical case: 2× faster') ||
             !initialSummary.includes('Browser fixture invert RGBA')) {
           throw new Error(`Reader summary did not explain the selected workload: ${initialSummary}`);
+        }
+        const simdComparison = await page.$eval('#bench-subject', select => {
+          const option = [...select.options].find(item => item.dataset.target === 'python-cpu' && item.dataset.baseline === 'pillow-simd');
+          return option ? option.value : null;
+        });
+        if (simdComparison) {
+          await page.select('#bench-subject', simdComparison);
+          const selectedBaselineView = await page.$eval('.bench-workload[data-search*="browser fixture"]', row => {
+            const target = row.querySelector('[data-subject="python-cpu"]');
+            const baseline = row.querySelector('[data-subject="pillow-simd"]');
+            const targetHeader = row.closest('table').querySelector('thead [data-subject="python-cpu"] small');
+            return {
+              label: target.querySelector('.bench-ratio').textContent,
+              ratio: target.dataset.ratio,
+              header: targetHeader.textContent,
+              baseline: baseline.querySelector('.bench-ratio').textContent,
+            };
+          });
+          if (selectedBaselineView.label !== '1.6× faster' || selectedBaselineView.ratio !== '1.6' ||
+              selectedBaselineView.header !== 'Median · vs Pillow-SIMD · SSE4' ||
+              selectedBaselineView.baseline !== 'Baseline') {
+            throw new Error(`Selected Pillow-SIMD comparison showed the wrong denominator: ${JSON.stringify(selectedBaselineView)}`);
+          }
+          await page.select('#bench-subject', 'python-cpu');
+        } else {
+          const hasUnpairedOption = await page.$eval('#bench-subject', select =>
+            [...select.options].some(item => item.dataset.baseline === 'pillow-simd'));
+          if (hasUnpairedOption) throw new Error('Selector exposed a Pillow-SIMD comparison without a matched baseline');
         }
         await page.type('#evidence-filter', 'no-such-workload');
         const after = await page.$eval('#bench-count', element => element.textContent);

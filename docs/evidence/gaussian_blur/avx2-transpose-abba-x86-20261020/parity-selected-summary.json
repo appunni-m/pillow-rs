@@ -1,0 +1,126 @@
+{
+  "runs": {
+    "A1": {
+      "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-noise-1024x768-radius-7-5",
+      "diff_count": 0,
+      "exact_output_bytes_equal": true,
+      "outcome": "pass",
+      "report_path_on_runner": "build/migration-parity/gaussian-simd-x86-current-source-20261020/parity.json",
+      "report_sha256": "d9f0066498f08ba16f8dc7af14db61bcc502edbd2ecb0b06933b2c18f297e1d1",
+      "report_size_bytes": 16781168,
+      "run_id": "migration-parity-benchmark-gate-778e358eecfc43b5a1ac0117b767f075",
+      "source_output": {
+        "byte_count": 3145728,
+        "mode": "RGBA",
+        "sha256": "29a097670d78bb2c9ade5dec7f89b3d246338819f8f5c9dd6daec693ce33f630",
+        "size": [
+          1024,
+          768
+        ],
+        "step_id": "blurred"
+      },
+      "status": "completed",
+      "summary": {
+        "executed": 1,
+        "failed": 0,
+        "infrastructure_errors": 0,
+        "not_run": 0,
+        "passed": 1,
+        "selected": 1
+      },
+      "target_output": {
+        "byte_count": 3145728,
+        "mode": "RGBA",
+        "sha256": "29a097670d78bb2c9ade5dec7f89b3d246338819f8f5c9dd6daec693ce33f630",
+        "size": [
+          1024,
+          768
+        ],
+        "step_id": "blurred"
+      },
+      "target_profile": "python-simd"
+    },
+    "A2": {
+      "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-noise-1024x768-radius-7-5",
+      "diff_count": 0,
+      "exact_output_bytes_equal": true,
+      "outcome": "pass",
+      "report_path_on_runner": "build/migration-parity/gaussian-simd-x86-current-source-20261020/candidate-a2/parity.json",
+      "report_sha256": "8ec335fa22b49ba2c9cbf642af56ad71bc152beff9e555c551a069426e376245",
+      "report_size_bytes": 16781168,
+      "run_id": "migration-parity-benchmark-gate-5fee8e77ecd54665a7a5ad549546f9d2",
+      "source_output": {
+        "byte_count": 3145728,
+        "mode": "RGBA",
+        "sha256": "29a097670d78bb2c9ade5dec7f89b3d246338819f8f5c9dd6daec693ce33f630",
+        "size": [
+          1024,
+          768
+        ],
+        "step_id": "blurred"
+      },
+      "status": "completed",
+      "summary": {
+        "executed": 1,
+        "failed": 0,
+        "infrastructure_errors": 0,
+        "not_run": 0,
+        "passed": 1,
+        "selected": 1
+      },
+      "target_output": {
+        "byte_count": 3145728,
+        "mode": "RGBA",
+        "sha256": "29a097670d78bb2c9ade5dec7f89b3d246338819f8f5c9dd6daec693ce33f630",
+        "size": [
+          1024,
+          768
+        ],
+        "step_id": "blurred"
+      },
+      "target_profile": "python-simd"
+    },
+    "B1": {
+      "case_id": "PIL.Image.Image.filter.nuanced.performance-material-rgba-noise-1024x768-radius-7-5",
+      "diff_count": 0,
+      "exact_output_bytes_equal": true,
+      "outcome": "pass",
+      "report_path_on_runner": "build/migration-parity/gaussian-simd-x86-current-source-20261020/candidate-b1/parity.json",
+      "report_sha256": "bb52fc5d37d02ee1d8954605b113aafce6a832d35d245d7cb6501fa441098c78",
+      "report_size_bytes": 16781168,
+      "run_id": "migration-parity-benchmark-gate-41a2623f2297461fb5348ce9e355fcad",
+      "source_output": {
+        "byte_count": 3145728,
+        "mode": "RGBA",
+        "sha256": "29a097670d78bb2c9ade5dec7f89b3d246338819f8f5c9dd6daec693ce33f630",
+        "size": [
+          1024,
+          768
+        ],
+        "step_id": "blurred"
+      },
+      "status": "completed",
+      "summary": {
+        "executed": 1,
+        "failed": 0,
+        "infrastructure_errors": 0,
+        "not_run": 0,
+        "passed": 1,
+        "selected": 1
+      },
+      "target_output": {
+        "byte_count": 3145728,
+        "mode": "RGBA",
+        "sha256": "29a097670d78bb2c9ade5dec7f89b3d246338819f8f5c9dd6daec693ce33f630",
+        "size": [
+          1024,
+          768
+        ],
+        "step_id": "blurred"
+      },
+      "target_profile": "python-simd"
+    }
+  },
+  "schema": "gaussian-blur-selected-parity-summary@1",
+  "scope": "single selected Pillow parity case; pixel payloads retained on runner only"
+}

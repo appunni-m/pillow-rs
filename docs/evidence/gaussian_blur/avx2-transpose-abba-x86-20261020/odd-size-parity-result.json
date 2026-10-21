@@ -1,0 +1,54 @@
+{
+  "exact_pillow_parity": true,
+  "mode": "RGBA",
+  "output_bytes": 12220,
+  "output_sha256": "c9c5e4af816457d8499d552509deb636b0a2ac673b962b7a9605699bc6cb3c66",
+  "pillow_version": "12.2.0",
+  "radius": 7.5,
+  "receipt": {
+    "actual_backend": "simd",
+    "backend_ns": 187651,
+    "dispatch_count": null,
+    "fallback_reason": null,
+    "operation_count": 1,
+    "operation_telemetry": [
+      {
+        "handoff_count": 0,
+        "mode_conversion_count": 0,
+        "operation": "GaussianBlur",
+        "path": "avx2-transpose",
+        "scalar_tail_count": 3960,
+        "vector_block_count": 3079
+      }
+    ],
+    "phase_diagnostics_ns": {
+      "python_bytes_copy_ns": 730,
+      "transpose_avx2_executor_ns": 2400
+    },
+    "requested_backend": null,
+    "resize_coeff_cache_hits": 0,
+    "resize_coeff_cache_misses": 0,
+    "resource": {
+      "auxiliary_bytes": 0,
+      "full_frame_copy_count": 0,
+      "fused_operation_count": 0,
+      "host_allocated_bytes": 12220,
+      "host_allocation_count": 1,
+      "host_buffer_bytes": 24440,
+      "host_buffer_count": 2,
+      "mode_conversion_count": 0,
+      "parameter_bytes": 0,
+      "peak_live_host_bytes": 24440,
+      "readback_bytes": 0,
+      "retained_cache_bytes": 0,
+      "upload_bytes": 0
+    },
+    "route_ns": 37020,
+    "validation_ns": 40
+  },
+  "shape": [
+    65,
+    47
+  ],
+  "target_extension_sha256": "83af13ac8fda38a21ae69a57e7837a89f9745cfb57116d2da29dadd5b41fd92e"
+}

@@ -249,7 +249,13 @@ def capture_source_snapshot(root: Path) -> dict[str, Any]:
         finally:
             active_directories.remove(resolved_directory)
 
-    required = [workspace / "Cargo.toml", workspace / "Cargo.lock"]
+    required = [
+        workspace / "Cargo.toml",
+        workspace / "Cargo.lock",
+        # Maturin selects the Python extension features from this file. It is
+        # part of the build input even though Cargo cannot see it directly.
+        workspace / "pillow-rs-py" / "pyproject.toml",
+    ]
     for path in (workspace / "rust-toolchain.toml", workspace / "rust-toolchain"):
         if path.exists():
             required.append(path)

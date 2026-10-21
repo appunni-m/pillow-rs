@@ -18,7 +18,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_ycbcr_grayscale_bytes
         return None;
     }
     #[cfg(target_arch = "x86_64")]
-    if let Some(output) = crate::color::ycbcr_luma_ssse3_bytes(source.as_raw()) {
+    if let Some(output) = super::ycbcr_ssse3::ycbcr_luma_ssse3_bytes(source.as_raw()) {
         return Some(output);
     }
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]

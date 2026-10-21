@@ -44,8 +44,11 @@ use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
+mod getcolors;
 mod gpu_batch;
 mod putdata;
+mod save_options;
+mod telemetry;
 
 // Pillow's custom exception for images exceeding its decompression-bomb limit.
 #[cfg(not(feature = "parallel-wheel"))]
@@ -988,10 +991,12 @@ impl PyImage {
         .map_err(map_error)
     }
 
+    #[pyo3(signature = (fp, format=None, compress_level=None))]
     fn save(
         &mut self,
         fp: &Bound<'_, PyAny>,
         format: Option<String>,
+        compress_level: Option<i64>,
         py: Python<'_>,
     ) -> PyResult<()> {
         let path = host_path_from_python(fp)?;
@@ -1017,8 +1022,9 @@ impl PyImage {
             .and_then(|extension| extension.to_str());
         let format = pillow_rs::Image::resolve_save_format(format.as_deref(), extension)
             .map_err(map_error)?;
+        let encoder_options = save_options::encoder_options(&format, compress_level)?;
         let encoded = py
-            .detach(|| self.inner.encode(&format))
+            .detach(|| self.inner.encode_with_options(&format, &encoder_options))
             .map_err(map_error)?;
         if let Some(path) = path {
             py.detach(|| std::fs::write(path, &encoded))
@@ -1239,7 +1245,7 @@ impl PyImage {
                     .tobytes_encoded_shared(&mode, &encoder_name, &args)
             })
             .map_err(map_error)?;
-        Ok(PyBytes::new(py, bytes.as_ref()).unbind())
+        Ok(telemetry::materialize_python_bytes(py, bytes.as_ref()))
     }
 
     /// Lock a lazy image pipeline to the sole active compute backend.
@@ -1638,26 +1644,15 @@ impl PyImage {
             .map_err(map_error)?;
         Python::attach(|py| match formatted {
             None => Ok(None),
-            Some(results) => {
-                let out = pyo3::types::PyList::empty(py);
-                for (count, color) in results {
-                    let color_value = match color {
-                        pillow_rs::FormattedPixelValue::Scalar(value) => value.into_py_any(py)?,
-                        pillow_rs::FormattedPixelValue::Integer(value) => value.into_py_any(py)?,
-                        pillow_rs::FormattedPixelValue::Float(value) => value.into_py_any(py)?,
-                        pillow_rs::FormattedPixelValue::Components(values) => {
-                            PyTuple::new(py, values)?.into_py_any(py)?
-                        }
-                        pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => {
-                            PyTuple::new(py, bytes.into_iter().take(usize::from(bands)))?
-                                .into_py_any(py)?
-                        }
-                    };
-                    let entry = PyTuple::new(py, [count.into_py_any(py)?, color_value])?;
-                    out.append(entry)?;
-                }
-                Ok(Some(out.into_py_any(py)?))
-            }
+            Some(results) => Ok(Some(
+                PyList::new(
+                    py,
+                    results
+                        .into_iter()
+                        .map(|(count, color)| getcolors::PyGetColorsEntry { count, color }),
+                )?
+                .into_py_any(py)?,
+            )),
         })
     }
 
@@ -2348,6 +2343,7 @@ fn pipeline_operation_telemetry_to_py(
 #[pyfunction]
 fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
     let operation_telemetry = pillow_rs::Backend::take_pipeline_operation_telemetry();
+    let phase_timings = pillow_rs::Backend::take_pipeline_phase_timings();
     let Some((
         requested_backend,
         actual_backend,
@@ -2362,14 +2358,17 @@ fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         resize_coeff_cache_misses,
     )) = pillow_rs::Backend::take_pipeline_telemetry()
     else {
-        if operation_telemetry.is_empty() {
+        if operation_telemetry.is_empty() && phase_timings == (None, None, None) {
             return Ok(None);
         }
         let result = PyDict::new(py);
-        result.set_item(
-            "operation_telemetry",
-            pipeline_operation_telemetry_to_py(py, operation_telemetry)?,
-        )?;
+        if !operation_telemetry.is_empty() {
+            result.set_item(
+                "operation_telemetry",
+                pipeline_operation_telemetry_to_py(py, operation_telemetry)?,
+            )?;
+        }
+        telemetry::set_pipeline_phase_diagnostics(&result, phase_timings)?;
         return Ok(Some(result.into()));
     };
 
@@ -2394,6 +2393,7 @@ fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         "operation_telemetry",
         pipeline_operation_telemetry_to_py(py, operation_telemetry)?,
     )?;
+    telemetry::set_pipeline_phase_diagnostics(&result, phase_timings)?;
     if let Some(resource) = resource {
         let resource_dict = PyDict::new(py);
         resource_dict.set_item("upload_bytes", resource.upload_bytes)?;

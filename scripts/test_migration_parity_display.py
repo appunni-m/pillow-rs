@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,6 +9,10 @@ from scripts import validate_migration_parity_contract as contract
 from scripts.migration_parity.display import (
     build_capture_viewer,
     isolated_viewer_registry,
+)
+from scripts.migration_parity.display_inputs import (
+    default_display_case,
+    nuanced_display_cases,
 )
 
 
@@ -20,6 +25,12 @@ class FakeImage:
 
     def tobytes(self):
         return self._pixels
+
+    def load(self):
+        return self
+
+    def close(self):
+        pass
 
     def convert(self, mode):
         # Deliberately drop metadata like one target conversion path does.
@@ -41,7 +52,13 @@ class FakeViewer:
         return self.show_image(image, **options)
 
     def show_image(self, image, **options):
-        return self.show_file("unused", **options)
+        return self.show_file(self.save_image(image), **options)
+
+    def save_image(self, image):
+        with tempfile.NamedTemporaryFile(suffix=".PPM", delete=False) as output:
+            output.write(b"fake encoded file")
+        self.saved_path = output.name
+        return self.saved_path
 
     def show_file(self, path, **options):
         FakeViewer.launched += 1
@@ -188,6 +205,7 @@ class MigrationParityDisplayTests(unittest.TestCase):
                     "size": (2, 1),
                     "pixels": b"\x00\x7f\xff\x10",
                     "options": {"title": "raw view", "fit": "contain"},
+                    "save_options": {},
                 }
             ],
         )
@@ -208,6 +226,10 @@ class MigrationParityDisplayTests(unittest.TestCase):
 
         self.assertEqual(events[0]["mode"], "LA")
         self.assertEqual(events[0]["pixels"], b"\x80\x40")
+        self.assertEqual(
+            events[0]["save_options"],
+            {"compress_level": 1, "save_all": True},
+        )
         self.assertEqual(FakeViewer.launched, 0)
 
     def test_instance_show_image_hook_records_converted_image_in_original_sink(self):
@@ -231,6 +253,138 @@ class MigrationParityDisplayTests(unittest.TestCase):
         self.assertEqual(events[0]["pixels"], b"converted pixels")
         self.assertIs(image.info["display_callbacks"], events)
         self.assertEqual(FakeViewer.launched, 0)
+
+    def test_show_file_hook_captures_materialized_file_and_removes_temp_file(self):
+        events = []
+        image = FakeImage("RGB", (2, 1), b"source pixels", {"display_callbacks": events})
+        module, capture_instance = self.build_capture(
+            image,
+            registration="instance",
+            hook="show_file",
+            accept=1,
+        )
+
+        module.register(capture_instance, order=0)
+        self.assertTrue(module.show(image, title="materialized view"))
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["viewer_id"], "capture-one")
+        self.assertEqual(events[0]["title"], "materialized view")
+        self.assertEqual(events[0]["_encoded_file"], b"fake encoded file")
+        self.assertEqual(events[0]["options"], {"title": "materialized view"})
+        self.assertEqual(events[0]["save_options"], {})
+        self.assertFalse(Path(module._viewers[0].saved_path).exists())
+        self.assertEqual(FakeViewer.launched, 0)
+
+    def test_file_capture_is_decoded_for_parity_after_timing_boundary(self):
+        decoded_image = FakeImage("LA", (1, 1), b"\x80\x40")
+        decoded_image.format = "PNG"
+        image_module = SimpleNamespace(open=lambda stream: decoded_image)
+        captured = {
+            "display_callbacks": [
+                {
+                    "viewer_id": "capture-one",
+                    "title": "file view",
+                    "_encoded_file": b"encoded bytes",
+                    "options": {"title": "file view"},
+                }
+            ]
+        }
+
+        normalized = run_migration_parity._decode_display_file_captures(
+            captured,
+            side="source",
+            import_surface_fn=lambda side, surface: image_module,
+        )
+
+        self.assertIn("_encoded_file", captured["display_callbacks"][0])
+        event = normalized["display_callbacks"][0]
+        self.assertNotIn("_encoded_file", event)
+        self.assertEqual(event["file_format"], "PNG")
+        self.assertEqual(event["mode"], "LA")
+        self.assertEqual(event["size"], (1, 1))
+        self.assertEqual(event["pixels"], b"\x80\x40")
+
+    def test_png_file_capture_retains_zlib_compression_hint(self):
+        # Minimal chunk envelope; the fake decoder supplies pixels while the
+        # zlib header records compression level 1's fast FLEVEL class.
+        encoded = (
+            b"\x89PNG\r\n\x1a\n"
+            + (2).to_bytes(4, "big")
+            + b"IDAT\x78\x01"
+            + b"\x00\x00\x00\x00"
+        )
+        decoded_image = FakeImage("LA", (1, 1), b"\x80\x40")
+        decoded_image.format = "PNG"
+        captured = {
+            "display_callbacks": [
+                {"_encoded_file": encoded, "options": {}, "save_options": {}}
+            ]
+        }
+        normalized = run_migration_parity._decode_display_file_captures(
+            captured,
+            side="source",
+            import_surface_fn=lambda side, surface: SimpleNamespace(
+                open=lambda stream: decoded_image
+            ),
+        )
+        self.assertEqual(
+            normalized["display_callbacks"][0]["png_zlib_flevel"], 0
+        )
+
+    def test_binary_ppm_capture_decodes_without_backend_codecs(self):
+        captured = {
+            "display_callbacks": [
+                {
+                    "viewer_id": "capture-one",
+                    "title": None,
+                    "_encoded_file": b"P6\n1 1\n255\n\x01\x02\x03",
+                    "options": {"title": None},
+                }
+            ]
+        }
+
+        normalized = run_migration_parity._decode_display_file_captures(
+            captured,
+            side="target",
+            import_surface_fn=lambda side, surface: self.fail(
+                "binary PPM normalization must not import a side-specific codec"
+            ),
+        )
+
+        event = normalized["display_callbacks"][0]
+        self.assertEqual(event["file_format"], "PPM")
+        self.assertEqual(event["mode"], "RGB")
+        self.assertEqual(event["size"], (1, 1))
+        self.assertEqual(event["pixels"], b"\x01\x02\x03")
+
+    def test_default_show_cases_capture_the_file_and_include_la_png_case(self):
+        performance = default_display_case(
+            "PIL.Image.Image",
+            {"id": "show"},
+            {
+                "id": "PIL.Image.Image.show.performance.standard",
+                "dimension": "performance",
+            },
+            "PIL.Image.Image.show.performance.standard",
+        )
+        self.assertEqual(
+            performance["steps"][1]["arguments"]["viewer"]["value"]["hook"],
+            "show_file",
+        )
+
+        cases = nuanced_display_cases(
+            "PIL.Image.Image", {("PIL.Image.Image", "show"): {"id": "show"}}
+        )
+        la_png = next(
+            case
+            for case in cases
+            if case["case_id"] == "PIL.Image.Image.show.capture.la-file-PNG"
+        )
+        viewer = la_png["steps"][1]["arguments"]["viewer"]["value"]
+        self.assertEqual(viewer["hook"], "show_file")
+        self.assertEqual(viewer["format"], "PNG")
+        self.assertEqual(la_png["steps"][0]["arguments"]["mode"]["value"], "LA")
 
     def test_registry_is_restored_after_workflow_exception(self):
         original_viewer = object()
@@ -443,6 +597,14 @@ class MigrationParityDisplayTests(unittest.TestCase):
                 {"image"},
                 {"image"},
             )
+
+    def test_capture_viewer_accepts_saved_file_hook(self):
+        contract._validate_capture_viewer_literal(
+            capture_spec(hook="show_file"),
+            "step.arguments.viewer.value",
+            {"image"},
+            {"image"},
+        )
 
     def test_capture_reference_is_a_runner_dependency(self):
         descriptor = {"kind": "literal", "value": capture_spec()}

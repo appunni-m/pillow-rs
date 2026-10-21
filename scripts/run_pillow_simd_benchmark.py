@@ -96,6 +96,42 @@ PILLOW_VERSION = "12.1.1"
 PILLOW_SIMD_VERSION = "12.1.1.post0"
 
 
+def select_workload_ids(requested: list[str] | None) -> list[str]:
+    """Return the full catalog or a validated subset in canonical order."""
+
+    if not requested:
+        return list(WORKLOAD_IDS)
+    if len(set(requested)) != len(requested):
+        raise ValueError("Pillow-SIMD workload IDs must not be repeated")
+    unknown = sorted(set(requested) - set(WORKLOAD_IDS))
+    if unknown:
+        raise ValueError(f"unknown Pillow-SIMD workload IDs: {unknown}")
+    selected = set(requested)
+    return [workload_id for workload_id in WORKLOAD_IDS if workload_id in selected]
+
+
+def output_paths(
+    requested_output: Path | None,
+    requested_workloads: list[str] | None,
+) -> tuple[Path, Path]:
+    """Keep partial cohorts and their intermediate reports separate from full runs."""
+
+    default_root = ROOT / "build" / "migration-parity"
+    if not requested_workloads:
+        return (
+            requested_output or default_root / "pillow-simd-public-snapshot.json",
+            default_root,
+        )
+    workload_ids = select_workload_ids(requested_workloads)
+    if requested_output is None:
+        selection_hash = hashlib.sha256("\n".join(workload_ids).encode()).hexdigest()[:12]
+        requested_output = default_root / f"pillow-simd-selected-{selection_hash}.json"
+    artifact_root = requested_output.with_suffix("").with_name(
+        f"{requested_output.stem}.artifacts"
+    )
+    return requested_output, artifact_root
+
+
 @lru_cache(maxsize=1)
 def workload_contracts() -> dict[str, dict[str, Any]]:
     manifest = load_manifest(DEFAULT_MANIFEST)
@@ -727,12 +763,16 @@ def combine_results(
     *,
     parity_run_ids: tuple[str, str] = ("", ""),
     source_compatibility: dict[str, dict[str, Any]] | None = None,
+    workload_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build one x86 comparison snapshot with a version-matched Pillow baseline."""
     first_identity = pillow["identity"]
     simd_identity = pillow_simd["identity"]
+    selected_workloads = select_workload_ids(workload_ids)
     if source_compatibility is None:
         raise ValueError("Pillow-SIMD source compatibility evidence is required")
+    if set(source_compatibility) != set(selected_workloads):
+        raise ValueError("Pillow-SIMD compatibility evidence does not match the selected workload set")
     if first_identity["targets"] != simd_identity["targets"]:
         raise ValueError("Pillow and Pillow-SIMD target identities differ")
     for key in ("manifest", "inputs", "assets"):
@@ -740,16 +780,18 @@ def combine_results(
             raise ValueError(f"Pillow and Pillow-SIMD {key} differ")
     if pillow["environment"] != pillow_simd["environment"]:
         raise ValueError("Pillow and Pillow-SIMD measurements use different hosts")
-    if [w["workload_id"] for w in pillow["workloads"]] != [
-        w["workload_id"] for w in pillow_simd["workloads"]
-    ]:
+    pillow_workloads = [w["workload_id"] for w in pillow["workloads"]]
+    pillow_simd_workloads = [w["workload_id"] for w in pillow_simd["workloads"]]
+    if pillow_workloads != selected_workloads or pillow_simd_workloads != selected_workloads:
+        raise ValueError("source reports do not exactly match the selected workload set")
+    if pillow_workloads != pillow_simd_workloads:
         raise ValueError("Pillow and Pillow-SIMD measurements use different workloads")
 
     snapshot = project_pillow(pillow)
     simd_snapshot = project_pillow(pillow_simd)
     normal_rows = {(row["workload"], row["subject"]): row for row in snapshot["rows"]}
     simd_rows = {(row["workload"], row["subject"]): row for row in simd_snapshot["rows"]}
-    for workload in WORKLOAD_IDS:
+    for workload in selected_workloads:
         normal_workload = next(w for w in pillow["workloads"] if w["workload_id"] == workload)
         simd_workload = next(w for w in pillow_simd["workloads"] if w["workload_id"] == workload)
         if normal_workload["context"] != simd_workload["context"] or normal_workload["measurement_policy"] != simd_workload["measurement_policy"]:
@@ -802,7 +844,17 @@ def combine_results(
     snapshot["notes"] = [
         "This x86-only cohort compares pillow-rs CPU/SIMD, ordinary Pillow 12.1.1, and Pillow-SIMD 12.1.1.post0 on identical workloads and measurement policies.",
         "Pillow-SIMD and Pillow were run in separate virtual environments because both install the PIL namespace. pillow-rs CPU/SIMD parity uses regular Pillow; Pillow-SIMD compatibility is checked separately and incompatible baseline cells remain visible with their speed ratios withheld.",
-        f"The matched cohort covers {len(WORKLOAD_IDS)} full-size, parity-backed workflow IDs: {sum(workload.startswith('pipeline-op.') for workload in WORKLOAD_IDS)} pipeline-op workloads, the established RGB GaussianBlur case, and getchannel in L, LA, RGB, and RGBA. Each measured source uses the same input and measurement policy per workflow; target profiles appear only when declared by that workload.",
+        (
+            f"The matched cohort covers {len(selected_workloads)} full-size, parity-backed workflow IDs: "
+            f"{sum(workload.startswith('pipeline-op.') for workload in selected_workloads)} pipeline-op workloads, "
+            "the established RGB GaussianBlur case, and getchannel in L, LA, RGB, and RGBA. "
+            "Each measured source uses the same input and measurement policy per workflow; target profiles appear only when declared by that workload."
+            if len(selected_workloads) == len(WORKLOAD_IDS)
+            else (
+                f"This focused cohort contains only these {len(selected_workloads)} selected workload(s): "
+                f"{', '.join(selected_workloads)}. Omitted workloads were not measured and receive no performance conclusion."
+            )
+        ),
         "This cohort uses the Pillow-SIMD default SSE4 build. It is not comparable with the Apple ARM measurements on the main benchmark page.",
         *(
             [
@@ -840,6 +892,10 @@ def combine_results(
         schema="public-docs/benchmark-snapshot@1",
         repository="appunni-m/pillow-rs",
         source_sha256=source_digest,
+        selection={
+            "workload_ids": selected_workloads,
+            "complete_catalog": set(selected_workloads) == set(WORKLOAD_IDS),
+        },
     )
     return snapshot
 
@@ -848,16 +904,26 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pillow-python", default=os.environ.get("PILLOW_ORACLE_PYTHON"))
     parser.add_argument("--pillow-simd-python", default=os.environ.get("PILLOW_SIMD_PYTHON"))
-    parser.add_argument("--output", type=Path, default=ROOT / "build/migration-parity/pillow-simd-public-snapshot.json")
+    parser.add_argument(
+        "--workload-id",
+        action="append",
+        dest="workload_ids",
+        help="Measure only this declared workload ID; repeat to select more than one. Defaults to the full cohort.",
+    )
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if not args.pillow_python or not args.pillow_simd_python:
         parser.error("set PILLOW_ORACLE_PYTHON and PILLOW_SIMD_PYTHON to isolated interpreter paths")
     if platform.machine().lower() not in {"x86_64", "amd64"}:
         raise SystemExit("Pillow-SIMD comparison benchmarks require an x86_64 host")
+    try:
+        ids = select_workload_ids(args.workload_ids)
+    except ValueError as error:
+        parser.error(str(error))
     workloads = workload_contracts()
-    ids = list(workloads)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    root = ROOT / "build" / "migration-parity"
+    output, root = output_paths(args.output, args.workload_ids)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    root.mkdir(parents=True, exist_ok=True)
     results = []
     parity_run_ids = []
     pillow_parity_path = root / "benchmark-parity-result-pillow.json"
@@ -922,15 +988,25 @@ def main() -> int:
         digest,
         parity_run_ids=tuple(parity_run_ids),
         source_compatibility=source_compatibility,
+        workload_ids=ids,
     )
     validate(snapshot, "appunni-m/pillow-rs")
-    args.output.write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
+    output.write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
     print(
         json.dumps(
             {
                 "status": "completed",
                 "workloads": len(ids),
-                "subjects": 4,
+                "workload_ids": ids,
+                "target_profiles": sorted(
+                    {
+                        subject["id"]
+                        for workload_id in ids
+                        for subject in workloads[workload_id]["subjects"]
+                        if subject["kind"] == "target_profile"
+                    }
+                ),
+                "output": str(output),
                 "pillow_simd_compatible": sum(
                     result["outcome"] == "pass"
                     for result in source_compatibility.values()

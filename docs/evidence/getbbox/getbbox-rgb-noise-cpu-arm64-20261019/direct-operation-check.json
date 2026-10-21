@@ -1,0 +1,79 @@
+{
+  "backend_execution": "pass",
+  "benchmark_report_sha256": "2fca5a6cb4a94f85821490e6ff7951dd53974431a23bd8dd3bb12c2b96e1c793",
+  "benchmark_runtime_identities": [
+    {
+      "profile": "pillow",
+      "side": "source",
+      "stable_sha256": "0584fcd7cd643a2167f9b8ddfbf1882837c483db1f15dfddcfa4b2c144dbf7b0"
+    },
+    {
+      "profile": "python-cpu",
+      "side": "target",
+      "stable_sha256": "8c55b923199cf4662b6e80e45196d12ca2707b4330b3ba31832ef55dee4bd7c5"
+    }
+  ],
+  "case_id": "PIL.Image.Image.getbbox.nuanced.performance-rgb-noise-1024x768",
+  "comparison_context": {
+    "benchmark_input_sha256": "fced232cf921915022a99786b4cc52a5bb4525cef6fa7cd55d82ae3ba2e12900",
+    "build_features": {
+      "pillow-rs": [
+        "default",
+        "gpu",
+        "image-codecs-all",
+        "pollster",
+        "wgpu"
+      ],
+      "pillow-rs-py": [
+        "default"
+      ]
+    },
+    "case_id": "PIL.Image.Image.getbbox.nuanced.performance-rgb-noise-1024x768",
+    "manifest_sha256": "ff0d8fa434e60ed844d9d3606396919e28e8b59bdcc590c80d0d73564ec5d885",
+    "parity_input_sha256": "0ccae3b22280dec96acffd4506d23896756e83b841d199fe627caa941e68d397",
+    "producer_child": {
+      "sha256": "95b6737ba5b731bafaa2a9afb9da6fb44d99568f8551761cb8032c8a3a28c89a",
+      "size": 202100
+    },
+    "producer_extras": [],
+    "producer_files_sha256": "17090344bb5de6995e1aed74cf082509043eb15d12ad5d44a7d02f9bc150bb1c",
+    "producer_parent": {
+      "sha256": "958d712a7648b70408c483d7a17f7aed719af7ac47f21634596c6fd694ccf5f7",
+      "size": 112764
+    },
+    "schema": "migration-parity/direct-operation-comparison-context@1",
+    "source_runtime_fingerprints": [
+      {
+        "profile": "pillow",
+        "side": "source",
+        "stable_sha256": "0584fcd7cd643a2167f9b8ddfbf1882837c483db1f15dfddcfa4b2c144dbf7b0"
+      }
+    ],
+    "target_profile": "python-cpu",
+    "workload_id": "pil-image-image.getbbox.materialized.rgb-noise-1024x768"
+  },
+  "direct_operation_parity": "pass",
+  "link_sha256": "30d1d3421345af292a3190c1c95bfac5b8b310731682e1cb4af3e938ad6ae89b",
+  "parity_report_sha256": "a25de9f4061c1ac3982d1e8b73f1e9d8b913d6aac3613ff6f0083a704f159e7f",
+  "parity_runtime_identities": [
+    {
+      "profile": "pillow",
+      "side": "source",
+      "stable_sha256": "0584fcd7cd643a2167f9b8ddfbf1882837c483db1f15dfddcfa4b2c144dbf7b0"
+    },
+    {
+      "profile": "python-cpu",
+      "side": "target",
+      "stable_sha256": "8c55b923199cf4662b6e80e45196d12ca2707b4330b3ba31832ef55dee4bd7c5"
+    }
+  ],
+  "performance_admission": "verified",
+  "producer_equivalence": "pass",
+  "producer_files_sha256": "18a703840c1160b6c58beafc626dc0d42cfefb2bce57ade7fadc424c3ad7a683",
+  "runtime_equivalence": "pass",
+  "source_build_binding": "pass",
+  "source_build_sha256": "9955b09f6c4079f832bc340083427134f84d462ddda8673ef9ebccfcc6ff264a",
+  "status": "complete",
+  "target_profile": "python-cpu",
+  "workload_id": "pil-image-image.getbbox.materialized.rgb-noise-1024x768"
+}

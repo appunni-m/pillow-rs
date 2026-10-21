@@ -103,6 +103,54 @@ fn getbbox_i_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
     Some((left as u32, right as u32))
 }
 
+fn getbbox_rgb_bounds(image: &crate::raster::RgbImage) -> Option<(u32, u32, u32, u32)> {
+    if image.width() == 0 || image.height() == 0 {
+        return None;
+    }
+    let row_stride = image.width() as usize * 3;
+    let raw = image.as_raw();
+    let has_nonzero = raw[..3].iter().any(|&sample| sample != 0) || {
+        let (words, remainder) = raw[3..].as_chunks::<8>();
+        words.iter().any(|word| u64::from_ne_bytes(*word) != 0)
+            || remainder.iter().any(|&sample| sample != 0)
+    };
+    if !has_nonzero {
+        return None;
+    }
+    let rows = raw.chunks_exact(row_stride);
+    let is_nonzero = |pixel: &[u8]| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0;
+    let first = rows.clone().enumerate().find_map(|(y, row)| {
+        let mut pixels = row.chunks_exact(3);
+        let left = pixels.clone().position(is_nonzero)?;
+        let right = pixels.rposition(is_nonzero).unwrap_or(left);
+        Some((y, left, right))
+    });
+    let (top, left, right) = first?;
+    if left == 0
+        && right + 1 == image.width() as usize
+        && let Some(bottom) = rows
+            .clone()
+            .enumerate()
+            .rposition(|(_, row)| row.chunks_exact(3).any(is_nonzero))
+    {
+        return Some((0, top as u32, image.width(), bottom as u32 + 1));
+    }
+
+    let (mut bbox_left, mut bbox_right, mut bbox_bottom) =
+        (left as u32, right as u32 + 1, top as u32 + 1);
+    for (y, row) in rows.enumerate().skip(top + 1) {
+        let mut pixels = row.chunks_exact(3);
+        let Some(row_left) = pixels.clone().position(is_nonzero) else {
+            continue;
+        };
+        let row_right = pixels.rposition(is_nonzero).unwrap_or(row_left);
+        bbox_left = bbox_left.min(row_left as u32);
+        bbox_right = bbox_right.max(row_right as u32 + 1);
+        bbox_bottom = y as u32 + 1;
+    }
+    Some((bbox_left, top as u32, bbox_right, bbox_bottom))
+}
+
 #[cfg(test)]
 mod getbbox_i_row_tests {
     use super::getbbox_i_row_bounds;
@@ -479,56 +527,10 @@ impl Image {
                 }
             }
             crate::raster::DynamicImage::ImageRgb8(image) => {
-                if image.width() == 0 || image.height() == 0 {
-                    return Ok(None);
-                }
-
-                // A bounding box only needs the first and last nonzero pixel
-                // from each nonempty row. Walking every pixel and updating
-                // four global extrema does unnecessary work for dense images.
-                let row_stride = image.width() as usize * 3;
-                let raw = image.as_raw();
-                if !raw.iter().any(|&sample| sample != 0) {
-                    return Ok(None);
-                }
-                let rows = raw.chunks_exact(row_stride);
-                let is_nonzero = |pixel: &[u8]| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0;
-                let first = rows.clone().enumerate().find_map(|(y, row)| {
-                    let mut pixels = row.chunks_exact(3);
-                    let left = pixels.clone().position(is_nonzero)?;
-                    let right = pixels.rposition(is_nonzero).unwrap_or(left);
-                    Some((y, left, right))
-                });
-                let Some((top, left, right)) = first else {
+                let Some(bounds) = getbbox_rgb_bounds(image) else {
                     return Ok(None);
                 };
-
-                // If the first nonempty row already spans the image width,
-                // horizontal bounds are final. Find only the last nonempty
-                // row instead of visiting every row and recomputing x bounds.
-                if left == 0 && right + 1 == image.width() as usize {
-                    if let Some(bottom) = rows
-                        .clone()
-                        .enumerate()
-                        .rposition(|(_, row)| row.chunks_exact(3).any(is_nonzero))
-                    {
-                        return Ok(Some((0, top as u32, image.width(), bottom as u32 + 1)));
-                    }
-                }
-
-                let (mut bbox_left, mut bbox_right, mut bbox_bottom) =
-                    (left as u32, right as u32 + 1, top as u32 + 1);
-                for (y, row) in rows.enumerate().skip(top + 1) {
-                    let mut pixels = row.chunks_exact(3);
-                    let Some(row_left) = pixels.clone().position(is_nonzero) else {
-                        continue;
-                    };
-                    let row_right = pixels.rposition(is_nonzero).unwrap_or(row_left);
-                    bbox_left = bbox_left.min(row_left as u32);
-                    bbox_right = bbox_right.max(row_right as u32 + 1);
-                    bbox_bottom = y as u32 + 1;
-                }
-                return Ok(Some((bbox_left, top as u32, bbox_right, bbox_bottom)));
+                return Ok(Some(bounds));
             }
             crate::raster::DynamicImage::ImageRgba8(image) => {
                 // Four-byte storage is not synonymous with alpha. CMYK and

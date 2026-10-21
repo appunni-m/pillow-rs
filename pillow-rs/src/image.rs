@@ -44,6 +44,11 @@ use crate::pipeline::{
 };
 use crate::raster::{DynamicImage, GenericImageView};
 
+#[path = "image/encode.rs"]
+mod encode;
+#[path = "image/pipeline_admission.rs"]
+mod pipeline_admission;
+
 /// Persistent operation list used by lazy image nodes.
 ///
 /// Appending to an existing `Image::Pipeline` keeps an immutable parent link
@@ -5090,36 +5095,6 @@ impl Image {
         Ok(bands.into_iter().map(str::to_string).collect())
     }
 
-    /// Encodes the image using the requested Pillow format name.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PilError`] when the format is unsupported or image
-    /// materialization or encoding fails.
-    pub fn encode(&self, format: &str) -> Result<Vec<u8>, PilError> {
-        let save_format = parse_format_str(format)?;
-        let upper_format = format.to_ascii_uppercase();
-        let mode = self.mode()?;
-        // Pillow's encoders reject unsupported mode/format combinations with
-        // an OSError naming both; replicate the public messages exactly.
-        let rejection = match upper_format.as_str() {
-            "PNG" if mode == "F" => Some("cannot write mode F as PNG"),
-            "PNG" if mode == "CMYK" => Some("cannot write mode CMYK as PNG"),
-            "BMP" if mode == "I" => Some("cannot write mode I as BMP"),
-            "BMP" if mode == "F" => Some("cannot write mode F as BMP"),
-            "BMP" if mode == "CMYK" => Some("cannot write mode CMYK as BMP"),
-            _ => None,
-        };
-        if let Some(message) = rejection {
-            return Err(PilError::OsError(message.into()));
-        }
-        if upper_format == "PNG" {
-            return self.to_png_bytes();
-        }
-        let decoded = self.decoded_for_encoding()?;
-        Ok(image_slash_star::encode_default(&decoded, save_format)?)
-    }
-
     /// Resolves Pillow's explicit save format or a host-supplied path
     /// extension before encoding.
     ///
@@ -6239,94 +6214,6 @@ impl Image {
         }
         let img = self.materialized_shared()?;
         Ok((img.width(), img.height()))
-    }
-
-    /// Whether this CPU-locked RGB pipeline contains only public, already
-    /// validated pixel writes over an in-memory source. `thumbnail()` can use
-    /// shape metadata for this prefix and keep the writes in the same batch.
-    pub(crate) fn has_deferable_cpu_rgb_putpixel_prefix(&self) -> bool {
-        let Image::Pipeline {
-            source,
-            ops,
-            backend,
-            explicit_mode,
-            ..
-        } = self
-        else {
-            return false;
-        };
-        let cpu_route_is_unambiguous = match backend {
-            Some(crate::compute::Backend::Cpu) => true,
-            None => crate::compute::cpu_is_only_active_backend(),
-            Some(_) => false,
-        };
-        if !cpu_route_is_unambiguous {
-            return false;
-        }
-        if !matches!(explicit_mode.as_deref(), None | Some("RGB")) || ops.is_empty() {
-            return false;
-        }
-        let Image::Loaded(source) = source.as_ref() else {
-            return false;
-        };
-        if !matches!(source.image.as_ref(), DynamicImage::ImageRgb8(_)) {
-            return false;
-        }
-        ops.iter().all(|op| {
-            matches!(
-                op,
-                PipelineOp::PutPixel {
-                    palette_index: false,
-                    ..
-                }
-            )
-        })
-    }
-
-    /// Check the concrete CPU fusion admission for this lazy write prefix and
-    /// requested thumbnail. The geometry backend owns the mode, size, filter,
-    /// and factor proof shared with its fused executor.
-    pub(crate) fn can_defer_cpu_rgb_putpixel_thumbnail(
-        &self,
-        width: u32,
-        height: u32,
-        filter: ResampleFilter,
-    ) -> bool {
-        if !self.has_deferable_cpu_rgb_putpixel_prefix() {
-            return false;
-        }
-        let Image::Pipeline {
-            source,
-            ops,
-            backend,
-            explicit_mode,
-            ..
-        } = self
-        else {
-            return false;
-        };
-        let cpu_route_is_unambiguous = match backend {
-            Some(crate::compute::Backend::Cpu) => true,
-            None => crate::compute::cpu_is_only_active_backend(),
-            Some(_) => false,
-        };
-        if !cpu_route_is_unambiguous {
-            return false;
-        }
-        let Image::Loaded(source) = source.as_ref() else {
-            return false;
-        };
-        let thumbnail = PipelineOp::Thumbnail {
-            w: width,
-            h: height,
-            filter,
-        };
-        crate::compute::cpu_rgb_putpixel_thumbnail_fusion_supported(
-            source.image.as_ref(),
-            ops.as_slice(),
-            &thumbnail,
-            explicit_mode.as_deref(),
-        )
     }
 
     /// Returns the Pillow mode string for this image.

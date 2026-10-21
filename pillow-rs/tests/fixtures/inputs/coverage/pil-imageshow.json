@@ -19,6 +19,7 @@
           "PIL.ImageShow.show.behavior.default",
           "PIL.ImageShow.show.parameter.title",
           "PIL.ImageShow.show.parameter.options",
+          "PIL.ImageShow.show.capture.la-file-PNG",
           "PIL.ImageShow.show.capture.1-show-default",
           "PIL.ImageShow.show.capture.1-show_image-default",
           "PIL.ImageShow.show.capture.1-show_image-PNG",

@@ -321,7 +321,9 @@ class Image:
     def save(
         self, fp: Union[str, Path], format: Optional[str] = None, **options
     ) -> None:
-        self._rust_image.save(fp, format)
+        # This Image owns one still frame, so save_all has no sequence to add.
+        # Preserve PNG's public compression override used by ImageShow viewers.
+        self._rust_image.save(fp, format, options.get("compress_level"))
 
     def resize(
         self,

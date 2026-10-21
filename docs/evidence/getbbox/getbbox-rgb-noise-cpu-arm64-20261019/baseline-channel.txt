@@ -1,0 +1,2 @@
+NAME                     SOURCE               PROFILE                  TARGET       ROWS SOURCE ARTIFACT
+getbbox-rgb-noise-arm64- benchmark-result     python-cpu               strict          1 2fca5a6cb4a9 (baseline a4e175149489)

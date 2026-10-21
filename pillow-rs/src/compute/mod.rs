@@ -33,6 +33,30 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Instant;
 
+#[path = "automatic_segments.rs"]
+mod automatic_segments;
+#[path = "backend_state.rs"]
+mod backend_state;
+#[path = "phase_telemetry.rs"]
+mod phase_telemetry;
+#[path = "thumbnail_fusion.rs"]
+mod thumbnail_fusion;
+#[cfg(test)]
+#[path = "transpose_tests.rs"]
+mod transpose_tests;
+
+pub(crate) use backend_state::{
+    cpu_is_only_active_backend, preferred_active_backend, simd_is_only_active_backend,
+};
+#[cfg(target_arch = "x86_64")]
+pub(crate) use phase_telemetry::record_transpose_avx2_executor_timing;
+pub(crate) use phase_telemetry::{
+    pipeline_phase_timestamp, record_transpose_output_allocation_timing,
+};
+pub(crate) use thumbnail_fusion::{
+    cpu_rgb_putpixel_thumbnail_fusion_supported, simd_rgb_putpixel_thumbnail_fusion_supported,
+};
+
 /// Return `(multiplier, offset)` when a 256-entry byte LUT is exactly the
 /// modulo-256 affine mapping `sample * multiplier + offset`.
 ///
@@ -355,6 +379,7 @@ fn set_pipeline_telemetry_enabled(enabled: bool) -> bool {
         LAST_PIPELINE_TELEMETRY.with(|last| {
             *last.borrow_mut() = None;
         });
+        phase_telemetry::clear();
         LAST_PIPELINE_RESOURCE_TELEMETRY.with(|last| {
             *last.borrow_mut() = None;
         });
@@ -566,6 +591,12 @@ pub(crate) fn record_pipeline_operation_path(path: &'static str) {
     }
     ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
         if let Some(sample) = active.borrow_mut().last_mut() {
+            // A fused executor may add the generic native-copy label after
+            // an adapter has identified its architecture-specific kernel.
+            // Preserve the more precise AVX2 receipt in that case.
+            if sample.path == "avx2-transpose" && path == "native-copy" {
+                return;
+            }
             sample.path = path;
         }
     });
@@ -1087,22 +1118,6 @@ mod pool_simd;
 pub(crate) use pool_simd::ops::adapters::simd_extract_band_into;
 pub(crate) use pool_simd::ops::adapters::simd_grayscale_with_evidence;
 
-/// Ask the CPU execution path whether an RGB PutPixel prefix can be folded
-/// into a non-nearest 2×2 thumbnail reduction without materializing the prefix.
-pub(crate) fn cpu_rgb_putpixel_thumbnail_fusion_supported(
-    img: &DynamicImage,
-    putpixel_ops: &[PipelineOp],
-    thumbnail: &PipelineOp,
-    mode: Option<&str>,
-) -> bool {
-    pool_cpu::ops::geometry::rgb_putpixel_thumbnail_fusion_supported(
-        img,
-        putpixel_ops,
-        thumbnail,
-        mode,
-    )
-}
-
 /// Run the SIMD CMYK projection block scanner and return its vector/tail
 /// evidence together with the two Pillow-compatible result axes.
 pub(crate) fn simd_cmyk_projection(
@@ -1550,24 +1565,6 @@ pub(crate) fn gpu_rgb_projection_terminal_supported(
     ops: &[PipelineOp],
 ) -> bool {
     pool_gpu::GpuPool::rgb_projection_terminal_supported(image, ops)
-}
-
-/// Whether an unlocked pipeline can only be routed to the serial CPU backend.
-/// A CPU-locked pipeline is handled directly by its caller; this check keeps
-/// narrow CPU-only fusion admission from intercepting normal multi-backend
-/// routing.
-pub(crate) fn cpu_is_only_active_backend() -> bool {
-    matches!(active_backends(), Ok(active) if active.as_slice() == [Backend::Cpu])
-}
-
-/// Select the highest-priority active backend for one eager image operation
-/// without allocating the sorted vector returned by [`active_backends`].
-pub(crate) fn preferred_active_backend() -> Result<Option<(Backend, bool)>, PilError> {
-    let active = active_lock()?;
-    let selected = [Backend::Gpu, Backend::Simd, Backend::Cpu]
-        .into_iter()
-        .find(|backend| active.contains(backend));
-    Ok(selected.map(|backend| (backend, active.len() == 1)))
 }
 
 pub(crate) mod registry;
@@ -2250,12 +2247,12 @@ fn merge_pipeline_resource_telemetry(
 /// segments.
 ///
 /// This planner is intentionally conservative about segment extension. A
-/// segment may include only operations that preserve the current concrete
-/// layout; crop, transpose, extraction, alpha promotion, conversion, and
-/// other shape/mode-changing operations end the segment. The next operation
-/// is then checked against the actual owned output, so no backend is entered
-/// with stale capability information and no Python-level materialization is
-/// needed at a CPU↔SIMD boundary.
+/// segment may include operations that preserve the current concrete layout,
+/// plus a consecutive transpose run that the SIMD executor composes against
+/// the original input. Other shape/mode-changing operations end the segment.
+/// The next operation is then checked against the actual owned output, so no
+/// backend is entered with stale capability information and no Python-level
+/// materialization is needed at a CPU↔SIMD boundary.
 fn execute_automatic_simd_segments(
     ops: &[PipelineOp],
     img: &DynamicImage,
@@ -2299,10 +2296,11 @@ fn execute_automatic_simd_segments(
         let mut end = index + 1;
         if backend == Backend::Simd {
             // Every operation in this segment is checked against the same
-            // concrete layout. The last operation may change that layout; it
-            // is included, then the segment ends before the next check.
+            // concrete layout. A transpose-only run is the exception: the
+            // SIMD batch executor composes it before dispatch, and each
+            // transform is checked against this original image layout.
             while end < ops.len()
-                && adapters_preserve_native_contract(&ops[end - 1])
+                && automatic_segments::can_extend(&ops[end - 1], &ops[end])
                 && simd.supports_for_image(&ops[end], input, op_mode)?
             {
                 end += 1;
@@ -2313,7 +2311,7 @@ fn execute_automatic_simd_segments(
             // before an operation that SIMD can execute so the next segment
             // can return to the vector path without replaying this segment.
             while end < ops.len()
-                && adapters_preserve_native_contract(&ops[end - 1])
+                && automatic_segments::preserves_native_contract(&ops[end - 1])
                 && !simd.supports_for_image(&ops[end], input, op_mode)?
             {
                 if !cpu.supports(&ops[end])? {
@@ -2352,10 +2350,6 @@ fn execute_automatic_simd_segments(
     }
     let actual_backend = last_backend.unwrap_or(Backend::Cpu);
     Ok((result, actual_backend, fallback_reason, resources))
-}
-
-fn adapters_preserve_native_contract(op: &PipelineOp) -> bool {
-    pool_simd::ops::adapters::preserves_native_contract(op)
 }
 
 /// Executes a previously routed and validated pipeline, recording the bounded

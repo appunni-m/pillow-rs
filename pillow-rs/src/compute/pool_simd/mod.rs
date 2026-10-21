@@ -19,6 +19,8 @@ use crate::pipeline::{PipelineOp, TransposeTransform};
 use crate::raster::DynamicImage;
 
 pub(crate) mod ops;
+mod point_batch;
+mod put_pixel_batch;
 
 // ─── SimdPool ──────────────────────────────────────────────────────────────
 
@@ -26,86 +28,6 @@ pub(crate) mod ops;
 ///
 /// Executes only operations with a registered SIMD implementation.
 pub struct SimdPool;
-
-fn point_band_count(img: &DynamicImage) -> Option<usize> {
-    match img.color() {
-        crate::raster::ColorType::L8 => Some(1),
-        crate::raster::ColorType::La8 => Some(2),
-        crate::raster::ColorType::Rgb8 => Some(3),
-        crate::raster::ColorType::Rgba8 => Some(4),
-        _ => None,
-    }
-}
-
-fn byte_point_mode_allowed(img: &DynamicImage, mode: Option<&str>) -> bool {
-    match img {
-        DynamicImage::ImageLuma8(_) => matches!(mode, None | Some("L")),
-        DynamicImage::ImageLumaA8(_) => matches!(mode, None | Some("LA")),
-        DynamicImage::ImageRgb8(_) => matches!(mode, None | Some("RGB")),
-        DynamicImage::ImageRgba8(_) => matches!(mode, None | Some("RGBA")),
-        _ => false,
-    }
-}
-
-fn point_lut(op: &PipelineOp, bands: usize) -> Option<Vec<u8>> {
-    match op {
-        PipelineOp::Invert => Some(
-            (0..bands)
-                .flat_map(|_| (0u16..=255).map(|value| 255u8 - value as u8))
-                .collect(),
-        ),
-        PipelineOp::Solarize { threshold } => Some(
-            (0..bands)
-                .flat_map(|_| {
-                    (0u16..=255).map(|value| {
-                        let value = value as u8;
-                        if value >= *threshold {
-                            255 - value
-                        } else {
-                            value
-                        }
-                    })
-                })
-                .collect(),
-        ),
-        PipelineOp::Posterize { bits } if *bits <= 8 => {
-            let mask = !((1u8 << (8 - bits)) - 1);
-            Some(
-                (0..bands)
-                    .flat_map(|_| (0u16..=255).map(|value| value as u8 & mask))
-                    .collect(),
-            )
-        }
-        PipelineOp::Eval { lut } if lut.len() == bands * 256 => Some(lut.to_vec()),
-        _ => None,
-    }
-}
-
-fn fused_point_batch(
-    ops: &[PipelineOp],
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Option<(usize, Vec<u8>)> {
-    if !byte_point_mode_allowed(img, mode) {
-        return None;
-    }
-    let bands = point_band_count(img)?;
-    let mut composed: Vec<u8> = (0..bands)
-        .flat_map(|_| (0u16..=255).map(|value| value as u8))
-        .collect();
-    let mut consumed = 0usize;
-    for op in ops {
-        let next = point_lut(op, bands)?;
-        for band in 0..bands {
-            let offset = band * 256;
-            for value in 0..256usize {
-                composed[offset + value] = next[offset + composed[offset + value] as usize];
-            }
-        }
-        consumed += 1;
-    }
-    (consumed >= 2).then_some((consumed, composed))
-}
 
 /// Compose methods for the existing GPU caller. Dimensions do not affect D4
 /// composition; `None` denotes its exact identity element.
@@ -229,10 +151,7 @@ impl BackendImpl for SimdPool {
             ops.iter().map(registry::variant_key).collect::<Vec<_>>()
         );
 
-        // The first operation can read the materialized source directly.  Do
-        // not clone the full frame merely to seed the accumulator; each
-        // adapter already returns an owned output buffer. Empty batches and
-        // borrowed all-identity batches clone only at return.
+        // Only the first adapter reads caller-owned pixels; later outputs move directly.
         let mut current: Option<DynamicImage> = None;
         let mut current_mode = ops::adapters::simd_initial_mode(img, ops, mode);
         let mut resources = crate::compute::host_resource_telemetry(img);
@@ -247,6 +166,15 @@ impl BackendImpl for SimdPool {
                 return Err(PilError::NotImplementedError(format!(
                     "SIMD does not support {key} for the current image layout/mode"
                 )));
+            }
+            if matches!(current_op, PipelineOp::PutPixel { .. })
+                && let Some((next, next_mode, next_index)) =
+                    put_pixel_batch::try_execute(input, ops, index, op_mode, &mut resources)?
+            {
+                current = Some(next);
+                current_mode = next_mode;
+                index = next_index;
+                continue;
             }
             if current_mode.is_none() {
                 if index + 1 < ops.len() {
@@ -424,7 +352,7 @@ impl BackendImpl for SimdPool {
                     }
                 }
             }
-            if let Some((consumed, lut)) = fused_point_batch(&ops[index..], input, op_mode) {
+            if let Some((consumed, lut)) = point_batch::fused(&ops[index..], input, op_mode) {
                 if let Some(unsupported) = ops[index..index + consumed]
                     .iter()
                     .find(|op| !ops::adapters::simd_supports_for_image(input, op, op_mode))
@@ -468,12 +396,7 @@ impl BackendImpl for SimdPool {
                 index += consumed;
                 continue;
             }
-            // Once a SIMD segment has produced an owned intermediate, native
-            // byte transforms can reuse that buffer.  The first operation
-            // still reads the caller-owned source immutably; only subsequent
-            // operations enter this path, so public branch semantics remain
-            // unchanged while repeated point/effect work avoids full-frame
-            // clones.
+            // Reuse owned intermediates for native byte transforms after the first op.
             let can_reuse = current.as_ref().is_some_and(|input| {
                 ops::adapters::simd_in_place_supported(input, current_op, op_mode)
             });
@@ -493,11 +416,7 @@ impl BackendImpl for SimdPool {
                         continue;
                     }
                     Ok(false) => {
-                        // `simd_in_place_supported` and the executor are a
-                        // single capability contract.  Reaching this arm
-                        // means the implementation failed to honor its own
-                        // preflight, so report unsupported instead of
-                        // silently switching to an allocating/scalar path.
+                        // Admission and execution share one contract; disagreement is unsupported.
                         crate::compute::record_pipeline_operation_path("unsupported");
                         crate::compute::finish_pipeline_operation_telemetry();
                         return Err(PilError::NotImplementedError(format!(
@@ -535,32 +454,32 @@ impl BackendImpl for SimdPool {
             current_mode = ops::adapters::simd_mode_after_op(op, op_mode);
             index += 1;
         }
-        // Image.merge consumes a P source as a raw one-byte band but creates
-        // a new multi-band image. Do not run its RGB/LA/RGBA result through
-        // the P-mode normalizer, which is reserved for operations that retain
-        // the source palette sample layout.
-        let current = current.unwrap_or_else(|| {
-            let output = img.clone();
-            if !ops.is_empty() {
-                // Identity admission checked the complete native allocation.
-                // An owned result is still required at the public boundary.
-                crate::compute::record_pipeline_allocation(output.as_bytes().len());
-                crate::compute::account_host_buffer_boundary(&mut resources, img, &output);
-            }
-            output
-        });
-        let result = if ops.iter().any(|op| matches!(op, PipelineOp::Merge { .. })) {
-            Ok(current)
-        } else {
-            // Palette normalization follows the pipeline's final logical
-            // mode. The source mode can differ after ExtractBand: PA produces
-            // one-band L bytes, which must not be widened back into [index,
-            // 255] pairs at this boundary.
-            normalize_palette_result(current, current_mode.as_deref())
-        }?;
-        crate::compute::record_pipeline_resource_telemetry(resources);
-        Ok(result)
+        finish_simd_batch(img, ops, current, current_mode.as_deref(), resources)
     }
+}
+
+fn finish_simd_batch(
+    img: &DynamicImage,
+    ops: &[PipelineOp],
+    current: Option<DynamicImage>,
+    current_mode: Option<&str>,
+    mut resources: crate::compute::PipelineResourceTelemetry,
+) -> Result<DynamicImage, PilError> {
+    let current = current.unwrap_or_else(|| {
+        let output = img.clone();
+        if !ops.is_empty() {
+            crate::compute::record_pipeline_allocation(output.as_bytes().len());
+            crate::compute::account_host_buffer_boundary(&mut resources, img, &output);
+        }
+        output
+    });
+    let result = if ops.iter().any(|op| matches!(op, PipelineOp::Merge { .. })) {
+        Ok(current)
+    } else {
+        normalize_palette_result(current, current_mode)
+    }?;
+    crate::compute::record_pipeline_resource_telemetry(resources);
+    Ok(result)
 }
 
 #[cfg(test)]

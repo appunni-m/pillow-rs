@@ -100,6 +100,7 @@ def project_pillow(document: dict) -> dict:
                 "terminal_complete": execution.get("terminal_complete"),
                 "fallback_reasons": execution.get("fallback_reason_counts", {}),
                 "operation_telemetry": execution.get("operation_telemetry"),
+                "selected_step_ids": execution.get("selected_step_ids"),
             })
     env = document["environment"]
     snapshot = {

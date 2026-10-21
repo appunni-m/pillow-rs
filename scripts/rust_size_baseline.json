@@ -1,0 +1,1324 @@
+{
+  "baseline_commit": "7f3bce72bb795ca8d0c6918c5309d0768550cbc1",
+  "file_lines": {
+    "pillow-rs-js/src/lib.rs": 5494,
+    "pillow-rs-py/src/lib.rs": 4972,
+    "pillow-rs/src/color.rs": 2374,
+    "pillow-rs/src/compute/mod.rs": 3030,
+    "pillow-rs/src/compute/pool_cpu/ops/draw.rs": 1777,
+    "pillow-rs/src/compute/pool_cpu/ops/effects.rs": 6212,
+    "pillow-rs/src/compute/pool_cpu/ops/filter.rs": 7042,
+    "pillow-rs/src/compute/pool_cpu/ops/geometry.rs": 5760,
+    "pillow-rs/src/compute/pool_cpu/ops/imageops.rs": 2861,
+    "pillow-rs/src/compute/pool_gpu/mod.rs": 43197,
+    "pillow-rs/src/compute/pool_gpu/stream.rs": 2508,
+    "pillow-rs/src/compute/pool_simd/ops/adapters.rs": 36047,
+    "pillow-rs/src/compute/pool_simd/ops/scalar.rs": 4038,
+    "pillow-rs/src/compute/registry.rs": 3011,
+    "pillow-rs/src/draw/mod.rs": 3106,
+    "pillow-rs/src/font/imagingft.rs": 2561,
+    "pillow-rs/src/image.rs": 10371,
+    "pillow-rs/src/lib.rs": 1082,
+    "pillow-rs/src/ops/convert.rs": 1450,
+    "pillow-rs/src/ops/imageops.rs": 1899,
+    "pillow-rs/src/ops/module_fns.rs": 1122,
+    "pillow-rs/src/ops/pil_resize.rs": 6032,
+    "pillow-rs/src/ops/quantize.rs": 2462,
+    "pillow-rs/src/pipeline.rs": 1077,
+    "pillow-rs/src/raster/buffer.rs": 1244,
+    "pillow-rs/src/raster/dynamic.rs": 1162
+  },
+  "format_version": 1,
+  "function_lines": [
+    {
+      "lines": 124,
+      "occurrence": 1,
+      "path": "pillow-rs-js/src/lib.rs",
+      "signature": "fn js_new_color_input( mode: &str, value: Option<&JsValue>, ) -> Result<pillow_rs::PythonNewColorInput, JsValue> {"
+    },
+    {
+      "lines": 150,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/mod.rs",
+      "signature": "pub(crate) fn execute_prepared( prepared: &PreparedExecution, ops: &[PipelineOp], img: &DynamicImage, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 320,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/mod.rs",
+      "signature": "fn execute_batch( &self, ops: &[PipelineOp], img: &DynamicImage, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 129,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/color.rs",
+      "signature": "pub fn op_convert( img: &DynamicImage, mode: &ColorMode, source_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 172,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/draw.rs",
+      "signature": "fn draw_op_on_canvas( canvas: &mut NativeDrawCanvas, op: &PipelineOp, mode: Option<&str>, ) -> Result<(), PilError> {"
+    },
+    {
+      "lines": 158,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/draw.rs",
+      "signature": "fn draw_rounded_rect_on_canvas<C: DrawCanvas>( canvas: &mut C, x0: i32, y0: i32, x1: i32, y1: i32, radius: f64, fill: Option<(u8, u8, u8, u8)>, outline: Option<(u8, u8, u8, u8)>, width: u32, ) {"
+    },
+    {
+      "lines": 219,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+      "signature": "fn paste_native_masked( destination: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &Arc<Image>, mask_alpha: bool, mode: &str, ) -> Option<DynamicImage> {"
+    },
+    {
+      "lines": 146,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+      "signature": "fn transform_affine_f32( img: &DynamicImage, dst_w: u32, dst_h: u32, data: &[f64], filter: &ResampleFilter, fill: Option<(u8, u8, u8, u8)>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 150,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+      "signature": "fn transform_affine_generic( img: &DynamicImage, dst_w: u32, dst_h: u32, aff_a: f64, aff_b: f64, aff_c: f64, aff_d: f64, aff_e: f64, aff_f: f64, fill: Option<(u8, u8, u8, u8)>, nearest: bool, bicubic: bool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 108,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+      "signature": "fn transform_mesh_scalar32<const IS_FLOAT: bool>( img: &DynamicImage, dst_w: u32, dst_h: u32, mesh_data: &[f64], fill: Option<(u8, u8, u8, u8)>, fill_is_none: bool, filter: &ResampleFilter, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 169,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+      "signature": "fn transform_mesh_with_filter( img: &DynamicImage, dst_w: u32, dst_h: u32, mesh_data: &[f64], fill: Option<(u8, u8, u8, u8)>, filter: ResampleFilter, fill_is_none: bool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 163,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+      "signature": "fn transform_projective_generic( img: &DynamicImage, dst_w: u32, dst_h: u32, data: &[f64], filter: &ResampleFilter, fill: Option<(u8, u8, u8, u8)>, quad: bool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 136,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+      "signature": "pub fn op_merge( img: &DynamicImage, mode: &ColorMode, bands: &[Arc<Image>], logical_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 235,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+      "signature": "pub fn op_paste( img: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &Option<Arc<Image>>, mask_alpha: bool, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 216,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/effects.rs",
+      "signature": "pub fn op_transform( img: &DynamicImage, w: u32, h: u32, method: &TransformMethod, data: &[f64], filter: &ResampleFilter, fill: Option<(u8, u8, u8, u8)>, fill_is_none: bool, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 117,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/enhance.rs",
+      "signature": "pub fn op_enhance_brightness( img: &DynamicImage, factor: f64, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 124,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
+      "signature": "fn blur_line( source: &[u8], destination: &mut [u8], line_start: usize, line_length: usize, element_width: usize, radius: usize, whole_weight: u32, fractional_weight: u32, accumulator: &mut [u32], ) {"
+    },
+    {
+      "lines": 149,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
+      "signature": "fn blur_line_step( source: &[u8], destination: &mut [u8], accumulator: &mut [u32], line_start: usize, element_width: usize, output: usize, subtract: usize, add: usize, far_left: usize, far_right: usize, whole_weight: u32, fractional_weight: u32, ) {"
+    },
+    {
+      "lines": 114,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
+      "signature": "fn filter_5x5_i32( img: &DynamicImage, kernel: &[f32; 25], scale: f32, offset: f32, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 260,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
+      "signature": "fn pil_box_blur_xy_impl( img: &DynamicImage, radius_x: f32, radius_y: f32, passes: u32, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 110,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
+      "signature": "fn rank_filter_impl( img: &DynamicImage, size: u32, rank: u32, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 157,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
+      "signature": "pub fn execute_filter5x5( img: &DynamicImage, kernel: &[f32; 25], scale: f32, offset: f32, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 237,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "fn affine_nearest_fixed( source: &[u8], source_size: (u32, u32), destination_size: (u32, u32), channels: usize, affine: [f64; 6], fill: (u8, u8, u8, u8), output: &mut [u8], ) {"
+    },
+    {
+      "lines": 244,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "fn execute_reduce_rgb_with_sparse_rows( img: &DynamicImage, x_factor: u32, y_factor: u32, explicit_mode: Option<&str>, ) -> Result<Option<(DynamicImage, Option<Vec<bool>>)>, PilError> {"
+    },
+    {
+      "lines": 101,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "fn reduce_f_thumbnail( img: &DynamicImage, dst_w: u32, dst_h: u32, factor_x: u32, factor_y: u32, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 182,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "fn resize_f_with_fma<F: F64MulAdd>( img: &DynamicImage, dst_w: u32, dst_h: u32, filter: &ResampleFilter, fma: &F, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 133,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "fn resize_i_with_fma<F: F64MulAdd>( img: &DynamicImage, dst_w: u32, dst_h: u32, filter: &ResampleFilter, fma: &F, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 221,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "fn rotate_arbitrary_generic( img: &DynamicImage, angle: f64, expand: bool, fill: Option<(u8, u8, u8, u8)>, filter: ResampleFilter, nearest: bool, center: Option<(f64, f64)>, translate: Option<(f64, f64)>, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 159,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "fn rotate_arbitrary_scalar( source: &[u8], source_size: (u32, u32), destination_size: (u32, u32), channels: usize, affine: [f64; 6], fill: (u8, u8, u8, u8), filter: ResampleFilter, is_float: bool, output: &mut [u8], ) {"
+    },
+    {
+      "lines": 108,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "fn transpose_tiled_rows_preserve_native_pixels_edges_and_trailing_storage() {"
+    },
+    {
+      "lines": 150,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "pub fn execute_reduce( img: &DynamicImage, x_factor: u32, y_factor: u32, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 117,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "pub fn execute_thumbnail( img: &DynamicImage, w: u32, h: u32, filter: &ResampleFilter, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 108,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "pub fn execute_transpose( img: &DynamicImage, method: &TransposeMethod, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 133,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+      "signature": "pub(crate) fn execute_rgb_putpixel_thumbnail_fusion( img: &DynamicImage, putpixel_ops: &[PipelineOp], thumbnail: &PipelineOp, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 155,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/imageops.rs",
+      "signature": "fn pad_native_bytes( original: &DynamicImage, resized: &DynamicImage, w: u32, h: u32, nw: u32, nh: u32, color: (u8, u8, u8, u8), centering: (f64, f64), explicit_mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 143,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/imageops.rs",
+      "signature": "fn pad_native_rows( img: &DynamicImage, resized: &DynamicImage, w: u32, h: u32, nw: u32, nh: u32, offset_x: usize, offset_y: usize, fill: (u8, u8, u8, u8), explicit_mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 105,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/imageops.rs",
+      "signature": "pub fn op_expand( img: &DynamicImage, border: u32, fill: (u8, u8, u8, u8), mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 303,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/imageops.rs",
+      "signature": "pub fn op_pad( img: &DynamicImage, w: u32, h: u32, filter: ResampleFilter, color: Option<(u8, u8, u8, u8)>, centering: (f64, f64), explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 106,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_cpu/ops/imageops.rs",
+      "signature": "pub(crate) fn autocontrast_lut( img: &DynamicImage, cutoff: f64, mask: Option<&std::sync::Arc<crate::image::Image>>, ) -> Result<Vec<u8>, PilError> {"
+    },
+    {
+      "lines": 228,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn build_pipeline( device: &wgpu::Device, variant_name: &'static str, shader_file: &'static str, shader_source: &str, ) -> Option<CachedPipeline> {"
+    },
+    {
+      "lines": 102,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn byte_projective_fractional_nearest_native_gpu_preserves_pixels() {"
+    },
+    {
+      "lines": 101,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn byte_projective_integer_affine_nearest_native_gpu_preserves_pixels() {"
+    },
+    {
+      "lines": 148,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn byte_projective_nearest_proven_native_gpu_preserves_pixels() {"
+    },
+    {
+      "lines": 130,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn byte_projective_nonconstant_denominator_nearest_native_gpu_preserves_pixels() {"
+    },
+    {
+      "lines": 113,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn byte_projective_quad_mesh_nearest_proof_native_gpu_preserves_pixels() {"
+    },
+    {
+      "lines": 127,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn byte_quad_mesh_filtered_relocations_native_gpu_preserve_pixels() {"
+    },
+    {
+      "lines": 369,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn encode_batch( &self, encoder: &mut wgpu::CommandEncoder, ops: &[PipelineOp], prepared: &PreparedGpuBatch, start_is_a: bool, logical_mode: Option<&str>, packed_luma_point: bool, packed_luma_putdata: bool, packed_luma_order_statistic: bool, packed_native_byte_filter: bool, packed_luma_pad: bool, packed_la_pad: bool, packed_luma_transform_output: bool, native_sharpness_l_input: bool, native_sharpness_la_input: bool, native_sharpness_rgb_input: bool, ) -> Result<bool, PilError> {"
+    },
+    {
+      "lines": 248,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn encode_dispatch( &self, cpass: &mut wgpu::ComputePass<'_>, cached: &CachedPipeline, index: usize, current_is_a: bool, resources: &GpuBatchResources, input_dims: (u32, u32), output_dims: (u32, u32), ) -> Result<bool, PilError> {"
+    },
+    {
+      "lines": 238,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn estimate_resource_bytes( &self, op: &PipelineOp, auxiliary: &AuxiliaryImages, buffers: &BufferPool, uniform_alignment: usize, storage_alignment: usize, source_dimensions: (u32, u32), mode: u32, packed_luma_putdata: bool, logical_mode: Option<&str>, f_resize_f64_is_exact: bool, f_resize_f64_ordered_is_exact: bool, ) -> Result<usize, PilError> {"
+    },
+    {
+      "lines": 320,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_batch_impl( &self, ops: &[PipelineOp], auxiliary_images: &[AuxiliaryImages], w: u32, h: u32, mode: u32, packed_luma_colorize: bool, packed_luma_convert: bool, packed_luma_transform_input: bool, packed_luma_transform_output: bool, native_rgb_compact_input: bool, native_rgb_packed_output: bool, native_la_transform_output: bool, packed_luma_point: bool, packed_luma_putdata: bool, packed_luma_order_statistic: bool, packed_native_byte_filter: bool, packed_luma_pad: bool, packed_la_pad: bool, native_extract_band: bool, native_grayscale_rgb_input: bool, native_sharpness_l_input: bool, native_sharpness_la_input: bool, native_sharpness_rgb_input: bool, native_reduce_rgb_input: bool, native_expand_channels: Option<u8>, native_cover_input_channels: Option<u8>, native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>, logical_mode: Option<&str>, contrast_mean: Option<u8>, f_resize_constant_bits: Option<u32>, f_resize_box_copy_is_exact: bool, f_resize_identity_is_exact: bool, f_resize_box_average_is_exact: bool, f_resize_dyadic_is_exact: bool, f_resize_f64_is_exact: bool, f_resize_f64_ordered_is_exact: bool, initial_input: Option<&wgpu::Buffer>, buffers: &mut BufferPool, ) -> Result< ( bool, u32, u32, ReadbackTarget, PipelineResourceTelemetry, u64, bool, ), PilError, > {"
+    },
+    {
+      "lines": 1741,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_batch_with_policy( &self, ops: &[PipelineOp], img: &DynamicImage, mode: Option<&str>, allow_cpu_fallback: bool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 194,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_f_resize_tiled( &self, source: (u32, u32), destination: (u32, u32), horizontal: &FilterCoeffsF64, vertical: &FilterCoeffsF64, buffers: &BufferPool, ) -> Result< ( bool, u32, u32, ReadbackTarget, PipelineResourceTelemetry, u64, ), PilError, > {"
+    },
+    {
+      "lines": 177,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_byte_flip( &self, image: &DynamicImage, format: NativeFlipFormat, dispatch: NativeByteFlipDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 412,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_byte_op( &self, op: &PipelineOp, image: &DynamicImage, other: Option<&DynamicImage>, channels: u8, logical_mode: Option<&str>, fused_screen: bool, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 215,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_byte_paste( &self, destination: &DynamicImage, source: &DynamicImage, offset: (i32, i32), dispatch: NativeBytePasteDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 210,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_composite( &self, image: &DynamicImage, other: &DynamicImage, mask: &DynamicImage, channels: u8, mask_channels: u8, mask_channel: u8, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 147,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_hsv_pad( &self, image: &DynamicImage, dispatch: NativeHsvPadDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 307,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_masked_byte_paste( &self, destination: &DynamicImage, source: &DynamicImage, mask: &DynamicImage, logical_mode: &str, offset: (i32, i32), dispatch: NativeMaskedBytePasteDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 196,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_rgb_crop( &self, source: &DynamicImage, left: u32, top: u32, dispatch: NativeRgbCropDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 275,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_rgb_luma_merge( &self, image: &DynamicImage, bands: &[crate::image::Image], dispatch: NativeRgbMergeDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 137,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_rgb_put_alpha( &self, image: &DynamicImage, alpha: u8, dispatch: NativeRgbPutAlphaDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 175,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_rgb_put_alpha_data( &self, image: &DynamicImage, mask: &DynamicImage, dispatch: NativeRgbPutAlphaDataDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 216,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_rgb_to_rgba_paste( &self, destination: &DynamicImage, source: &DynamicImage, offset: (i32, i32), dispatch: NativeRgbRgbaPasteDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 173,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_rgba_put_alpha_data( &self, image: &DynamicImage, mask: &DynamicImage, dispatch: NativeRgbaPutAlphaDataDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 218,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_native_transpose_with_upload( &self, op: &PipelineOp, input: NativeTransposeInput<'_>, buffers: &mut BufferPool, mapped_input: bool, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 301,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn execute_projection_terminal( &self, image: &DynamicImage, ops: &[PipelineOp], channels: u8, source_is_known_zero: bool, ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {"
+    },
+    {
+      "lines": 226,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn expand_gpu_geometry_ops( ops: &[PipelineOp], image: &DynamicImage, dimensions: (u32, u32), logical_mode: Option<&str>, ) -> Vec<PipelineOp> {"
+    },
+    {
+      "lines": 121,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn extract_second_image( op: &PipelineOp, primary_dimensions: Option<(u32, u32)>, draw_source: Option<&DynamicImage>, ) -> Result<Option<Arc<DynamicImage>>, PilError> {"
+    },
+    {
+      "lines": 108,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn f_resize_box_average_lowering_requires_2x_axes_and_safe_values() {"
+    },
+    {
+      "lines": 206,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn f_resize_dyadic_gpu_bytes_match_reference_and_publish_native_receipt() {"
+    },
+    {
+      "lines": 227,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {"
+    },
+    {
+      "lines": 203,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {"
+    },
+    {
+      "lines": 103,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn f_resize_f64_relocation_chain_native_matches_cpu() {"
+    },
+    {
+      "lines": 135,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn f_resize_ordered_f64_through_8388607_taps_native_matches_cpu() {"
+    },
+    {
+      "lines": 117,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_dimensions_require_cpu( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
+    },
+    {
+      "lines": 113,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_f_resize_compact_box_is_exact( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
+    },
+    {
+      "lines": 103,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_f_resize_compact_box_sample_bits( bytes: &[u8], source_dimensions: (u32, u32), source_axis: u32, output_axis: u32, horizontal: bool, output_index: usize, line: usize, ) -> Option<u32> {"
+    },
+    {
+      "lines": 282,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_f_resize_dyadic_is_exact( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
+    },
+    {
+      "lines": 147,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_f_resize_f64_is_exact( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
+    },
+    {
+      "lines": 134,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_f_resize_f64_sample_bits( bytes: &[u8], source_dimensions: (u32, u32), coeffs: &FilterCoeffsF64, output_index: usize, horizontal: bool, line: usize, ) -> Option<u32> {"
+    },
+    {
+      "lines": 103,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_f_resize_integer_is_exact( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
+    },
+    {
+      "lines": 101,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_f_resize_integer_sample_bits( bytes: &[u8], source_dimensions: (u32, u32), coeffs: &FilterCoeffs, output_index: usize, horizontal: bool, line: usize, ) -> Option<u32> {"
+    },
+    {
+      "lines": 150,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_f_resize_relocate_words( bytes: &[u8], dimensions: (u32, u32), op: &PipelineOp, ) -> Option<(Vec<u8>, (u32, u32))> {"
+    },
+    {
+      "lines": 134,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_geometry_host_control_reason( ops: &[PipelineOp], image: &DynamicImage, mode: Option<&str>, f_resize_constant_bits: Option<u32>, f_resize_box_copy_is_exact: bool, f_resize_identity_is_exact: bool, f_resize_box_average_is_exact: bool, f_resize_dyadic_is_exact: bool, f_resize_f64_is_exact: bool, ) -> Option<&'static str> {"
+    },
+    {
+      "lines": 385,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_logical_mode_is_supported( ops: &[PipelineOp], img: Option<&DynamicImage>, mode: Option<&str>, f_resize_constant_bits: Option<u32>, f_pad_f64_is_exact: bool, inspect_auxiliary_modes: bool, ) -> bool {"
+    },
+    {
+      "lines": 128,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_native_byte_flip_dispatch_bounds_padded_rows_and_grid() {"
+    },
+    {
+      "lines": 143,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_native_byte_op_channels( op: &PipelineOp, image: &DynamicImage, mode: Option<&str>, ) -> Option<u8> {"
+    },
+    {
+      "lines": 128,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_native_flip_keeps_mode_specific_storage_and_pixels() {"
+    },
+    {
+      "lines": 110,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_native_luma_affine_nearest_transform_reads_and_writes_packed_bytes() {"
+    },
+    {
+      "lines": 177,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_native_rgb_compact_input_requires_supported_native_rgb_operations() {"
+    },
+    {
+      "lines": 132,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_native_upload_paths_concurrent_reuse_and_resources(channels: usize) {"
+    },
+    {
+      "lines": 163,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_nearest_affine_is_exact( op: &PipelineOp, image: &DynamicImage, mode: Option<&str>, source_dimensions: (u32, u32), ) -> bool {"
+    },
+    {
+      "lines": 134,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_operation_is_safe(op: &PipelineOp) -> bool {"
+    },
+    {
+      "lines": 251,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons() {"
+    },
+    {
+      "lines": 103,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_packed_rgb_transpose_native_tails_and_methods() {"
+    },
+    {
+      "lines": 115,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_primary_readback_concurrent_public_pipelines_keep_outputs_owned() {"
+    },
+    {
+      "lines": 102,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_primary_readback_matches_staged_shader_results_and_reuse() {"
+    },
+    {
+      "lines": 408,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_projective_uniform_is_exact( op: &PipelineOp, mode: Option<&str>, source_dimensions: (u32, u32), ) -> bool {"
+    },
+    {
+      "lines": 138,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_rgb_readback_native_respects_final_mode_and_transfer_counts() {"
+    },
+    {
+      "lines": 244,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_transform_all_fill_is_exact( op: &PipelineOp, image: &DynamicImage, mode: Option<&str>, source_dimensions: (u32, u32), ) -> bool {"
+    },
+    {
+      "lines": 126,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn gpu_transform_geometry_words( op: &PipelineOp, source: (u32, u32), mode: Option<&str>, ) -> Result<Vec<u32>, PilError> {"
+    },
+    {
+      "lines": 254,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn make_bind_group( &self, cached: &CachedPipeline, input_buf: &wgpu::Buffer, output_buf: &wgpu::Buffer, resources: &GpuBatchResources, op_index: usize, ) -> Result<wgpu::BindGroup, PilError> {"
+    },
+    {
+      "lines": 160,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn native_cover_packed_output_dispatch_covers_row_tails_and_checks_limits() {"
+    },
+    {
+      "lines": 113,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn native_masked_la_paste_planner_checks_two_pixel_packing_and_limits() {"
+    },
+    {
+      "lines": 130,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn native_masked_rgb_paste_planner_checks_three_byte_words_and_limits() {"
+    },
+    {
+      "lines": 109,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn palette_alpha_projective_filtered_relocations_native_gpu_preserve_pairs() {"
+    },
+    {
+      "lines": 174,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn palette_alpha_projective_nearest_native_gpu_preserves_pairs() {"
+    },
+    {
+      "lines": 232,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn palette_alpha_projective_relocation_proof_is_narrow() {"
+    },
+    {
+      "lines": 103,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn plan_native_transform_output( ops: &[PipelineOp], output_channels: u32, max_workgroups_per_dimension: u32, max_storage_buffer_binding_size: u32, max_buffer_size: u64, capacity_words: u32, ) -> Option<NativePackedChannelOutputDispatch> {"
+    },
+    {
+      "lines": 1366,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn prepare_batch<'a>( &self, ops: &[PipelineOp], auxiliary_images: &[AuxiliaryImages], w: u32, h: u32, mode: u32, logical_mode: Option<&str>, contrast_mean: Option<u8>, f_resize_constant_bits: Option<u32>, f_resize_box_copy_is_exact: bool, f_resize_identity_is_exact: bool, f_resize_box_average_is_exact: bool, f_resize_dyadic_is_exact: bool, f_resize_f64_is_exact: bool, f_resize_f64_ordered_is_exact: bool, packed_luma_colorize: bool, packed_luma_convert: bool, packed_luma_transform_input: bool, packed_luma_transform_output: bool, native_rgb_compact_input: bool, native_rgb_packed_output: bool, native_la_transform_output: bool, packed_luma_point: bool, packed_luma_putdata: bool, packed_luma_order_statistic: bool, packed_native_byte_filter: bool, packed_luma_pad: bool, native_extract_band: bool, native_grayscale_rgb_input: bool, native_sharpness_l_input: bool, native_sharpness_la_input: bool, native_sharpness_rgb_input: bool, native_reduce_rgb_input: bool, native_expand_channels: Option<u8>, native_cover_input_channels: Option<u8>, native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>, buffers: &'a mut BufferPool, auxiliary_cache: &GpuAuxiliaryCache, ) -> Result<PreparedGpuBatch<'a>, PilError> {"
+    },
+    {
+      "lines": 144,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn projective_filtered_constant_proof_is_narrow() {"
+    },
+    {
+      "lines": 104,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn projective_filtered_integer_constants_native_gpu_preserve_pixels() {"
+    },
+    {
+      "lines": 420,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn projective_nearest_proof_is_bounded() {"
+    },
+    {
+      "lines": 628,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn resolve_batch_pipelines( &self, ops: &[PipelineOp], logical_mode: Option<&str>, input_dims: &[(u32, u32)], packed_luma_point: bool, packed_luma_putdata: bool, packed_luma_order_statistic: bool, packed_native_byte_filter: bool, packed_luma_pad: bool, packed_la_pad: bool, native_sharpness_l_input: bool, native_sharpness_la_input: bool, native_sharpness_rgb_input: bool, native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>, native_luma_transform_output: bool, native_rgb_packed_output: bool, native_la_transform_output: bool, ) -> Result<Vec<ResolvedPipeline>, PilError> {"
+    },
+    {
+      "lines": 124,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/mod.rs",
+      "signature": "fn rgb_transform_consumes_compact_input_for_affine_and_geometry_shaders() {"
+    },
+    {
+      "lines": 152,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/stream.rs",
+      "signature": "fn dispatch(&mut self) -> Result<(), BatchError> {"
+    },
+    {
+      "lines": 186,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/stream.rs",
+      "signature": "fn encode_byte_stage( gpu: &GpuInner, encoder: &mut wgpu::CommandEncoder, buffers: &BufferPool, stage: &Stage<'_>, secondary: Option<&EncodedGraph>, current_a: bool, ) -> Result<bool, PilError> {"
+    },
+    {
+      "lines": 271,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/stream.rs",
+      "signature": "fn encode_graph( plan: &Plan<'_>, gpu: &'static GpuInner, encoder: &mut wgpu::CommandEncoder, ) -> Result<EncodedGraph, PilError> {"
+    },
+    {
+      "lines": 124,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/stream.rs",
+      "signature": "fn encode_rgb_blur_stage( gpu: &GpuInner, encoder: &mut wgpu::CommandEncoder, buffers: &BufferPool, stage: &Stage<'_>, mut current_a: bool, ) -> Result<bool, PilError> {"
+    },
+    {
+      "lines": 331,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_gpu/stream.rs",
+      "signature": "fn plan_graph_inner<'a>( image: &'a Image, gpu: &GpuInner, depth: usize, bounds: &mut GraphBounds, ) -> Result<Plan<'a>, PilError> {"
+    },
+    {
+      "lines": 313,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/mod.rs",
+      "signature": "fn execute_batch( &self, ops: &[PipelineOp], img: &DynamicImage, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 111,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn f_boxed_resize_sample_view_matches_cpu_reference() {"
+    },
+    {
+      "lines": 120,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn native_cmyk_to_rgb_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {"
+    },
+    {
+      "lines": 216,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn native_convert_bytes( img: &DynamicImage, layout: NativeConvertLayout, ) -> Option<(Vec<u8>, u64, u64)> {"
+    },
+    {
+      "lines": 145,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn native_expand_bytes( img: &DynamicImage, border: u32, fill: (u8, u8, u8, u8), mode: Option<&str>, ) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {"
+    },
+    {
+      "lines": 294,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn native_pad_bytes( img: &DynamicImage, target_width: u32, target_height: u32, filter: ResampleFilter, color: Option<(u8, u8, u8, u8)>, centering: (f64, f64), mode: Option<&str>, ) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {"
+    },
+    {
+      "lines": 780,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn native_paste_apply( destination: &mut [u8], source: &[u8], mask: Option<&[u8]>, destination_width: usize, destination_height: usize, plan: NativePastePlan, allow_short_masked_tail: bool, ) -> bool {"
+    },
+    {
+      "lines": 130,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn native_paste_cmyk_l_masked_row( source: &[u8], destination: &mut [u8], mask: &[u8], allow_short_masked_tail: bool, ) -> (u64, u64, bool) {"
+    },
+    {
+      "lines": 147,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn native_paste_luma16_apply( destination: &mut [u16], source: &[u16], mask: Option<&[u8]>, destination_width: usize, destination_height: usize, plan: NativePastePlan, ) -> bool {"
+    },
+    {
+      "lines": 130,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn native_reduce_bytes( img: &DynamicImage, channels: usize, premultiplied_alpha: bool, x_factor: u32, y_factor: u32, rgb_3x5_fast_path: bool, ) -> Option<(Vec<u8>, u32, u32, u64, u64)> {"
+    },
+    {
+      "lines": 168,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn native_sharpness_filter_blend( source: &[u8], output: &mut [u8], width: usize, height: usize, channels: usize, active_channels: usize, mode: Option<&str>, kernel: &[f32; 9], rounding_bias: f32, factor: f64, ) -> Option<(u64, u64)> {"
+    },
+    {
+      "lines": 268,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn native_transpose_bytes( bytes: &[u8], width: u32, height: u32, channels: usize, method: TransposeMethod, ) -> Option<(Vec<u8>, u32, u32, u64, u64)> {"
+    },
+    {
+      "lines": 139,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdImageShape> {"
+    },
+    {
+      "lines": 186,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_affine_bilinear_transform_bytes( img: &DynamicImage, width: u32, height: u32, data: &[f64], fill: Option<(u8, u8, u8, u8)>, mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 126,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_affine_luma16_transform_bytes( img: &DynamicImage, width: u32, height: u32, data: &[f64], fill: Option<(u8, u8, u8, u8)>, filter: ResampleFilter, mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 149,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_affine_nearest_transform_bytes( img: &DynamicImage, width: u32, height: u32, data: &[f64], fill: Option<(u8, u8, u8, u8)>, mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 186,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_bilinear_rotate_native( img: &DynamicImage, angle: f64, expand: bool, fill: Option<(u8, u8, u8, u8)>, center: Option<(f64, f64)>, translate: Option<(f64, f64)>, mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 148,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_draw_bresenham_native( img: &DynamicImage, x0: i32, y0: i32, x1: i32, y1: i32, channels: usize, fill: (u8, u8, u8, u8), alpha_blend_rgb: bool, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 133,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_draw_line_native( img: &DynamicImage, x0: i32, y0: i32, x1: i32, y1: i32, fill: (u8, u8, u8, u8), width: u32, alpha_blend_rgb: bool, mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 180,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_draw_rounded_rect_native( img: &DynamicImage, x0: i32, y0: i32, x1: i32, y1: i32, radius: f64, fill: Option<(u8, u8, u8, u8)>, outline: Option<(u8, u8, u8, u8)>, width: u32, alpha_blend_rgb: bool, mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 121,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_mesh_transform_bytes( img: &DynamicImage, width: u32, height: u32, data: &[f64], fill: Option<(u8, u8, u8, u8)>, fill_is_none: bool, mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 102,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_nearest_rotate_native( img: &DynamicImage, angle: f64, expand: bool, fill: Option<(u8, u8, u8, u8)>, center: Option<(f64, f64)>, translate: Option<(f64, f64)>, mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 149,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_paste_rgb_to_rgba( img: &DynamicImage, source: &DynamicImage, x: i32, y: i32, width: i32, height: i32, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 179,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_pil_box_blur_xy( img: &DynamicImage, radius_x: f32, radius_y: f32, passes: u32, channels: usize, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 141,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_projective_bilinear_transform_bytes( img: &DynamicImage, width: u32, height: u32, data: &[f64], fill: Option<(u8, u8, u8, u8)>, mode: Option<&str>, quad: bool, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 125,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_projective_nearest_transform_bytes( img: &DynamicImage, width: u32, height: u32, data: &[f64], fill: Option<(u8, u8, u8, u8)>, mode: Option<&str>, quad: bool, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 129,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_put_alpha_data_bytes( source: &[u8], mask: &[u8], pixels: usize, source_channels: usize, output_channels: usize, cmyk_source: bool, ) -> Option<(Vec<u8>, u64, u64)> {"
+    },
+    {
+      "lines": 111,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_resize_boxed( img: &DynamicImage, output_width: u32, output_height: u32, filter: ResampleFilter, bounds: (f64, f64, f64, f64), mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 331,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_resize_convolution_boxed( img: &DynamicImage, output_width: u32, output_height: u32, box_left: f64, box_top: f64, box_right: f64, box_bottom: f64, filter: ResampleFilter, channels: usize, premultiplied_alpha: bool, parallel_pixel_threshold: usize, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 367,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_resize_convolution_into_with_zero_row_elision( img: &DynamicImage, output_width: u32, output_height: u32, filter: ResampleFilter, channels: usize, premultiplied_alpha: bool, cover_byte_i32: bool, parallel_pixel_threshold: usize, vectorize_tail: bool, skip_zero_source_rows: bool, output: &mut [u8], ) -> Result<(), PilError> {"
+    },
+    {
+      "lines": 409,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_resize_f( img: &DynamicImage, output_width: u32, output_height: u32, filter: &ResampleFilter, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 220,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_resize_f_boxed( img: &DynamicImage, output_width: u32, output_height: u32, box_left: f64, box_top: f64, box_right: f64, box_bottom: f64, filter: ResampleFilter, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 205,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_resize_luma16( img: &DynamicImage, output_width: u32, output_height: u32, filter: &ResampleFilter, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 198,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_resize_nearest( img: &DynamicImage, output_width: u32, output_height: u32, channels: usize, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 125,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_resize_nearest_boxed( img: &DynamicImage, output_width: u32, output_height: u32, box_left: f64, box_top: f64, box_right: f64, box_bottom: f64, channels: usize, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 114,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_rgb_box_blur_radius_one_rows( source: &[u8], destination: &mut [u8], width: usize, height: usize, horizontal_weight: u32, horizontal_fractional_weight: u32, vertical_weight: u32, vertical_fractional_weight: u32, ) {"
+    },
+    {
+      "lines": 105,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_rgba_l_masked_paste_uses_native_mask_expansion_and_exact_clipped_tail() {"
+    },
+    {
+      "lines": 130,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_right_angle_rotate_native( img: &DynamicImage, angle: f64, expand: bool, fill: Option<(u8, u8, u8, u8)>, center: Option<(f64, f64)>, translate: Option<(f64, f64)>, mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 592,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<&str>) -> bool {"
+    },
+    {
+      "lines": 117,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "fn simd_typed_bilinear_rotate_native( img: &DynamicImage, angle: f64, expand: bool, fill: Option<(u8, u8, u8, u8)>, center: Option<(f64, f64)>, translate: Option<(f64, f64)>, mode: Option<&str>, ) -> Result<Option<DynamicImage>, PilError> {"
+    },
+    {
+      "lines": 118,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "pub fn simd_filter_5x5( img: &DynamicImage, op: &PipelineOp, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 140,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "pub fn simd_fit( img: &DynamicImage, op: &PipelineOp, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 107,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "pub fn simd_put_alpha_data( img: &DynamicImage, op: &PipelineOp, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 243,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "pub(crate) fn simd_execute_in_place( img: &mut DynamicImage, op: &PipelineOp, mode: Option<&str>, ) -> Result<bool, PilError> {"
+    },
+    {
+      "lines": 556,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
+      "signature": "pub(crate) fn simd_supports_for_image( img: &DynamicImage, op: &PipelineOp, mode: Option<&str>, ) -> bool {"
+    },
+    {
+      "lines": 189,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail.rs",
+      "signature": "pub(crate) fn simd_thumbnail( img: &DynamicImage, op: &PipelineOp, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 130,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail/float.rs",
+      "signature": "pub(super) fn simd_thumbnail_reduce_f( img: &DynamicImage, factor_x: u32, factor_y: u32, ) -> Result<(DynamicImage, u64, u64), PilError> {"
+    },
+    {
+      "lines": 131,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail/integer.rs",
+      "signature": "pub(super) fn simd_thumbnail_i_reduce2x2_resample( img: &DynamicImage, output_width: u32, output_height: u32, filter: ResampleFilter, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 243,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/adapters/resize_i32.rs",
+      "signature": "pub(super) fn simd_resize_i32( img: &DynamicImage, output_width: u32, output_height: u32, filter: &ResampleFilter, ) -> Result<DynamicImage, PilError> {"
+    },
+    {
+      "lines": 117,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/scalar.rs",
+      "signature": "fn resize_box( pixels: &[u32], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32, mode: u32, filter: u32, box_left: f64, box_top: f64, box_right: f64, box_bottom: f64, ) -> (Vec<u32>, u32, u32) {"
+    },
+    {
+      "lines": 108,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/scalar.rs",
+      "signature": "pub fn box_blur(pixels: &mut [u32], w: u32, h: u32, mode: u32, radius: u32) {"
+    },
+    {
+      "lines": 164,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/scalar.rs",
+      "signature": "pub fn rotate( pixels: &[u32], w: u32, h: u32, mode: u32, angle_deg: f64, expand: bool, fill_rgba: u32, ) -> (Vec<u32>, u32, u32) {"
+    },
+    {
+      "lines": 190,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/pool_simd/ops/scalar.rs",
+      "signature": "pub fn transform( pixels: &[u32], w: u32, h: u32, mode: u32, dst_w: u32, dst_h: u32, matrix: &[f64; 8], filter: u32, fill_rgba: u32, ) -> (Vec<u32>, u32, u32) {"
+    },
+    {
+      "lines": 130,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/registry.rs",
+      "signature": "fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {"
+    },
+    {
+      "lines": 1617,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/registry.rs",
+      "signature": "fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> {"
+    },
+    {
+      "lines": 278,
+      "occurrence": 1,
+      "path": "pillow-rs/src/compute/registry.rs",
+      "signature": "pub fn extract_params(op: &PipelineOp) -> Vec<u32> {"
+    },
+    {
+      "lines": 215,
+      "occurrence": 1,
+      "path": "pillow-rs/src/draw/mod.rs",
+      "signature": "fn text_compose_direct( &mut self, x: i32, y: i32, w: u32, h: u32, pixels: &[u8], mode: &str, fill: (u8, u8, u8, u8), ) -> Result<(), PilError> {"
+    },
+    {
+      "lines": 504,
+      "occurrence": 1,
+      "path": "pillow-rs/src/draw/mod.rs",
+      "signature": "pub fn bitmap( &mut self, x: i32, y: i32, bitmap: &Image, fill: Option<(u8, u8, u8, u8)>, ) -> Result<(), PilError> {"
+    },
+    {
+      "lines": 142,
+      "occurrence": 1,
+      "path": "pillow-rs/src/draw/mod.rs",
+      "signature": "pub(crate) fn for_each_polygon_fill_span<F>( points: &[(i32, i32)], img_w: u32, img_h: u32, mut visit: F, ) where F: FnMut(i32, i32, i32),"
+    },
+    {
+      "lines": 156,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "fn frombytes_with_data( mode: &str, size: (u32, u32), data: Cow<'_, [u8]>, ) -> Result<Self, PilError> {"
+    },
+    {
+      "lines": 127,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "fn getcolors_scalar( maxcolors: u32, mode: &str, img: &DynamicImage, ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {"
+    },
+    {
+      "lines": 170,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "fn getprojection_from_materialized( img: &DynamicImage, mode: &str, ) -> Result<(Vec<u32>, Vec<u32>), PilError> {"
+    },
+    {
+      "lines": 110,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "fn gpu_pending_graph_depth(&self, depth: usize) -> Result<GpuPendingGraph<'_>, PilError> {"
+    },
+    {
+      "lines": 160,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "fn known_pipeline_op_dimensions( op: &PipelineOp, (width, height): (u32, u32), ) -> Option<(u32, u32)> {"
+    },
+    {
+      "lines": 208,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "fn try_getprojection_putpixel_pipeline( &self, ) -> Result<Option<(Vec<u32>, Vec<u32>)>, PilError> {"
+    },
+    {
+      "lines": 156,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "pub fn entropy_with_mask(&self, mask: Option<&Image>) -> Result<f64, PilError> {"
+    },
+    {
+      "lines": 114,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "pub fn getchannel(&self, channel: i32) -> Result<Image, PilError> {"
+    },
+    {
+      "lines": 122,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "pub fn getcolors( &self, maxcolors: u32, ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {"
+    },
+    {
+      "lines": 101,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "pub fn getdata_band_into(&self, band: i32, output: &mut [u8]) -> Result<(), PilError> {"
+    },
+    {
+      "lines": 117,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "pub fn new( width: u32, height: u32, mode: &str, color: (u8, u8, u8, u8), ) -> Result<Self, PilError> {"
+    },
+    {
+      "lines": 140,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "pub fn prepare_putpixel_palette( &mut self, value: PutPixelValue, reserved: &[u32], ) -> Result<PutPixelValue, PilError> {"
+    },
+    {
+      "lines": 144,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "pub fn push_op(source: &Image, op: PipelineOp) -> Image {"
+    },
+    {
+      "lines": 265,
+      "occurrence": 1,
+      "path": "pillow-rs/src/image.rs",
+      "signature": "pub fn stat(&self) -> Result<Vec<Vec<f64>>, PilError> {"
+    },
+    {
+      "lines": 218,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/analysis.rs",
+      "signature": "fn getbbox_materialized( &self, alpha_only: bool, ) -> Result<Option<(u32, u32, u32, u32)>, PilError> {"
+    },
+    {
+      "lines": 162,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/analysis.rs",
+      "signature": "pub fn histogram_with_mask(&self, mask: Option<&Image>) -> Result<Vec<u32>, PilError> {"
+    },
+    {
+      "lines": 576,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/convert.rs",
+      "signature": "pub fn convert( &self, mode: &str, matrix: Option<Vec<f64>>, dither: Option<&str>, _palette: Option<&str>, _colors: Option<u32>, ) -> Result<Image, PilError> {"
+    },
+    {
+      "lines": 125,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/imageops.rs",
+      "signature": "pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {"
+    },
+    {
+      "lines": 134,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/imageops.rs",
+      "signature": "pub(crate) fn resolve_imageops_color( input: ImageOpsColor, mode: &str, ) -> Result<Option<(u8, u8, u8, u8)>, PilError> {"
+    },
+    {
+      "lines": 123,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/paste.rs",
+      "signature": "fn paste_impl( &mut self, source: PasteSource, placement: PastePlacement, mask: Option<&Image>, ) -> Result<(), PilError> {"
+    },
+    {
+      "lines": 120,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/paste.rs",
+      "signature": "fn solid_color(&self, mode: &str) -> Result<ResolvedPasteColor, PilError> {"
+    },
+    {
+      "lines": 131,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/pil_resize.rs",
+      "signature": "fn horizontal_pass_boxed_rows( work_bytes: &[u8], source_width: u32, first_source_row: u32, source_row_count: u32, channels: usize, coeffs: &FilterCoeffs, output_width: u32, intermediate: &mut [u8], premultiplied_alpha: bool, parallel_pixel_threshold: usize, sparse_rgb_nonzero_rows: Option<&[bool]>, ) {"
+    },
+    {
+      "lines": 125,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/pil_resize.rs",
+      "signature": "fn horizontal_pass_row( src_row: &[u8], _src_w: u32, channels: usize, coeffs: &FilterCoeffs, out_w: u32, intermediate_row: &mut [u8], ) {"
+    },
+    {
+      "lines": 240,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/pil_resize.rs",
+      "signature": "fn pil_resize_boxed_with_hints( img: &DynamicImage, dst_w: u32, dst_h: u32, box_left: f64, box_top: f64, box_right: f64, box_bottom: f64, filter: ResampleFilter, explicit_mode: Option<&str>, parallel_pixel_threshold: usize, sparse_rgb_nonzero_rows: Option<&[bool]>, ) -> DynamicImage {"
+    },
+    {
+      "lines": 106,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/pil_resize.rs",
+      "signature": "fn pil_resize_f_boxed_with_fma<F: F64MulAdd, const UNROLL_EIGHT: bool>( img: &DynamicImage, dst_w: u32, dst_h: u32, box_left: f64, box_top: f64, box_right: f64, box_bottom: f64, filter: ResampleFilter, fma: &F, ) -> DynamicImage {"
+    },
+    {
+      "lines": 116,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/pil_resize.rs",
+      "signature": "fn vertical_pass_col( intermediate: &[u8], _src_rows: u32, out_x: u32, out_w: u32, channels: usize, coeffs: &FilterCoeffs, out_y: usize, ) -> [u8; 4] {"
+    },
+    {
+      "lines": 103,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/pil_resize.rs",
+      "signature": "fn vertical_pass_rows_alpha( intermediate: &[u8], source_rows: u32, output_width: u32, output_height: u32, channels: usize, coeffs: &FilterCoeffs, output: &mut [u8], parallel_pixel_threshold: usize, ) {"
+    },
+    {
+      "lines": 194,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/pil_resize.rs",
+      "signature": "pub fn pil_resize( img: &DynamicImage, dst_w: u32, dst_h: u32, filter: ResampleFilter, explicit_mode: Option<&str>, ) -> DynamicImage {"
+    },
+    {
+      "lines": 117,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/quantize.rs",
+      "signature": "fn apple_qsort_octree_buckets(values: &mut [OctreeBucket]) {"
+    },
+    {
+      "lines": 129,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/quantize.rs",
+      "signature": "fn try_split(vbox: &VBox, entries: &[HistEntry]) -> Option<(VBox, VBox, usize, u8)> {"
+    },
+    {
+      "lines": 180,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/quantize.rs",
+      "signature": "pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<[u8; 3]>) {"
+    },
+    {
+      "lines": 111,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/quantize.rs",
+      "signature": "pub fn quantize( &self, colors: u32, kmeans: u32, _palette: Option<&Image>, _dither: bool, method: u32, ) -> Result<Image, PilError> {"
+    },
+    {
+      "lines": 101,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/resize.rs",
+      "signature": "pub fn resize_with_options( &self, size: (i64, i64), filter: Option<ResampleInput>, box_coords: Option<(f64, f64, f64, f64)>, reducing_gap: Option<f64>, ) -> Result<Image, PilError> {"
+    },
+    {
+      "lines": 139,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/transform.rs",
+      "signature": "pub fn transform_public( &self, size: (u32, u32), method: i32, data: Option<TransformData>, resample: i32, _fill: i32, fillcolor: Option<TransformFill>, ) -> Result<Image, PilError> {"
+    },
+    {
+      "lines": 137,
+      "occurrence": 1,
+      "path": "pillow-rs/src/ops/transform.rs",
+      "signature": "pub(crate) fn public_transform_fill( &self, fillcolor: Option<TransformFill>, ) -> Result<((u8, u8, u8, u8), Option<u8>), PilError> {"
+    },
+    {
+      "lines": 102,
+      "occurrence": 1,
+      "path": "pillow-rs/src/raster/dynamic.rs",
+      "signature": "pub fn crop_imm(&self, x: u32, y: u32, width: u32, height: u32) -> DynamicImage {"
+    }
+  ]
+}

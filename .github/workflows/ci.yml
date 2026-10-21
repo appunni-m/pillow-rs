@@ -39,6 +39,7 @@ env:
   WASM_PACK_VERSION: 0.15.0
   NODE_VERSION: 22.14.0
   NPM_VERSION: 11.5.1
+  SOURCE_CONTRACT_BASE_REF: ${{ github.event.before || github.event.pull_request.base.sha || github.sha }}
 
 jobs:
   # ── Rust: format + clippy + parity build + supply chain ──
@@ -54,17 +55,17 @@ jobs:
         task: [fmt-clippy, parity-build, supply-chain, windows-type-check]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
       - name: install the locked Rust toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
           rustup default "$RUST_TOOLCHAIN"
           rustc --version
 
-      - name: rustfmt + clippy
+      - name: consolidated repository quality gates
         if: matrix.task == 'fmt-clippy'
-        run: |
-          cargo fmt --check
-          cargo clippy --all-targets --all-features -- -D deprecated
+        run: make quality
 
       - name: parity build
         if: matrix.task == 'parity-build'

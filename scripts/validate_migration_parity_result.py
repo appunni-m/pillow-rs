@@ -116,7 +116,12 @@ def infrastructure_errors(value: list[dict[str, Any]]) -> None:
         string(item["message"], f"infrastructure_errors[{index}].message")
 
 
-def execution_receipt(value: dict[str, Any], label: str) -> None:
+def execution_receipt(
+    value: dict[str, Any],
+    label: str,
+    *,
+    allowed_step_ids: set[str] | None = None,
+) -> None:
     required = {
         "status",
         "requested_backend",
@@ -132,7 +137,12 @@ def execution_receipt(value: dict[str, Any], label: str) -> None:
         "sample_count",
         "cached_sample_count",
     }
-    optional = {"terminal_complete", "errors", "operation_telemetry"}
+    optional = {
+        "terminal_complete",
+        "errors",
+        "operation_telemetry",
+        "selected_step_ids",
+    }
     if (
         not isinstance(value, dict)
         or not required <= set(value)
@@ -140,7 +150,21 @@ def execution_receipt(value: dict[str, Any], label: str) -> None:
     ):
         raise ValueError(
             f"{label}: expected execution receipt keys {sorted(required)}"
-            " with optional terminal_complete, errors, and operation_telemetry"
+            " with optional terminal_complete, errors, operation_telemetry, "
+            "and selected_step_ids"
+        )
+    selected_step_ids = (
+        set(id_array(value["selected_step_ids"], f"{label}.selected_step_ids"))
+        if "selected_step_ids" in value
+        else None
+    )
+    if (
+        selected_step_ids is not None
+        and allowed_step_ids is not None
+        and not selected_step_ids <= allowed_step_ids
+    ):
+        raise ValueError(
+            f"{label}.selected_step_ids: outside workload measurement_policy.step_ids"
         )
     explicit_terminal_state = "terminal_complete" in value
     if explicit_terminal_state and type(value["terminal_complete"]) is not bool:
@@ -238,18 +262,23 @@ def execution_receipt(value: dict[str, Any], label: str) -> None:
             raise ValueError(f"{label}.operation_telemetry: expected array")
         for index, item in enumerate(telemetry):
             telemetry_label = f"{label}.operation_telemetry[{index}]"
-            exact(
-                item,
-                {
-                    "operation",
-                    "path",
-                    "vector_block_count",
-                    "scalar_tail_count",
-                    "mode_conversion_count",
-                    "handoff_count",
-                },
-                telemetry_label,
-            )
+            telemetry_keys = {
+                "operation",
+                "path",
+                "vector_block_count",
+                "scalar_tail_count",
+                "mode_conversion_count",
+                "handoff_count",
+            }
+            if selected_step_ids is None:
+                exact(item, telemetry_keys, telemetry_label)
+            else:
+                exact(item, telemetry_keys | {"step_id"}, telemetry_label)
+                string(item["step_id"], f"{telemetry_label}.step_id")
+                if item["step_id"] not in selected_step_ids:
+                    raise ValueError(
+                        f"{telemetry_label}.step_id: not in selected_step_ids"
+                    )
             string(item["operation"], f"{telemetry_label}.operation")
             string(item["path"], f"{telemetry_label}.path")
             for field in (
@@ -1088,7 +1117,20 @@ def benchmark(result: dict[str, Any]) -> None:
                 for field, value in phase["statistics"].items():
                     if value is not None and not isinstance(value, (int, float)):
                         raise ValueError(f"{pprefix}.statistics.{field}: expected number or null")
-            execution_receipt(subject["execution"], f"{sprefix}.execution")
+            policy = workload["measurement_policy"]
+            allowed_step_ids = None
+            if policy.get("boundary") == "observed_steps":
+                allowed_step_ids = set(
+                    id_array(
+                        policy.get("step_ids"),
+                        f"{prefix}.measurement_policy.step_ids",
+                    )
+                )
+            execution_receipt(
+                subject["execution"],
+                f"{sprefix}.execution",
+                allowed_step_ids=allowed_step_ids,
+            )
         unique(subject_ids, f"{prefix}.subjects")
         for budget_index, budget in enumerate(workload["budgets"]):
             exact(budget, {"requirement_id", "subject_id", "baseline_subject", "metric", "statistic", "operator", "required", "observed", "unit", "outcome"}, f"{prefix}.budgets[{budget_index}]")

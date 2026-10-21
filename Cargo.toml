@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "12.2.2"
+version = "12.2.3"
 edition = "2024"
 license = "MIT-CMU"
 rust-version = "1.96.1"
@@ -23,10 +23,9 @@ documentation = "https://docs.rs/pillow-rs"
 #   documented rationale in the PR description.
 #
 #   Key protections:
-#   - unwrap_used/expect_used: No panics in production from fallible operations
+#   - unwrap_used/expect_used: Fallible operations must not panic
 #   - dead_code: No accumulating dead code
-#   - arithmetic_side_effects: Flags integer overflow patterns
-#   - cast_possible_truncation: Flags (w*h) as usize overflow sites
+#   - arithmetic_side_effects/cast_possible_truncation: Report migration debt
 # ============================================================================
 
 [workspace.lints.rust]
@@ -48,22 +47,20 @@ dead_code = "deny"
 deprecated = "deny"
 
 # ── Documentation ──
-# AS PER DESIGN — DO NOT REMOVE:
-# All workspace crates must document public APIs. Crates not yet ready use
-# an explicit #![allow(missing_docs)] at crate root — not a silent skip.
+# Review warning: surface missing public API docs while documentation debt is
+# being reduced. This is not currently a CI error.
 missing_docs = "warn"
 
 [workspace.lints.clippy]
 # ── Safety: hard errors that block CI ──
 # AS PER DESIGN — DO NOT REMOVE:
-# .unwrap() is banned — use .expect("why this can't fail") to document invariants,
-# or proper error propagation with Result/Option.
+# Both unwrap() and expect() are denied. Use Result/Option propagation for
+# fallible work, or the existing infallible helper for proven invariants.
 unwrap_used = "deny"
 
 # AS PER DESIGN — DO NOT REMOVE:
-# .expect() calls must document WHY the invariant holds. Use `InfallibleExt::because()`
-# from pillow-rs/src/infallible.rs for truly infallible cases.
-# CI grep enforces no bare .expect() in production without a meaningful message.
+# `expect_used` is a hard Clippy error; a message does not make expect() an
+# accepted production path. `InfallibleExt::because()` documents proven cases.
 expect_used = "deny"
 
 # AS PER DESIGN — DO NOT REMOVE:
@@ -85,10 +82,12 @@ map_unwrap_or = "deny"
 needless_range_loop = "deny"
 unnecessary_cast = "deny"
 
-# AS PER DESIGN — DO NOT REMOVE:
-# These catch the integer overflow patterns identified in the audit.
-# Currently warn (not deny) — 171 existing sites need migration first.
-# Once clean, change to "deny".
+# Review-only function-size signal. The quality runner ratchets new functions
+# over 100 lines and growth in baseline functions; 60 lines is an early warning.
+too_many_lines = "warn"
+
+# These arithmetic and cast lints report migration debt but do not currently
+# fail CI. Promote them only after their existing warnings are resolved.
 cast_possible_truncation = "warn"
 cast_sign_loss = "warn"
 arithmetic_side_effects = "warn"

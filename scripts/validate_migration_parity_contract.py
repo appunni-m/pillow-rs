@@ -591,8 +591,8 @@ def _validate_capture_viewer_literal(
         raise _error(f"{path}.accept", "expected bool or integer")
     if value["registration"] not in ("class", "instance"):
         raise _error(f"{path}.registration", "expected class or instance")
-    if value["hook"] not in ("show", "show_image"):
-        raise _error(f"{path}.hook", "expected show or show_image")
+    if value["hook"] not in ("show", "show_image", "show_file"):
+        raise _error(f"{path}.hook", "expected show, show_image, or show_file")
 
 
 def _reject_nested_capture_viewer(value: Any, path: str, *, root: bool = True) -> None:

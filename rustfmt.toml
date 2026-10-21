@@ -12,7 +12,7 @@ max_width = 100
 hard_tabs = false
 tab_spaces = 4
 newline_style = "Unix"
-edition = "2021"
+edition = "2024"
 
 # ── Structure ──
 use_small_heuristics = "Default"

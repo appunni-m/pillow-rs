@@ -27,11 +27,12 @@ independent and do not count fallback as acceleration.
 
 Spend at most three or four optimization attempts on one operation per visit.
 Keep each visit scoped to that operation, then move to the next ranked
-operation with retained changes and evidence in the working tree. Accumulate 33
-completed operation items before committing and pushing a checkpoint, unless
-the user explicitly asks for an earlier Git action. A checkpoint is not
-completion: unmet targets stay in the matrix and can be revisited after other
-operations receive their first pass.
+operation with retained changes and evidence in the working tree. The current
+default is one completed, focused-verified item per commit/push checkpoint,
+following the user's 2026-10-21 instruction; historical entries that say 33
+refer to the previous batch policy. A checkpoint is not completion: unmet
+targets stay in the matrix and can be revisited after other operations receive
+their first pass.
 
 ## Operation-wide baseline
 
@@ -147,6 +148,27 @@ working tree was dirty because of focused fixture changes, while the measured
 `docs/evidence/filter5x5-la-single-outlier-x86-20261017/`; the run is also
 listed in `docs/evidence/performance-optimization-local-runs.csv`. It does not
 change the clean published matrix.
+
+### Native-LA Filter5x5 x86 SIMD recheck — 2026-10-18
+
+The retained single-outlier LA SIMD kernel was measured on the native x86
+runner for `pipeline-op.filter.material-la-nonmatching-5x5-1024x768`. On
+AMD Ryzen 5 2600X, the public `call;materialize` boundary measured
+2.660 ms median / 2.904 ms p95 for actual SIMD versus 24.723 ms / 30.770 ms
+for Pillow 12.2.0 (9.293× median). The terminal receipt completed with no
+fallback, one Filter5x5 operation, 97,028 vector blocks, and 3,056 scalar-tail
+pixels. The full-size benchmark parity gate passed; the odd-width 7×5 strict
+SIMD parity guard passed 1/1.
+
+This is a single current-source measurement, not an x86 A-B-B-A, so it does
+not establish a causal x86 improvement. It does show that the historical
+x86 SIMD-vs-Pillow miss no longer reproduces for this selected workload.
+Pillow-SIMD remains ineligible for this case because its compatibility gate
+fails. Other modes, profiles, and workloads remain open. Full report, raw
+samples, attestations, and the compact odd-width parity report are in
+`docs/evidence/filter5x5-la-single-outlier-simd-x86-20261018/`; the full
+primary parity report remains on the native runner because it embeds 8.4 MB
+of image bytes.
 
 ### GetBBox-I SSE4.1 screening A/B/B/A — 2026-10-17
 
@@ -31414,4 +31436,490 @@ receipt has no Rayon-specific counter, and the reported 3,280.985 ops/s at
 concurrency one is not sustained throughput. Serial CPU, SIMD, GPU and the
 remaining mode/size matrix are still open. Full focused artifacts are in
 [`filter-l5x5-parallel-current-x86-20261018`](evidence/filter-l5x5-parallel-current-x86-20261018/README.md).
+
+## GetChannel SIMD adjacent RGBA PutPixel batching — ARM64 — 2026-10-18
+
+Batching four adjacent RGBA writes into one copied frame improved the selected
+1024×768 GetChannel workflow. Two candidate runs measured SIMD/Pillow speedups
+of 1.407× and 1.501×; the reused pre-batching and rebuilt control runs measured
+0.932× and 0.884×. Exact parity passed on each run, and SIMD completed without
+fallback. The 16×16 guard passed parity and measured 0.971× Pillow, which is
+near parity rather than accelerated.
+
+The benchmark's public-call receipt includes the final NEON ExtractBand
+receipt, but omits receipts from the earlier parent materialization and reports
+zero fused operations. A focused `SimdPool` test verifies that the candidate
+branch performs four vector stores, records all four `PutPixel` receipts, and
+creates one output frame. Do not use the outer GetChannel receipt's zero fused
+count to infer whether the parent prefix ran.
+
+The source-matched A–B–B–A timings have high absolute movement in Pillow and the
+target; the candidate runs both beat their matched Pillow runs, while both
+controls are slower. Keep the result as partial evidence, not a precise
+operation-wide gain. SIMD remains below the 5× target and the 16×16 case is
+near Pillow. Other sizes/modes, x86, Pillow-SIMD, GPU latency, and sustained
+throughput remain open. Ten subject rows are in the local-run ledger. Full
+evidence and source/build identities are in
+[`getchannel-putpixel-prefix-batch-arm64-20261018`](evidence/getchannel-putpixel-prefix-batch-arm64-20261018/README.md)
+and reusable performance-parity skill reference. Kata `pillow-rs#jpj6` remains
+open; no coverage, commit, or push ran.
+
+## x86 RGBA transpose AVX2 8×8 candidate — 2026-10-18
+
+The AVX2 candidate passes the focused x86 transpose test and exact parity for
+the aligned workload and the odd 1025×1023 strict SIMD guard. The end-to-end
+772×768 workflow measured Pillow at 2.323 ms, serial CPU at 3.148 ms, and SIMD
+at 2.819 ms. Receipts prove one fused output allocation, two host-buffer
+boundaries, actual SIMD execution through the `avx2-transpose` path, 73,728
+vector blocks, and no fallback. CPU remains slower than Pillow; SIMD remains
+1.21× slower. GPU and Pillow-SIMD were not measured, so transpose stays open.
+
+The earlier generic-path receipt exposed a real telemetry issue: the fused
+executor overwrote the adapter's AVX2 label with `native-copy`. The receipt
+preservation fix has a focused Rust regression test. The prior x86 4×4 report
+is not a source-matched A–B–B–A control; do not claim its timing delta as a
+stable AVX2 gain. See
+[`transpose-avx2-kernel-x86-20261018`](evidence/transpose-avx2-kernel-x86-20261018/README.md)
+for parity IDs, report hashes, and workload details.
+
+## x86 serial CPU RGBA transpose tile-size candidate — 2026-10-18
+
+A bounded 32×32 serial CPU tile candidate passed exact parity for the aligned
+772×768 case and odd 1025×1023 guard. The materialized public workflow measured
+Pillow at 2.097 ms and CPU at 3.154 ms (0.665× Pillow); the CPU result was
+essentially unchanged from the preceding 16×16 report at 3.148 ms. Those runs
+are not an interleaved A–B–B–A trial, and Pillow timing shifted substantially,
+so no tile-size speedup is established. The candidate was reverted and the
+native x86 parity extension was rebuilt at 16×16. Full details and compact
+attestations are in
+[`transpose-cpu-tile32-x86-20261018`](evidence/transpose-cpu-tile32-x86-20261018/README.md).
+
+## SIMD GaussianBlur RGBA uniformity proof — partial ARM64 — 2026-10-18
+
+A source-matched A–B–B–A trial added a full SIMD uniformity scan for the exact
+three-pass RGBA GaussianBlur radius-7.5 fixed-point path. The candidate passed
+both selected parity cases in all four legs. On the 1024×768 uniform workload,
+the SIMD medians were 0.677 ms and 0.653 ms versus same-run Pillow medians of
+7.421 ms and 7.479 ms (10.96× and 11.46× faster). Controls measured 13.108 ms
+and 12.450 ms against Pillow at 7.352 ms and 7.418 ms. Receipts show actual
+SIMD, terminal completion, no fallback, and a positive vector count.
+The uniform receipt reports two host buffers (6,291,456 bytes), while its
+separate allocation-event counters are zero even though the fast path creates
+an output Vec. The whole-workflow timer includes allocation and materialization;
+do not interpret the allocation-event counter as total allocated bytes. Kata
+`pillow-rs#w00k` tracks the telemetry audit.
+
+The 1024×768 noise guard remains slower than Pillow at 0.585× and 0.564×; the
+matched controls were 0.556× and 0.548×. Host variance leaves small noise-path
+overhead inconclusive. Retain this as a partial uniform-input gain only; the
+Filter matrix remains open for noise, CPU, x86, Pillow-SIMD, other modes/sizes,
+and GPU. Reports, compressed parity, samples, and attestations are in
+[`gaussian-rgba-uniform-simd-abba-arm64-20261018`](evidence/gaussian-rgba-uniform-simd-abba-arm64-20261018/README.md); Kata
+`pillow-rs#ttfz`; read-only scout `pillow-rs#wz8p`.
+
+## Nonuniform RGBA GaussianBlur SIMD tiled transpose — partial AArch64 — 2026-10-18
+
+The large native RGBA radius-7.5 Gaussian SIMD path now routes its two
+full-frame transposes through the existing 4×4 portable-SIMD tile transpose.
+Dispatch is AArch64-only, requires the exact Gaussian RGBA kernel candidate,
+and applies at dimensions at least 256×256. BoxBlur, other modes, small images,
+x86, and Parallel CPU retain their existing paths. The uniform identity return
+happens before the changed transposes.
+
+A source-matched A–B–B–A selected only
+`pipeline-chain.blur-material.gaussian-rgba-noise-1024x768` and its uniform
+identity-path guard `pipeline-chain.blur-material.gaussian-rgba-1024x768`.
+Each leg passed both exact parity cases and used the warm `whole_workflow`
+boundary (setup/frombytes, filter, and tobytes), with one warmup, three
+iterations × two samples, and concurrency one.
+
+| Leg | Noise Pillow | Noise SIMD | Pillow/SIMD | Uniform Pillow | Uniform SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A1 control | 7.744 ms | 13.900 ms | 0.557× | 9.330 ms | 0.723 ms |
+| B1 candidate | 7.610 ms | 9.757 ms | 0.780× | 8.413 ms | 1.209 ms |
+| B2 candidate | 6.677 ms | 7.617 ms | 0.877× | 6.444 ms | 0.591 ms |
+| A2 control | 6.858 ms | 12.404 ms | 0.553× | 6.799 ms | 0.619 ms |
+
+Noisy-workload candidate mean fell from 13.152 ms across controls to 8.687 ms
+(1.51× faster, 34.0% lower). It remains slower than same-run Pillow in both
+candidate legs: 9.757 vs 7.610 ms and 7.617 vs 6.677 ms. The uniform B1 time
+was a guard outlier even though the path returns before the transpose; a
+single fresh-parity recheck measured 0.672 ms, near the 0.723/0.619 ms controls.
+Keep that guard's timing caveat explicit and attribute no uniform gain to the
+candidate.
+
+Candidate receipts show actual SIMD, terminal completion, no fallback, and
+589,824 blur vector blocks. There are no per-transpose counters. Full-workflow
+timing includes allocations and materialization. A separate B3r guard recheck
+also passed both cases and measured noisy RGBA at 7.334 ms versus Pillow at
+6.408 ms. The operation remains open; this does not meet the SIMD target.
+
+This finding is limited to one aligned ARM64 size/mode and regular Pillow.
+x86 Gaussian, Pillow-SIMD, other sizes/modes, serial CPU, Parallel CPU, and GPU
+remain open. Per-leg reports, fresh parity results, samples, and attestations
+are in
+[`gaussian-rgba-tiled-transpose-simd-aarch64-abba-20261018`](evidence/gaussian-rgba-tiled-transpose-simd-aarch64-abba-20261018/README.md).
+The earlier ungated candidate cohort remains archived in
+[`gaussian-rgba-tiled-transpose-simd-abba-arm64-20261018`](evidence/gaussian-rgba-tiled-transpose-simd-abba-arm64-20261018/README.md).
+Kata `pillow-rs#ttfz` remains open; read-only scout `pillow-rs#nxy0` is
+complete. No full suite or coverage ran, and this batch has not been committed
+or pushed.
 *** End of File
+
+
+## RGBA GaussianBlur SIMD signed-delta prefix scan — partial AArch64 — 2026-10-18
+
+The AArch64 RGBA radius-7 fractional GaussianBlur block now computes its
+eight rolling deltas as one signed-i16 inclusive prefix scan. Byte deltas stay
+within ±255 and their eight-lane prefix within ±2040; both bounds fit exactly.
+The scan sign-extends before the existing u32 Q24 multiply, fractional taps,
+bias, shift, and byte narrowing. The vld4/vst4 accesses and full-block bounds
+are unchanged. Clamped and short regions and scalar tails keep the old path.
+
+The source-matched A–B–B–A cohort selected only
+`pipeline-chain.blur-material.gaussian-rgba-noise-1024x768` and the uniform
+identity-path guard `pipeline-chain.blur-material.gaussian-rgba-1024x768`. It
+used `python-simd`, release/default features, warm `whole_workflow` including
+setup/frombytes, filtering, and tobytes materialization, one warmup, 3×2 samples,
+and concurrency one. Each leg freshly passed both exact Pillow parity cases.
+
+| Leg | Noise Pillow | Noise SIMD | Pillow/SIMD | Uniform Pillow | Uniform SIMD | Pillow/SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A1 control | 6.771 ms | 8.101 ms | 0.836× | 6.946 ms | 0.617 ms | 11.263× |
+| B1 candidate | 7.513 ms | 6.684 ms | 1.124× | 6.870 ms | 0.677 ms | 10.149× |
+| B2 candidate | 8.988 ms | 6.480 ms | 1.387× | 8.013 ms | 0.636 ms | 12.600× |
+| A2 control | 6.705 ms | 8.191 ms | 0.819× | 6.791 ms | 0.789 ms | 8.606× |
+
+Noise SIMD mean decreased from 8.146 ms in controls to 6.582 ms in candidate
+legs (1.238×, 19.2% lower). Both candidate legs beat same-run Pillow. Pillow's
+noise median shifted from 6.738 ms across controls to 8.251 ms across candidate
+legs, so the same-run ratios show a crossing of the local slowdown while the
+extra margin remains variable. The candidate remains below both the 2×
+prioritization threshold and the 5× SIMD target. The uniform guard returns before
+the changed block; no improvement is attributed to it.
+
+Every SIMD receipt reports actual SIMD, terminal completion, no fallback, the
+vector path, 589,824 vector blur blocks, and zero scalar tail. This telemetry
+proves the selected vector route; it does not count individual NEON intrinsics.
+The existing Rust scalar-reference test passed 1/1, and `make build-parity`
+succeeded. After a rustfmt-only source cleanup, a second build emitted the same
+extension bytes and the focused Rust test passed again. All four benchmark
+reports passed schema validation. The builds retained the existing seven
+Python-binding missing-documentation warnings and the `block 0.1.6`
+future-incompatibility notice. No full suite or coverage ran.
+
+The local comparison matrix gained 16 subject rows, bringing it to 8,521 data
+rows. Full per-leg reports, strict parity, raw samples, execution/producer
+attestations, and checksums are in
+[`gaussian-rgba-neon-prefix-simd-aarch64-abba-20261018`](evidence/gaussian-rgba-neon-prefix-simd-aarch64-abba-20261018/README.md).
+The reusable performance skill records bounds and reuse guards at
+`references/gaussian-rgba-neon-prefix-scan-arm64.md`. Kata
+`pillow-rs#vc6w` remains open for the remaining operation-wide architecture,
+mode, size, CPU, Pillow-SIMD, and GPU targets. This batch is not committed or
+pushed.
+
+## Grayscale family aligned to the repository path standard — partial — 2026-10-19
+
+The repository now has one maintained path rule in
+[`IMPLEMENTATION_STRUCTURE.md`](IMPLEMENTATION_STRUCTURE.md): owner, domain or
+layer, family or concern, responsibility, then a mode or architecture only
+when it selects a real path. It covers Rust, bindings, tests, scripts, parity
+inputs, docs, evidence, and workflows. This sets a consistent rhythm without
+inventing adapter files, forcing equal directory depth, or mass-moving
+unrelated legacy paths; touched legacy areas align incrementally and remaining
+paths are visible through the source crosswalk for review.
+
+Grayscale now follows the standard at its CPU and SIMD ownership boundaries:
+serial CPU dispatch is in `pool_cpu/ops/grayscale.rs`; architecture-specific
+RGB AVX2 and YCbCr SSSE3 loops are in the SIMD grayscale family kernels; core
+shared color semantics remain in `color.rs`. SIMD paths retain their own
+specialized loops and are the only paths reporting vector execution. The
+crosswalk parser now resolves direct imported CPU family functions, so the CPU
+registry mapping points to the new module instead of producing an unresolved
+registration finding.
+
+The focused 1024×768 parity-backed rebaseline passed exact RGB and YCbCr cases
+on ARM64 and x86_64 for CPU and SIMD. ARM64 CPU was 2.41× and 2.78× Pillow;
+SIMD was 2.36× and 3.16×. x86_64 CPU was 1.03× and 1.37×; SIMD was 1.49× and
+1.41×. Consequently x86 SIMD remains below the 2× triage gate, and the narrow
+x86 RGB CPU margin needs attention. This is partial family evidence; GPU,
+Parallel CPU, throughput, additional modes, and additional sizes remain open.
+
+See [`grayscale/backend-attribution-cpu-simd-multiarch-20261019`](evidence/grayscale/backend-attribution-cpu-simd-multiarch-20261019/README.md)
+for exact workload and case IDs, receipts, run IDs, and the rejected probe.
+Focused source-crosswalk contracts pass 11/11; focused Rust formatting passes.
+The local-run ledger contains 8,568 data rows. No coverage ran. No operation
+completion was claimed, and the commit/push batch remains 0/33.
+
+## RGB GetChannel capacity-only output allocation — narrow SIMD gain — 2026-10-19
+
+The RGB GetChannel adapter now has a source-matched A–B–B–A result on Apple
+ARM64 and the native x86_64 runner. The 1024×768 full public call, including
+result observation, improved by 5.67% in the mean candidate SIMD median on
+ARM64 (87.219→82.271 µs) and 13.63% on x86_64 (94.166→81.336 µs). Same-report
+Pillow ratios remain the comparison basis. The primary case passed its exact
+parity gate in every retained run; selected RGB edge parity passed 8/8 on both
+hosts for A1 and B1. Runtime receipts prove NEON `neon-deinterleave` and x86
+`ssse3-gather`, each with 49,152 blocks and no fallback for the full image.
+
+The small ExtractBand guard is flat on ARM64 and 4.68% lower on x86_64. The
+shared Grayscale guard is noisy on ARM64; its average same-report Pillow ratio
+is unchanged. An ARM64 B3 repeat under high unrelated system load is retained
+but excluded. The x86_64 Grayscale guard is 2.20% higher by mean target median
+on code whose x86 path is unchanged, so it remains a watch item rather than an
+attributed regression. x86 A2 reused parity was freshly rerun after the runtime
+fingerprint rejected evidence reuse. The first x86 candidate reports proved
+stale because Cargo reused the control core; they are quarantined and excluded.
+The native runner used Rust 1.98.1 because the repository-pinned 1.96.1 was not
+available there.
+
+This supports retaining one narrow allocation change; the repository SIMD
+target, other GetChannel modes, serial CPU, Pillow-SIMD, GPU latency, and
+sustained GPU throughput remain open. The detailed reports, raw samples, parity,
+attestations, and quarantined artifacts are in
+[`getchannel/rgb-output-zero-fill-abba-arm64-20261019`](evidence/getchannel/rgb-output-zero-fill-abba-arm64-20261019/README.md).
+The local-run ledger now contains 8,650 data rows and includes all 50 benchmark
+subject/workload pairs from these retained reports.
+
+The repository-wide path authority is
+[`IMPLEMENTATION_STRUCTURE.md`](IMPLEMENTATION_STRUCTURE.md). The changed-path
+audit currently flags five adapter-root helper modules and one crosswalk test
+for review. This trial does not relocate those performance-sensitive paths;
+module moves need their own source-matched verification before their results
+can enter a baseline. The newly added GetChannel evidence follows the standard
+family/experiment directory. No commit or push was made.
+
+## GetColors I current-source CPU tracking baseline — 2026-10-19
+
+Measured only the high-cardinality signed-I public call on dirty source revision
+`418d5f0cde51ca64a97cbd007ea731da72d68abf`. The selected workload was
+`pipeline-chain.terminal-read.getcolors.high-cardinality-signed-run-i-128x64`
+and its exact case was
+`PIL.Image.Image.getcolors.nuanced.i-high-cardinality-signed-run-fallback-128x64`.
+The timed `call-fallback-4097` includes materialization of all 4,097 Python rows;
+sampling used 5 warmups, 20 iterations × 5 samples, warm cache, concurrency one.
+
+Exact selected parity passed 1/1. On the stable-runner report, Pillow 12.2.0
+measured 178.750 µs median and serial CPU measured 187.9375 µs (0.95111×
+Pillow/CPU; serial CPU latency is 5.14% higher). The receipt confirms one actual
+GetColors CPU operation, terminal completion, and no fallback. This is a
+single-run tracking baseline, not an optimization claim. It is 1.28% slower
+than the prior witness-bound CPU median, but the runs were not interleaved and
+no code changed, so do not attribute that difference to implementation.
+
+The benchmark report is
+[`reports/runner-id-bound-final-20261019/benchmark-result.json`](evidence/getcolors/current-source-i-high-cardinality-cpu-arm64-20261019/reports/runner-id-bound-final-20261019/benchmark-result.json), run
+`migration-benchmark-ba2964a454aa499abed91871bd101ffc`, SHA-256
+`e178edf9d0fd8aa3702ecd04e5cdac9814e4b8182d65f02f76ccb6cd13ec7cdd`. Its exact
+parity run is `migration-parity-eaa564da5eb8439cab0b026be1dea2b3` (report SHA-256
+`b011a740e5e21d632870f4a5782b1e3f2a70251cbbee51d7c3ecddbeba5b47b7`). The
+strict direct-operation link
+[`direct-operation-link-runner-id-v2.json`](evidence/getcolors/current-source-i-high-cardinality-cpu-arm64-20261019/direct-operation-link-runner-id-v2.json)
+passed PerfDB checks for parity, runtime and producer equivalence, source-build
+binding, backend execution, and performance admission. The measured extension
+matches the existing build-witness artifact at
+`5a42dd70babf1242df00a534b250b57e640734789e09bceca178a0532d304ba3`.
+
+The generated DuckDB promoted this one workload to the tracking channel
+`getcolors-i-high-cardinality-cpu-arm64-tracking-20261019`. The initial attempt
+to reuse the older parity report failed because `MIGRATION_BENCHMARK_RUNNER_ID`
+changes the runtime fingerprint. Using the same stable runner ID for one
+selected parity case and the one selected benchmark resolved it; no full image
+campaign was repeated. The database regression CLI rejects checking a baseline
+artifact against itself, so a later compatible report will exercise that gate.
+
+Earlier GetColors counting, table-finalization, dispatch, and binding
+materialization trials did not establish a repeatable full-call win. Keep this
+small CPU miss behind larger verified CPU misses. SIMD, Parallel CPU, GPU,
+other modes, other sizes, and other operations remain open. See the complete
+evidence and retained failed-preflight artifacts in
+[`getcolors/current-source-i-high-cardinality-cpu-arm64-20261019`](evidence/getcolors/current-source-i-high-cardinality-cpu-arm64-20261019/README.md).
+The local comparison ledger now contains 8,662 subject rows. No coverage,
+commit, or push ran; the batch remains 0/33.
+
+## GetColors I direct Python list-construction candidate — 2026-10-19
+
+The selected high-cardinality I-mode public call first tried collecting Python
+tuples into a Rust vector and then building a list. That candidate measured
+189.896 µs against same-run Pillow at 175.250 µs and was rejected. A lazy
+`IntoPyObject` adapter passed directly to `PyList::new` removed that temporary
+vector. Its first run measured 175.1665 µs against Pillow at 173.750 µs
+(0.99191×); a stable-runner repeat measured 168.729 µs against Pillow at
+175.021 µs (1.03729×). In a matched append-control comparison, the original
+implementation measured 183.354 µs against Pillow at 177.5625 µs, while the
+direct-list candidate measured 170.1045 µs against Pillow at 175.479 µs
+(1.03160×), 7.23% lower CPU median than control. Exact I-mode parity passed,
+the eight-case selected mode guard passed, and receipts prove actual CPU,
+terminal completion, one operation, and no fallback. The selected CPU workload
+therefore meets Pillow latency; other GetColors modes, sizes and backends remain
+open.
+
+The timed `call-fallback-4097` includes all 4,097 Python rows; runs used 5
+warmups and 20 iterations × 5 samples. The generated DuckDB contains the
+selected reports. Strict baseline promotion remains blocked because the
+newly captured build-witness artifact SHA-256
+(`916a51ed984d8077859cfc52e9d805cf4d0afede6921b9ad4d78f8f10c63fba1`) differs
+from the benchmark extension SHA-256
+(`35979d251e4e49d8cee6b1ac8bc6608fd84dce8c5dca4426345d30d8294b0c25`). An
+earlier reused-parity attempt stopped on oracle-identity validation before
+timing and is excluded. Only one benchmark workload and eight focused parity
+cases ran; no full campaign was repeated. See
+[`getcolors/current-source-i-high-cardinality-cpu-arm64-20261019`](evidence/getcolors/current-source-i-high-cardinality-cpu-arm64-20261019/README.md).
+The local comparison ledger now contains 8,674 subject rows.
+
+## RGB 5×5 BLUR ring SIMD current-source check — 2026-10-19
+
+Measured only `pipeline-matrix.expanded.filter5x5.1024x768` on current dirty
+source, with exact parity case
+`PIL.Image.Image.filter.nuanced.rgb-blur-5x5-noise-1024x768`. The whole-workflow
+boundary included setup, allocation, filtering and terminal materialization;
+the selected backend set contained only Pillow and SIMD. Exact SIMD parity
+passed 1/1. On ARM64, Pillow measured 11.414438 ms and SIMD 2.303771 ms
+(4.954676×). The receipt proves actual SIMD, terminal completion, no fallback,
+291,848 vector blocks and 3,056 scalar-tail components. This single current
+measurement is 0.91% below the unchanged 5× target and does not seed a baseline.
+
+The retained source-matched native x86_64 result for the same workload is
+6.13× Pillow with positive SIMD vector execution. Keep its report and parity
+limitations from [`rgb-blur-ring-simd-x86-20261019`](evidence/filter/rgb-blur-ring-simd-x86-20261019/README.md)
+separate from the ARM64 measurement. Do not use the older 53.409 ms x86 generic
+path run as a matched control: it has a different runner identity.
+
+The selected report and exact parity artifacts are retained in
+[`current-source-rgb-blur-ring-simd-arm64-20261019`](evidence/filter/current-source-rgb-blur-ring-simd-arm64-20261019/README.md)
+and imported into the generated DuckDB. The benchmark-selection suite exposed
+a fixture defect under `MIGRATION_BENCHMARK_BACKENDS=simd`: its synthetic
+reused-parity case declared CPU only. The fixture now declares the frozen
+profiles and intersects them with the active selection; all 38 focused
+contracts pass without changing assertions or thresholds. A separate remote
+checkout could not build because it lacks `maturin`, `pip` and `PyYAML`; the
+already retained native x86 evidence remains available, so no full campaign or
+remote environment repair was attempted. The ledger now contains 8,664 data
+rows. No coverage, commit or push ran; the 33-item batch remains open.
+
+## GetData HSV band-2 current-worktree refresh — 2026-10-19
+
+Reused the existing selected rebaseline for
+`pipeline-chain.terminal-read.getdata.hsv-band2-1024x768` and exact parity case
+`PIL.Image.Image.getdata.performance.material-hsv-band2-1024x768`; no benchmark
+or parity command was rerun. On dirty revision
+`418d5f0cde51ca64a97cbd007ea731da72d68abf`, macOS 15.7.7 ARM64, CPython 3.12.13,
+Pillow 12.2.0, release/default CPU, the warm `band-data` boundary measured
+Pillow at 5.639667 ms and serial CPU at 2.593313 ms (2.17470×). Exact parity
+passed 1/1. The receipt confirms actual CPU, one completed operation, terminal
+completion and no fallback; the result buffer is 786,432 bytes. This does not
+replace the published clean matrix row or establish other GetData modes and
+profiles.
+
+The report is now imported into generated DuckDB history and added to the local
+ledger, which contains 8,676 subject rows. It is not a promoted regression
+baseline: the dirty report lacks validated `workflow-parity-link@2` cross-run
+context required by the baseline promoter. Keep this current-worktree result
+separate from the clean published miss until that proof is available. No full
+benchmark, parity campaign or coverage ran; commit/push remains 0/33. Kata:
+`pillow-rs#a53w`, `pillow-rs#v2jj`, and `pillow-rs#0h0b`.
+
+## F-mode Bicubic Resize packed final output — native x86 CPU — 2026-10-20
+
+Selected only
+`pipeline-chain.resize-native-f32.bicubic-noise-1024x768` and its exact
+parity case `PIL.Image.Image.resize.nuanced.f-resize-bicubic-noise-1024x768`.
+The warm `call;materialize` workload used 5 warmups, 20 iterations × 5 samples,
+and concurrency one on the existing native x86_64 Ryzen 5 2600X runner. The
+candidate writes the final vertical F32 pass directly into packed little-endian
+pixel slots and flattens that vector without allocating and filling a second
+full-frame output. The F64 accumulator order and F32 pass boundary are
+unchanged. Parallel CPU, SIMD, and GPU code were not changed.
+
+In the B1/A1/A2/B2 sequence, selected Pillow parity passed in every report.
+The CPU receipts were terminal-complete, requested and actual backend `cpu`,
+and had no fallback. Candidate medians were 4.426197 ms and 4.318801 ms, versus
+the adjacent controls at 4.588777 ms and 4.471771 ms. The paired candidate runs
+were 3.54% and 3.42% faster than their controls. Candidate CPU latency also beat
+same-run Pillow in both reports (1.053× and 1.037×). Keep this as a retained
+candidate for this one x86 F-mode workload only; other Resize modes, sizes,
+architectures, SIMD, GPU, and the full operation target remain open. The
+benchmark resource receipt is not a process-wide allocator trace, so allocation
+reduction is attributed from the source path and not from a claimed allocation
+counter delta.
+
+Evidence, raw samples, and attestations are in
+[`resize/f32-bicubic-cpu-x86-20261020/packed-output`](evidence/resize/f32-bicubic-cpu-x86-20261020/packed-output/README.md).
+Only selected evidence was copied from the reused x86 worktree; the original
+A-B-B-A parity payloads remain there, and no checkout or `target/` directory
+was copied or deleted. Eight Pillow/CPU rows were appended to
+[`performance-optimization-local-runs.csv`](evidence/performance-optimization-local-runs.csv).
+
+Four additional stable-runner-ID reports and their compressed parity sidecars
+were imported into the existing generated PerfDB. The first A1/B1 comparison
+exposed a generated coverage omission: the exact F-mode case declared only
+`resize.behavior.default`, while its workload also declares
+`resize.performance.standard`. The generator and that case's coverage metadata
+now include the missing performance requirement; its public steps and parity
+assertions are unchanged. A2/B2 both passed the selected exact parity case.
+PerfDB then withheld their comparison because direct parity sidecars do not
+provide the required shared `workflow-parity-link@2` source/producer/build
+context. No ratio was admitted and no baseline was promoted. These pairs test
+runner identity and proof linking; the earlier A-B-B-A sequence remains the
+performance evidence. Eight more Pillow/CPU ledger rows were added. See the
+evidence README for artifact IDs, medians, and the remaining build-proof gate.
+
+The first focused Rust test build found an orphan `SimdOnlyBackendsGuard` in
+the dirty test support file; repository-wide search found no callers, and
+`dead_code = "deny"` correctly rejected the build. The helper was removed
+without weakening the lint. The focused packed-versus-F32 byte test then passed
+1/1, including signed-zero and non-finite samples. No full test campaign or
+coverage ran; commit/push remains 0/33. Kata: `pillow-rs#b9n6`.
+
+## GetChannel RGB current-worktree Pillow-SIMD comparison — native x86 — 2026-10-20
+
+Reused the single selected workload
+`pil-image-image.getchannel.materialized.rgb-1024x768` and exact case
+`PIL.Image.Image.getchannel.nuanced.performance-rgb-1024x768`; no full
+benchmark or parity campaign ran. On the native x86 runner, serial CPU measured
+316.321 µs against Pillow at 303.151 µs (0.958365×) and 314.462 µs against
+Pillow-SIMD at 215.221 µs (0.684501×) in their respective matched cohorts.
+SIMD measured 85.885 µs (3.529732× Pillow) and 86.510 µs (2.487816×
+Pillow-SIMD). Exact selected CPU/SIMD parity passed 2/2; the separate
+Pillow-SIMD compatibility preflight passed with no differences. Receipts prove
+actual CPU and SSSE3 gather execution, with no fallback. SIMD remains below the
+5× Pillow target. There is no GPU or sustained-throughput result.
+
+The whole manifest and fixture-input hashes differ from the local tree, and the
+dirty build does not bind every source file to the extension. Treat these as
+selected-path diagnostics, not a strict baseline or accepted optimization. The
+full parity input was not copied from the existing host. Details and artifact
+hashes: [`getchannel/rgb-pillow-simd-x86-20261020/README.md`](evidence/getchannel/rgb-pillow-simd-x86-20261020/README.md).
+The ledger contains three new Pillow-cohort rows; the separate Pillow-SIMD
+comparison is retained in the evidence README because it is not a ledger
+profile. No code, coverage, commit, or push ran; the batch remains 0/33. Kata:
+`pillow-rs#jpj6` and `pillow-rs#277n`.
+
+## GaussianBlur RGBA source-bound CPU/SIMD baseline — ARM64 — 2026-10-21
+
+Recorded one selected whole-workflow workload,
+`pipeline-chain.blur-material.gaussian-rgba-noise-1024x768`, with exact parity
+case
+`PIL.Image.Image.filter.nuanced.performance-material-rgba-noise-1024x768-radius-7-5`.
+The frozen selection is RGBA 1024×768 at radius 7.5, warm, one warmup, three
+iterations × two samples, concurrency one. The source-build witness binds the
+materialized `_core.abi3.so` to dirty revision
+`418d5f0cde51ca64a97cbd007ea731da72d68abf`. Exact CPU and SIMD parity passed
+2/2. Their terminal receipts report actual `cpu` and `simd`, with no fallback.
+
+In the same report, Pillow measured 6.079605 ms, serial CPU 5.281875 ms
+(1.151031× Pillow), and SIMD 6.367209 ms (0.954830× Pillow). The CPU meets its
+latency ceiling for this selected workload. SIMD remains far below the 5×
+Pillow target; no GPU or sustained-throughput result is available. These are
+source-bound baselines, not candidate-vs-control optimization results and not
+proof for other modes, sizes, or architectures.
+
+The generated PerfDB records a strict CPU baseline `gauss-rgba-1024-arm64-cpu-strict`
+and a SIMD tracking baseline `gaussian-blur-rgba-arm64-simd-20261021`. The older
+CPU baseline has a different producer/build context, so it cannot serve as a
+matched comparison. The report, parity evidence, receipts, direct-operation
+links, and build witness are documented in
+[`gaussian_blur/current-source-cpu-simd-arm64-20261021-profile-fix-runnerid`](evidence/gaussian_blur/current-source-cpu-simd-arm64-20261021-profile-fix-runnerid/README.md).
+Three rows for the report are already present in the local comparison ledger.
+No full benchmark or coverage campaign ran; this does not close GaussianBlur
+and the 33-item integration batch remains open.

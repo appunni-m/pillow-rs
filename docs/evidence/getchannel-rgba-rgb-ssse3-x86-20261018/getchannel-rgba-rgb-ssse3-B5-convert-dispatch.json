@@ -1,0 +1,92 @@
+{
+  "input": {
+    "corner_seeded": true,
+    "mode": "RGBA",
+    "size": [
+      1024,
+      768
+    ]
+  },
+  "operation": "PIL.Image.Image.convert(RGBA, RGB)",
+  "receipt": {
+    "actual_backend": "simd",
+    "backend_ns": 3465043,
+    "dispatch_count": null,
+    "fallback_reason": null,
+    "operation_count": 5,
+    "operation_telemetry": [
+      {
+        "handoff_count": 0,
+        "mode_conversion_count": 0,
+        "operation": "PutPixel",
+        "path": "vector",
+        "scalar_tail_count": 0,
+        "vector_block_count": 1
+      },
+      {
+        "handoff_count": 0,
+        "mode_conversion_count": 0,
+        "operation": "PutPixel",
+        "path": "vector",
+        "scalar_tail_count": 0,
+        "vector_block_count": 1
+      },
+      {
+        "handoff_count": 0,
+        "mode_conversion_count": 0,
+        "operation": "PutPixel",
+        "path": "vector",
+        "scalar_tail_count": 0,
+        "vector_block_count": 1
+      },
+      {
+        "handoff_count": 0,
+        "mode_conversion_count": 0,
+        "operation": "PutPixel",
+        "path": "vector",
+        "scalar_tail_count": 0,
+        "vector_block_count": 1
+      },
+      {
+        "handoff_count": 0,
+        "mode_conversion_count": 1,
+        "operation": "Convert",
+        "path": "ssse3-rgba-to-rgb",
+        "scalar_tail_count": 0,
+        "vector_block_count": 49152
+      }
+    ],
+    "requested_backend": null,
+    "resize_coeff_cache_hits": 0,
+    "resize_coeff_cache_misses": 0,
+    "resource": {
+      "auxiliary_bytes": 0,
+      "full_frame_copy_count": 0,
+      "fused_operation_count": 4,
+      "host_allocated_bytes": 0,
+      "host_allocation_count": 0,
+      "host_buffer_bytes": 8650752,
+      "host_buffer_count": 3,
+      "mode_conversion_count": 1,
+      "parameter_bytes": 0,
+      "peak_live_host_bytes": 6291456,
+      "readback_bytes": 0,
+      "retained_cache_bytes": 0,
+      "upload_bytes": 0
+    },
+    "route_ns": 40011,
+    "validation_ns": 40
+  },
+  "result": {
+    "mode": "RGB",
+    "output_bytes": 2359296
+  },
+  "schema": "pillow-rs/convert-dispatch-probe@1",
+  "target": {
+    "active_backends": [
+      "simd"
+    ],
+    "backend": "simd",
+    "extension_sha256": "cc6ab230ec82914e0435cf5ddd46a941cbf44c6d99c4103e2c4de02454a01d1a"
+  }
+}

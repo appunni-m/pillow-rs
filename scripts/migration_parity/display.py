@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Callable, Iterator
 
 
@@ -36,8 +37,8 @@ def _capture_viewer_spec(value: Any) -> dict[str, Any]:
         raise ValueError("capture-viewer accept must be a bool or int")
     if value["registration"] not in ("class", "instance"):
         raise ValueError("capture-viewer registration must be class or instance")
-    if value["hook"] not in ("show", "show_image"):
-        raise ValueError("capture-viewer hook must be show or show_image")
+    if value["hook"] not in ("show", "show_image", "show_file"):
+        raise ValueError("capture-viewer hook must be show, show_image, or show_file")
     return value
 
 
@@ -83,16 +84,40 @@ def build_capture_viewer(
                 "size": getattr(shown_image, "size", None),
                 "pixels": bytes(shown_image.tobytes()),
                 "options": dict(options),
+                "save_options": dict(getattr(self, "options", {})),
             }
         )
         return spec["accept"]
 
-    override = "show" if spec["hook"] == "show" else "show_image"
-    capture_viewer = type(
-        "CaptureViewer",
-        (viewer_base,),
-        {"format": spec["format"], override: capture},
-    )
+    def capture_file(self: Any, path: str, **options: Any) -> Any:
+        try:
+            events.append(
+                {
+                    "viewer_id": spec["viewer_id"],
+                    "title": options.get("title"),
+                    "_encoded_file": Path(path).read_bytes(),
+                    "options": dict(options),
+                    "save_options": dict(getattr(self, "options", {})),
+                }
+            )
+            return spec["accept"]
+        finally:
+            # Capture viewers replace the platform process which normally
+            # consumes and eventually removes this generated temporary file.
+            try:
+                Path(path).unlink()
+            except FileNotFoundError:
+                pass
+
+    override_name, override_callback = {
+        "show": ("show", capture),
+        "show_image": ("show_image", capture),
+        "show_file": ("show_file", capture_file),
+    }[spec["hook"]]
+    attributes = {"format": spec["format"], override_name: override_callback}
+    if spec["format"] == "PNG":
+        attributes["options"] = {"compress_level": 1, "save_all": True}
+    capture_viewer = type("CaptureViewer", (viewer_base,), attributes)
     if spec["registration"] == "class":
         return capture_viewer
     return capture_viewer()

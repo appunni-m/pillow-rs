@@ -1,6 +1,6 @@
 {
   "project": "pillow-rs",
-  "version": "12.2.2",
+  "version": "12.2.3",
   "release_revision": "5d6751a7f968cb0d9ee823ed7bea1c945cbc7dfa",
   "repository": "appunni-m/pillow-rs",
   "site_url": "https://appunni-m.github.io/pillow-rs/",
@@ -81,6 +81,16 @@
       "audience": "contributor"
     },
     {
+      "source": "docs/IMPLEMENTATION_STRUCTURE.md",
+      "output": "implementation-structure.md",
+      "audience": "contributor"
+    },
+    {
+      "source": "docs/UNREACHABLE_CODE_AUDIT.md",
+      "output": "unreachable-code-audit.md",
+      "audience": "contributor"
+    },
+    {
       "source": "docs/DOCUMENTATION_CHECKLIST.md",
       "output": "documentation.md",
       "audience": "contributor"
@@ -120,7 +130,7 @@
     "source": "docs/evidence/benchmark.json"
   },
   "pillow_simd_benchmark": {
-    "snapshot": null
+    "snapshot": "docs/evidence/pillow-simd-benchmark.json"
   },
   "rust_example": {
     "source": "docs/RUST.md",

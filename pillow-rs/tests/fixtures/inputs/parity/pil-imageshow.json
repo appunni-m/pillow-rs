@@ -258,7 +258,7 @@
                 "format": null,
                 "accept": 1,
                 "registration": "instance",
-                "hook": "show"
+                "hook": "show_file"
               }
             },
             "order": {
@@ -358,7 +358,7 @@
                 "format": null,
                 "accept": 1,
                 "registration": "instance",
-                "hook": "show"
+                "hook": "show_file"
               }
             },
             "order": {
@@ -458,7 +458,7 @@
                 "format": null,
                 "accept": 1,
                 "registration": "instance",
-                "hook": "show"
+                "hook": "show_file"
               }
             },
             "order": {
@@ -560,7 +560,106 @@
                 "format": null,
                 "accept": 1,
                 "registration": "instance",
-                "hook": "show"
+                "hook": "show_file"
+              }
+            },
+            "order": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageShow",
+          "operation": "show",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "title": {
+              "kind": "literal",
+              "value": null
+            },
+            "options": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        },
+        {
+          "step_id": "callbacks",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "image"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "register-0",
+        "call",
+        "callbacks"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageShow.show.capture.la-file-PNG",
+      "surface": "PIL.ImageShow",
+      "operation": "show",
+      "covers": [
+        "PIL.ImageShow.show.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                109,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "register-0",
+          "surface": "PIL.ImageShow",
+          "operation": "register",
+          "receiver": null,
+          "arguments": {
+            "viewer": {
+              "kind": "literal",
+              "value": {
+                "protocol": "capture-viewer",
+                "viewer_id": "viewer-0",
+                "image_step_id": "image",
+                "format": "PNG",
+                "accept": 1,
+                "registration": "instance",
+                "hook": "show_file"
               }
             },
             "order": {
