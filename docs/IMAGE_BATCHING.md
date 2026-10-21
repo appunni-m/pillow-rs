@@ -1,7 +1,7 @@
 # Explicit GPU batching and streaming
 
 <!-- release:summary -->
-**Latest release: [12.2.2](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.2).**
+**Latest release: [12.2.3](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.3).**
 <!-- /release:summary -->
 
 `GpuBatchExecutor` is available in pillow-rs 12.2.1. It schedules existing lazy
