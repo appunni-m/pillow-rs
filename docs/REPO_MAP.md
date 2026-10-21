@@ -76,7 +76,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |-- color.rs
 |   |   |-- color_grayscale_allocation_tests.rs
 |   |   |-- compute/
+|   |   |   |-- automatic_segments.rs
+|   |   |   |-- backend_state.rs
 |   |   |   |-- mod.rs
+|   |   |   |-- phase_telemetry.rs
 |   |   |   |-- pool_cpu/
 |   |   |   |   |-- mod.rs
 |   |   |   |   `-- ops/
@@ -87,11 +90,24 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- effects.rs
 |   |   |   |       |-- enhance.rs
 |   |   |   |       |-- filter/
+|   |   |   |       |   |-- kernels/
+|   |   |   |       |   |   |-- blur_line_steps.rs
+|   |   |   |       |   |   |-- i32_cross_smooth.rs
+|   |   |   |       |   |   `-- mod.rs
 |   |   |   |       |   |-- rgb_blur_ring.rs
 |   |   |   |       |   |-- uniform_box.rs
 |   |   |   |       |   `-- uniform_box_tests.rs
 |   |   |   |       |-- filter.rs
+|   |   |   |       |-- geometry/
+|   |   |   |       |   |-- float_resize.rs
+|   |   |   |       |   |-- float_resize_tests.rs
+|   |   |   |       |   |-- kernels/
+|   |   |   |       |   |   `-- transpose_rgba/
+|   |   |   |       |   |       `-- x86_64.rs
+|   |   |   |       |   |-- native_transpose.rs
+|   |   |   |       |   `-- transpose.rs
 |   |   |   |       |-- geometry.rs
+|   |   |   |       |-- grayscale.rs
 |   |   |   |       |-- imageops.rs
 |   |   |   |       `-- mod.rs
 |   |   |   |-- pool_gpu/
@@ -248,35 +264,83 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- stream.rs
 |   |   |   |-- pool_simd/
 |   |   |   |   |-- mod.rs
-|   |   |   |   `-- ops/
-|   |   |   |       |-- adapters/
-|   |   |   |       |   |-- box_blur_luma.rs
-|   |   |   |       |   |-- cmyk_packing_tests.rs
-|   |   |   |       |   |-- extract_band.rs
-|   |   |   |       |   |-- grayscale/
-|   |   |   |       |   |   `-- kernels/
-|   |   |   |       |   |       |-- channels.rs
-|   |   |   |       |   |       |-- cmyk.rs
-|   |   |   |       |   |       |-- mod.rs
-|   |   |   |       |   |       `-- ycbcr.rs
-|   |   |   |       |   |-- grayscale.rs
-|   |   |   |       |   |-- median_filter.rs
-|   |   |   |       |   |-- merge.rs
-|   |   |   |       |   |-- native_thumbnail/
-|   |   |   |       |   |   |-- float.rs
-|   |   |   |       |   |   `-- integer.rs
-|   |   |   |       |   |-- native_thumbnail.rs
-|   |   |   |       |   |-- projection.rs
-|   |   |   |       |   |-- resize_i32/
-|   |   |   |       |   |   `-- neon.rs
-|   |   |   |       |   `-- resize_i32.rs
-|   |   |   |       |-- adapters.rs
-|   |   |   |       |-- mod.rs
-|   |   |   |       |-- native_channel.rs
-|   |   |   |       |-- native_filter.rs
-|   |   |   |       |-- native_merge.rs
-|   |   |   |       `-- scalar.rs
-|   |   |   `-- registry.rs
+|   |   |   |   |-- ops/
+|   |   |   |   |   |-- adapters/
+|   |   |   |   |   |   |-- box_blur/
+|   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- luma.rs
+|   |   |   |   |   |   |       |-- rgba_avx2.rs
+|   |   |   |   |   |   |       `-- rgba_neon.rs
+|   |   |   |   |   |   |-- box_blur.rs
+|   |   |   |   |   |   |-- cmyk_packing_tests.rs
+|   |   |   |   |   |   |-- convert/
+|   |   |   |   |   |   |   |-- cmyk.rs
+|   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- mod.rs
+|   |   |   |   |   |   |       |-- rgba_rgb_neon.rs
+|   |   |   |   |   |   |       `-- rgba_rgb_ssse3.rs
+|   |   |   |   |   |   |-- convert.rs
+|   |   |   |   |   |   |-- extract_band.rs
+|   |   |   |   |   |   |-- filter/
+|   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- byte_layouts.rs
+|   |   |   |   |   |   |       |-- l.rs
+|   |   |   |   |   |   |       |-- la.rs
+|   |   |   |   |   |   |       |-- mod.rs
+|   |   |   |   |   |   |       |-- rgb_blur_ring.rs
+|   |   |   |   |   |   |       `-- uniform_rgb.rs
+|   |   |   |   |   |   |-- filter.rs
+|   |   |   |   |   |   |-- gaussian_blur/
+|   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       `-- rgba_uniform.rs
+|   |   |   |   |   |   |-- gaussian_blur.rs
+|   |   |   |   |   |   |-- grayscale/
+|   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- channels.rs
+|   |   |   |   |   |   |       |-- cmyk.rs
+|   |   |   |   |   |   |       |-- mod.rs
+|   |   |   |   |   |   |       |-- rgb_avx2.rs
+|   |   |   |   |   |   |       |-- ycbcr.rs
+|   |   |   |   |   |   |       `-- ycbcr_ssse3.rs
+|   |   |   |   |   |   |-- grayscale.rs
+|   |   |   |   |   |   |-- median_filter.rs
+|   |   |   |   |   |   |-- merge.rs
+|   |   |   |   |   |   |-- native_thumbnail/
+|   |   |   |   |   |   |   |-- float.rs
+|   |   |   |   |   |   |   `-- integer.rs
+|   |   |   |   |   |   |-- native_thumbnail.rs
+|   |   |   |   |   |   |-- projection.rs
+|   |   |   |   |   |   |-- put_pixel/
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   `-- rgba_batch.rs
+|   |   |   |   |   |   |   `-- kernels.rs
+|   |   |   |   |   |   |-- put_pixel.rs
+|   |   |   |   |   |   |-- resize_i32/
+|   |   |   |   |   |   |   `-- neon.rs
+|   |   |   |   |   |   |-- resize_i32.rs
+|   |   |   |   |   |   |-- rotate/
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   `-- nearest.rs
+|   |   |   |   |   |   |   `-- kernels.rs
+|   |   |   |   |   |   |-- rotate.rs
+|   |   |   |   |   |   |-- transpose/
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   `-- rgba_avx2.rs
+|   |   |   |   |   |   |   `-- kernels.rs
+|   |   |   |   |   |   `-- transpose.rs
+|   |   |   |   |   |-- adapters.rs
+|   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |-- native_channel/
+|   |   |   |   |   |   `-- cmyk_ssse3.rs
+|   |   |   |   |   |-- native_channel.rs
+|   |   |   |   |   |-- native_filter.rs
+|   |   |   |   |   |-- native_merge.rs
+|   |   |   |   |   `-- scalar.rs
+|   |   |   |   |-- point_batch.rs
+|   |   |   |   `-- put_pixel_batch.rs
+|   |   |   |-- registry.rs
+|   |   |   |-- thumbnail_fusion.rs
+|   |   |   `-- transpose_tests.rs
 |   |   |-- data/
 |   |   |   |-- lab-identity-profile.icc
 |   |   |   `-- lcms-lab-lut.u16le
@@ -293,6 +357,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- mod.rs
 |   |   |   `-- pilfont.rs
 |   |   |-- format.rs
+|   |   |-- image/
+|   |   |   |-- encode.rs
+|   |   |   `-- pipeline_admission.rs
 |   |   |-- image.rs
 |   |   |-- image_getchannel_receipt_tests.rs
 |   |   |-- image_sequence.rs
@@ -318,6 +385,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- pil_resize.rs
 |   |   |   |-- quantize.rs
 |   |   |   |-- resize.rs
+|   |   |   |-- rotate/
+|   |   |   |   `-- nearest.rs
 |   |   |   |-- rotate.rs
 |   |   |   |-- split.rs
 |   |   |   |-- transform.rs
@@ -385,9 +454,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |       |-- imagestat.py
 |   |       `-- operations.py
 |   `-- src/
+|       |-- getcolors.rs
 |       |-- gpu_batch.rs
 |       |-- lib.rs
-|       `-- putdata.rs
+|       |-- putdata.rs
+|       |-- save_options.rs
+|       `-- telemetry.rs
 |-- requirements-ci.txt
 |-- requirements-docs.in
 |-- requirements-docs.txt
@@ -399,12 +471,16 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- benchmark_gpu_batch.py
     |-- build_migration_parity_inputs.py
     |-- build_migration_parity_manifest.py
+    |-- build_operation_source_crosswalk.py
+    |-- build_perfdb_selected_run.py
     |-- build_performance_optimization_matrix.py
     |-- build_public_api_inventory.py
+    |-- check_backend_boundaries.py
     |-- check_bindings.py
     |-- check_docs_browser.cjs
     |-- check_docs_examples.py
     |-- check_docs_registry.py
+    |-- check_implementation_structure.py
     |-- check_migration_parity_inputs.py
     |-- check_pipeline_benchmark_budgets.py
     |-- check_public_api_boundary.py
@@ -416,6 +492,8 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- check_release_status.py
     |-- check_release_wheel.py
     |-- check_repo_map.py
+    |-- check_rust_file_sizes.py
+    |-- check_source_contracts.py
     |-- check_workflows.py
     |-- codex-worktree-setup.sh
     |-- data/
@@ -425,12 +503,17 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- docs_release.py
     |-- docs_site.py
     |-- generate_migration_parity_docs.py
+    |-- implementation_structure/
+    |   |-- __init__.py
+    |   |-- audit.py
+    |   `-- test_audit.py
     |-- lint.sh
     |-- migration_benchmark_adapter.py
     |-- migration_benchmark_samples.py
     |-- migration_build_witness.py
     |-- migration_execution_attestation.py
     |-- migration_execution_identity.py
+    |-- migration_materialization_witness.py
     |-- migration_parity/
     |   |-- channel_inputs.py
     |   |-- display.py
@@ -451,6 +534,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- report_pipeline_performance.py
     |-- report_pipeline_roadmap_status.py
     |-- run_all_backend_tests.py
+    |-- run_clippy_quality.py
     |-- run_migration_benchmark.py
     |-- run_migration_coverage.py
     |-- run_migration_font_native_cases.py
@@ -466,9 +550,22 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- run_migration_rust_coverage.py
     |-- run_pillow_simd_benchmark.py
     |-- run_transpose_throughput.py
+    |-- rust_size_baseline.json
     |-- select_docs_benchmark.py
     |-- simd_evidence.py
+    |-- source_crosswalk/
+    |   |-- __init__.py
+    |   |-- builder.py
+    |   |-- evidence.py
+    |   |-- pyo3_bindings.py
+    |   |-- python_bindings.py
+    |   |-- rust_calls.py
+    |   |-- rust_modules.py
+    |   |-- rust_source.py
+    |   |-- test_evidence.py
+    |   `-- test_operation_source_crosswalk.py
     |-- test_benchmark_gpu_batch_contract.py
+    |-- test_build_perfdb_selected_run.py
     |-- test_chops_affine_parity.py
     |-- test_coverage_context.py
     |-- test_docs_benchmark_selection.py
@@ -482,14 +579,17 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_gpu_batch.py
     |-- test_grayscale_rgb_domain.py
     |-- test_migration_benchmark_attestation.py
+    |-- test_migration_benchmark_runner_identity.py
     |-- test_migration_benchmark_samples.py
     |-- test_migration_benchmark_selection.py
     |-- test_migration_build_witness.py
     |-- test_migration_execution_attestation.py
     |-- test_migration_execution_identity.py
+    |-- test_migration_materialization_witness.py
     |-- test_migration_parity_attestation.py
     |-- test_migration_parity_display.py
     |-- test_migration_parity_icc_timestamp.py
+    |-- test_migration_parity_selection.py
     |-- test_migration_parity_serialization.py
     |-- test_migration_parity_timing.py
     |-- test_migration_producer_attestation.py
@@ -502,6 +602,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_profile_migration_benchmark.py
     |-- test_receipt_state.py
     |-- test_release_tools.py
+    |-- test_source_contracts.py
     |-- validate_migration_parity_contract.py
     `-- validate_migration_parity_result.py
 ```
