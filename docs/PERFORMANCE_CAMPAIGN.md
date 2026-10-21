@@ -31414,6 +31414,10 @@ sustained throughput.
 
 ## Native-L 5×5 Parallel CPU x86 current-source rebaseline — 2026-10-18
 
+This remains historical evidence for source `1c9203b11e789059b139bbd4772bc3184cf37511`;
+the latest clean-main x86 measurement is the
+[2026-10-21 rebaseline](evidence/filter-l5x5-parallel-current-x86-20261021/README.md).
+
 Rechecked the historical x86 Parallel CPU miss on clean source
 `1c9203b11e789059b139bbd4772bc3184cf37511`, using only
 `pipeline-op.filter.material-l-noise-5x5-1024x768` and its exact binomial-L
@@ -31921,5 +31925,21 @@ matched comparison. The report, parity evidence, receipts, direct-operation
 links, and build witness are documented in
 [`gaussian_blur/current-source-cpu-simd-arm64-20261021-profile-fix-runnerid`](evidence/gaussian_blur/current-source-cpu-simd-arm64-20261021-profile-fix-runnerid/README.md).
 Three rows for the report are already present in the local comparison ledger.
-No full benchmark or coverage campaign ran; this does not close GaussianBlur
-and the 33-item integration batch remains open.
+No full benchmark or coverage campaign ran; this does not close GaussianBlur.
+Keep its remaining work in separate focused commit/push checkpoints.
+
+## Native-L 5×5 Parallel CPU current-main rebaseline — x86_64 — 2026-10-21
+
+On clean `main` at `fce9a28b9062c129cf8159a52be231799801359f`, the selected
+1024×768 L workload measured 0.302127 ms median / 0.408422 ms p95 on Parallel
+CPU. The separate same-host Pillow 12.2.0 source run measured 9.919031 ms /
+12.140210 ms, a local 32.8307× median ratio. Both the large-noise binomial
+case and flat-kernel admission guard passed parity (2/2 total). The target
+receipt reports actual CPU execution, one completed Filter5x5 and no fallback.
+
+The source and target timings are separate reports, so the ratio is not a
+same-report PerfDB rank. Concurrency-one reciprocal latency is not sustained
+throughput; no benchmark budgets were configured. Serial CPU, SIMD, GPU and
+other modes and sizes remain open. Full source/build identities and retained
+reports are in
+[`filter-l5x5-parallel-current-x86-20261021`](evidence/filter-l5x5-parallel-current-x86-20261021/README.md).
