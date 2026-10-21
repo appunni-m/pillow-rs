@@ -1,0 +1,68 @@
+{
+  "error": null,
+  "identity": {
+    "entrypoint": {
+      "path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_parity.py",
+      "sha256": "c0ea849a927c4aa4fc1cc97a68d046b22ef1499fe9395ae7c68e1ade6ed3ee48",
+      "size": 208096
+    },
+    "files_sha256": "5740d9ba6c258e34cf4821da3bdcde1794757703b70130d75b4c09ec0f015779",
+    "loaded_modules": [
+      {
+        "module": "__main__",
+        "origin": null,
+        "path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_parity.py",
+        "sha256": "c0ea849a927c4aa4fc1cc97a68d046b22ef1499fe9395ae7c68e1ade6ed3ee48",
+        "size": 208096
+      },
+      {
+        "module": "migration_execution_attestation",
+        "origin": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_execution_attestation.py",
+        "path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_execution_attestation.py",
+        "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+        "size": 24471
+      },
+      {
+        "module": "migration_execution_identity",
+        "origin": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_execution_identity.py",
+        "path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_execution_identity.py",
+        "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+        "size": 47103
+      },
+      {
+        "module": "migration_parity.display",
+        "origin": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_parity/display.py",
+        "path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_parity/display.py",
+        "sha256": "a897c4344caedf200d6a0470e03caad0daf9dd7d4bc707f82c62544d0b311dd6",
+        "size": 6935
+      },
+      {
+        "module": "migration_producer_attestation",
+        "origin": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_producer_attestation.py",
+        "path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_producer_attestation.py",
+        "sha256": "d8b640fb7f2686bfa66a51e46c9e63361606af615e5bf0e8a36f00291e7c8f4e",
+        "size": 19266
+      },
+      {
+        "module": "migration_producer_identity",
+        "origin": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_producer_identity.py",
+        "path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_producer_identity.py",
+        "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+        "size": 32710
+      },
+      {
+        "module": "validate_migration_parity_contract",
+        "origin": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/validate_migration_parity_contract.py",
+        "path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/validate_migration_parity_contract.py",
+        "sha256": "e9a3be1c662feebb761f0ba29376f439bac457ec9c1fb297886de33337dc04ec",
+        "size": 58739
+      }
+    ],
+    "role": "child",
+    "schema": "migration-parity/producer-identity@1"
+  },
+  "invocation_id": "77e4a1f0f65042218273668dbb16bb9e",
+  "producer_bundle_sha256": "baf82dc4ff1e3416296a83645e3c9bc29c5f325c0e7b978c6b8b1143a1bc0d1a",
+  "schema": "migration-parity/child-producer-attestation@1",
+  "status": "complete"
+}

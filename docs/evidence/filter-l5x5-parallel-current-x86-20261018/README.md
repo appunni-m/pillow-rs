@@ -1,10 +1,13 @@
 # Filter5x5 native-L Parallel CPU rebaseline — x86_64 — 2026-10-18
 
-This rechecks the historical x86 Parallel CPU miss against the current clean
-source on the native runner. The old row reported 22.734 ms Parallel CPU vs
+This records the 2026-10-18 recheck of the historical x86 Parallel CPU miss on
+clean source at `1c9203b11e789059b139bbd4772bc3184cf37511`. It is now a
+historical rebaseline; the latest clean-main x86 result is the
+[2026-10-21 rebaseline](../filter-l5x5-parallel-current-x86-20261021/README.md).
+The old row reported 22.734 ms Parallel CPU vs
 8.864 ms Pillow (0.3899×), but did not attest the loaded extension or the
-Parallel feature. The current result is a focused rebaseline, not an A–B–B–A
-comparison with that historical build.
+Parallel feature. The October 18 measurement is a focused rebaseline, not an
+A–B–B–A comparison with that historical build.
 
 ## Frozen scope and identity
 

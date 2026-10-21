@@ -1,0 +1,553 @@
+{
+  "entrypoints": {
+    "child": {
+      "path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_parity.py",
+      "sha256": "c0ea849a927c4aa4fc1cc97a68d046b22ef1499fe9395ae7c68e1ade6ed3ee48",
+      "size": 208096
+    },
+    "parent": {
+      "path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_parity.py",
+      "sha256": "c0ea849a927c4aa4fc1cc97a68d046b22ef1499fe9395ae7c68e1ade6ed3ee48",
+      "size": 208096
+    }
+  },
+  "extras": [],
+  "files": [
+    {
+      "relative_path": "aggregate_migration_parity.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/aggregate_migration_parity.py",
+      "sha256": "4a5938ffcf2d24ade8c38f889706f0e35aaf35f0536775ff68a36489e5dd52ef",
+      "size": 28558
+    },
+    {
+      "relative_path": "audit_rust_result_methods.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/audit_rust_result_methods.py",
+      "sha256": "4f3435393e50dc2a70db64a88e9460bf782c690c99e551028135530c01768b95",
+      "size": 14229
+    },
+    {
+      "relative_path": "benchmark_gpu_batch.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/benchmark_gpu_batch.py",
+      "sha256": "5899daf5a22a492f6851a64788094c0ab08c234afa03822966ffe1c76e8116b3",
+      "size": 38143
+    },
+    {
+      "relative_path": "build_migration_parity_inputs.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/build_migration_parity_inputs.py",
+      "sha256": "420358e2a2b0e50f893a9307ee0e29e9af9a4d513d463739f945ab44b0717d48",
+      "size": 2198713
+    },
+    {
+      "relative_path": "build_migration_parity_manifest.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/build_migration_parity_manifest.py",
+      "sha256": "5f4dbc8125055631185a990c24a61664f552a6a97f7a6f6047d99d6626ab5c24",
+      "size": 55275
+    },
+    {
+      "relative_path": "build_operation_source_crosswalk.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/build_operation_source_crosswalk.py",
+      "sha256": "09b31b5be529acde82382db5fa4e48c51b929b2fc6cb3b368f88234aae326c74",
+      "size": 186
+    },
+    {
+      "relative_path": "build_perfdb_selected_run.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/build_perfdb_selected_run.py",
+      "sha256": "fc6b8274bd1d7756316b789b0975b63a776041887a328f20daf481514a60e449",
+      "size": 41801
+    },
+    {
+      "relative_path": "build_performance_optimization_matrix.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/build_performance_optimization_matrix.py",
+      "sha256": "90654a7f10130e781827f9f60ed16c158fabead09f94ba87456f586714fe62a5",
+      "size": 34245
+    },
+    {
+      "relative_path": "build_public_api_inventory.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/build_public_api_inventory.py",
+      "sha256": "540260bdf03c498a175c1f8ae9b309db7a2a2b36f357c67ad8ae62b52916cb55",
+      "size": 14530
+    },
+    {
+      "relative_path": "check_backend_boundaries.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_backend_boundaries.py",
+      "sha256": "f0c5233e352dffdf74fe922460583e14941147198799525a630dc3d4ff63a015",
+      "size": 3766
+    },
+    {
+      "relative_path": "check_bindings.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_bindings.py",
+      "sha256": "ca858550dd3d82c08bf33228e01b31d3cad3c0fff3747aad51b2673d5ecfe892",
+      "size": 10513
+    },
+    {
+      "relative_path": "check_docs_examples.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_docs_examples.py",
+      "sha256": "39c314581b3c38ebf9b9c9ae338f463721a5a18528f7447aa1c55faf6cf22726",
+      "size": 1789
+    },
+    {
+      "relative_path": "check_docs_registry.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_docs_registry.py",
+      "sha256": "9880b165b7ef22f89362c173fb058be811ffe2d4060836198c7502822a00331e",
+      "size": 3236
+    },
+    {
+      "relative_path": "check_implementation_structure.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_implementation_structure.py",
+      "sha256": "ddae72d1e28f9d42175b7de682f106da4c4cd9a92e16afdd75e047581889f42a",
+      "size": 211
+    },
+    {
+      "relative_path": "check_migration_parity_inputs.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_migration_parity_inputs.py",
+      "sha256": "30a9a5046b9ce986c38da141cf539d0804e788cfe68f988895062d20bd5b716d",
+      "size": 5993
+    },
+    {
+      "relative_path": "check_pipeline_benchmark_budgets.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_pipeline_benchmark_budgets.py",
+      "sha256": "e4f4ea43bae9cef24cadbba46117925fb2d638a28ea7f2386ed08617765f94d1",
+      "size": 11797
+    },
+    {
+      "relative_path": "check_public_api_boundary.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_public_api_boundary.py",
+      "sha256": "fdb3b01b381136ac457460fb507e3ecd766ef3c1385d66e82c59ae646e2ae4c7",
+      "size": 4792
+    },
+    {
+      "relative_path": "check_python_compatibility.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_python_compatibility.py",
+      "sha256": "b91931cc905611b57d7e4f159eef2fb1f74392f1165e698db4dcff505a284810",
+      "size": 1419
+    },
+    {
+      "relative_path": "check_release_crate.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_release_crate.py",
+      "sha256": "88d1e7dc51facbd758feff36f2e2a7f6b7ae0c7ad36467722609ca1144269d77",
+      "size": 6708
+    },
+    {
+      "relative_path": "check_release_licenses.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_release_licenses.py",
+      "sha256": "e714148925fa9cce77d0312d1788881875b99761059a29284c0be3737db457cb",
+      "size": 2132
+    },
+    {
+      "relative_path": "check_release_parallel_wheel.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_release_parallel_wheel.py",
+      "sha256": "2b500deeb2031f48a94903091fb764efdd007cb7fd8c28b60cc788dcf2a881aa",
+      "size": 5750
+    },
+    {
+      "relative_path": "check_release_recovery.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_release_recovery.py",
+      "sha256": "ebef0cff562f642ca13e3c429e2bbe1566dba2c5f5e39db964173ea8e490617e",
+      "size": 2191
+    },
+    {
+      "relative_path": "check_release_status.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_release_status.py",
+      "sha256": "213cb422b0fff5212311f595515d7fe28519144b2de9644abd7c6dce1a08551d",
+      "size": 4980
+    },
+    {
+      "relative_path": "check_release_wheel.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_release_wheel.py",
+      "sha256": "4445812e741fe09d2c121d5daaeb345d50da8239b82d476b173dad19899edfcf",
+      "size": 3176
+    },
+    {
+      "relative_path": "check_repo_map.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_repo_map.py",
+      "sha256": "b401091857099e181a55772158e8247ead1f6166d3bb364c9a64862d3fc55919",
+      "size": 5593
+    },
+    {
+      "relative_path": "check_rust_file_sizes.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_rust_file_sizes.py",
+      "sha256": "8cb528fba31f3895b83618dc659daabde1180c59459c8cb5df068cb14170c0fd",
+      "size": 4951
+    },
+    {
+      "relative_path": "check_source_contracts.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_source_contracts.py",
+      "sha256": "a067b9ad15136c73f05399507d62fec80cc05ce1b7aca4e0e53806c203f54483",
+      "size": 5849
+    },
+    {
+      "relative_path": "check_workflows.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/check_workflows.py",
+      "sha256": "4d4c1c5be964ea04d8d8758be4069e0c463547637b894f56a8ac714ed38ff6d3",
+      "size": 3088
+    },
+    {
+      "relative_path": "docs_benchmark_view.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/docs_benchmark_view.py",
+      "sha256": "f2336459c09551577186982b043b87ed23c55200cfcfb199e3b46566d0432f63",
+      "size": 39334
+    },
+    {
+      "relative_path": "docs_evidence.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/docs_evidence.py",
+      "sha256": "468b211ee5af6f91f4c3a725ce3019ac1038959f1397e397eaf9b0472596caad",
+      "size": 43941
+    },
+    {
+      "relative_path": "docs_release.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/docs_release.py",
+      "sha256": "b49d17423382a45eef87cff0cf0d380709b1f90ad7ad3de2961a65744575c7e0",
+      "size": 10169
+    },
+    {
+      "relative_path": "docs_site.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/docs_site.py",
+      "sha256": "38417970c9e94359411d882a3b888144c40ab120180a66d695606d4703cfed05",
+      "size": 14773
+    },
+    {
+      "relative_path": "generate_migration_parity_docs.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/generate_migration_parity_docs.py",
+      "sha256": "947747b728ff28ae45dacfad514bc52f553ad59d59f43ce1998a457053dd1a9a",
+      "size": 8508
+    },
+    {
+      "relative_path": "implementation_structure/__init__.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/implementation_structure/__init__.py",
+      "sha256": "8a7537419d80c4161a8a51538540c9745eeda8671d77296b0ef25d27cf8b70f0",
+      "size": 80
+    },
+    {
+      "relative_path": "implementation_structure/audit.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/implementation_structure/audit.py",
+      "sha256": "380037e21857921f571b18790d7a2a6bd7b5ae156240ea4d009ca89ca56e6928",
+      "size": 30308
+    },
+    {
+      "relative_path": "migration_benchmark_adapter.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_benchmark_adapter.py",
+      "sha256": "2b913005963c3fdbaf89010348ee9c76a459f16e17c8e177f6ebeda612220786",
+      "size": 2601
+    },
+    {
+      "relative_path": "migration_benchmark_samples.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_benchmark_samples.py",
+      "sha256": "846cf4834c685fdc3571b5b984d9b0d3037cf855896b212b96654bef880a0620",
+      "size": 21051
+    },
+    {
+      "relative_path": "migration_build_witness.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_build_witness.py",
+      "sha256": "876bb73889cdd7fa341fbecee261c8baf08b3d89c2abe349a87e422b19fd0082",
+      "size": 44557
+    },
+    {
+      "relative_path": "migration_execution_attestation.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_execution_attestation.py",
+      "sha256": "bcce15447661f0c3d0aa4d9537182055481c58a5a61098156a73e94a85992f90",
+      "size": 24471
+    },
+    {
+      "relative_path": "migration_execution_identity.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_execution_identity.py",
+      "sha256": "c744018d6a6b2b05acd65f6c57e4771e51ef1360f199144e330fec9f744cf62f",
+      "size": 47103
+    },
+    {
+      "relative_path": "migration_materialization_witness.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_materialization_witness.py",
+      "sha256": "f09534ea2be5e1914b5e2d06b19b031f94ce516d9ace3bfd4689d7a7161bf744",
+      "size": 14408
+    },
+    {
+      "relative_path": "migration_parity/channel_inputs.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_parity/channel_inputs.py",
+      "sha256": "dca88be581230c5a0bd18aed1821fb2afcd3c5a36c676609d226a9cf6eb5fad0",
+      "size": 6221
+    },
+    {
+      "relative_path": "migration_parity/display.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_parity/display.py",
+      "sha256": "a897c4344caedf200d6a0470e03caad0daf9dd7d4bc707f82c62544d0b311dd6",
+      "size": 6935
+    },
+    {
+      "relative_path": "migration_parity/display_inputs.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_parity/display_inputs.py",
+      "sha256": "bc21dfb0560a6ef03c16ef746ba335b4a67abfa89a4c50bd9b67e6ab7014f5ec",
+      "size": 5940
+    },
+    {
+      "relative_path": "migration_parity/parallel_cpu_inputs.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_parity/parallel_cpu_inputs.py",
+      "sha256": "324db4e01ca04d1dd24598164175368061f8635060366a5aaee3727861c3d7df",
+      "size": 2599
+    },
+    {
+      "relative_path": "migration_parity_inventory.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_parity_inventory.py",
+      "sha256": "da22c4561265ddc86aea12527d85b1d96c3d56ea4d15dec4a2c7a133d7efd13c",
+      "size": 21899
+    },
+    {
+      "relative_path": "migration_producer_attestation.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_producer_attestation.py",
+      "sha256": "d8b640fb7f2686bfa66a51e46c9e63361606af615e5bf0e8a36f00291e7c8f4e",
+      "size": 19266
+    },
+    {
+      "relative_path": "migration_producer_identity.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/migration_producer_identity.py",
+      "sha256": "9481ff1f1ba330973bae7ea246cd6a2cef6adafcf3633f4dddcc1c8d2811c6ce",
+      "size": 32710
+    },
+    {
+      "relative_path": "prepare_pypi_release.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/prepare_pypi_release.py",
+      "sha256": "2b80acc883174bd740d5539f15b3f8fc1657af366bdd00268a1c9841d520c9ea",
+      "size": 4034
+    },
+    {
+      "relative_path": "profile_migration_benchmark.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/profile_migration_benchmark.py",
+      "sha256": "42847be6013c450815af57b5b7f7d3a23dac7df5519e975dff65fdc16a16f5aa",
+      "size": 14123
+    },
+    {
+      "relative_path": "reduce_migration_parity_cases.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/reduce_migration_parity_cases.py",
+      "sha256": "de5cf51c15b4a0b1f91c2186255f64f61c443195b3444f2e6fc57d70570fc3c8",
+      "size": 14228
+    },
+    {
+      "relative_path": "release_versions.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/release_versions.py",
+      "sha256": "603a95e8534c7d3c68a56f81e83a5e4b442b0dce84b50b3066d4efc6fd380e41",
+      "size": 5854
+    },
+    {
+      "relative_path": "report_migration_changed_line_coverage.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/report_migration_changed_line_coverage.py",
+      "sha256": "d5178629d9caec33376088b994ce1a471a0db700919b81176ffd098b43b96e01",
+      "size": 4951
+    },
+    {
+      "relative_path": "report_migration_js_parity_gaps.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/report_migration_js_parity_gaps.py",
+      "sha256": "f090839128a920efb6461e30e985a86a165faea416669d27f04c8b7cbe7f054a",
+      "size": 20278
+    },
+    {
+      "relative_path": "report_migration_parity_region_coverage.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/report_migration_parity_region_coverage.py",
+      "sha256": "7a9d8a11464e1851e39bb80d0465ac6b070a8ec73e431a9ce4476223e71174eb",
+      "size": 15267
+    },
+    {
+      "relative_path": "report_migration_pillow_missing.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/report_migration_pillow_missing.py",
+      "sha256": "3cafe4472ec09324526ad7d48c64b41617033ecb3872d6dc6d18f9290b8b63d6",
+      "size": 24181
+    },
+    {
+      "relative_path": "report_optimization_goals.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/report_optimization_goals.py",
+      "sha256": "6d9747680cd4a90fbdf516e433de894be176fc936e4b33bde8c560d20a3a86f8",
+      "size": 22016
+    },
+    {
+      "relative_path": "report_pipeline_benchmark_coverage.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/report_pipeline_benchmark_coverage.py",
+      "sha256": "cf23af9e3b5553387ac71c1a9045f1dda64052ca133214f844fc130dca87b11a",
+      "size": 15282
+    },
+    {
+      "relative_path": "report_pipeline_performance.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/report_pipeline_performance.py",
+      "sha256": "2cbae55a850d705c150df7db7b1f9f4dd1d6745cc7e97c9689ba00a02d95a91a",
+      "size": 11086
+    },
+    {
+      "relative_path": "report_pipeline_roadmap_status.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/report_pipeline_roadmap_status.py",
+      "sha256": "2b2551eb6f579f73c6acc80b74e30b195d7ae9050a909519c5330d7b65761af7",
+      "size": 6616
+    },
+    {
+      "relative_path": "run_all_backend_tests.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_all_backend_tests.py",
+      "sha256": "df3b5990cc8007db5b126636b8d56c070b8d0715ceb189864130c2dec110ec57",
+      "size": 54060
+    },
+    {
+      "relative_path": "run_clippy_quality.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_clippy_quality.py",
+      "sha256": "5ebb29616785290c6b6cbce08fe10711f878fc13baf56b5be10543d3f1dab2e1",
+      "size": 8825
+    },
+    {
+      "relative_path": "run_migration_benchmark.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_benchmark.py",
+      "sha256": "343c018ebd7464a4d57bebb8c898352bd1dae9e8e723437d3ccbab662ac6f2b2",
+      "size": 117313
+    },
+    {
+      "relative_path": "run_migration_coverage.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_coverage.py",
+      "sha256": "342477566d50e90b691a9d2dbeb19c5818c21fcb29bae8a1505aa132a499fb03",
+      "size": 25987
+    },
+    {
+      "relative_path": "run_migration_font_native_cases.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_font_native_cases.py",
+      "sha256": "1f363325042775d1da70568b17f6633d9daa03333c5be3cd6b5896ea65641ebc",
+      "size": 14796
+    },
+    {
+      "relative_path": "run_migration_imagecolor_native_cases.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_imagecolor_native_cases.py",
+      "sha256": "3bc285073377ddf30d4fdd97d2463d2b87b4ab9026d9f19d5d21dc6250155451",
+      "size": 2288
+    },
+    {
+      "relative_path": "run_migration_imagecore_native_cases.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_imagecore_native_cases.py",
+      "sha256": "869f026f2d2695980e5dfc72d90cbf562ef9808e31cbf65966ddf7e82ec3b7b1",
+      "size": 37102
+    },
+    {
+      "relative_path": "run_migration_imagedraw_native_cases.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_imagedraw_native_cases.py",
+      "sha256": "eb9127be66f9e575b6f6cf64a27f275f85bd2728aa6b9219a242bdcc7a224331",
+      "size": 3812
+    },
+    {
+      "relative_path": "run_migration_imageops_native_cases.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_imageops_native_cases.py",
+      "sha256": "1c95f8abccf513f6467a92e4aa095481fb36bfe8dc6bd957b565b2869e0bc9a4",
+      "size": 6731
+    },
+    {
+      "relative_path": "run_migration_imagepalette_native_cases.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_imagepalette_native_cases.py",
+      "sha256": "6f09bc360f34d008a7c76aae166073cb03c1fb6acc83463b7c9ebd52910839d9",
+      "size": 5621
+    },
+    {
+      "relative_path": "run_migration_imagesequence_native_cases.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_imagesequence_native_cases.py",
+      "sha256": "65524a3bf6ea1681e84c8867e305117b6ac8d4dfdcb51b11986822cb52ab136c",
+      "size": 4530
+    },
+    {
+      "relative_path": "run_migration_js_parity.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_js_parity.py",
+      "sha256": "51e5a2c1a62b6a8c2ba09fa451f9120b51770c33bdbeeb41b48aa39b539b5a75",
+      "size": 68934
+    },
+    {
+      "relative_path": "run_migration_parity.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_parity.py",
+      "sha256": "c0ea849a927c4aa4fc1cc97a68d046b22ef1499fe9395ae7c68e1ade6ed3ee48",
+      "size": 208096
+    },
+    {
+      "relative_path": "run_migration_pillow_coverage.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_pillow_coverage.py",
+      "sha256": "cb8ea0e9c131c33237e92f82cbe4f801fd80c681b52e5c9ff663646983651677",
+      "size": 10720
+    },
+    {
+      "relative_path": "run_migration_rust_coverage.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_migration_rust_coverage.py",
+      "sha256": "5ee646dc4951500e0e441e0efd84d8aa1afa39cb3bed789cfe037ce975609c52",
+      "size": 40181
+    },
+    {
+      "relative_path": "run_pillow_simd_benchmark.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_pillow_simd_benchmark.py",
+      "sha256": "8a2e53881b22fbe4f6e1ee500a6067c472c90a1afdcc5cf98951a925a5c67278",
+      "size": 42571
+    },
+    {
+      "relative_path": "run_transpose_throughput.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/run_transpose_throughput.py",
+      "sha256": "39f7f92fdffeb33f38ea1d95d66526b80188b94a002baa4a16f9fbaf32843eeb",
+      "size": 46358
+    },
+    {
+      "relative_path": "select_docs_benchmark.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/select_docs_benchmark.py",
+      "sha256": "e8a6dc754350a0b26ba98fe001308390a031310ec22e2033c4b1bb74c63be8e0",
+      "size": 7069
+    },
+    {
+      "relative_path": "simd_evidence.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/simd_evidence.py",
+      "sha256": "1148ae3cd1319757bce3f34ef1a7b00dc5f0f87d6a2c8309d0aa29a93b948310",
+      "size": 2682
+    },
+    {
+      "relative_path": "source_crosswalk/__init__.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/source_crosswalk/__init__.py",
+      "sha256": "ecc3c53e8560c33c88035b862786c9efca9dff3c601fdaaa1acf61fa72f17856",
+      "size": 43
+    },
+    {
+      "relative_path": "source_crosswalk/builder.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/source_crosswalk/builder.py",
+      "sha256": "49bc492b3781cbca0e95403f6ba5b6ce0b76c45c5ae44a19b3497261041db7ed",
+      "size": 64884
+    },
+    {
+      "relative_path": "source_crosswalk/evidence.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/source_crosswalk/evidence.py",
+      "sha256": "ee50c24443d236427f5cdbaefad19243e93996f0efbebbe32189120707b4f564",
+      "size": 21959
+    },
+    {
+      "relative_path": "source_crosswalk/pyo3_bindings.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/source_crosswalk/pyo3_bindings.py",
+      "sha256": "e0b442b314a2a5a17633fdd0f8675691959a68687105f3a21113a316d4c4050a",
+      "size": 12636
+    },
+    {
+      "relative_path": "source_crosswalk/python_bindings.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/source_crosswalk/python_bindings.py",
+      "sha256": "dd34bc654fc44d640b12424cc38e78b0bfe456c9947d5222aa052b60c879dd61",
+      "size": 15642
+    },
+    {
+      "relative_path": "source_crosswalk/rust_calls.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/source_crosswalk/rust_calls.py",
+      "sha256": "136fe8c8fe1beea05dee46bedb515417c63088f8b0597ce5435dbbbe9bfa1ea6",
+      "size": 22305
+    },
+    {
+      "relative_path": "source_crosswalk/rust_modules.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/source_crosswalk/rust_modules.py",
+      "sha256": "87176494ee1b70fe0eef1ee8c5bec12c325c655aadba91d52f51a0b6be9f7498",
+      "size": 17122
+    },
+    {
+      "relative_path": "source_crosswalk/rust_source.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/source_crosswalk/rust_source.py",
+      "sha256": "f8ec372f2c914d098d26b5bf62a367e39b4161c784cb04afa27b7172ed7f34c6",
+      "size": 15347
+    },
+    {
+      "relative_path": "validate_migration_parity_contract.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/validate_migration_parity_contract.py",
+      "sha256": "e9a3be1c662feebb761f0ba29376f439bac457ec9c1fb297886de33337dc04ec",
+      "size": 58739
+    },
+    {
+      "relative_path": "validate_migration_parity_result.py",
+      "resolved_path": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts/validate_migration_parity_result.py",
+      "sha256": "7f3fca57d432855720bb83e0729730ea0f679eb8da415b0313a0995aaaa91a89",
+      "size": 69787
+    }
+  ],
+  "root": "/home/appunni/work/pillow-rs-f32-resize-zero-fill-20261020/scripts",
+  "schema": "migration-parity/producer-bundle@1"
+}
