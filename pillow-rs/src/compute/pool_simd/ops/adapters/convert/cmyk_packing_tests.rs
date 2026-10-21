@@ -1,6 +1,6 @@
 //! Focused guards for the native x86 CMYK RGB packing path.
 
-use super::native_cmyk_to_rgb_bytes;
+use super::cmyk::native_cmyk_to_rgb_bytes;
 use crate::raster::{DynamicImage, RgbImage, RgbaImage};
 
 #[test]
@@ -15,8 +15,9 @@ fn rgb16_packing_preserves_channel_order_across_output_blocks() {
         let blue = std::array::from_fn(|i| seed ^ (i * 13) as u8);
         // SAFETY: this test checks SSSE3 support above, and all inputs have
         // sixteen initialized bytes.
-        let packed =
-            unsafe { super::super::native_merge::rgb16_interleave_ssse3(&red, &green, &blue) };
+        let packed = unsafe {
+            super::super::super::native_merge::rgb16_interleave_ssse3(&red, &green, &blue)
+        };
         for pixel in 0..16 {
             assert_eq!(
                 &packed[pixel * 3..pixel * 3 + 3],

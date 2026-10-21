@@ -5,6 +5,9 @@
 
 #[path = "convert/cmyk.rs"]
 mod cmyk;
+#[cfg(all(test, target_arch = "x86_64"))]
+#[path = "convert/cmyk_packing_tests.rs"]
+mod cmyk_packing_tests;
 #[path = "convert/kernels/mod.rs"]
 mod kernels;
 use self::cmyk::native_cmyk_to_rgb_bytes;

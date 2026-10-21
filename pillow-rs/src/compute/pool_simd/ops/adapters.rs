@@ -17,8 +17,6 @@ mod box_blur_rgba_avx2;
 #[cfg(target_arch = "aarch64")]
 #[path = "adapters/box_blur/kernels/rgba_neon.rs"]
 mod box_blur_rgba_neon;
-#[cfg(all(test, target_arch = "x86_64"))]
-mod cmyk_packing_tests;
 use self::box_blur::{simd_pil_box_blur, simd_pil_box_blur_xy};
 mod extract_band;
 mod filter;
