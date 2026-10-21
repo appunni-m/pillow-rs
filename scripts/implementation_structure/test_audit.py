@@ -179,7 +179,20 @@ class PathClassificationTests(unittest.TestCase):
             tracked.parent.mkdir(parents=True)
             tracked.write_text("# Architecture\n", encoding="utf-8")
             subprocess.run(["git", "add", "docs/ARCHITECTURE.md"], cwd=root, check=True)
-            subprocess.run(["git", "commit", "-qm", "add guide"], cwd=root, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.com",
+                    "commit",
+                    "-qm",
+                    "add guide",
+                ],
+                cwd=root,
+                check=True,
+            )
             moved_from = (
                 root / "pillow-rs" / "src" / "compute" / "pool_simd" / "ops"
                 / "adapters" / "box_blur_luma.rs"
