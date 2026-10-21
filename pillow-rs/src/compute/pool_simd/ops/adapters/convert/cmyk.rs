@@ -109,6 +109,7 @@ fn native_cmyk_to_rgb_neon(
 }
 
 #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+#[allow(unsafe_code)] // SSSE3 calls require the runtime-checked full-block path below.
 fn native_cmyk_to_rgb_wide(
     source: &crate::raster::RgbaImage,
     output_capacity: usize,
