@@ -105338,12 +105338,14 @@
       "surface": "PIL.ImageOps",
       "operation": "posterize",
       "covers": [
-        "PIL.ImageOps.posterize.performance.standard"
+        "PIL.ImageOps.posterize.performance.standard",
+        "PIL.ImageOps.posterize.backend.parallel-cpu"
       ],
       "target_profiles": [
         "python-cpu",
         "python-simd",
-        "python-gpu"
+        "python-gpu",
+        "python-parallel-cpu"
       ],
       "assets": [
         {

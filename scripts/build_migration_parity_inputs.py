@@ -39,6 +39,15 @@ except ModuleNotFoundError:
     )
 
 try:
+    from migration_parity.parallel_cpu_inputs import (
+        add_parallel_cpu_parity_profiles,
+    )
+except ModuleNotFoundError:
+    from scripts.migration_parity.parallel_cpu_inputs import (
+        add_parallel_cpu_parity_profiles,
+    )
+
+try:
     from migration_parity.channel_inputs import (
         seeded_corner_benchmark_workloads,
         seeded_corner_parity_cases,
@@ -55083,6 +55092,11 @@ def build_inputs(
                 existing_signatures.add(signature)
                 appended_nuanced.append(nuanced_case)
                 added_nuanced_cases += 1
+        add_parallel_cpu_parity_profiles(
+            surface_id,
+            parity_cases,
+            case_by_requirement,
+        )
         pipeline_case_pool = {
             **all_cases_by_id,
             **{case["case_id"]: case for case in parity_cases},
