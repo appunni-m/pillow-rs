@@ -423,6 +423,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |-- package-lock.json
 |   |-- package.json
 |   `-- src/
+|       |-- image_io.rs
 |       `-- lib.rs
 |-- pillow-rs-parallel/
 |   |-- LICENSE
