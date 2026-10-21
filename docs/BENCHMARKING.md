@@ -504,10 +504,10 @@ enumerates the loaded `PIL` facade, the native extension, each module's explicit
 `__all__` exports or locally defined public functions and classes, public class
 methods and properties, and the selected manifest mapping. Imported aliases
 aren't repeated as new API paths in every module. The [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
-has four profile rows for each of its 408 paths: 209 paths map to the selected
-manifest and 199 outside paths remain explicit as `not_mapped_to_benchmark`.
-Those inventory-only rows are unmeasured gaps, not evidence that a profile
-supports or has run the operation.
+has four profile rows for each of the 212 operations selected by the generated
+manifest, for 848 rows total. The census separately records 196 public paths
+outside the selected manifest; they are outside the matrix denominator and do
+not imply that a profile supports or has run those operations.
 The matrix keeps successful, failed, not-run, fallback, and dirty-snapshot rows.
 It includes source hashes and revisions, runner and workload identity, mode and
 size, full-call policy, exact-parity status, actual backend, observed and

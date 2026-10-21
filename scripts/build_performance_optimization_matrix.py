@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Flatten published benchmark snapshots into a complete operation matrix.
+"""Flatten published benchmark snapshots against the selected manifest.
 
 The CSV preserves every row, including execution-only, failed, not-run,
 fallback, and dirty-snapshot observations. Only exact-parity rows with a clean
 source and a completed matching-backend receipt receive verified speedup or
 goal-status fields. SIMD additionally requires recorded vector work. Sustained
-throughput is not inferred from latency.
+throughput is not inferred from latency. The operation matrix denominator is
+the generated public-operation manifest; the broader public API census is used
+only to resolve selected operation paths.
 """
 
 from __future__ import annotations
@@ -667,70 +669,9 @@ def operation_matrix_rows(
                 "benchmark_workload_ids": ";".join(workload_ids),
             })
 
-    # The manifest defines the selected correctness/performance contract. Keep
-    # every other public PIL path visible as an explicit, unbenchmarked row so
-    # the operation matrix does not imply coverage of only the selected subset.
-    for api in public_api_rows:
-        if api.get("manifest_status") == "selected_manifest":
-            continue
-        path = api["public_path"]
-        for profile in PROFILES:
-            if profile == "python-cpu":
-                baseline, threshold = "Pillow", 1.0
-            elif profile == "python-simd":
-                baseline, threshold = "Pillow", 5.0
-            elif profile == "python-gpu":
-                baseline, threshold = "SIMD", 1.0
-            else:
-                baseline, threshold = "Pillow", None
-            output.append({
-                "full_snapshot_revision": full_metadata.get("source_revision", ""),
-                "full_snapshot_clean": full_metadata.get("source_clean", ""),
-                "full_snapshot_measured_at": full_metadata.get("measured_at", ""),
-                "full_snapshot_sha256": full_metadata.get("source_json_sha256", ""),
-                "pillow_simd_snapshot_revision": pillow_simd_metadata.get("source_revision", ""),
-                "pillow_simd_snapshot_clean": pillow_simd_metadata.get("source_clean", ""),
-                "pillow_simd_snapshot_measured_at": pillow_simd_metadata.get("measured_at", ""),
-                "pillow_simd_snapshot_sha256": pillow_simd_metadata.get("source_json_sha256", ""),
-                "operation": f"public-api.{path}",
-                "api_path": path,
-                "target_api_paths": path,
-                "kind": api["entry_kind"],
-                "classification": "outside_selected_manifest",
-                "profile": profile,
-                "baseline": baseline,
-                "goal_threshold_speedup": "" if threshold is None else f"{threshold:.1f}",
-                "profile_applicability": "public_api_inventory_gap",
-                "profile_status": "not_mapped_to_benchmark",
-                "declared_profiles": "",
-                "manifest_target_profiles": "",
-                "workload_target_profiles": "",
-                "benchmark_workloads": "0",
-                "published_workloads": "0",
-                "missing_published_workloads": "",
-                "published_profile_rows": "0",
-                "verified_comparisons": "0",
-                "below_baseline_comparisons": "0",
-                "below_2x_comparisons": "0",
-                "below_5x_comparisons": "" if profile != "python-simd" else "0",
-                "worst_verified_speedup": "",
-                "worst_verified_workload": "",
-                "worst_verified_runner": "",
-                "execution_only_rows": "0",
-                "parity_not_proven_rows": "0",
-                "failed_rows": "0",
-                "not_run_rows": "0",
-                "fallback_rows": "0",
-                "wrong_backend_rows": "0",
-                "simd_vector_not_proven_rows": "0",
-                "pillow_simd_incompatible_rows": "0",
-                "pillow_simd_unproven_rows": "0",
-                "pillow_simd_snapshot_workloads": "0",
-                "verified_pillow_simd_comparisons": "0",
-                "worst_verified_speedup_vs_pillow_simd": "",
-                "gpu_sustained_throughput_status": "not_measured" if profile == "python-gpu" else "",
-                "benchmark_workload_ids": "",
-            })
+    # The selected manifest and benchmark workload specifications are the
+    # denominator. Emit one row per declared operation/profile pair, including
+    # profiles with no applicable performance requirement or published result.
     return output
 
 
@@ -798,9 +739,11 @@ def main() -> int:
         "rows": len(rows),
         "operation_output": str(args.operation_output),
         "operation_rows": len(operation_rows),
+        "operation_matrix_scope": "selected_manifest_operations_by_backend_profile",
         "operations": len(operations),
+        "backend_profiles": len(PROFILES),
         "public_api_entries": len(public_api_rows),
-        "public_api_inventory_gaps": sum(
+        "unselected_public_api_entries": sum(
             row.get("manifest_status") != "selected_manifest" for row in public_api_rows
         ),
         "workloads": workload_counts,
