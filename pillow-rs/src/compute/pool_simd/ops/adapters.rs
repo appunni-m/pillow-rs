@@ -9,6 +9,7 @@ use super::native_channel;
 use super::native_filter::native_filter_load_byte_block;
 
 mod box_blur;
+use self::box_blur::simd_pil_box_blur;
 #[path = "adapters/box_blur/kernels/luma.rs"]
 mod box_blur_luma;
 #[cfg(target_arch = "x86_64")]
@@ -17,7 +18,7 @@ mod box_blur_rgba_avx2;
 #[cfg(target_arch = "aarch64")]
 #[path = "adapters/box_blur/kernels/rgba_neon.rs"]
 mod box_blur_rgba_neon;
-use self::box_blur::{simd_pil_box_blur, simd_pil_box_blur_xy};
+pub(crate) use self::box_blur::simd_box_blur;
 mod effects;
 mod extract_band;
 mod filter;
@@ -23339,40 +23340,6 @@ pub fn simd_reduce(
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::compute::record_pipeline_operation_path("vector");
     crate::image_utils::raw_bytes_to_image(width, height, output, channels)
-}
-
-pub fn simd_box_blur(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let channels =
-        simd_native_blur_channels(img, mode).ok_or_else(|| simd_unsupported("BoxBlur"))?;
-    let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
-    if pixel_count == 0 {
-        return Err(simd_unsupported("BoxBlur"));
-    }
-    match op {
-        PipelineOp::BoxBlur { radius } if *radius == 0 => {
-            native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("BoxBlur"))
-        }
-        PipelineOp::BoxBlur { radius } => {
-            simd_pil_box_blur(img, *radius as f32, 1, channels, mode, false)
-        }
-        PipelineOp::BoxBlurXY {
-            radius_x,
-            radius_y,
-            passes,
-        } if *radius_x == 0.0 && *radius_y == 0.0 => {
-            native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("BoxBlur"))
-        }
-        PipelineOp::BoxBlurXY {
-            radius_x,
-            radius_y,
-            passes,
-        } => simd_pil_box_blur_xy(img, *radius_x, *radius_y, *passes, channels, mode, false),
-        _ => Err(PilError::ValueError("expected BoxBlur op".into())),
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════

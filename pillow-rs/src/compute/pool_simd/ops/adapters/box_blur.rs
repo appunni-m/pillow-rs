@@ -3,10 +3,11 @@
 use super::{
     CheckedDims, SIMD_BOX_BLUR_SCALE, box_blur_luma, gaussian_rgba_uniform,
     native_copy_image_bytes, native_small_uniform_byte_image, preserve_mode, simd_blur_rows,
-    simd_blur_transpose_rows, simd_rgb_box_blur_radius_one_rows,
+    simd_blur_transpose_rows, simd_native_blur_channels, simd_rgb_box_blur_radius_one_rows,
     simd_rgba_horizontal_radius_one_rows, simd_rgba_vertical_radius_one_rows, simd_unsupported,
 };
 use crate::error::PilError;
+use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
 #[derive(Clone, Copy)]
@@ -512,4 +513,38 @@ fn materialize_box_blur(
         channels,
     )?;
     Ok(preserve_mode(img, result))
+}
+
+pub(crate) fn simd_box_blur(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let channels =
+        simd_native_blur_channels(img, mode).ok_or_else(|| simd_unsupported("BoxBlur"))?;
+    let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
+    if pixel_count == 0 {
+        return Err(simd_unsupported("BoxBlur"));
+    }
+    match op {
+        PipelineOp::BoxBlur { radius } if *radius == 0 => {
+            native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("BoxBlur"))
+        }
+        PipelineOp::BoxBlur { radius } => {
+            simd_pil_box_blur(img, *radius as f32, 1, channels, mode, false)
+        }
+        PipelineOp::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } if *radius_x == 0.0 && *radius_y == 0.0 => {
+            native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("BoxBlur"))
+        }
+        PipelineOp::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } => simd_pil_box_blur_xy(img, *radius_x, *radius_y, *passes, channels, mode, false),
+        _ => Err(PilError::ValueError("expected BoxBlur op".into())),
+    }
 }
