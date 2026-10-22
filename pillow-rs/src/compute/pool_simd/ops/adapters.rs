@@ -635,17 +635,6 @@ pub fn simd_put_data(
     Ok(preserve_mode(img, result))
 }
 
-/// Return the native byte layout accepted by the all-channel inversion path.
-fn native_invert_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
-    match img {
-        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
-        DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
-        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "CMYK")) => Some(4),
-        _ => None,
-    }
-}
-
 pub(super) fn simd_unsupported(operation: &str) -> PilError {
     PilError::NotImplementedError(format!(
         "SIMD {operation} is unsupported for the validated image layout/parameters"
@@ -683,10 +672,7 @@ pub(crate) fn simd_supports_for_image(
         // These point operations have native byte kernels. Typed, indexed,
         // and explicitly mode-converted images are deliberately rejected
         // until their sample-domain kernels exist.
-        PipelineOp::Invert | PipelineOp::InvertChops => native_invert_layout(img, mode)
-            .is_some_and(|channels| {
-                has_empty_native_bytes(img, channels) || has_nonempty_byte_data(img, channels)
-            }),
+        PipelineOp::Invert | PipelineOp::InvertChops => effects::supports_for_image(img, op, mode),
         PipelineOp::ResizeBoxed { .. }
         | PipelineOp::Resize { .. }
         | PipelineOp::Scale { .. }
@@ -1123,19 +1109,6 @@ fn shape_has_vectorized_native_identity_copy(shape: SimdImageShape, channels: us
         .is_some_and(|bytes| bytes >= 16)
 }
 
-fn shape_native_invert_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
-    let channels = shape_channels(shape)?;
-    let valid = match shape.layout {
-        SimdLayout::Luma8 => matches!(mode, None | Some("1" | "L" | "P")),
-        SimdLayout::LumaA8 => matches!(mode, None | Some("LA" | "PA")),
-        SimdLayout::Rgb8 => matches!(mode, None | Some("RGB")),
-        SimdLayout::Rgba8 => matches!(mode, None | Some("RGBA" | "CMYK")),
-        SimdLayout::Luma16 => false,
-        SimdLayout::Unsupported => false,
-    };
-    valid.then_some(channels)
-}
-
 fn shape_native_copy_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     let channels = shape_channels(shape)?;
     shape_mode_matches(shape, mode).then_some(channels)
@@ -1495,11 +1468,9 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
     let native_luma16_copy =
         shape_luma16_copy_layout(shape, mode) && shape.width != 0 && shape.height != 0;
     match op {
-        PipelineOp::Invert | PipelineOp::InvertChops => shape_native_invert_channels(shape, mode)
-            .is_some_and(|channels| {
-                shape_has_empty_native_bytes(shape, channels)
-                    || shape_has_nonempty_byte_data(shape, channels)
-            }),
+        PipelineOp::Invert | PipelineOp::InvertChops => {
+            effects::supports_for_shape(shape, op, mode)
+        }
         PipelineOp::ResizeBoxed { .. }
         | PipelineOp::Resize { .. }
         | PipelineOp::Scale { .. }
@@ -1859,16 +1830,6 @@ const NATIVE_BYTE_ACTIVE_MASKS: [[u8; 16]; 5] = [
     NATIVE_BYTE_RGBA_MASK,
 ];
 
-// `invert_alpha as usize` selects preserve-alpha (false) or invert-alpha
-// (true). Native inversion dispatch supplies only channel counts 1..=4.
-const NATIVE_BYTE_INVERT_MASKS: [[&[u8; 16]; 2]; 5] = [
-    [&NATIVE_BYTE_ZERO_MASK, &NATIVE_BYTE_ZERO_MASK],
-    [&NATIVE_BYTE_ALL_MASK, &NATIVE_BYTE_ALL_MASK],
-    [&NATIVE_BYTE_LA_MASK, &NATIVE_BYTE_ALL_MASK],
-    [&NATIVE_BYTE_ALL_MASK, &NATIVE_BYTE_ALL_MASK],
-    [&NATIVE_BYTE_RGBA_MASK, &NATIVE_BYTE_ALL_MASK],
-];
-
 #[inline]
 fn native_byte_transform_bytes<F>(bytes: &mut [u8], channels: usize, transform: &F)
 where
@@ -1993,87 +1954,6 @@ where
     Some(result)
 }
 
-/// Invert selected byte channels with one portable 16-byte vector operation.
-///
-/// `wide` selects the target's safe SIMD implementation (NEON, SSE2, or its
-/// scalar fallback) without introducing unsafe code into this crate. The mask
-/// keeps alpha bytes unchanged when Pillow's operation does not invert alpha,
-/// while still allowing LA/RGBA to use the same interleaved path.
-fn invert_native_bytes(bytes: &mut [u8], channels: usize, invert_alpha: bool) {
-    let active = NATIVE_BYTE_INVERT_MASKS[channels][invert_alpha as usize];
-    let active_vector = u8x16::new(*active);
-    // XOR with an all-ones byte inverts it; zero preserves an alpha byte.
-    // The shared loop loads full vectors directly and pads only the tail.
-    native_all_channel_transform_bytes(bytes, &|input| input ^ active_vector);
-}
-
-/// Invert an exact native byte image into one output allocation.
-///
-/// The first SIMD operation cannot mutate its caller-owned source. Copying the
-/// full image and then transforming that copy performs two memory passes;
-/// this path combines them while preserving native channel and alpha rules.
-fn native_invert_copy(
-    img: &DynamicImage,
-    channels: usize,
-    active_mask: &[u8; 16],
-) -> Option<DynamicImage> {
-    let dims = crate::checked_dims::CheckedDims::new_allow_empty(
-        img.width(),
-        img.height(),
-        u8::try_from(channels).ok()?,
-    )
-    .ok()?;
-    let source = img.as_bytes();
-    if source.len() != dims.total_bytes() || source.is_empty() {
-        return None;
-    }
-
-    // The bytewise L/P case has no inactive lanes or channel mask. Write each
-    // vector directly into its final destination slice instead of extending
-    // the Vec by sixteen bytes per block; bounded Vec growth bookkeeping was
-    // material in the single-channel full-frame benchmark.
-    if channels == 1 && active_mask.iter().all(|&mask| mask == u8::MAX) {
-        let mut output = vec![0u8; source.len()];
-        let full_len = source.len() / 16 * 16;
-        let active_vector = u8x16::splat(u8::MAX);
-        for (input, destination) in source[..full_len]
-            .chunks_exact(16)
-            .zip(output[..full_len].chunks_exact_mut(16))
-        {
-            let input = u8x16::new(<[u8; 16]>::try_from(input).ok()?);
-            destination.copy_from_slice(&(input ^ active_vector).to_array());
-        }
-        for (destination, &input) in output[full_len..].iter_mut().zip(&source[full_len..]) {
-            *destination = !input;
-        }
-
-        crate::compute::record_pipeline_operation_vector_blocks((full_len / 16) as u64);
-        crate::compute::record_pipeline_operation_scalar_tail((source.len() - full_len) as u64);
-        return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
-            .ok();
-    }
-
-    let active_vector = u8x16::new(*active_mask);
-    let mut output = Vec::with_capacity(source.len());
-    let mut chunks = source.chunks_exact(16);
-    for chunk in &mut chunks {
-        let input = u8x16::new(<[u8; 16]>::try_from(chunk).ok()?);
-        output.extend_from_slice(&(input ^ active_vector).to_array());
-    }
-    let remainder = chunks.remainder();
-    let mask_offset = source.len() - remainder.len();
-    output.extend(
-        remainder
-            .iter()
-            .enumerate()
-            .map(|(index, value)| *value ^ active_mask[(mask_offset + index) % 16]),
-    );
-
-    crate::compute::record_pipeline_operation_vector_blocks((source.len() / 16) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail(remainder.len() as u64);
-    crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels).ok()
-}
-
 fn apply_native_rows<F>(
     bytes: &mut [u8],
     width: usize,
@@ -2113,59 +1993,6 @@ fn apply_native_rows<F>(
     }
 }
 
-/// Apply an 8-bit point operation directly to the image's native byte
-/// storage. The packed `u32` adapter is still used for modes and operations
-/// that need its logical lane representation, but ordinary byte images do not
-/// need an RGBA expansion merely to invert their channels.
-fn native_invert(
-    img: &DynamicImage,
-    mode: Option<&str>,
-    invert_alpha: bool,
-) -> Option<DynamicImage> {
-    if let Some(channels) = native_invert_layout(img, mode) {
-        if has_empty_native_bytes(img, channels) {
-            crate::compute::record_pipeline_operation_path("native-copy");
-            return Some(img.clone());
-        }
-        let invert_alpha = invert_alpha || mode == Some("CMYK");
-        if let Some(result) = native_invert_copy(
-            img,
-            channels,
-            NATIVE_BYTE_INVERT_MASKS[channels][invert_alpha as usize],
-        ) {
-            crate::compute::record_pipeline_operation_path("vector");
-            return Some(result);
-        }
-        record_padded_native_row_work(img.width() as usize, img.height() as usize, channels);
-    }
-    let mut result = img.clone();
-    let (width, height) = result.dimensions();
-    match &mut result {
-        DynamicImage::ImageLuma8(image) if matches!(mode, None | Some("1" | "L" | "P")) => {
-            apply_native_rows(image.as_mut(), width as usize, height as usize, 1, |row| {
-                invert_native_bytes(row, 1, false);
-            });
-        }
-        DynamicImage::ImageLumaA8(image) if matches!(mode, None | Some("LA" | "PA")) => {
-            apply_native_rows(image.as_mut(), width as usize, height as usize, 2, |row| {
-                invert_native_bytes(row, 2, invert_alpha);
-            });
-        }
-        DynamicImage::ImageRgb8(image) if matches!(mode, None | Some("RGB")) => {
-            apply_native_rows(image.as_mut(), width as usize, height as usize, 3, |row| {
-                invert_native_bytes(row, 3, false);
-            });
-        }
-        DynamicImage::ImageRgba8(image) if matches!(mode, None | Some("RGBA" | "CMYK")) => {
-            apply_native_rows(image.as_mut(), width as usize, height as usize, 4, |row| {
-                invert_native_bytes(row, 4, invert_alpha || mode == Some("CMYK"));
-            });
-        }
-        _ => return None,
-    }
-    Some(result)
-}
-
 /// Apply a native byte transform to an already-owned intermediate image.
 ///
 /// The ordinary adapter takes `&DynamicImage` because the first pipeline
@@ -2203,28 +2030,6 @@ where
     true
 }
 
-/// In-place counterpart of [`native_invert`].
-fn native_invert_in_place(img: &mut DynamicImage, mode: Option<&str>, invert_alpha: bool) -> bool {
-    let Some(channels) = native_invert_layout(img, mode) else {
-        return false;
-    };
-    let width = img.width() as usize;
-    let height = img.height() as usize;
-    if has_empty_native_bytes(img, channels) {
-        crate::compute::record_pipeline_operation_path("native-copy");
-        return true;
-    }
-    let Some(bytes) = img.as_bytes_mut() else {
-        return false;
-    };
-    record_padded_native_row_work(width, height, channels);
-    apply_native_rows(bytes, width, height, channels, |row| {
-        invert_native_bytes(row, channels, invert_alpha || mode == Some("CMYK"));
-    });
-    crate::compute::record_pipeline_operation_path("vector");
-    true
-}
-
 /// Whether an admitted operation can reuse an owned intermediate without
 /// changing its concrete layout.  This is deliberately narrower than SIMD
 /// capability: native-copy, blur, convolution, and other shape-changing
@@ -2235,7 +2040,7 @@ pub(crate) fn simd_in_place_supported(
     mode: Option<&str>,
 ) -> bool {
     match op {
-        PipelineOp::Invert | PipelineOp::InvertChops => native_invert_layout(img, mode).is_some(),
+        PipelineOp::Invert | PipelineOp::InvertChops => effects::supports_in_place(img, mode),
         PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => native_byte_layout(img, mode)
             .is_some_and(|channels| has_nonempty_byte_data(img, channels)),
         PipelineOp::Brightness { .. } => enhance::supports_in_place(img, mode),
@@ -2278,8 +2083,8 @@ pub(crate) fn simd_execute_in_place(
     mode: Option<&str>,
 ) -> Result<bool, PilError> {
     match op {
-        PipelineOp::Invert => Ok(native_invert_in_place(img, mode, false)),
-        PipelineOp::InvertChops => Ok(native_invert_in_place(img, mode, true)),
+        PipelineOp::Invert => Ok(effects::execute_invert_in_place(img, mode, false)),
+        PipelineOp::InvertChops => Ok(effects::execute_invert_in_place(img, mode, true)),
         PipelineOp::Solarize { threshold } => {
             Ok(native_byte_transform_in_place(img, mode, |input| {
                 input
@@ -6009,6 +5814,7 @@ mod tests {
         }
     }
 
+    use super::effects::native_invert;
     use super::rotate::rotate_discrete_fast_angle;
     #[cfg(feature = "parallel")]
     use super::{
@@ -6017,7 +5823,7 @@ mod tests {
         transpose_native_odd_collect_admitted,
     };
     use super::{
-        native_invert, native_lut_apply, native_lut_map_rows, native_lut_tables_for_channels,
+        native_lut_apply, native_lut_map_rows, native_lut_tables_for_channels,
         native_transpose_bytes, simd_posterize, simd_resize_f,
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
