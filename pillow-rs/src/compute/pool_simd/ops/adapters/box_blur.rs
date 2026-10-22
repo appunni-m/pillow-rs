@@ -1,10 +1,19 @@
 //! SIMD BoxBlur orchestration and native mode admission.
 
+mod kernels;
+
+#[cfg(target_arch = "aarch64")]
+use self::kernels::blur_vertical_rows_radius_seven;
+use self::kernels::simd_luma_box_blur_radius_one_rows;
+#[cfg(test)]
+pub(super) use self::kernels::simd_transpose_interleaved_rows;
+pub(super) use self::kernels::{simd_blur_rows, simd_blur_transpose_rows};
+
 use super::{
-    CheckedDims, SIMD_BOX_BLUR_SCALE, box_blur_luma, gaussian_rgba_uniform,
-    native_copy_image_bytes, native_small_uniform_byte_image, preserve_mode, simd_blur_rows,
-    simd_blur_transpose_rows, simd_native_blur_channels, simd_rgb_box_blur_radius_one_rows,
-    simd_rgba_horizontal_radius_one_rows, simd_rgba_vertical_radius_one_rows, simd_unsupported,
+    CheckedDims, SIMD_BOX_BLUR_SCALE, gaussian_rgba_uniform, native_copy_image_bytes,
+    native_small_uniform_byte_image, preserve_mode, simd_native_blur_channels,
+    simd_rgb_box_blur_radius_one_rows, simd_rgba_horizontal_radius_one_rows,
+    simd_rgba_vertical_radius_one_rows, simd_unsupported,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -242,7 +251,7 @@ fn try_small_radius_box_blur(
         debug_assert_eq!(plan.vertical.weight, SIMD_BOX_BLUR_SCALE / 3);
         debug_assert_eq!(plan.vertical.fractional_weight, 0);
         let mut output = dimensions.alloc_buffer();
-        box_blur_luma::simd_luma_box_blur_radius_one_rows(
+        simd_luma_box_blur_radius_one_rows(
             img.as_bytes(),
             &mut output,
             dimensions.width as usize,
@@ -388,7 +397,7 @@ fn try_neon_rgba_vertical(
         return Ok(None);
     }
     for _ in 0..plan.passes {
-        let (blocks, tail) = super::box_blur_rgba_neon::blur_vertical_rows_radius_seven(
+        let (blocks, tail) = blur_vertical_rows_radius_seven(
             work,
             scratch,
             width,

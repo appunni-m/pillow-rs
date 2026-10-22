@@ -10,7 +10,7 @@ use super::{
 /// The horizontal pass is rounded before the vertical pass, matching Pillow's
 /// two-pass fixed-point behavior. Three horizontally filtered rows stay in a
 /// ring, avoiding a full-frame input clone and horizontal intermediate.
-pub(super) fn simd_luma_box_blur_radius_one_rows(
+pub(crate) fn simd_luma_box_blur_radius_one_rows(
     source: &[u8],
     destination: &mut [u8],
     width: usize,

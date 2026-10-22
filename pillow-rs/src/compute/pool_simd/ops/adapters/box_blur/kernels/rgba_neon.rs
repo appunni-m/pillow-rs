@@ -93,7 +93,7 @@ pub(super) fn blur_middle_block(
 /// preserves each vertical pass's Q24 boundary while keeping destination
 /// stores in native RGBA order.
 #[allow(unsafe_code)]
-pub(super) fn blur_vertical_rows_radius_seven(
+pub(crate) fn blur_vertical_rows_radius_seven(
     source: &[u8],
     destination: &mut [u8],
     width: usize,
