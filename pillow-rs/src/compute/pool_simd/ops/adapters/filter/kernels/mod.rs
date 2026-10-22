@@ -6,12 +6,14 @@ mod la;
 mod rgb_blur_ring;
 mod three_by_three;
 mod uniform_rgb;
+mod unsharp;
 
 pub(super) use self::byte_layouts::native_filter_5x5_rows;
 pub(super) use self::l::{
     native_filter_5x5_binomial_luma_rows, native_filter_5x5_uniform_luma_rows,
 };
 pub(super) use self::la::native_filter_5x5_single_outlier_la_rows;
+pub(crate) use self::unsharp::simd_unsharp_blend_rgb_150;
 pub(super) use crate::compute::pool_simd::ops::native_filter::native_filter_5x5_binomial_la_rows;
 pub(super) use crate::compute::pool_simd::ops::native_filter::native_filter_5x5_i32_rows;
 

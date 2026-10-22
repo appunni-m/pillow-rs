@@ -382,8 +382,10 @@ the guide and its inventory rules on the regular contributor validation path.
 The SIMD Filter5x5 seam now follows the family pattern: `adapters.rs` re-exports
 the family entry, `adapters/filter.rs` owns admission, mode routing, receipts,
 and materialization, and SIMD-only mode kernels live under
-`adapters/filter/kernels/`. The byte loader is shared across filter families;
-the LA-binomial row loop has serial AArch64 CPU and SIMD production callers.
+`adapters/filter/kernels/`. The RGB 150% UnsharpMask blend used by
+`ops/param_filters.rs` also lives in that kernel family. The byte loader is
+shared across filter families; the LA-binomial row loop has serial AArch64 CPU
+and SIMD production callers.
 The I32 row/vector loop has a SIMD production caller, while CPU reaches it only
 from a target-gated differential test, so it is a candidate to move into the
 Filter family tree after the listed guards are run. ARM64 and native x86 layout

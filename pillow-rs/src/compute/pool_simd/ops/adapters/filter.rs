@@ -2,6 +2,7 @@
 
 mod kernels;
 
+pub(crate) use self::kernels::simd_unsharp_blend_rgb_150;
 use self::kernels::{
     native_filter_3x3_i32_rows, native_filter_3x3_rgb_byte_stream, native_filter_3x3_rows,
 };
