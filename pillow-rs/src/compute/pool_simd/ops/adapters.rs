@@ -28,10 +28,7 @@ mod box_blur_rgba_neon;
 pub(crate) use self::box_blur::simd_box_blur;
 pub(crate) use self::crop::{simd_crop, simd_crop_border};
 mod draw;
-use self::draw::{
-    draw_line_vector_block, has_visible_draw_point, has_visible_draw_rectangle,
-    line_bounds_intersect, native_draw_layout, valid_draw_rectangle,
-};
+use self::draw::{draw_line_vector_block, native_draw_layout, shape_draw_channels};
 mod effects;
 mod expand;
 mod extract_band;
@@ -1678,76 +1675,22 @@ pub(crate) fn simd_supports_for_image(
                 }
             }
         }
-        PipelineOp::DrawLine { x0, y0, x1, y1, .. } => {
-            native_draw_layout(img, mode).is_some_and(|channels| {
-                has_vectorized_byte_rows(img, channels)
-                    && line_bounds_intersect(img.width(), img.height(), *x0, *y0, *x1, *y1)
-                    && channels != 0
-            })
-        }
-        PipelineOp::DrawPoint { points, .. } => {
-            native_draw_layout(img, mode).is_some_and(|channels| {
-                (points.is_empty() || has_vectorized_byte_rows(img, channels))
-                    && (!has_visible_draw_point(img.width(), img.height(), points)
-                        || has_vectorized_byte_rows(img, channels))
-            })
-        }
-        PipelineOp::DrawEllipse { .. }
+        PipelineOp::DrawLine { .. }
+        | PipelineOp::DrawPoint { .. }
+        | PipelineOp::DrawEllipse { .. }
         | PipelineOp::DrawCircle { .. }
         | PipelineOp::DrawArc { .. }
         | PipelineOp::DrawChord { .. }
-        | PipelineOp::DrawPieslice { .. } => native_draw_layout(img, mode)
-            .is_some_and(|channels| has_vectorized_byte_rows(img, channels)),
-        PipelineOp::DrawRoundedRect {
-            x0,
-            y0,
-            x1,
-            y1,
-            radius,
-            ..
-        } => native_draw_layout(img, mode).is_some_and(|channels| {
-            has_vectorized_byte_rows(img, channels)
-                && *x1 >= *x0
-                && *y1 >= *y0
-                && radius.is_finite()
-                && *radius >= 0.0
-        }),
-        PipelineOp::DrawPolygon { .. } => native_draw_layout(img, mode)
-            .is_some_and(|channels| has_vectorized_byte_rows(img, channels)),
+        | PipelineOp::DrawPieslice { .. }
+        | PipelineOp::DrawRoundedRect { .. }
+        | PipelineOp::DrawPolygon { .. }
+        | PipelineOp::DrawRectangle { .. } => draw::supports_for_image(img, op, mode),
         PipelineOp::PutPixel {
             x,
             y,
             palette_index: _,
             ..
         } => put_pixel::native_putpixel_supported_for_image(img, *x, *y, mode),
-        PipelineOp::DrawRectangle {
-            x0,
-            y0,
-            x1,
-            y1,
-            fill,
-            outline,
-            width,
-            ..
-        } => native_draw_layout(img, mode).is_some_and(|channels| {
-            (img.width() == 0 || img.height() == 0 || has_vectorized_byte_rows(img, channels))
-                && valid_draw_rectangle(img.width(), img.height(), *x0, *y0, *x1, *y1)
-                && (has_visible_draw_rectangle(
-                    img.width(),
-                    img.height(),
-                    *x0,
-                    *y0,
-                    *x1,
-                    *y1,
-                    *fill,
-                    *outline,
-                    *width,
-                ) || fill.is_none() && (outline.is_none() || *width == 0)
-                    || i64::from(*x1) < 0
-                    || i64::from(*y1) < 0
-                    || i64::from(*x0) >= i64::from(img.width())
-                    || i64::from(*y0) >= i64::from(img.height()))
-        }),
         PipelineOp::AlphaComposite { source, dest, src } => {
             *dest == (0, 0)
                 && *src == (0, 0)
@@ -1835,66 +1778,57 @@ pub(crate) fn simd_supports_for_image(
 }
 
 pub(crate) fn preserves_native_contract(op: &PipelineOp) -> bool {
-    matches!(
-        op,
-        PipelineOp::Filter3x3 { .. }
-            | PipelineOp::Filter5x5 { .. }
-            | PipelineOp::GaussianBlur { .. }
-            | PipelineOp::BoxBlur { .. }
-            | PipelineOp::BoxBlurXY { .. }
-            | PipelineOp::MedianFilter { .. }
-            | PipelineOp::MaxFilter { .. }
-            | PipelineOp::MinFilter { .. }
-            | PipelineOp::RankFilter { .. }
-            | PipelineOp::Autocontrast { .. }
-            | PipelineOp::Equalize
-            | PipelineOp::EqualizeMasked { .. }
-            | PipelineOp::RemapPalette { .. }
-            | PipelineOp::Invert
-            | PipelineOp::Flip
-            | PipelineOp::Mirror
-            | PipelineOp::Posterize { .. }
-            | PipelineOp::Solarize { .. }
-            | PipelineOp::Add { .. }
-            | PipelineOp::Subtract { .. }
-            | PipelineOp::Multiply { .. }
-            | PipelineOp::Screen { .. }
-            | PipelineOp::Darker { .. }
-            | PipelineOp::Lighter { .. }
-            | PipelineOp::Difference { .. }
-            | PipelineOp::Overlay { .. }
-            | PipelineOp::HardLight { .. }
-            | PipelineOp::SoftLight { .. }
-            | PipelineOp::AddModulo { .. }
-            | PipelineOp::SubtractModulo { .. }
-            | PipelineOp::LogicalAnd { .. }
-            | PipelineOp::LogicalOr { .. }
-            | PipelineOp::LogicalXor { .. }
-            | PipelineOp::Offset { .. }
-            | PipelineOp::Duplicate
-            | PipelineOp::InvertChops
-            | PipelineOp::AlphaComposite { .. }
-            | PipelineOp::Brightness { .. }
-            | PipelineOp::Contrast { .. }
-            | PipelineOp::ColorSaturation { .. }
-            | PipelineOp::Sharpness { .. }
-            | PipelineOp::EffectSpread { .. }
-            | PipelineOp::Paste { .. }
-            | PipelineOp::BlendModule { .. }
-            | PipelineOp::Eval { .. }
-            | PipelineOp::PutData { .. }
-            | PipelineOp::PutPixel { .. }
-            | PipelineOp::DrawLine { .. }
-            | PipelineOp::DrawRectangle { .. }
-            | PipelineOp::DrawRoundedRect { .. }
-            | PipelineOp::DrawEllipse { .. }
-            | PipelineOp::DrawCircle { .. }
-            | PipelineOp::DrawPolygon { .. }
-            | PipelineOp::DrawArc { .. }
-            | PipelineOp::DrawChord { .. }
-            | PipelineOp::DrawPieslice { .. }
-            | PipelineOp::DrawPoint { .. }
-    )
+    draw::preserves_native_contract(op)
+        || matches!(
+            op,
+            PipelineOp::Filter3x3 { .. }
+                | PipelineOp::Filter5x5 { .. }
+                | PipelineOp::GaussianBlur { .. }
+                | PipelineOp::BoxBlur { .. }
+                | PipelineOp::BoxBlurXY { .. }
+                | PipelineOp::MedianFilter { .. }
+                | PipelineOp::MaxFilter { .. }
+                | PipelineOp::MinFilter { .. }
+                | PipelineOp::RankFilter { .. }
+                | PipelineOp::Autocontrast { .. }
+                | PipelineOp::Equalize
+                | PipelineOp::EqualizeMasked { .. }
+                | PipelineOp::RemapPalette { .. }
+                | PipelineOp::Invert
+                | PipelineOp::Flip
+                | PipelineOp::Mirror
+                | PipelineOp::Posterize { .. }
+                | PipelineOp::Solarize { .. }
+                | PipelineOp::Add { .. }
+                | PipelineOp::Subtract { .. }
+                | PipelineOp::Multiply { .. }
+                | PipelineOp::Screen { .. }
+                | PipelineOp::Darker { .. }
+                | PipelineOp::Lighter { .. }
+                | PipelineOp::Difference { .. }
+                | PipelineOp::Overlay { .. }
+                | PipelineOp::HardLight { .. }
+                | PipelineOp::SoftLight { .. }
+                | PipelineOp::AddModulo { .. }
+                | PipelineOp::SubtractModulo { .. }
+                | PipelineOp::LogicalAnd { .. }
+                | PipelineOp::LogicalOr { .. }
+                | PipelineOp::LogicalXor { .. }
+                | PipelineOp::Offset { .. }
+                | PipelineOp::Duplicate
+                | PipelineOp::InvertChops
+                | PipelineOp::AlphaComposite { .. }
+                | PipelineOp::Brightness { .. }
+                | PipelineOp::Contrast { .. }
+                | PipelineOp::ColorSaturation { .. }
+                | PipelineOp::Sharpness { .. }
+                | PipelineOp::EffectSpread { .. }
+                | PipelineOp::Paste { .. }
+                | PipelineOp::BlendModule { .. }
+                | PipelineOp::Eval { .. }
+                | PipelineOp::PutData { .. }
+                | PipelineOp::PutPixel { .. }
+        )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1937,26 +1871,6 @@ fn shape_channels(shape: SimdImageShape) -> Option<usize> {
         SimdLayout::Rgb8 => Some(3),
         SimdLayout::Rgba8 => Some(4),
         SimdLayout::Luma16 | SimdLayout::Unsupported => None,
-    }
-}
-
-fn shape_draw_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
-    match shape.layout {
-        SimdLayout::Luma8 if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
-        SimdLayout::LumaA8 if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-        SimdLayout::Rgb8 if matches!(mode, None | Some("RGB" | "RGBA" | "HSV" | "YCbCr")) => {
-            Some(3)
-        }
-        SimdLayout::Rgba8
-            if matches!(
-                mode,
-                None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")
-            ) =>
-        {
-            Some(4)
-        }
-        SimdLayout::Luma16 => None,
-        _ => None,
     }
 }
 
@@ -2975,75 +2889,22 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 }
             }
         }
-        PipelineOp::DrawLine { x0, y0, x1, y1, .. } => shape_draw_channels(shape, mode)
-            .is_some_and(|channels| {
-                shape_has_vector_rows(shape, channels)
-                    && line_bounds_intersect(shape.width, shape.height, *x0, *y0, *x1, *y1)
-                    && channels != 0
-            }),
-        PipelineOp::DrawPoint { points, .. } => {
-            shape_draw_channels(shape, mode).is_some_and(|channels| {
-                (points.is_empty() || shape_has_vector_rows(shape, channels))
-                    && (!has_visible_draw_point(shape.width, shape.height, points)
-                        || shape_has_vector_rows(shape, channels))
-            })
-        }
-        PipelineOp::DrawEllipse { .. }
+        PipelineOp::DrawLine { .. }
+        | PipelineOp::DrawPoint { .. }
+        | PipelineOp::DrawEllipse { .. }
         | PipelineOp::DrawCircle { .. }
         | PipelineOp::DrawArc { .. }
         | PipelineOp::DrawChord { .. }
-        | PipelineOp::DrawPieslice { .. } => shape_draw_channels(shape, mode)
-            .is_some_and(|channels| shape_has_vector_rows(shape, channels)),
-        PipelineOp::DrawRoundedRect {
-            x0,
-            y0,
-            x1,
-            y1,
-            radius,
-            ..
-        } => shape_draw_channels(shape, mode).is_some_and(|channels| {
-            shape_has_vector_rows(shape, channels)
-                && *x1 >= *x0
-                && *y1 >= *y0
-                && radius.is_finite()
-                && *radius >= 0.0
-        }),
-        PipelineOp::DrawPolygon { .. } => shape_draw_channels(shape, mode)
-            .is_some_and(|channels| shape_has_vector_rows(shape, channels)),
+        | PipelineOp::DrawPieslice { .. }
+        | PipelineOp::DrawRoundedRect { .. }
+        | PipelineOp::DrawPolygon { .. }
+        | PipelineOp::DrawRectangle { .. } => draw::supports_for_shape(shape, op, mode),
         PipelineOp::PutPixel {
             x,
             y,
             palette_index: _,
             ..
         } => put_pixel::native_putpixel_supported_for_shape(shape, *x, *y, mode),
-        PipelineOp::DrawRectangle {
-            x0,
-            y0,
-            x1,
-            y1,
-            fill,
-            outline,
-            width,
-            ..
-        } => shape_draw_channels(shape, mode).is_some_and(|channels| {
-            (shape.width == 0 || shape.height == 0 || shape_has_vector_rows(shape, channels))
-                && valid_draw_rectangle(shape.width, shape.height, *x0, *y0, *x1, *y1)
-                && (has_visible_draw_rectangle(
-                    shape.width,
-                    shape.height,
-                    *x0,
-                    *y0,
-                    *x1,
-                    *y1,
-                    *fill,
-                    *outline,
-                    *width,
-                ) || fill.is_none() && (outline.is_none() || *width == 0)
-                    || i64::from(*x1) < 0
-                    || i64::from(*y1) < 0
-                    || i64::from(*x0) >= i64::from(shape.width)
-                    || i64::from(*y0) >= i64::from(shape.height))
-        }),
         PipelineOp::AlphaComposite { source, dest, src } => {
             *dest == (0, 0)
                 && *src == (0, 0)

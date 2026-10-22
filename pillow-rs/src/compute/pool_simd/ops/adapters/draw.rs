@@ -9,6 +9,7 @@ use self::kernels::{
     simd_draw_rectangle_native, simd_draw_rounded_rect_native,
 };
 use super::simd_unsupported;
+use super::{SimdImageShape, SimdLayout};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
@@ -41,7 +42,7 @@ pub(super) fn native_draw_layout(img: &DynamicImage, mode: Option<&str>) -> Opti
     }
 }
 
-pub(super) fn has_visible_draw_rectangle(
+fn has_visible_draw_rectangle(
     width: u32,
     height: u32,
     x0: i32,
@@ -63,26 +64,12 @@ pub(super) fn has_visible_draw_rectangle(
         && i64::from(y0) < i64::from(height)
 }
 
-pub(super) fn valid_draw_rectangle(
-    width: u32,
-    height: u32,
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
-) -> bool {
+fn valid_draw_rectangle(width: u32, height: u32, x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
     let _ = (width, height);
     x1 >= x0 && y1 >= y0
 }
 
-pub(super) fn line_bounds_intersect(
-    width: u32,
-    height: u32,
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
-) -> bool {
+fn line_bounds_intersect(width: u32, height: u32, x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
     let min_x = i64::from(x0.min(x1));
     let max_x = i64::from(x0.max(x1));
     let min_y = i64::from(y0.min(y1));
@@ -95,10 +82,196 @@ pub(super) fn line_bounds_intersect(
         && min_y < i64::from(height)
 }
 
-pub(super) fn has_visible_draw_point(width: u32, height: u32, points: &[(i32, i32)]) -> bool {
+fn has_visible_draw_point(width: u32, height: u32, points: &[(i32, i32)]) -> bool {
     points.iter().any(|&(x, y)| {
         x >= 0 && y >= 0 && i64::from(x) < i64::from(width) && i64::from(y) < i64::from(height)
     })
+}
+
+pub(super) fn shape_draw_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
+    match shape.layout {
+        SimdLayout::Luma8 if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
+        SimdLayout::LumaA8 if matches!(mode, None | Some("LA" | "PA")) => Some(2),
+        SimdLayout::Rgb8 if matches!(mode, None | Some("RGB" | "RGBA" | "HSV" | "YCbCr")) => {
+            Some(3)
+        }
+        SimdLayout::Rgba8
+            if matches!(
+                mode,
+                None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")
+            ) =>
+        {
+            Some(4)
+        }
+        SimdLayout::Luma16 | SimdLayout::Unsupported => None,
+        _ => None,
+    }
+}
+
+/// Check whether the native Draw adapters can execute this operation for an
+/// already materialized image. The dispatcher routes one Draw family group
+/// here so mode, vector-row, and geometry admission stay beside the adapters.
+pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    match op {
+        PipelineOp::DrawLine { x0, y0, x1, y1, .. } => {
+            native_draw_layout(img, mode).is_some_and(|channels| {
+                super::has_vectorized_byte_rows(img, channels)
+                    && line_bounds_intersect(img.width(), img.height(), *x0, *y0, *x1, *y1)
+                    && channels != 0
+            })
+        }
+        PipelineOp::DrawPoint { points, .. } => {
+            native_draw_layout(img, mode).is_some_and(|channels| {
+                (points.is_empty() || super::has_vectorized_byte_rows(img, channels))
+                    && (!has_visible_draw_point(img.width(), img.height(), points)
+                        || super::has_vectorized_byte_rows(img, channels))
+            })
+        }
+        PipelineOp::DrawEllipse { .. }
+        | PipelineOp::DrawCircle { .. }
+        | PipelineOp::DrawArc { .. }
+        | PipelineOp::DrawChord { .. }
+        | PipelineOp::DrawPieslice { .. } => native_draw_layout(img, mode)
+            .is_some_and(|channels| super::has_vectorized_byte_rows(img, channels)),
+        PipelineOp::DrawRoundedRect {
+            x0,
+            y0,
+            x1,
+            y1,
+            radius,
+            ..
+        } => native_draw_layout(img, mode).is_some_and(|channels| {
+            super::has_vectorized_byte_rows(img, channels)
+                && *x1 >= *x0
+                && *y1 >= *y0
+                && radius.is_finite()
+                && *radius >= 0.0
+        }),
+        PipelineOp::DrawPolygon { .. } => native_draw_layout(img, mode)
+            .is_some_and(|channels| super::has_vectorized_byte_rows(img, channels)),
+        PipelineOp::DrawRectangle {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            outline,
+            width,
+            ..
+        } => native_draw_layout(img, mode).is_some_and(|channels| {
+            (img.width() == 0
+                || img.height() == 0
+                || super::has_vectorized_byte_rows(img, channels))
+                && valid_draw_rectangle(img.width(), img.height(), *x0, *y0, *x1, *y1)
+                && (has_visible_draw_rectangle(
+                    img.width(),
+                    img.height(),
+                    *x0,
+                    *y0,
+                    *x1,
+                    *y1,
+                    *fill,
+                    *outline,
+                    *width,
+                ) || fill.is_none() && (outline.is_none() || *width == 0)
+                    || i64::from(*x1) < 0
+                    || i64::from(*y1) < 0
+                    || i64::from(*x0) >= i64::from(img.width())
+                    || i64::from(*y0) >= i64::from(img.height()))
+        }),
+        _ => false,
+    }
+}
+
+/// Check Draw admission for a planned image shape before materialization.
+pub(super) fn supports_for_shape(
+    shape: SimdImageShape,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    match op {
+        PipelineOp::DrawLine { x0, y0, x1, y1, .. } => shape_draw_channels(shape, mode)
+            .is_some_and(|channels| {
+                super::shape_has_vector_rows(shape, channels)
+                    && line_bounds_intersect(shape.width, shape.height, *x0, *y0, *x1, *y1)
+                    && channels != 0
+            }),
+        PipelineOp::DrawPoint { points, .. } => {
+            shape_draw_channels(shape, mode).is_some_and(|channels| {
+                (points.is_empty() || super::shape_has_vector_rows(shape, channels))
+                    && (!has_visible_draw_point(shape.width, shape.height, points)
+                        || super::shape_has_vector_rows(shape, channels))
+            })
+        }
+        PipelineOp::DrawEllipse { .. }
+        | PipelineOp::DrawCircle { .. }
+        | PipelineOp::DrawArc { .. }
+        | PipelineOp::DrawChord { .. }
+        | PipelineOp::DrawPieslice { .. } => shape_draw_channels(shape, mode)
+            .is_some_and(|channels| super::shape_has_vector_rows(shape, channels)),
+        PipelineOp::DrawRoundedRect {
+            x0,
+            y0,
+            x1,
+            y1,
+            radius,
+            ..
+        } => shape_draw_channels(shape, mode).is_some_and(|channels| {
+            super::shape_has_vector_rows(shape, channels)
+                && *x1 >= *x0
+                && *y1 >= *y0
+                && radius.is_finite()
+                && *radius >= 0.0
+        }),
+        PipelineOp::DrawPolygon { .. } => shape_draw_channels(shape, mode)
+            .is_some_and(|channels| super::shape_has_vector_rows(shape, channels)),
+        PipelineOp::DrawRectangle {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            outline,
+            width,
+            ..
+        } => shape_draw_channels(shape, mode).is_some_and(|channels| {
+            (shape.width == 0 || shape.height == 0 || super::shape_has_vector_rows(shape, channels))
+                && valid_draw_rectangle(shape.width, shape.height, *x0, *y0, *x1, *y1)
+                && (has_visible_draw_rectangle(
+                    shape.width,
+                    shape.height,
+                    *x0,
+                    *y0,
+                    *x1,
+                    *y1,
+                    *fill,
+                    *outline,
+                    *width,
+                ) || fill.is_none() && (outline.is_none() || *width == 0)
+                    || i64::from(*x1) < 0
+                    || i64::from(*y1) < 0
+                    || i64::from(*x0) >= i64::from(shape.width)
+                    || i64::from(*y0) >= i64::from(shape.height))
+        }),
+        _ => false,
+    }
+}
+
+/// Draw returns native sample buffers for every supported operation.
+pub(super) fn preserves_native_contract(op: &PipelineOp) -> bool {
+    matches!(
+        op,
+        PipelineOp::DrawLine { .. }
+            | PipelineOp::DrawRectangle { .. }
+            | PipelineOp::DrawRoundedRect { .. }
+            | PipelineOp::DrawEllipse { .. }
+            | PipelineOp::DrawCircle { .. }
+            | PipelineOp::DrawPolygon { .. }
+            | PipelineOp::DrawArc { .. }
+            | PipelineOp::DrawChord { .. }
+            | PipelineOp::DrawPieslice { .. }
+            | PipelineOp::DrawPoint { .. }
+    )
 }
 
 /// Draw a width-one line directly in the destination's native byte layout.
