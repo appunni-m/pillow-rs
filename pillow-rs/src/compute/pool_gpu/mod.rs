@@ -71,6 +71,8 @@ mod batch_segmentation;
 use batch_output::*;
 mod batch_upload;
 use batch_upload::*;
+mod batch_arena_upload;
+use batch_arena_upload::*;
 mod batch_telemetry;
 use batch_telemetry::*;
 mod batch_preparation;
@@ -4499,158 +4501,34 @@ impl GpuInner {
             current_mode = gpu_mode_after_op(current_mode, op);
         }
 
-        buffers.params_arena.ensure_capacity(
-            &self.device,
-            "gpu_batch_params",
-            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            params_arena
-                .len()
-                .saturating_mul(std::mem::size_of::<u32>()),
-            uniform_alignment,
-        );
-        self.queue.write_buffer(
-            &buffers.params_arena.buffer,
-            0,
-            bytemuck::cast_slice(&params_arena),
-        );
-
-        let direct_img2_bytes = direct_alpha_composite_rgba.unwrap_or_default();
-        let arena_img2_bytes = (auxiliary_cache.img2_values.len() + img2_arena.len())
-            .saturating_mul(std::mem::size_of::<u32>());
-        let required_img2_bytes = arena_img2_bytes.max(direct_img2_bytes.len());
-        let img2 = if required_img2_bytes == 0 {
-            None
-        } else {
-            let previous_capacity = buffers.img2_arena.capacity_bytes;
-            buffers.img2_arena.ensure_capacity(
-                &self.device,
-                "gpu_batch_img2",
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                required_img2_bytes,
+        self.finalize_prepared_batch(
+            buffers,
+            auxiliary_cache,
+            GpuBatchPreparationOutput {
+                uniform_alignment,
                 storage_alignment,
-            );
-            if buffers.img2_arena.capacity_bytes != previous_capacity
-                && !auxiliary_cache.img2_values.is_empty()
-            {
-                self.queue.write_buffer(
-                    &buffers.img2_arena.buffer,
-                    0,
-                    bytemuck::cast_slice(&auxiliary_cache.img2_values),
-                );
-            }
-            if !img2_arena.is_empty() {
-                self.queue.write_buffer(
-                    &buffers.img2_arena.buffer,
-                    (auxiliary_cache.img2_values.len() * 4) as u64,
-                    bytemuck::cast_slice(&img2_arena),
-                );
-            }
-            if !direct_img2_bytes.is_empty() {
-                self.queue
-                    .write_buffer(&buffers.img2_arena.buffer, 0, direct_img2_bytes);
-            }
-            Some(&buffers.img2_arena.buffer)
-        };
-        let img3 = if auxiliary_cache.img3_values.is_empty() && img3_arena.is_empty() {
-            None
-        } else {
-            let previous_capacity = buffers.img3_arena.capacity_bytes;
-            buffers.img3_arena.ensure_capacity(
-                &self.device,
-                "gpu_batch_img3",
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                (auxiliary_cache.img3_values.len() + img3_arena.len())
-                    .saturating_mul(std::mem::size_of::<u32>()),
-                storage_alignment,
-            );
-            if buffers.img3_arena.capacity_bytes != previous_capacity
-                && !auxiliary_cache.img3_values.is_empty()
-            {
-                self.queue.write_buffer(
-                    &buffers.img3_arena.buffer,
-                    0,
-                    bytemuck::cast_slice(&auxiliary_cache.img3_values),
-                );
-            }
-            if !img3_arena.is_empty() {
-                self.queue.write_buffer(
-                    &buffers.img3_arena.buffer,
-                    (auxiliary_cache.img3_values.len() * 4) as u64,
-                    bytemuck::cast_slice(&img3_arena),
-                );
-            }
-            Some(&buffers.img3_arena.buffer)
-        };
-        let lut = if auxiliary_cache.lut_values.is_empty() && lut_arena.is_empty() {
-            None
-        } else {
-            let previous_capacity = buffers.lut_arena.capacity_bytes;
-            buffers.lut_arena.ensure_capacity(
-                &self.device,
-                "gpu_batch_lut",
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                (auxiliary_cache.lut_values.len() + lut_arena.len())
-                    .saturating_mul(std::mem::size_of::<u32>()),
-                storage_alignment,
-            );
-            if buffers.lut_arena.capacity_bytes != previous_capacity
-                && !auxiliary_cache.lut_values.is_empty()
-            {
-                self.queue.write_buffer(
-                    &buffers.lut_arena.buffer,
-                    0,
-                    bytemuck::cast_slice(&auxiliary_cache.lut_values),
-                );
-            }
-            if !lut_arena.is_empty() {
-                self.queue.write_buffer(
-                    &buffers.lut_arena.buffer,
-                    (auxiliary_cache.lut_values.len() * 4) as u64,
-                    bytemuck::cast_slice(&lut_arena),
-                );
-            }
-            Some(&buffers.lut_arena.buffer)
-        };
-
-        let resource_telemetry = PipelineResourceTelemetry {
-            parameter_bytes: (params_arena.len() * std::mem::size_of::<u32>()) as u64,
-            auxiliary_bytes: ((img2_arena.len() + img3_arena.len() + lut_arena.len())
-                * std::mem::size_of::<u32>()) as u64
-                + direct_img2_bytes.len() as u64,
-            ..PipelineResourceTelemetry::default()
-        };
-
-        Ok(PreparedGpuBatch {
-            resources: GpuBatchResources {
-                buf_a: &buffers.buf_a,
-                buf_b: &buffers.buf_b,
-                initial_input: None,
-                fallback_img2: &buffers.buf_img2,
-                fallback_img3: &buffers.buf_img3,
-                fallback_lut: &buffers.lut_buf,
-                histogram: &buffers.histogram_buf,
-                params: &buffers.params_arena.buffer,
+                direct_img2_bytes: direct_alpha_composite_rgba.unwrap_or_default(),
+                params_arena,
                 params_ranges,
-                img2,
+                img2_arena,
                 img2_ranges,
-                resize_coeff_ranges,
-                img3,
+                img3_arena,
                 img3_ranges,
-                lut,
+                lut_arena,
                 lut_ranges,
+                resize_coeff_ranges,
+                input_dims,
+                output_dims,
+                resize_source_rows,
+                pad_resize_dims,
                 native_expand_output,
                 native_luma_transform_output,
                 native_rgb_packed_output,
                 native_la_transform_output,
                 native_cover_packed_output,
+                final_dims: (cur_w, cur_h),
             },
-            input_dims,
-            output_dims,
-            resize_source_rows,
-            pad_resize_dims,
-            final_dims: (cur_w, cur_h),
-            resource_telemetry,
-        })
+        )
     }
 
     fn blur_pass_count(op: &PipelineOp) -> Option<usize> {

@@ -116,6 +116,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       `-- mod.rs
 |   |   |   |-- pool_gpu/
 |   |   |   |   |-- auxiliary_images.rs
+|   |   |   |   |-- batch_arena_upload.rs
 |   |   |   |   |-- batch_encoding/
 |   |   |   |   |   `-- dispatch.rs
 |   |   |   |   |-- batch_encoding.rs
