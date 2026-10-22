@@ -622,3 +622,55 @@ impl GpuInner {
         result
     }
 }
+
+impl GpuInner {
+    pub(super) fn upload_auxiliary_cache(
+        &self,
+        cache: &GpuAuxiliaryCache,
+        buffers: &mut BufferPool,
+        storage_alignment: usize,
+    ) {
+        if !cache.img2_values.is_empty() {
+            buffers.img2_arena.ensure_capacity(
+                &self.device,
+                "gpu_batch_img2",
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                cache.img2_values.len() * std::mem::size_of::<u32>(),
+                storage_alignment,
+            );
+            self.queue.write_buffer(
+                &buffers.img2_arena.buffer,
+                0,
+                bytemuck::cast_slice(&cache.img2_values),
+            );
+        }
+        if !cache.img3_values.is_empty() {
+            buffers.img3_arena.ensure_capacity(
+                &self.device,
+                "gpu_batch_img3",
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                cache.img3_values.len() * std::mem::size_of::<u32>(),
+                storage_alignment,
+            );
+            self.queue.write_buffer(
+                &buffers.img3_arena.buffer,
+                0,
+                bytemuck::cast_slice(&cache.img3_values),
+            );
+        }
+        if !cache.lut_values.is_empty() {
+            buffers.lut_arena.ensure_capacity(
+                &self.device,
+                "gpu_batch_lut",
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                cache.lut_values.len() * std::mem::size_of::<u32>(),
+                storage_alignment,
+            );
+            self.queue.write_buffer(
+                &buffers.lut_arena.buffer,
+                0,
+                bytemuck::cast_slice(&cache.lut_values),
+            );
+        }
+    }
+}
