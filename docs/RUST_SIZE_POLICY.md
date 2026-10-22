@@ -114,7 +114,7 @@ lazytrot; each reducer issue is a child of Kata pillow-rs#m2f1.
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter.rs</code> | 6,897 | 4 (max 260) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/geometry.rs</code> | 5,600 | 11 (max 244) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303) | lazytrot | pillow-rs#vamp |
-| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 21,314 | 36 (max 1741) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 20,788 | 36 (max 1741) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/compact_box.rs</code> | — | 2 (max 113) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs</code> | — | 4 (max 282) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/integer_arithmetic.rs</code> | — | 1 (max 101) | lazytrot | pillow-rs#ras2 |
