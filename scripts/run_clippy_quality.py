@@ -12,6 +12,11 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+from check_rust_file_sizes import (
+    legacy_owner_errors,
+    reconcile_legacy_owners,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = ROOT / "scripts" / "rust_size_baseline.json"
@@ -91,9 +96,58 @@ def metric_key(metric: dict[str, object]) -> tuple[str, str, int]:
     )
 
 
+def stale_function_baseline_errors(
+    current: list[dict[str, object]],
+    function_baseline: dict[tuple[str, str, int], int],
+) -> list[str]:
+    current_keys = {metric_key(metric) for metric in current}
+    return [
+        f"stale function baseline entry for {path} {signature} occurrence {occurrence}; "
+        "run checkstyle-update-baseline to retire it"
+        for path, signature, occurrence in sorted(set(function_baseline) - current_keys)
+    ]
+
+
+def function_ratchet_errors(
+    over_limit: list[dict[str, object]],
+    function_baseline: dict[tuple[str, str, int], int],
+    owner_map: object = None,
+) -> tuple[list[str], int]:
+    errors: list[str] = []
+    legacy_count = 0
+    for metric in over_limit:
+        key = metric_key(metric)
+        count = int(metric["lines"])
+        previous = function_baseline.get(key)
+        location = f"{metric['path']}:{metric['line_start']} {metric['signature']}"
+        record = owner_map.get(str(metric["path"]), {}) if isinstance(owner_map, dict) else {}
+        if not isinstance(record, dict):
+            record = {}
+        owner = record.get("owner", "missing")
+        task = record.get("reduction_task", "missing")
+        if previous is None:
+            errors.append(
+                f"new over-limit function: {location} has {count} lines "
+                f"(limit {FUNCTION_HARD_LIMIT}; owner {owner}; task {task})"
+            )
+        elif count > previous:
+            errors.append(
+                f"over-limit function grew: {location} has {count} lines "
+                f"(limit {FUNCTION_HARD_LIMIT}; baseline {previous}; owner {owner}; task {task})"
+            )
+        else:
+            legacy_count += 1
+    return errors, legacy_count
+
+
 def load_baseline() -> dict[str, object]:
     if not BASELINE_PATH.exists():
-        return {"format_version": 1, "file_lines": {}, "function_lines": []}
+        return {
+            "format_version": 1,
+            "file_lines": {},
+            "function_lines": [],
+            "legacy_owners": {},
+        }
     data = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     if data.get("format_version") != 1:
         raise ValueError(f"unsupported baseline format in {BASELINE_PATH}")
@@ -183,14 +237,28 @@ def main() -> int:
 
     over_limit = [metric for metric in metrics if int(metric["lines"]) > FUNCTION_HARD_LIMIT]
     if args.update_baseline:
-        baseline["function_lines"] = [
+        file_baseline = baseline.get("file_lines", {})
+        if not isinstance(file_baseline, dict):
+            print("file_lines baseline must be a JSON object", file=sys.stderr)
+            return 2
+        function_lines = [
             {key: metric[key] for key in ("path", "signature", "occurrence", "lines")}
             for metric in over_limit
         ]
+        active_paths = set(file_baseline)
+        active_paths.update(str(metric["path"]) for metric in over_limit)
+        baseline["function_lines"] = function_lines
+        owner_errors, retired_count = reconcile_legacy_owners(baseline, active_paths)
+        if owner_errors:
+            print("Rust size ownership metadata is invalid:", file=sys.stderr)
+            for error in owner_errors:
+                print(f"  {error}", file=sys.stderr)
+            return 2
         write_baseline(baseline)
         print(
             f"Recorded {len(over_limit)} current functions over {FUNCTION_HARD_LIMIT} lines "
-            f"in {BASELINE_PATH.relative_to(ROOT)}."
+            f"in {BASELINE_PATH.relative_to(ROOT)}; retired "
+            f"{retired_count} inactive ownership entries."
         )
         return clippy_status
 
@@ -200,19 +268,20 @@ def main() -> int:
         return 2
     function_baseline = {metric_key(item): int(item["lines"]) for item in raw_baseline}
 
-    errors: list[str] = []
-    legacy_count = 0
-    for metric in over_limit:
-        key = metric_key(metric)
-        count = int(metric["lines"])
-        previous = function_baseline.get(key)
-        location = f"{metric['path']}:{metric['line_start']} {metric['signature']}"
-        if previous is None:
-            errors.append(f"new over-limit function: {location} has {count} lines (limit {FUNCTION_HARD_LIMIT})")
-        elif count > previous:
-            errors.append(f"over-limit function grew: {location} has {count} lines, baseline is {previous}")
-        else:
-            legacy_count += 1
+    file_baseline = baseline.get("file_lines", {})
+    if not isinstance(file_baseline, dict):
+        print("file_lines baseline must be a JSON object", file=sys.stderr)
+        return 2
+
+    errors = stale_function_baseline_errors(over_limit, function_baseline)
+    owner_map = baseline.get("legacy_owners")
+    ratchet_errors, legacy_count = function_ratchet_errors(
+        over_limit, function_baseline, owner_map
+    )
+    errors.extend(ratchet_errors)
+    active_owner_paths = set(file_baseline)
+    active_owner_paths.update(str(metric["path"]) for metric in over_limit)
+    errors.extend(legacy_owner_errors(owner_map, active_owner_paths))
 
     if clippy_status == 0:
         print(
@@ -225,6 +294,21 @@ def main() -> int:
                 f"  review: {metric['path']}:{metric['line_start']} has "
                 f"{metric['lines']} lines: {metric['signature']}"
             )
+        if isinstance(owner_map, dict):
+            for metric in over_limit:
+                key = metric_key(metric)
+                previous = function_baseline.get(key)
+                if previous is None or int(metric["lines"]) > previous:
+                    continue
+                record = owner_map.get(str(metric["path"]), {})
+                if not isinstance(record, dict):
+                    record = {}
+                print(
+                    f"  baseline: {metric['path']}:{metric['line_start']} has "
+                    f"{metric['lines']} lines (limit {FUNCTION_HARD_LIMIT}; ceiling {previous}; "
+                    f"owner {record.get('owner', 'missing')}; "
+                    f"task {record.get('reduction_task', 'missing')}): {metric['signature']}"
+                )
     if errors:
         print("Rust function-size ratchet violations:", file=sys.stderr)
         for error in errors:

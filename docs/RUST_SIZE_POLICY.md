@@ -85,11 +85,13 @@ checkstyle gate tracked by Kata pillow-rs#q730 should validate that the
 ownership map covers every active legacy path and has no retired entries.
 
 make checkstyle-update-baseline rewrites the file and function ceiling
-sections from current measurements while preserving other JSON fields. It does
-not infer or update task ownership. Review the function signatures, file
-ceilings, legacy_owners, and this document together after each baseline
-change. Do not add #[allow(clippy::too_many_lines)] or raise thresholds to
-make a failing change pass.
+sections from current measurements, preserves metadata for active paths, and
+removes owner entries for retired paths. It fails if an active path has no
+owner, reason, or qualified reduction task; add that metadata before recording
+a new exception. Review the function signatures, file ceilings, legacy_owners,
+and this document together after each baseline change. Do not add
+#[allow(clippy::too_many_lines)] or raise thresholds to make a failing change
+pass.
 
 ## Current legacy inventory
 

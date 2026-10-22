@@ -43,6 +43,8 @@ check "Rust source-contract ratchets" "$PYTHON" scripts/check_source_contracts.p
     --baseline-ref "${SOURCE_CONTRACT_BASE_REF:-HEAD}"
 check "backend-boundary checker contracts" "$PYTHON" -m unittest discover \
     -s scripts -p 'test_check_backend_boundaries.py' -v
+check "Rust size-policy and baseline contracts" "$PYTHON" -m unittest discover \
+    -s scripts -p 'test_rust_size_policy.py' -v
 check "backend feature and Rayon boundaries" "$PYTHON" scripts/check_backend_boundaries.py
 
 # ── Rust: supply chain (advisories, duplicate deps, licenses, sources) ──
