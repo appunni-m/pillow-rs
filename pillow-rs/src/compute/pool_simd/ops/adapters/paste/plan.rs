@@ -1,8 +1,7 @@
 //! Native-mode Paste admission and region planning.
 
-use super::super::{SimdImageShape, SimdLayout, pixel_mode_name};
+use super::super::{SimdImageShape, SimdLayout};
 use crate::image::Image;
-use crate::pipeline::PixelMode;
 use crate::raster::{DynamicImage, GenericImageView};
 use std::sync::Arc;
 
@@ -58,7 +57,10 @@ fn native_paste_luma16_mask_byte_shift(mode: Option<&str>) -> u32 {
 /// no mask is present: in that case Paste moves native samples rather than
 /// interpreting their color meaning. Masked variants remain restricted to
 /// the modes whose alpha blending contract is implemented below.
-fn native_paste_layout(img: &DynamicImage, mode: Option<&str>) -> Option<NativePasteLayout> {
+pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_layout(
+    img: &DynamicImage,
+    mode: Option<&str>,
+) -> Option<NativePasteLayout> {
     match (img, mode) {
         (DynamicImage::ImageLuma8(_), None | Some("L")) => Some(NativePasteLayout {
             channels: 1,
@@ -139,7 +141,7 @@ fn native_paste_luma16_layout(img: &DynamicImage, mode: Option<&str>) -> Option<
         })
 }
 
-fn native_paste_shape_layout(
+pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_shape_layout(
     shape: SimdImageShape,
     mode: Option<&str>,
 ) -> Option<NativePasteLayout> {
@@ -613,28 +615,6 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_composite_plan_for_sh
         source_height: shape.height as usize,
         luma16_mask_byte_shift: 0,
     })
-}
-
-pub(in crate::compute::pool_simd::ops::adapters) fn native_put_data_layout(
-    img: &DynamicImage,
-    data_mode: PixelMode,
-    mode: Option<&str>,
-) -> Option<NativePasteLayout> {
-    let logical_mode = pixel_mode_name(data_mode);
-    let layout =
-        native_paste_layout(img, mode).or_else(|| native_paste_layout(img, Some(logical_mode)))?;
-    (layout.channels == data_mode.channels()).then_some(layout)
-}
-
-pub(in crate::compute::pool_simd::ops::adapters) fn native_put_data_shape_layout(
-    shape: SimdImageShape,
-    data_mode: PixelMode,
-    mode: Option<&str>,
-) -> Option<NativePasteLayout> {
-    let logical_mode = pixel_mode_name(data_mode);
-    let layout = native_paste_shape_layout(shape, mode)
-        .or_else(|| native_paste_shape_layout(shape, Some(logical_mode)))?;
-    (layout.channels == data_mode.channels()).then_some(layout)
 }
 
 pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_actual_layout(

@@ -23,15 +23,14 @@ use self::kernels::native_paste_luma16_apply;
 pub(super) use self::kernels::{
     native_paste_cmyk_l_masked_row, native_paste_la_masked_row, native_paste_rgb_l_masked_row,
 };
-#[cfg(test)]
 pub(super) use self::plan::NativePasteLayout;
 pub(super) use self::plan::{
     NativePasteMaskLayout, NativePastePlan, NativePasteRegion, native_composite_plan_for_image,
     native_composite_plan_for_shape, native_paste_actual_layout, native_paste_actual_mask_layout,
-    native_paste_plan_for_image, native_paste_plan_for_shape, native_paste_region,
-    native_paste_rgb_to_rgba_supported, native_paste_rgb_to_rgba_supported_for_shape,
-    native_paste_rgba_to_rgb_supported, native_paste_rgba_to_rgb_supported_for_shape,
-    native_put_data_layout, native_put_data_shape_layout,
+    native_paste_layout, native_paste_plan_for_image, native_paste_plan_for_shape,
+    native_paste_region, native_paste_rgb_to_rgba_supported,
+    native_paste_rgb_to_rgba_supported_for_shape, native_paste_rgba_to_rgb_supported,
+    native_paste_rgba_to_rgb_supported_for_shape, native_paste_shape_layout,
 };
 
 /// Composite two images through their native byte planes.
