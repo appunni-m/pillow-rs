@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = ROOT / "scripts" / "rust_size_baseline.json"
 PACKAGES = ("pillow-rs", "pillow-rs-py", "pillow-rs-js")
-EXCLUDED_PARTS = {".git", "target", "build", "vendor", "node_modules", "generated"}
+EXCLUDED_PARTS = {".git", "target", "vendor", "node_modules", "generated"}
 FILE_LIMIT = 1_000
 FILE_REVIEW_LINE = 800
 

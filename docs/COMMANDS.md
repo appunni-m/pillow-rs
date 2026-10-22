@@ -21,8 +21,9 @@ enabled.
 | Format check / fix | `make fmt` / `make fmt-fix` | Checks / changes Rust formatting |
 | Consolidated quality gate | `make quality` | Runs rustfmt, Clippy, Rust file/function size ratchets, API-boundary and architecture checks, repository-map and documentation checks, and source/binding/spec policies |
 | Compatibility lint command | `make lint` | Alias for `make quality` |
-| Rust checkstyle | `make checkstyle` | Reports files/functions over 800/60 lines and fails on new code over 1,000/100 lines or growth beyond a legacy baseline |
+| Rust checkstyle | `make checkstyle` | Reports files from 800 lines and functions over 60 lines; fails on new code over 1,000/100 lines or growth beyond a legacy baseline |
 | Checkstyle baseline maintenance | `make checkstyle-update-baseline` | Re-records current over-limit files/functions after reviewed reductions; inspect the baseline diff |
+| Rust size policy and legacy inventory | [Rust size policy](RUST_SIZE_POLICY.md) | Defines counting rules, exclusions, baseline behavior, owners, and reducer issues |
 | Rust lint | `make clippy` | Runs workspace Clippy, reports functions over 60 lines, and fails on new functions over 100 lines or growth beyond a legacy baseline |
 | Source map | `make repo-map-update` / `make repo-map-check` | Regenerates / validates the tracked source inventory |
 | Operation source crosswalk | `make operation-source-crosswalk` / `make operation-source-crosswalk-test` | Generates the ignored manifest→Python→PyO3→backend crosswalk, maps declared parity cases and benchmark workloads to public operations, includes the Rust module inventory, and checks focused contracts; input declarations never count as execution |
