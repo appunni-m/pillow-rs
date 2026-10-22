@@ -1,5 +1,9 @@
 //! Pillow-compatible image statistics methods for [`Image`].
 
+mod result;
+
+pub use result::{StatResult, StatValue, stat_from_histogram, stat_from_list};
+
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
@@ -13,9 +17,8 @@ use super::color_count::{
     scalar_prefix_has_repeated_samples,
 };
 use super::{
-    FormattedExtrema, FormattedPixelValue, Image, ScalarImageSamples, StatResult,
-    decode_float_samples, decode_integer_samples, is_l16_mode, pillow_band_count,
-    stat_from_histogram,
+    FormattedExtrema, FormattedPixelValue, Image, ScalarImageSamples, decode_float_samples,
+    decode_integer_samples, is_l16_mode, pillow_band_count,
 };
 
 impl Image {
