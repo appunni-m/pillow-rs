@@ -73,6 +73,7 @@ mod native_bytes;
 mod offset;
 mod pad;
 mod paste;
+mod pipeline;
 mod projection;
 mod put_alpha;
 mod put_data;
@@ -108,12 +109,12 @@ use self::layout::{
     has_vectorized_native_identity_copy, has_vectorized_offset_rows, native_byte_layout,
     native_copy_layout, native_expand_contract_for_image, native_expand_contract_for_shape,
     native_filter_byte_layout, native_luma16_transpose_layout, native_typed_filter_layout,
-    shape_after_simd_op, shape_channels, shape_has_empty_native_bytes,
-    shape_has_nonempty_byte_data, shape_has_vector_rows, shape_has_vectorized_luma16_offset,
-    shape_has_vectorized_mirror_rows, shape_has_vectorized_native_identity_copy,
-    shape_has_vectorized_offset_rows, shape_luma16_copy_layout, shape_luma16_transpose_layout,
-    shape_native_byte_channels, shape_native_copy_channels, shape_native_identity_copy_channels,
-    shape_native_typed_filter_channels, simd_shape,
+    shape_channels, shape_has_empty_native_bytes, shape_has_nonempty_byte_data,
+    shape_has_vector_rows, shape_has_vectorized_luma16_offset, shape_has_vectorized_mirror_rows,
+    shape_has_vectorized_native_identity_copy, shape_has_vectorized_offset_rows,
+    shape_luma16_copy_layout, shape_luma16_transpose_layout, shape_native_byte_channels,
+    shape_native_copy_channels, shape_native_identity_copy_channels,
+    shape_native_typed_filter_channels,
 };
 pub(crate) use self::lut::{native_point_lut, simd_eval, simd_remap_palette};
 pub(crate) use self::mandelbrot::simd_mandelbrot_generate;
@@ -137,6 +138,8 @@ use self::paste::{
     native_paste_rgb_to_rgba_supported, native_paste_rgb_to_rgba_supported_for_shape,
     native_paste_rgba_to_rgb_supported, native_paste_rgba_to_rgb_supported_for_shape,
 };
+use self::pipeline::pixel_mode_name;
+pub(crate) use self::pipeline::{first_unsupported_simd_op, simd_initial_mode, simd_mode_after_op};
 pub(crate) use self::projection::{
     simd_cmyk_projection, simd_cmyk_projection_from_positive_writes, simd_rgb_projection,
 };
@@ -170,7 +173,7 @@ use crate::image::{Image, preserve_mode};
 use crate::ops::pil_resize::{
     compact_resize_coeffs_to_source_span, precompute_coeffs_boxed_for_filter,
 };
-use crate::pipeline::{ColorMode, PipelineOp, PixelMode, TransposeMethod};
+use crate::pipeline::{PipelineOp, TransposeMethod};
 use crate::raster::{DynamicImage, GenericImageView};
 use std::sync::Arc;
 use wide::{f64x8, i16x8, i32x8, u8x16, u16x8, u16x16, u32x16};
@@ -452,152 +455,6 @@ pub(crate) fn preserves_native_contract(op: &PipelineOp) -> bool {
                 | PipelineOp::PutData { .. }
                 | PipelineOp::PutPixel { .. }
         )
-}
-
-fn color_mode_name(mode: &ColorMode) -> &'static str {
-    match mode {
-        ColorMode::L => "L",
-        ColorMode::LA => "LA",
-        ColorMode::RGB => "RGB",
-        ColorMode::RGBA => "RGBA",
-        ColorMode::CMYK => "CMYK",
-        ColorMode::YCbCr => "YCbCr",
-        ColorMode::HSV => "HSV",
-        ColorMode::I => "I",
-        ColorMode::F => "F",
-        ColorMode::P => "P",
-        ColorMode::Mode1 => "1",
-    }
-}
-
-fn pixel_mode_name(mode: PixelMode) -> &'static str {
-    match mode {
-        PixelMode::L => "L",
-        PixelMode::LA => "LA",
-        PixelMode::RGB => "RGB",
-        PixelMode::RGBA => "RGBA",
-        PixelMode::P => "P",
-        PixelMode::PA => "PA",
-        PixelMode::CMYK => "CMYK",
-        PixelMode::Mode1 => "1",
-        PixelMode::YCbCr => "YCbCr",
-        PixelMode::HSV => "HSV",
-        PixelMode::I => "I",
-        PixelMode::F => "F",
-    }
-}
-
-fn concrete_simd_mode(img: &DynamicImage) -> Option<&'static str> {
-    match img {
-        DynamicImage::ImageLuma8(_) => Some("L"),
-        DynamicImage::ImageLumaA8(_) => Some("LA"),
-        DynamicImage::ImageRgb8(_) => Some("RGB"),
-        DynamicImage::ImageRgba8(_) => Some("RGBA"),
-        _ => None,
-    }
-}
-
-fn operation_target_mode(op: &PipelineOp) -> Option<&str> {
-    match op {
-        PipelineOp::Convert { mode, .. } => Some(color_mode_name(mode)),
-        PipelineOp::ConvertLab { .. } => Some("LAB"),
-        // A merge's storage family can differ from its logical mode (LAB
-        // uses RGB storage). Subsequent operations need the semantic tag.
-        PipelineOp::Merge { logical_mode, .. } => Some(logical_mode),
-        PipelineOp::Color3DLut { target_mode, .. } => Some(pixel_mode_name(*target_mode)),
-        PipelineOp::PutAlpha { .. } | PipelineOp::PutAlphaData { .. } => put_alpha::output_mode(op),
-        PipelineOp::Grayscale => Some("L"),
-        PipelineOp::EffectNoise { .. } => Some(effects::output_mode()),
-        PipelineOp::Colorize { .. } => Some("RGB"),
-        PipelineOp::Constant { .. } => Some("L"),
-        PipelineOp::ExtractBand { .. } => Some("L"),
-        _ => None,
-    }
-}
-
-/// Resolve the logical mode at the first operation boundary.
-///
-/// Pipeline metadata carries the final output mode, while the concrete input
-/// buffer still has the source layout. If a pipeline ends in a nonstandard
-/// conversion (for example RGB -> CMYK), passing that final tag to the first
-/// `PutPixel` or `Convert` operation would make a valid native source look
-/// unsupported. Use the concrete source mode whenever the operation list
-/// contains the final mode transition; preserving a nonstandard mode without
-/// such a transition remains necessary for raw HSV/YCbCr/CMYK samples.
-pub(crate) fn simd_initial_mode(
-    img: &DynamicImage,
-    ops: &[PipelineOp],
-    final_mode: Option<&str>,
-) -> Option<String> {
-    let Some(final_mode) = final_mode else {
-        return None;
-    };
-    // `PA` shares the two-byte `LumaA8` storage with `LA`, but its first byte
-    // is a palette index rather than luma.  Keep the logical tag at this
-    // boundary; replacing it with the concrete raster mode would make a
-    // valid PA-only adapter look unsupported before execution begins.
-    if final_mode == "PA" {
-        return Some(final_mode.to_owned());
-    }
-    if let Some(PipelineOp::Color3DLut { source_mode, .. }) = ops.first() {
-        return Some(pixel_mode_name(*source_mode).to_owned());
-    }
-    if ops
-        .iter()
-        .any(|op| operation_target_mode(op) == Some(final_mode))
-    {
-        return concrete_simd_mode(img)
-            .map(str::to_owned)
-            .or_else(|| Some(final_mode.to_owned()));
-    }
-    Some(final_mode.to_owned())
-}
-
-/// Advance the logical mode after one pipeline operation.
-pub(crate) fn simd_mode_after_op(op: &PipelineOp, current: Option<&str>) -> Option<String> {
-    if let PipelineOp::CompositeModule { other, .. } = op {
-        return other.mode().ok();
-    }
-    if let Some(target) = operation_target_mode(op) {
-        // Equalize expands indexed samples before its histogram operation.
-        if matches!(op, PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }) {
-            return Some(target.to_owned());
-        }
-        return Some(target.to_owned());
-    }
-    if matches!(op, PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. })
-        && matches!(current, Some("P" | "PA"))
-    {
-        return Some("RGB".to_owned());
-    }
-    current.map(str::to_owned)
-}
-
-/// Find the first operation that would be unsupported for the actual
-/// intermediate layout, without allocating or touching pixel data.
-///
-/// Strict SIMD uses this shape-only pass before entering the first adapter.
-/// It closes the subtle gap where an early crop/extraction/alpha promotion
-/// changes the layout enough to make a later operation unsupported.
-pub(crate) fn first_unsupported_simd_op<'a>(
-    img: &DynamicImage,
-    ops: &'a [PipelineOp],
-    mode: Option<&str>,
-) -> Option<&'a PipelineOp> {
-    let mut shape = simd_shape(img);
-    let mut current_mode = simd_initial_mode(img, ops, mode);
-    for op in ops {
-        let op_mode = current_mode.as_deref();
-        if !crate::compute::registry::simd_supports(op).unwrap_or(false) {
-            return Some(op);
-        }
-        if !simd_supports_for_shape(shape, op, op_mode) {
-            return Some(op);
-        }
-        shape = shape_after_simd_op(shape, op)?;
-        current_mode = simd_mode_after_op(op, op_mode);
-    }
-    None
 }
 
 fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<&str>) -> bool {
