@@ -1,16 +1,15 @@
 //! Rotate-family native kernels selected by the SIMD adapter.
 
-#[cfg(not(feature = "parallel"))]
 mod kernels;
 
 #[cfg(not(feature = "parallel"))]
 pub(super) use self::kernels::copy_contiguous_rgb_runs;
 
-use super::{
-    native_identity_rotate, rotate_identity_contract, rotate_uses_discrete_fast_path,
-    simd_bilinear_rotate_native, simd_empty_rotate_native, simd_nearest_rotate_native,
-    simd_right_angle_rotate_native, simd_typed_bilinear_rotate_native, simd_unsupported,
+use self::kernels::{
+    native_identity_rotate, simd_bilinear_rotate_native, simd_empty_rotate_native,
+    simd_nearest_rotate_native, simd_right_angle_rotate_native, simd_typed_bilinear_rotate_native,
 };
+use super::{rotate_identity_contract, rotate_uses_discrete_fast_path, simd_unsupported};
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::pipeline::{PipelineOp, ResampleFilter};
