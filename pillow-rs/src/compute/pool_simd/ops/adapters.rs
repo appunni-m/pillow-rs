@@ -126,8 +126,8 @@ pub(crate) use self::module_blend::simd_blend_module;
 use self::native_bytes::{
     NATIVE_BYTE_ALL_MASK, NATIVE_BYTE_LA_MASK, NATIVE_BYTE_RGBA_MASK, NATIVE_BYTE_ZERO_MASK,
     apply_native_rows, copy_native_bytes, mirror_native_row, native_all_channel_transform_bytes,
-    native_byte_transform_bytes, native_byte_transform_copy_bytes, native_luma16_image_from_bytes,
-    record_padded_native_row_work, reverse_pixel_block,
+    native_byte_transform_bytes, native_byte_transform_copy_bytes, native_copy_image_bytes,
+    native_luma16_image_from_bytes, record_padded_native_row_work, reverse_pixel_block,
 };
 pub(crate) use self::offset::simd_offset;
 pub(crate) use self::pad::simd_pad;
@@ -174,7 +174,7 @@ use crate::ops::pil_resize::{
     compact_resize_coeffs_to_source_span, precompute_coeffs_boxed_for_filter,
 };
 use crate::pipeline::{PipelineOp, TransposeMethod};
-use crate::raster::{DynamicImage, GenericImageView};
+use crate::raster::DynamicImage;
 use std::sync::Arc;
 use wide::{f64x8, i16x8, i32x8, u8x16, u16x8, u16x16, u32x16};
 
@@ -913,42 +913,6 @@ fn native_fill_row(row: &mut [u8], fill: (u8, u8, u8, u8), channels: usize) -> O
         vector_blocks = vector_blocks.saturating_add(1);
     }
     Some((vector_blocks, scalar_tail as u64))
-}
-
-/// Copy an identity-like operation in the source's native byte layout.
-///
-/// Callers validate their complete public contract before this fast path is
-/// selected. Once that validation proves that every output pixel maps to the
-/// same source pixel, the data plane is simply a contiguous copy. Keep it as
-/// a real SIMD operation so strict SIMD never enters a scalar implementation
-/// by accident.
-fn native_copy_image_bytes(
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Result<Option<DynamicImage>, PilError> {
-    let Some(channels) = native_copy_layout(img, mode) else {
-        return Ok(None);
-    };
-    let (width, height) = img.dimensions();
-    let Some(expected_len) = (width as usize)
-        .checked_mul(height as usize)
-        .and_then(|pixels| pixels.checked_mul(channels))
-    else {
-        return Ok(None);
-    };
-    let source = img.as_bytes();
-    if source.len() != expected_len {
-        return Ok(None);
-    }
-
-    let mut output = vec![0u8; source.len()];
-    let (vector_blocks, scalar_tail) = copy_native_bytes(source, &mut output)
-        .ok_or_else(|| PilError::InternalError("SIMD identity copy shape mismatch".into()))?;
-
-    crate::compute::record_pipeline_operation_path("native-copy");
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::image_utils::raw_bytes_to_image(width, height, output, channels).map(Some)
 }
 
 const SIMD_F64_LANES: usize = 8;

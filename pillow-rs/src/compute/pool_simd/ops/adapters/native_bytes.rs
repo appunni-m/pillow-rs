@@ -1,8 +1,10 @@
-//! Shared native-byte SIMD transformations and row traversal.
+//! Shared native-byte SIMD transformations, identity copies, and row traversal.
 
+use super::layout::native_copy_layout;
 #[cfg(feature = "parallel")]
 use super::simd_rows_mut_serial;
-use crate::raster::{DynamicImage, ImageBuffer, Luma};
+use crate::error::PilError;
+use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 use wide::u8x16;
 
 // Native byte transforms always operate on L/LA/RGB/RGBA layouts. Keeping
@@ -254,6 +256,42 @@ pub(super) fn copy_native_bytes(source: &[u8], output: &mut [u8]) -> Option<(u64
         vector_blocks = vector_blocks.saturating_add(1);
     }
     Some((vector_blocks, scalar_tail as u64))
+}
+
+/// Copy an identity-like operation in the source's native byte layout.
+///
+/// Callers validate their complete public contract before this fast path is
+/// selected. Once that validation proves that every output pixel maps to the
+/// same source pixel, the data plane is simply a contiguous copy. Keep it as
+/// a real SIMD operation so strict SIMD never enters a scalar implementation
+/// by accident.
+pub(super) fn native_copy_image_bytes(
+    img: &DynamicImage,
+    mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    let Some(channels) = native_copy_layout(img, mode) else {
+        return Ok(None);
+    };
+    let (width, height) = img.dimensions();
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+    else {
+        return Ok(None);
+    };
+    let source = img.as_bytes();
+    if source.len() != expected_len {
+        return Ok(None);
+    }
+
+    let mut output = vec![0u8; source.len()];
+    let (vector_blocks, scalar_tail) = copy_native_bytes(source, &mut output)
+        .ok_or_else(|| PilError::InternalError("SIMD identity copy shape mismatch".into()))?;
+
+    crate::compute::record_pipeline_operation_path("native-copy");
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    crate::image_utils::raw_bytes_to_image(width, height, output, channels).map(Some)
 }
 
 /// Write a horizontally reversed row into a separate native output buffer.
