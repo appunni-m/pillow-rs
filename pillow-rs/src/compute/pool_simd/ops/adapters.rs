@@ -25134,22 +25134,7 @@ pub fn simd_eval(
 
 #[path = "adapters/convert.rs"]
 mod convert;
-pub(crate) use self::convert::simd_convert;
-
-pub fn simd_convert_lab(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    if !matches!(op, PipelineOp::ConvertLab { .. }) {
-        return Err(PilError::ValueError("expected ConvertLab op".into()));
-    }
-    if !matches!(img, DynamicImage::ImageRgb8(_)) || !matches!(mode, None | Some("RGB")) {
-        return Err(simd_unsupported("ConvertLab"));
-    }
-    crate::compute::record_pipeline_operation_path("scalar-control");
-    crate::lab::convert_rgb_image(img)
-}
+pub(crate) use self::convert::{simd_convert, simd_convert_lab};
 
 #[inline]
 fn alpha_composite_div255(value: u32x8) -> u32x8 {

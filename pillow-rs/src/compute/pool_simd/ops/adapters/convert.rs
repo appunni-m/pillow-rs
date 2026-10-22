@@ -212,6 +212,21 @@ pub(crate) fn simd_convert(
     )
 }
 
+pub(crate) fn simd_convert_lab(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if !matches!(op, PipelineOp::ConvertLab { .. }) {
+        return Err(PilError::ValueError("expected ConvertLab op".into()));
+    }
+    if !matches!(img, DynamicImage::ImageRgb8(_)) || !matches!(mode, None | Some("RGB")) {
+        return Err(simd_unsupported("ConvertLab"));
+    }
+    crate::compute::record_pipeline_operation_path("scalar-control");
+    crate::lab::convert_rgb_image(img)
+}
+
 #[cfg(all(test, target_arch = "x86_64"))]
 mod tests {
     use super::native_rgba_to_rgb_bytes;
