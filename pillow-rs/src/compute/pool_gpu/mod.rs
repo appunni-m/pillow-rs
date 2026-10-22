@@ -79,6 +79,8 @@ mod batch_auxiliary_ranges;
 use batch_auxiliary_ranges::*;
 mod batch_operation_planning;
 use batch_operation_planning::*;
+mod batch_operations;
+use batch_operations::*;
 mod batch_parameters;
 use batch_parameters::*;
 mod batch_telemetry;
@@ -3486,24 +3488,7 @@ impl GpuInner {
         let limits = self.device.limits();
         let uniform_alignment = limits.min_uniform_buffer_offset_alignment as usize;
         let storage_alignment = limits.min_storage_buffer_offset_alignment as usize;
-        let mut params_arena = Vec::new();
-        let mut params_ranges = Vec::with_capacity(ops.len());
-        let mut img2_arena = Vec::new();
-        let mut img2_ranges = Vec::with_capacity(ops.len());
-        let mut img3_arena = Vec::new();
-        let mut img3_ranges = Vec::with_capacity(ops.len());
-        let mut lut_arena = Vec::new();
-        let mut lut_ranges = Vec::with_capacity(ops.len());
-        let mut second_cache: HashMap<usize, BufferRange> = HashMap::new();
-        let mut third_cache: HashMap<usize, BufferRange> = HashMap::new();
-        let mut lut_cache: HashMap<[u32; 256], BufferRange> = HashMap::new();
-        let mut resize_coeff_ranges = Vec::with_capacity(ops.len());
-        let mut input_dims = Vec::with_capacity(ops.len());
-        let mut output_dims = Vec::with_capacity(ops.len());
-        let mut resize_source_rows = Vec::with_capacity(ops.len());
-        let mut pad_resize_dims = Vec::with_capacity(ops.len());
-        let mut native_expand_output = None;
-        let mut native_luma_transform_output = None;
+        let mut scratch = BatchPreparationScratch::new(ops.len());
         let packed_output_plans = self.prepare_batch_packed_output_plans(
             BatchPackedOutputPlanningContext {
                 ops,
@@ -3518,10 +3503,6 @@ impl GpuInner {
         )?;
         let native_rgb_packed_output = packed_output_plans.native_rgb;
         let native_la_transform_output = packed_output_plans.native_la;
-        let mut cur_w = w;
-        let mut cur_h = h;
-        let mut current_mode = mode;
-
         let pipeline_options = BatchPreparationPipelineOptions {
             logical_mode,
             packed_native_byte_filter,
@@ -3534,50 +3515,32 @@ impl GpuInner {
             native_sharpness_la_input,
             native_sharpness_rgb_input,
         };
-
-        for (index, op) in ops.iter().enumerate() {
-            let cached =
-                self.resolve_preparation_pipeline(ops, index, (cur_w, cur_h), &pipeline_options)?;
-            let plan = self.prepare_batch_operation_plan(
-                BatchOperationPlanningContext {
-                    ops,
-                    op,
-                    source_dimensions: (cur_w, cur_h),
-                    current_mode,
-                    logical_mode,
-                    output_only_pipeline: cached.is_output_only,
-                    native_expand_channels,
-                    packed_luma_transform_output,
-                    max_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension,
-                    max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
-                    max_buffer_size: limits.max_buffer_size,
-                },
-                buffers,
-            )?;
-            let (out_w, out_h) = plan.output_dimensions;
-            if let Some(dispatch) = plan.native_expand_output {
-                native_expand_output = Some(dispatch);
-            }
-            if let Some(dispatch) = plan.native_luma_transform_output {
-                native_luma_transform_output = Some(dispatch);
-            }
-            input_dims.push((cur_w, cur_h));
-            output_dims.push((out_w, out_h));
-            resize_source_rows.push(plan.resize_source_row_range);
-            let (shader_w, shader_h) = plan.shader_dimensions;
-            let op_mode = plan.op_mode;
-            let source_row_base = plan.source_row_base;
-            let params = prepare_batch_operation_params(BatchOperationParameterContext {
-                op,
-                auxiliary: &auxiliary_images[index],
-                source_dimensions: (cur_w, cur_h),
-                output_dimensions: (out_w, out_h),
-                shader_dimensions: (shader_w, shader_h),
-                op_mode,
+        let parameter_layouts = BatchParameterLayouts {
+            packed_luma_colorize,
+            packed_luma_convert,
+            packed_luma_point,
+            packed_luma_putdata,
+            packed_luma_pad,
+            packed_luma_transform_input,
+            packed_luma_transform_output,
+            native_extract_band,
+            native_grayscale_rgb_input,
+            native_sharpness_l_input,
+            native_reduce_rgb_input,
+            native_expand_channels,
+            native_cover_input: native_cover_input_channels.is_some(),
+            native_rgb_compact_input,
+            native_rgb_packed_output,
+            native_la_transform_output,
+            native_expand_output: None,
+            native_cover_packed_output,
+        };
+        let final_dims = self.prepare_batch_operations(
+            BatchOperationPreparationOptions {
+                ops,
+                auxiliary_images,
                 logical_mode,
                 contrast_mean,
-                source_row_base,
-                max_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension,
                 resize_exactness: BatchResizeParameterExactness {
                     constant_bits: f_resize_constant_bits,
                     box_copy_is_exact: f_resize_box_copy_is_exact,
@@ -3587,112 +3550,34 @@ impl GpuInner {
                     f64_is_exact: f_resize_f64_is_exact,
                     f64_ordered_is_exact: f_resize_f64_ordered_is_exact,
                 },
-                layouts: BatchParameterLayouts {
-                    packed_luma_colorize,
-                    packed_luma_convert,
-                    packed_luma_point,
-                    packed_luma_putdata,
-                    packed_luma_pad,
-                    packed_luma_transform_input,
-                    packed_luma_transform_output,
-                    native_extract_band,
-                    native_grayscale_rgb_input,
-                    native_sharpness_l_input,
-                    native_reduce_rgb_input,
-                    native_expand_channels,
-                    native_cover_input: native_cover_input_channels.is_some(),
-                    native_rgb_compact_input,
-                    native_rgb_packed_output,
-                    native_la_transform_output,
-                    native_expand_output: plan.native_expand_output,
-                    native_cover_packed_output,
-                },
-            })?;
-            params_ranges.push(append_arena_slice(
-                &mut params_arena,
-                &params,
-                uniform_alignment,
-            ));
-
-            let resize_coeff_range = self.prepare_batch_resize_coefficients(
-                BatchResizeCoefficientContext {
-                    op,
-                    input_dimensions: (cur_w, cur_h),
-                    output_dimensions: (out_w, out_h),
-                    logical_mode,
-                    op_mode,
-                    f_resize_f64_is_exact,
-                    f_resize_f64_ordered_is_exact,
-                    boxed_resize_coefficients: plan.boxed_resize_coefficients.as_ref(),
-                    storage_alignment,
-                },
-                &mut img2_arena,
-                auxiliary_cache,
-            )?;
-            resize_coeff_ranges.push(resize_coeff_range);
-            pad_resize_dims.push(
-                matches!(op, PipelineOp::Pad { .. })
-                    .then(|| gpu_pad_geometry(op, cur_w, cur_h).map(|(dims, _)| dims))
-                    .flatten(),
-            );
-
-            let auxiliary_ranges = GpuBatchAuxiliaryPreparation {
-                op,
-                auxiliary: &auxiliary_images[index],
-                index,
-                op_mode,
-                logical_mode,
-                source_dimensions: (cur_w, cur_h),
-                cached_pipeline: &cached,
+                layouts: parameter_layouts,
+                pipeline_options,
                 packed_luma_putdata,
                 direct_alpha_composite_rgba,
-                capacity: buffers.capacity,
+                uniform_alignment,
                 storage_alignment,
+                max_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension,
+                max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
+                max_buffer_size: limits.max_buffer_size,
                 auxiliary_cache,
-                img2_arena: &mut img2_arena,
-                img3_arena: &mut img3_arena,
-                lut_arena: &mut lut_arena,
-                second_cache: &mut second_cache,
-                third_cache: &mut third_cache,
-                lut_cache: &mut lut_cache,
-            }
-            .prepare()?;
-            img2_ranges.push(auxiliary_ranges.second);
-            img3_ranges.push(auxiliary_ranges.third);
-            lut_ranges.push(auxiliary_ranges.lut);
-
-            cur_w = out_w;
-            cur_h = out_h;
-            current_mode = gpu_mode_after_op(current_mode, op);
-        }
+            },
+            buffers,
+            &mut scratch,
+            (w, h, mode),
+        )?;
 
         self.finalize_prepared_batch(
             buffers,
             auxiliary_cache,
-            GpuBatchPreparationOutput {
+            scratch.into_output(BatchPreparationOutputOptions {
                 uniform_alignment,
                 storage_alignment,
                 direct_img2_bytes: direct_alpha_composite_rgba.unwrap_or_default(),
-                params_arena,
-                params_ranges,
-                img2_arena,
-                img2_ranges,
-                img3_arena,
-                img3_ranges,
-                lut_arena,
-                lut_ranges,
-                resize_coeff_ranges,
-                input_dims,
-                output_dims,
-                resize_source_rows,
-                pad_resize_dims,
-                native_expand_output,
-                native_luma_transform_output,
                 native_rgb_packed_output,
                 native_la_transform_output,
                 native_cover_packed_output,
-                final_dims: (cur_w, cur_h),
-            },
+                final_dims,
+            }),
         )
     }
 

@@ -124,6 +124,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- batch_estimates.rs
 |   |   |   |   |-- batch_normalization.rs
 |   |   |   |   |-- batch_operation_planning.rs
+|   |   |   |   |-- batch_operations.rs
 |   |   |   |   |-- batch_output.rs
 |   |   |   |   |-- batch_parameters.rs
 |   |   |   |   |-- batch_pipeline.rs
