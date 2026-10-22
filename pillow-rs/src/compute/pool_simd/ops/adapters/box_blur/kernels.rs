@@ -14,15 +14,28 @@ use crate::checked_dims::CheckedDims;
 use crate::pipeline::TransposeMethod;
 use wide::{u16x16, u32x8, u32x16};
 
+mod la;
 mod luma;
+mod rgb;
+mod rgba;
 #[cfg(target_arch = "x86_64")]
 mod rgba_avx2;
 #[cfg(target_arch = "aarch64")]
 mod rgba_neon;
 
+pub(in crate::compute::pool_simd::ops::adapters) use self::la::{
+    simd_la_blur_scalar_pixel, simd_la_vertical_radius_one_rows,
+};
 pub(super) use self::luma::simd_luma_box_blur_radius_one_rows;
 pub(in crate::compute::pool_simd::ops::adapters) use self::luma::{
     simd_luma_horizontal_radius_one_three_passes_rows, simd_luma_vertical_radius_one_rows,
+};
+pub(super) use self::rgb::simd_rgb_box_blur_radius_one_rows;
+pub(in crate::compute::pool_simd::ops::adapters) use self::rgb::{
+    simd_rgb_horizontal_radius_one_rows, simd_rgb_vertical_radius_one_rows,
+};
+pub(in crate::compute::pool_simd::ops::adapters) use self::rgba::{
+    simd_rgba_horizontal_radius_one_rows, simd_rgba_vertical_radius_one_rows,
 };
 #[cfg(target_arch = "aarch64")]
 pub(super) use self::rgba_neon::blur_vertical_rows_radius_seven;

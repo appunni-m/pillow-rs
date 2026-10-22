@@ -1,13 +1,13 @@
 //! SIMD adapter for Pillow-compatible GaussianBlur.
 
 use super::box_blur::{
-    simd_luma_horizontal_radius_one_three_passes_rows, simd_luma_vertical_radius_one_rows,
+    simd_la_vertical_radius_one_rows, simd_luma_horizontal_radius_one_three_passes_rows,
+    simd_luma_vertical_radius_one_rows, simd_native_blur_channels,
+    simd_rgb_horizontal_radius_one_rows, simd_rgb_vertical_radius_one_rows,
 };
 use super::{
     CheckedDims, DynamicImage, PilError, PipelineOp, SIMD_BOX_BLUR_SCALE, native_copy_image_bytes,
-    native_small_uniform_byte_image, preserve_mode, simd_la_vertical_radius_one_rows,
-    simd_native_blur_channels, simd_pil_box_blur, simd_rgb_horizontal_radius_one_rows,
-    simd_rgb_vertical_radius_one_rows, simd_unsupported,
+    native_small_uniform_byte_image, preserve_mode, simd_pil_box_blur, simd_unsupported,
 };
 
 #[path = "gaussian_blur/kernels/la.rs"]

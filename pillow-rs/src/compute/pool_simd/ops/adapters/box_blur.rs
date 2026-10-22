@@ -4,23 +4,29 @@ mod kernels;
 
 #[cfg(target_arch = "aarch64")]
 use self::kernels::blur_vertical_rows_radius_seven;
-use self::kernels::simd_luma_box_blur_radius_one_rows;
 #[cfg(test)]
 pub(super) use self::kernels::simd_transpose_interleaved_rows;
 pub(super) use self::kernels::{simd_blur_rows, simd_blur_transpose_rows};
 pub(super) use self::kernels::{
+    simd_la_blur_scalar_pixel, simd_la_vertical_radius_one_rows,
     simd_luma_horizontal_radius_one_three_passes_rows, simd_luma_vertical_radius_one_rows,
+    simd_rgb_horizontal_radius_one_rows, simd_rgb_vertical_radius_one_rows,
+    simd_rgba_horizontal_radius_one_rows, simd_rgba_vertical_radius_one_rows,
 };
+use self::kernels::{simd_luma_box_blur_radius_one_rows, simd_rgb_box_blur_radius_one_rows};
 
 use super::{
-    CheckedDims, SIMD_BOX_BLUR_SCALE, gaussian_rgba_uniform, native_copy_image_bytes,
-    native_small_uniform_byte_image, preserve_mode, simd_native_blur_channels,
-    simd_rgb_box_blur_radius_one_rows, simd_rgba_horizontal_radius_one_rows,
-    simd_rgba_vertical_radius_one_rows, simd_unsupported,
+    CheckedDims, SIMD_BOX_BLUR_SCALE, gaussian_rgba_uniform, native_byte_layout,
+    native_copy_image_bytes, native_small_uniform_byte_image, preserve_mode, simd_unsupported,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
+
+pub(super) fn simd_native_blur_channels(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
+    let channels = native_byte_layout(img, mode)?;
+    (1..=4).contains(&channels).then_some(channels)
+}
 
 #[derive(Clone, Copy)]
 struct BlurAxis {

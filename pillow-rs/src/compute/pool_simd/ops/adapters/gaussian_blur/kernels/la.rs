@@ -1,8 +1,8 @@
 //! Native-LA horizontal radius-one SIMD row kernel.
 
+use super::super::box_blur::simd_la_blur_scalar_pixel;
 use super::super::{
-    SIMD_BOX_BLUR_BIAS, simd_blur_load_u8x16, simd_blur_pack_u32x16_to_bytes,
-    simd_la_blur_scalar_pixel, u16x16, u32x16,
+    SIMD_BOX_BLUR_BIAS, simd_blur_load_u8x16, simd_blur_pack_u32x16_to_bytes, u16x16, u32x16,
 };
 
 /// Apply one horizontal LA box pass to a native `[L, A]` row.
