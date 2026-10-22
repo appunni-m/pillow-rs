@@ -1,4 +1,4 @@
-//! Focused native SIMD batching for consecutive RGBA PutPixel operations.
+//! SIMD PutPixel family adapters and native byte kernels.
 
 mod kernels;
 
@@ -191,4 +191,96 @@ mod tests {
         }
         assert_eq!(result.as_bytes(), sequential.as_bytes());
     }
+}
+
+/// `Image.putpixel` stores the already-normalized LAB sample triplet directly
+/// into the shared RGB8 raster. Keep this support specific to PutPixel so the
+/// broader drawing adapters do not accidentally inherit color-space semantics.
+pub(super) fn native_putpixel_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
+    if matches!((img, mode), (DynamicImage::ImageRgb8(_), Some("LAB"))) {
+        Some(3)
+    } else {
+        super::native_draw_layout(img, mode)
+    }
+}
+
+/// Set one validated pixel through a masked native-byte vector store.  The
+/// surrounding pixels are preserved, so this keeps `P`, `CMYK`, and the
+/// ordinary byte layouts in their logical storage without packed RGBA
+/// conversion.  Palette resolution and coordinate validation happen before
+/// the pipeline operation is queued.
+fn simd_put_pixel_native(
+    img: &DynamicImage,
+    x: u32,
+    y: u32,
+    color: (u8, u8, u8, u8),
+    channels: usize,
+) -> Result<Option<DynamicImage>, PilError> {
+    if x >= img.width() || y >= img.height() {
+        return Ok(None);
+    }
+    let row_bytes = (img.width() as usize)
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::InternalError("SIMD PutPixel row stride overflow".into()))?;
+    let target_start = (y as usize)
+        .checked_mul(row_bytes)
+        .and_then(|row| row.checked_add((x as usize).checked_mul(channels)?))
+        .ok_or_else(|| PilError::InternalError("SIMD PutPixel offset overflow".into()))?;
+    let target_end = target_start
+        .checked_add(channels)
+        .ok_or_else(|| PilError::InternalError("SIMD PutPixel end overflow".into()))?;
+    let mut output = img.as_bytes().to_vec();
+    if target_end > output.len() {
+        return Ok(None);
+    }
+    // A single pixel can sit in a row narrower than one vector.  Use a
+    // masked block over the flat native buffer instead of rejecting the
+    // operation: bytes from the adjacent row are loaded and stored
+    // unchanged, while only this pixel's channel lanes are enabled.  The
+    // channel pattern is based on the global byte offset, so crossing a row
+    // boundary does not change the logical sample mapping.
+    if output.len() < 16 {
+        let mut block = [0u8; 16];
+        block[..output.len()].copy_from_slice(&output);
+        super::draw_line_vector_block(
+            &mut block,
+            0,
+            target_start,
+            target_end,
+            channels,
+            color,
+            false,
+        );
+        let output_len = output.len();
+        output.copy_from_slice(&block[..output_len]);
+    } else {
+        let block_start = target_start.min(output.len() - 16);
+        super::draw_line_vector_block(
+            &mut output,
+            block_start,
+            target_start,
+            target_end,
+            channels,
+            color,
+            false,
+        );
+    }
+    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_vector_blocks(1);
+    crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels).map(Some)
+}
+
+pub(crate) fn simd_put_pixel(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let PipelineOp::PutPixel { x, y, color, .. } = op else {
+        return Err(PilError::ValueError("expected PutPixel op".into()));
+    };
+    let Some(channels) = native_putpixel_layout(img, mode) else {
+        return Err(super::simd_unsupported("PutPixel"));
+    };
+    simd_put_pixel_native(img, *x, *y, *color, channels)?
+        .ok_or_else(|| super::simd_unsupported("PutPixel"))
 }

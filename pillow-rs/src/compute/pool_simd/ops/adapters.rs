@@ -49,7 +49,9 @@ pub(crate) use self::native_thumbnail::{
 pub(crate) use self::projection::{
     simd_cmyk_projection, simd_cmyk_projection_from_positive_writes, simd_rgb_projection,
 };
-pub(crate) use self::put_pixel::{simd_rgba_putpixel_batch, simd_rgba_putpixel_batch_supported};
+pub(crate) use self::put_pixel::{
+    simd_put_pixel, simd_rgba_putpixel_batch, simd_rgba_putpixel_batch_supported,
+};
 use self::resize_i32::simd_resize_i32;
 use self::transpose::native_transpose_bytes;
 use crate::checked_dims::CheckedDims;
@@ -492,17 +494,6 @@ fn native_draw_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
             Some(4)
         }
         _ => None,
-    }
-}
-
-/// `Image.putpixel` stores the already-normalized LAB sample triplet directly
-/// into the shared RGB8 raster. Keep this support specific to PutPixel so the
-/// broader drawing adapters do not accidentally inherit color-space semantics.
-fn native_putpixel_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
-    if matches!((img, mode), (DynamicImage::ImageRgb8(_), Some("LAB"))) {
-        Some(3)
-    } else {
-        native_draw_layout(img, mode)
     }
 }
 
@@ -5000,72 +4991,6 @@ fn simd_draw_points_native(
     crate::image_utils::raw_bytes_to_image(image_width, image_height, output, channels).map(Some)
 }
 
-/// Set one validated pixel through a masked native-byte vector store.  The
-/// surrounding pixels are preserved, so this keeps `P`, `CMYK`, and the
-/// ordinary byte layouts in their logical storage without packed RGBA
-/// conversion.  Palette resolution and coordinate validation happen before
-/// the pipeline operation is queued.
-fn simd_put_pixel_native(
-    img: &DynamicImage,
-    x: u32,
-    y: u32,
-    color: (u8, u8, u8, u8),
-    channels: usize,
-) -> Result<Option<DynamicImage>, PilError> {
-    if x >= img.width() || y >= img.height() {
-        return Ok(None);
-    }
-    let row_bytes = (img.width() as usize)
-        .checked_mul(channels)
-        .ok_or_else(|| PilError::InternalError("SIMD PutPixel row stride overflow".into()))?;
-    let target_start = (y as usize)
-        .checked_mul(row_bytes)
-        .and_then(|row| row.checked_add((x as usize).checked_mul(channels)?))
-        .ok_or_else(|| PilError::InternalError("SIMD PutPixel offset overflow".into()))?;
-    let target_end = target_start
-        .checked_add(channels)
-        .ok_or_else(|| PilError::InternalError("SIMD PutPixel end overflow".into()))?;
-    let mut output = img.as_bytes().to_vec();
-    if target_end > output.len() {
-        return Ok(None);
-    }
-    // A single pixel can sit in a row narrower than one vector.  Use a
-    // masked block over the flat native buffer instead of rejecting the
-    // operation: bytes from the adjacent row are loaded and stored
-    // unchanged, while only this pixel's channel lanes are enabled.  The
-    // channel pattern is based on the global byte offset, so crossing a row
-    // boundary does not change the logical sample mapping.
-    if output.len() < 16 {
-        let mut block = [0u8; 16];
-        block[..output.len()].copy_from_slice(&output);
-        draw_line_vector_block(
-            &mut block,
-            0,
-            target_start,
-            target_end,
-            channels,
-            color,
-            false,
-        );
-        let output_len = output.len();
-        output.copy_from_slice(&block[..output_len]);
-    } else {
-        let block_start = target_start.min(output.len() - 16);
-        draw_line_vector_block(
-            &mut output,
-            block_start,
-            target_start,
-            target_end,
-            channels,
-            color,
-            false,
-        );
-    }
-    crate::compute::record_pipeline_operation_path("vector");
-    crate::compute::record_pipeline_operation_vector_blocks(1);
-    crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels).map(Some)
-}
-
 fn simd_draw_vertical_segment(
     output: &mut [u8],
     image_width: u32,
@@ -6790,7 +6715,7 @@ pub(crate) fn simd_supports_for_image(
             y,
             palette_index: _,
             ..
-        } => native_putpixel_layout(img, mode)
+        } => put_pixel::native_putpixel_layout(img, mode)
             .is_some_and(|channels| *x < img.width() && *y < img.height() && channels != 0),
         PipelineOp::DrawRectangle {
             x0,
@@ -28761,21 +28686,6 @@ pub fn simd_rotate(
 // ═══════════════════════════════════════════════════════════════════════
 // Section H: Special/mutating ops
 // ═══════════════════════════════════════════════════════════════════════
-
-pub fn simd_put_pixel(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let PipelineOp::PutPixel { x, y, color, .. } = op else {
-        return Err(PilError::ValueError("expected PutPixel op".into()));
-    };
-    let Some(channels) = native_putpixel_layout(img, mode) else {
-        return Err(simd_unsupported("PutPixel"));
-    };
-    simd_put_pixel_native(img, *x, *y, *color, channels)?
-        .ok_or_else(|| simd_unsupported("PutPixel"))
-}
 
 #[inline]
 fn simd_put_alpha_block(
