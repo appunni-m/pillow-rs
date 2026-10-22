@@ -1,15 +1,190 @@
 //! SIMD Pad adapter and native-layout resize/fill orchestration.
 
 use super::{
-    copy_native_bytes, native_expand_fill_sample, native_fill_row, native_pad_channels_for_image,
-    native_pad_contained_dimensions, native_pad_filter, native_pad_offsets,
-    native_pad_supported_for_image, simd_resize_convolution, simd_resize_convolution_into,
-    simd_resize_f, simd_resize_i32, simd_resize_nearest, simd_unsupported,
+    SimdImageShape, copy_native_bytes, native_expand_fill_sample, native_fill_row,
+    native_pad_channels_for_image, native_pad_channels_for_shape, native_pad_contained_dimensions,
+    simd_resize_convolution, simd_resize_convolution_into, simd_resize_f, simd_resize_i32,
+    simd_resize_nearest, simd_unsupported,
 };
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::DynamicImage;
+
+fn native_pad_offsets(
+    contained_width: u32,
+    contained_height: u32,
+    target_width: u32,
+    target_height: u32,
+    centering: (f64, f64),
+) -> Option<(usize, usize)> {
+    if !centering.0.is_finite() || !centering.1.is_finite() {
+        return None;
+    }
+    let width_gap = target_width.checked_sub(contained_width)?;
+    let height_gap = target_height.checked_sub(contained_height)?;
+    if width_gap != 0 {
+        Some((
+            usize::try_from(super::native_pad_round_dimension(
+                f64::from(width_gap) * centering.0.clamp(0.0, 1.0),
+            )?)
+            .ok()?,
+            0,
+        ))
+    } else {
+        Some((
+            0,
+            usize::try_from(super::native_pad_round_dimension(
+                f64::from(height_gap) * centering.1.clamp(0.0, 1.0),
+            )?)
+            .ok()?,
+        ))
+    }
+}
+
+/// Pillow's indexed `P` pad path uses nearest-neighbour sampling regardless
+/// of the requested filter. `PA` is different: its index and alpha bytes are
+/// filtered independently, so it retains the requested kernel.
+fn native_pad_filter(mode: Option<&str>, filter: ResampleFilter) -> ResampleFilter {
+    if mode == Some("P") {
+        ResampleFilter::Nearest
+    } else {
+        filter
+    }
+}
+
+fn native_pad_supported_for_image(
+    img: &DynamicImage,
+    target_width: u32,
+    target_height: u32,
+    filter: ResampleFilter,
+    mode: Option<&str>,
+) -> bool {
+    let Some(channels) = native_pad_channels_for_image(img, mode) else {
+        return false;
+    };
+    let Some(expected_bytes) = (img.width() as usize)
+        .checked_mul(img.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+    else {
+        return false;
+    };
+    if img.as_bytes().len() != expected_bytes {
+        return false;
+    }
+    let filter = native_pad_filter(mode, filter);
+    // A zero-width/zero-height source still has a valid Pillow pad contract:
+    // the output is a filled canvas. There is no aspect-ratio geometry to
+    // compute, so admission is based on the vector fill data plane directly.
+    if img.width() == 0 || img.height() == 0 {
+        return target_width != 0
+            && target_height != 0
+            && super::native_resize_supported_for_dimensions(
+                img.width(),
+                img.height(),
+                target_width,
+                target_height,
+                filter,
+                channels,
+            );
+    }
+    let Some((contained_width, contained_height)) = super::native_pad_contained_dimensions(
+        img.width(),
+        img.height(),
+        target_width,
+        target_height,
+    ) else {
+        return false;
+    };
+    if native_pad_offsets(
+        contained_width,
+        contained_height,
+        target_width,
+        target_height,
+        (0.5, 0.5),
+    )
+    .is_none()
+    {
+        return false;
+    }
+    (img.width(), img.height()) == (contained_width, contained_height)
+        || super::native_resize_supported_for_dimensions(
+            img.width(),
+            img.height(),
+            contained_width,
+            contained_height,
+            filter,
+            channels,
+        )
+}
+
+fn native_pad_supported_for_shape(
+    shape: SimdImageShape,
+    target_width: u32,
+    target_height: u32,
+    filter: ResampleFilter,
+    mode: Option<&str>,
+) -> bool {
+    let Some(channels) = native_pad_channels_for_shape(shape, mode) else {
+        return false;
+    };
+    let filter = native_pad_filter(mode, filter);
+    if shape.width == 0 || shape.height == 0 {
+        return target_width != 0
+            && target_height != 0
+            && super::native_resize_supported_for_dimensions(
+                shape.width,
+                shape.height,
+                target_width,
+                target_height,
+                filter,
+                channels,
+            );
+    }
+    let Some((contained_width, contained_height)) = super::native_pad_contained_dimensions(
+        shape.width,
+        shape.height,
+        target_width,
+        target_height,
+    ) else {
+        return false;
+    };
+    native_pad_offsets(
+        contained_width,
+        contained_height,
+        target_width,
+        target_height,
+        (0.5, 0.5),
+    )
+    .is_some()
+        && ((shape.width, shape.height) == (contained_width, contained_height)
+            || super::native_resize_supported_for_dimensions(
+                shape.width,
+                shape.height,
+                contained_width,
+                contained_height,
+                filter,
+                channels,
+            ))
+}
+
+pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    let PipelineOp::Pad { w, h, filter, .. } = op else {
+        return false;
+    };
+    native_pad_supported_for_image(img, *w, *h, *filter, mode)
+}
+
+pub(super) fn supports_for_shape(
+    shape: SimdImageShape,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    let PipelineOp::Pad { w, h, filter, .. } = op else {
+        return false;
+    };
+    native_pad_supported_for_shape(shape, *w, *h, *filter, mode)
+}
 
 fn native_pad_bytes(
     img: &DynamicImage,
