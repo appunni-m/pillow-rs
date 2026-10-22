@@ -5,16 +5,105 @@ mod kernels;
 pub(crate) use self::extrema::{simd_max_filter, simd_min_filter};
 
 use super::{
-    SIMD_RANK_FILTER_LANES, SIMD_RANK_FILTER_MIN_VECTOR_PIXELS, native_copy_image_bytes,
-    native_filter_byte_layout, native_float_rank_supported_for_image,
-    native_small_uniform_byte_image, native_uniform_f_mode_image, rank_filter_vector_pixels,
-    simd_blur_load_u8x16, simd_unsupported, store_rank_filter_channel_vector, u8x16,
+    SIMD_BYTE_VECTOR_LANES, SimdImageShape, native_copy_image_bytes, native_filter_byte_layout,
+    native_small_uniform_byte_image, native_typed_filter_layout,
+    shape_native_typed_filter_channels, simd_blur_load_u8x16, simd_unsupported, u8x16,
 };
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 use wide::f32x8;
+
+const SIMD_RANK_FILTER_MIN_VECTOR_PIXELS: usize = 1;
+
+pub(super) fn native_float_rank_supported_for_image(
+    img: &DynamicImage,
+    mode: Option<&str>,
+    size: u32,
+    rank: u32,
+) -> bool {
+    let area = u64::from(size).saturating_mul(u64::from(size));
+    native_typed_filter_layout(img, mode).is_some()
+        && mode == Some("F")
+        && size != 0
+        && size % 2 == 1
+        && size <= SIMD_FLOAT_ORDER_STATISTIC_MAX_SIZE
+        && u64::from(rank) < area
+        && img.width() != 0
+        && img.height() != 0
+        && img
+            .width()
+            .checked_mul(img.height())
+            .and_then(|pixels| pixels.checked_mul(4))
+            .is_some_and(|bytes| img.as_bytes().len() == bytes as usize)
+}
+
+pub(super) fn shape_native_float_rank_supported(
+    shape: SimdImageShape,
+    mode: Option<&str>,
+    size: u32,
+    rank: u32,
+) -> bool {
+    let area = u64::from(size).saturating_mul(u64::from(size));
+    shape_native_typed_filter_channels(shape, mode).is_some()
+        && mode == Some("F")
+        && size != 0
+        && size % 2 == 1
+        && size <= SIMD_FLOAT_ORDER_STATISTIC_MAX_SIZE
+        && u64::from(rank) < area
+        && shape.width != 0
+        && shape.height != 0
+}
+
+#[inline]
+fn native_uniform_f_mode_image(raw: &[u8], width: usize, height: usize) -> bool {
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    let Some(byte_count) = pixel_count.checked_mul(4) else {
+        return false;
+    };
+    if pixel_count == 0 || raw.len() != byte_count {
+        return false;
+    }
+    let Some(first) = raw.get(..4) else {
+        return false;
+    };
+    raw.chunks_exact(4).skip(1).all(|pixel| pixel == first)
+}
+
+/// Choose a useful active width for one `u8x16` pixel block.
+///
+/// The image is interleaved, so the vector operates on one channel at a time.
+/// A partial block is still a real vector operation: inactive lanes are held
+/// at the operation's identity value and are never stored. This also keeps
+/// narrow images on the vector data path instead of making a valid public
+/// input appear to be CPU-only merely because it has fewer than eight pixels.
+#[inline]
+fn rank_filter_vector_pixels(remaining: usize) -> usize {
+    if remaining >= SIMD_BYTE_VECTOR_LANES {
+        SIMD_BYTE_VECTOR_LANES
+    } else {
+        remaining.min(SIMD_BYTE_VECTOR_LANES)
+    }
+}
+
+#[inline]
+fn store_rank_filter_channel_vector(
+    output: &mut [u8],
+    row_start: usize,
+    channels: usize,
+    channel: usize,
+    x_start: usize,
+    active: usize,
+    values: u8x16,
+) {
+    let values = values.to_array();
+    for (lane, value) in values.into_iter().enumerate().take(active) {
+        output[row_start + (x_start + lane) * channels + channel] = value;
+    }
+}
 
 #[inline]
 pub(super) fn median_of_nine_vectors(values: &mut [u8x16]) -> u8x16 {
@@ -143,7 +232,7 @@ fn rank_filter_order_statistic_window_vector(
 ) -> u8x16 {
     // The upper lanes are never stored for an incomplete block. Zero is a
     // valid padding value because the sorting network is lane-independent.
-    let mut values = [0u8; SIMD_RANK_FILTER_LANES];
+    let mut values = [0u8; SIMD_BYTE_VECTOR_LANES];
     let last = width - 1;
     for (lane, value) in values.iter_mut().enumerate().take(active) {
         let source_x = x_start
@@ -166,14 +255,14 @@ fn rank_filter_luma_window_vector(
 ) -> u8x16 {
     // Interior lanes are contiguous in native L; require room for the full
     // right-neighbor load. Border and tail blocks keep explicit clamping.
-    if active == SIMD_RANK_FILTER_LANES
+    if active == SIMD_BYTE_VECTOR_LANES
         && x_start > 0
-        && x_start.saturating_add(SIMD_RANK_FILTER_LANES) < width
+        && x_start.saturating_add(SIMD_BYTE_VECTOR_LANES) < width
     {
         return simd_blur_load_u8x16(source_row, x_start + column_offset - 1);
     }
 
-    let mut values = [0u8; SIMD_RANK_FILTER_LANES];
+    let mut values = [0u8; SIMD_BYTE_VECTOR_LANES];
     for (lane, value) in values.iter_mut().enumerate().take(active) {
         let source_x = x_start
             .saturating_add(lane)
@@ -454,7 +543,7 @@ pub(super) fn simd_order_statistic_filter(
         );
     }
     let vector_blocks =
-        width.div_ceil(SIMD_RANK_FILTER_LANES) as u64 * channels as u64 * height as u64;
+        width.div_ceil(SIMD_BYTE_VECTOR_LANES) as u64 * channels as u64 * height as u64;
     let scalar_tail = 0u64;
 
     crate::compute::record_pipeline_operation_path("vector");
@@ -472,7 +561,7 @@ const SIMD_FLOAT_ORDER_STATISTIC_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 // The byte-domain selector switches away from the fixed network above 5x5,
 // but the existing F-mode vector sorter is independently bounded by its
 // 9x9/81-value storage. Keep that exact F-mode contract available.
-pub(super) const SIMD_FLOAT_ORDER_STATISTIC_MAX_SIZE: u32 = 9;
+const SIMD_FLOAT_ORDER_STATISTIC_MAX_SIZE: u32 = 9;
 
 #[inline]
 fn sort_float_order_statistic_vectors(values: &mut [f32x8]) {

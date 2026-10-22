@@ -1,6 +1,6 @@
 //! Lane-wise SIMD kernels for fixed-size median windows.
 
-use super::super::{SIMD_RANK_FILTER_LANES, u8x16};
+use super::super::{SIMD_BYTE_VECTOR_LANES, u8x16};
 
 #[inline(always)]
 fn compare_exchange(values: &mut [u8x16], left: usize, right: usize) {
@@ -57,7 +57,7 @@ pub(super) fn median_filter_rgb_3x3_row(
     for channel in 0..3 {
         let mut x = 0usize;
         while x < width {
-            let active = super::super::rank_filter_vector_pixels(width - x);
+            let active = super::rank_filter_vector_pixels(width - x);
             let top = y.saturating_sub(1) * row_stride;
             let middle = y * row_stride;
             let bottom = y.saturating_add(1).min(height - 1) * row_stride;
@@ -79,9 +79,7 @@ pub(super) fn median_filter_rgb_3x3_row(
                 bottom_right,
             ];
             let selected = median_of_nine_vectors(&mut values);
-            super::super::store_rank_filter_channel_vector(
-                output_row, 0, 3, channel, x, active, selected,
-            );
+            super::store_rank_filter_channel_vector(output_row, 0, 3, channel, x, active, selected);
             x += active;
         }
     }
@@ -108,7 +106,7 @@ pub(super) fn la_order_statistic_3x3_row<const RANK: usize>(
     let mut x = 0usize;
 
     while x < width {
-        let active_pixels = (width - x).min(SIMD_RANK_FILTER_LANES / 2);
+        let active_pixels = (width - x).min(SIMD_BYTE_VECTOR_LANES / 2);
         let mut values = [u8x16::splat(u8::MAX); 9];
         for (row_index, row_start) in row_starts.into_iter().enumerate() {
             let source_row = &raw[row_start..row_start + row_stride];
@@ -137,7 +135,7 @@ fn gather_la_row_columns(
     x_start: usize,
     active_pixels: usize,
 ) -> [u8x16; 3] {
-    let pixels_per_vector = SIMD_RANK_FILTER_LANES / 2;
+    let pixels_per_vector = SIMD_BYTE_VECTOR_LANES / 2;
     if active_pixels == pixels_per_vector && x_start > 0 && x_start + active_pixels < width {
         let left_start = (x_start - 1) * 2;
         return [
@@ -147,7 +145,7 @@ fn gather_la_row_columns(
         ];
     }
 
-    let mut columns = [[u8::MAX; SIMD_RANK_FILTER_LANES]; 3];
+    let mut columns = [[u8::MAX; SIMD_BYTE_VECTOR_LANES]; 3];
     for lane in 0..active_pixels {
         let pixel_x = x_start + lane;
         let neighbors = [

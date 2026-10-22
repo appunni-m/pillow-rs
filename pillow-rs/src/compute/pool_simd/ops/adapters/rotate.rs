@@ -109,7 +109,7 @@ pub(super) fn copy_right_angle_pixels(
     y_offset: i32,
     fill: (u8, u8, u8, u8),
 ) -> (u64, u64) {
-    let pixels_per_vector = (super::SIMD_RANK_FILTER_LANES / channels).max(1);
+    let pixels_per_vector = (super::SIMD_BYTE_VECTOR_LANES / channels).max(1);
     let block_bytes = pixels_per_vector * channels;
     let row_bytes = width * channels;
     let vector_width = width / pixels_per_vector * pixels_per_vector;

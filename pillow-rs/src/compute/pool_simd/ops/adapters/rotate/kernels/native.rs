@@ -3,7 +3,7 @@
 use super::super as rotate;
 use super::super::super::transpose::native_transpose;
 use super::super::super::{
-    SIMD_F64_LANES, SIMD_RANK_FILTER_LANES, SimdRotateSample, TransposeMethod,
+    SIMD_BYTE_VECTOR_LANES, SIMD_F64_LANES, SimdRotateSample, TransposeMethod,
     bilinear_rotate_scalar, bilinear_rotate_vector, gather_rotate_neighborhood_vectors,
     native_copy_image_bytes, native_rotate_layout, rotate_discrete_fast_angle, rotate_fill_sample,
     rotate_fused_mul_add, rotate_unpremultiply_vector, simd_rotate_geometry,
@@ -73,7 +73,7 @@ pub(in crate::compute::pool_simd::ops::adapters::rotate) fn simd_nearest_rotate_
     let step_y_y = fixed(e);
     let origin_x = fixed(c + a * 0.5 + b * 0.5);
     let origin_y = fixed(f + d * 0.5 + e * 0.5);
-    let pixels_per_vector = (SIMD_RANK_FILTER_LANES / channels).max(1);
+    let pixels_per_vector = (SIMD_BYTE_VECTOR_LANES / channels).max(1);
     let block_bytes = pixels_per_vector * channels;
     // Small positive angles keep nearest samples in one source row long
     // enough to copy native RGB spans. Other affine slopes retain the gather

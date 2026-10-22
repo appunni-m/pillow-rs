@@ -182,6 +182,8 @@ macro_rules! simd_rows_mut_serial {
 
 pub(crate) use simd_rows_mut_serial;
 
+const SIMD_BYTE_VECTOR_LANES: usize = 16;
+
 fn native_byte_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
@@ -1406,7 +1408,7 @@ pub(crate) fn simd_supports_for_image(
                 && *size % 2 == 1
                 && img.width() != 0
                 && img.height() != 0)
-                || native_float_rank_supported_for_image(
+                || median_filter::native_float_rank_supported_for_image(
                     img,
                     mode,
                     *size,
@@ -1424,7 +1426,7 @@ pub(crate) fn simd_supports_for_image(
                 && *size <= 15
                 && img.width() != 0
                 && img.height() != 0)
-                || native_float_rank_supported_for_image(
+                || median_filter::native_float_rank_supported_for_image(
                     img,
                     mode,
                     *size,
@@ -1440,7 +1442,7 @@ pub(crate) fn simd_supports_for_image(
                 && u64::from(*rank) < area
                 && img.width() != 0
                 && img.height() != 0)
-                || native_float_rank_supported_for_image(img, mode, *size, *rank)
+                || median_filter::native_float_rank_supported_for_image(img, mode, *size, *rank)
         }
         PipelineOp::PutAlpha { .. } | PipelineOp::PutAlphaData { .. } => {
             put_alpha::supports_for_image(img, op, mode)
@@ -1773,23 +1775,6 @@ fn shape_native_byte_channels(shape: SimdImageShape, mode: Option<&str>) -> Opti
 
 fn shape_native_typed_filter_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     (shape.layout == SimdLayout::Rgba8 && matches!(mode, Some("I" | "F"))).then_some(4)
-}
-
-fn shape_native_float_rank_supported(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-    size: u32,
-    rank: u32,
-) -> bool {
-    let area = u64::from(size).saturating_mul(u64::from(size));
-    shape_native_typed_filter_channels(shape, mode).is_some()
-        && mode == Some("F")
-        && size != 0
-        && size % 2 == 1
-        && size <= median_filter::SIMD_FLOAT_ORDER_STATISTIC_MAX_SIZE
-        && u64::from(rank) < area
-        && shape.width != 0
-        && shape.height != 0
 }
 
 fn shape_native_rotate_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
@@ -2617,7 +2602,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 && *size % 2 == 1
                 && shape.width != 0
                 && shape.height != 0)
-                || shape_native_float_rank_supported(
+                || median_filter::shape_native_float_rank_supported(
                     shape,
                     mode,
                     *size,
@@ -2635,7 +2620,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 && *size <= 15
                 && shape.width != 0
                 && shape.height != 0)
-                || shape_native_float_rank_supported(
+                || median_filter::shape_native_float_rank_supported(
                     shape,
                     mode,
                     *size,
@@ -2651,7 +2636,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 && u64::from(*rank) < area
                 && shape.width != 0
                 && shape.height != 0)
-                || shape_native_float_rank_supported(shape, mode, *size, *rank)
+                || median_filter::shape_native_float_rank_supported(shape, mode, *size, *rank)
         }
         PipelineOp::PutAlpha { .. } | PipelineOp::PutAlphaData { .. } => {
             put_alpha::supports_for_shape(shape, op, mode)
@@ -6513,8 +6498,6 @@ pub fn simd_remap_palette(
 
 // ── Native rank-family extrema ─────────────────────────────────────────────
 
-const SIMD_RANK_FILTER_LANES: usize = 16;
-const SIMD_RANK_FILTER_MIN_VECTOR_PIXELS: usize = 1;
 const SIMD_UNIFORM_NEIGHBORHOOD_MAX_PIXELS: usize = 64 * 64;
 const SIMD_ZERO_NEIGHBORHOOD_MAX_PIXELS: usize = 256 * 256;
 
@@ -6557,77 +6540,6 @@ fn native_uniform_byte_image_up_to(img: &DynamicImage, channels: usize, max_pixe
     pixel_chunks.next().is_some_and(|first_pixel| {
         pixel_chunks.remainder().is_empty() && pixel_chunks.all(|pixel| pixel == first_pixel)
     })
-}
-
-fn native_float_rank_supported_for_image(
-    img: &DynamicImage,
-    mode: Option<&str>,
-    size: u32,
-    rank: u32,
-) -> bool {
-    let area = u64::from(size).saturating_mul(u64::from(size));
-    native_typed_filter_layout(img, mode).is_some()
-        && mode == Some("F")
-        && size != 0
-        && size % 2 == 1
-        && size <= median_filter::SIMD_FLOAT_ORDER_STATISTIC_MAX_SIZE
-        && u64::from(rank) < area
-        && img.width() != 0
-        && img.height() != 0
-        && img
-            .width()
-            .checked_mul(img.height())
-            .and_then(|pixels| pixels.checked_mul(4))
-            .is_some_and(|bytes| img.as_bytes().len() == bytes as usize)
-}
-
-#[inline]
-fn native_uniform_f_mode_image(raw: &[u8], width: usize, height: usize) -> bool {
-    let Some(pixel_count) = width.checked_mul(height) else {
-        return false;
-    };
-    let Some(byte_count) = pixel_count.checked_mul(4) else {
-        return false;
-    };
-    if pixel_count == 0 || raw.len() != byte_count {
-        return false;
-    }
-    let Some(first) = raw.get(..4) else {
-        return false;
-    };
-    raw.chunks_exact(4).skip(1).all(|pixel| pixel == first)
-}
-
-/// Choose a useful active width for one `u8x16` pixel block.
-///
-/// The image is interleaved, so the vector operates on one channel at a time.
-/// A partial block is still a real vector operation: inactive lanes are held
-/// at the operation's identity value and are never stored. This also keeps
-/// narrow images on the vector data path instead of making a valid public
-/// input appear to be CPU-only merely because it has fewer than eight pixels.
-#[inline]
-fn rank_filter_vector_pixels(remaining: usize) -> usize {
-    if remaining >= SIMD_RANK_FILTER_LANES {
-        SIMD_RANK_FILTER_LANES
-    } else {
-        remaining.min(SIMD_RANK_FILTER_LANES)
-    }
-}
-
-#[inline]
-fn store_rank_filter_channel_vector(
-    output: &mut [u8],
-    row_start: usize,
-    channels: usize,
-    channel: usize,
-    x_start: usize,
-    active: usize,
-    values: u8x16,
-) {
-    let values = values.to_array();
-    for (lane, value) in values.into_iter().enumerate().take(active) {
-        output[row_start + (x_start + lane) * channels + channel] = value;
-    }
 }
 
 const SIMD_BOX_BLUR_SCALE: u32 = 1 << 24;

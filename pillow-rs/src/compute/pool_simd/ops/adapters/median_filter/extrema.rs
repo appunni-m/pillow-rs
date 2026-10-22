@@ -1,9 +1,8 @@
 //! SIMD MaxFilter and MinFilter family adapter and native-byte kernels.
 
 use super::super::{
-    SIMD_RANK_FILTER_LANES, native_copy_image_bytes, native_filter_byte_layout,
-    native_small_uniform_byte_image, native_zero_byte_image, rank_filter_vector_pixels,
-    simd_unsupported, store_rank_filter_channel_vector, u8x16,
+    SIMD_BYTE_VECTOR_LANES, native_copy_image_bytes, native_filter_byte_layout,
+    native_small_uniform_byte_image, native_zero_byte_image, simd_unsupported, u8x16,
 };
 use crate::error::PilError;
 use crate::image::preserve_mode;
@@ -31,7 +30,7 @@ fn rank_filter_horizontal_window_vector(
     window_offset: usize,
     select_max: bool,
 ) -> u8x16 {
-    let mut values = [rank_filter_identity(select_max); SIMD_RANK_FILTER_LANES];
+    let mut values = [rank_filter_identity(select_max); SIMD_BYTE_VECTOR_LANES];
     let last = width - 1;
     for (lane, value) in values.iter_mut().enumerate().take(active) {
         let source_x = x_start
@@ -60,7 +59,7 @@ fn rank_filter_vertical_window_vector(
     window_offset: usize,
     select_max: bool,
 ) -> u8x16 {
-    let mut values = [rank_filter_identity(select_max); SIMD_RANK_FILTER_LANES];
+    let mut values = [rank_filter_identity(select_max); SIMD_BYTE_VECTOR_LANES];
     let last = height - 1;
     let source_y = y
         .saturating_add(window_offset)
@@ -152,7 +151,7 @@ fn rank_filter_horizontal_vectorized_row(
     for channel in 0..channels {
         let mut x = 0usize;
         while x < width {
-            let active = rank_filter_vector_pixels(width - x);
+            let active = super::rank_filter_vector_pixels(width - x);
             if active == 0 {
                 for tail_x in x..width {
                     horizontal_row[tail_x * channels + channel] = rank_filter_horizontal_scalar(
@@ -188,7 +187,7 @@ fn rank_filter_horizontal_vectorized_row(
                     selected.min(values)
                 };
             }
-            store_rank_filter_channel_vector(
+            super::store_rank_filter_channel_vector(
                 horizontal_row,
                 0,
                 channels,
@@ -249,7 +248,7 @@ fn rank_filter_horizontal_vectorized(
         );
     }
     let vector_blocks =
-        width.div_ceil(SIMD_RANK_FILTER_LANES) as u64 * channels as u64 * height as u64;
+        width.div_ceil(SIMD_BYTE_VECTOR_LANES) as u64 * channels as u64 * height as u64;
     (vector_blocks, 0)
 }
 
@@ -271,7 +270,7 @@ fn rank_filter_vertical_vectorized_row(
     for channel in 0..channels {
         let mut x = 0usize;
         while x < width {
-            let active = rank_filter_vector_pixels(width - x);
+            let active = super::rank_filter_vector_pixels(width - x);
             if active == 0 {
                 for tail_x in x..width {
                     output_row[tail_x * channels + channel] = rank_filter_vertical_scalar(
@@ -310,7 +309,9 @@ fn rank_filter_vertical_vectorized_row(
                     selected.min(values)
                 };
             }
-            store_rank_filter_channel_vector(output_row, 0, channels, channel, x, active, selected);
+            super::store_rank_filter_channel_vector(
+                output_row, 0, channels, channel, x, active, selected,
+            );
             x += active;
         }
     }
@@ -355,7 +356,7 @@ fn rank_filter_vertical_vectorized(
         );
     }
     let vector_blocks =
-        width.div_ceil(SIMD_RANK_FILTER_LANES) as u64 * channels as u64 * height as u64;
+        width.div_ceil(SIMD_BYTE_VECTOR_LANES) as u64 * channels as u64 * height as u64;
     (vector_blocks, 0)
 }
 
