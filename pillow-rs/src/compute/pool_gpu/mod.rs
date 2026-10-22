@@ -7024,65 +7024,16 @@ impl GpuPool {
         // itself need the device and must surface its materialization errors.
         let auxiliary_images = resolve_batch_auxiliary_images(ops, img, mode)?;
 
-        if empty_two_input_noop {
-            if !gpu_empty_two_input_inputs_are_safe(ops, img, &auxiliary_images) {
-                gpu_log!(
-                    "[GPU] dispatch preflight routed batch to CPU: unsafe or incomplete empty-image inputs"
-                );
-                return self.preflight_failure(
-                    ops,
-                    img,
-                    mode,
-                    allow_cpu_fallback,
-                    "unsafe or incomplete empty-image inputs",
-                );
-            }
-            // There are no invocations to submit. Record an explicit zero
-            // dispatch so telemetry does not substitute the operation-count
-            // estimate for this valid no-op path.
-            crate::compute::record_pipeline_dispatch_count(0);
-            return Ok(img.clone());
-        }
-
-        if gpu_pipeline_requires_cpu(ops, img, &auxiliary_images, mode) {
-            gpu_log!(
-                "[GPU] dispatch preflight routed batch to CPU: unsafe or incomplete image dimensions"
-            );
-            return self.preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                "unsafe or incomplete image dimensions",
-            );
-        }
-
-        // Contrast's midpoint belongs to the current source image. The
-        // batch uniform block carries one midpoint, so compute it before
-        // upload. A single exact PutPixel prefix can be mirrored without
-        // publishing a second backend receipt; all other current-image
-        // sequences retain the exact host-control path.
-        let contrast_mean = if ops
-            .iter()
-            .any(|op| matches!(op, PipelineOp::Contrast { .. }))
-        {
-            match gpu_contrast_mean_after_exact_prefix(img, ops, mode) {
-                Some(mean) => Some(mean),
-                None => {
-                    let reason = if ops
-                        .iter()
-                        .position(|op| matches!(op, PipelineOp::Contrast { .. }))
-                        == Some(0)
-                    {
-                        "Contrast midpoint is unavailable for this image layout"
-                    } else {
-                        "Contrast midpoint requires the current host image"
-                    };
-                    return self.preflight_failure(ops, img, mode, allow_cpu_fallback, reason);
-                }
-            }
-        } else {
-            None
+        let contrast_mean = match self.preflight_resolved_batch_inputs(
+            ops,
+            img,
+            &auxiliary_images,
+            mode,
+            allow_cpu_fallback,
+            empty_two_input_noop,
+        )? {
+            BatchResolvedInputPreflight::Continue { contrast_mean } => contrast_mean,
+            BatchResolvedInputPreflight::Return(image) => return Ok(image),
         };
 
         let gpu = Self::ensure_init()?;

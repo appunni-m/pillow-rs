@@ -5,6 +5,11 @@ pub(super) enum BatchContractPreflight {
     Return(DynamicImage),
 }
 
+pub(super) enum BatchResolvedInputPreflight {
+    Continue { contrast_mean: Option<u8> },
+    Return(DynamicImage),
+}
+
 pub(super) struct GpuBatchResizeProofs {
     pub(super) constant_bits: Option<u32>,
     pub(super) box_copy_is_exact: bool,
@@ -64,6 +69,80 @@ pub(super) fn gpu_batch_resize_proofs(
 }
 
 impl GpuPool {
+    pub(super) fn preflight_resolved_batch_inputs(
+        &self,
+        ops: &[PipelineOp],
+        image: &DynamicImage,
+        auxiliary_images: &[AuxiliaryImages],
+        mode: Option<&str>,
+        allow_cpu_fallback: bool,
+        empty_two_input_noop: bool,
+    ) -> Result<BatchResolvedInputPreflight, PilError> {
+        if empty_two_input_noop {
+            if !gpu_empty_two_input_inputs_are_safe(ops, image, auxiliary_images) {
+                gpu_log!(
+                    "[GPU] dispatch preflight routed batch to CPU: unsafe or incomplete empty-image inputs"
+                );
+                return self
+                    .preflight_failure(
+                        ops,
+                        image,
+                        mode,
+                        allow_cpu_fallback,
+                        "unsafe or incomplete empty-image inputs",
+                    )
+                    .map(BatchResolvedInputPreflight::Return);
+            }
+            // No invocations are submitted for this valid empty-image no-op.
+            crate::compute::record_pipeline_dispatch_count(0);
+            return Ok(BatchResolvedInputPreflight::Return(image.clone()));
+        }
+
+        if gpu_pipeline_requires_cpu(ops, image, auxiliary_images, mode) {
+            gpu_log!(
+                "[GPU] dispatch preflight routed batch to CPU: unsafe or incomplete image dimensions"
+            );
+            return self
+                .preflight_failure(
+                    ops,
+                    image,
+                    mode,
+                    allow_cpu_fallback,
+                    "unsafe or incomplete image dimensions",
+                )
+                .map(BatchResolvedInputPreflight::Return);
+        }
+
+        // Contrast's midpoint belongs to the current source image. A single
+        // exact PutPixel prefix can be mirrored; other prefixes need host control.
+        let contrast_mean = if ops
+            .iter()
+            .any(|op| matches!(op, PipelineOp::Contrast { .. }))
+        {
+            match gpu_contrast_mean_after_exact_prefix(image, ops, mode) {
+                Some(mean) => Some(mean),
+                None => {
+                    let reason = if ops
+                        .iter()
+                        .position(|op| matches!(op, PipelineOp::Contrast { .. }))
+                        == Some(0)
+                    {
+                        "Contrast midpoint is unavailable for this image layout"
+                    } else {
+                        "Contrast midpoint requires the current host image"
+                    };
+                    return self
+                        .preflight_failure(ops, image, mode, allow_cpu_fallback, reason)
+                        .map(BatchResolvedInputPreflight::Return);
+                }
+            }
+        } else {
+            None
+        };
+
+        Ok(BatchResolvedInputPreflight::Continue { contrast_mean })
+    }
+
     pub(super) fn preflight_batch_contract(
         &self,
         ops: &[PipelineOp],
