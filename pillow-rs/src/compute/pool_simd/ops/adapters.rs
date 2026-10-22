@@ -503,7 +503,6 @@ pub(crate) fn simd_supports_for_image(
         return false;
     }
     let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
-    let native_byte_channels = native_byte_layout(img, mode);
     let native_filter_byte_channels = native_filter_byte_layout(img, mode);
     let native_copy = native_copy_layout(img, mode).is_some();
     let native_luma16_transpose = native_luma16_transpose_layout(img, mode);
@@ -618,28 +617,8 @@ pub(crate) fn simd_supports_for_image(
         PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => {
             filter::supports_for_image(img, op, mode)
         }
-        PipelineOp::BoxBlur { radius } => {
-            if *radius == 0 {
-                has_vectorized_native_identity_copy(img, mode)
-            } else {
-                native_byte_channels.is_some() && img.width() != 0 && img.height() != 0
-            }
-        }
-        PipelineOp::BoxBlurXY {
-            radius_x,
-            radius_y,
-            passes,
-        } => {
-            native_byte_channels.is_some()
-                && *passes != 0
-                && radius_x.is_finite()
-                && radius_y.is_finite()
-                && *radius_x >= 0.0
-                && *radius_y >= 0.0
-                && ((*radius_x != 0.0 || *radius_y != 0.0) && img.width() != 0 && img.height() != 0
-                    || (*radius_x == 0.0
-                        && *radius_y == 0.0
-                        && has_vectorized_native_identity_copy(img, mode)))
+        PipelineOp::BoxBlur { .. } | PipelineOp::BoxBlurXY { .. } => {
+            box_blur::supports_for_image(img, op, mode)
         }
         PipelineOp::GaussianBlur { sigma } => gaussian_blur::supports_for_image(img, *sigma, mode),
         PipelineOp::MaxFilter { size } | PipelineOp::MinFilter { size } => {
@@ -1281,7 +1260,6 @@ pub(crate) fn first_unsupported_simd_op<'a>(
 
 fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<&str>) -> bool {
     let pixel_count = (shape.width as usize).saturating_mul(shape.height as usize);
-    let native_byte_channels = shape_native_byte_channels(shape, mode);
     let native_filter_byte_channels = shape_native_filter_byte_channels(shape, mode);
     let native_copy = shape_native_copy_channels(shape, mode).is_some();
     let native_luma16_transpose = shape_luma16_transpose_layout(shape, mode);
@@ -1394,32 +1372,8 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => {
             filter::supports_for_shape(shape, op, mode)
         }
-        PipelineOp::BoxBlur { radius } => {
-            if *radius == 0 {
-                shape_native_byte_channels(shape, mode).is_some_and(|channels| {
-                    shape_has_vectorized_native_identity_copy(shape, channels)
-                })
-            } else {
-                native_byte_channels.is_some() && shape.width != 0 && shape.height != 0
-            }
-        }
-        PipelineOp::BoxBlurXY {
-            radius_x,
-            radius_y,
-            passes,
-        } => {
-            native_byte_channels.is_some()
-                && *passes != 0
-                && radius_x.is_finite()
-                && radius_y.is_finite()
-                && *radius_x >= 0.0
-                && *radius_y >= 0.0
-                && ((*radius_x != 0.0 || *radius_y != 0.0) && shape.width != 0 && shape.height != 0
-                    || (*radius_x == 0.0
-                        && *radius_y == 0.0
-                        && shape_native_byte_channels(shape, mode).is_some_and(|channels| {
-                            shape_has_vectorized_native_identity_copy(shape, channels)
-                        })))
+        PipelineOp::BoxBlur { .. } | PipelineOp::BoxBlurXY { .. } => {
+            box_blur::supports_for_shape(shape, op, mode)
         }
         PipelineOp::GaussianBlur { sigma } => {
             gaussian_blur::supports_for_shape(shape, *sigma, mode)

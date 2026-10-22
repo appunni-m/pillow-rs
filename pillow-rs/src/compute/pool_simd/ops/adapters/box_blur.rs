@@ -16,8 +16,10 @@ pub(super) use self::kernels::{
 use self::kernels::{simd_luma_box_blur_radius_one_rows, simd_rgb_box_blur_radius_one_rows};
 
 use super::{
-    CheckedDims, SIMD_BOX_BLUR_SCALE, gaussian_rgba_uniform, native_byte_layout,
-    native_copy_image_bytes, native_small_uniform_byte_image, preserve_mode, simd_unsupported,
+    CheckedDims, SIMD_BOX_BLUR_SCALE, SimdImageShape, gaussian_rgba_uniform,
+    has_vectorized_native_identity_copy, native_byte_layout, native_copy_image_bytes,
+    native_small_uniform_byte_image, preserve_mode, shape_has_vectorized_native_identity_copy,
+    shape_native_byte_channels, simd_unsupported,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -26,6 +28,74 @@ use crate::raster::DynamicImage;
 pub(super) fn simd_native_blur_channels(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     let channels = native_byte_layout(img, mode)?;
     (1..=4).contains(&channels).then_some(channels)
+}
+
+pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    let native_byte_channels = native_byte_layout(img, mode);
+    match op {
+        PipelineOp::BoxBlur { radius } => {
+            if *radius == 0 {
+                has_vectorized_native_identity_copy(img, mode)
+            } else {
+                native_byte_channels.is_some() && img.width() != 0 && img.height() != 0
+            }
+        }
+        PipelineOp::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } => {
+            native_byte_channels.is_some()
+                && *passes != 0
+                && radius_x.is_finite()
+                && radius_y.is_finite()
+                && *radius_x >= 0.0
+                && *radius_y >= 0.0
+                && ((*radius_x != 0.0 || *radius_y != 0.0) && img.width() != 0 && img.height() != 0
+                    || (*radius_x == 0.0
+                        && *radius_y == 0.0
+                        && has_vectorized_native_identity_copy(img, mode)))
+        }
+        _ => false,
+    }
+}
+
+pub(super) fn supports_for_shape(
+    shape: SimdImageShape,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    let native_byte_channels = shape_native_byte_channels(shape, mode);
+    match op {
+        PipelineOp::BoxBlur { radius } => {
+            if *radius == 0 {
+                native_byte_channels.is_some_and(|channels| {
+                    shape_has_vectorized_native_identity_copy(shape, channels)
+                })
+            } else {
+                native_byte_channels.is_some() && shape.width != 0 && shape.height != 0
+            }
+        }
+        PipelineOp::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } => {
+            native_byte_channels.is_some()
+                && *passes != 0
+                && radius_x.is_finite()
+                && radius_y.is_finite()
+                && *radius_x >= 0.0
+                && *radius_y >= 0.0
+                && ((*radius_x != 0.0 || *radius_y != 0.0) && shape.width != 0 && shape.height != 0
+                    || (*radius_x == 0.0
+                        && *radius_y == 0.0
+                        && native_byte_channels.is_some_and(|channels| {
+                            shape_has_vectorized_native_identity_copy(shape, channels)
+                        })))
+        }
+        _ => false,
+    }
 }
 
 #[derive(Clone, Copy)]
