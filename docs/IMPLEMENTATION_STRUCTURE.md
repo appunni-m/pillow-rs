@@ -336,7 +336,9 @@ Completed under `pillow-rs#rxcj`: SIMD Thumbnail now has a family adapter at
 path and F32/I32 reduction kernels under `thumbnail/kernels/`. SIMD Offset's
 byte and Luma16 kernels are under `pool_simd/ops/adapters/offset/kernels/`.
 BoxBlur owns `box_blur.rs` and its Luma, AVX2, and NEON kernels; Transpose owns
-`transpose.rs` with its RGBA AVX2 kernel; GaussianBlur owns
+`transpose.rs` for admission and orientation, with portable tiled kernels in
+`transpose/kernels/portable.rs` and its RGBA AVX2 kernel in
+`transpose/kernels/rgba_avx2.rs`; GaussianBlur owns
 `gaussian_blur.rs` with its RGBA uniform kernel.
 
 SIMD Draw now keeps its operation adapter in `pool_simd/ops/adapters/draw.rs`.

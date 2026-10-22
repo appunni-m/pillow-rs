@@ -380,6 +380,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- transform.rs
 |   |   |   |   |   |   |-- transpose/
 |   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- portable.rs
 |   |   |   |   |   |   |   |   `-- rgba_avx2.rs
 |   |   |   |   |   |   |   `-- kernels.rs
 |   |   |   |   |   |   `-- transpose.rs

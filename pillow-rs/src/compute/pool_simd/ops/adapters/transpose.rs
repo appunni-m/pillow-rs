@@ -1,20 +1,26 @@
 //! SIMD Transpose family admission and mode/orientation selection.
 
-#[cfg(target_arch = "x86_64")]
 mod kernels;
 
-use super::{
-    CheckedDims, copy_native_bytes, mirror_native_row, transpose_gathered_row,
-    transpose_native_tiled,
+use self::kernels::transpose_gathered_row;
+pub(super) use self::kernels::transpose_native_tiled;
+#[cfg(all(test, feature = "parallel"))]
+pub(super) use self::kernels::{
+    TransposeNativeCollectCounters, TransposeNativeOddCollectCounters, TransposeNativeOddRowCache,
+    TransposeNativeRowCache,
 };
 #[cfg(feature = "parallel")]
-use super::{
+pub(super) use self::kernels::{
     transpose_native_collect, transpose_native_collect_admitted, transpose_native_odd_collect,
     transpose_native_odd_collect_admitted,
 };
+use super::{
+    CheckedDims, copy_native_bytes, mirror_native_row, native_luma16_transpose_layout,
+    preserve_mode,
+};
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, TransposeMethod};
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, ImageBuffer, Luma};
 
 #[inline]
 #[cfg(target_arch = "x86_64")]
@@ -353,6 +359,81 @@ pub(super) fn native_transpose_bytes(
     ))
 }
 
+/// Apply transpose while retaining the native `I;16*` DynamicImage variant.
+///
+/// The shared byte kernel moves complete two-byte samples as opaque groups;
+/// reconstructing `ImageLuma16` only restores the native typed buffer after
+/// the reorder. Endianness is deliberately not changed here: DynamicImage's
+/// `ImageLuma16` storage is host-native, and the public mode boundary handles
+/// the requested `I;16B`/`I;16L` byte order.
+fn native_transpose_luma16(
+    img: &DynamicImage,
+    mode: Option<&str>,
+    method: TransposeMethod,
+) -> Option<(DynamicImage, u64, u64)> {
+    if !native_luma16_transpose_layout(img, mode) {
+        return None;
+    }
+    let (bytes, width, height, vector_blocks, scalar_tail, _) =
+        native_transpose_bytes(img.as_bytes(), img.width(), img.height(), 2, method)?;
+    let mut chunks = bytes.chunks_exact(2);
+    let samples = chunks
+        .by_ref()
+        .map(|sample| u16::from_ne_bytes([sample[0], sample[1]]))
+        .collect::<Vec<_>>();
+    if !chunks.remainder().is_empty() {
+        return None;
+    }
+    let result = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(width, height, samples)?;
+    Some((
+        DynamicImage::ImageLuma16(result),
+        vector_blocks,
+        scalar_tail,
+    ))
+}
+
+/// Apply transpose while retaining the native 8-bit DynamicImage variant.
+pub(super) fn native_transpose(
+    img: &DynamicImage,
+    mode: Option<&str>,
+    method: TransposeMethod,
+) -> Option<(DynamicImage, u64, u64, &'static str)> {
+    if matches!(img, DynamicImage::ImageLuma16(_)) {
+        return native_transpose_luma16(img, mode, method).map(
+            |(result, vector_blocks, scalar_tail)| {
+                (result, vector_blocks, scalar_tail, "native-copy")
+            },
+        );
+    }
+    let channels = match img {
+        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => 1,
+        DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => 2,
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => 3,
+        DynamicImage::ImageRgba8(_)
+            if matches!(
+                mode,
+                None | Some("RGBA" | "RGBa" | "CMYK" | "RGBX" | "I" | "F")
+            ) =>
+        {
+            4
+        }
+        _ => return None,
+    };
+    let (bytes, width, height, vector_blocks, scalar_tail, kernel_path) =
+        native_transpose_bytes(img.as_bytes(), img.width(), img.height(), channels, method)?;
+    let result = if img.width() == 0 || img.height() == 0 {
+        crate::image_utils::raw_bytes_to_image_allow_empty(width, height, bytes, channels).ok()?
+    } else {
+        crate::image_utils::raw_bytes_to_image(width, height, bytes, channels).ok()?
+    };
+    Some((
+        preserve_mode(img, result),
+        vector_blocks,
+        scalar_tail,
+        kernel_path,
+    ))
+}
+
 /// Execute Pillow's native transpose family adapter and record its selected kernel path.
 pub(crate) fn simd_transpose(
     img: &DynamicImage,
@@ -363,7 +444,7 @@ pub(crate) fn simd_transpose(
         return Err(PilError::ValueError("expected Transpose op".into()));
     };
     if let Some((result, vector_blocks, scalar_tail, kernel_path)) =
-        super::native_transpose(img, mode, method.clone())
+        native_transpose(img, mode, method.clone())
     {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
