@@ -286,6 +286,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |       `-- rgba_rgb_ssse3.rs
 |   |   |   |   |   |   |-- convert.rs
 |   |   |   |   |   |   |-- crop.rs
+|   |   |   |   |   |   |-- draw/
+|   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- mod.rs
+|   |   |   |   |   |   |       |-- shapes.rs
+|   |   |   |   |   |   |       `-- spans.rs
 |   |   |   |   |   |   |-- draw.rs
 |   |   |   |   |   |   |-- effects.rs
 |   |   |   |   |   |   |-- expand.rs
@@ -316,6 +321,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |       |-- ycbcr.rs
 |   |   |   |   |   |   |       `-- ycbcr_ssse3.rs
 |   |   |   |   |   |   |-- grayscale.rs
+|   |   |   |   |   |   |-- mandelbrot.rs
 |   |   |   |   |   |   |-- median_filter/
 |   |   |   |   |   |   |   |-- extrema.rs
 |   |   |   |   |   |   |   `-- kernels.rs
