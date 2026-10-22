@@ -11,6 +11,7 @@ use super::native_filter::native_filter_load_byte_block;
 mod alpha_composite;
 mod box_blur;
 mod color3dlut;
+mod colorize;
 mod crop;
 pub(crate) use self::alpha_composite::{simd_alpha_composite, simd_alpha_composite_mirror};
 use self::alpha_composite::{
@@ -36,6 +37,7 @@ mod extract_band;
 mod filter;
 pub(crate) use self::color3dlut::simd_color3dlut;
 use self::color3dlut::{color3dlut_supported_for_image, color3dlut_supported_for_shape};
+pub(crate) use self::colorize::simd_colorize;
 mod flip;
 #[cfg(not(feature = "parallel"))]
 pub(crate) use self::filter::native_filter_3x3_la_binomial_rows;
@@ -157,7 +159,7 @@ use crate::ops::pil_resize::{
     FilterCoeffs, compact_resize_coeffs_to_source_span, precompute_coeffs_boxed_for_filter,
 };
 use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter, TransposeMethod};
-use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Luma, RgbImage};
+use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 use std::sync::Arc;
 use wide::{f32x4, f32x8, f64x8, i16x8, i32x8, i64x8, u8x16, u16x8, u16x16, u32x4, u32x8, u32x16};
 
@@ -1163,15 +1165,7 @@ pub(crate) fn simd_supports_for_image(
             native_byte_channels.is_some_and(|channels| has_nonempty_byte_data(img, channels))
         }
         PipelineOp::Grayscale => grayscale::supports_image(img, mode),
-        PipelineOp::Colorize { .. } => {
-            matches!(img, DynamicImage::ImageLuma8(_))
-                && matches!(mode, None | Some("L"))
-                && img.width() != 0
-                && img.height() != 0
-                && (img.width() as usize)
-                    .checked_mul(img.height() as usize)
-                    .is_some_and(|pixels| img.as_bytes().len() == pixels)
-        }
+        PipelineOp::Colorize { .. } => colorize::supports_for_image(img, mode),
         PipelineOp::Brightness { .. }
         | PipelineOp::Contrast { .. }
         | PipelineOp::ColorSaturation { .. }
@@ -1707,13 +1701,6 @@ fn shape_native_autocontrast_channels(shape: SimdImageShape, mode: Option<&str>)
         }
     };
     valid.then_some(channels)
-}
-
-fn shape_native_colorize_supported(shape: SimdImageShape, mode: Option<&str>) -> bool {
-    shape.layout == SimdLayout::Luma8
-        && matches!(mode, None | Some("L"))
-        && shape.width != 0
-        && shape.height != 0
 }
 
 fn shape_has_nonempty_byte_data(shape: SimdImageShape, channels: usize) -> bool {
@@ -2274,7 +2261,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
         }
         PipelineOp::Grayscale => grayscale::supports_shape(shape, mode),
-        PipelineOp::Colorize { .. } => shape_native_colorize_supported(shape, mode),
+        PipelineOp::Colorize { .. } => colorize::supports_for_shape(shape, mode),
         PipelineOp::Brightness { .. }
         | PipelineOp::Contrast { .. }
         | PipelineOp::ColorSaturation { .. }
@@ -3129,26 +3116,6 @@ fn native_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
 /// the shared LUT lowering used by other operations.
 #[inline]
 fn native_point_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
-    let low = input & u8x16::splat(0x0f);
-    let high: u8x16 = input >> 4u32;
-    let lookups: [u8x16; 16] = std::array::from_fn(|index| tables[index].swizzle_relaxed(low));
-    let bit0 = (high & u8x16::splat(1)).simd_eq(u8x16::splat(0));
-    let bit1 = (high & u8x16::splat(2)).simd_eq(u8x16::splat(0));
-    let bit2 = (high & u8x16::splat(4)).simd_eq(u8x16::splat(0));
-    let bit3 = (high & u8x16::splat(8)).simd_eq(u8x16::splat(0));
-    let level1: [u8x16; 8] =
-        std::array::from_fn(|index| bit0.select(lookups[index * 2], lookups[index * 2 + 1]));
-    let level2: [u8x16; 4] =
-        std::array::from_fn(|index| bit1.select(level1[index * 2], level1[index * 2 + 1]));
-    let level3: [u8x16; 2] =
-        std::array::from_fn(|index| bit2.select(level2[index * 2], level2[index * 2 + 1]));
-    bit3.select(level3[0], level3[1])
-}
-
-/// Apply the three colorize LUTs' 256-entry lookup using a balanced select
-/// tree. Keep the general LUT helper's lowering unchanged for its other users.
-#[inline]
-fn native_colorize_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     let low = input & u8x16::splat(0x0f);
     let high: u8x16 = input >> 4u32;
     let lookups: [u8x16; 16] = std::array::from_fn(|index| tables[index].swizzle_relaxed(low));
@@ -5338,143 +5305,6 @@ fn simd_native_chops(
 // ═══════════════════════════════════════════════════════════════════════
 // Section B: Single-image with extra params (solarize, posterize, ...)
 // ═══════════════════════════════════════════════════════════════════════
-
-/// Extract sixteen samples from complete interleaved byte vectors. Const
-/// layout/channel parameters let the compiler keep shuffle masks invariant.
-#[inline]
-/// Apply ImageOps.colorize's three per-value LUTs to native `L` samples.
-///
-/// Each sixteen-pixel group performs three vectorized LUT gathers and four
-/// vectorized four-pixel RGB interleaves.  The interleave setup is scalar
-/// control only; no pixel arithmetic or per-sample LUT evaluation falls back
-/// to the packed CPU adapter.  A partial group is padded and stores only its
-/// valid output bytes.
-fn native_colorize_bytes(img: &DynamicImage, lut: &[[u8; 256]; 3]) -> Option<(Vec<u8>, u64, u64)> {
-    if !matches!(img, DynamicImage::ImageLuma8(_)) {
-        return None;
-    }
-    let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
-    let source = img.as_bytes();
-    let output_bytes = pixels.checked_mul(3)?;
-    if pixels == 0 || source.len() != pixels {
-        return None;
-    }
-    let tables = [
-        native_lut_tables(&lut[0])?,
-        native_lut_tables(&lut[1])?,
-        native_lut_tables(&lut[2])?,
-    ];
-    // Store complete RGB pixels so output construction does not zero-fill a
-    // second full frame before overwriting every output byte.
-    let mut output = Vec::<[u8; 3]>::with_capacity(output_bytes / 3);
-    let mut vector_blocks = 0u64;
-    if pixels >= 65_536 {
-        for start in (0..pixels).step_by(16) {
-            let active = (pixels - start).min(16);
-            let mut padded = [0u8; 16];
-            padded[..active].copy_from_slice(&source[start..start + active]);
-            let input = u8x16::new(padded);
-            let red = native_colorize_lut_chunk(input, &tables[0]).to_array();
-            let green = native_colorize_lut_chunk(input, &tables[1]).to_array();
-            let blue = native_colorize_lut_chunk(input, &tables[2]).to_array();
-
-            // Interleave the computed lanes into exact RGB pixels, then append
-            // only active pixels. This avoids zero-filling a second full-frame
-            // byte vector and keeps the final partial block out of the result.
-            let mut packed = [[0u8; 3]; 16];
-            for lane in 0..active {
-                packed[lane] = [red[lane], green[lane], blue[lane]];
-            }
-            output.extend_from_slice(&packed[..active]);
-            vector_blocks = vector_blocks.saturating_add(4);
-        }
-    } else {
-        let interleave = u8x16::new([0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11, 12, 13, 14, 15]);
-        for start in (0..pixels).step_by(16) {
-            let active = (pixels - start).min(16);
-            let mut padded = [0u8; 16];
-            padded[..active].copy_from_slice(&source[start..start + active]);
-            let input = u8x16::new(padded);
-            let red = native_colorize_lut_chunk(input, &tables[0]).to_array();
-            let green = native_colorize_lut_chunk(input, &tables[1]).to_array();
-            let blue = native_colorize_lut_chunk(input, &tables[2]).to_array();
-
-            for group in 0..4 {
-                let lane = group * 4;
-                let packed = u8x16::new([
-                    red[lane],
-                    red[lane + 1],
-                    red[lane + 2],
-                    red[lane + 3],
-                    green[lane],
-                    green[lane + 1],
-                    green[lane + 2],
-                    green[lane + 3],
-                    blue[lane],
-                    blue[lane + 1],
-                    blue[lane + 2],
-                    blue[lane + 3],
-                    0,
-                    0,
-                    0,
-                    0,
-                ])
-                .swizzle_relaxed(interleave)
-                .to_array();
-                let group_pixels = active.saturating_sub(lane).min(4);
-                if group_pixels != 0 {
-                    let pixels = [
-                        [packed[0], packed[1], packed[2]],
-                        [packed[3], packed[4], packed[5]],
-                        [packed[6], packed[7], packed[8]],
-                        [packed[9], packed[10], packed[11]],
-                    ];
-                    output.extend_from_slice(&pixels[..group_pixels]);
-                }
-                vector_blocks = vector_blocks.saturating_add(1);
-            }
-        }
-    }
-    Some((output.into_flattened(), vector_blocks, 0))
-}
-
-pub fn simd_colorize(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let PipelineOp::Colorize {
-        black,
-        white,
-        mid,
-        blackpoint,
-        midpoint,
-        whitepoint,
-    } = op
-    else {
-        return Err(PilError::ValueError("expected Colorize op".into()));
-    };
-    if !matches!(mode, None | Some("L")) {
-        return Err(simd_unsupported("Colorize"));
-    }
-    let lut = crate::compute::pool_cpu::ops::imageops::colorize_lut(
-        black,
-        white,
-        *mid,
-        *blackpoint,
-        *midpoint,
-        *whitepoint,
-    );
-    let Some((output, vector_blocks, scalar_tail)) = native_colorize_bytes(img, &lut) else {
-        return Err(simd_unsupported("Colorize"));
-    };
-    crate::compute::record_pipeline_operation_path("vector");
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    RgbImage::from_raw(img.width(), img.height(), output)
-        .map(DynamicImage::ImageRgb8)
-        .ok_or_else(|| PilError::InternalError("SIMD colorize buffer mismatch".into()))
-}
 
 pub fn simd_solarize(
     img: &DynamicImage,
