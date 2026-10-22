@@ -109,3 +109,6 @@ pub fn simd_duplicate(
     crate::compute::record_pipeline_operation_path("native-copy");
     Ok(preserve_mode(img, result))
 }
+
+#[cfg(test)]
+mod tests;
