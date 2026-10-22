@@ -2,6 +2,7 @@
 
 #[cfg(feature = "parallel")]
 use super::simd_rows_mut_serial;
+use crate::raster::{DynamicImage, ImageBuffer, Luma};
 use wide::u8x16;
 
 // Native byte transforms always operate on L/LA/RGB/RGBA layouts. Keeping
@@ -170,4 +171,173 @@ pub(super) fn apply_native_rows<F>(
             }
         }
     }
+}
+
+/// Reverse rows in native 8-bit storage without packing pixels into RGBA.
+#[inline]
+pub(super) fn reverse_pixel_block(input: &[u8], channels: usize) -> Option<[u8; 16]> {
+    let indices = match channels {
+        1 => [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+        2 => [14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1],
+        4 => [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3],
+        _ => return None,
+    };
+    let input = u8x16::new(<[u8; 16]>::try_from(input).ok()?);
+    Some(input.swizzle_relaxed(u8x16::new(indices)).to_array())
+}
+
+/// Reverse sixteen RGB pixels with three native byte vectors.
+///
+/// RGB pixels are three bytes wide, so a single `u8x16` cannot contain an
+/// integral number of pixels. Three source vectors and fixed lane selects
+/// still cover the complete 48-byte group without scalar pixel arithmetic.
+#[inline]
+fn reverse_rgb_block(input: &[u8]) -> Option<[u8; 48]> {
+    let first = u8x16::new(<[u8; 16]>::try_from(input.get(..16)?).ok()?);
+    let second = u8x16::new(<[u8; 16]>::try_from(input.get(16..32)?).ok()?);
+    let third = u8x16::new(<[u8; 16]>::try_from(input.get(32..48)?).ok()?);
+
+    let block0_from_third = third.swizzle_relaxed(u8x16::new([
+        13, 14, 15, 10, 11, 12, 7, 8, 9, 4, 5, 6, 1, 2, 3, 0,
+    ]));
+    let block0_from_second = second.swizzle_relaxed(u8x16::splat(14));
+    let block0 = u8x16::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, u8::MAX])
+        .select(block0_from_second, block0_from_third);
+
+    let block1_from_second = second.swizzle_relaxed(u8x16::new([
+        15, 0, 11, 12, 13, 8, 9, 10, 5, 6, 7, 2, 3, 4, 0, 0,
+    ]));
+    let block1_from_third = third.swizzle_relaxed(u8x16::splat(0));
+    let block1_from_first = first.swizzle_relaxed(u8x16::splat(15));
+    let block1 = u8x16::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, u8::MAX, 0]).select(
+        block1_from_first,
+        u8x16::new([0, u8::MAX, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+            .select(block1_from_third, block1_from_second),
+    );
+
+    let block2_from_first = first.swizzle_relaxed(u8x16::new([
+        0, 12, 13, 14, 9, 10, 11, 6, 7, 8, 3, 4, 5, 0, 1, 2,
+    ]));
+    let block2_from_second = second.swizzle_relaxed(u8x16::splat(1));
+    let block2 = u8x16::new([u8::MAX, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        .select(block2_from_second, block2_from_first);
+
+    let mut output = [0u8; 48];
+    output[..16].copy_from_slice(&block0.to_array());
+    output[16..32].copy_from_slice(&block1.to_array());
+    output[32..].copy_from_slice(&block2.to_array());
+    Some(output)
+}
+
+/// Copy a byte span through the native vector type and account for its tail.
+#[inline]
+pub(super) fn copy_native_bytes(source: &[u8], output: &mut [u8]) -> Option<(u64, u64)> {
+    if source.len() != output.len() {
+        return None;
+    }
+    if source.is_empty() {
+        return Some((0, 0));
+    }
+    let vector_len = source.len() / 16 * 16;
+    let mut vector_blocks = 0u64;
+    for offset in (0..vector_len).step_by(16) {
+        let block = u8x16::new(<[u8; 16]>::try_from(&source[offset..offset + 16]).ok()?);
+        output[offset..offset + 16].copy_from_slice(&block.to_array());
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    let scalar_tail = source.len() - vector_len;
+    if scalar_tail != 0 {
+        let mut padded = [0u8; 16];
+        padded[..scalar_tail].copy_from_slice(&source[vector_len..]);
+        let block = u8x16::new(padded);
+        output[vector_len..].copy_from_slice(&block.to_array()[..scalar_tail]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail as u64))
+}
+
+/// Write a horizontally reversed row into a separate native output buffer.
+///
+/// Using a separate row is intentional: it avoids the source/destination
+/// overlap constraints of an in-place swap and lets every complete group use
+/// a fixed vector load/store. Only incomplete pixel groups use scalar copies.
+pub(super) fn mirror_native_row(
+    source: &[u8],
+    output: &mut [u8],
+    width: usize,
+    channels: usize,
+) -> Option<(u64, u64)> {
+    let row_len = width.checked_mul(channels)?;
+    if source.len() != row_len || output.len() != row_len {
+        return None;
+    }
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    if channels == 3 {
+        let vector_pixels = width / 16 * 16;
+        for output_pixel in (0..vector_pixels).step_by(16) {
+            let source_pixel = width - output_pixel - 16;
+            let source_start = source_pixel.checked_mul(3)?;
+            let output_start = output_pixel.checked_mul(3)?;
+            let block = reverse_rgb_block(source.get(source_start..source_start + 48)?)?;
+            output[output_start..output_start + 48].copy_from_slice(&block);
+            vector_blocks = vector_blocks.saturating_add(3);
+        }
+        let remainder_pixels = width - vector_pixels;
+        if remainder_pixels != 0 {
+            let remainder_len = remainder_pixels.checked_mul(3)?;
+            let mut padded = [0u8; 48];
+            let pad = 48usize.checked_sub(remainder_len)?;
+            padded[pad..].copy_from_slice(source.get(..remainder_len)?);
+            let block = reverse_rgb_block(&padded)?;
+            let output_start = vector_pixels.checked_mul(3)?;
+            output[output_start..output_start + remainder_len]
+                .copy_from_slice(&block[..remainder_len]);
+            vector_blocks = vector_blocks.saturating_add(3);
+            scalar_tail = scalar_tail.saturating_add(remainder_pixels as u64);
+        }
+        return Some((vector_blocks, scalar_tail));
+    }
+    let pixels_per_vector = 16usize.checked_div(channels)?;
+    let vector_pixels = width / pixels_per_vector * pixels_per_vector;
+    for output_pixel in (0..vector_pixels).step_by(pixels_per_vector) {
+        let source_pixel = width - output_pixel - pixels_per_vector;
+        let source_start = source_pixel.checked_mul(channels)?;
+        let output_start = output_pixel.checked_mul(channels)?;
+        let block = reverse_pixel_block(source.get(source_start..source_start + 16)?, channels)?;
+        output[output_start..output_start + 16].copy_from_slice(&block);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    let remainder_pixels = width - vector_pixels;
+    if remainder_pixels != 0 {
+        let remainder_len = remainder_pixels.checked_mul(channels)?;
+        let mut padded = [0u8; 16];
+        let pad = 16usize.checked_sub(remainder_len)?;
+        padded[pad..].copy_from_slice(source.get(..remainder_len)?);
+        let block = reverse_pixel_block(&padded, channels)?;
+        let output_start = vector_pixels.checked_mul(channels)?;
+        output[output_start..output_start + remainder_len].copy_from_slice(&block[..remainder_len]);
+        vector_blocks = vector_blocks.saturating_add(1);
+        scalar_tail = scalar_tail.saturating_add(remainder_pixels as u64);
+    }
+    Some((vector_blocks, scalar_tail))
+}
+
+pub(super) fn native_luma16_image_from_bytes(
+    width: u32,
+    height: u32,
+    bytes: Vec<u8>,
+) -> Option<DynamicImage> {
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(2))?;
+    if bytes.len() != expected {
+        return None;
+    }
+    let samples = bytes
+        .chunks_exact(2)
+        .map(|sample| u16::from_ne_bytes([sample[0], sample[1]]))
+        .collect::<Vec<_>>();
+    let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(width, height, samples)?;
+    Some(DynamicImage::ImageLuma16(image))
 }
