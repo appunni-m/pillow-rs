@@ -10,15 +10,17 @@ use self::kernels::{
     native_chops_logical_or, native_chops_logical_xor, native_chops_overlay,
     native_chops_pair_channels, native_chops_soft_light, native_chops_subtract_clamped,
     native_chops_subtract_modulo, native_logical_and_vector, native_logical_or_vector,
-    native_logical_xor_vector,
+    native_logical_xor_vector, simd_fused_multiply_screen_row,
 };
+#[cfg(feature = "parallel")]
+use super::simd_rows_mut_serial;
 use super::{
     SimdImageShape, SimdLayout, has_empty_native_bytes, has_valid_byte_data,
     has_vectorized_byte_rows, materialize_chops_operand, shape_channels,
     shape_has_empty_native_bytes, shape_has_nonempty_byte_data, simd_unsupported,
 };
 use crate::error::PilError;
-use crate::image::Image;
+use crate::image::{Image, preserve_mode};
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView};
 use std::sync::Arc;
@@ -584,4 +586,74 @@ pub(crate) fn simd_subtract(
         return Ok(result);
     }
     Err(simd_unsupported("Subtract"))
+}
+
+pub(crate) fn simd_fused_multiply_screen(
+    img: &DynamicImage,
+    first_other: &Arc<Image>,
+    second_other: &Arc<Image>,
+    mode: Option<&str>,
+) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
+    if mode.is_some() || !first_other.shares_execution_source(second_other) {
+        return Ok(None);
+    }
+    let other = materialize_chops_operand(first_other, mode)?;
+    let channels = match (img, other.as_ref()) {
+        (DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_)) => 1usize,
+        (DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(_)) => 2,
+        (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_)) => 3,
+        (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(_)) => 4,
+        _ => return Ok(None),
+    };
+    if img.dimensions() != other.dimensions() {
+        return Ok(None);
+    }
+
+    let left_bytes = img.as_bytes();
+    let right_bytes = other.as_bytes();
+    let mut output = vec![0u8; left_bytes.len()];
+    let (width, height) = img.dimensions();
+    let row_stride = (width as usize)
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("SIMD fused Chops row stride overflow".into()))?;
+    if row_stride == 0 || row_stride.checked_mul(height as usize) != Some(output.len()) {
+        return Ok(None);
+    }
+    // Both operands are tightly packed and each byte is independent. Stream
+    // across rows; only the final tile needs a tail. Cheap fused arithmetic
+    // must amortize scheduling just like the standalone native blend path.
+    let vector_blocks = output.len() / 16;
+    let scalar_tail = output.len() % 16;
+    #[cfg(feature = "parallel")]
+    if output.len() >= 4 * 1024 * 1024 {
+        const TILE_BYTES: usize = 64 * 1024;
+        let tiles = output.len().div_ceil(TILE_BYTES);
+        simd_rows_mut_serial!(
+            &mut output,
+            TILE_BYTES,
+            tiles,
+            |row_start, _row_end, _y, row| {
+                let row_end = row_start + row.len();
+                let _ = simd_fused_multiply_screen_row(
+                    &left_bytes[row_start..row_end],
+                    &right_bytes[row_start..row_end],
+                    row,
+                );
+            }
+        );
+    } else if !simd_fused_multiply_screen_row(left_bytes, right_bytes, &mut output) {
+        return Ok(None);
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    if !simd_fused_multiply_screen_row(left_bytes, right_bytes, &mut output) {
+        return Ok(None);
+    }
+    let result =
+        crate::image_utils::raw_bytes_to_image_allow_empty(width, height, output, channels)?;
+    Ok(Some((
+        preserve_mode(img, result),
+        vector_blocks as u64,
+        scalar_tail as u64,
+    )))
 }

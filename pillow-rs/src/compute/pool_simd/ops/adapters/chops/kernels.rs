@@ -787,6 +787,9 @@ native_bytewise_chops!(
     |left: u8, right: u8| u8::from((left != 0) ^ (right != 0)) * 255
 );
 
+mod fused_multiply_screen;
+pub(super) use self::fused_multiply_screen::simd_fused_multiply_screen_row;
+
 #[cfg(test)]
 mod tests {
     use super::{native_chops_lut_vector, simd_div127};

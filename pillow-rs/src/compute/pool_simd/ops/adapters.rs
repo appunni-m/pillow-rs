@@ -27,9 +27,9 @@ use self::box_blur::{
     simd_rgba_vertical_radius_one_rows, simd_transpose_interleaved_rows,
 };
 pub(crate) use self::chops::{
-    simd_add, simd_add_modulo, simd_darker, simd_difference, simd_hard_light, simd_lighter,
-    simd_logical_and, simd_logical_or, simd_logical_xor, simd_multiply, simd_overlay, simd_screen,
-    simd_soft_light, simd_subtract, simd_subtract_modulo,
+    simd_add, simd_add_modulo, simd_darker, simd_difference, simd_fused_multiply_screen,
+    simd_hard_light, simd_lighter, simd_logical_and, simd_logical_or, simd_logical_xor,
+    simd_multiply, simd_overlay, simd_screen, simd_soft_light, simd_subtract, simd_subtract_modulo,
 };
 pub(crate) use self::crop::{simd_crop, simd_crop_border};
 mod draw;
@@ -2140,118 +2140,6 @@ pub(crate) fn simd_unsharp_blend_rgb_150(
     }
 
     true
-}
-
-#[inline]
-fn simd_fused_multiply_screen_row(
-    left_bytes: &[u8],
-    right_bytes: &[u8],
-    output: &mut [u8],
-) -> bool {
-    if left_bytes.len() != right_bytes.len() || left_bytes.len() != output.len() {
-        return false;
-    }
-
-    let mut left_chunks = left_bytes.chunks_exact(16);
-    let mut right_chunks = right_bytes.chunks_exact(16);
-    let mut output_chunks = output.chunks_exact_mut(16);
-    for ((left_chunk, right_chunk), output_chunk) in left_chunks
-        .by_ref()
-        .zip(right_chunks.by_ref())
-        .zip(output_chunks.by_ref())
-    {
-        let Ok(left) = <[u8; 16]>::try_from(left_chunk) else {
-            return false;
-        };
-        let Ok(right) = <[u8; 16]>::try_from(right_chunk) else {
-            return false;
-        };
-        let left = u16x16::from(u8x16::new(left));
-        let right = u16x16::from(u8x16::new(right));
-        let multiplied = simd_div255(left * right);
-        let result = multiplied + right - simd_div255(multiplied * right);
-        output_chunk.copy_from_slice(&simd_pack_u16x16(result).to_array());
-    }
-    for ((&left, &right), output) in left_chunks
-        .remainder()
-        .iter()
-        .zip(right_chunks.remainder())
-        .zip(output_chunks.into_remainder())
-    {
-        let multiplied = (left as u32 * right as u32 / 255) as u8;
-        *output = (255u32 - ((255 - multiplied as u32) * (255 - right as u32) / 255)) as u8;
-    }
-    true
-}
-
-pub(crate) fn simd_fused_multiply_screen(
-    img: &DynamicImage,
-    first_other: &Arc<Image>,
-    second_other: &Arc<Image>,
-    mode: Option<&str>,
-) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
-    if mode.is_some() || !first_other.shares_execution_source(second_other) {
-        return Ok(None);
-    }
-    let other = materialize_chops_operand(first_other, mode)?;
-    let channels = match (img, other.as_ref()) {
-        (DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_)) => 1usize,
-        (DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(_)) => 2,
-        (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_)) => 3,
-        (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(_)) => 4,
-        _ => return Ok(None),
-    };
-    if img.dimensions() != other.dimensions() {
-        return Ok(None);
-    }
-
-    let left_bytes = img.as_bytes();
-    let right_bytes = other.as_bytes();
-    let mut output = vec![0u8; left_bytes.len()];
-    let (width, height) = img.dimensions();
-    let row_stride = (width as usize)
-        .checked_mul(channels)
-        .ok_or_else(|| PilError::ValueError("SIMD fused Chops row stride overflow".into()))?;
-    if row_stride == 0 || row_stride.checked_mul(height as usize) != Some(output.len()) {
-        return Ok(None);
-    }
-    // Both operands are tightly packed and each byte is independent. Stream
-    // across rows; only the final tile needs a tail. Cheap fused arithmetic
-    // must amortize scheduling just like the standalone native blend path.
-    let vector_blocks = output.len() / 16;
-    let scalar_tail = output.len() % 16;
-    #[cfg(feature = "parallel")]
-    if output.len() >= 4 * 1024 * 1024 {
-        const TILE_BYTES: usize = 64 * 1024;
-        let tiles = output.len().div_ceil(TILE_BYTES);
-        simd_rows_mut_serial!(
-            &mut output,
-            TILE_BYTES,
-            tiles,
-            |row_start, _row_end, _y, row| {
-                let row_end = row_start + row.len();
-                let _ = simd_fused_multiply_screen_row(
-                    &left_bytes[row_start..row_end],
-                    &right_bytes[row_start..row_end],
-                    row,
-                );
-            }
-        );
-    } else if !simd_fused_multiply_screen_row(left_bytes, right_bytes, &mut output) {
-        return Ok(None);
-    }
-
-    #[cfg(not(feature = "parallel"))]
-    if !simd_fused_multiply_screen_row(left_bytes, right_bytes, &mut output) {
-        return Ok(None);
-    }
-    let result =
-        crate::image_utils::raw_bytes_to_image_allow_empty(width, height, output, channels)?;
-    Ok(Some((
-        preserve_mode(img, result),
-        vector_blocks as u64,
-        scalar_tail as u64,
-    )))
 }
 
 /// Reverse rows in native 8-bit storage without packing pixels into RGBA.
