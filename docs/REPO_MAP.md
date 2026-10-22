@@ -78,6 +78,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |-- compute/
 |   |   |   |-- automatic_segments.rs
 |   |   |   |-- backend_state.rs
+|   |   |   |-- eager.rs
+|   |   |   |-- execution/
+|   |   |   |   `-- terminals.rs
+|   |   |   |-- execution.rs
 |   |   |   |-- mod.rs
 |   |   |   |-- phase_telemetry.rs
 |   |   |   |-- pool_cpu/
@@ -111,7 +115,43 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- imageops.rs
 |   |   |   |       `-- mod.rs
 |   |   |   |-- pool_gpu/
+|   |   |   |   |-- auxiliary_images.rs
+|   |   |   |   |-- batch_encoding/
+|   |   |   |   |   `-- dispatch.rs
+|   |   |   |   |-- batch_encoding.rs
+|   |   |   |   |-- batch_pipeline.rs
+|   |   |   |   |-- fusion.rs
+|   |   |   |   |-- geometry/
+|   |   |   |   |   `-- native_execution.rs
+|   |   |   |   |-- geometry.rs
+|   |   |   |   |-- layout_admission.rs
 |   |   |   |   |-- mod.rs
+|   |   |   |   |-- mode.rs
+|   |   |   |   |-- native_composite.rs
+|   |   |   |   |-- native_dispatch.rs
+|   |   |   |   |-- native_hsv_pad.rs
+|   |   |   |   |-- native_input.rs
+|   |   |   |   |-- native_paste/
+|   |   |   |   |   |-- execution.rs
+|   |   |   |   |   `-- masked_execution.rs
+|   |   |   |   |-- native_paste.rs
+|   |   |   |   |-- operation_admission.rs
+|   |   |   |   |-- operation_support.rs
+|   |   |   |   |-- point_ops/
+|   |   |   |   |   |-- native_alpha.rs
+|   |   |   |   |   `-- native_byte_op.rs
+|   |   |   |   |-- point_ops.rs
+|   |   |   |   |-- resize/
+|   |   |   |   |   |-- compact_box.rs
+|   |   |   |   |   |-- float_exactness.rs
+|   |   |   |   |   |-- float_fast_paths.rs
+|   |   |   |   |   |-- integer.rs
+|   |   |   |   |   |-- integer_arithmetic.rs
+|   |   |   |   |   |-- luma16.rs
+|   |   |   |   |   |-- mod.rs
+|   |   |   |   |   `-- ordered_float.rs
+|   |   |   |   |-- resource_pool.rs
+|   |   |   |   |-- rgb_merge.rs
 |   |   |   |   |-- shaders/
 |   |   |   |   |   |-- add.wgsl
 |   |   |   |   |   |-- add_modulo.wgsl
@@ -261,7 +301,53 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- transpose.wgsl
 |   |   |   |   |   |-- transpose_rgb.wgsl
 |   |   |   |   |   `-- transpose_rgb_tiled.wgsl
-|   |   |   |   `-- stream.rs
+|   |   |   |   |-- stream.rs
+|   |   |   |   |-- tests/
+|   |   |   |   |   |-- affine_geometry.rs
+|   |   |   |   |   |-- dispatch_planners.rs
+|   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |-- native_cover.rs
+|   |   |   |   |   |-- native_effects.rs
+|   |   |   |   |   |-- native_filters.rs
+|   |   |   |   |   |-- native_layout_planners.rs
+|   |   |   |   |   |-- native_luma.rs
+|   |   |   |   |   |-- native_luma_transfer.rs
+|   |   |   |   |   |-- native_operations.rs
+|   |   |   |   |   |-- native_padding.rs
+|   |   |   |   |   |-- native_paste_execution.rs
+|   |   |   |   |   |-- native_paste_planning.rs
+|   |   |   |   |   |-- native_transform.rs
+|   |   |   |   |   |-- palette_projective.rs
+|   |   |   |   |   |-- pipeline_fusion.rs
+|   |   |   |   |   |-- point_merge.rs
+|   |   |   |   |   |-- projective_filtered.rs
+|   |   |   |   |   |-- projective_nearest_execution.rs
+|   |   |   |   |   |-- projective_nearest_proofs.rs
+|   |   |   |   |   |-- putalpha_planners.rs
+|   |   |   |   |   |-- readback.rs
+|   |   |   |   |   |-- resize_compact_box.rs
+|   |   |   |   |   |-- resize_float_execution.rs
+|   |   |   |   |   |-- resize_float_proofs.rs
+|   |   |   |   |   |-- resize_geometry.rs
+|   |   |   |   |   |-- resize_integer.rs
+|   |   |   |   |   |-- resize_ordered_float.rs
+|   |   |   |   |   |-- resize_ordered_taps.rs
+|   |   |   |   |   |-- resize_streaming.rs
+|   |   |   |   |   |-- resize_thumbnail.rs
+|   |   |   |   |   |-- resource_pool.rs
+|   |   |   |   |   |-- rgb_compact.rs
+|   |   |   |   |   |-- transpose_execution.rs
+|   |   |   |   |   |-- transpose_planning.rs
+|   |   |   |   |   |-- typed_geometry.rs
+|   |   |   |   |   |-- typed_resize.rs
+|   |   |   |   |   `-- upload_reuse.rs
+|   |   |   |   |-- thumbnail.rs
+|   |   |   |   |-- transform/
+|   |   |   |   |   |-- geometry.rs
+|   |   |   |   |   |-- projective_admission.rs
+|   |   |   |   |   |-- projective_exactness.rs
+|   |   |   |   |   `-- safety.rs
+|   |   |   |   `-- transform.rs
 |   |   |   |-- pool_simd/
 |   |   |   |   |-- mod.rs
 |   |   |   |   |-- ops/
@@ -459,7 +545,27 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   `-- scalar.rs
 |   |   |   |   |-- point_batch.rs
 |   |   |   |   `-- put_pixel_batch.rs
+|   |   |   |-- registry/
+|   |   |   |   |-- gpu_params.rs
+|   |   |   |   |-- gpu_support.rs
+|   |   |   |   `-- registration/
+|   |   |   |       |-- chops.rs
+|   |   |   |       |-- color.rs
+|   |   |   |       |-- draw.rs
+|   |   |   |       |-- effects.rs
+|   |   |   |       |-- enhance.rs
+|   |   |   |       |-- extract_band.rs
+|   |   |   |       |-- filter.rs
+|   |   |   |       |-- geometry.rs
+|   |   |   |       |-- imageops.rs
+|   |   |   |       |-- mod.rs
+|   |   |   |       |-- module_fns.rs
+|   |   |   |       |-- mutating.rs
+|   |   |   |       |-- prelude.rs
+|   |   |   |       |-- simd.rs
+|   |   |   |       `-- transform.rs
 |   |   |   |-- registry.rs
+|   |   |   |-- telemetry.rs
 |   |   |   |-- thumbnail_fusion.rs
 |   |   |   `-- transpose_tests.rs
 |   |   |-- data/
@@ -689,6 +795,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |   `-- test_operation_source_crosswalk.py
     |-- test_benchmark_gpu_batch_contract.py
     |-- test_build_perfdb_selected_run.py
+    |-- test_check_backend_boundaries.py
     |-- test_chops_affine_parity.py
     |-- test_coverage_context.py
     |-- test_docs_benchmark_selection.py
@@ -726,6 +833,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_profile_migration_benchmark.py
     |-- test_receipt_state.py
     |-- test_release_tools.py
+    |-- test_rust_size_policy.py
     |-- test_source_contracts.py
     |-- validate_migration_parity_contract.py
     `-- validate_migration_parity_result.py
