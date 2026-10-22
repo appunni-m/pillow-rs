@@ -654,23 +654,6 @@ impl GpuInner {
             _ => None,
         }
     }
-
-    #[cfg(target_endian = "little")]
-    fn execute_packed_rgb_transpose(
-        &self,
-        op: &PipelineOp,
-        image: &RgbImage,
-        layout: &PackedRgbTransposeLayout,
-        buffers: &mut BufferPool,
-    ) -> Result<DynamicImage, PilError> {
-        self.execute_packed_rgb_transpose_with_upload(
-            op,
-            image,
-            layout,
-            buffers,
-            self.direct_primary_readback,
-        )
-    }
 }
 
 static GPU: std::sync::OnceLock<Result<GpuInner, PilError>> = std::sync::OnceLock::new();

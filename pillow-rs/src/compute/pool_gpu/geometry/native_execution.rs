@@ -2,6 +2,23 @@ use super::*;
 
 impl GpuInner {
     #[cfg(target_endian = "little")]
+    fn execute_packed_rgb_transpose(
+        &self,
+        op: &PipelineOp,
+        image: &RgbImage,
+        layout: &PackedRgbTransposeLayout,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
+        self.execute_packed_rgb_transpose_with_upload(
+            op,
+            image,
+            layout,
+            buffers,
+            self.direct_primary_readback,
+        )
+    }
+
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_packed_rgb_transpose_with_upload(
         &self,
         op: &PipelineOp,
