@@ -2,6 +2,11 @@ use super::*;
 
 #[cfg(target_endian = "little")]
 mod native_alpha;
+#[cfg(target_endian = "little")]
+pub(super) use native_alpha::{
+    plan_native_rgb_put_alpha_data_dispatch, plan_native_rgb_put_alpha_dispatch,
+    plan_native_rgba_put_alpha_data_dispatch,
+};
 mod native_byte_op;
 
 /// Extract and pack LUT data from a PipelineOp into [u32; 256] for GPU upload.
