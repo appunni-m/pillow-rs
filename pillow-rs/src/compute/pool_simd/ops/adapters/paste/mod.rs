@@ -4,6 +4,8 @@
 mod kernels;
 #[path = "plan.rs"]
 mod plan;
+#[cfg(test)]
+mod tests;
 
 #[cfg(feature = "parallel")]
 use super::SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD;
