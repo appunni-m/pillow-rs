@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 23 legacy file ceilings and 199 legacy functions across 66 source
+Snapshot: 23 legacy file ceilings and 197 legacy functions across 82 source
 paths. A dash means that path has no over-limit file entry; function counts
 and maximum recorded function lines are summarized here, with each exact
 signature and ceiling in the JSON baseline. All listed paths are owned by
@@ -114,12 +114,28 @@ lazytrot; each reducer issue is a child of Kata pillow-rs#m2f1.
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter.rs</code> | 6,897 | 4 (max 260) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/geometry.rs</code> | 5,600 | 11 (max 244) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303) | lazytrot | pillow-rs#vamp |
-| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 38,511 | 68 (max 1741) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 21,314 | 36 (max 1741) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/compact_box.rs</code> | — | 2 (max 113) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs</code> | — | 4 (max 282) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/integer_arithmetic.rs</code> | — | 1 (max 101) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/ordered_float.rs</code> | — | 1 (max 134) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/stream.rs</code> | 2,508 | 5 (max 331) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/mod.rs</code> | — | 1 (max 129) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/native_cover.rs</code> | — | 1 (max 160) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/native_luma.rs</code> | — | 1 (max 249) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/native_transform.rs</code> | — | 1 (max 109) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/palette_projective.rs</code> | — | 3 (max 232) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/projective_filtered.rs</code> | — | 3 (max 144) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs</code> | — | 5 (max 148) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/projective_nearest_proofs.rs</code> | — | 1 (max 420) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/readback.rs</code> | — | 3 (max 137) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/resize_float_execution.rs</code> | — | 1 (max 206) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/resize_float_proofs.rs</code> | — | 3 (max 223) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/resize_ordered_taps.rs</code> | — | 1 (max 135) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/resize_thumbnail.rs</code> | — | 1 (max 103) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs</code> | — | 2 (max 176) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/transpose_execution.rs</code> | — | 1 (max 103) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/transpose_planning.rs</code> | — | 2 (max 128) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_simd/mod.rs</code> | — | 1 (max 308) | lazytrot | pillow-rs#nt8w |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters.rs</code> | — | 2 (max 177) | lazytrot | pillow-rs#nt8w |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/box_blur/kernels/rgb.rs</code> | — | 1 (max 114) | lazytrot | pillow-rs#y5m4 |
