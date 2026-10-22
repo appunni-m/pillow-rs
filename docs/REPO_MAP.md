@@ -125,6 +125,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- batch_pipeline.rs
 |   |   |   |   |-- batch_preflight.rs
 |   |   |   |   |-- batch_preparation.rs
+|   |   |   |   |-- batch_segmentation.rs
 |   |   |   |   |-- fusion.rs
 |   |   |   |   |-- geometry/
 |   |   |   |   |   `-- native_execution.rs
