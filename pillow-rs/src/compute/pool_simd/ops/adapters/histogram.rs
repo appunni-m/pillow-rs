@@ -1,8 +1,9 @@
 //! SIMD histogram adapters for autocontrast and equalization.
 
+use super::lut::{native_lut_apply, native_lut_is_identity};
 use super::{
-    SimdImageShape, SimdLayout, has_valid_byte_data, native_lut_apply, native_lut_is_identity,
-    shape_channels, shape_has_empty_native_bytes, shape_has_nonempty_byte_data, simd_unsupported,
+    SimdImageShape, SimdLayout, has_valid_byte_data, shape_channels, shape_has_empty_native_bytes,
+    shape_has_nonempty_byte_data, simd_unsupported,
 };
 use crate::error::PilError;
 use crate::image::Image;

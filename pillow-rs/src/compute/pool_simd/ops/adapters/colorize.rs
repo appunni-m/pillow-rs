@@ -1,6 +1,7 @@
 //! SIMD adapter for native-L ImageOps.colorize.
 
-use super::{SimdImageShape, SimdLayout, native_lut_tables, simd_unsupported};
+use super::lut::native_lut_tables;
+use super::{SimdImageShape, SimdLayout, simd_unsupported};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, RgbImage};
