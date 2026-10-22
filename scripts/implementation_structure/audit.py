@@ -450,7 +450,6 @@ def classify_path(
             if stem.startswith("native_") or stem in {
                 "box_blur_luma",
                 "gaussian_rgba_uniform",
-                "resize_i32",
             }:
                 return {
                     "assessment": "review_candidate",

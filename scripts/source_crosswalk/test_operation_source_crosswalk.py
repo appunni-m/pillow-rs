@@ -153,12 +153,17 @@ class RustFamilyPathTests(unittest.TestCase):
             "native_put_pixel.rs": "simd:put_pixel",
             "native_thumbnail.rs": "simd:thumbnail",
             "native_transpose_avx2.rs": "simd:transpose",
-            "resize_i32.rs": "simd:resize",
         }
         for name, family in cases.items():
             path = f"pillow-rs/src/compute/pool_simd/ops/adapters/{name}"
             with self.subTest(path=path):
                 self.assertEqual(rust_family_for_path(path), family)
+        self.assertEqual(
+            rust_family_for_path(
+                "pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/i32.rs"
+            ),
+            "simd:resize",
+        )
         self.assertEqual(
             rust_family_for_path(
                 "pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail/integer.rs"

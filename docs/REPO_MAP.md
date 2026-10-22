@@ -280,6 +280,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |       |-- rgba_rgb_neon.rs
 |   |   |   |   |   |   |       `-- rgba_rgb_ssse3.rs
 |   |   |   |   |   |   |-- convert.rs
+|   |   |   |   |   |   |-- effects.rs
 |   |   |   |   |   |   |-- extract_band.rs
 |   |   |   |   |   |   |-- filter/
 |   |   |   |   |   |   |   `-- kernels/
@@ -292,6 +293,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- filter.rs
 |   |   |   |   |   |   |-- gaussian_blur/
 |   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- la.rs
 |   |   |   |   |   |   |       `-- rgba_uniform.rs
 |   |   |   |   |   |   |-- gaussian_blur.rs
 |   |   |   |   |   |   |-- grayscale/
@@ -303,6 +305,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |       |-- ycbcr.rs
 |   |   |   |   |   |   |       `-- ycbcr_ssse3.rs
 |   |   |   |   |   |   |-- grayscale.rs
+|   |   |   |   |   |   |-- median_filter/
+|   |   |   |   |   |   |   `-- kernels.rs
 |   |   |   |   |   |   |-- median_filter.rs
 |   |   |   |   |   |   |-- merge.rs
 |   |   |   |   |   |   |-- native_thumbnail/

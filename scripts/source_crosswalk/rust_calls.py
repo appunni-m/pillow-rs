@@ -39,11 +39,9 @@ SIMD_LEGACY_ROOT_FAMILIES = {
     "native_put_pixel.rs": "put_pixel",
     "native_thumbnail.rs": "thumbnail",
     "native_transpose_avx2.rs": "transpose",
-    "resize_i32.rs": "resize",
 }
 SIMD_LEGACY_FAMILY_DIRECTORIES = {
     "native_thumbnail": "thumbnail",
-    "resize_i32": "resize",
 }
 
 

@@ -1,6 +1,6 @@
 //! Native scalar-I SIMD thumbnail reduction and streaming resample kernels.
 
-use super::super::resize_i32::{build_resize_i_horizontal_plan, resize_i_horizontal_values};
+use super::super::resize::{build_resize_i_horizontal_plan, resize_i_horizontal_values};
 use super::super::{SIMD_RESIZE_LANES, simd_unsupported};
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::geometry::resample_kernel;

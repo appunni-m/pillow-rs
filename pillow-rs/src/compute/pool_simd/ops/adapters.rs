@@ -32,7 +32,7 @@ mod merge;
 mod native_thumbnail;
 mod projection;
 mod put_pixel;
-mod resize_i32;
+mod resize;
 mod rotate;
 mod transpose;
 pub(crate) use self::effects::{simd_effect_noise, simd_effect_spread};
@@ -54,7 +54,8 @@ pub(crate) use self::projection::{
 pub(crate) use self::put_pixel::{
     simd_put_pixel, simd_rgba_putpixel_batch, simd_rgba_putpixel_batch_supported,
 };
-use self::resize_i32::simd_resize_i32;
+pub(crate) use self::resize::simd_resize;
+use self::resize::simd_resize_i32;
 use self::transpose::native_transpose_bytes;
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::draw::{
@@ -26133,14 +26134,6 @@ fn simd_resize_boxed(
             0,
         )
     }
-}
-
-pub fn simd_resize(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    simd_resize_impl(img, op, mode, true, 0, false)
 }
 
 fn simd_resize_impl(

@@ -31943,3 +31943,35 @@ throughput; no benchmark budgets were configured. Serial CPU, SIMD, GPU and
 other modes and sizes remain open. Full source/build identities and retained
 reports are in
 [`filter-l5x5-parallel-current-x86-20261021`](evidence/filter-l5x5-parallel-current-x86-20261021/README.md).
+
+## I-mode SIMD Resize family extraction — 2026-10-22
+
+Moved the I-mode direct and boxed resize routes under the Resize family at
+`pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/i32.rs`, including
+its AArch64 NEON kernel. The family adapter now owns registered Resize
+dispatch; native Thumbnail imports the same I-mode routes and horizontal tap
+planner. The direct I-mode routine was divided into nearest, filtered,
+horizontal, vertical, and finish helpers without changing its accumulation or
+packing order. No algorithm change was intended.
+
+On the dirty arm64 macOS build based on `70a2481a18df70d73a392f49b0fce4b7e8eff6be`,
+the two affected workflows passed exact parity for all six Pillow/CPU/SIMD/GPU
+comparisons. The selected cases were
+`PIL.Image.Image.resize.nuanced.i-resize-bicubic-noise-1024x768` and
+`PIL.Image.Image.thumbnail.nuanced.performance-large-i-1024x768`. Timing used
+five warmups and 20 iterations in five samples at concurrency one; Resize
+timed `call` plus `materialize`, and Thumbnail timed `call` plus
+`observe-receiver`.
+
+| Workflow | Pillow ms | Serial CPU ms | SIMD ms | SIMD receipt | GPU request ms / actual backend |
+| --- | ---: | ---: | ---: | --- | --- |
+| I Bicubic Resize, 1024×768 → 512×384 | 2.110771 | 1.074521 | 1.340584 | `neon-f64-resize`, no fallback | 13.448730 / GPU |
+| I Thumbnail, 1024×768 | 0.966854 | 0.428167 | 0.623521 | `vector`, no fallback | 0.725854 / CPU fallback |
+
+The Thumbnail GPU request remains an admission fallback because reducing-gap
+or typed arithmetic is not proven for its selected path; it is not GPU timing.
+These are structural-refactor checks, not candidate-versus-control optimization
+evidence. The raw reports are `build/migration-parity/resize-i32-family-refactor-20261022.json`
+and `build/migration-parity/resize-i32-family-refactor-20261022-parity.json`
+with run IDs `migration-benchmark-735850761b284d689f6fac20029c9833` and
+`migration-parity-benchmark-gate-277f0fc3a75e45cd8c1884df71c37fec`.

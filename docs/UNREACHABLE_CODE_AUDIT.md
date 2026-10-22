@@ -298,3 +298,14 @@ that every production path is selected by a test or benchmark.
 No automatic cleanup is supported by this report. Each finding must end as
 documented retained code, a focused test-selection repair, a further
 investigation with missing evidence, or a separately reviewed removal task.
+
+## SIMD Resize family path follow-up — 2026-10-22
+
+The 2026-10-20 table above records the former I-mode Resize paths. The direct
+and boxed I-mode kernels now live at
+`pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/i32.rs`, with the
+AArch64 NEON module beside them at `resize/kernels/i32/neon.rs`. The Resize
+family entry remains registered as `adapters::simd_resize`, and native
+Thumbnail continues to call the I-mode direct and boxed routes through the
+family. This resolves the two old path-layout findings; it does not change the
+historical crosswalk counts or claim runtime reachability for unmeasured cfgs.

@@ -1,6 +1,6 @@
 //! Native SIMD thumbnail adapter and typed reduction kernels.
 
-use super::resize_i32::{simd_resize_i32, simd_resize_i32_boxed};
+use super::resize::{simd_resize_i32, simd_resize_i32_boxed};
 use super::{
     SimdImageShape, SimdLayout, native_copy_image_bytes, native_reduce_bytes,
     native_reduce_sparse_rgb_2x2, native_reduce_supported_for_image,
