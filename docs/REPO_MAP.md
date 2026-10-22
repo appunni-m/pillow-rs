@@ -168,7 +168,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- integer_arithmetic.rs
 |   |   |   |   |   |-- luma16.rs
 |   |   |   |   |   |-- mod.rs
-|   |   |   |   |   `-- ordered_float.rs
+|   |   |   |   |   |-- ordered_float.rs
+|   |   |   |   |   `-- tiled.rs
 |   |   |   |   |-- resource_pool.rs
 |   |   |   |   |-- rgb_merge.rs
 |   |   |   |   |-- shaders/

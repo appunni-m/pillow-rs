@@ -7,6 +7,7 @@ mod integer;
 mod integer_arithmetic;
 mod luma16;
 mod ordered_float;
+mod tiled;
 
 pub(super) use compact_box::*;
 pub(super) use float_exactness::*;
