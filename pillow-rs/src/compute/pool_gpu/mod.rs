@@ -71,6 +71,8 @@ mod batch_segmentation;
 use batch_output::*;
 mod batch_upload;
 use batch_upload::*;
+mod batch_telemetry;
+use batch_telemetry::*;
 mod batch_preparation;
 use batch_preparation::*;
 mod batch_estimates;
@@ -7696,202 +7698,45 @@ impl GpuPool {
         // working images. Return successful working sets to the bounded pool;
         // every error path drops its buffers instead of risking reuse of an
         // in-flight or device-invalid resource.
-        resource_telemetry.upload_bytes = if output_only_constant || full_luma_putdata {
-            0
-        } else if let Some(channels) = native_extract_band_channels {
-            let raw_bytes = CheckedDims::new(w, h, channels)?.total_bytes();
-            let transfer_bytes = raw_bytes
-                .div_ceil(std::mem::size_of::<u32>())
-                .checked_mul(std::mem::size_of::<u32>())
-                .ok_or_else(|| PilError::ValueError("GPU channel input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU channel input is too large".into()))?
-        } else if native_grayscale_rgb_input || native_rgb_compact_input {
-            let raw_bytes = CheckedDims::new(w, h, 3)?.total_bytes();
-            let transfer_bytes = raw_bytes
-                .div_ceil(std::mem::size_of::<u32>())
-                .checked_mul(std::mem::size_of::<u32>())
-                .ok_or_else(|| PilError::ValueError("GPU native RGB input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU native RGB input is too large".into()))?
-        } else if native_sharpness_l_input {
-            compact_luma8_transfer_bytes(w, h)?
-        } else if packed_native_byte_filter && matches!(mode, Some("LA")) {
-            let raw_bytes = CheckedDims::new(w, h, 2)?.total_bytes();
-            u64::try_from(
-                raw_bytes
-                    .div_ceil(std::mem::size_of::<u32>())
-                    .checked_mul(std::mem::size_of::<u32>())
-                    .ok_or_else(|| {
-                        PilError::ValueError("GPU native LA input is too large".into())
-                    })?,
-            )
-            .map_err(|_| PilError::ValueError("GPU native LA input is too large".into()))?
-        } else if packed_native_byte_filter {
-            compact_luma8_transfer_bytes(w, h)?
-        } else if packed_la_pad {
-            compact_native_channel_transfer_bytes(w, h, 2)?
-        } else if packed_luma_pad {
-            compact_luma8_transfer_bytes(w, h)?
-        } else if native_sharpness_la_input {
-            let raw_bytes = CheckedDims::new(w, h, 2)?.total_bytes();
-            let transfer_bytes = raw_bytes
-                .div_ceil(std::mem::size_of::<u32>())
-                .checked_mul(std::mem::size_of::<u32>())
-                .ok_or_else(|| PilError::ValueError("GPU native LA input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU native LA input is too large".into()))?
-        } else if native_la_transform_output {
-            let raw_bytes = CheckedDims::new(w, h, 2)?.total_bytes();
-            let transfer_bytes = raw_bytes
-                .div_ceil(std::mem::size_of::<u32>())
-                .checked_mul(std::mem::size_of::<u32>())
-                .ok_or_else(|| PilError::ValueError("GPU native LA input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU native LA input is too large".into()))?
-        } else if native_sharpness_rgb_input || native_reduce_rgb_input {
-            let raw_bytes = CheckedDims::new(w, h, 3)?.total_bytes();
-            let transfer_bytes = raw_bytes
-                .div_ceil(std::mem::size_of::<u32>())
-                .checked_mul(std::mem::size_of::<u32>())
-                .ok_or_else(|| PilError::ValueError("GPU native RGB input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU native RGB input is too large".into()))?
-        } else if let Some(channels) = native_expand_channels {
-            let raw_bytes = CheckedDims::new(w, h, channels)?.total_bytes();
-            let transfer_bytes = raw_bytes
-                .div_ceil(std::mem::size_of::<u32>())
-                .checked_mul(std::mem::size_of::<u32>())
-                .ok_or_else(|| PilError::ValueError("GPU Expand input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU Expand input is too large".into()))?
-        } else if let Some(channels) = native_cover_input_channels {
-            let raw_bytes = CheckedDims::new(w, h, channels)?.total_bytes();
-            let transfer_bytes = raw_bytes
-                .div_ceil(std::mem::size_of::<u32>())
-                .checked_mul(std::mem::size_of::<u32>())
-                .ok_or_else(|| PilError::ValueError("GPU Cover input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU Cover input is too large".into()))?
-        } else if packed_luma_colorize
-            || packed_luma_convert
-            || packed_luma_transform_input
-            || packed_luma_point
-            || packed_luma_putdata
-            || packed_luma_order_statistic
-            || packed_native_byte_filter
-            || packed_luma_pad
-            || native_sharpness_l_input
-        {
-            compact_luma8_transfer_bytes(w, h)?
-        } else {
-            CheckedDims::new(w, h, 4)?.total_bytes() as u64
-        };
-        resource_telemetry.readback_bytes = if let Some(dispatch) = native_cover_packed_output {
-            dispatch.transfer_bytes
-        } else if native_rgb_packed_output {
-            u64::try_from(CheckedDims::new(final_w, final_h, 3)?.total_bytes())
-                .map_err(|_| PilError::ValueError("GPU native RGB readback is too large".into()))?
-                .div_ceil(4)
-                .checked_mul(4)
-                .ok_or_else(|| {
-                    PilError::ValueError("GPU native RGB readback size overflow".into())
-                })?
-        } else if packed_la_pad || native_la_transform_output {
-            u64::try_from(CheckedDims::new(final_w, final_h, 2)?.total_bytes())
-                .map_err(|_| PilError::ValueError("GPU native LA readback is too large".into()))?
-                .div_ceil(4)
-                .checked_mul(4)
-                .ok_or_else(|| {
-                    PilError::ValueError("GPU native LA readback size overflow".into())
-                })?
-        } else if packed_native_byte_filter && matches!(mode, Some("LA")) {
-            let raw_bytes = CheckedDims::new(final_w, final_h, 2)?.total_bytes();
-            u64::try_from(
-                raw_bytes
-                    .div_ceil(std::mem::size_of::<u32>())
-                    .checked_mul(std::mem::size_of::<u32>())
-                    .ok_or_else(|| {
-                        PilError::ValueError("GPU native LA readback size overflow".into())
-                    })?,
-            )
-            .map_err(|_| PilError::ValueError("GPU native LA readback size overflow".into()))?
-        } else if native_expand_output {
-            let channels = native_expand_channels.ok_or_else(|| {
-                PilError::InternalError("GPU native Expand output is missing its channels".into())
-            })?;
-            let native_bytes = CheckedDims::new(final_w, final_h, channels)?.total_bytes();
-            u64::try_from(
-                native_bytes
-                    .div_ceil(std::mem::size_of::<u32>())
-                    .checked_mul(std::mem::size_of::<u32>())
-                    .ok_or_else(|| {
-                        PilError::ValueError("GPU native image readback size overflow".into())
-                    })?,
-            )
-            .map_err(|_| PilError::ValueError("GPU native image readback size overflow".into()))?
-        } else if output_layout.native_luma8_extract
-            || output_layout.native_luma8_grayscale
-            || output_layout.native_luma8_constant
-            || packed_luma_transform_output
-            || packed_luma_point
-            || packed_luma_putdata
-            || packed_luma_order_statistic
-            || packed_native_byte_filter
-            || packed_luma_pad
-            || native_sharpness_l_input
-        {
-            compact_luma8_transfer_bytes(final_w, final_h)?
-        } else {
-            CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64
-        };
-        resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
-        resource_telemetry.full_frame_copy_count =
-            readback.full_frame_copy_count(!output_only_constant);
-        resource_telemetry.mode_conversion_count = if output_only_constant
-            || output_layout.native_luma8_constant
-            || packed_luma_convert
-            || packed_luma_transform_input
-            || packed_luma_order_statistic
-            || packed_native_byte_filter
-            || packed_luma_pad
-            || packed_la_pad
-            || native_rgb_compact_input
-            || native_la_transform_output
-            || native_grayscale_rgb_input
-            || native_sharpness_l_input
-            || native_sharpness_la_input
-            || native_sharpness_rgb_input
-            || native_reduce_rgb_input
-            || native_expand_channels.is_some()
-            || native_cover_input_channels.is_some()
-        {
-            // This counter measures source widening before backend execution.
-            // Native upload avoids that conversion for admitted layouts;
-            // RGBA readback narrowing is accounted at the output boundary.
-            0
-        } else {
-            u64::from(
-                !native_extract_band
-                    && !native_grayscale_rgb_input
-                    && !native_sharpness_l_input
-                    && !native_sharpness_la_input
-                    && !native_sharpness_rgb_input
-                    && !native_reduce_rgb_input
-                    && !packed_luma_point
-                    && !packed_luma_putdata
-                    && !packed_luma_order_statistic
-                    && !packed_native_byte_filter
-                    && !packed_luma_pad
-                    && !packed_la_pad
-                    && (native_luma16_convert
-                        || native_luma16_paste
-                        || !matches!(
-                            img,
-                            DynamicImage::ImageRgba8(_) | DynamicImage::ImageLuma16(_)
-                        )),
-            )
-        };
+        resource_telemetry = gpu_batch_resource_telemetry(
+            resource_telemetry,
+            &buffers,
+            &readback,
+            img,
+            GpuBatchResourceTelemetryOptions {
+                input_dimensions: (w, h),
+                output_dimensions: (final_w, final_h),
+                mode,
+                output_layout: &output_layout,
+                output_only_constant,
+                full_luma_putdata,
+                native_extract_band_channels,
+                native_grayscale_rgb_input,
+                native_rgb_compact_input,
+                native_sharpness_l_input,
+                packed_native_byte_filter,
+                packed_la_pad,
+                packed_luma_pad,
+                native_sharpness_la_input,
+                native_la_transform_output,
+                native_sharpness_rgb_input,
+                native_reduce_rgb_input,
+                native_expand_channels,
+                native_cover_input_channels,
+                packed_luma_colorize,
+                packed_luma_convert,
+                packed_luma_transform_input,
+                packed_luma_point,
+                packed_luma_putdata,
+                packed_luma_order_statistic,
+                native_luma16_convert,
+                native_luma16_paste,
+                native_cover_packed_output,
+                native_rgb_packed_output,
+                packed_luma_transform_output,
+                native_expand_output,
+            },
+        )?;
         crate::compute::record_pipeline_resource_telemetry(resource_telemetry);
         crate::compute::record_pipeline_dispatch_count(dispatch_count);
         if let ReadbackTarget::Staging(staging) = readback {
