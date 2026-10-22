@@ -1,6 +1,8 @@
 use super::*;
 
 impl GpuInner {
+    /// Execute admitted byte operations without transport mode expansion.
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_byte_op(
         &self,
         op: &PipelineOp,

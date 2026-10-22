@@ -1,6 +1,8 @@
 use super::*;
 
 impl GpuInner {
+    /// Execute exact masked L/LA/PA/RGB/HSV/RGBA Paste with compact native buffers.
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_masked_byte_paste(
         &self,
         destination: &DynamicImage,

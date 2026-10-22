@@ -1,5 +1,6 @@
 use super::*;
 
+#[cfg(target_endian = "little")]
 mod native_execution;
 
 /// Compute output dimensions for a size-changing op given current input dimensions.

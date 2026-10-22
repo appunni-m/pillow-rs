@@ -1,6 +1,7 @@
 use super::*;
 
 impl GpuInner {
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_packed_rgb_transpose_with_upload(
         &self,
         op: &PipelineOp,
@@ -17,6 +18,7 @@ impl GpuInner {
         )
     }
 
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_rgba_transpose_with_upload(
         &self,
         op: &PipelineOp,
@@ -32,6 +34,7 @@ impl GpuInner {
         )
     }
 
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_byte_flip(
         &self,
         image: &DynamicImage,
@@ -220,6 +223,7 @@ impl GpuInner {
         Ok(crate::image::preserve_mode(image, result))
     }
 
+    #[cfg(target_endian = "little")]
     fn execute_native_transpose_with_upload(
         &self,
         op: &PipelineOp,

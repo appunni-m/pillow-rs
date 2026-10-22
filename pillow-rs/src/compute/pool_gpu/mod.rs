@@ -62,6 +62,7 @@ mod operation_admission;
 use operation_admission::*;
 mod batch_encoding;
 mod batch_pipeline;
+#[cfg(target_endian = "little")]
 mod native_composite;
 mod thumbnail;
 use thumbnail::*;
@@ -5067,17 +5068,6 @@ impl GpuInner {
         result
     }
 
-    #[cfg(target_endian = "little")]
-    #[cfg(target_endian = "little")]
-    #[cfg(target_endian = "little")]
-    #[cfg(target_endian = "little")]
-
-    /// Execute a full-size ImageChops composite using native byte buffers.
-    /// The shader treats each packed word as four independent result bytes,
-    /// so L/LA/RGB channels and an L/alpha mask stay compact from upload to
-    /// readback instead of expanding every input to packed RGBA pixels.
-    #[cfg(target_endian = "little")]
-
     /// Merge three native L planes into packed RGB bytes without RGBA staging.
     #[cfg(target_endian = "little")]
     fn upload_native_rgb_luma_merge_mapped(
@@ -5450,18 +5440,6 @@ impl GpuInner {
         Ok(result)
     }
 
-    /// Copy or clip one exact-layout unmasked L/LA/RGB Paste in native bytes.
-    /// The shader packs each output word directly, avoiding RGBA staging and
-    /// mode restoration; RGB bytes that cross word boundaries share one writer.
-    #[cfg(target_endian = "little")]
-
-    /// Paste native packed RGB bytes into an RGBA destination without
-    /// allocating or uploading an expanded RGBA source image.
-    #[cfg(target_endian = "little")]
-
-    /// Execute exact masked L/LA/PA/RGB/HSV/RGBA Paste with compact native buffers.
-    #[cfg(target_endian = "little")]
-
     /// Keep identity-contain HSV Pad in its native three-byte representation.
     #[cfg(target_endian = "little")]
     fn execute_native_hsv_pad(
@@ -5619,22 +5597,6 @@ impl GpuInner {
         }
         Ok(result)
     }
-
-    /// Add scalar alpha to native RGB samples and write the required RGBA
-    /// result without first expanding the host upload to four bytes per pixel.
-    #[cfg(target_endian = "little")]
-
-    /// Add a mask-derived alpha to native RGB samples while writing the
-    /// required RGBA result directly, without expanding either upload.
-    #[cfg(target_endian = "little")]
-
-    /// Replace the alpha byte in native RGBA pixels from a packed L mask.
-    /// Both inputs stay in their original host layout; the shader writes the
-    /// required RGBA output without constructing a widened mask image.
-    #[cfg(target_endian = "little")]
-
-    /// Execute admitted byte operations without transport mode expansion.
-    #[cfg(target_endian = "little")]
 
     fn readback_bytes(&self, size: u64, staging: &wgpu::Buffer) -> Result<Vec<u8>, PilError> {
         self.readback_with(size, staging, |bytes| Ok(bytes.to_vec()))

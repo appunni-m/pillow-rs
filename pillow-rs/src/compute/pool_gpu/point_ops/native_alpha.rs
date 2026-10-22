@@ -1,6 +1,9 @@
 use super::*;
 
 impl GpuInner {
+    /// Add scalar alpha to native RGB samples and write the required RGBA
+    /// result without first expanding the host upload to four bytes per pixel.
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_rgb_put_alpha(
         &self,
         image: &DynamicImage,
@@ -148,6 +151,9 @@ impl GpuInner {
         Ok(result)
     }
 
+    /// Add a mask-derived alpha to native RGB samples while writing the
+    /// required RGBA result directly, without expanding either upload.
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_rgb_put_alpha_data(
         &self,
         image: &DynamicImage,
@@ -334,6 +340,10 @@ impl GpuInner {
         Ok(result)
     }
 
+    /// Replace the alpha byte in native RGBA pixels from a packed L mask.
+    /// Both inputs stay in their original host layout; the shader writes the
+    /// required RGBA output without constructing a widened mask image.
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_rgba_put_alpha_data(
         &self,
         image: &DynamicImage,

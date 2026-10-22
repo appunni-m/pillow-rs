@@ -1,6 +1,11 @@
 use super::*;
 
 impl GpuInner {
+    /// Execute a full-size ImageChops composite using native byte buffers.
+    /// The shader treats each packed word as four independent result bytes,
+    /// so L/LA/RGB channels and an L/alpha mask stay compact from upload to
+    /// readback instead of expanding every input to packed RGBA pixels.
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_composite(
         &self,
         image: &DynamicImage,

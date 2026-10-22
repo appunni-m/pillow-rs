@@ -1,5 +1,6 @@
 use super::*;
 
+#[cfg(target_endian = "little")]
 mod native_alpha;
 mod native_byte_op;
 

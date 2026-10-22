@@ -1,6 +1,7 @@
 use super::*;
 
 mod execution;
+#[cfg(target_endian = "little")]
 mod masked_execution;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

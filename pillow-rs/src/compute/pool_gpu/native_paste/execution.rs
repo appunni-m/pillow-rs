@@ -1,6 +1,10 @@
 use super::*;
 
 impl GpuInner {
+    /// Copy or clip one exact-layout unmasked L/LA/RGB Paste in native bytes.
+    /// The shader packs each output word directly, avoiding RGBA staging and
+    /// mode restoration; RGB bytes that cross word boundaries share one writer.
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_rgb_crop(
         &self,
         source: &DynamicImage,
@@ -437,6 +441,9 @@ impl GpuInner {
         Ok(result)
     }
 
+    /// Paste native packed RGB bytes into an RGBA destination without
+    /// allocating or uploading an expanded RGBA source image.
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_rgb_to_rgba_paste(
         &self,
         destination: &DynamicImage,
