@@ -95,11 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 23 legacy file ceilings and 197 legacy functions across 86 source
-paths. A dash means that path has no over-limit file entry; function counts
-and maximum recorded function lines are summarized here, with each exact
-signature and ceiling in the JSON baseline. All listed paths are owned by
-lazytrot; each reducer issue is a child of Kata pillow-rs#m2f1.
+Snapshot: 23 legacy file ceilings and 197 legacy functions across 90 source paths. A dash means that path has no over-limit file entry; function counts and maximum recorded function lines are summarized here, with each exact signature and ceiling in the JSON baseline. All listed paths are owned by `lazytrot`; each reducer issue is a child of Kata `pillow-rs#m2f1`.
 
 | Source path | Recorded file ceiling | Long functions (count; max lines) | Owner | Reduction task |
 | --- | ---: | ---: | --- | --- |
@@ -115,7 +111,7 @@ lazytrot; each reducer issue is a child of Kata pillow-rs#m2f1.
 | <code>pillow-rs/src/compute/pool_cpu/ops/geometry.rs</code> | 5,600 | 11 (max 244) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303) | lazytrot | pillow-rs#vamp |
 | <code>pillow-rs/src/compute/pool_gpu/auxiliary_images.rs</code> | — | 1 (max 121) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 16,138 | 31 (max 1741) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 13,894 | 26 (max 1741) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/operation_admission.rs</code> | — | 2 (max 134) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/operation_support.rs</code> | — | 1 (max 226) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/point_ops.rs</code> | — | 1 (max 143) | lazytrot | pillow-rs#ras2 |
@@ -140,6 +136,10 @@ lazytrot; each reducer issue is a child of Kata pillow-rs#m2f1.
 | <code>pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs</code> | — | 2 (max 176) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/tests/transpose_execution.rs</code> | — | 1 (max 103) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/tests/transpose_planning.rs</code> | — | 2 (max 128) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/transform/geometry.rs</code> | — | 1 (max 163) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/transform/projective_admission.rs</code> | — | 1 (max 126) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs</code> | — | 1 (max 408) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/transform/safety.rs</code> | — | 2 (max 244) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_simd/mod.rs</code> | — | 1 (max 308) | lazytrot | pillow-rs#nt8w |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters.rs</code> | — | 2 (max 177) | lazytrot | pillow-rs#nt8w |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/box_blur/kernels/rgb.rs</code> | — | 1 (max 114) | lazytrot | pillow-rs#y5m4 |
