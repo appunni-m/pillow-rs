@@ -9,6 +9,9 @@ mod i32_mode;
 #[path = "resize/kernels/luma16.rs"]
 mod luma16_mode;
 mod support;
+
+#[cfg(test)]
+mod tests;
 #[path = "resize/kernels/u8_boxed_convolution.rs"]
 mod u8_boxed_convolution;
 #[path = "resize/kernels/u8_convolution.rs"]
