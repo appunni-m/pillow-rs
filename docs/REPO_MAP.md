@@ -266,31 +266,42 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- mod.rs
 |   |   |   |   |-- ops/
 |   |   |   |   |   |-- adapters/
+|   |   |   |   |   |   |-- alpha_composite.rs
 |   |   |   |   |   |   |-- box_blur/
 |   |   |   |   |   |   |   `-- kernels/
 |   |   |   |   |   |   |       |-- luma.rs
 |   |   |   |   |   |   |       |-- rgba_avx2.rs
 |   |   |   |   |   |   |       `-- rgba_neon.rs
 |   |   |   |   |   |   |-- box_blur.rs
+|   |   |   |   |   |   |-- color3dlut.rs
 |   |   |   |   |   |   |-- convert/
 |   |   |   |   |   |   |   |-- cmyk.rs
 |   |   |   |   |   |   |   |-- cmyk_packing_tests.rs
 |   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- color_space.rs
+|   |   |   |   |   |   |       |-- dispatch.rs
+|   |   |   |   |   |   |       |-- layout.rs
 |   |   |   |   |   |   |       |-- mod.rs
 |   |   |   |   |   |   |       |-- rgba_rgb_neon.rs
 |   |   |   |   |   |   |       `-- rgba_rgb_ssse3.rs
 |   |   |   |   |   |   |-- convert.rs
+|   |   |   |   |   |   |-- crop.rs
+|   |   |   |   |   |   |-- draw.rs
 |   |   |   |   |   |   |-- effects.rs
+|   |   |   |   |   |   |-- expand.rs
 |   |   |   |   |   |   |-- extract_band.rs
 |   |   |   |   |   |   |-- filter/
 |   |   |   |   |   |   |   `-- kernels/
 |   |   |   |   |   |   |       |-- byte_layouts.rs
+|   |   |   |   |   |   |       |-- i32_three_by_three.rs
 |   |   |   |   |   |   |       |-- l.rs
 |   |   |   |   |   |   |       |-- la.rs
 |   |   |   |   |   |   |       |-- mod.rs
 |   |   |   |   |   |   |       |-- rgb_blur_ring.rs
+|   |   |   |   |   |   |       |-- three_by_three.rs
 |   |   |   |   |   |   |       `-- uniform_rgb.rs
 |   |   |   |   |   |   |-- filter.rs
+|   |   |   |   |   |   |-- flip.rs
 |   |   |   |   |   |   |-- gaussian_blur/
 |   |   |   |   |   |   |   `-- kernels/
 |   |   |   |   |   |   |       |-- la.rs
@@ -306,6 +317,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |       `-- ycbcr_ssse3.rs
 |   |   |   |   |   |   |-- grayscale.rs
 |   |   |   |   |   |   |-- median_filter/
+|   |   |   |   |   |   |   |-- extrema.rs
 |   |   |   |   |   |   |   `-- kernels.rs
 |   |   |   |   |   |   |-- median_filter.rs
 |   |   |   |   |   |   |-- merge.rs
@@ -314,19 +326,39 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |       |-- byte.rs
 |   |   |   |   |   |   |       `-- luma16.rs
 |   |   |   |   |   |   |-- offset.rs
+|   |   |   |   |   |   |-- pad.rs
+|   |   |   |   |   |   |-- paste/
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- apply.rs
+|   |   |   |   |   |   |   |   |-- blend.rs
+|   |   |   |   |   |   |   |   |-- luma.rs
+|   |   |   |   |   |   |   |   |-- luma16.rs
+|   |   |   |   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |   |   |   `-- rgb_cmyk.rs
+|   |   |   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |   |   `-- plan.rs
 |   |   |   |   |   |   |-- projection.rs
+|   |   |   |   |   |   |-- put_alpha/
+|   |   |   |   |   |   |   `-- kernels.rs
+|   |   |   |   |   |   |-- put_alpha.rs
 |   |   |   |   |   |   |-- put_pixel/
 |   |   |   |   |   |   |   |-- kernels/
 |   |   |   |   |   |   |   |   `-- rgba_batch.rs
 |   |   |   |   |   |   |   `-- kernels.rs
 |   |   |   |   |   |   |-- put_pixel.rs
+|   |   |   |   |   |   |-- reduce/
+|   |   |   |   |   |   |   `-- tests.rs
+|   |   |   |   |   |   |-- reduce.rs
 |   |   |   |   |   |   |-- resize/
 |   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- f32.rs
 |   |   |   |   |   |   |       |-- i32/
 |   |   |   |   |   |   |       |   `-- neon.rs
 |   |   |   |   |   |   |       |-- i32.rs
+|   |   |   |   |   |   |       |-- luma16.rs
 |   |   |   |   |   |   |       |-- u8.rs
-|   |   |   |   |   |   |       `-- u8_boxed_convolution.rs
+|   |   |   |   |   |   |       |-- u8_boxed_convolution.rs
+|   |   |   |   |   |   |       `-- u8_nearest.rs
 |   |   |   |   |   |   |-- resize.rs
 |   |   |   |   |   |   |-- rotate/
 |   |   |   |   |   |   |   |-- kernels/
@@ -336,8 +368,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- thumbnail/
 |   |   |   |   |   |   |   `-- kernels/
 |   |   |   |   |   |   |       |-- float.rs
+|   |   |   |   |   |   |       |-- fusion.rs
 |   |   |   |   |   |   |       `-- integer.rs
 |   |   |   |   |   |   |-- thumbnail.rs
+|   |   |   |   |   |   |-- transform.rs
 |   |   |   |   |   |   |-- transpose/
 |   |   |   |   |   |   |   |-- kernels/
 |   |   |   |   |   |   |   |   `-- rgba_avx2.rs

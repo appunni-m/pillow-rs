@@ -1,14 +1,105 @@
 //! SIMD native-layout Draw family adapters.
 
-use super::{
-    has_visible_draw_rectangle, native_draw_layout, simd_draw_arc_native, simd_draw_chord_native,
-    simd_draw_ellipse_native, simd_draw_line_native, simd_draw_pieslice_native,
-    simd_draw_points_native, simd_draw_polygon_native, simd_draw_rectangle_native,
-    simd_draw_rounded_rect_native, simd_unsupported, valid_draw_rectangle,
+mod kernels;
+
+pub(super) use self::kernels::draw_line_vector_block;
+use self::kernels::{
+    simd_draw_arc_native, simd_draw_chord_native, simd_draw_ellipse_native, simd_draw_line_native,
+    simd_draw_pieslice_native, simd_draw_points_native, simd_draw_polygon_native,
+    simd_draw_rectangle_native, simd_draw_rounded_rect_native,
 };
+use super::simd_unsupported;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
+
+/// Return the native byte layout accepted by drawing operations.
+///
+/// Drawing writes samples, rather than interpreting them as colors. That
+/// allows the RGB-family logical modes backed by `Rgb8` and the CMYK-family
+/// mode backed by `Rgba8` to stay in their native interleaved storage. An
+/// explicit RGBA drawing context over an RGB image is also valid: the RGB
+/// kernel blends the supplied alpha into the three destination samples.
+pub(super) fn native_draw_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
+    match img {
+        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
+        DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
+        DynamicImage::ImageRgb8(_)
+            if matches!(mode, None | Some("RGB" | "RGBA" | "HSV" | "YCbCr")) =>
+        {
+            Some(3)
+        }
+        DynamicImage::ImageRgba8(_)
+            if matches!(
+                mode,
+                None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")
+            ) =>
+        {
+            Some(4)
+        }
+        _ => None,
+    }
+}
+
+pub(super) fn has_visible_draw_rectangle(
+    width: u32,
+    height: u32,
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    fill: Option<(u8, u8, u8, u8)>,
+    outline: Option<(u8, u8, u8, u8)>,
+    outline_width: u32,
+) -> bool {
+    if !valid_draw_rectangle(width, height, x0, y0, x1, y1) {
+        return false;
+    }
+    let has_ink = fill.is_some() || (outline.is_some() && outline_width != 0);
+    has_ink
+        && i64::from(x1) >= 0
+        && i64::from(y1) >= 0
+        && i64::from(x0) < i64::from(width)
+        && i64::from(y0) < i64::from(height)
+}
+
+pub(super) fn valid_draw_rectangle(
+    width: u32,
+    height: u32,
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+) -> bool {
+    let _ = (width, height);
+    x1 >= x0 && y1 >= y0
+}
+
+pub(super) fn line_bounds_intersect(
+    width: u32,
+    height: u32,
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+) -> bool {
+    let min_x = i64::from(x0.min(x1));
+    let max_x = i64::from(x0.max(x1));
+    let min_y = i64::from(y0.min(y1));
+    let max_y = i64::from(y0.max(y1));
+    width != 0
+        && height != 0
+        && max_x >= 0
+        && max_y >= 0
+        && min_x < i64::from(width)
+        && min_y < i64::from(height)
+}
+
+pub(super) fn has_visible_draw_point(width: u32, height: u32, points: &[(i32, i32)]) -> bool {
+    points.iter().any(|&(x, y)| {
+        x >= 0 && y >= 0 && i64::from(x) < i64::from(width) && i64::from(y) < i64::from(height)
+    })
+}
 
 /// Draw a width-one line directly in the destination's native byte layout.
 /// Geometry, clipping, and mode admission are scalar control work; contiguous

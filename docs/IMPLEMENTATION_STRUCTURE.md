@@ -339,6 +339,12 @@ BoxBlur owns `box_blur.rs` and its Luma, AVX2, and NEON kernels; Transpose owns
 `transpose.rs` with its RGBA AVX2 kernel; GaussianBlur owns
 `gaussian_blur.rs` with its RGBA uniform kernel.
 
+SIMD Draw now keeps its operation adapter in `pool_simd/ops/adapters/draw.rs`.
+The native byte span path and line/point/rectangle kernels live in
+`draw/kernels/spans.rs`; scan-converted shapes and polygons live in
+`draw/kernels/shapes.rs`. PutPixel continues to call Draw's shared byte-vector
+writer directly.
+
 Refresh this candidate list as structural work lands. The source crosswalk tracks
 implementation references; it cannot by itself declare a path misplaced or
 unused. The full-tree structure inventory classifies every maintained path;
