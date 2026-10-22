@@ -6,7 +6,7 @@
 #[path = "convert/cmyk.rs"]
 mod cmyk;
 #[cfg(all(test, target_arch = "x86_64"))]
-#[path = "convert/cmyk_packing_tests.rs"]
+#[path = "convert/tests/cmyk_packing.rs"]
 mod cmyk_packing_tests;
 #[path = "convert/kernels/mod.rs"]
 mod kernels;
@@ -517,25 +517,6 @@ pub(crate) fn simd_convert_lab(
     crate::lab::convert_rgb_image(img)
 }
 
-#[cfg(all(test, target_arch = "x86_64"))]
-mod tests {
-    use super::native_rgba_to_rgb_bytes;
-    use crate::raster::{DynamicImage, RgbaImage};
-
-    #[test]
-    fn rgba_to_rgb_dispatch_reports_the_ssse3_kernel() {
-        if !std::is_x86_feature_detected!("ssse3") {
-            return;
-        }
-        let image = DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(32, 1, (0..128).map(|byte| byte as u8).collect())
-                .expect("RGBA source has four bytes per pixel"),
-        );
-        let (_, vector_blocks, scalar_tail, path) =
-            native_rgba_to_rgb_bytes(&image).expect("SSSE3 conversion is available");
-
-        assert_eq!(path, "ssse3-rgba-to-rgb");
-        assert_eq!(vector_blocks, 2);
-        assert_eq!(scalar_tail, 0);
-    }
-}
+#[cfg(test)]
+#[path = "convert/tests.rs"]
+mod tests;
