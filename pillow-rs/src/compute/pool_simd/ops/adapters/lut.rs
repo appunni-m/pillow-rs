@@ -778,3 +778,6 @@ pub fn simd_remap_palette(
     }
     crate::image_utils::raw_bytes_to_image_allow_empty(img.width(), img.height(), output, 1)
 }
+
+#[cfg(test)]
+mod tests;
