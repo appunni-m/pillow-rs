@@ -15,8 +15,10 @@ mod u8_mode;
 #[path = "resize/kernels/u8_nearest.rs"]
 mod u8_nearest;
 
-use self::coordinates::resize_nearest_indices;
 pub(super) use self::coordinates::resize_nearest_vectorizable;
+use self::coordinates::{
+    boxed_nearest_axis_maps_identity, boxed_nearest_indices, resize_nearest_indices,
+};
 pub(super) use self::f32_mode::{simd_resize_f, simd_resize_f_boxed};
 pub(super) use self::i32_mode::{
     build_resize_i_horizontal_plan, resize_i_horizontal_values, simd_resize_i32,
@@ -32,9 +34,9 @@ pub(super) use self::u8_mode::{
 pub(super) use self::u8_nearest::{simd_resize_nearest, simd_resize_nearest_boxed};
 use super::{
     SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD, SIMD_FIT_PARALLEL_PIXEL_THRESHOLD,
-    boxed_nearest_axis_maps_identity, native_contain_supported_for_image, native_copy_image_bytes,
-    native_cover_dimensions, native_fit_box, native_fit_filter, native_fit_layout_for_image,
-    native_fit_supported_for_image, native_pad_contained_dimensions, native_resize_boxed_bounds,
+    native_contain_supported_for_image, native_copy_image_bytes, native_cover_dimensions,
+    native_fit_box, native_fit_filter, native_fit_layout_for_image, native_fit_supported_for_image,
+    native_pad_contained_dimensions, native_resize_boxed_bounds,
     native_resize_boxed_layout_for_image, native_resize_boxed_supported_for_image,
     native_resize_supported_for_image, native_scale_dimensions, native_small_uniform_byte_image,
     native_zero_byte_image, simd_unsupported,

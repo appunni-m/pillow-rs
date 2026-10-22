@@ -44,3 +44,67 @@ pub(in crate::compute::pool_simd::ops::adapters) fn resize_nearest_vectorizable(
     resize_nearest_indices(source_width, output_width).is_some()
         && resize_nearest_indices(source_height, output_height).is_some()
 }
+
+/// Build the affine nearest-neighbour map used by boxed P/PA resampling.
+/// Coordinates are evaluated in f64 lanes after Pillow's float box boundary
+/// conversion; individual source loads remain scalar gathers because portable
+/// byte gather is not available on every SIMD target.
+pub(super) fn boxed_nearest_indices(
+    source_size: u32,
+    output_size: u32,
+    box_start: f64,
+    box_end: f64,
+) -> Option<Vec<usize>> {
+    if source_size == 0 || output_size == 0 || !box_start.is_finite() || !box_end.is_finite() {
+        return None;
+    }
+    let box_start = box_start as f32 as f64;
+    let box_end = box_end as f32 as f64;
+    let scale = (box_end as f32 - box_start as f32) as f64 / f64::from(output_size);
+    let last = f64::from(source_size - 1);
+    let mut indices = Vec::with_capacity(usize::try_from(output_size).ok()?);
+    // Pillow's nearest boxed resize enters `ImagingScaleAffine`, which
+    // initializes one coordinate and advances it with `xo += a[0]` for each
+    // output pixel. Recomputing `(index + 0.5) * scale` in SIMD lanes rounds
+    // differently at exact upsample boundaries, so keep the scalar coordinate
+    // recurrence for selection and leave SIMD to the subsequent byte gather.
+    let mut coordinate = box_start + scale * 0.5;
+    for _ in 0..output_size as usize {
+        indices.push(coordinate.floor().clamp(0.0, last) as usize);
+        coordinate += scale;
+    }
+    Some(indices)
+}
+
+/// Return whether boxed nearest coordinates select each same-position sample.
+/// The recurrence mirrors Pillow's affine scaler; checking one axis is linear
+/// in its extent and avoids constructing a per-output-pixel gather map.
+pub(super) fn boxed_nearest_axis_maps_identity(
+    source_size: u32,
+    output_size: u32,
+    box_start: f64,
+    box_end: f64,
+) -> bool {
+    if source_size == 0
+        || source_size != output_size
+        || !box_start.is_finite()
+        || !box_end.is_finite()
+    {
+        return false;
+    }
+    let box_start = box_start as f32 as f64;
+    let box_end = box_end as f32 as f64;
+    let scale = (box_end as f32 - box_start as f32) as f64 / f64::from(output_size);
+    if !scale.is_finite() {
+        return false;
+    }
+    let last = f64::from(source_size - 1);
+    let mut coordinate = box_start + scale * 0.5;
+    for expected in 0..output_size as usize {
+        if coordinate.floor().clamp(0.0, last) as usize != expected {
+            return false;
+        }
+        coordinate += scale;
+    }
+    true
+}

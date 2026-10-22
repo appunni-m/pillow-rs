@@ -1,7 +1,7 @@
 //! Native-byte nearest-neighbor SIMD kernels for Resize and Thumbnail.
 
-use super::super::{SIMD_RESIZE_NEAREST_BYTES, boxed_nearest_indices, simd_unsupported};
-use super::resize_nearest_indices;
+use super::super::{SIMD_RESIZE_NEAREST_BYTES, simd_unsupported};
+use super::{boxed_nearest_indices, resize_nearest_indices};
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::raster::DynamicImage;

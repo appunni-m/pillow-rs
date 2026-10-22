@@ -1,7 +1,7 @@
 //! Native float-mode SIMD Resize kernels for direct and boxed geometry.
 
-use super::super::{SIMD_F64_LANES, SIMD_RESIZE_LANES, boxed_nearest_indices, simd_unsupported};
-use super::resize_nearest_indices;
+use super::super::{SIMD_F64_LANES, SIMD_RESIZE_LANES, simd_unsupported};
+use super::{boxed_nearest_indices, resize_nearest_indices};
 use crate::compute::pool_cpu::ops::geometry::resample_kernel;
 use crate::error::PilError;
 use crate::image::preserve_mode;
