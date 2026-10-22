@@ -502,10 +502,7 @@ pub(crate) fn simd_supports_for_image(
     if !crate::compute::registry::simd_supports(op).unwrap_or(false) {
         return false;
     }
-    let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
     let native_filter_byte_channels = native_filter_byte_layout(img, mode);
-    let native_copy = native_copy_layout(img, mode).is_some();
-    let native_luma16_transpose = native_luma16_transpose_layout(img, mode);
     match op {
         // These point operations have native byte kernels. Typed, indexed,
         // and explicitly mode-converted images are deliberately rejected
@@ -566,12 +563,7 @@ pub(crate) fn simd_supports_for_image(
         // arithmetic vectorization, but they never enter a CPU adapter.
         PipelineOp::Offset { x, .. } => offset::supports_for_image(img, *x, mode),
         PipelineOp::Flip | PipelineOp::Mirror => flip::supports_for_image(img, op, mode),
-        PipelineOp::Transpose { .. } => {
-            (native_copy || native_luma16_transpose)
-                && (pixel_count != 0
-                    || native_copy_layout(img, mode)
-                        .is_some_and(|channels| has_empty_native_bytes(img, channels)))
-        }
+        PipelineOp::Transpose { .. } => transpose::supports_for_image(img, mode),
         PipelineOp::Crop { .. } | PipelineOp::CropBorder { .. } => {
             crop::supports_for_image(img, op, mode)
         }
@@ -1225,8 +1217,6 @@ pub(crate) fn first_unsupported_simd_op<'a>(
 fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<&str>) -> bool {
     let pixel_count = (shape.width as usize).saturating_mul(shape.height as usize);
     let native_filter_byte_channels = shape_native_filter_byte_channels(shape, mode);
-    let native_copy = shape_native_copy_channels(shape, mode).is_some();
-    let native_luma16_transpose = shape_luma16_transpose_layout(shape, mode);
     match op {
         PipelineOp::Invert | PipelineOp::InvertChops => {
             effects::supports_for_shape(shape, op, mode)
@@ -1285,12 +1275,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         }
         PipelineOp::Offset { x, .. } => offset::supports_for_shape(shape, *x, mode),
         PipelineOp::Flip | PipelineOp::Mirror => flip::supports_for_shape(shape, op, mode),
-        PipelineOp::Transpose { .. } => {
-            (native_copy || native_luma16_transpose)
-                && (pixel_count != 0
-                    || native_copy
-                        && shape_has_empty_native_bytes(shape, shape_channels(shape).unwrap_or(0)))
-        }
+        PipelineOp::Transpose { .. } => transpose::supports_for_shape(shape, mode),
         PipelineOp::Crop { .. } | PipelineOp::CropBorder { .. } => {
             crop::supports_for_shape(shape, op, mode)
         }

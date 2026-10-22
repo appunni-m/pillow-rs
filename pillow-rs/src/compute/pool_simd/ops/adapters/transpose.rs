@@ -21,12 +21,31 @@ pub(super) use self::kernels::{
     transpose_native_odd_collect_admitted,
 };
 use super::{
-    CheckedDims, copy_native_bytes, mirror_native_row, native_luma16_transpose_layout,
-    preserve_mode,
+    CheckedDims, SimdImageShape, copy_native_bytes, has_empty_native_bytes, mirror_native_row,
+    native_copy_layout, native_luma16_transpose_layout, preserve_mode,
+    shape_has_empty_native_bytes, shape_luma16_transpose_layout, shape_native_copy_channels,
 };
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, TransposeMethod};
 use crate::raster::{DynamicImage, ImageBuffer, Luma};
+
+pub(super) fn supports_for_image(img: &DynamicImage, mode: Option<&str>) -> bool {
+    let native_copy = native_copy_layout(img, mode);
+    let native_luma16_transpose = native_luma16_transpose_layout(img, mode);
+    let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
+    (native_copy.is_some() || native_luma16_transpose)
+        && (pixel_count != 0
+            || native_copy.is_some_and(|channels| has_empty_native_bytes(img, channels)))
+}
+
+pub(super) fn supports_for_shape(shape: SimdImageShape, mode: Option<&str>) -> bool {
+    let native_copy = shape_native_copy_channels(shape, mode);
+    let native_luma16_transpose = shape_luma16_transpose_layout(shape, mode);
+    let pixel_count = (shape.width as usize).saturating_mul(shape.height as usize);
+    (native_copy.is_some() || native_luma16_transpose)
+        && (pixel_count != 0
+            || native_copy.is_some_and(|channels| shape_has_empty_native_bytes(shape, channels)))
+}
 
 #[inline]
 #[cfg(target_arch = "x86_64")]
