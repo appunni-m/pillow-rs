@@ -10,18 +10,306 @@ mod cmyk;
 mod cmyk_packing_tests;
 #[path = "convert/kernels/mod.rs"]
 mod kernels;
-use self::cmyk::native_cmyk_to_rgb_bytes;
-
-use self::kernels::native_rgba_to_rgb_bytes;
-
 use super::{
-    NativeConvertLayout, grayscale, native_convert_bytes, native_convert_layout,
-    native_convert_luma16_bytes, native_convert_supported_for_image, native_convert_target,
-    native_rgb_to_rgba_bytes, simd_unsupported,
+    SimdImageShape, SimdLayout, grayscale, native_byte_layout, shape_native_byte_channels,
+    simd_unsupported,
 };
 use crate::error::PilError;
 use crate::pipeline::{ColorMode, PipelineOp};
 use crate::raster::DynamicImage;
+use wide::u16x8;
+
+use self::cmyk::native_cmyk_to_rgb_bytes;
+#[cfg(feature = "parallel")]
+pub(super) use self::kernels::SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD;
+use self::kernels::native_rgba_to_rgb_bytes;
+pub(super) use self::kernels::{
+    native_convert_bytes, native_convert_layout_block, native_luma_to_rgb_bytes,
+    native_luma_to_rgba_bytes, native_rgb_to_rgba_bytes, native_rgba_color_degenerate,
+};
+
+#[derive(Clone, Copy)]
+pub(super) struct NativeConvertLayout {
+    pub(super) source_channels: usize,
+    pub(super) target_channels: usize,
+    pub(super) source_is_luma: bool,
+    pub(super) source_is_rgbx: bool,
+    pub(super) target_is_luma: bool,
+    pub(super) target_is_cmyk: bool,
+    pub(super) target_is_hsv: bool,
+    pub(super) target_is_ycbcr: bool,
+    pub(super) target_is_integer: bool,
+    pub(super) target_is_float: bool,
+}
+
+fn native_convert_target(mode: &ColorMode) -> Option<(usize, bool, bool, bool, bool)> {
+    match mode {
+        ColorMode::L => Some((1, true, false, false, false)),
+        ColorMode::LA => Some((2, true, false, false, false)),
+        ColorMode::RGB => Some((3, false, false, false, false)),
+        ColorMode::RGBA => Some((4, false, false, false, false)),
+        // Convert.c writes C/M/Y/K directly for byte RGB-family and luma
+        // sources. The raster layer carries those four native samples in
+        // Rgba8, but the fourth byte is K, never alpha.
+        ColorMode::CMYK => Some((4, false, true, false, false)),
+        // Pillow stores HSV and YCbCr in an RGB-sized byte buffer. These
+        // destinations have distinct arithmetic contracts, so they are
+        // admitted only through their dedicated native kernels below.
+        ColorMode::HSV => Some((3, false, false, true, false)),
+        ColorMode::YCbCr => Some((3, false, false, false, true)),
+        // Pillow keeps I and F as four-byte scalar samples. The surrounding
+        // image layer stores those bytes in Rgba8, but the logical target is
+        // a luma sample, not an RGBA pixel; their arithmetic is handled by
+        // the dedicated vector path below.
+        ColorMode::I | ColorMode::F => Some((4, false, false, false, false)),
+        _ => None,
+    }
+}
+
+fn native_convert_luma16_supported(
+    img: &DynamicImage,
+    target: &ColorMode,
+    mode: Option<&str>,
+) -> bool {
+    matches!(
+        target,
+        ColorMode::L | ColorMode::LA | ColorMode::RGB | ColorMode::RGBA | ColorMode::CMYK
+    ) && matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
+        && matches!(img, DynamicImage::ImageLuma16(_))
+        && (img.width() as usize)
+            .checked_mul(img.height() as usize)
+            .is_some()
+}
+
+/// Convert native unsigned-16-bit luma to the byte L/LA destinations.
+///
+/// Pillow's I;16 converter clamps each unsigned sample to the byte range; it
+/// does not scale 65535 down to 255. The sample load and clamp use eight
+/// `u16` lanes, then the result is packed into the native byte destination.
+/// This stays separate from the ordinary byte converter so raw endianness is
+/// resolved once by `Image::frombytes` and is never reinterpreted as pixels.
+fn native_convert_luma16_bytes(
+    img: &DynamicImage,
+    target: &ColorMode,
+    mode: Option<&str>,
+) -> Option<(Vec<u8>, u64, u64)> {
+    if !native_convert_luma16_supported(img, target, mode) {
+        return None;
+    }
+    let DynamicImage::ImageLuma16(source) = img else {
+        return None;
+    };
+    let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
+    if source.as_raw().len() != pixels {
+        return None;
+    }
+    let source = source.as_raw();
+    let output_channels = match target {
+        ColorMode::L => 1,
+        ColorMode::LA => 2,
+        ColorMode::RGB => 3,
+        ColorMode::RGBA | ColorMode::CMYK => 4,
+        _ => return None,
+    };
+    let mut output = Vec::with_capacity(pixels * output_channels);
+    let mut vector_blocks = 0u64;
+    for start in (0..pixels).step_by(8) {
+        let active = (pixels - start).min(8);
+        let samples = std::array::from_fn(|lane| {
+            if lane < active {
+                source[start + lane]
+            } else {
+                0
+            }
+        });
+        let samples = u16x8::new(samples)
+            .simd_gt(u16x8::splat(u16::from(u8::MAX)))
+            .select(u16x8::splat(u16::from(u8::MAX)), u16x8::new(samples))
+            .to_array()
+            .map(|value| value as u8);
+        for &value in samples.iter().take(active) {
+            match target {
+                ColorMode::L => output.push(value),
+                ColorMode::LA => output.extend_from_slice(&[value, u8::MAX]),
+                ColorMode::RGB => output.extend_from_slice(&[value, value, value]),
+                ColorMode::RGBA => output.extend_from_slice(&[value, value, value, u8::MAX]),
+                ColorMode::CMYK => {
+                    output.extend_from_slice(&[0, 0, 0, u8::MAX.saturating_sub(value)])
+                }
+                _ => return None,
+            }
+        }
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    Some((output, vector_blocks, 0))
+}
+
+fn native_convert_layout(
+    img: &DynamicImage,
+    target: &ColorMode,
+    mode: Option<&str>,
+) -> Option<NativeConvertLayout> {
+    // RGBa needs unpremultiplication before luma. The byte converter below
+    // has no such arithmetic; retain the exact CPU path for this contract.
+    if mode == Some("RGBa") && matches!(target, ColorMode::L) {
+        return None;
+    }
+    let (target_channels, target_is_luma, target_is_cmyk, target_is_hsv, target_is_ycbcr) =
+        native_convert_target(target)?;
+    let source_channels = if target_is_hsv || target_is_ycbcr {
+        match img {
+            DynamicImage::ImageRgba8(_) if mode == Some("RGBX") => 4,
+            _ => native_byte_layout(img, mode)?,
+        }
+    } else {
+        native_byte_layout(img, mode)?
+    };
+    Some(NativeConvertLayout {
+        source_channels,
+        target_channels,
+        source_is_luma: source_channels <= 2,
+        source_is_rgbx: mode == Some("RGBX"),
+        target_is_luma,
+        target_is_cmyk,
+        target_is_hsv,
+        target_is_ycbcr,
+        target_is_integer: matches!(target, ColorMode::I),
+        target_is_float: matches!(target, ColorMode::F),
+    })
+}
+
+pub(super) fn native_convert_pixels_per_vector(layout: NativeConvertLayout) -> usize {
+    if layout.target_is_cmyk {
+        // Four output samples are emitted per input pixel. The inverse and
+        // luma-to-K subtraction both run in byte vector lanes.
+        4
+    } else if layout.target_is_hsv || layout.target_is_ycbcr {
+        // Both color-space kernels process eight RGB-family pixels per wide
+        // block. Their output is three bytes per pixel, so the block is
+        // gathered/scattered by lane while the arithmetic stays vectorized.
+        8
+    } else if layout.target_is_integer || layout.target_is_float {
+        // I/F emit one four-byte scalar per pixel. Gather eight source
+        // pixels and vectorize the luma arithmetic before packing the native
+        // little-endian samples.
+        8
+    } else if !layout.source_is_luma && layout.target_is_luma {
+        // The luma formula uses eight u32 lanes. Input bytes are gathered
+        // into those lanes before the vector arithmetic begins.
+        8
+    } else {
+        // The layout-only path loads one padded u8x16 block and stores at
+        // most one u8x16 block. This also handles three-byte RGB pixels
+        // without converting them through a packed RGBA representation.
+        16 / layout.source_channels.max(layout.target_channels)
+    }
+}
+
+pub(super) fn native_convert_supported_for_image(
+    img: &DynamicImage,
+    target: &ColorMode,
+    matrix: Option<&[f64]>,
+    mode: Option<&str>,
+) -> bool {
+    // Pillow ignores the dither enum for these standard byte destinations;
+    // only matrix conversion changes the arithmetic contract.
+    if matrix.is_some() {
+        return false;
+    }
+    if matches!(target, ColorMode::RGB) && mode == Some("CMYK") {
+        let Some(pixel_count) = (img.width() as usize).checked_mul(img.height() as usize) else {
+            return false;
+        };
+        return matches!(img, DynamicImage::ImageRgba8(_))
+            && pixel_count.checked_mul(4) == Some(img.as_bytes().len());
+    }
+    if native_convert_luma16_supported(img, target, mode) {
+        return true;
+    }
+    let Some(layout) = native_convert_layout(img, target, mode) else {
+        return false;
+    };
+    let Some(pixel_count) = (img.width() as usize).checked_mul(img.height() as usize) else {
+        return false;
+    };
+    let Some(expected_bytes) = pixel_count.checked_mul(layout.source_channels) else {
+        return false;
+    };
+    // Every native converter pads its final vector block. This includes
+    // one-pixel images: the inactive lanes are zero-filled and never copied
+    // to the output, so a short public input still exercises the real SIMD
+    // data path instead of being rejected solely for its width.
+    // Empty conversions are valid scalar control in this executor; they
+    // perform no vector work and retain their destination shape/mode.
+    img.as_bytes().len() == expected_bytes
+}
+
+fn native_convert_shape_layout(
+    shape: SimdImageShape,
+    target: &ColorMode,
+    mode: Option<&str>,
+) -> Option<NativeConvertLayout> {
+    if mode == Some("RGBa") && matches!(target, ColorMode::L) {
+        return None;
+    }
+    let (target_channels, target_is_luma, target_is_cmyk, target_is_hsv, target_is_ycbcr) =
+        native_convert_target(target)?;
+    let source_channels = if target_is_hsv || target_is_ycbcr {
+        match (shape.layout, mode) {
+            (SimdLayout::Rgba8, Some("RGBX")) => 4,
+            _ => shape_native_byte_channels(shape, mode)?,
+        }
+    } else {
+        shape_native_byte_channels(shape, mode)?
+    };
+    Some(NativeConvertLayout {
+        source_channels,
+        target_channels,
+        source_is_luma: source_channels <= 2,
+        source_is_rgbx: mode == Some("RGBX"),
+        target_is_luma,
+        target_is_cmyk,
+        target_is_hsv,
+        target_is_ycbcr,
+        target_is_integer: matches!(target, ColorMode::I),
+        target_is_float: matches!(target, ColorMode::F),
+    })
+}
+
+pub(super) fn native_convert_supported_for_shape(
+    shape: SimdImageShape,
+    target: &ColorMode,
+    matrix: Option<&[f64]>,
+    mode: Option<&str>,
+) -> bool {
+    if matrix.is_some() {
+        return false;
+    }
+    if matches!(target, ColorMode::RGB) && mode == Some("CMYK") {
+        return shape.layout == SimdLayout::Rgba8
+            && (shape.width as usize)
+                .checked_mul(shape.height as usize)
+                .and_then(|pixels| pixels.checked_mul(4))
+                .is_some();
+    }
+    if matches!(
+        target,
+        ColorMode::L | ColorMode::LA | ColorMode::RGB | ColorMode::RGBA | ColorMode::CMYK
+    ) && matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
+        && matches!(shape.layout, SimdLayout::Luma16)
+    {
+        return (shape.width as usize)
+            .checked_mul(shape.height as usize)
+            .is_some();
+    }
+    let Some(_layout) = native_convert_shape_layout(shape, target, mode) else {
+        return false;
+    };
+    // Match image preflight, including empty control-only conversions.
+    (shape.width as usize)
+        .checked_mul(shape.height as usize)
+        .is_some()
+}
 
 #[inline(always)]
 fn finish_vector_conversion(
