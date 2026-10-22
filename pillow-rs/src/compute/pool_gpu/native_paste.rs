@@ -1,5 +1,8 @@
 use super::*;
 
+mod execution;
+mod masked_execution;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct NativeBytePasteDispatch {
     pub(super) destination_bytes: usize,
