@@ -35,6 +35,7 @@ mod enhance;
 mod expand;
 mod extract_band;
 mod filter;
+mod histogram;
 pub(crate) use self::color3dlut::simd_color3dlut;
 use self::color3dlut::{color3dlut_supported_for_image, color3dlut_supported_for_shape};
 pub(crate) use self::colorize::simd_colorize;
@@ -90,6 +91,7 @@ pub(crate) use self::expand::simd_expand;
 pub(crate) use self::extract_band::{simd_extract_band, simd_extract_band_into};
 pub(crate) use self::gradient::{simd_linear_gradient_generate, simd_radial_gradient_generate};
 pub(crate) use self::grayscale::{simd_grayscale, simd_grayscale_with_evidence};
+pub(crate) use self::histogram::{simd_autocontrast, simd_equalize};
 pub(crate) use self::mandelbrot::simd_mandelbrot_generate;
 pub(crate) use self::median_filter::{
     simd_max_filter, simd_median_filter, simd_min_filter, simd_rank_filter,
@@ -316,22 +318,6 @@ fn native_expand_contract_for_shape(
         return None;
     }
     Some((channels, width, height))
-}
-
-fn native_autocontrast_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
-    match img {
-        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
-        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
-        _ => None,
-    }
-}
-
-fn autocontrast_mask_supported(width: u32, height: u32, mask: Option<&Arc<Image>>) -> bool {
-    let Some(mask) = mask else {
-        return true;
-    };
-    matches!(mask.mode().ok().as_deref(), Some("1") | Some("L"))
-        && mask.size().ok() == Some((width, height))
 }
 
 /// Return the native byte channel count for Pillow's byte-domain point/eval
@@ -1170,22 +1156,9 @@ pub(crate) fn simd_supports_for_image(
         | PipelineOp::Contrast { .. }
         | PipelineOp::ColorSaturation { .. }
         | PipelineOp::Sharpness { .. } => enhance::supports_for_image(img, op, mode),
-        PipelineOp::Autocontrast { cutoff, mask } => {
-            cutoff.is_finite()
-                && native_autocontrast_layout(img, mode)
-                    .is_some_and(|channels| has_valid_byte_data(img, channels))
-                && autocontrast_mask_supported(img.width(), img.height(), mask.as_ref())
-        }
-        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => {
-            native_autocontrast_layout(img, mode)
-                .is_some_and(|channels| has_valid_byte_data(img, channels))
-                && match op {
-                    PipelineOp::EqualizeMasked { mask } => {
-                        autocontrast_mask_supported(img.width(), img.height(), Some(mask))
-                    }
-                    _ => true,
-                }
-        }
+        PipelineOp::Autocontrast { .. }
+        | PipelineOp::Equalize
+        | PipelineOp::EqualizeMasked { .. } => histogram::supports_for_image(img, op, mode),
         PipelineOp::RemapPalette { dest_map } => native_remap_palette_layout(img, mode)
             .is_some_and(|_| dest_map.len() <= 256 && has_valid_remap_bytes(img)),
         // Eval/PointOp keeps its interleaved native layout. The LUT lookup
@@ -1689,18 +1662,6 @@ fn shape_native_rotate_channels(shape: SimdImageShape, mode: Option<&str>) -> Op
         (SimdLayout::Rgba8, Some("CMYK" | "RGBa" | "RGBX" | "I" | "F")) => Some(4),
         _ => shape_native_byte_channels(shape, mode),
     }
-}
-
-fn shape_native_autocontrast_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
-    let channels = shape_channels(shape)?;
-    let valid = match shape.layout {
-        SimdLayout::Luma8 => matches!(mode, None | Some("L")),
-        SimdLayout::Rgb8 => matches!(mode, None | Some("RGB")),
-        SimdLayout::LumaA8 | SimdLayout::Rgba8 | SimdLayout::Luma16 | SimdLayout::Unsupported => {
-            false
-        }
-    };
-    valid.then_some(channels)
 }
 
 fn shape_has_nonempty_byte_data(shape: SimdImageShape, channels: usize) -> bool {
@@ -2266,25 +2227,9 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         | PipelineOp::Contrast { .. }
         | PipelineOp::ColorSaturation { .. }
         | PipelineOp::Sharpness { .. } => enhance::supports_for_shape(shape, op, mode),
-        PipelineOp::Autocontrast { cutoff, mask } => {
-            cutoff.is_finite()
-                && shape_native_autocontrast_channels(shape, mode).is_some_and(|channels| {
-                    shape_has_empty_native_bytes(shape, channels)
-                        || shape_has_nonempty_byte_data(shape, channels)
-                })
-                && autocontrast_mask_supported(shape.width, shape.height, mask.as_ref())
-        }
-        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => {
-            shape_native_autocontrast_channels(shape, mode).is_some_and(|channels| {
-                shape_has_empty_native_bytes(shape, channels)
-                    || shape_has_nonempty_byte_data(shape, channels)
-            }) && match op {
-                PipelineOp::EqualizeMasked { mask } => {
-                    autocontrast_mask_supported(shape.width, shape.height, Some(mask))
-                }
-                _ => true,
-            }
-        }
+        PipelineOp::Autocontrast { .. }
+        | PipelineOp::Equalize
+        | PipelineOp::EqualizeMasked { .. } => histogram::supports_for_shape(shape, op, mode),
         PipelineOp::RemapPalette { dest_map } => {
             dest_map.len() <= 256
                 && shape.layout == SimdLayout::Luma8
@@ -5361,120 +5306,6 @@ pub fn simd_posterize(
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_path("vector");
     Ok(crate::image::preserve_mode(img, result))
-}
-
-/// Build the histogram and percentile LUT with the shared scalar control
-/// plane, then apply every native L/RGB byte through the vector LUT kernel.
-/// Masks affect only LUT construction; they do not force the output pass back
-/// through the CPU pixel implementation.
-pub fn simd_autocontrast(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let PipelineOp::Autocontrast { cutoff, mask } = op else {
-        return Err(PilError::ValueError("expected Autocontrast op".into()));
-    };
-    let Some(channels) = native_autocontrast_layout(img, mode) else {
-        return Err(simd_unsupported("Autocontrast"));
-    };
-    if !cutoff.is_finite() || !autocontrast_mask_supported(img.width(), img.height(), mask.as_ref())
-    {
-        return Err(simd_unsupported("Autocontrast"));
-    }
-    if !has_valid_byte_data(img, channels) {
-        return Err(simd_unsupported("Autocontrast"));
-    }
-    if img.width() == 0 || img.height() == 0 {
-        crate::compute::record_pipeline_operation_path("native-copy");
-        return Ok(img.clone());
-    }
-
-    let lut =
-        crate::compute::pool_cpu::ops::imageops::autocontrast_lut(img, *cutoff, mask.as_ref())?;
-    let mut result = img.clone();
-    let Some(bytes) = result.as_bytes_mut() else {
-        return Err(simd_unsupported("Autocontrast"));
-    };
-    let Some((vector_blocks, scalar_tail)) = native_lut_apply(
-        bytes,
-        img.width() as usize,
-        img.height() as usize,
-        channels,
-        &lut,
-    ) else {
-        return Err(simd_unsupported("Autocontrast"));
-    };
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::record_pipeline_operation_path("vector");
-    Ok(result)
-}
-
-/// Apply Pillow's equalize LUT directly to native L/RGB storage.
-/// Histogram construction is shared scalar control; every stored output byte
-/// is then handled by the vector LUT kernel without an RGB widening copy.
-pub fn simd_equalize(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    if !matches!(op, PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }) {
-        return Err(PilError::ValueError("expected Equalize op".into()));
-    }
-    let Some(channels) = native_autocontrast_layout(img, mode) else {
-        return Err(simd_unsupported("Equalize"));
-    };
-    if !has_valid_byte_data(img, channels) {
-        return Err(simd_unsupported("Equalize"));
-    }
-    if img.width() == 0 || img.height() == 0 {
-        crate::compute::record_pipeline_operation_path("native-copy");
-        return Ok(img.clone());
-    }
-    let mask = match op {
-        PipelineOp::EqualizeMasked { mask } => Some(mask.materialized_shared()?),
-        _ => None,
-    };
-    let Some(lut) =
-        crate::compute::pool_cpu::ops::imageops::equalize_lut(img, channels, mask.as_deref())
-    else {
-        return Err(simd_unsupported("Equalize"));
-    };
-    if native_lut_is_identity(&lut, channels) {
-        crate::compute::record_pipeline_operation_path("native-copy");
-        return Ok(img.clone());
-    }
-    let mut result = img.clone();
-    let Some(bytes) = result.as_bytes_mut() else {
-        return Err(simd_unsupported("Equalize"));
-    };
-    let source = img.as_bytes();
-    let (vector_blocks, scalar_tail, path) = if channels == 1 && source.len() <= 4096 {
-        // The portable byte-vector LUT expands each lookup into sixteen
-        // swizzles and lane selects. For small frames, a direct L1 table read
-        // avoids that setup and shuffle cost; larger images retain the vector
-        // path where its work amortizes over enough pixels.
-        for (output, &value) in bytes.iter_mut().zip(source) {
-            *output = lut[usize::from(value)];
-        }
-        (0, source.len() as u64, "scalar-lut")
-    } else {
-        let Some((vector_blocks, scalar_tail)) = native_lut_apply(
-            bytes,
-            img.width() as usize,
-            img.height() as usize,
-            channels,
-            &lut,
-        ) else {
-            return Err(simd_unsupported("Equalize"));
-        };
-        (vector_blocks, scalar_tail, "vector")
-    };
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::record_pipeline_operation_path(path);
-    Ok(result)
 }
 
 /// Remap native `L`/`P` samples with Pillow's inverse destination map.
