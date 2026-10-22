@@ -6,8 +6,14 @@ mod kernels;
 #[cfg(not(feature = "parallel"))]
 pub(super) use self::kernels::copy_contiguous_rgb_runs;
 
+use super::{
+    native_identity_rotate, rotate_identity_contract, rotate_uses_discrete_fast_path,
+    simd_bilinear_rotate_native, simd_empty_rotate_native, simd_nearest_rotate_native,
+    simd_right_angle_rotate_native, simd_typed_bilinear_rotate_native, simd_unsupported,
+};
 use crate::error::PilError;
 use crate::image::preserve_mode;
+use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::DynamicImage;
 use wide::u8x16;
 
@@ -193,4 +199,96 @@ pub(super) fn finish_native_rotation(
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::image_utils::raw_bytes_to_image(width, height, output, channels)
         .map(|result| Some(preserve_mode(img, result)))
+}
+
+pub(crate) fn simd_rotate(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Rotate {
+        angle,
+        expand,
+        fill,
+        center,
+        translate,
+        filter,
+        nearest,
+        ..
+    } = op
+    else {
+        return Err(PilError::ValueError("expected Rotate op".into()));
+    };
+    // Indexed Pillow images are defined to rotate with nearest-neighbor
+    // sampling. The operation flag records only the explicit resample
+    // request, so include the logical mode before choosing the data kernel.
+    let nearest = *nearest || matches!(mode, Some("1" | "P"));
+    if let Some(result) =
+        simd_empty_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
+    {
+        return Ok(result);
+    }
+    if rotate_identity_contract(*angle, *center, *translate) {
+        if let Some(result) = native_identity_rotate(img, mode)? {
+            return Ok(preserve_mode(img, result));
+        }
+    }
+    if rotate_uses_discrete_fast_path(
+        *angle,
+        *center,
+        *translate,
+        *expand,
+        img.width(),
+        img.height(),
+    ) && let Some(result) =
+        simd_right_angle_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
+    {
+        return Ok(result);
+    }
+    if nearest
+        && !rotate_uses_discrete_fast_path(
+            *angle,
+            *center,
+            *translate,
+            *expand,
+            img.width(),
+            img.height(),
+        )
+        && let Some(result) =
+            simd_nearest_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
+    {
+        return Ok(result);
+    }
+    if !nearest
+        && matches!(filter, ResampleFilter::Bilinear)
+        && !rotate_uses_discrete_fast_path(
+            *angle,
+            *center,
+            *translate,
+            *expand,
+            img.width(),
+            img.height(),
+        )
+        && let Some(result) = simd_typed_bilinear_rotate_native(
+            img, *angle, *expand, *fill, *center, *translate, mode,
+        )?
+    {
+        return Ok(result);
+    }
+    if !nearest
+        && matches!(filter, ResampleFilter::Bilinear)
+        && !rotate_uses_discrete_fast_path(
+            *angle,
+            *center,
+            *translate,
+            *expand,
+            img.width(),
+            img.height(),
+        )
+        && let Some(result) =
+            simd_bilinear_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
+    {
+        return Ok(result);
+    }
+    Err(simd_unsupported("Rotate"))
 }
