@@ -7468,71 +7468,20 @@ impl GpuPool {
 
         #[cfg(target_endian = "little")]
         match gpu.try_execute_native_flip(ops, img, mode, &limits, capacity)? {
-            NativeFlipDispatchOutcome::NotApplicable => {}
-            NativeFlipDispatchOutcome::ExceedsLimits(reason) => {
+            NativeGeometryDispatchOutcome::NotApplicable => {}
+            NativeGeometryDispatchOutcome::ExceedsLimits(reason) => {
                 return self.preflight_failure(ops, img, mode, allow_cpu_fallback, reason);
             }
-            NativeFlipDispatchOutcome::Executed(result) => return Ok(result),
+            NativeGeometryDispatchOutcome::Executed(result) => return Ok(result),
         }
 
         #[cfg(target_endian = "little")]
-        if matches!(mode, None | Some("RGB"))
-            && matches!(ops, [PipelineOp::Mirror])
-            && let DynamicImage::ImageRgb8(rgb) = img
-            && let Some(layout) = packed_rgb_transpose_layout(
-                rgb.width(),
-                rgb.height(),
-                limits.max_compute_workgroups_per_dimension,
-            )
-        {
-            // Mirror is the horizontal RGB transpose method. Keep its packed
-            // three-byte input and output instead of expanding RGB to RGBA.
-            let geometry_as_transpose = PipelineOp::Transpose {
-                method: TransposeMethod::FlipLeftRight,
-            };
-            let words = u32::try_from(layout.transfer_bytes / 4)
-                .map_err(|_| PilError::ValueError("GPU packed RGB mirror is too large".into()))?;
-            let mut buffers = gpu.acquire_buffers(words)?;
-            let result = gpu.execute_packed_rgb_transpose(
-                &geometry_as_transpose,
-                rgb,
-                &layout,
-                &mut buffers,
-            )?;
-            gpu.recycle_buffers(buffers);
-            return Ok(result);
-        }
-
-        #[cfg(target_endian = "little")]
-        if matches!(mode, None | Some("RGB" | "HSV"))
-            && let ([op @ PipelineOp::Transpose { .. }], DynamicImage::ImageRgb8(rgb)) = (ops, img)
-            && let Some(layout) = packed_rgb_transpose_layout(
-                rgb.width(),
-                rgb.height(),
-                limits.max_compute_workgroups_per_dimension,
-            )
-        {
-            // Fusion and ordinary preflight have already validated the full
-            // batch. RGB and HSV share physical RGB8 triplets here; the
-            // singleton transpose only relocates bytes, while mixed
-            // operations keep the ordinary packed RGBA path.
-            let mut buffers = gpu.acquire_buffers(capacity)?;
-            let result = gpu.execute_packed_rgb_transpose(op, rgb, &layout, &mut buffers)?;
-            gpu.recycle_buffers(buffers);
-            return Ok(result);
-        }
-
-        #[cfg(target_endian = "little")]
-        if mapped_rgba_transpose_is_supported(ops, img, mode, gpu.direct_primary_readback)
-            && let ([op], DynamicImage::ImageRgba8(rgba)) = (ops, img)
-        {
-            // Logical mode matters: RGBX, premultiplied samples, and packed
-            // I/F storage also use four-byte containers, but keep their
-            // existing mode-specific execution paths.
-            let mut buffers = gpu.acquire_buffers(capacity)?;
-            let result = gpu.execute_rgba_transpose_with_upload(op, rgba, &mut buffers, true)?;
-            gpu.recycle_buffers(buffers);
-            return Ok(result);
+        match gpu.try_execute_native_transpose_paths(ops, img, mode, &limits, capacity)? {
+            NativeGeometryDispatchOutcome::NotApplicable => {}
+            NativeGeometryDispatchOutcome::ExceedsLimits(reason) => {
+                return self.preflight_failure(ops, img, mode, allow_cpu_fallback, reason);
+            }
+            NativeGeometryDispatchOutcome::Executed(result) => return Ok(result),
         }
 
         let mut buffers = gpu.acquire_buffers(capacity)?;

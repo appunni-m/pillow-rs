@@ -48,7 +48,7 @@ pub(super) enum NativeFlipFormat {
 }
 
 #[cfg(target_endian = "little")]
-pub(super) enum NativeFlipDispatchOutcome {
+pub(super) enum NativeGeometryDispatchOutcome {
     NotApplicable,
     ExceedsLimits(&'static str),
     Executed(DynamicImage),

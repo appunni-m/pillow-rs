@@ -231,9 +231,9 @@ impl GpuInner {
         mode: Option<&str>,
         limits: &wgpu::Limits,
         capacity: u32,
-    ) -> Result<NativeFlipDispatchOutcome, PilError> {
+    ) -> Result<NativeGeometryDispatchOutcome, PilError> {
         let Some(format) = gpu_native_flip_format(ops, image, mode) else {
-            return Ok(NativeFlipDispatchOutcome::NotApplicable);
+            return Ok(NativeGeometryDispatchOutcome::NotApplicable);
         };
         match format {
             NativeFlipFormat::Mode1
@@ -252,7 +252,7 @@ impl GpuInner {
         image: &DynamicImage,
         format: NativeFlipFormat,
         limits: &wgpu::Limits,
-    ) -> Result<NativeFlipDispatchOutcome, PilError> {
+    ) -> Result<NativeGeometryDispatchOutcome, PilError> {
         let (channels, limit_reason) = match format {
             NativeFlipFormat::Mode1 => (1, "native byte Flip exceeds adapter or shader limits"),
             NativeFlipFormat::L => (1, "native L Flip exceeds adapter or shader limits"),
@@ -277,12 +277,12 @@ impl GpuInner {
             limits.max_buffer_size,
             GPU_BUFFER_CAPACITY,
         ) else {
-            return Ok(NativeFlipDispatchOutcome::ExceedsLimits(limit_reason));
+            return Ok(NativeGeometryDispatchOutcome::ExceedsLimits(limit_reason));
         };
         let mut buffers = self.acquire_buffers(dispatch.word_count)?;
         let result = self.execute_native_byte_flip(image, format, dispatch, &mut buffers)?;
         self.recycle_buffers(buffers);
-        Ok(NativeFlipDispatchOutcome::Executed(result))
+        Ok(NativeGeometryDispatchOutcome::Executed(result))
     }
 
     #[cfg(target_endian = "little")]
@@ -290,7 +290,7 @@ impl GpuInner {
         &self,
         image: &DynamicImage,
         limits: &wgpu::Limits,
-    ) -> Result<NativeFlipDispatchOutcome, PilError> {
+    ) -> Result<NativeGeometryDispatchOutcome, PilError> {
         let DynamicImage::ImageRgb8(rgb) = image else {
             return Err(PilError::InternalError(
                 "native RGB Flip admission did not match RGB storage".into(),
@@ -301,7 +301,7 @@ impl GpuInner {
             rgb.height(),
             limits.max_compute_workgroups_per_dimension,
         ) else {
-            return Ok(NativeFlipDispatchOutcome::ExceedsLimits(
+            return Ok(NativeGeometryDispatchOutcome::ExceedsLimits(
                 "native RGB Flip exceeds adapter or shader limits",
             ));
         };
@@ -314,7 +314,7 @@ impl GpuInner {
         let result =
             self.execute_packed_rgb_transpose(&geometry_as_transpose, rgb, &layout, &mut buffers)?;
         self.recycle_buffers(buffers);
-        Ok(NativeFlipDispatchOutcome::Executed(result))
+        Ok(NativeGeometryDispatchOutcome::Executed(result))
     }
 
     #[cfg(target_endian = "little")]
@@ -323,7 +323,7 @@ impl GpuInner {
         image: &DynamicImage,
         limits: &wgpu::Limits,
         capacity: u32,
-    ) -> Result<NativeFlipDispatchOutcome, PilError> {
+    ) -> Result<NativeGeometryDispatchOutcome, PilError> {
         let DynamicImage::ImageRgba8(rgba) = image else {
             return Err(PilError::InternalError(
                 "native RGBA Flip admission did not match RGBA storage".into(),
@@ -344,7 +344,7 @@ impl GpuInner {
             || groups_x > limits.max_compute_workgroups_per_dimension
             || groups_y > limits.max_compute_workgroups_per_dimension
         {
-            return Ok(NativeFlipDispatchOutcome::ExceedsLimits(
+            return Ok(NativeGeometryDispatchOutcome::ExceedsLimits(
                 "native RGBA Flip exceeds adapter or shader limits",
             ));
         }
@@ -361,7 +361,121 @@ impl GpuInner {
             self.direct_primary_readback,
         )?;
         self.recycle_buffers(buffers);
-        Ok(NativeFlipDispatchOutcome::Executed(result))
+        Ok(NativeGeometryDispatchOutcome::Executed(result))
+    }
+
+    #[cfg(target_endian = "little")]
+    pub(in crate::compute::pool_gpu) fn try_execute_native_transpose_paths(
+        &self,
+        ops: &[PipelineOp],
+        image: &DynamicImage,
+        mode: Option<&str>,
+        limits: &wgpu::Limits,
+        capacity: u32,
+    ) -> Result<NativeGeometryDispatchOutcome, PilError> {
+        if let Some(result) = self.try_execute_native_rgb_mirror(ops, image, mode, limits)? {
+            return Ok(NativeGeometryDispatchOutcome::Executed(result));
+        }
+        if let Some(result) =
+            self.try_execute_native_rgb_transpose(ops, image, mode, limits, capacity)?
+        {
+            return Ok(NativeGeometryDispatchOutcome::Executed(result));
+        }
+        if let Some(result) = self.try_execute_mapped_rgba_transpose(ops, image, mode, capacity)? {
+            return Ok(NativeGeometryDispatchOutcome::Executed(result));
+        }
+        Ok(NativeGeometryDispatchOutcome::NotApplicable)
+    }
+
+    #[cfg(target_endian = "little")]
+    fn try_execute_native_rgb_mirror(
+        &self,
+        ops: &[PipelineOp],
+        image: &DynamicImage,
+        mode: Option<&str>,
+        limits: &wgpu::Limits,
+    ) -> Result<Option<DynamicImage>, PilError> {
+        if !matches!(mode, None | Some("RGB")) || !matches!(ops, [PipelineOp::Mirror]) {
+            return Ok(None);
+        }
+        let DynamicImage::ImageRgb8(rgb) = image else {
+            return Ok(None);
+        };
+        let Some(layout) = packed_rgb_transpose_layout(
+            rgb.width(),
+            rgb.height(),
+            limits.max_compute_workgroups_per_dimension,
+        ) else {
+            return Ok(None);
+        };
+        // Mirror is the horizontal RGB transpose method. Keep its packed
+        // three-byte input and output instead of expanding RGB to RGBA.
+        let geometry_as_transpose = PipelineOp::Transpose {
+            method: TransposeMethod::FlipLeftRight,
+        };
+        let words = u32::try_from(layout.transfer_bytes / 4)
+            .map_err(|_| PilError::ValueError("GPU packed RGB mirror is too large".into()))?;
+        let mut buffers = self.acquire_buffers(words)?;
+        let result =
+            self.execute_packed_rgb_transpose(&geometry_as_transpose, rgb, &layout, &mut buffers)?;
+        self.recycle_buffers(buffers);
+        Ok(Some(result))
+    }
+
+    #[cfg(target_endian = "little")]
+    fn try_execute_native_rgb_transpose(
+        &self,
+        ops: &[PipelineOp],
+        image: &DynamicImage,
+        mode: Option<&str>,
+        limits: &wgpu::Limits,
+        capacity: u32,
+    ) -> Result<Option<DynamicImage>, PilError> {
+        if !matches!(mode, None | Some("RGB" | "HSV")) {
+            return Ok(None);
+        }
+        let ([op @ PipelineOp::Transpose { .. }], DynamicImage::ImageRgb8(rgb)) = (ops, image)
+        else {
+            return Ok(None);
+        };
+        let Some(layout) = packed_rgb_transpose_layout(
+            rgb.width(),
+            rgb.height(),
+            limits.max_compute_workgroups_per_dimension,
+        ) else {
+            return Ok(None);
+        };
+        // Fusion and ordinary preflight have already validated the full
+        // batch. RGB and HSV share physical RGB8 triplets here; the singleton
+        // transpose only relocates bytes, while mixed operations keep the
+        // ordinary packed RGBA path.
+        let mut buffers = self.acquire_buffers(capacity)?;
+        let result = self.execute_packed_rgb_transpose(op, rgb, &layout, &mut buffers)?;
+        self.recycle_buffers(buffers);
+        Ok(Some(result))
+    }
+
+    #[cfg(target_endian = "little")]
+    fn try_execute_mapped_rgba_transpose(
+        &self,
+        ops: &[PipelineOp],
+        image: &DynamicImage,
+        mode: Option<&str>,
+        capacity: u32,
+    ) -> Result<Option<DynamicImage>, PilError> {
+        if !mapped_rgba_transpose_is_supported(ops, image, mode, self.direct_primary_readback) {
+            return Ok(None);
+        }
+        let ([op], DynamicImage::ImageRgba8(rgba)) = (ops, image) else {
+            return Ok(None);
+        };
+        // Logical mode matters: RGBX, premultiplied samples, and packed I/F
+        // storage also use four-byte containers, but keep their mode-specific
+        // execution paths.
+        let mut buffers = self.acquire_buffers(capacity)?;
+        let result = self.execute_rgba_transpose_with_upload(op, rgba, &mut buffers, true)?;
+        self.recycle_buffers(buffers);
+        Ok(Some(result))
     }
 
     #[cfg(target_endian = "little")]
