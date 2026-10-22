@@ -143,3 +143,6 @@ pub(crate) fn simd_grayscale(
     crate::compute::record_pipeline_operation_path(path);
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests;
