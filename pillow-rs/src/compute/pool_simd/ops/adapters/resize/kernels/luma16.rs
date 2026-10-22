@@ -1,6 +1,7 @@
 //! SIMD Luma16 Resize kernel for Pillow's typed `I;16*` modes.
 
-use super::super::{SIMD_RESIZE_LANES, resize_nearest_indices, simd_unsupported};
+use super::super::{SIMD_RESIZE_LANES, simd_unsupported};
+use super::resize_nearest_indices;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::pil_resize::{

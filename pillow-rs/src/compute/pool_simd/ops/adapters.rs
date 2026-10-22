@@ -5799,93 +5799,6 @@ const SIMD_RESIZE_LANES: usize = 8;
 const SIMD_RESIZE_NEAREST_BYTES: usize = 16;
 const SIMD_FIT_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 
-fn resize_native_channels_for_image(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
-    native_resize_byte_layout_for_image(img, mode).map(|(channels, _)| channels)
-}
-
-/// Return the byte-domain resize layout and alpha contract.
-///
-/// The concrete raster variant is the storage contract; the logical Pillow
-/// mode decides whether the final byte is alpha or an ordinary sample.  This
-/// deliberately excludes `I` and `F`: their four bytes form one scalar sample
-/// and must go through the typed kernels below rather than byte convolution.
-fn native_resize_byte_layout_for_image(
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Option<(usize, bool)> {
-    if matches!(mode, Some("I" | "F")) {
-        return None;
-    }
-    let channels = native_copy_layout(img, mode)?;
-    let premultiplied_alpha = match channels {
-        2 => matches!(mode, None | Some("LA")),
-        4 => matches!(mode, None | Some("RGBA")),
-        _ => false,
-    };
-    Some((channels, premultiplied_alpha))
-}
-
-fn native_resize_byte_layout_for_shape(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<(usize, bool)> {
-    if matches!(mode, Some("I" | "F")) {
-        return None;
-    }
-    let channels = shape_native_copy_channels(shape, mode)?;
-    let premultiplied_alpha = match channels {
-        2 => matches!(mode, None | Some("LA")),
-        4 => matches!(mode, None | Some("RGBA")),
-        _ => false,
-    };
-    Some((channels, premultiplied_alpha))
-}
-
-fn resize_nearest_indices(source_size: u32, output_size: u32) -> Option<Vec<usize>> {
-    if source_size == 0 || output_size == 0 {
-        return None;
-    }
-    let scale = f64::from(source_size) / f64::from(output_size);
-    let mut position = scale * 0.5;
-    let mut indices = Vec::with_capacity(usize::try_from(output_size).ok()?);
-    for _ in 0..output_size {
-        let index = position as u32;
-        indices.push(if index >= source_size {
-            usize::try_from(source_size - 1).ok()?
-        } else {
-            usize::try_from(index).ok()?
-        });
-        position += scale;
-    }
-    Some(indices)
-}
-
-fn resize_nearest_vectorizable(
-    source_width: u32,
-    source_height: u32,
-    output_width: u32,
-    output_height: u32,
-    channels: usize,
-) -> bool {
-    if channels == 0
-        || !(1..=4).contains(&channels)
-        || source_width == 0
-        || source_height == 0
-        || output_width == 0
-        || output_height == 0
-    {
-        return false;
-    }
-    // Nearest-neighbour coordinates are inherently a scalar gather on
-    // architectures without a portable byte-gather instruction. That does
-    // not make the operation a CPU fallback: the gathered samples are packed
-    // into native vector blocks and the output data plane is written by the
-    // SIMD kernel. Admission therefore depends on valid non-empty dimensions,
-    // not on the source span of a particular gather block.
-    resize_nearest_indices(source_width, output_width).is_some()
-        && resize_nearest_indices(source_height, output_height).is_some()
-}
-
 /// Round a positive Pillow dimension with Python's ties-to-even rule.
 ///
 /// `ImageOps.pad` performs this calculation in its scalar control plane
@@ -6779,7 +6692,7 @@ fn native_resize_supported_for_dimensions(
             .is_some_and(|bytes| bytes >= SIMD_RESIZE_NEAREST_BYTES as u32);
     }
     match filter {
-        ResampleFilter::Nearest => resize_nearest_vectorizable(
+        ResampleFilter::Nearest => resize::resize_nearest_vectorizable(
             source_width,
             source_height,
             output_width,
@@ -6838,7 +6751,7 @@ fn native_resize_supported_for_image(
     }
     let channels = if is_typed_scalar {
         4
-    } else if let Some(channels) = resize_native_channels_for_image(img, mode) {
+    } else if let Some(channels) = resize::resize_native_channels_for_image(img, mode) {
         channels
     } else {
         return false;
@@ -6872,7 +6785,7 @@ fn native_resize_supported_for_shape(
     } else if matches!(mode, Some("I" | "F")) {
         (4, shape.layout == SimdLayout::Rgba8)
     } else {
-        match native_resize_byte_layout_for_shape(shape, mode) {
+        match resize::native_resize_byte_layout_for_shape(shape, mode) {
             Some((channels, _)) => (channels, true),
             None => (0, false),
         }

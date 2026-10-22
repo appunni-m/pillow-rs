@@ -1,5 +1,7 @@
 //! SIMD Resize family dispatch and mode-specific kernels.
 
+#[path = "resize/coordinates.rs"]
+mod coordinates;
 #[path = "resize/kernels/f32.rs"]
 mod f32_mode;
 #[path = "resize/kernels/i32.rs"]
@@ -13,6 +15,8 @@ mod u8_mode;
 #[path = "resize/kernels/u8_nearest.rs"]
 mod u8_nearest;
 
+use self::coordinates::resize_nearest_indices;
+pub(super) use self::coordinates::resize_nearest_vectorizable;
 pub(super) use self::f32_mode::{simd_resize_f, simd_resize_f_boxed};
 pub(super) use self::i32_mode::{
     build_resize_i_horizontal_plan, resize_i_horizontal_values, simd_resize_i32,
@@ -32,9 +36,8 @@ use super::{
     native_cover_dimensions, native_fit_box, native_fit_filter, native_fit_layout_for_image,
     native_fit_supported_for_image, native_pad_contained_dimensions, native_resize_boxed_bounds,
     native_resize_boxed_layout_for_image, native_resize_boxed_supported_for_image,
-    native_resize_byte_layout_for_image, native_resize_supported_for_image,
-    native_scale_dimensions, native_small_uniform_byte_image, native_zero_byte_image,
-    simd_unsupported,
+    native_resize_supported_for_image, native_scale_dimensions, native_small_uniform_byte_image,
+    native_zero_byte_image, simd_unsupported,
 };
 
 use crate::error::PilError;
@@ -42,6 +45,51 @@ use crate::image::preserve_mode;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::DynamicImage;
 use wide::u8x16;
+
+pub(super) fn resize_native_channels_for_image(
+    img: &DynamicImage,
+    mode: Option<&str>,
+) -> Option<usize> {
+    native_resize_byte_layout_for_image(img, mode).map(|(channels, _)| channels)
+}
+
+/// Return the byte-domain resize layout and alpha contract.
+///
+/// The concrete raster variant is the storage contract; the logical Pillow
+/// mode decides whether the final byte is alpha or an ordinary sample.  This
+/// deliberately excludes `I` and `F`: their four bytes form one scalar sample
+/// and must go through the typed kernels below rather than byte convolution.
+pub(super) fn native_resize_byte_layout_for_image(
+    img: &DynamicImage,
+    mode: Option<&str>,
+) -> Option<(usize, bool)> {
+    if matches!(mode, Some("I" | "F")) {
+        return None;
+    }
+    let channels = super::native_copy_layout(img, mode)?;
+    let premultiplied_alpha = match channels {
+        2 => matches!(mode, None | Some("LA")),
+        4 => matches!(mode, None | Some("RGBA")),
+        _ => false,
+    };
+    Some((channels, premultiplied_alpha))
+}
+
+pub(super) fn native_resize_byte_layout_for_shape(
+    shape: super::SimdImageShape,
+    mode: Option<&str>,
+) -> Option<(usize, bool)> {
+    if matches!(mode, Some("I" | "F")) {
+        return None;
+    }
+    let channels = super::shape_native_copy_channels(shape, mode)?;
+    let premultiplied_alpha = match channels {
+        2 => matches!(mode, None | Some("LA")),
+        4 => matches!(mode, None | Some("RGBA")),
+        _ => false,
+    };
+    Some((channels, premultiplied_alpha))
+}
 
 /// Execute a native SIMD resize through the shared family adapter.
 pub(crate) fn simd_resize(
