@@ -155,6 +155,10 @@ fn transpose_tiled_axis_swap(
         3 | 4 => 4,
         _ => return None,
     };
+    // On ARM64, the materialized 9x31 RGBA workload is about 5% slower on
+    // SIMD than CPU: 279 pixels do not amortize vector dispatch and tile/edge
+    // work (56 vector blocks and 220 scalar-tail bytes). Keep the path until a
+    // size-based route wins the same full-call boundary with exact parity.
     if width < tile || height < tile {
         return None;
     }

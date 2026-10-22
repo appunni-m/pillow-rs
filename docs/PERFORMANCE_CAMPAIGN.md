@@ -32336,3 +32336,25 @@ Parity run IDs, before then after: CPU
 benchmark reports passed schema validation. Complete JSON reports, samples,
 attestations, and producer receipts are preserved under
 `docs/evidence/geometry/thumbnail-simd-family-layout-arm64-20261022/`.
+
+## SIMD Transpose family extraction — ARM64 — 2026-10-22
+
+Moved the portable tiled transpose and feature-gated collector implementations
+under the SIMD Transpose family. The kernel bodies, admission rules, and
+dispatch behavior stayed unchanged. Candidate commit
+`5711bdfedb46836c2302245d26be43d6e61a4b02` passed the frozen 376-case CPU and
+139-case strict SIMD parity cohorts. Four operation-materialized pipeline
+workloads passed their correctness gates in both the default and separately
+built Parallel CPU profiles.
+
+The A–B–B–A default SIMD medians were 4.5% lower for RGB 513×515, 1.3% higher
+for RGBA 9×31, 6.1% lower for RGBA 772×768, and 7.7% lower for RGBA 768×769.
+The tiny RGBA case averaged about 5.1% slower on SIMD than CPU; its 279 pixels
+do not amortize the vector and tile-edge work, as recorded beside the SIMD
+guard. Parallel CPU repeats did not isolate a stable change. The direct RGB
+benchmark declares only CPU parity; its CPU-only sidecar passed 1/1, but the
+workload-level default gate remains `not_proven` because SIMD and GPU parity
+are absent. Default direct-workflow rows are excluded from performance claims.
+This ARM64 result does not exercise the x86 AVX2 path. Full receipts and
+per-run results are in
+[`simd-family-extraction-arm64-20261022`](evidence/transpose/simd-family-extraction-arm64-20261022/README.md).
