@@ -69,6 +69,8 @@ mod batch_output;
 mod batch_pipeline;
 mod batch_segmentation;
 use batch_output::*;
+mod batch_upload;
+use batch_upload::*;
 mod batch_preparation;
 use batch_preparation::*;
 mod batch_estimates;
@@ -7530,116 +7532,41 @@ impl GpuPool {
         gpu_log!(
             "[GPU] step=upload start output_only_constant={output_only_constant} native_luma16={native_luma16} native_luma16_convert={native_luma16_convert} native_luma16_paste={native_luma16_paste}"
         );
-        if output_only_constant {
-            // A standalone Constant generates every output sample from its
-            // parameter; the shader does not consume the source pixels.
-        } else if native_luma16 {
-            let DynamicImage::ImageLuma16(image) = img else {
-                return Err(PilError::InternalError(
-                    "GPU typed layout was admitted without an ImageLuma16 source".into(),
-                ));
-            };
-            buffers.upload_luma16(&gpu.queue, image, mode)?;
-        } else if native_luma16_convert || native_luma16_paste {
-            let DynamicImage::ImageLuma16(image) = img else {
-                return Err(PilError::InternalError(
-                    "GPU typed operation was admitted without an ImageLuma16 source".into(),
-                ));
-            };
-            buffers.upload_luma16_numeric(&gpu.queue, image)?;
-        } else if full_luma_putdata {
-            // A complete replacement has no observable source pixels. The
-            // packed shader initializes every valid destination sample.
-        } else if packed_la_pad {
-            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 2, img.as_bytes())?;
-        } else if packed_native_byte_filter && matches!(mode, Some("LA")) {
-            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 2, img.as_bytes())?;
-        } else if packed_luma_colorize
-            || packed_luma_convert
-            || packed_luma_transform_input
-            || packed_luma_point
-            || packed_luma_putdata
-            || packed_luma_order_statistic
-            || packed_native_byte_filter
-            || packed_luma_pad
-        {
-            let DynamicImage::ImageLuma8(image) = img else {
-                return Err(PilError::InternalError(
-                    "packed-luma GPU input requires native L samples".into(),
-                ));
-            };
-            if mapped_native_box_blur_input {
-                gpu.upload_packed_luma8_mapped(image, &mut buffers)?;
-            } else {
-                buffers.upload_packed_luma8(&gpu.queue, image)?;
-            }
-        } else if native_la_transform_output {
-            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 2, img.as_bytes())?;
-        } else if native_rgb_compact_input {
-            if mapped_native_box_blur_input {
-                let transfer_bytes = compact_native_channel_transfer_bytes(w, h, 3)?;
-                gpu.upload_native_bytes_mapped(
-                    img.as_bytes(),
-                    img.as_bytes().len(),
-                    transfer_bytes,
-                    &mut buffers,
-                )?;
-            } else {
-                buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
-            }
-        } else if let Some(channels) = native_extract_band_channels {
-            buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
-        } else if native_grayscale_rgb_input {
-            if mapped_native_grayscale_input {
-                let transfer_bytes = compact_native_channel_transfer_bytes(w, h, 3)?;
-                gpu.upload_native_bytes_mapped(
-                    img.as_bytes(),
-                    img.as_bytes().len(),
-                    transfer_bytes,
-                    &mut buffers,
-                )?;
-            } else {
-                buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
-            }
-        } else if native_grayscale_cmyk_input {
-            if mapped_native_grayscale_input {
-                let transfer_bytes = compact_native_channel_transfer_bytes(w, h, 4)?;
-                gpu.upload_native_bytes_mapped(
-                    img.as_bytes(),
-                    img.as_bytes().len(),
-                    transfer_bytes,
-                    &mut buffers,
-                )?;
-            } else {
-                buffers.upload_standard_image(&gpu.queue, img)?;
-            }
-        } else if native_sharpness_l_input {
-            let DynamicImage::ImageLuma8(image) = img else {
-                return Err(PilError::InternalError(
-                    "native-L Sharpness input requires an ImageLuma8 source".into(),
-                ));
-            };
-            buffers.upload_packed_luma8(&gpu.queue, image)?;
-        } else if native_sharpness_la_input {
-            buffers.upload_native_channel_bytes_with_la_patch(
-                &gpu.queue,
-                w,
-                h,
-                2,
-                img.as_bytes(),
+        gpu.upload_batch_input(
+            img,
+            &mut buffers,
+            GpuBatchUploadOptions {
+                mode,
+                native_luma16,
+                native_luma16_convert,
+                native_luma16_paste,
+                full_luma_putdata,
+                output_only_constant,
+                packed_la_pad,
+                packed_native_byte_filter,
+                packed_luma_colorize,
+                packed_luma_convert,
+                packed_luma_transform_input,
+                packed_luma_point,
+                packed_luma_putdata,
+                packed_luma_order_statistic,
+                packed_luma_pad,
+                native_la_transform_output,
+                native_rgb_compact_input,
+                native_extract_band_channels,
+                native_grayscale_rgb_input,
+                native_grayscale_cmyk_input,
+                native_sharpness_l_input,
+                native_sharpness_la_input,
                 native_sharpness_la_patch,
-            )?;
-        } else if native_sharpness_rgb_input {
-            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
-        } else if native_reduce_rgb_input {
-            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
-        } else if let Some(channels) = native_expand_channels {
-            buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
-        } else if let Some(channels) = native_cover_input_channels {
-            buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
-        } else {
-            buffers.upload_standard_image(&gpu.queue, img)?;
-        }
+                native_sharpness_rgb_input,
+                native_reduce_rgb_input,
+                native_expand_channels,
+                native_cover_input_channels,
+                mapped_native_box_blur_input,
+                mapped_native_grayscale_input,
+            },
+        )?;
         gpu_log!(
             "[GPU] step=upload done output_only_constant={output_only_constant} native_luma16={native_luma16}"
         );
