@@ -1,11 +1,103 @@
-//! Shared native-byte SIMD transformations, identity copies, and row traversal.
+//! Shared native-byte SIMD transforms, fills, copies, and row traversal.
 
 use super::layout::native_copy_layout;
-#[cfg(feature = "parallel")]
-use super::simd_rows_mut_serial;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 use wide::u8x16;
+
+// `parallel` may be enabled to select Parallel CPU kernels, but it must not
+// silently add Rayon scheduling to the SIMD backend. Keep SIMD routes
+// row-serial while retaining their vectorized inner loops.
+macro_rules! simd_rows_mut_serial {
+    ($data:expr, $stride:expr, $height:expr,
+     |$row_start:ident, $row_end:ident, $y:ident, $row:ident| $body:block) => {{
+        let _data: &mut [u8] = $data;
+        let _stride: usize = $stride;
+        let _height: usize = $height;
+        _data
+            .chunks_mut(_stride)
+            .take(_height)
+            .enumerate()
+            .for_each(|(_y_idx, _row)| {
+                let $row_start: usize = _y_idx * _stride;
+                let $row_end: usize = $row_start + _stride;
+                let $y: u32 = _y_idx as u32;
+                let $row: &mut [u8] = _row;
+                $body
+            });
+    }};
+}
+
+pub(crate) use simd_rows_mut_serial;
+
+#[inline]
+pub(super) fn native_expand_fill_sample(
+    fill: (u8, u8, u8, u8),
+    channels: usize,
+    index: usize,
+) -> u8 {
+    match channels {
+        1 => fill.0,
+        2 => {
+            if index % 2 == 0 {
+                fill.0
+            } else {
+                fill.3
+            }
+        }
+        3 => match index % 3 {
+            0 => fill.0,
+            1 => fill.1,
+            _ => fill.2,
+        },
+        4 => match index % 4 {
+            0 => fill.0,
+            1 => fill.1,
+            2 => fill.2,
+            _ => fill.3,
+        },
+        _ => 0,
+    }
+}
+
+pub(super) fn native_fill_row(
+    row: &mut [u8],
+    fill: (u8, u8, u8, u8),
+    channels: usize,
+) -> Option<(u64, u64)> {
+    if !(1..=4).contains(&channels) {
+        return None;
+    }
+    if channels == 1 {
+        let pattern = u8x16::splat(fill.0).to_array();
+        let vector_len = row.len() / pattern.len() * pattern.len();
+        for chunk in row[..vector_len].chunks_exact_mut(pattern.len()) {
+            chunk.copy_from_slice(&pattern);
+        }
+        let scalar_tail = row.len() - vector_len;
+        row[vector_len..].copy_from_slice(&pattern[..scalar_tail]);
+        let vector_blocks = (vector_len / pattern.len()) as u64 + u64::from(scalar_tail != 0);
+        return Some((vector_blocks, scalar_tail as u64));
+    }
+    let vector_len = row.len() / 16 * 16;
+    let mut vector_blocks = 0u64;
+    for start in (0..vector_len).step_by(16) {
+        let block = u8x16::new(std::array::from_fn(|lane| {
+            native_expand_fill_sample(fill, channels, start + lane)
+        }));
+        row[start..start + 16].copy_from_slice(&block.to_array());
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    let scalar_tail = row.len() - vector_len;
+    if scalar_tail != 0 {
+        let block = u8x16::new(std::array::from_fn(|lane| {
+            native_expand_fill_sample(fill, channels, vector_len + lane)
+        }));
+        row[vector_len..].copy_from_slice(&block.to_array()[..scalar_tail]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail as u64))
+}
 
 // Native byte transforms always operate on L/LA/RGB/RGBA layouts. Keeping
 // their active-channel masks in one table avoids duplicating an input-driven
