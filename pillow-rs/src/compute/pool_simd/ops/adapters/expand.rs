@@ -1,11 +1,34 @@
 //! SIMD Expand family adapter and native-layout output construction.
 
 use super::{
-    copy_native_bytes, native_expand_contract_for_image, native_fill_row, simd_unsupported,
+    SimdImageShape, copy_native_bytes, native_expand_contract_for_image,
+    native_expand_contract_for_shape, native_fill_row, simd_unsupported,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
+
+pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    match op {
+        PipelineOp::Expand { border, .. } => {
+            native_expand_contract_for_image(img, *border, mode).is_some()
+        }
+        _ => false,
+    }
+}
+
+pub(super) fn supports_for_shape(
+    shape: SimdImageShape,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    match op {
+        PipelineOp::Expand { border, .. } => {
+            native_expand_contract_for_shape(shape, *border, mode).is_some()
+        }
+        _ => false,
+    }
+}
 
 /// Expand an image in its native byte layout using vectorized fill and row
 /// copies. The output border is intentionally handled as two data-plane

@@ -593,9 +593,7 @@ pub(crate) fn simd_supports_for_image(
         PipelineOp::Crop { .. } | PipelineOp::CropBorder { .. } => {
             crop::supports_for_image(img, op, mode)
         }
-        PipelineOp::Expand { border, .. } => {
-            native_expand_contract_for_image(img, *border, mode).is_some()
-        }
+        PipelineOp::Expand { .. } => expand::supports_for_image(img, op, mode),
         PipelineOp::Constant { .. } => img.width() != 0 && img.height() != 0,
         PipelineOp::Duplicate => duplicate::supports_for_image(img, mode),
         PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => {
@@ -1331,9 +1329,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         PipelineOp::Crop { .. } | PipelineOp::CropBorder { .. } => {
             crop::supports_for_shape(shape, op, mode)
         }
-        PipelineOp::Expand { border, .. } => {
-            native_expand_contract_for_shape(shape, *border, mode).is_some()
-        }
+        PipelineOp::Expand { .. } => expand::supports_for_shape(shape, op, mode),
         PipelineOp::Pad { .. } => pad::supports_for_shape(shape, op, mode),
         PipelineOp::Constant { .. } => shape.width != 0 && shape.height != 0,
         PipelineOp::Duplicate => duplicate::supports_for_shape(shape, mode),
