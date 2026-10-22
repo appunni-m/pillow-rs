@@ -32031,3 +32031,59 @@ current-worktree build was based on dirty revision
 `12dcf9037b2cf2d969ee183e720c18c0869b5944`. The measurements preserve route
 and parity evidence; they do not identify why the observed SIMD/CPU timing
 differences occur.
+
+### SIMD Resize native-byte convolution extraction — 2026-10-22
+
+The existing separable native-byte convolution entry points moved from
+`pillow-rs/src/compute/pool_simd/ops/adapters.rs` to
+`pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8.rs`. This was
+a structural move; the arithmetic, dispatch conditions, and workload
+definitions did not change.
+
+The focused benchmark selected
+`pipeline-chain.resize-alpha.rgba-lanczos-1024x768`,
+`pipeline-chain.resize-alpha.la-bicubic-1024x768`, and
+`pipeline-op.thumbnail.material-rgb-1024x768`. It measured the whole workflow
+with the existing policy: each alpha Resize used one warmup, three timed
+iterations, and two samples; Thumbnail used five warmups, twenty timed
+iterations, and five samples. The two alpha Resize workloads use a
+`successful_execution` gate, so their results establish execution and route,
+not exact Pillow output parity. Thumbnail passed its exact `parity_pass` gate
+for CPU, SIMD, and GPU.
+
+| Workload | Pillow (ms) | CPU (ms) | SIMD (ms) | SIMD receipt | GPU (ms) | GPU receipt |
+| --- | ---: | ---: | ---: | --- | ---: | --- |
+| RGBA Lanczos Resize, 1024×768 | 8.818605 | 10.041437 | 11.153375 | `vector`, 122,880 blocks, no tail | 4.011583 | `gpu`, 2 dispatches, no fallback |
+| LA bicubic Resize, 1024×768 | 5.116896 | 5.307459 | 5.798042 | `vector`, 122,880 blocks, no tail | 3.852833 | `gpu`, 2 dispatches, no fallback |
+| Material RGB Thumbnail, 1024×768 | 1.187730 | 0.242875 | 0.393480 | `vector`, 96 blocks, no tail | 2.796792 | `gpu`, 3 dispatches, no fallback |
+
+The measured SIMD medians are 11.1%, 9.2%, and 62.0% above serial CPU for
+these three workloads. These are current-source measurements, not a
+candidate-versus-control comparison, so they do not show a regression caused
+by the move. They do not identify the bottlenecks, so no causal performance
+comment was added to the implementation. The benchmark
+completed all three workloads and evaluated no performance budgets. Pillow,
+CPU, SIMD, and GPU actual-route receipts are present for each workload; the
+SIMD and GPU samples have no fallback.
+
+The SIMD parity selection also included
+`PIL.Image.Image.resize.nuanced.modes-LA-tall-3-full`,
+`PIL.Image.Image.resize.nuanced.modes-RGBA-tall-3-full`, and
+`PIL.Image.Image.thumbnail.nuanced.performance-large-rgb-1024x768`. CPU
+parity passed 3/3. Strict SIMD parity passed Thumbnail and returned the
+unsupported-layout error for both 5×3 Resize outputs; the fallback-enabled
+SIMD parity run passed 3/3. GPU-requested parity passed 3/3. The separate
+large alpha Resize timing rows confirm actual SIMD vector execution, but their
+successful-execution gate does not replace exact output parity.
+
+Benchmark run `migration-benchmark-5ac6f9d34ca1479f9b1d481389f3eaa4` passed
+result-schema validation. Its Thumbnail parity gate is
+`migration-parity-benchmark-gate-8e43ac5ea7764277a3f8b2dabea8a9db` (3/3).
+The selected direct parity runs are
+`migration-parity-c60fa3fd840b4d2cb8994093be885f3e` (CPU, 3/3),
+`migration-parity-2814c93b347243b49203796667aef76a` (strict SIMD, 1/3),
+`migration-parity-33f564986d55467c8f25a8200f340942` (fallback-enabled SIMD,
+3/3), and `migration-parity-1cf2b4db22fa468db77a7053a869f9f0`
+(GPU-requested, 3/3). The benchmark build identifies revision
+`b42be4c69fd04aa11ae528d10fa2f6dcc8f39b71` with a dirty worktree; the
+affected Rust sources were unchanged after the build.

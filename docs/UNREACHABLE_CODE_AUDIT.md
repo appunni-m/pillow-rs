@@ -318,3 +318,13 @@ registered family entry calls this local dispatcher. General byte, float, and
 Luma16 pixel kernels remain in `adapters.rs` for later caller-traced moves.
 This changes file ownership only; it does not alter the historical crosswalk
 counts or infer reachability beyond the selected parity and benchmark paths.
+
+## SIMD Resize native-byte convolution follow-up — 2026-10-22
+
+The direct separable native-byte convolution entry points now live in
+`pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8.rs`. Direct
+filtered Resize and native Thumbnail continue to enter through their existing
+family routes. Shared coefficient and row helpers remain in `adapters.rs`
+because boxed byte convolution and other Resize paths still call them. This
+relocates the existing implementation without changing its algorithms or
+registered operation routes; static reachability counts remain unchanged.

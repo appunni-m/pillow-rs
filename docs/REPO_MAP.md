@@ -319,9 +319,13 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |   |   `-- rgba_batch.rs
 |   |   |   |   |   |   |   `-- kernels.rs
 |   |   |   |   |   |   |-- put_pixel.rs
-|   |   |   |   |   |   |-- resize_i32/
-|   |   |   |   |   |   |   `-- neon.rs
-|   |   |   |   |   |   |-- resize_i32.rs
+|   |   |   |   |   |   |-- resize/
+|   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- i32/
+|   |   |   |   |   |   |       |   `-- neon.rs
+|   |   |   |   |   |   |       |-- i32.rs
+|   |   |   |   |   |   |       `-- u8.rs
+|   |   |   |   |   |   |-- resize.rs
 |   |   |   |   |   |   |-- rotate/
 |   |   |   |   |   |   |   |-- kernels/
 |   |   |   |   |   |   |   |   `-- nearest.rs
