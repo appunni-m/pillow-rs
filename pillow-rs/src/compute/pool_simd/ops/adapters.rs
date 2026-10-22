@@ -590,24 +590,8 @@ pub(crate) fn simd_supports_for_image(
                     || native_copy_layout(img, mode)
                         .is_some_and(|channels| has_empty_native_bytes(img, channels)))
         }
-        PipelineOp::Crop {
-            left,
-            top,
-            right,
-            bottom,
-        } => {
-            (native_copy || native_luma16_copy)
-                && pixel_count != 0
-                && *left < *right
-                && *top < *bottom
-                && *right <= img.width()
-                && *bottom <= img.height()
-        }
-        PipelineOp::CropBorder { .. } => {
-            // Let the adapter's scalar geometry check report Pillow's public
-            // error for an oversized border. Capability preflight must not
-            // replace that validation error with NotImplementedError.
-            native_copy
+        PipelineOp::Crop { .. } | PipelineOp::CropBorder { .. } => {
+            crop::supports_for_image(img, op, mode)
         }
         PipelineOp::Expand { border, .. } => {
             native_expand_contract_for_image(img, *border, mode).is_some()
@@ -1344,24 +1328,8 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                     || native_copy
                         && shape_has_empty_native_bytes(shape, shape_channels(shape).unwrap_or(0)))
         }
-        PipelineOp::Crop {
-            left,
-            top,
-            right,
-            bottom,
-        } => {
-            (native_copy || native_luma16_copy)
-                && pixel_count != 0
-                && *left < *right
-                && *top < *bottom
-                && *right <= shape.width
-                && *bottom <= shape.height
-        }
-        PipelineOp::CropBorder { .. } => {
-            // Invalid geometry is still a scalar control-plane concern; the
-            // adapter must be allowed to return Pillow's ValueError instead
-            // of strict SIMD masking it as an unsupported operation.
-            native_copy
+        PipelineOp::Crop { .. } | PipelineOp::CropBorder { .. } => {
+            crop::supports_for_shape(shape, op, mode)
         }
         PipelineOp::Expand { border, .. } => {
             native_expand_contract_for_shape(shape, *border, mode).is_some()

@@ -1,12 +1,69 @@
 //! SIMD Crop and CropBorder family adapters with native-layout copy paths.
 
 use super::{
-    copy_native_bytes, has_valid_luma16_copy_bytes, native_copy_layout,
-    native_luma16_image_from_bytes, simd_unsupported,
+    SimdImageShape, copy_native_bytes, has_valid_luma16_copy_bytes, native_copy_layout,
+    native_luma16_image_from_bytes, shape_luma16_copy_layout, shape_native_copy_channels,
+    simd_unsupported,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView};
+
+pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
+    let native_copy = native_copy_layout(img, mode).is_some();
+    let native_luma16_copy =
+        has_valid_luma16_copy_bytes(img, mode) && img.width() != 0 && img.height() != 0;
+    match op {
+        PipelineOp::Crop {
+            left,
+            top,
+            right,
+            bottom,
+        } => {
+            (native_copy || native_luma16_copy)
+                && pixel_count != 0
+                && *left < *right
+                && *top < *bottom
+                && *right <= img.width()
+                && *bottom <= img.height()
+        }
+        PipelineOp::CropBorder { .. } => {
+            // Keep invalid border geometry in the adapter so it can return
+            // Pillow's ValueError instead of a SIMD capability error.
+            native_copy
+        }
+        _ => false,
+    }
+}
+
+pub(super) fn supports_for_shape(
+    shape: SimdImageShape,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    let pixel_count = (shape.width as usize).saturating_mul(shape.height as usize);
+    let native_copy = shape_native_copy_channels(shape, mode).is_some();
+    let native_luma16_copy =
+        shape_luma16_copy_layout(shape, mode) && shape.width != 0 && shape.height != 0;
+    match op {
+        PipelineOp::Crop {
+            left,
+            top,
+            right,
+            bottom,
+        } => {
+            (native_copy || native_luma16_copy)
+                && pixel_count != 0
+                && *left < *right
+                && *top < *bottom
+                && *right <= shape.width
+                && *bottom <= shape.height
+        }
+        PipelineOp::CropBorder { .. } => native_copy,
+        _ => false,
+    }
+}
 
 /// Copy a validated crop directly in the source's native byte layout.
 ///
