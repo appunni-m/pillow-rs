@@ -5,6 +5,33 @@ use super::*;
 
 mod routing;
 
+pub(super) fn select_gpu_chunk_end(
+    chunk_start: usize,
+    resource_bytes: &[usize],
+    shader_work_items: &[u64],
+) -> Option<usize> {
+    if resource_bytes.len() != shader_work_items.len() {
+        return None;
+    }
+    let mut chunk_end = chunk_start;
+    let mut total_bytes = 0usize;
+    let mut total_work = 0u64;
+    while chunk_end < resource_bytes.len() && chunk_end - chunk_start < MAX_GPU_OPS_PER_SUBMISSION {
+        let op_bytes = resource_bytes[chunk_end];
+        let op_work = shader_work_items[chunk_end];
+        if chunk_end > chunk_start
+            && (total_bytes.saturating_add(op_bytes) > MAX_GPU_RESOURCE_BYTES_PER_SUBMISSION
+                || total_work.saturating_add(op_work) > MAX_GPU_SHADER_WORK_ITEMS)
+        {
+            break;
+        }
+        total_bytes = total_bytes.saturating_add(op_bytes);
+        total_work = total_work.saturating_add(op_work);
+        chunk_end += 1;
+    }
+    (chunk_end > chunk_start).then_some(chunk_end)
+}
+
 pub(super) struct GpuBatchResources<'a> {
     pub(super) buf_a: &'a wgpu::Buffer,
     pub(super) buf_b: &'a wgpu::Buffer,

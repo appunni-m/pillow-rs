@@ -1,5 +1,17 @@
 use super::*;
 
+pub(super) fn putdata_auxiliary_words(
+    data_len: usize,
+    channels: usize,
+    packed_luma: bool,
+) -> usize {
+    if packed_luma {
+        data_len.div_ceil(std::mem::size_of::<u32>())
+    } else {
+        data_len.div_ceil(channels)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct BatchEstimateOptions<'a> {
     pub(super) uniform_alignment: usize,

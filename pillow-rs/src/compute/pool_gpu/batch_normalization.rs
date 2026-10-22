@@ -1,5 +1,52 @@
 use super::*;
 
+/// Pillow's `ImagingLineBoxBlur{8,32}` in `src/libImaging/BoxBlur.c` uses a
+/// normalized replicated-edge average, so a constant image remains constant
+/// through every box pass (and therefore Pillow's three-pass Gaussian
+/// lowering). Scanning larger frames can cost more than the six GPU passes it
+/// replaces, so keep this exact lowering bounded to the benchmark-sized
+/// working set where the launch savings are measurable.
+const GPU_UNIFORM_BLUR_MAX_PIXELS: usize = 1024 * 1024;
+
+fn gpu_uniform_blur_can_copy(ops: &[PipelineOp], image: &DynamicImage) -> bool {
+    if ops.len() != 1
+        || !matches!(
+            ops[0],
+            PipelineOp::BoxBlur { .. }
+                | PipelineOp::BoxBlurXY { .. }
+                | PipelineOp::GaussianBlur { .. }
+        )
+        || !gpu_operation_is_safe(&ops[0])
+        || !gpu_image_layout_is_supported(image)
+    {
+        return false;
+    }
+
+    let Ok(dims) = CheckedDims::new(image.width(), image.height(), 1) else {
+        return false;
+    };
+    let pixel_count = dims.total_pixels();
+    if pixel_count == 0 || pixel_count > GPU_UNIFORM_BLUR_MAX_PIXELS {
+        return false;
+    }
+
+    let channels = match image {
+        DynamicImage::ImageLuma8(_) => 1,
+        DynamicImage::ImageLumaA8(_) => 2,
+        DynamicImage::ImageRgb8(_) => 3,
+        DynamicImage::ImageRgba8(_) => 4,
+        _ => return false,
+    };
+    let bytes = image.as_bytes();
+    let Some(first) = bytes.get(..channels) else {
+        return false;
+    };
+    bytes
+        .chunks_exact(channels)
+        .take(pixel_count)
+        .all(|pixel| pixel == first)
+}
+
 pub(super) struct NormalizedGpuBatch {
     pub(super) native_cover_input_channels: Option<u8>,
     pub(super) native_sharpness_la_patch: Option<(usize, [u8; 2])>,

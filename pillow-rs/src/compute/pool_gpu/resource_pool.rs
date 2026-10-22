@@ -8,6 +8,108 @@ pub(super) struct BufferRange {
     pub(super) size: u64,
 }
 
+pub(super) fn gpu_working_set_bytes(capacity: u32) -> u64 {
+    // The two full-size ping-pong buffers dominate this working set. The
+    // optional-input fallbacks contain one word each and the LUT contains 256
+    // words.
+    u64::from(capacity)
+        .saturating_mul(2)
+        .saturating_mul(std::mem::size_of::<u32>() as u64)
+        .saturating_add(2 * std::mem::size_of::<u32>() as u64)
+        .saturating_add(256 * std::mem::size_of::<u32>() as u64)
+        .saturating_add(GPU_HISTOGRAM_BYTES as u64)
+}
+
+pub(super) fn gpu_buffer_reuse_allowed(capacity: u32, minimum_capacity: u32) -> bool {
+    capacity >= minimum_capacity
+        && (minimum_capacity == 0
+            || capacity <= minimum_capacity.saturating_mul(MAX_GPU_BUFFER_REUSE_RATIO))
+}
+
+pub(super) fn align_up(value: usize, alignment: usize) -> usize {
+    if alignment <= 1 {
+        value
+    } else {
+        let remainder = value % alignment;
+        if remainder == 0 {
+            value
+        } else {
+            value + alignment - remainder
+        }
+    }
+}
+
+pub(super) fn aligned_bytes(bytes: usize, alignment: usize) -> usize {
+    align_up(bytes.max(1), alignment.max(4))
+}
+
+/// Append one aligned slice to a u32 arena and return its byte range.
+pub(super) fn append_arena_slice(
+    arena: &mut Vec<u32>,
+    values: &[u32],
+    alignment_bytes: usize,
+) -> BufferRange {
+    let alignment_words = alignment_bytes.max(4).div_ceil(4);
+    let offset_words = align_up(arena.len(), alignment_words);
+    let size_words = align_up(values.len().max(1), alignment_words);
+    arena.resize(offset_words + size_words, 0);
+    arena[offset_words..offset_words + values.len()].copy_from_slice(values);
+    BufferRange {
+        offset: (offset_words * std::mem::size_of::<u32>()) as u64,
+        size: (size_words * std::mem::size_of::<u32>()) as u64,
+    }
+}
+
+pub(super) fn create_sized_buffer(
+    device: &wgpu::Device,
+    label: &'static str,
+    usage: wgpu::BufferUsages,
+    size_bytes: usize,
+    alignment_bytes: usize,
+) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some(label),
+        size: aligned_bytes(size_bytes, alignment_bytes) as u64,
+        usage,
+        mapped_at_creation: false,
+    })
+}
+
+pub(super) fn ranged_binding(
+    buffer: &wgpu::Buffer,
+    range: Option<BufferRange>,
+) -> Result<wgpu::BindingResource<'_>, PilError> {
+    match range {
+        Some(range) => {
+            let size = NonZeroU64::new(range.size).ok_or_else(|| {
+                PilError::InternalError("GPU buffer binding range cannot be empty".into())
+            })?;
+            Ok(wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer,
+                offset: range.offset,
+                size: Some(size),
+            }))
+        }
+        None => Ok(buffer.as_entire_binding()),
+    }
+}
+
+pub(super) fn auxiliary_binding<'a>(
+    arena: Option<&'a wgpu::Buffer>,
+    fallback: &'a wgpu::Buffer,
+    range: Option<BufferRange>,
+) -> Result<wgpu::BindingResource<'a>, PilError> {
+    match range {
+        Some(range) => {
+            let buffer = arena.ok_or_else(|| {
+                PilError::InternalError("GPU auxiliary range has no backing buffer".into())
+            })?;
+            ranged_binding(buffer, Some(range))
+        }
+        None => ranged_binding(fallback, None),
+    }
+}
+
 /// Immutable auxiliary resources shared by operations in one execution.
 ///
 /// GPU submissions are split at a bounded operation/resource budget, but the
