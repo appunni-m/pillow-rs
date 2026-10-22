@@ -1,5 +1,7 @@
 use super::*;
 
+mod native_byte_op;
+
 /// Extract and pack LUT data from a PipelineOp into [u32; 256] for GPU upload.
 /// Each u32 packs RGBA channels for one LUT entry (R in byte 0, G byte 1, B byte 2, A byte 3).
 pub(super) fn extract_lut(op: &PipelineOp, mode: u32) -> Option<[u32; 256]> {
