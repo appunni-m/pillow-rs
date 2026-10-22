@@ -645,15 +645,6 @@ impl GpuInner {
         vertical_range.offset += base_offset;
         Ok((horizontal_range, vertical_range))
     }
-
-    fn blur_pass_count(op: &PipelineOp) -> Option<usize> {
-        match op {
-            PipelineOp::BoxBlur { .. } => Some(1),
-            PipelineOp::BoxBlurXY { passes, .. } => Some((*passes).max(1) as usize),
-            PipelineOp::GaussianBlur { .. } => Some(3),
-            _ => None,
-        }
-    }
 }
 
 static GPU: std::sync::OnceLock<Result<GpuInner, PilError>> = std::sync::OnceLock::new();

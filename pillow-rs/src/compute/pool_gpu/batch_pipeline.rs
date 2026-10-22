@@ -1,6 +1,15 @@
 use super::*;
 
 impl GpuInner {
+    pub(super) fn blur_pass_count(op: &PipelineOp) -> Option<usize> {
+        match op {
+            PipelineOp::BoxBlur { .. } => Some(1),
+            PipelineOp::BoxBlurXY { passes, .. } => Some((*passes).max(1) as usize),
+            PipelineOp::GaussianBlur { .. } => Some(3),
+            _ => None,
+        }
+    }
+
     pub(super) fn resolve_batch_pipelines(
         &self,
         ops: &[PipelineOp],
