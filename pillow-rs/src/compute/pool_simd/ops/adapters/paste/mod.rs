@@ -8,11 +8,13 @@ mod plan;
 #[cfg(feature = "parallel")]
 use super::SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD;
 use super::put_alpha::simd_put_alpha_rgb_row;
-use super::{NativeConvertLayout, native_convert_layout_block, simd_unsupported};
+use super::{
+    NativeConvertLayout, copy_native_bytes, native_convert_layout_block, simd_unsupported,
+};
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, ImageBuffer, RgbImage, RgbaImage};
+use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, RgbImage, RgbaImage};
 use std::sync::Arc;
 
 pub(super) use self::kernels::native_paste_apply;
@@ -31,6 +33,81 @@ pub(super) use self::plan::{
     native_paste_rgba_to_rgb_supported, native_paste_rgba_to_rgb_supported_for_shape,
     native_put_data_layout, native_put_data_shape_layout,
 };
+
+/// Composite two images through their native byte planes.
+///
+/// Pillow implements composite as a copy of `image2` followed by a masked
+/// paste of `image1` at the origin. The output copy and the masked arithmetic
+/// both stay on the host in native storage; no packed-RGBA conversion or CPU
+/// adapter is used. A padded final vector handles narrow rows, which is
+/// important for indexed images and small public inputs.
+pub fn simd_composite_module(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let PipelineOp::CompositeModule {
+        other,
+        mask,
+        mask_alpha,
+    } = op
+    else {
+        return Err(PilError::ValueError("expected CompositeModule op".into()));
+    };
+    let plan = native_composite_plan_for_image(img, other, mask, *mask_alpha, mode)
+        .ok_or_else(|| simd_unsupported("CompositeModule"))?;
+    let destination = other.materialized_shared()?;
+    if !native_paste_actual_layout(img, plan.layout)
+        || !native_paste_actual_layout(destination.as_ref(), plan.layout)
+        || destination.dimensions() != other.size()?
+    {
+        return Err(simd_unsupported("CompositeModule"));
+    }
+    let mask_image = mask.materialized_shared()?;
+    let mask_layout = plan
+        .mask
+        .ok_or_else(|| simd_unsupported("CompositeModule"))?;
+    if !native_paste_actual_mask_layout(mask_image.as_ref(), mask_layout)
+        || mask_image.dimensions() != img.dimensions()
+    {
+        return Err(simd_unsupported("CompositeModule"));
+    }
+
+    // Composite starts from an image2 copy. For native L, clone the existing
+    // byte plane directly: zero-filling a new output before copying every
+    // destination byte adds a full redundant write pass. Keep the explicit
+    // vector copy and its telemetry for the other layouts.
+    let mut output = if plan.layout.mode == "L" {
+        destination.as_bytes().to_vec()
+    } else {
+        let mut output = vec![0u8; destination.as_bytes().len()];
+        let (copy_blocks, copy_tail) = copy_native_bytes(destination.as_bytes(), &mut output)
+            .ok_or_else(|| {
+                PilError::InternalError("SIMD composite buffer shape mismatch".into())
+            })?;
+        crate::compute::record_pipeline_operation_vector_blocks(copy_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(copy_tail);
+        output
+    };
+    if !native_paste_apply(
+        &mut output,
+        img.as_bytes(),
+        Some(mask_image.as_bytes()),
+        destination.width() as usize,
+        destination.height() as usize,
+        plan,
+        true,
+    ) {
+        return Err(simd_unsupported("CompositeModule"));
+    }
+    let result = crate::image_utils::raw_bytes_to_image_allow_empty(
+        destination.width(),
+        destination.height(),
+        output,
+        plan.layout.channels,
+    )?;
+    Ok(preserve_mode(destination.as_ref(), result))
+}
 
 /// Copy an RGBA source into an RGB destination using fixed SIMD shuffles to
 /// drop alpha. This is the unmasked Pillow contract; a mask would require a

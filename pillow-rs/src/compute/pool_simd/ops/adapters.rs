@@ -124,17 +124,17 @@ use self::merge::{native_merge_bytes, native_merge_rgb_luma_owners};
 pub(crate) use self::module_blend::simd_blend_module;
 pub(crate) use self::offset::simd_offset;
 pub(crate) use self::pad::simd_pad;
+pub use self::paste::simd_composite_module;
 pub(crate) use self::paste::simd_paste;
 #[cfg(test)]
 use self::paste::{
-    NativePasteLayout, NativePasteMaskLayout, NativePastePlan, native_paste_cmyk_l_masked_row,
-    native_paste_la_masked_row, native_paste_region, native_paste_rgb_l_masked_row,
-    simd_paste_rgb_to_rgba,
+    NativePasteLayout, NativePasteMaskLayout, NativePastePlan, native_paste_apply,
+    native_paste_cmyk_l_masked_row, native_paste_la_masked_row, native_paste_region,
+    native_paste_rgb_l_masked_row, simd_paste_rgb_to_rgba,
 };
 use self::paste::{
-    native_composite_plan_for_image, native_composite_plan_for_shape, native_paste_actual_layout,
-    native_paste_actual_mask_layout, native_paste_apply, native_paste_in_place,
-    native_paste_plan_for_image, native_paste_plan_for_shape, native_paste_rgb_to_rgba_supported,
+    native_paste_actual_layout, native_paste_in_place, native_paste_plan_for_image,
+    native_paste_plan_for_shape, native_paste_rgb_to_rgba_supported,
     native_paste_rgb_to_rgba_supported_for_shape, native_paste_rgba_to_rgb_supported,
     native_paste_rgba_to_rgb_supported_for_shape, native_put_data_layout,
     native_put_data_shape_layout,
@@ -504,81 +504,6 @@ fn valid_convolution_parameters(kernel: &[f32], scale: f32) -> bool {
     scale.is_finite() && scale != 0.0 && kernel.iter().all(|value| value.is_finite())
 }
 
-/// Composite two images through their native byte planes.
-///
-/// Pillow implements composite as a copy of `image2` followed by a masked
-/// paste of `image1` at the origin. The output copy and the masked arithmetic
-/// both stay on the host in native storage; no packed-RGBA conversion or CPU
-/// adapter is used. A padded final vector handles narrow rows, which is
-/// important for indexed images and small public inputs.
-pub fn simd_composite_module(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let PipelineOp::CompositeModule {
-        other,
-        mask,
-        mask_alpha,
-    } = op
-    else {
-        return Err(PilError::ValueError("expected CompositeModule op".into()));
-    };
-    let plan = native_composite_plan_for_image(img, other, mask, *mask_alpha, mode)
-        .ok_or_else(|| simd_unsupported("CompositeModule"))?;
-    let destination = other.materialized_shared()?;
-    if !native_paste_actual_layout(img, plan.layout)
-        || !native_paste_actual_layout(destination.as_ref(), plan.layout)
-        || destination.dimensions() != other.size()?
-    {
-        return Err(simd_unsupported("CompositeModule"));
-    }
-    let mask_image = mask.materialized_shared()?;
-    let mask_layout = plan
-        .mask
-        .ok_or_else(|| simd_unsupported("CompositeModule"))?;
-    if !native_paste_actual_mask_layout(mask_image.as_ref(), mask_layout)
-        || mask_image.dimensions() != img.dimensions()
-    {
-        return Err(simd_unsupported("CompositeModule"));
-    }
-
-    // Composite starts from an image2 copy. For native L, clone the existing
-    // byte plane directly: zero-filling a new output before copying every
-    // destination byte adds a full redundant write pass. Keep the explicit
-    // vector copy and its telemetry for the other layouts.
-    let mut output = if plan.layout.mode == "L" {
-        destination.as_bytes().to_vec()
-    } else {
-        let mut output = vec![0u8; destination.as_bytes().len()];
-        let (copy_blocks, copy_tail) = copy_native_bytes(destination.as_bytes(), &mut output)
-            .ok_or_else(|| {
-                PilError::InternalError("SIMD composite buffer shape mismatch".into())
-            })?;
-        crate::compute::record_pipeline_operation_vector_blocks(copy_blocks);
-        crate::compute::record_pipeline_operation_scalar_tail(copy_tail);
-        output
-    };
-    if !native_paste_apply(
-        &mut output,
-        img.as_bytes(),
-        Some(mask_image.as_bytes()),
-        destination.width() as usize,
-        destination.height() as usize,
-        plan,
-        true,
-    ) {
-        return Err(simd_unsupported("CompositeModule"));
-    }
-    let result = crate::image_utils::raw_bytes_to_image_allow_empty(
-        destination.width(),
-        destination.height(),
-        output,
-        plan.layout.channels,
-    )?;
-    Ok(preserve_mode(destination.as_ref(), result))
-}
-
 /// Replace the canonical `putdata` prefix through the image's native byte
 /// layout. The binding/core boundary has already normalized scalar and tuple
 /// values into `data`; the SIMD adapter only performs the defined byte copy,
@@ -918,7 +843,7 @@ pub(crate) fn simd_supports_for_image(
             other,
             mask,
             mask_alpha,
-        } => native_composite_plan_for_image(img, other, mask, *mask_alpha, mode).is_some(),
+        } => paste::native_composite_plan_for_image(img, other, mask, *mask_alpha, mode).is_some(),
         PipelineOp::Paste {
             source,
             x,
@@ -1713,7 +1638,9 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             other,
             mask,
             mask_alpha,
-        } => native_composite_plan_for_shape(shape, other, mask, *mask_alpha, mode).is_some(),
+        } => {
+            paste::native_composite_plan_for_shape(shape, other, mask, *mask_alpha, mode).is_some()
+        }
         PipelineOp::Paste {
             source,
             x,
