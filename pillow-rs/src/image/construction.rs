@@ -10,9 +10,81 @@ use crate::error::PilError;
 use crate::format::parse_format_str;
 use crate::raster::DynamicImage;
 
-use super::{
-    Image, LoadedData, PalettedData, l16_uses_big_endian, materialization_cache, unpack_mode1_rows,
+use super::{Image, LoadedData, PalettedData, l16_uses_big_endian, materialization_cache};
+
+const MODE1_BYTE_PIXELS: [[u8; 8]; 256] = {
+    let mut table = [[0; 8]; 256];
+    let mut value = 0;
+    while value < 256 {
+        let mut bit = 0;
+        while bit < 8 {
+            table[value][bit] = if value & (128 >> bit) == 0 { 0 } else { 255 };
+            bit += 1;
+        }
+        value += 1;
+    }
+    table
 };
+
+/// Expand complete, validated mode-1 rows; input padding never becomes pixels.
+pub(crate) fn unpack_mode1_rows(packed: &[u8], width: usize, pixels: &mut [u8]) {
+    if width == 0 {
+        return;
+    }
+    let row_bytes = width.div_ceil(8);
+    debug_assert!(pixels.len().is_multiple_of(width));
+    debug_assert!(packed.len() >= row_bytes * (pixels.len() / width));
+    for (source, destination) in packed
+        .chunks_exact(row_bytes)
+        .zip(pixels.chunks_exact_mut(width))
+    {
+        let (blocks, tail) = destination.as_chunks_mut::<8>();
+        for (block, &byte) in blocks.iter_mut().zip(source) {
+            *block = MODE1_BYTE_PIXELS[usize::from(byte)];
+        }
+        if !tail.is_empty() {
+            tail.copy_from_slice(
+                &MODE1_BYTE_PIXELS[usize::from(source[blocks.len()])][..tail.len()],
+            );
+        }
+    }
+}
+
+impl Image {
+    /// Returns a logically independent image sharing immutable caches until mutation.
+    pub fn copy(&self) -> Self {
+        // Pillow's copy returns a fresh image whose `format` is None even when
+        // the source came from a file; only the originally opened image
+        // carries the container format.
+        let mut copy = self.clone();
+        match &mut copy {
+            Image::Loaded(data) => data.source_format = None,
+            Image::Paletted(data) => data.source_format = None,
+            Image::Bytes { format, .. } => *format = None,
+            Image::Pipeline { format, .. } => *format = None,
+        }
+        copy
+    }
+
+    /// Seeks to a frame in a multi-frame image.
+    ///
+    /// Multi-frame decoding is not implemented in core yet, so only frame `0`
+    /// is accepted and other frame numbers raise [`PilError::EOFError`].
+    pub fn seek(&self, frame: u32) -> Result<(), PilError> {
+        if frame != self.tell() {
+            return Err(PilError::EOFError("no more images in file".to_owned()));
+        }
+        Ok(())
+    }
+
+    /// Returns the current frame number.
+    ///
+    /// Multi-frame decoding is not implemented in core yet, so this always
+    /// returns `0`.
+    pub fn tell(&self) -> u32 {
+        0
+    }
+}
 
 /// Host-neutral values extracted for a public `Image.new` color argument.
 #[derive(Debug, Clone)]

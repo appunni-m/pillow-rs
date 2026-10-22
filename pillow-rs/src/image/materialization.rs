@@ -2,16 +2,118 @@
 
 use std::sync::Arc;
 
+use image_slash_star::{Decoded, DecodedImage, ImageFormat, ImageInfo};
+
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
 use crate::raster::DynamicImage;
 
 use super::{
-    Image, ImageMode, LoadedData, PalettedData, PipelinePrefixCache, decoded_to_dynamic,
-    expand_palette, expand_palette_alpha, image_from_materialized, map_codec_error,
-    map_deferred_decode_error, materialization_cache, take_cached_materialization,
-    validate_scalar_storage,
+    Image, ImageMode, LoadedData, PalettedData, PipelinePrefixCache, expand_palette,
+    expand_palette_alpha, image_mode_name, materialization_cache, padded_palette,
+    take_cached_materialization, validate_scalar_storage,
 };
+
+fn image_from_materialized(
+    image: Arc<DynamicImage>,
+    source_format: Option<ImageFormat>,
+    info: Option<ImageInfo>,
+    exif: Option<Vec<u8>>,
+) -> Result<Image, PilError> {
+    let mode = info
+        .as_ref()
+        .map_or_else(|| image.color().into(), |info| info.mode);
+    if mode == ImageMode::P8 {
+        let palette = info
+            .as_ref()
+            .and_then(|info| info.palette.clone())
+            .ok_or_else(|| {
+                PilError::PaletteError("decoded P-mode image has no retained palette".to_owned())
+            })?;
+        return Ok(Image::Paletted(PalettedData {
+            indices: image.as_ref().clone().to_luma8(),
+            palette: padded_palette(&palette.rgb),
+            palette_alpha: palette.alpha,
+            source_format,
+            info,
+            exif: exif.clone(),
+            materialized: materialization_cache(),
+        }));
+    }
+    let explicit_mode = match mode {
+        ImageMode::L1 | ImageMode::Cmyk8 | ImageMode::F32 | ImageMode::I32 => {
+            Some(image_mode_name(mode).to_owned())
+        }
+        _ => None,
+    };
+    Ok(Image::Loaded(LoadedData {
+        image,
+        known_zero_fill: false,
+        explicit_mode,
+        decoded_mode: mode,
+        palette: None,
+        palette_alpha: None,
+        source_format,
+        info,
+        exif,
+    }))
+}
+
+fn map_codec_error(error: image_slash_star::ImageError, source: &str) -> PilError {
+    if matches!(error, image_slash_star::ImageError::UnknownFormat) {
+        PilError::UnidentifiedImageError(source.to_owned())
+    } else {
+        PilError::ImageError(error)
+    }
+}
+
+fn map_deferred_decode_error(error: image_slash_star::ImageError) -> PilError {
+    match error {
+        // Pillow's lazy Image.load path collapses malformed encoded payloads
+        // to this stable OSError message, even though open() accepted the
+        // format header. Keep codec-specific diagnostics out of the public
+        // error contract for deferred loads.
+        image_slash_star::ImageError::Malformed { .. } => {
+            PilError::IOError("cannot load this image".to_owned())
+        }
+        other => map_codec_error(other, "memory"),
+    }
+}
+
+fn decoded_to_dynamic(decoded: &Decoded<DecodedImage>) -> Result<DynamicImage, PilError> {
+    let content = &decoded.content;
+    match content.mode {
+        ImageMode::P8 => crate::raster::GrayImage::from_raw(
+            content.width,
+            content.height,
+            content.pixels.clone(),
+        )
+        .map(DynamicImage::ImageLuma8)
+        .ok_or_else(|| PilError::DimensionError("invalid indexed buffer".to_owned())),
+        ImageMode::L1 => {
+            let row_bytes = content.width.div_ceil(8) as usize;
+            let mut unpacked = Vec::with_capacity(content.width as usize * content.height as usize);
+            for row in content.pixels.chunks_exact(row_bytes) {
+                for x in 0..content.width as usize {
+                    let bit = (row[x / 8] >> (7 - (x % 8))) & 1;
+                    unpacked.push(if bit == 0 { 0 } else { 255 });
+                }
+            }
+            crate::raster::GrayImage::from_raw(content.width, content.height, unpacked)
+                .map(DynamicImage::ImageLuma8)
+                .ok_or_else(|| PilError::DimensionError("invalid packed bilevel buffer".to_owned()))
+        }
+        ImageMode::Cmyk8 | ImageMode::F32 | ImageMode::I32 => crate::raster::RgbaImage::from_raw(
+            content.width,
+            content.height,
+            content.pixels.clone(),
+        )
+        .map(DynamicImage::ImageRgba8)
+        .ok_or_else(|| PilError::DimensionError("invalid four-byte buffer".to_owned())),
+        mode => DynamicImage::from_decoded(content)
+            .ok_or_else(|| PilError::ValueError(format!("unsupported decoded mode {mode:?}"))),
+    }
+}
 
 impl Image {
     // ── Materialize ──

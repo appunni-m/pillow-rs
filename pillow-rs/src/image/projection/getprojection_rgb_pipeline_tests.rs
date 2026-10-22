@@ -1,4 +1,5 @@
-use super::super::{Image, PilError};
+use super::super::Image;
+use crate::error::PilError;
 
 #[test]
 fn cpu_zero_rgb_source_preserves_sparse_overwrite_order() -> Result<(), PilError> {

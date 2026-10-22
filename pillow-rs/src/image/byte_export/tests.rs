@@ -1,4 +1,5 @@
-use super::super::{Image, PilError, PutDataValue, is_l16_mode, l16_uses_big_endian};
+use super::super::{Image, PutDataValue, is_l16_mode, l16_uses_big_endian};
+use crate::error::PilError;
 
 const MODES: &[(&str, usize)] = &[
     ("1", 1),
@@ -136,4 +137,57 @@ fn exported_bytes_survive_image_mutation_and_drop() -> Result<(), PilError> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod mode1_byte_block_tests {
+    use super::super::super::construction::unpack_mode1_rows;
+    use super::super::pack_mode1_rows;
+
+    #[test]
+    fn every_packed_byte_expands_in_msb_order() {
+        for value in 0..=255u8 {
+            let mut pixels = [0; 8];
+            unpack_mode1_rows(&[value], 8, &mut pixels);
+            for (bit, pixel) in pixels.into_iter().enumerate() {
+                assert_eq!(pixel, if value & (128 >> bit) != 0 { 255 } else { 0 });
+            }
+        }
+    }
+
+    #[test]
+    fn every_nonzero_byte_packs_as_a_set_bit() {
+        for position in 0..8 {
+            for background in [0, 1, 127, 128, 255] {
+                for value in 0..=255u8 {
+                    let mut pixels = [background; 8];
+                    pixels[position] = value;
+                    let expected = pixels.iter().enumerate().fold(0, |byte, (bit, &pixel)| {
+                        byte | (u8::from(pixel != 0) << (7 - bit))
+                    });
+                    assert_eq!(pack_mode1_rows(&pixels, 8, 1), [expected]);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rows_keep_padding_separate_at_each_byte_boundary() {
+        for width in 0usize..=33 {
+            for height in 0..=3 {
+                let row_bytes = width.div_ceil(8);
+                let mut expected: Vec<u8> = (0..row_bytes * height)
+                    .map(|index| (index * 73 + 29) as u8)
+                    .collect();
+                let mut pixels = vec![0; width * height];
+                unpack_mode1_rows(&expected, width, &mut pixels);
+                if !width.is_multiple_of(8) {
+                    for row in expected.chunks_exact_mut(row_bytes) {
+                        row[row_bytes - 1] &= 255 << (8 - width % 8);
+                    }
+                }
+                assert_eq!(pack_mode1_rows(&pixels, width, height), expected);
+            }
+        }
+    }
 }

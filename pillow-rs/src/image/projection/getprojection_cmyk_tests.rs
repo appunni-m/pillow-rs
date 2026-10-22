@@ -1,4 +1,5 @@
-use super::super::{Image, PilError, PutDataValue};
+use super::super::{Image, PutDataValue};
+use crate::error::PilError;
 
 #[test]
 fn cpu_known_zero_cmyk_projection_uses_sparse_writes() -> Result<(), PilError> {

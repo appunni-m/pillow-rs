@@ -3,7 +3,93 @@
 use crate::error::PilError;
 use crate::format::parse_format_str;
 
-use super::{Image, ImageByteExport, is_l16_mode, l16_uses_big_endian, pack_mode1_rows};
+use std::sync::Arc;
+
+use crate::raster::DynamicImage;
+
+use super::{Image, is_l16_mode, l16_uses_big_endian};
+
+/// Host-neutral input for converting Pillow's scalar `ImagingCore` view to bytes.
+#[derive(Debug, Clone)]
+pub enum ImagingCoreBytesInput {
+    /// A one-band sequence of integer samples.
+    Scalars(Vec<i64>),
+    /// A one-band sequence of floating-point samples.
+    Floats(Vec<f64>),
+    /// A multiband or otherwise non-scalar sequence.
+    Multiband,
+}
+
+/// Converts scalar `ImagingCore` samples to bytes with Pillow's errors.
+pub fn imaging_core_to_bytes(input: ImagingCoreBytesInput) -> Result<Vec<u8>, PilError> {
+    match input {
+        ImagingCoreBytesInput::Scalars(values) => values
+            .into_iter()
+            .map(|value| {
+                u8::try_from(value)
+                    .map_err(|_| PilError::ValueError("bytes must be in range(0, 256)".into()))
+            })
+            .collect(),
+        // Pillow's bytes(list[float]) path reports the element type rather than
+        // exposing the binding's internal sequence classification.
+        ImagingCoreBytesInput::Floats(_) => Err(PilError::TypeError(
+            "'float' object cannot be interpreted as an integer".into(),
+        )),
+        // ImagingCore returns tuples for multiband pixels, so Python's bytes()
+        // reports the tuple element type exactly as Pillow does.
+        ImagingCoreBytesInput::Multiband => Err(PilError::TypeError(
+            "'tuple' object cannot be interpreted as an integer".into(),
+        )),
+    }
+}
+
+/// Owns either an immutable materialized image or bytes produced by a packer.
+enum ImageByteExport {
+    Shared(Arc<DynamicImage>),
+    Packed(Vec<u8>),
+}
+
+impl AsRef<[u8]> for ImageByteExport {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Self::Shared(image) => image.as_bytes(),
+            Self::Packed(bytes) => bytes,
+        }
+    }
+}
+
+/// Pack validated luma rows using Pillow's nonzero-pixel rule and MSB order.
+fn pack_mode1_rows(pixels: &[u8], width: usize, height: usize) -> Vec<u8> {
+    if width == 0 || height == 0 {
+        return Vec::new();
+    }
+    debug_assert!(pixels.len() >= width * height);
+    let row_bytes = width.div_ceil(8);
+    let mut packed = vec![0; row_bytes * height];
+    for (source, destination) in pixels
+        .chunks_exact(width)
+        .zip(packed.chunks_exact_mut(row_bytes))
+    {
+        let (blocks, tail) = source.as_chunks::<8>();
+        for (block, byte) in blocks.iter().zip(destination.iter_mut()) {
+            let word = u64::from_le_bytes(*block);
+            // Low-seven-bit sums cannot carry between bytes. Combining the
+            // sum's high bit with the original high bit tests every byte for
+            // nonzero, including values other than the usual 0/255 pair.
+            let flags = (((word & 0x7f7f_7f7f_7f7f_7f7f) + 0x7f7f_7f7f_7f7f_7f7f) | word)
+                & 0x8080_8080_8080_8080;
+            // Gather byte flags into MSB-first pixel order. Discarding the
+            // product's upper bits is intentional; input byte order is explicit.
+            *byte = ((flags >> 7).wrapping_mul(0x8040_2010_0804_0201) >> 56) as u8;
+        }
+        if !tail.is_empty() {
+            destination[blocks.len()] = tail.iter().enumerate().fold(0, |byte, (bit, &pixel)| {
+                byte | (u8::from(pixel != 0) << (7 - bit))
+            });
+        }
+    }
+    packed
+}
 
 #[cfg(test)]
 mod tests;

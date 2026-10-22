@@ -10,10 +10,15 @@ use crate::pipeline::{PipelineOp, PixelMode};
 use crate::raster::DynamicImage;
 
 use super::{
-    FormattedImageData, Image, PutDataInput, PutDataValue, PutDataValueKind, ScalarImageSamples,
-    image_mode_name, materialization_cache, select_interleaved_band, select_interleaved_band_into,
-    select_lab_band, select_lab_band_into,
+    FormattedImageData, Image, PutDataInput, PutDataValue, PutDataValueKind, image_mode_name,
+    materialization_cache, select_interleaved_band, select_interleaved_band_into, select_lab_band,
+    select_lab_band_into,
 };
+
+pub(crate) enum ScalarImageSamples {
+    Integer(Vec<i32>),
+    Float(Vec<f64>),
+}
 
 pub(super) fn decode_integer_samples(raw: &[u8]) -> Vec<i32> {
     raw.chunks_exact(4)

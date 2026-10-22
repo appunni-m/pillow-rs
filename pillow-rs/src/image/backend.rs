@@ -415,3 +415,41 @@ impl Image {
         }
     }
 }
+
+/// Preserves the input image color type after operations that may widen to RGBA.
+///
+/// For L/LA modes, extracts the R channel directly (GPU stores luma in R, and
+/// G/B may be stale after mode-aware processing). Uses `to_luma8()`/`to_luma_alpha8()`
+/// only as a fallback.
+pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicImage {
+    let orig_color = original.color();
+    let res_color = result.color();
+    if orig_color == res_color {
+        return result;
+    }
+    match orig_color {
+        crate::raster::ColorType::L8 => {
+            // Extract R channel directly — GPU mode-aware shaders only update R for L mode.
+            // G and B may be stale; to_luma8() weights all three channels and would be wrong.
+            let rgba = result.to_rgba8();
+            let (w, h) = rgba.dimensions();
+            let luma: Vec<u8> = rgba.pixels().map(|px| px[0]).collect();
+            DynamicImage::ImageLuma8(
+                crate::raster::GrayImage::from_raw(w, h, luma).unwrap_or_else(|| result.to_luma8()),
+            )
+        }
+        crate::raster::ColorType::La8 => {
+            // Extract R (luma) and A (alpha) directly.
+            let rgba = result.to_rgba8();
+            let (w, h) = rgba.dimensions();
+            let la: Vec<u8> = rgba.pixels().flat_map(|px| [px[0], px[3]]).collect();
+            DynamicImage::ImageLumaA8(
+                crate::raster::GrayAlphaImage::from_raw(w, h, la)
+                    .unwrap_or_else(|| result.to_luma_alpha8()),
+            )
+        }
+        crate::raster::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
+        crate::raster::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
+        _ => result,
+    }
+}

@@ -8,9 +8,161 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
-use super::{
-    Image, LoadedData, PalettedData, materialization_cache, operational_palette, split_palette_data,
-};
+use super::{Image, LoadedData, PalettedData, materialization_cache};
+
+pub(super) fn padded_palette(rgb: &[u8]) -> Vec<u8> {
+    let mut palette = rgb.to_vec();
+    palette.resize(768, 0);
+    palette
+}
+
+fn split_palette_data(data: &[u8], rawmode: &str) -> Result<(Vec<u8>, Vec<u8>), PilError> {
+    match rawmode {
+        "RGB" => {
+            let complete = data.len() / 3 * 3;
+            if complete > 768 {
+                return Err(PilError::ValueError("invalid palette size".to_owned()));
+            }
+            Ok((data[..complete].to_vec(), Vec::new()))
+        }
+        "RGBA" => {
+            let complete = data.len() / 4 * 4;
+            if complete > 1024 {
+                return Err(PilError::ValueError("invalid palette size".to_owned()));
+            }
+            let mut rgb = Vec::with_capacity(complete / 4 * 3);
+            let mut alpha = Vec::with_capacity(complete / 4);
+            for color in data[..complete].chunks_exact(4) {
+                rgb.extend_from_slice(&color[..3]);
+                alpha.push(color[3]);
+            }
+            Ok((rgb, alpha))
+        }
+        "LA" => {
+            // Pillow ImagePalette compiles an LA palette to RGB triples with
+            // the L channel replicated and the A channel carried as palette
+            // alpha (ImagePalette.py `_raw`/mode transforms); getpalette
+            // therefore returns (L,L,L,A) per entry.
+            let complete = data.len() / 2 * 2;
+            if complete > 512 {
+                return Err(PilError::ValueError("invalid palette size".to_owned()));
+            }
+            let mut rgb = Vec::with_capacity(complete / 2 * 3);
+            let mut alpha = Vec::with_capacity(complete / 2);
+            for color in data[..complete].chunks_exact(2) {
+                rgb.extend_from_slice(&[color[0], color[0], color[0]]);
+                alpha.push(color[1]);
+            }
+            Ok((rgb, alpha))
+        }
+        _ => Err(PilError::ValueError("unrecognized raw mode".to_owned())),
+    }
+}
+
+pub(crate) fn expand_palette(
+    indices: &crate::raster::GrayImage,
+    palette: &[u8],
+    palette_alpha: &[u8],
+) -> DynamicImage {
+    if palette_alpha.is_empty() {
+        return DynamicImage::ImageRgb8(crate::raster::RgbImage::from_fn(
+            indices.width(),
+            indices.height(),
+            |x, y| {
+                let index = usize::from(indices.get_pixel(x, y)[0]);
+                let base = index * 3;
+                crate::raster::Rgb([
+                    palette.get(base).copied().unwrap_or(0),
+                    palette.get(base + 1).copied().unwrap_or(0),
+                    palette.get(base + 2).copied().unwrap_or(0),
+                ])
+            },
+        ));
+    }
+    DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_fn(
+        indices.width(),
+        indices.height(),
+        |x, y| {
+            let index = usize::from(indices.get_pixel(x, y)[0]);
+            let base = index * 3;
+            crate::raster::Rgba([
+                palette.get(base).copied().unwrap_or(0),
+                palette.get(base + 1).copied().unwrap_or(0),
+                palette.get(base + 2).copied().unwrap_or(0),
+                palette_alpha.get(index).copied().unwrap_or(255),
+            ])
+        },
+    ))
+}
+
+/// Expands Pillow `PA` samples through their RGB palette.
+///
+/// Unlike `P`, `PA` owns alpha per pixel. Pillow therefore ignores any alpha
+/// attached to the palette while converting `PA` to `RGBA`.
+pub(crate) fn expand_palette_alpha(
+    indices_alpha: &crate::raster::GrayAlphaImage,
+    palette: &[u8],
+) -> DynamicImage {
+    let mut rgb_by_index = [[0u8; 3]; 256];
+    for (index, rgb) in rgb_by_index.iter_mut().enumerate() {
+        let base = index * 3;
+        *rgb = [
+            palette.get(base).copied().unwrap_or(0),
+            palette.get(base + 1).copied().unwrap_or(0),
+            palette.get(base + 2).copied().unwrap_or(0),
+        ];
+    }
+
+    let samples = indices_alpha.as_raw();
+    if let Some(output_len) = samples.len().checked_mul(2) {
+        let mut output = Vec::with_capacity(output_len);
+        for sample in samples.chunks_exact(2) {
+            let rgb = rgb_by_index[usize::from(sample[0])];
+            output.extend_from_slice(&[rgb[0], rgb[1], rgb[2], sample[1]]);
+        }
+        if let Some(image) = crate::raster::RgbaImage::from_raw(
+            indices_alpha.width(),
+            indices_alpha.height(),
+            output,
+        ) {
+            return DynamicImage::ImageRgba8(image);
+        }
+    }
+
+    // Preserve the image crate's checked construction fallback if dimensions
+    // cannot be represented by a flat RGBA allocation.
+    DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_fn(
+        indices_alpha.width(),
+        indices_alpha.height(),
+        |x, y| {
+            let pixel = indices_alpha.get_pixel(x, y);
+            let rgb = rgb_by_index[usize::from(pixel[0])];
+            crate::raster::Rgba([rgb[0], rgb[1], rgb[2], pixel[1]])
+        },
+    ))
+}
+
+/// Return mutable palette state without treating internal zero padding as
+/// encoded palette entries.
+pub(super) fn operational_palette(data: &PalettedData) -> Vec<u8> {
+    let Some(source_palette) = data
+        .info
+        .as_ref()
+        .and_then(|info| info.palette.as_ref())
+        .map(|palette| &palette.rgb)
+    else {
+        return data.palette.clone();
+    };
+    if data.palette.starts_with(source_palette)
+        && data.palette[source_palette.len()..]
+            .iter()
+            .all(|&component| component == 0)
+    {
+        source_palette.clone()
+    } else {
+        data.palette.clone()
+    }
+}
 
 impl Image {
     /// Returns the explicit Pillow mode tag carried by this image.

@@ -1,6 +1,6 @@
 //! Image mode, size, transparency, and compatibility metadata methods.
 
-use image_slash_star::ImageFormat;
+use image_slash_star::{ImageFormat, ImageInfo, ImageMode};
 
 use crate::color::color_type_to_mode;
 use crate::error::PilError;
@@ -8,9 +8,75 @@ use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView};
 
 use super::{
-    Image, ImageInfoValue, PaletteTransparency, PalettedData, clear_palette_info_alpha,
-    image_mode_name, known_pipeline_op_dimensions, known_pipeline_op_mode, materialization_cache,
+    Image, ImageInfoValue, PaletteTransparency, PalettedData, known_pipeline_op_dimensions,
+    known_pipeline_op_mode, materialization_cache,
 };
+
+/// Prepared fields for Pillow's lightweight public EXIF compatibility object.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExifCompatFields {
+    /// Original EXIF bytes retained only for fully loaded metadata.
+    pub loaded_exif: Option<Vec<u8>>,
+    /// First eight bytes of the TIFF payload, when a record was supplied.
+    pub head: Option<Vec<u8>>,
+    /// TIFF byte order marker, if the payload has a valid TIFF magic.
+    pub endian: Option<String>,
+    /// Whether the compatibility object should expose Pillow's `bigtiff=False`.
+    pub bigtiff: bool,
+    /// Whether a non-empty EXIF record was supplied.
+    pub has_source: bool,
+}
+
+/// Prepares EXIF compatibility metadata without touching Python objects.
+pub fn prepare_exif_compat(raw: Option<&[u8]>, loaded_exif: bool) -> ExifCompatFields {
+    let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
+        return ExifCompatFields::default();
+    };
+    let payload = raw.strip_prefix(b"Exif\0\0").unwrap_or(raw);
+    let endian = (payload.len() >= 4)
+        .then(|| &payload[2..4])
+        .filter(|magic| *magic == b"*\0" || *magic == b"\0*")
+        .map(|_| {
+            if payload.starts_with(b"II") {
+                "<".to_owned()
+            } else {
+                ">".to_owned()
+            }
+        });
+    ExifCompatFields {
+        loaded_exif: loaded_exif.then(|| raw.to_vec()),
+        head: Some(payload[..payload.len().min(8)].to_vec()),
+        endian,
+        bigtiff: !loaded_exif,
+        has_source: true,
+    }
+}
+
+fn clear_palette_info_alpha(info: &mut Option<ImageInfo>) {
+    let Some(info) = info.as_mut() else {
+        return;
+    };
+    let Some(palette) = info.palette.as_mut() else {
+        return;
+    };
+    palette.alpha.clear();
+}
+
+pub(super) const fn image_mode_name(mode: ImageMode) -> &'static str {
+    match mode {
+        ImageMode::L1 => "1",
+        ImageMode::P8 => "P",
+        ImageMode::L8 => "L",
+        ImageMode::La8 | ImageMode::La16 => "LA",
+        ImageMode::Rgb8 | ImageMode::Rgb16 | ImageMode::Rgb32F => "RGB",
+        ImageMode::Rgba8 | ImageMode::Rgba16 | ImageMode::Rgba32F => "RGBA",
+        ImageMode::Cmyk8 => "CMYK",
+        ImageMode::L16 => "I;16",
+        ImageMode::F32 => "F",
+        ImageMode::I32 => "I",
+        _ => "unknown",
+    }
+}
 
 impl Image {
     /// Returns pending Pillow `info["transparency"]` metadata for a P image.
