@@ -3,6 +3,8 @@
 
 use super::*;
 
+mod routing;
+
 impl GpuInner {
     pub(super) fn execute_batch_impl(
         &self,
