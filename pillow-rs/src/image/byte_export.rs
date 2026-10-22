@@ -5,6 +5,9 @@ use crate::format::parse_format_str;
 
 use super::{Image, ImageByteExport, is_l16_mode, l16_uses_big_endian, pack_mode1_rows};
 
+#[cfg(test)]
+mod tests;
+
 impl Image {
     /// Resolves Pillow's explicit save format or a host-supplied path
     /// extension before encoding.
