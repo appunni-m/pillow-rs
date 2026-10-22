@@ -69,6 +69,7 @@ mod mandelbrot;
 mod median_filter;
 mod merge;
 mod module_blend;
+mod native_arithmetic;
 mod native_bytes;
 mod offset;
 mod pad;
@@ -123,6 +124,7 @@ pub(crate) use self::median_filter::{
 };
 pub(crate) use self::merge::simd_merge;
 pub(crate) use self::module_blend::simd_blend_module;
+use self::native_arithmetic::{simd_div255, simd_div255_u16x8, simd_pack_u16x16};
 use self::native_bytes::{
     NATIVE_BYTE_ALL_MASK, NATIVE_BYTE_LA_MASK, NATIVE_BYTE_RGBA_MASK, NATIVE_BYTE_ZERO_MASK,
     apply_native_rows, copy_native_bytes, mirror_native_row, native_all_channel_transform_bytes,
@@ -176,7 +178,7 @@ use crate::ops::pil_resize::{
 use crate::pipeline::{PipelineOp, TransposeMethod};
 use crate::raster::DynamicImage;
 use std::sync::Arc;
-use wide::{f64x8, i16x8, i32x8, u8x16, u16x8, u16x16, u32x16};
+use wide::{f64x8, i16x8, i32x8, u8x16, u16x16, u32x16};
 
 // `parallel` may be enabled to select Parallel CPU kernels, but it must not
 // silently add Rayon scheduling to the SIMD backend. Keep SIMD routes
@@ -745,31 +747,6 @@ pub(crate) fn simd_execute_in_place(
         | PipelineOp::Subtract { .. } => chops::execute_in_place(img, op, mode),
         _ => Ok(false),
     }
-}
-
-fn simd_div255(value: u16x16) -> u16x16 {
-    // For 0 <= value <= 65025, this is exactly floor(value / 255), including
-    // both endpoints.  It replaces an integer divide without changing the
-    // intermediate truncation required by ImageChops.multiply/screen.
-    // A runtime splat can emit memset_pattern16 in every vector iteration.
-    const ONE: u16x16 = u16x16::splat(1);
-    let incremented = value + ONE;
-    (incremented + (incremented >> 8u32)) >> 8u32
-}
-
-#[inline]
-fn simd_div255_u16x8(value: u16x8) -> u16x8 {
-    const ONE: u16x8 = u16x8::splat(1);
-    let incremented = value + ONE;
-    (incremented + (incremented >> 8u32)) >> 8u32
-}
-
-#[inline]
-pub(super) fn simd_pack_u16x16(value: u16x16) -> u8x16 {
-    let [low, high]: [u16x8; 2] = bytemuck::cast(value);
-    let low: i16x8 = bytemuck::cast(low);
-    let high: i16x8 = bytemuck::cast(high);
-    u8x16::narrow_i16x8(low, high)
 }
 
 fn materialize_chops_operand(
