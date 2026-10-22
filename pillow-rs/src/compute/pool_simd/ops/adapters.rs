@@ -2028,30 +2028,8 @@ mod tests {
         }
     }
 
-    use super::effects::native_invert;
     use super::rotate::rotate_discrete_fast_angle;
     use super::{native_lut_apply, native_lut_map_rows, native_lut_tables_for_channels};
-    use crate::raster::{DynamicImage, GrayImage};
-
-    #[test]
-    fn native_invert_writes_owned_p_indices_in_one_vector_pass() {
-        for width in [1u32, 15, 16, 17, 31] {
-            let height = 3;
-            let source = (0..width * height)
-                .map(|index| (index.wrapping_mul(73).wrapping_add(19)) as u8)
-                .collect::<Vec<_>>();
-            let image = DynamicImage::ImageLuma8(
-                GrayImage::from_raw(width, height, source.clone()).unwrap(),
-            );
-            let inverted = native_invert(&image, Some("P"), false).unwrap();
-            let expected = source.iter().map(|value| 255 - value).collect::<Vec<_>>();
-
-            assert!(matches!(inverted, DynamicImage::ImageLuma8(_)));
-            assert_eq!(inverted.as_bytes(), expected);
-            assert_eq!(image.as_bytes(), source, "input remains immutable");
-        }
-    }
-
     #[test]
     fn native_lut_preserves_channel_order_and_vector_tails() {
         for channels in 1..=4 {

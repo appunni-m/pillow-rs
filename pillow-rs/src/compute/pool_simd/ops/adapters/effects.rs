@@ -497,3 +497,6 @@ pub(crate) fn simd_effect_spread(
     simd_effect_spread_native(img, *distance, mode)?
         .ok_or_else(|| super::simd_unsupported("EffectSpread"))
 }
+
+#[cfg(test)]
+mod tests;
