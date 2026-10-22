@@ -566,14 +566,7 @@ pub(crate) fn simd_supports_for_image(
         PipelineOp::ExtractBand { index } => extract_band::supports_for_image(img, *index, mode),
         // These operations are native memory movement. They do not claim
         // arithmetic vectorization, but they never enter a CPU adapter.
-        PipelineOp::Offset { x, .. } => {
-            has_vectorized_luma16_offset(img, mode)
-                || (native_copy
-                    && native_copy_layout(img, mode).is_some_and(|channels| {
-                        has_empty_native_bytes(img, channels)
-                            || has_vectorized_offset_rows(img, channels, *x)
-                    }))
-        }
+        PipelineOp::Offset { x, .. } => offset::supports_for_image(img, *x, mode),
         PipelineOp::Flip => {
             native_copy_layout(img, mode)
                 .is_some_and(|channels| has_nonempty_byte_data(img, channels))
@@ -1303,13 +1296,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         PipelineOp::ExtractBand { index } => {
             extract_band::supports_for_shape(shape, *index, mode, pixel_count)
         }
-        PipelineOp::Offset { x, .. } => {
-            shape_has_vectorized_luma16_offset(shape, mode)
-                || shape_native_copy_channels(shape, mode).is_some_and(|channels| {
-                    shape_has_empty_native_bytes(shape, channels)
-                        || shape_has_vectorized_offset_rows(shape, channels, *x)
-                })
-        }
+        PipelineOp::Offset { x, .. } => offset::supports_for_shape(shape, *x, mode),
         PipelineOp::Flip => {
             shape_native_copy_channels(shape, mode)
                 .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
