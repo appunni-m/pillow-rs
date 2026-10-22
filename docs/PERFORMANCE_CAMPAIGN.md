@@ -32087,3 +32087,57 @@ The selected direct parity runs are
 (GPU-requested, 3/3). The benchmark build identifies revision
 `b42be4c69fd04aa11ae528d10fa2f6dcc8f39b71` with a dirty worktree; the
 affected Rust sources were unchanged after the build.
+
+### SIMD Resize native-byte nearest extraction — 2026-10-22
+
+The direct and boxed native-byte nearest kernels and their gather helper moved
+from `pillow-rs/src/compute/pool_simd/ops/adapters.rs` to the existing
+`pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8.rs`. Resize
+and native Thumbnail retain their callers; shared coordinate builders remain
+in `adapters.rs` because the float and I32 paths also use them. The kernel
+bodies and operation routing were unchanged.
+
+Exact parity passed for CPU and GPU-requested profiles on
+`modes-LA-tall-0-full`, `modes-RGBA-tall-0-full`,
+`modes-LA-normal-0-fractional-box`, and
+`modes-RGBA-normal-0-fractional-box` (4/4 each). Fallback-enabled SIMD also
+passed 4/4. Strict SIMD passed both fractional-box cases but returned the
+unsupported Resize error for the two tall 2×203-to-5×3 cases (2/4). Those
+strict failures are retained as evidence; this ownership-only change does not
+alter their dispatch or support. A separate pair of direct RGB/RGBA nearest
+cases, 33×29-to-5×3 with `reducing_gap=2`, passed CPU, strict SIMD, and
+GPU-requested parity (2/2 per profile). Together, these checks exercise the
+moved direct and boxed routes while documenting the unsupported tall cases.
+
+The focused benchmark selected
+`pipeline-chain.matrix-000` (RGB Thumbnail),
+`pipeline-chain.matrix-010` (L transform/Resize workflow), and
+`pipeline-chain.matrix-033` (RGB-to-Palette conversion followed by nearest
+Resize). Each retained its whole-workflow policy of one warmup, three timed
+iterations, two samples, and a `successful_execution` correctness gate. All
+three gates passed. Median latency is in milliseconds:
+
+| Workload | Pillow | CPU | SIMD | SIMD execution receipt | GPU request / actual route |
+| --- | ---: | ---: | ---: | --- | --- |
+| RGB Thumbnail, 46×22 | 0.048750 | 0.028813 | 0.038625 | `vector`, 44 blocks, 33 scalar tails | 0.443500 / GPU |
+| L transform/Resize workflow | 0.037188 | 0.031500 | 0.034354 | `vector`, 17 blocks, no tail | 0.425563 / GPU |
+| RGB-to-Palette then nearest Resize | 0.079917 | 0.047313 | 0.043397 | `vector`, 9 blocks, no tail | 0.342271 / GPU |
+
+These whole-workflow gates establish successful execution and actual routing,
+not exact Pillow output parity. The timings are current-source measurements,
+not candidate-versus-control comparisons, and do not identify why SIMD differs
+from CPU. No causal performance comment was added to the implementation.
+
+Benchmark run `migration-benchmark-e26180f9f1284732827234bb93056d36` passed
+result-schema validation. The parity runs are
+`migration-parity-f7e7d4e8095044cfb931c69a76606534` (CPU, original four,
+4/4), `migration-parity-a70fb07acf8e4f1cad78d5aea0e555cc` (strict SIMD,
+original four, 2/4),
+`migration-parity-5225bd8a89e247989f239fe1e67c60da` (fallback-enabled SIMD,
+original four, 4/4), and
+`migration-parity-b43d484f44b84ef194e42f1fb752f23c` (GPU-requested, original
+four, 4/4). The direct-nearest runs passed 2/2 each on CPU
+(`migration-parity-aa65156d30d8406091b881965700f4f5`), strict SIMD
+(`migration-parity-a1e2a636db814e7ebff47a24768264f2`), and GPU-requested
+(`migration-parity-c2156499750049d69ba4f4e1c3c1580c`). The build identifies
+revision `3c7d68f4f95a30702659b2813556a4e80bd83a01` with a dirty worktree.

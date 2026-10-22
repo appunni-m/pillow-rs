@@ -328,3 +328,12 @@ family routes. Shared coefficient and row helpers remain in `adapters.rs`
 because boxed byte convolution and other Resize paths still call them. This
 relocates the existing implementation without changing its algorithms or
 registered operation routes; static reachability counts remain unchanged.
+
+## SIMD Resize native-byte nearest follow-up — 2026-10-22
+
+The direct and boxed native-byte nearest kernels, plus their byte gather
+helper, now live in `pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8.rs`.
+Resize and native Thumbnail continue to use the same routes. Shared coordinate
+builders remain in `adapters.rs` because the float and I32 Resize paths also
+call them. The move changes ownership only; it does not change the operation
+graph or add a static reachability claim.
