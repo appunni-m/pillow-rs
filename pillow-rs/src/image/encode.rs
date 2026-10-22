@@ -1,8 +1,11 @@
-//! Image encoder dispatch with Pillow-compatible format validation.
+//! Pillow-compatible image encoding and format validation.
 
-use super::Image;
+use image_slash_star::{DecodedImage, ImageFormat, ImageMode, ImagePalette};
+
 use crate::error::PilError;
 use crate::format::parse_format_str;
+
+use super::{Image, operational_palette};
 
 impl Image {
     /// Encodes the image using the requested Pillow format name.
@@ -57,5 +60,60 @@ impl Image {
         let options = image_slash_star::EncodeOptions::try_from_legacy_pairs(save_format, options)?;
         let decoded = self.decoded_for_encoding()?;
         Ok(image_slash_star::encode(&decoded, save_format, &options)?)
+    }
+}
+
+impl Image {
+    /// Encodes the image as PNG bytes.
+    ///
+    /// Paletted images are rendered through their palette before encoding so
+    /// saved output contains visible RGB colors rather than raw index bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization or PNG encoding fails.
+    pub fn to_png_bytes(&self) -> Result<Vec<u8>, PilError> {
+        let decoded = self.decoded_for_encoding()?;
+        Ok(image_slash_star::encode_default(
+            &decoded,
+            ImageFormat::Png,
+        )?)
+    }
+
+    fn decoded_for_encoding(&self) -> Result<DecodedImage, PilError> {
+        if let Image::Paletted(data) = self {
+            let mut palette_bytes = operational_palette(data);
+            if palette_bytes.len() < 768 {
+                // The underlying indexed encoder requires a full 256-entry
+                // palette; Pillow synthesizes missing entries at save time.
+                palette_bytes.resize(768, 0);
+            }
+            let palette = ImagePalette::new(palette_bytes, data.palette_alpha.clone())?;
+            return Ok(DecodedImage::with_mode(
+                data.indices.width(),
+                data.indices.height(),
+                data.indices.as_raw().to_vec(),
+                ImageMode::P8,
+            )
+            .with_palette(palette));
+        }
+        if self.has_palette_mode() {
+            let indices = self.materialize_indices()?.to_luma8();
+            let mut palette = self.extract_palette().ok_or_else(|| {
+                PilError::PaletteError("P-mode pipeline has no retained palette".to_owned())
+            })?;
+            if palette.len() < 768 {
+                palette.resize(768, 0);
+            }
+            let alpha = self.palette_alpha().unwrap_or_default();
+            return Ok(DecodedImage::with_mode(
+                indices.width(),
+                indices.height(),
+                indices.into_raw(),
+                ImageMode::P8,
+            )
+            .with_palette(ImagePalette::new(palette, alpha)?));
+        }
+        Ok(self.materialize()?.into_decoded())
     }
 }
