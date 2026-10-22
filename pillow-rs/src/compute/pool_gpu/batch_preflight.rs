@@ -1,3 +1,4 @@
+use super::logical_mode_admission::gpu_logical_mode_is_supported;
 use super::*;
 
 pub(super) enum BatchContractPreflight {

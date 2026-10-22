@@ -140,6 +140,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   `-- native_execution.rs
 |   |   |   |   |-- geometry.rs
 |   |   |   |   |-- layout_admission.rs
+|   |   |   |   |-- logical_mode_admission.rs
 |   |   |   |   |-- mod.rs
 |   |   |   |   |-- mode.rs
 |   |   |   |   |-- native_composite.rs
