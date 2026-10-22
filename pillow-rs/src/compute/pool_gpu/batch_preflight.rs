@@ -5,6 +5,64 @@ pub(super) enum BatchContractPreflight {
     Return(DynamicImage),
 }
 
+pub(super) struct GpuBatchResizeProofs {
+    pub(super) constant_bits: Option<u32>,
+    pub(super) box_copy_is_exact: bool,
+    pub(super) identity_is_exact: bool,
+    pub(super) box_average_is_exact: bool,
+    pub(super) pad_f64_is_exact: bool,
+    pub(super) dyadic_is_exact: bool,
+    pub(super) f64_is_exact: bool,
+    pub(super) f64_ordered_is_exact: bool,
+}
+
+pub(super) fn gpu_batch_resize_proofs(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    mode: Option<&str>,
+) -> GpuBatchResizeProofs {
+    let constant_bits = gpu_f_resize_constant_bits(ops, image, mode);
+    let box_copy_is_exact = gpu_f_resize_box_copy_is_exact(ops, image, mode);
+    let identity_is_exact = gpu_f_resize_identity_is_exact(ops, image, mode);
+    let box_average_is_exact = gpu_f_resize_box_average_is_exact(ops, image, mode);
+    let pad_f64_is_exact = gpu_f_pad_f64_is_exact(ops, image, mode);
+    let ordered_shader_supported = gpu_f_resize_f64_ordered_shader_is_supported(ops, image, mode);
+    // The static ordered-f64 contract covers every source bit pattern and
+    // avoids the per-pixel marker-6 simulation when geometry already qualifies.
+    let dyadic_is_exact =
+        !ordered_shader_supported && gpu_f_resize_dyadic_is_exact(ops, image, mode);
+    // Use the bounded ordered-f64 shader's static coefficient/geometry
+    // contract first; retain the input-driven marker-9 and marker-12 proofs
+    // only when that shader cannot handle this resize.
+    let f64_is_exact = !ordered_shader_supported
+        && (gpu_f_resize_f64_is_exact(ops, image, mode)
+            || pad_f64_is_exact
+            || gpu_luma16_resize_f64_is_exact(ops, image, mode)
+            || gpu_i_resize_f64_is_exact(ops, image, mode));
+    let ordered_proof = ordered_shader_supported
+        || (!f64_is_exact && gpu_f_resize_f64_ordered_is_exact(ops, image, mode));
+    // Marker 12 is selected only if no earlier F proof owns the operation.
+    // Box-average and dyadic markers use fixed-point tables; marker 12 needs
+    // the four-word f64 coefficient arena.
+    let f64_ordered_is_exact = ordered_proof
+        && !f64_is_exact
+        && constant_bits.is_none()
+        && !box_copy_is_exact
+        && !identity_is_exact
+        && !box_average_is_exact
+        && !dyadic_is_exact;
+    GpuBatchResizeProofs {
+        constant_bits,
+        box_copy_is_exact,
+        identity_is_exact,
+        box_average_is_exact,
+        pad_f64_is_exact,
+        dyadic_is_exact,
+        f64_is_exact,
+        f64_ordered_is_exact,
+    }
+}
+
 impl GpuPool {
     pub(super) fn preflight_batch_contract(
         &self,

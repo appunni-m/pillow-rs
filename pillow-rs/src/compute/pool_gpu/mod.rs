@@ -6939,44 +6939,16 @@ impl GpuPool {
             return Ok(suffix_result);
         }
 
-        let f_resize_constant_bits = gpu_f_resize_constant_bits(&dispatch_ops, img, mode);
-        let f_resize_box_copy_is_exact = gpu_f_resize_box_copy_is_exact(&dispatch_ops, img, mode);
-        let f_resize_identity_is_exact = gpu_f_resize_identity_is_exact(&dispatch_ops, img, mode);
-        let f_resize_box_average_is_exact =
-            gpu_f_resize_box_average_is_exact(&dispatch_ops, img, mode);
-        let f_pad_f64_is_exact = gpu_f_pad_f64_is_exact(&dispatch_ops, img, mode);
-        let f_resize_f64_ordered_shader_is_supported =
-            gpu_f_resize_f64_ordered_shader_is_supported(&dispatch_ops, img, mode);
-        // The static ordered-f64 contract covers every source bit pattern and
-        // does not need the per-pixel marker-6 CPU simulation. Run that more
-        // expensive input proof only when the ordered shader cannot accept
-        // this geometry.
-        let f_resize_dyadic_is_exact = !f_resize_f64_ordered_shader_is_supported
-            && gpu_f_resize_dyadic_is_exact(&dispatch_ops, img, mode);
-        // The bounded ordered-f64 shader implements Pillow's per-tap
-        // accumulation for finite inputs, subnormals, and special values.
-        // Use its static coefficient/geometry contract first; otherwise keep
-        // the existing input-driven exact proofs for marker 9 and the
-        // restricted marker-12 simulation.
-        let f_resize_f64_is_exact = !f_resize_f64_ordered_shader_is_supported
-            && (gpu_f_resize_f64_is_exact(&dispatch_ops, img, mode)
-                || f_pad_f64_is_exact
-                || gpu_luma16_resize_f64_is_exact(&dispatch_ops, img, mode)
-                || gpu_i_resize_f64_is_exact(&dispatch_ops, img, mode));
-        let f_resize_f64_ordered_proof = f_resize_f64_ordered_shader_is_supported
-            || (!f_resize_f64_is_exact
-                && gpu_f_resize_f64_ordered_is_exact(&dispatch_ops, img, mode));
-        // Marker 12 is selected only when none of the earlier F proofs owns
-        // the operation.  In particular, Box-average/dyadic markers consume
-        // the fixed-point coefficient table, whereas marker 12 requires the
-        // four-word f64 coefficient arena.
-        let f_resize_f64_ordered_is_exact = f_resize_f64_ordered_proof
-            && !f_resize_f64_is_exact
-            && f_resize_constant_bits.is_none()
-            && !f_resize_box_copy_is_exact
-            && !f_resize_identity_is_exact
-            && !f_resize_box_average_is_exact
-            && !f_resize_dyadic_is_exact;
+        let GpuBatchResizeProofs {
+            constant_bits: f_resize_constant_bits,
+            box_copy_is_exact: f_resize_box_copy_is_exact,
+            identity_is_exact: f_resize_identity_is_exact,
+            box_average_is_exact: f_resize_box_average_is_exact,
+            pad_f64_is_exact: f_pad_f64_is_exact,
+            dyadic_is_exact: f_resize_dyadic_is_exact,
+            f64_is_exact: f_resize_f64_is_exact,
+            f64_ordered_is_exact: f_resize_f64_ordered_is_exact,
+        } = gpu_batch_resize_proofs(&dispatch_ops, img, mode);
 
         // Pillow defines both histogram operations as identity operations for
         // an empty image. There is no valid storage-buffer invocation to
