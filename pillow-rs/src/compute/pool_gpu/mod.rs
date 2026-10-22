@@ -77,6 +77,8 @@ mod batch_resize_coefficients;
 use batch_resize_coefficients::*;
 mod batch_auxiliary_ranges;
 use batch_auxiliary_ranges::*;
+mod batch_operation_planning;
+use batch_operation_planning::*;
 mod batch_parameters;
 use batch_parameters::*;
 mod batch_telemetry;
@@ -3575,108 +3577,35 @@ impl GpuInner {
         for (index, op) in ops.iter().enumerate() {
             let cached =
                 self.resolve_preparation_pipeline(ops, index, (cur_w, cur_h), &pipeline_options)?;
-            let (out_w, out_h) = op_output_dims(op, cur_w, cur_h).unwrap_or((cur_w, cur_h));
-            self.validate_output_dims(buffers, out_w, out_h)?;
-            let native_expand_output_dispatch = if let Some(channels) = native_expand_channels
-                && ops.len() == 1
-                && matches!(op, PipelineOp::Expand { .. })
-                // CMYK already occupies the generic four-byte GPU transport.
-                // Its compact word loop would add per-byte index arithmetic
-                // without reducing input or output transfer size.
-                && logical_mode != Some("CMYK")
-            {
-                let output_bytes = CheckedDims::new(out_w, out_h, channels)?.total_bytes();
-                plan_native_expand_output_dispatch(
-                    u64::try_from(output_bytes).map_err(|_| {
-                        PilError::ValueError("GPU Expand output is too large".into())
-                    })?,
-                    limits.max_compute_workgroups_per_dimension,
-                )
-            } else {
-                None
-            };
-            let native_luma_transform_output_dispatch = if packed_luma_transform_output
-                && ops.len() == 1
-                && matches!(op, PipelineOp::Transform { .. })
-            {
-                Some(
-                    plan_native_luma_transform_output(
-                        std::slice::from_ref(op),
-                        limits.max_compute_workgroups_per_dimension,
-                        limits.max_storage_buffer_binding_size,
-                        limits.max_buffer_size,
-                        buffers.capacity,
-                    )
-                    .ok_or_else(|| {
-                        PilError::InternalError(
-                            "GPU packed-L transform lost its checked output plan".into(),
-                        )
-                    })?,
-                )
-            } else {
-                None
-            };
-            if native_expand_output_dispatch.is_some() {
-                native_expand_output = native_expand_output_dispatch;
+            let plan = self.prepare_batch_operation_plan(
+                BatchOperationPlanningContext {
+                    ops,
+                    op,
+                    source_dimensions: (cur_w, cur_h),
+                    current_mode,
+                    logical_mode,
+                    output_only_pipeline: cached.is_output_only,
+                    native_expand_channels,
+                    packed_luma_transform_output,
+                    max_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension,
+                    max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
+                    max_buffer_size: limits.max_buffer_size,
+                },
+                buffers,
+            )?;
+            let (out_w, out_h) = plan.output_dimensions;
+            if let Some(dispatch) = plan.native_expand_output {
+                native_expand_output = Some(dispatch);
             }
-            if native_luma_transform_output_dispatch.is_some() {
-                native_luma_transform_output = native_luma_transform_output_dispatch;
+            if let Some(dispatch) = plan.native_luma_transform_output {
+                native_luma_transform_output = Some(dispatch);
             }
-            let mut boxed_resize_coefficients = None;
-            let resize_source_row_range =
-                if let PipelineOp::ResizeBoxed {
-                    filter, box_coords, ..
-                } = op
-                {
-                    let (horizontal, mut vertical) = gpu_resize_boxed_coefficients(
-                        (cur_w, cur_h),
-                        (out_w, out_h),
-                        *box_coords,
-                        *filter,
-                    );
-                    let range = compact_resize_coeffs_to_source_span(&mut vertical, cur_h)
-                        .unwrap_or((0, cur_h));
-                    boxed_resize_coefficients = Some((horizontal, vertical));
-                    Some(range)
-                } else {
-                    None
-                };
             input_dims.push((cur_w, cur_h));
             output_dims.push((out_w, out_h));
-            resize_source_rows.push(resize_source_row_range);
-
-            // Transpose's swap variants and output-only generators describe
-            // their dispatch dimensions in the first uniform words. Ordinary
-            // kernels use the current source dimensions there and consume the
-            // appended output dimensions only when their shader declares them.
-            let (shader_w, shader_h) = if cached.is_output_only
-                || matches!(
-                    op,
-                    PipelineOp::Transpose {
-                        method: TransposeMethod::Rotate90
-                            | TransposeMethod::Rotate270
-                            | TransposeMethod::Transpose
-                            | TransposeMethod::Transverse
-                    }
-                ) {
-                (out_w, out_h)
-            } else {
-                (cur_w, cur_h)
-            };
-            // Reduce's mode word distinguishes ordinary four-byte samples
-            // from RGBA/LA alpha layouts. RGBa and RGBX share the physical
-            // RGBA transport, but Pillow averages all four stored channels
-            // directly. PA and La likewise average raw bands; their packed
-            // luma copies and alpha can use the raw-four-channel encoding.
-            // Retain the source mode code for the rest of the batch.
-            let op_mode = if matches!(op, PipelineOp::Reduce { .. })
-                && matches!(logical_mode, Some("RGBa" | "RGBX" | "PA" | "La"))
-            {
-                4
-            } else {
-                current_mode
-            };
-            let source_row_base = resize_source_row_range.map_or(0, |(first, _)| first);
+            resize_source_rows.push(plan.resize_source_row_range);
+            let (shader_w, shader_h) = plan.shader_dimensions;
+            let op_mode = plan.op_mode;
+            let source_row_base = plan.source_row_base;
             let params = prepare_batch_operation_params(BatchOperationParameterContext {
                 op,
                 auxiliary: &auxiliary_images[index],
@@ -3714,7 +3643,7 @@ impl GpuInner {
                     native_rgb_compact_input,
                     native_rgb_packed_output,
                     native_la_transform_output,
-                    native_expand_output: native_expand_output_dispatch,
+                    native_expand_output: plan.native_expand_output,
                     native_cover_packed_output,
                 },
             })?;
@@ -3733,7 +3662,7 @@ impl GpuInner {
                     op_mode,
                     f_resize_f64_is_exact,
                     f_resize_f64_ordered_is_exact,
-                    boxed_resize_coefficients: boxed_resize_coefficients.as_ref(),
+                    boxed_resize_coefficients: plan.boxed_resize_coefficients.as_ref(),
                     storage_alignment,
                 },
                 &mut img2_arena,
