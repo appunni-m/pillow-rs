@@ -657,3 +657,43 @@ pub(crate) fn simd_fused_multiply_screen(
         scalar_tail as u64,
     )))
 }
+
+/// Fill the ImageChops.constant result with one byte per output pixel.
+///
+/// Pillow always returns a new single-band `L` image for this operation; the
+/// source samples and logical source mode do not affect the result. The
+/// backend telemetry retains the vector-block accounting for this SIMD route,
+/// while the allocator's repeated-byte fill avoids a redundant second pass.
+pub fn simd_constant(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    _mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Constant { value } = op else {
+        return Err(PilError::ValueError("expected Constant op".into()));
+    };
+    let width = img.width();
+    let height = img.height();
+    if width == 0 || height == 0 {
+        return Err(simd_unsupported("Constant"));
+    }
+    let output_len = (width as usize)
+        .checked_mul(height as usize)
+        .ok_or_else(|| PilError::ValueError("SIMD constant output length overflow".into()))?;
+    if output_len == 0 {
+        return Err(simd_unsupported("Constant"));
+    }
+    // The destination is constant for the whole operation. Allocate it with
+    // the final byte value so the bulk fill performs one pass; the previous
+    // zero-fill followed by per-block copies traversed the full frame twice
+    // without changing any output byte.
+    let output = vec![*value; output_len];
+    let vector_len = output_len / 16 * 16;
+    let scalar_tail = output_len - vector_len;
+    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_vector_blocks(
+        (vector_len / 16 + usize::from(scalar_tail != 0)) as u64,
+    );
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
+    crate::image_utils::raw_bytes_to_image(width, height, output, 1)
+}
