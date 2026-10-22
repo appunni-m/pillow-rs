@@ -686,3 +686,6 @@ pub(crate) fn simd_rotate(
     }
     Err(simd_unsupported("Rotate"))
 }
+
+#[cfg(test)]
+mod tests;
