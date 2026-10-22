@@ -257,3 +257,41 @@ pub(super) fn extract_auxiliary_images(
         third: extract_third_image(op)?,
     })
 }
+
+pub(super) fn resolve_batch_auxiliary_images(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    mode: Option<&str>,
+) -> Result<Vec<AuxiliaryImages>, PilError> {
+    let mut dimensions = image.dimensions();
+    let mut images = Vec::with_capacity(ops.len());
+    // Non-drawing batches only need dimensions and auxiliary handles. Borrow
+    // the source until drawing produces a preview, avoiding a discarded
+    // full-frame clone for ordinary batches.
+    let mut draw_preview: Option<DynamicImage> = None;
+    let mut draw_preview_valid = true;
+    for op in ops {
+        let rendered = if draw_preview_valid && crate::compute::pool_cpu::ops::draw::is_draw_op(op)
+        {
+            Some(crate::compute::pool_cpu::ops::draw::execute_draw_batch(
+                draw_preview.as_ref().unwrap_or(image),
+                std::slice::from_ref(op),
+                mode,
+            )?)
+        } else {
+            None
+        };
+        images.push(extract_auxiliary_images(op, dimensions, rendered.as_ref())?);
+        if let Some(rendered) = rendered {
+            draw_preview = Some(rendered);
+        } else if !crate::compute::pool_cpu::ops::draw::is_draw_op(op) {
+            // A draw after an arbitrary GPU operation needs the preceding
+            // native result as its canvas; do not render against stale pixels.
+            draw_preview_valid = false;
+        }
+        if let Some(next) = op_output_dims(op, dimensions.0, dimensions.1) {
+            dimensions = next;
+        }
+    }
+    Ok(images)
+}

@@ -7048,45 +7048,9 @@ impl GpuPool {
             return Ok(img.clone());
         }
 
-        // Resolve every nested image before starting GPU work. A nested
-        // explicitly locked pipeline may itself need the GPU pool, and Pillow
-        // surfaces that materialization failure instead of dispatching the
-        // outer shader with an empty auxiliary buffer.
-        let auxiliary_images = {
-            let mut dimensions = img.dimensions();
-            let mut images = Vec::with_capacity(ops.len());
-            // Non-drawing batches only need dimensions and auxiliary
-            // handles. Borrow the source until drawing actually produces a
-            // preview, avoiding a discarded full-frame clone on every batch.
-            let mut draw_preview: Option<DynamicImage> = None;
-            let mut draw_preview_valid = true;
-            for op in ops {
-                let rendered =
-                    if draw_preview_valid && crate::compute::pool_cpu::ops::draw::is_draw_op(op) {
-                        Some(crate::compute::pool_cpu::ops::draw::execute_draw_batch(
-                            draw_preview.as_ref().unwrap_or(img),
-                            std::slice::from_ref(op),
-                            mode,
-                        )?)
-                    } else {
-                        None
-                    };
-                images.push(extract_auxiliary_images(op, dimensions, rendered.as_ref())?);
-                if let Some(rendered) = rendered {
-                    draw_preview = Some(rendered);
-                } else if !crate::compute::pool_cpu::ops::draw::is_draw_op(op) {
-                    // Drawing after an arbitrary GPU operation needs the
-                    // preceding native result as its geometry canvas. Keep
-                    // the current bounded implementation explicit rather
-                    // than rendering against stale source pixels.
-                    draw_preview_valid = false;
-                }
-                if let Some(next) = op_output_dims(op, dimensions.0, dimensions.1) {
-                    dimensions = next;
-                }
-            }
-            images
-        };
+        // Resolve nested images before GPU work; a locked nested pipeline may
+        // itself need the device and must surface its materialization errors.
+        let auxiliary_images = resolve_batch_auxiliary_images(ops, img, mode)?;
 
         if empty_two_input_noop {
             if !gpu_empty_two_input_inputs_are_safe(ops, img, &auxiliary_images) {
