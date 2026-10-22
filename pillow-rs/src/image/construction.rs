@@ -11,9 +11,103 @@ use crate::format::parse_format_str;
 use crate::raster::DynamicImage;
 
 use super::{
-    Image, LoadedData, PalettedData, PythonNewColorInput, l16_uses_big_endian,
-    materialization_cache, unpack_mode1_rows,
+    Image, LoadedData, PalettedData, l16_uses_big_endian, materialization_cache, unpack_mode1_rows,
 };
+
+/// Host-neutral values extracted for a public `Image.new` color argument.
+#[derive(Debug, Clone)]
+pub struct PythonNewColorInput {
+    string: Option<String>,
+    single: Option<u8>,
+    rgb: Option<(u8, u8, u8)>,
+    rgba: Option<(u8, u8, u8, u8)>,
+    luma_alpha: Option<(u8, u8)>,
+    integer: Option<i32>,
+    float: Option<f64>,
+    provided: bool,
+}
+
+impl PythonNewColorInput {
+    /// Builds a constructor input from binding-level type extraction only.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_parts(
+        string: Option<String>,
+        single: Option<u8>,
+        rgb: Option<(u8, u8, u8)>,
+        rgba: Option<(u8, u8, u8, u8)>,
+        luma_alpha: Option<(u8, u8)>,
+        integer: Option<i32>,
+        float: Option<f64>,
+        provided: bool,
+    ) -> Self {
+        Self {
+            string,
+            single,
+            rgb,
+            rgba,
+            luma_alpha,
+            integer,
+            float,
+            provided,
+        }
+    }
+}
+
+/// Host-neutral mode input for the Python `Image.open` wrapper.
+#[derive(Debug, Clone)]
+pub enum PythonOpenModeInput {
+    /// No mode override was supplied.
+    None,
+    /// A mode value extracted from the host.
+    Name(String),
+    /// A non-string host value.
+    Invalid(String),
+}
+
+/// Host-neutral format allow-list input for the Python `Image.open` wrapper.
+#[derive(Debug, Clone)]
+pub enum PythonOpenFormatsInput {
+    /// No format allow-list was supplied.
+    None,
+    /// A list or tuple of format names.
+    Names(Vec<String>),
+    /// A value that is not a list or tuple.
+    Invalid(String),
+}
+
+/// Validates the Python `Image.open` mode and format arguments.
+pub fn validate_python_open_inputs(
+    mode: PythonOpenModeInput,
+    formats: PythonOpenFormatsInput,
+) -> Result<Option<Vec<String>>, PilError> {
+    match mode {
+        PythonOpenModeInput::None => {}
+        PythonOpenModeInput::Name(name) if name == "r" => {}
+        PythonOpenModeInput::Name(name) => {
+            return Err(PilError::ValueError(format!("bad mode '{name}'")));
+        }
+        PythonOpenModeInput::Invalid(value) => {
+            // Pillow formats a non-string mode with its value directly; the
+            // quotes are reserved for an invalid string mode.
+            return Err(PilError::ValueError(format!("bad mode {value}")));
+        }
+    }
+    match formats {
+        PythonOpenFormatsInput::None => Ok(None),
+        PythonOpenFormatsInput::Names(names) => Ok(Some(names)),
+        PythonOpenFormatsInput::Invalid(_) => Err(PilError::TypeError(
+            "formats must be a list or tuple".to_owned(),
+        )),
+    }
+}
+
+/// Validates byte paths before the binding translates decode failures.
+pub fn validate_python_open_source_bytes(data: &[u8]) -> Result<(), PilError> {
+    if data.contains(&0) {
+        return Err(PilError::ValueError("embedded null byte".to_owned()));
+    }
+    Ok(())
+}
 
 #[derive(Clone, Copy)]
 enum FromBytesMode {

@@ -6,7 +6,31 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView};
 
-use super::{ChannelSelector, Image, PutAlphaInput};
+use super::Image;
+
+/// Host-neutral selector for `Image.getchannel`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChannelSelector {
+    /// Numeric band index.
+    Index(i32),
+    /// Pillow band name such as `"R"` or `"A"`.
+    Name(String),
+    /// A host value that is neither an integer nor a string, retaining its
+    /// type name for Pillow's public conversion error.
+    Invalid(String),
+}
+
+/// Host-neutral input for Pillow's `Image.putalpha` wrapper.
+#[derive(Debug, Clone)]
+pub enum PutAlphaInput {
+    /// An integer value. Pillow clamps this to one byte for values outside
+    /// 0..255.
+    Integer(i64),
+    /// An image mask supplied by the caller.
+    Image(Box<Image>),
+    /// A value that cannot be interpreted as an integer or image mask.
+    Invalid(String),
+}
 
 fn putalpha_conversion_target(mode: &str) -> Option<&'static str> {
     match mode {

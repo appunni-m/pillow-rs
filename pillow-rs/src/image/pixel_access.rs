@@ -2,8 +2,23 @@
 
 use super::{
     Arc, DynamicImage, FormattedPixelValue, GenericImageView, Image, PilError, PipelineOp,
-    PutDataValue, PutPixelValue, image_mode_name, is_l16_mode, pillow_band_count,
+    PutDataValue, image_mode_name, is_l16_mode, pillow_band_count,
 };
+
+/// Host-neutral value extracted for a public `Image.putpixel` call.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PutPixelValue {
+    /// An integer scalar, retaining its range for core validation.
+    Integer(i64),
+    /// A non-integral numeric value, accepted by Pillow's `F` mode.
+    Float(f64),
+    /// A list or tuple of integer components, retaining the source range.
+    Components(Vec<i64>),
+    /// A list or tuple of floating-point components, retaining fractional values.
+    FloatComponents(Vec<f64>),
+    /// A value that is not a supported scalar or component sequence.
+    Invalid,
+}
 
 impl Image {
     /// Returns one pixel as an RGBA tuple.
