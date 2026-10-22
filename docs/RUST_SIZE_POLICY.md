@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 17 legacy file ceilings and 194 legacy functions across 113 source paths.
+Snapshot: 16 legacy file ceilings and 194 legacy functions across 112 source paths.
 A dash means that path has no over-limit file entry; function counts and
 maximum recorded function lines are summarized here, with each exact signature
 and ceiling in the JSON baseline. All listed paths are owned by `lazytrot`;
@@ -197,7 +197,6 @@ each reducer issue is a child of Kata `pillow-rs#m2f1`.
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/nearest.rs</code> | — | 2 (max 149 lines) | lazytrot | pillow-rs#tbtw |
 | <code>pillow-rs/src/compute/pool_simd/ops/scalar.rs</code> | 4,038 | 4 (max 190 lines) | lazytrot | pillow-rs#nt8w |
 | <code>pillow-rs/src/draw/mod.rs</code> | 3,106 | 3 (max 504 lines) | lazytrot | pillow-rs#mtx1 |
-| <code>pillow-rs/src/font/imagingft.rs</code> | 2,561 | 0 | lazytrot | pillow-rs#96je |
 | <code>pillow-rs/src/image/backend.rs</code> | — | 1 (max 110 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/image/channel_access.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/image/construction.rs</code> | — | 2 (max 156 lines) | lazytrot | pillow-rs#knsf |
