@@ -898,3 +898,6 @@ pub(super) fn execute_brightness_in_place(
     };
     native_brightness_transform_in_place(img, mode, |input| native_lut_chunk(input, &tables))
 }
+
+#[cfg(test)]
+mod tests;
