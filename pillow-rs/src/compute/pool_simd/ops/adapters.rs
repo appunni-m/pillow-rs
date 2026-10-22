@@ -171,13 +171,12 @@ pub(crate) use self::transpose::simd_transpose;
 use self::transpose::transpose_native_tiled;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::image::{Image, preserve_mode};
+use crate::image::preserve_mode;
 use crate::ops::pil_resize::{
     compact_resize_coeffs_to_source_span, precompute_coeffs_boxed_for_filter,
 };
 use crate::pipeline::{PipelineOp, TransposeMethod};
 use crate::raster::DynamicImage;
-use std::sync::Arc;
 use wide::{f64x8, i16x8, i32x8, u8x16, u16x16, u32x16};
 
 // `parallel` may be enabled to select Parallel CPU kernels, but it must not
@@ -747,16 +746,6 @@ pub(crate) fn simd_execute_in_place(
         | PipelineOp::Subtract { .. } => chops::execute_in_place(img, op, mode),
         _ => Ok(false),
     }
-}
-
-fn materialize_chops_operand(
-    arc: &Arc<Image>,
-    _mode: Option<&str>,
-) -> Result<Arc<DynamicImage>, PilError> {
-    // Native Chops and blend read stored samples, never expanded palette
-    // colors. The shared handle keeps a secondary operand alive without a
-    // full-image copy, including when it aliases an input pipeline branch.
-    arc.materialized_shared()
 }
 
 // ── Native rank-family extrema ─────────────────────────────────────────────

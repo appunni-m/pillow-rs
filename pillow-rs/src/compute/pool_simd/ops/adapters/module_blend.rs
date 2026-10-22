@@ -1,6 +1,7 @@
 //! SIMD adapter for Pillow's module-level image blend.
 
-use super::{SimdImageShape, SimdLayout, materialize_chops_operand, simd_unsupported};
+use super::chops::materialize_chops_operand;
+use super::{SimdImageShape, SimdLayout, simd_unsupported};
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::pipeline::PipelineOp;

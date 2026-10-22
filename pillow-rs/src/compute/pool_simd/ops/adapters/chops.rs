@@ -16,14 +16,24 @@ use self::kernels::{
 use super::simd_rows_mut_serial;
 use super::{
     SimdImageShape, SimdLayout, has_empty_native_bytes, has_valid_byte_data,
-    has_vectorized_byte_rows, materialize_chops_operand, shape_channels,
-    shape_has_empty_native_bytes, shape_has_nonempty_byte_data, simd_unsupported,
+    has_vectorized_byte_rows, shape_channels, shape_has_empty_native_bytes,
+    shape_has_nonempty_byte_data, simd_unsupported,
 };
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView};
 use std::sync::Arc;
+
+pub(super) fn materialize_chops_operand(
+    arc: &Arc<Image>,
+    _mode: Option<&str>,
+) -> Result<Arc<DynamicImage>, PilError> {
+    // Native Chops and blend read stored samples, never expanded palette
+    // colors. The shared handle keeps a secondary operand alive without a
+    // full-image copy, including when it aliases an input pipeline branch.
+    arc.materialized_shared()
+}
 
 /// Return the native channel stride for ImageChops operations.
 ///
