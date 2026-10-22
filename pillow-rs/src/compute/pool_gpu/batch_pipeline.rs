@@ -1,5 +1,46 @@
 use super::*;
 
+pub(super) enum ResolvedPipeline {
+    Single(Arc<CachedPipeline>),
+    /// The second public operation of a private fused dispatch.  It remains
+    /// in the prepared operation/resource arrays so the public operation
+    /// count, auxiliary ownership, and parameter indexing stay unchanged.
+    Skip,
+    Blur {
+        horizontal: Arc<CachedPipeline>,
+        vertical: Arc<CachedPipeline>,
+        pass_count: usize,
+    },
+    /// Non-nearest resize is the same exact two-pass fixed-point algorithm
+    /// used by the CPU/SIMD paths.  Coefficients live in an auxiliary storage
+    /// range, so the two dispatches stay on-device with no host materialize.
+    Resize {
+        horizontal: Arc<CachedPipeline>,
+        vertical: Arc<CachedPipeline>,
+    },
+    /// Pad is an exact contain resize followed by a device-side fill/copy
+    /// placement.  Keeping both stages inside one compute pass avoids a host
+    /// materialization while preserving Pillow's separable resize contract.
+    Pad {
+        horizontal: Arc<CachedPipeline>,
+        vertical: Arc<CachedPipeline>,
+        place: Arc<CachedPipeline>,
+        /// RGBX resize variant that writes the vertical result into the final
+        /// canvas, including its fill rows, instead of materializing a resized
+        /// frame for the placement pass.
+        vertical_pad_rgbx: Option<Arc<CachedPipeline>>,
+    },
+    /// Histogram-driven ImageOps keep all control/data passes on the device:
+    /// clear the reusable histogram, accumulate the current image, derive a
+    /// packed 256-entry LUT, and apply that LUT through the vector remap.
+    Histogram {
+        clear: Arc<CachedPipeline>,
+        histogram: Arc<CachedPipeline>,
+        derive: Arc<CachedPipeline>,
+        remap: Arc<CachedPipeline>,
+    },
+}
+
 impl GpuInner {
     pub(super) fn blur_pass_count(op: &PipelineOp) -> Option<usize> {
         match op {

@@ -75,8 +75,10 @@ mod operation_admission;
 use operation_admission::*;
 mod batch_encoding;
 mod batch_execution;
+use batch_execution::*;
 mod batch_output;
 mod batch_pipeline;
+use batch_pipeline::ResolvedPipeline;
 mod batch_segmentation;
 use batch_output::*;
 mod batch_upload;
@@ -325,46 +327,6 @@ fn create_sized_buffer(
     })
 }
 
-struct GpuBatchResources<'a> {
-    buf_a: &'a wgpu::Buffer,
-    buf_b: &'a wgpu::Buffer,
-    initial_input: Option<&'a wgpu::Buffer>,
-    fallback_img2: &'a wgpu::Buffer,
-    fallback_img3: &'a wgpu::Buffer,
-    fallback_lut: &'a wgpu::Buffer,
-    histogram: &'a wgpu::Buffer,
-    params: &'a wgpu::Buffer,
-    params_ranges: Vec<BufferRange>,
-    img2: Option<&'a wgpu::Buffer>,
-    img2_ranges: Vec<Option<BufferRange>>,
-    resize_coeff_ranges: Vec<Option<(BufferRange, BufferRange)>>,
-    img3: Option<&'a wgpu::Buffer>,
-    img3_ranges: Vec<Option<BufferRange>>,
-    lut: Option<&'a wgpu::Buffer>,
-    lut_ranges: Vec<Option<BufferRange>>,
-    native_expand_output: Option<NativeExpandOutputDispatch>,
-    native_luma_transform_output: Option<NativeExpandOutputDispatch>,
-    native_rgb_packed_output: Option<NativePackedChannelOutputDispatch>,
-    native_la_transform_output: Option<NativePackedChannelOutputDispatch>,
-    native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
-}
-
-struct PreparedGpuBatch<'a> {
-    resources: GpuBatchResources<'a>,
-    input_dims: Vec<(u32, u32)>,
-    output_dims: Vec<(u32, u32)>,
-    /// Source row range represented by a boxed resize's compact horizontal
-    /// intermediate. Other operations retain their complete input height.
-    resize_source_rows: Vec<Option<(u32, u32)>>,
-    /// Contain dimensions used by a public Pad operation before its final
-    /// placement pass.  The resize and placement remain in one command
-    /// buffer, so this is planner metadata rather than a host-side image
-    /// handoff.
-    pad_resize_dims: Vec<Option<(u32, u32)>>,
-    final_dims: (u32, u32),
-    resource_telemetry: PipelineResourceTelemetry,
-}
-
 fn ranged_binding(
     buffer: &wgpu::Buffer,
     range: Option<BufferRange>,
@@ -398,47 +360,6 @@ fn auxiliary_binding<'a>(
         }
         None => ranged_binding(fallback, None),
     }
-}
-
-enum ResolvedPipeline {
-    Single(Arc<CachedPipeline>),
-    /// The second public operation of a private fused dispatch.  It remains
-    /// in the prepared operation/resource arrays so the public operation
-    /// count, auxiliary ownership, and parameter indexing stay unchanged.
-    Skip,
-    Blur {
-        horizontal: Arc<CachedPipeline>,
-        vertical: Arc<CachedPipeline>,
-        pass_count: usize,
-    },
-    /// Non-nearest resize is the same exact two-pass fixed-point algorithm
-    /// used by the CPU/SIMD paths.  Coefficients live in an auxiliary storage
-    /// range, so the two dispatches stay on-device with no host materialize.
-    Resize {
-        horizontal: Arc<CachedPipeline>,
-        vertical: Arc<CachedPipeline>,
-    },
-    /// Pad is an exact contain resize followed by a device-side fill/copy
-    /// placement.  Keeping both stages inside one compute pass avoids a host
-    /// materialization while preserving Pillow's separable resize contract.
-    Pad {
-        horizontal: Arc<CachedPipeline>,
-        vertical: Arc<CachedPipeline>,
-        place: Arc<CachedPipeline>,
-        /// RGBX resize variant that writes the vertical result into the final
-        /// canvas, including its fill rows, instead of materializing a resized
-        /// frame for the placement pass.
-        vertical_pad_rgbx: Option<Arc<CachedPipeline>>,
-    },
-    /// Histogram-driven ImageOps keep all control/data passes on the device:
-    /// clear the reusable histogram, accumulate the current image, derive a
-    /// packed 256-entry LUT, and apply that LUT through the vector remap.
-    Histogram {
-        clear: Arc<CachedPipeline>,
-        histogram: Arc<CachedPipeline>,
-        derive: Arc<CachedPipeline>,
-        remap: Arc<CachedPipeline>,
-    },
 }
 
 #[derive(Default)]

@@ -5,6 +5,46 @@ use super::*;
 
 mod routing;
 
+pub(super) struct GpuBatchResources<'a> {
+    pub(super) buf_a: &'a wgpu::Buffer,
+    pub(super) buf_b: &'a wgpu::Buffer,
+    pub(super) initial_input: Option<&'a wgpu::Buffer>,
+    pub(super) fallback_img2: &'a wgpu::Buffer,
+    pub(super) fallback_img3: &'a wgpu::Buffer,
+    pub(super) fallback_lut: &'a wgpu::Buffer,
+    pub(super) histogram: &'a wgpu::Buffer,
+    pub(super) params: &'a wgpu::Buffer,
+    pub(super) params_ranges: Vec<BufferRange>,
+    pub(super) img2: Option<&'a wgpu::Buffer>,
+    pub(super) img2_ranges: Vec<Option<BufferRange>>,
+    pub(super) resize_coeff_ranges: Vec<Option<(BufferRange, BufferRange)>>,
+    pub(super) img3: Option<&'a wgpu::Buffer>,
+    pub(super) img3_ranges: Vec<Option<BufferRange>>,
+    pub(super) lut: Option<&'a wgpu::Buffer>,
+    pub(super) lut_ranges: Vec<Option<BufferRange>>,
+    pub(super) native_expand_output: Option<NativeExpandOutputDispatch>,
+    pub(super) native_luma_transform_output: Option<NativeExpandOutputDispatch>,
+    pub(super) native_rgb_packed_output: Option<NativePackedChannelOutputDispatch>,
+    pub(super) native_la_transform_output: Option<NativePackedChannelOutputDispatch>,
+    pub(super) native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
+}
+
+pub(super) struct PreparedGpuBatch<'a> {
+    pub(super) resources: GpuBatchResources<'a>,
+    pub(super) input_dims: Vec<(u32, u32)>,
+    pub(super) output_dims: Vec<(u32, u32)>,
+    /// Source row range represented by a boxed resize's compact horizontal
+    /// intermediate. Other operations retain their complete input height.
+    pub(super) resize_source_rows: Vec<Option<(u32, u32)>>,
+    /// Contain dimensions used by a public Pad operation before its final
+    /// placement pass.  The resize and placement remain in one command
+    /// buffer, so this is planner metadata rather than a host-side image
+    /// handoff.
+    pub(super) pad_resize_dims: Vec<Option<(u32, u32)>>,
+    pub(super) final_dims: (u32, u32),
+    pub(super) resource_telemetry: PipelineResourceTelemetry,
+}
+
 impl GpuInner {
     pub(super) fn execute_batch_impl(
         &self,
