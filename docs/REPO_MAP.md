@@ -157,6 +157,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- native_alpha.rs
 |   |   |   |   |   `-- native_byte_op.rs
 |   |   |   |   |-- point_ops.rs
+|   |   |   |   |-- projection.rs
 |   |   |   |   |-- resize/
 |   |   |   |   |   |-- compact_box.rs
 |   |   |   |   |   |-- float_exactness.rs
