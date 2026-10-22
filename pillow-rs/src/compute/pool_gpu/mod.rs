@@ -3504,59 +3504,20 @@ impl GpuInner {
         let mut pad_resize_dims = Vec::with_capacity(ops.len());
         let mut native_expand_output = None;
         let mut native_luma_transform_output = None;
-        let native_rgb_packed_output = if native_rgb_packed_output {
-            let output_plan = if matches!(
+        let packed_output_plans = self.prepare_batch_packed_output_plans(
+            BatchPackedOutputPlanningContext {
                 ops,
-                [PipelineOp::Eval { .. }
-                    | PipelineOp::Equalize
-                    | PipelineOp::MedianFilter { size: 3 }
-                    | PipelineOp::MinFilter { size: 3 }
-                    | PipelineOp::MaxFilter { size: 3 }
-                    | PipelineOp::BoxBlur { radius: 1 }]
-            ) {
-                plan_native_rgb_point_output(
-                    w,
-                    h,
-                    limits.max_compute_workgroups_per_dimension,
-                    limits.max_storage_buffer_binding_size,
-                    limits.max_buffer_size,
-                    buffers.capacity,
-                )
-            } else {
-                plan_native_rgb_transform_output(
-                    ops,
-                    limits.max_compute_workgroups_per_dimension,
-                    limits.max_storage_buffer_binding_size,
-                    limits.max_buffer_size,
-                    buffers.capacity,
-                )
-            };
-            Some(output_plan.ok_or_else(|| {
-                PilError::InternalError(
-                    "GPU packed-RGB operation lost its checked output plan".into(),
-                )
-            })?)
-        } else {
-            None
-        };
-        let native_la_transform_output = if native_la_transform_output {
-            Some(
-                plan_native_la_transform_output(
-                    ops,
-                    limits.max_compute_workgroups_per_dimension,
-                    limits.max_storage_buffer_binding_size,
-                    limits.max_buffer_size,
-                    buffers.capacity,
-                )
-                .ok_or_else(|| {
-                    PilError::InternalError(
-                        "GPU packed-LA transform lost its checked output plan".into(),
-                    )
-                })?,
-            )
-        } else {
-            None
-        };
+                source_dimensions: (w, h),
+                native_rgb_packed_output,
+                native_la_transform_output,
+                max_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension,
+                max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
+                max_buffer_size: limits.max_buffer_size,
+            },
+            buffers.capacity,
+        )?;
+        let native_rgb_packed_output = packed_output_plans.native_rgb;
+        let native_la_transform_output = packed_output_plans.native_la;
         let mut cur_w = w;
         let mut cur_h = h;
         let mut current_mode = mode;

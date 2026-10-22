@@ -11,6 +11,22 @@ pub(super) struct BatchOperationPreparationPlan {
     pub(super) resize_source_row_range: Option<(u32, u32)>,
 }
 
+pub(super) struct BatchPackedOutputPlans {
+    pub(super) native_rgb: Option<NativePackedChannelOutputDispatch>,
+    pub(super) native_la: Option<NativePackedChannelOutputDispatch>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct BatchPackedOutputPlanningContext<'a> {
+    pub(super) ops: &'a [PipelineOp],
+    pub(super) source_dimensions: (u32, u32),
+    pub(super) native_rgb_packed_output: bool,
+    pub(super) native_la_transform_output: bool,
+    pub(super) max_workgroups_per_dimension: u32,
+    pub(super) max_storage_buffer_binding_size: u32,
+    pub(super) max_buffer_size: u64,
+}
+
 struct BoxedResizeSourceRows {
     coefficients: (FilterCoeffs, FilterCoeffs),
     source_rows: (u32, u32),
@@ -32,6 +48,19 @@ pub(super) struct BatchOperationPlanningContext<'a> {
 }
 
 impl GpuInner {
+    pub(super) fn prepare_batch_packed_output_plans(
+        &self,
+        context: BatchPackedOutputPlanningContext<'_>,
+        capacity_words: u32,
+    ) -> Result<BatchPackedOutputPlans, PilError> {
+        let native_rgb = plan_native_rgb_output(context, capacity_words)?;
+        let native_la = plan_native_la_output(context, capacity_words)?;
+        Ok(BatchPackedOutputPlans {
+            native_rgb,
+            native_la,
+        })
+    }
+
     pub(super) fn prepare_batch_operation_plan(
         &self,
         context: BatchOperationPlanningContext<'_>,
@@ -67,6 +96,65 @@ impl GpuInner {
             resize_source_row_range,
         })
     }
+}
+
+fn plan_native_rgb_output(
+    context: BatchPackedOutputPlanningContext<'_>,
+    capacity_words: u32,
+) -> Result<Option<NativePackedChannelOutputDispatch>, PilError> {
+    if !context.native_rgb_packed_output {
+        return Ok(None);
+    }
+    let (width, height) = context.source_dimensions;
+    let output_plan = if matches!(
+        context.ops,
+        [PipelineOp::Eval { .. }
+            | PipelineOp::Equalize
+            | PipelineOp::MedianFilter { size: 3 }
+            | PipelineOp::MinFilter { size: 3 }
+            | PipelineOp::MaxFilter { size: 3 }
+            | PipelineOp::BoxBlur { radius: 1 }]
+    ) {
+        plan_native_rgb_point_output(
+            width,
+            height,
+            context.max_workgroups_per_dimension,
+            context.max_storage_buffer_binding_size,
+            context.max_buffer_size,
+            capacity_words,
+        )
+    } else {
+        plan_native_rgb_transform_output(
+            context.ops,
+            context.max_workgroups_per_dimension,
+            context.max_storage_buffer_binding_size,
+            context.max_buffer_size,
+            capacity_words,
+        )
+    };
+    output_plan.map(Some).ok_or_else(|| {
+        PilError::InternalError("GPU packed-RGB operation lost its checked output plan".into())
+    })
+}
+
+fn plan_native_la_output(
+    context: BatchPackedOutputPlanningContext<'_>,
+    capacity_words: u32,
+) -> Result<Option<NativePackedChannelOutputDispatch>, PilError> {
+    if !context.native_la_transform_output {
+        return Ok(None);
+    }
+    plan_native_la_transform_output(
+        context.ops,
+        context.max_workgroups_per_dimension,
+        context.max_storage_buffer_binding_size,
+        context.max_buffer_size,
+        capacity_words,
+    )
+    .map(Some)
+    .ok_or_else(|| {
+        PilError::InternalError("GPU packed-LA transform lost its checked output plan".into())
+    })
 }
 
 fn plan_native_expand_output(
