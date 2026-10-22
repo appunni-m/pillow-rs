@@ -636,3 +636,6 @@ pub(crate) fn simd_box_blur(
         _ => Err(PilError::ValueError("expected BoxBlur op".into())),
     }
 }
+
+#[cfg(test)]
+mod tests;
