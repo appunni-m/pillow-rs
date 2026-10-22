@@ -1,6 +1,8 @@
-//! SIMD MedianFilter and RankFilter family adapters and order-statistic kernels.
+//! SIMD MedianFilter, RankFilter, and rank-family extrema adapters and kernels.
 
+mod extrema;
 mod kernels;
+pub(crate) use self::extrema::{simd_max_filter, simd_min_filter};
 
 use super::{
     SIMD_RANK_FILTER_LANES, SIMD_RANK_FILTER_MIN_VECTOR_PIXELS, native_copy_image_bytes,
