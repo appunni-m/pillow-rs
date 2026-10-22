@@ -1,14 +1,14 @@
 //! SIMD adapters for Pillow ImageEnhance operations.
 
 use super::lut::{native_lut_apply, native_lut_chunk, native_lut_tables};
+use super::module_blend::native_module_blend_arithmetic_supported;
 use super::{
     SimdImageShape, SimdLayout, apply_native_rows, has_nonempty_byte_data,
     native_all_channel_transform_bytes, native_byte_transform_bytes,
     native_filter_3x3_channel_block_integer, native_filter_3x3_luma_block_integer,
     native_filter_3x3_pixel_block_integer, native_filter_3x3_rgb_byte_block_integer,
-    native_filter_3x3_vector, native_filter_load_byte_block,
-    native_module_blend_arithmetic_supported, native_rgba_color_degenerate, shape_channels,
-    shape_has_nonempty_byte_data, simd_duplicate, simd_unsupported,
+    native_filter_3x3_vector, native_filter_load_byte_block, native_rgba_color_degenerate,
+    shape_channels, shape_has_nonempty_byte_data, simd_duplicate, simd_unsupported,
 };
 use crate::error::PilError;
 use crate::image::preserve_mode;
