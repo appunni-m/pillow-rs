@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 25 legacy file ceilings and 203 legacy functions across 64 source
+Snapshot: 23 legacy file ceilings and 199 legacy functions across 66 source
 paths. A dash means that path has no over-limit file entry; function counts
 and maximum recorded function lines are summarized here, with each exact
 signature and ceiling in the JSON baseline. All listed paths are owned by
@@ -106,7 +106,6 @@ lazytrot; each reducer issue is a child of Kata pillow-rs#m2f1.
 | <code>pillow-rs-js/src/lib.rs</code> | 5,445 | 1 (max 124) | lazytrot | pillow-rs#dqs5 |
 | <code>pillow-rs-py/src/lib.rs</code> | 4,972 | 0 | lazytrot | pillow-rs#pxb1 |
 | <code>pillow-rs/src/color.rs</code> | 2,086 | 0 | lazytrot | pillow-rs#bnhk |
-| <code>pillow-rs/src/compute/mod.rs</code> | 3,024 | 1 (max 150) | lazytrot | pillow-rs#pnpc |
 | <code>pillow-rs/src/compute/pool_cpu/mod.rs</code> | — | 1 (max 320) | lazytrot | pillow-rs#7f4d |
 | <code>pillow-rs/src/compute/pool_cpu/ops/color.rs</code> | — | 1 (max 107) | lazytrot | pillow-rs#7f4d |
 | <code>pillow-rs/src/compute/pool_cpu/ops/draw.rs</code> | 1,777 | 2 (max 172) | lazytrot | pillow-rs#mtx1 |
@@ -115,10 +114,14 @@ lazytrot; each reducer issue is a child of Kata pillow-rs#m2f1.
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter.rs</code> | 6,897 | 4 (max 260) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/geometry.rs</code> | 5,600 | 11 (max 244) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303) | lazytrot | pillow-rs#vamp |
-| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 43,197 | 76 (max 1741) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 38,511 | 68 (max 1741) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/resize/compact_box.rs</code> | — | 2 (max 113) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs</code> | — | 4 (max 282) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/resize/integer_arithmetic.rs</code> | — | 1 (max 101) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/resize/ordered_float.rs</code> | — | 1 (max 134) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/stream.rs</code> | 2,508 | 5 (max 331) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_simd/mod.rs</code> | — | 1 (max 308) | lazytrot | pillow-rs#nt8w |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters.rs</code> | — | 2 (max 190) | lazytrot | pillow-rs#nt8w |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters.rs</code> | — | 2 (max 177) | lazytrot | pillow-rs#nt8w |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/box_blur/kernels/rgb.rs</code> | — | 1 (max 114) | lazytrot | pillow-rs#y5m4 |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/box_blur/tests.rs</code> | — | 1 (max 103) | lazytrot | pillow-rs#y5m4 |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/convert/kernels/dispatch.rs</code> | — | 1 (max 216) | lazytrot | pillow-rs#hezh |
@@ -150,7 +153,6 @@ lazytrot; each reducer issue is a child of Kata pillow-rs#m2f1.
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/mesh.rs</code> | — | 1 (max 121) | lazytrot | pillow-rs#tbtw |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/nearest.rs</code> | — | 2 (max 149) | lazytrot | pillow-rs#tbtw |
 | <code>pillow-rs/src/compute/pool_simd/ops/scalar.rs</code> | 4,038 | 4 (max 190) | lazytrot | pillow-rs#nt8w |
-| <code>pillow-rs/src/compute/registry.rs</code> | 3,011 | 3 (max 1617) | lazytrot | pillow-rs#pnpc |
 | <code>pillow-rs/src/draw/mod.rs</code> | 3,106 | 3 (max 504) | lazytrot | pillow-rs#mtx1 |
 | <code>pillow-rs/src/font/imagingft.rs</code> | 2,561 | 0 | lazytrot | pillow-rs#96je |
 | <code>pillow-rs/src/image.rs</code> | 10,258 | 14 (max 265) | lazytrot | pillow-rs#knsf |
