@@ -120,6 +120,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   `-- dispatch.rs
 |   |   |   |   |-- batch_encoding.rs
 |   |   |   |   |-- batch_pipeline.rs
+|   |   |   |   |-- batch_preparation.rs
 |   |   |   |   |-- fusion.rs
 |   |   |   |   |-- geometry/
 |   |   |   |   |   `-- native_execution.rs
