@@ -65,7 +65,9 @@ use operation_support::*;
 mod operation_admission;
 use operation_admission::*;
 mod batch_encoding;
+mod batch_output;
 mod batch_pipeline;
+use batch_output::*;
 mod batch_preparation;
 use batch_preparation::*;
 mod batch_estimates;
@@ -8024,63 +8026,7 @@ impl GpuPool {
             final_h,
             final_is_a
         );
-        // Track the last mode-changing operation. Geometry and other
-        // mode-preserving operations after it do not undo the promotion.
-        let mut put_alpha_mode = None;
-        let mut out_mode = None;
-        for op in ops {
-            match op {
-                PipelineOp::Grayscale | PipelineOp::ExtractBand { .. } => {
-                    put_alpha_mode = None;
-                    out_mode = Some(crate::raster::ColorType::L8);
-                }
-                PipelineOp::Constant { .. } => {
-                    put_alpha_mode = None;
-                    out_mode = Some(crate::raster::ColorType::L8);
-                }
-                PipelineOp::Convert { mode, .. } => {
-                    put_alpha_mode = None;
-                    out_mode = gpu_output_color_type(mode);
-                }
-                PipelineOp::ConvertLab { .. } => {
-                    put_alpha_mode = None;
-                    out_mode = Some(crate::raster::ColorType::Rgb8);
-                }
-                PipelineOp::Colorize { .. } => {
-                    put_alpha_mode = None;
-                    out_mode = Some(crate::raster::ColorType::Rgb8);
-                }
-                PipelineOp::Merge { mode, .. } => {
-                    put_alpha_mode = None;
-                    out_mode = gpu_output_color_type(mode);
-                }
-                PipelineOp::Color3DLut { target_mode, .. } => {
-                    put_alpha_mode = None;
-                    out_mode = gpu_pixel_mode_color_type(*target_mode);
-                }
-                PipelineOp::EffectNoise { .. } => {
-                    put_alpha_mode = None;
-                    out_mode = Some(crate::raster::ColorType::L8);
-                }
-                PipelineOp::PutAlpha { mode, .. } => {
-                    put_alpha_mode = Some(*mode);
-                    out_mode = None;
-                }
-                PipelineOp::PutAlphaData { mode, .. } => {
-                    put_alpha_mode = Some(*mode);
-                    out_mode = None;
-                }
-                _ => {}
-            }
-        }
-        let native_rgb = put_alpha_mode.is_none()
-            && out_mode.unwrap_or_else(|| img.color()) == crate::raster::ColorType::Rgb8;
-        let native_luma8_extract = out_mode == Some(crate::raster::ColorType::L8)
-            && matches!(ops.last(), Some(PipelineOp::ExtractBand { .. }));
-        let native_luma8_grayscale = out_mode == Some(crate::raster::ColorType::L8)
-            && matches!(ops.last(), Some(PipelineOp::Grayscale));
-        let native_luma8_constant = out_mode == Some(crate::raster::ColorType::L8)
-            && matches!(ops.last(), Some(PipelineOp::Constant { .. }));
+        let output_layout = GpuBatchOutputLayout::from_operations(ops, img.color());
         // All command buffers are submitted before registering the mapping. The
         // batch owns A/B exclusively until the mapped view is dropped and the
         // selected primary or staging buffer has been unmapped.
@@ -8100,9 +8046,9 @@ impl GpuPool {
             gpu.readback_to_luma16(final_w, final_h, readback_buffer, mode)?
         } else if native_luma16_paste {
             gpu.readback_to_luma16_numeric(final_w, final_h, readback_buffer)?
-        } else if native_luma8_extract
-            || native_luma8_grayscale
-            || native_luma8_constant
+        } else if output_layout.native_luma8_extract
+            || output_layout.native_luma8_grayscale
+            || output_layout.native_luma8_constant
             || packed_luma_transform_output
             || packed_luma_point
             || packed_luma_putdata
@@ -8123,7 +8069,7 @@ impl GpuPool {
                 })?;
                 gpu.readback_to_native_channels(final_w, final_h, channels, readback_buffer)?
             } else {
-                gpu.readback_to_image(final_w, final_h, readback_buffer, native_rgb)?
+                gpu.readback_to_image(final_w, final_h, readback_buffer, output_layout.native_rgb)?
             }
         };
         gpu_log!("[GPU] step=readback done");
@@ -8265,9 +8211,9 @@ impl GpuPool {
                     })?,
             )
             .map_err(|_| PilError::ValueError("GPU native image readback size overflow".into()))?
-        } else if native_luma8_extract
-            || native_luma8_grayscale
-            || native_luma8_constant
+        } else if output_layout.native_luma8_extract
+            || output_layout.native_luma8_grayscale
+            || output_layout.native_luma8_constant
             || packed_luma_transform_output
             || packed_luma_point
             || packed_luma_putdata
@@ -8284,7 +8230,7 @@ impl GpuPool {
         resource_telemetry.full_frame_copy_count =
             readback.full_frame_copy_count(!output_only_constant);
         resource_telemetry.mode_conversion_count = if output_only_constant
-            || native_luma8_constant
+            || output_layout.native_luma8_constant
             || packed_luma_convert
             || packed_luma_transform_input
             || packed_luma_order_statistic
@@ -8333,7 +8279,7 @@ impl GpuPool {
             gpu.recycle_staging(staging);
         }
         gpu.recycle_buffers(buffers);
-        if native_rgb
+        if output_layout.native_rgb
             || native_la_transform_output
             || native_sharpness_l_input
             || native_sharpness_la_input
@@ -8345,9 +8291,9 @@ impl GpuPool {
             // applying mode preservation again would reallocate it.
             return Ok(result);
         }
-        if native_luma8_extract
-            || native_luma8_grayscale
-            || native_luma8_constant
+        if output_layout.native_luma8_extract
+            || output_layout.native_luma8_grayscale
+            || output_layout.native_luma8_constant
             || packed_luma_transform_output
             || packed_luma_point
             || packed_luma_putdata
@@ -8358,10 +8304,10 @@ impl GpuPool {
         {
             return Ok(result);
         }
-        if let Some(mode) = put_alpha_mode {
+        if let Some(mode) = output_layout.put_alpha_mode {
             return put_alpha_output(result, mode);
         }
-        if let Some(ct) = out_mode {
+        if let Some(ct) = output_layout.output_color_type {
             // Bypass preserve_mode — use the override color type directly.
             return gpu_result_as_color_type(result, ct);
         } else {

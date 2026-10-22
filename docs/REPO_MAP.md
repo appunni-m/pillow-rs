@@ -120,6 +120,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   `-- dispatch.rs
 |   |   |   |   |-- batch_encoding.rs
 |   |   |   |   |-- batch_estimates.rs
+|   |   |   |   |-- batch_normalization.rs
+|   |   |   |   |-- batch_output.rs
 |   |   |   |   |-- batch_pipeline.rs
 |   |   |   |   |-- batch_preflight.rs
 |   |   |   |   |-- batch_preparation.rs
