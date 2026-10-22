@@ -6527,8 +6527,7 @@ pub(crate) fn simd_supports_for_image(
             y,
             palette_index: _,
             ..
-        } => put_pixel::native_putpixel_layout(img, mode)
-            .is_some_and(|channels| *x < img.width() && *y < img.height() && channels != 0),
+        } => put_pixel::native_putpixel_supported_for_image(img, *x, *y, mode),
         PipelineOp::DrawRectangle {
             x0,
             y0,
@@ -6766,14 +6765,6 @@ fn shape_draw_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usiz
         }
         SimdLayout::Luma16 => None,
         _ => None,
-    }
-}
-
-fn shape_putpixel_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
-    if matches!((shape.layout, mode), (SimdLayout::Rgb8, Some("LAB"))) {
-        Some(3)
-    } else {
-        shape_draw_channels(shape, mode)
     }
 }
 
@@ -7832,8 +7823,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             y,
             palette_index: _,
             ..
-        } => shape_putpixel_channels(shape, mode)
-            .is_some_and(|channels| *x < shape.width && *y < shape.height && channels != 0),
+        } => put_pixel::native_putpixel_supported_for_shape(shape, *x, *y, mode),
         PipelineOp::DrawRectangle {
             x0,
             y0,

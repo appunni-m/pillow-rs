@@ -2,6 +2,7 @@
 
 mod kernels;
 
+use super::{SimdImageShape, SimdLayout};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
@@ -202,6 +203,34 @@ pub(super) fn native_putpixel_layout(img: &DynamicImage, mode: Option<&str>) -> 
     } else {
         super::native_draw_layout(img, mode)
     }
+}
+
+pub(super) fn native_putpixel_supported_for_image(
+    img: &DynamicImage,
+    x: u32,
+    y: u32,
+    mode: Option<&str>,
+) -> bool {
+    native_putpixel_layout(img, mode)
+        .is_some_and(|channels| x < img.width() && y < img.height() && channels != 0)
+}
+
+fn shape_putpixel_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
+    if matches!((shape.layout, mode), (SimdLayout::Rgb8, Some("LAB"))) {
+        Some(3)
+    } else {
+        super::shape_draw_channels(shape, mode)
+    }
+}
+
+pub(super) fn native_putpixel_supported_for_shape(
+    shape: SimdImageShape,
+    x: u32,
+    y: u32,
+    mode: Option<&str>,
+) -> bool {
+    shape_putpixel_channels(shape, mode)
+        .is_some_and(|channels| x < shape.width && y < shape.height && channels != 0)
 }
 
 /// Set one validated pixel through a masked native-byte vector store.  The
