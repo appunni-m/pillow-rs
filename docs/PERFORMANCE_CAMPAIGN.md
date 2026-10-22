@@ -31975,3 +31975,59 @@ evidence. The raw reports are `build/migration-parity/resize-i32-family-refactor
 and `build/migration-parity/resize-i32-family-refactor-20261022-parity.json`
 with run IDs `migration-benchmark-735850761b284d689f6fac20029c9833` and
 `migration-parity-benchmark-gate-277f0fc3a75e45cd8c1884df71c37fec`.
+
+## SIMD Resize admission and dispatch extraction — 2026-10-22
+
+Moved direct and boxed Resize admission and mode dispatch, along with the
+zero-source helper, from `adapters.rs` into the Resize family module. The
+existing byte, float, Luma16, and I32 pixel algorithms were not changed by this
+step. The boxed route was divided into short validation, layout, and shortcut
+helpers to keep the family entry below the repository function-size limit.
+
+The selected arm64 macOS 15.7.7 benchmark used Pillow 12.2.0 / CPython 3.12,
+five warmups, 20 measured iterations in five samples, and concurrency one. It
+timed `call` plus `materialize` for these eight workload IDs:
+`pipeline-chain.resize-native-i32.bicubic-noise-1024x768`,
+`pipeline-chain.resize-native-f32.bicubic-noise-1024x768`,
+`pipeline-chain.resizeboxed.f-boxed-nearest-noise-512x512`,
+`pipeline-chain.resize-alpha.rgba-lanczos-1024x768`,
+`pipeline-chain.resize-alpha.la-bicubic-1024x768`,
+`pipeline-op.resize.benchmark-materialized`,
+`pipeline-op.resizeboxed.benchmark-materialized`, and
+`pipeline-op.thumbnail.native-i32-1024x768`. All eight workloads were measured
+and their correctness gates passed. Median latency is in milliseconds:
+
+| Workload | Pillow | CPU | SIMD | SIMD execution receipt | GPU request / actual route |
+| --- | ---: | ---: | ---: | --- | --- |
+| I32 bicubic Resize, 1024×768 | 2.162521 | 1.135834 | 1.434542 | `neon-f64-resize`, no fallback | 13.083792 / GPU |
+| F32 bicubic Resize, 1024×768 | 3.075438 | 0.977084 | 1.470646 | `vector`, no fallback | 4.401333 / GPU |
+| Boxed F nearest Resize, 512×512 | 0.254771 | 0.048771* | 0.057604* | `not_proven` | 0.063792* / `not_proven` |
+| RGBA Lanczos Resize, 1024×768 | 9.251000 | 10.008980 | 11.286812 | `vector`, no fallback | 3.352334 / GPU |
+| LA bicubic Resize, 1024×768 | 5.421438 | 5.313604 | 5.896354 | `vector`, no fallback | 2.019000 / GPU |
+| Materialized RGB identity Resize, 16×16 | 0.023125 | 0.021834 | 0.021271 | `native-copy`, no fallback | 0.295980 / GPU |
+| Materialized RGB boxed crop, 16×16 | 0.027167 | 0.022250 | 0.022854 | `vector`, no fallback | 0.216104 / GPU |
+| I32 Thumbnail, 1024×768 | 0.922042 | 0.438813 | 0.688021 | `vector`, no fallback | 0.781687 / CPU fallback |
+
+*The boxed-F report has timing samples but no selected execution receipts or
+operation telemetry for CPU, SIMD, or GPU. Those three values are not backend
+performance evidence. Thumbnail's GPU request fell back to CPU because
+reducing-gap or typed arithmetic is not proven for this path. These are
+structural-refactor measurements, not candidate-versus-control results; the
+selected SIMD/CPU differences do not establish a regression caused by moving
+dispatch.
+
+The benchmark report is
+`build/migration-parity/resize-dispatch-family-refactor-20261022.json`, run
+`migration-benchmark-1ea90c9e5eb64568bf47f6b857c0ee3e`; its shared parity gate is
+`migration-parity-benchmark-gate-e742e263c1b843fdb773cec21be9335d` (12 selected,
+12 passed). Separate CPU, SIMD, and GPU Resize guards each passed 3/3 for
+`PIL.Image.Image.resize.mode.1`,
+`PIL.Image.Image.resize.nuanced.noninteger-ratio-lanczos`, and
+`PIL.Image.Image.resize.nuanced.i16l-frombytes-bilinear`; run IDs are
+`migration-parity-dba7479454404127a51ebc9f59558d92`,
+`migration-parity-515d62a596c542a18db7f9332a585032`, and
+`migration-parity-a9866df399c24e40a7fb9e9658294547`, respectively. This
+current-worktree build was based on dirty revision
+`12dcf9037b2cf2d969ee183e720c18c0869b5944`. The measurements preserve route
+and parity evidence; they do not identify why the observed SIMD/CPU timing
+differences occur.

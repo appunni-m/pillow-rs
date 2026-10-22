@@ -309,3 +309,12 @@ family entry remains registered as `adapters::simd_resize`, and native
 Thumbnail continues to call the I-mode direct and boxed routes through the
 family. This resolves the two old path-layout findings; it does not change the
 historical crosswalk counts or claim runtime reachability for unmeasured cfgs.
+
+## SIMD Resize dispatch follow-up — 2026-10-22
+
+Direct and boxed Resize admission and mode routing, plus the zero-source helper,
+now live in `pillow-rs/src/compute/pool_simd/ops/adapters/resize.rs`. The
+registered family entry calls this local dispatcher. General byte, float, and
+Luma16 pixel kernels remain in `adapters.rs` for later caller-traced moves.
+This changes file ownership only; it does not alter the historical crosswalk
+counts or infer reachability beyond the selected parity and benchmark paths.

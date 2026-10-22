@@ -4,9 +4,8 @@
 //! stays in one family. The thumbnail family reuses the planner for its I-mode
 //! reducing-gap resample.
 
-use super::super::{
-    SIMD_RESIZE_LANES, resize_nearest_indices, simd_resize_zero_source, simd_unsupported,
-};
+use super::super::{SIMD_RESIZE_LANES, resize_nearest_indices, simd_unsupported};
+use super::simd_resize_zero_source;
 use crate::compute::pool_cpu::ops::geometry::resample_kernel;
 use crate::error::PilError;
 use crate::image::preserve_mode;
