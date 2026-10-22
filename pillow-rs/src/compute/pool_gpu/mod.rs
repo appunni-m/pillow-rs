@@ -70,6 +70,8 @@ mod batch_preparation;
 use batch_preparation::*;
 mod batch_estimates;
 use batch_estimates::*;
+mod batch_preflight;
+use batch_preflight::*;
 #[cfg(target_endian = "little")]
 mod native_composite;
 #[cfg(target_endian = "little")]
@@ -7106,141 +7108,19 @@ impl GpuPool {
             return self.execute_exact_host_result(ops, img, mode, reason);
         }
 
-        // GPU shaders consume the packed L/LA/RGB/RGBA representation. P and
-        // PA are safe for raw channel-wise Chops because the core exposes
-        // their index/(index, alpha) samples as Luma8/LumaA8 buffers; no
-        // palette expansion is involved. CMYK is additionally safe for a
-        // brightness/color-saturation batch because the core stores its
-        // C/M/Y/K bytes in the same four-byte transport and those shaders
-        // explicitly process K. Grayscale has a dedicated shader branch that
-        // fuses CMYK-to-RGB arithmetic with luma. EffectSpread is a separate
-        // raw-byte relocation: its host-generated map is gathered as complete
-        // packed words, so it is safe for every mode backed by the ordinary
-        // byte transport, including the logical modes below.
-        let logical_mode_supported = gpu_logical_mode_is_supported(
+        let empty_two_input_noop = match self.preflight_batch_contract(
             ops,
-            Some(img),
+            img,
             mode,
+            allow_cpu_fallback,
             f_resize_constant_bits,
             f_pad_f64_is_exact,
-            true,
-        );
-        if !logical_mode_supported {
-            gpu_log!(
-                "[GPU] dispatch preflight routed batch to exact host semantic control: logical layout"
-            );
-            return self.preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                "GPU logical-mode operation contract is not proven",
-            );
-        }
-
-        // A palette-index PutPixel has the same concrete Luma8 storage as an
-        // ordinary L image, so the logical mode is the only distinction that
-        // prevents a direct-core caller from accidentally treating the index
-        // as a visible luma sample. PA uses the non-indexed flag and is
-        // already represented by the LumaA8 layout check below.
-        if ops.iter().any(|op| {
-            matches!(
-                op,
-                PipelineOp::PutPixel {
-                    palette_index: true,
-                    ..
-                }
-            )
-        }) && mode != Some("P")
-        {
-            return self.preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                "palette index requires P logical mode",
-            );
-        }
-
-        // The uniform mode word describes the source layout for the whole
-        // dispatch batch. Convert, grayscale, and getchannel change that
-        // layout; a later shader would otherwise interpret the new packed
-        // pixels using the old source mode. Keep the pipeline lazy, but hand
-        // mixed-mode batches to the universal sequential CPU executor until
-        // GPU batch segmentation carries an updated mode between dispatches.
-        if gpu_batch_has_nonterminal_mode_change(ops) {
-            gpu_log!(
-                "[GPU] dispatch preflight routed batch to CPU: mode-changing op is not terminal"
-            );
-            return self.preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                "non-terminal mode change",
-            );
-        }
-
-        if !gpu_image_layout_is_supported(img)
-            && !gpu_luma16_geometry_is_supported(ops, img, mode)
-            && !gpu_luma16_convert_is_supported(ops, img)
-            && !gpu_luma16_paste_is_supported(ops, img)
-        {
-            gpu_log!(
-                "[GPU] dispatch preflight routed batch to CPU: unsupported native pixel layout"
-            );
-            return self.preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                "unsupported native pixel layout",
-            );
-        }
-
-        for op in ops {
-            let i_mode_filter = mode == Some("I")
-                && matches!(
-                    op,
-                    PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
-                )
-                && (gpu_int_filter_is_supported(ops, img)
-                    || gpu_int_filter_resize_chain_is_supported(ops, img));
-            if !registry::gpu_supports(op)? && !i_mode_filter {
-                return self.preflight_failure(
-                    ops,
-                    img,
-                    mode,
-                    allow_cpu_fallback,
-                    "no valid single-dispatch shader contract",
-                );
-            }
-        }
-
-        // Keep this guard at execution time as well as in `supports`: explicit
-        // backend selection and future callers must not bypass shader bounds.
-        if let Err(error) = validate_gpu_operations(ops, img, mode) {
-            let reason = error.to_string();
-            return self.preflight_failure(ops, img, mode, allow_cpu_fallback, &reason);
-        }
-
-        // Check the primary image and every declared output before resolving
-        // nested images. An empty/oversized outer image must not initialize a
-        // device merely because a later auxiliary pipeline is present; the
-        // entire batch will be handled by the CPU fallback.
-        let empty_two_input_noop = gpu_empty_two_input_batch_is_noop(ops, img);
-        if gpu_dimensions_require_cpu(ops, img, mode) && !empty_two_input_noop {
-            gpu_log!(
-                "[GPU] dispatch preflight routed batch to CPU: unsafe primary image dimensions"
-            );
-            return self.preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                "unsafe primary image dimensions",
-            );
-        }
+        )? {
+            BatchContractPreflight::Continue {
+                empty_two_input_noop,
+            } => empty_two_input_noop,
+            BatchContractPreflight::Return(image) => return Ok(image),
+        };
 
         // Distance one makes every EffectSpread displacement exactly zero.
         // Preserve its two RNG draws per pixel, but skip generating/uploading
