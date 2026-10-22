@@ -350,6 +350,14 @@ pub(crate) fn simd_rgb_putpixel_thumbnail_prepare(
 
 /// Resize the prepared reduced RGB image through the existing sparse SIMD
 /// path, preserving the standard thumbnail kernel and vector receipt.
+///
+/// On the one-pixel ARM64 workload, CPU remains about 1.5× faster: its fused
+/// reducer passes known active rows to the boxed resizer, while SIMD scans the
+/// reduced rows and runs the generic two-pass vector convolution. The SIMD
+/// profile concentrates in that convolution, so the row discovery and vector
+/// setup are not amortized by the small number of active pixels. See the
+/// matching benchmark and profile under
+/// `docs/evidence/filter/thumbnail-rgb-cpu-simd-arm64-20261022/`.
 pub(crate) fn simd_rgb_putpixel_thumbnail_resize(
     reduced: &DynamicImage,
     thumbnail: &PipelineOp,
@@ -417,6 +425,14 @@ pub(crate) fn simd_thumbnail(
         && img.width() % 2 == 0
         && img.height() % 2 == 0
     {
+        // Current Apple ARM64 controls for native I 1024x768 are slower than
+        // CPU (0.609/0.640 ms SIMD vs 0.425/0.430 ms CPU; see
+        // docs/evidence/filter/thumbnail-fi-rank9-arm64-20261022/README.md).
+        // Samples cluster in this fused kernel but do not split its stages.
+        // Source inspection shows scalar 2x2 reduction and per-tap lane
+        // gathers/rounding/packing around the f64x8 work; those costs likely
+        // outweigh vector arithmetic at this 256x192 output size. Keep the
+        // real vector path while row reuse and gather costs are investigated.
         return simd_thumbnail_i_reduce2x2_resample(
             img,
             output_width,
@@ -473,6 +489,13 @@ pub(crate) fn simd_thumbnail(
     };
     if typed_scalar && mode == Some("F") {
         if factor_x != 1 || factor_y != 1 {
+            // Current Apple ARM64 controls for native F 1024x768 are slower
+            // than CPU (0.417/0.437 ms SIMD vs 0.325/0.323 ms CPU; see
+            // docs/evidence/filter/thumbnail-fi-rank9-arm64-20261022/README.md).
+            // Profiles place most SIMD samples in simd_resize_f, but do not
+            // split its stages. Source inspection shows scalar source and
+            // coefficient lane gathers feeding ordered f64x8 updates; their
+            // overhead likely outweighs vector work on this 256x192 result.
             let box_right = f64::from(img.width()) / f64::from(factor_x);
             let box_bottom = f64::from(img.height()) / f64::from(factor_y);
             // The reducing-gap box is identical to ordinary F resize only
