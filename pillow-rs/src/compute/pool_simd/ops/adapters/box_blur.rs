@@ -8,6 +8,9 @@ use self::kernels::simd_luma_box_blur_radius_one_rows;
 #[cfg(test)]
 pub(super) use self::kernels::simd_transpose_interleaved_rows;
 pub(super) use self::kernels::{simd_blur_rows, simd_blur_transpose_rows};
+pub(super) use self::kernels::{
+    simd_luma_horizontal_radius_one_three_passes_rows, simd_luma_vertical_radius_one_rows,
+};
 
 use super::{
     CheckedDims, SIMD_BOX_BLUR_SCALE, gaussian_rgba_uniform, native_copy_image_bytes,

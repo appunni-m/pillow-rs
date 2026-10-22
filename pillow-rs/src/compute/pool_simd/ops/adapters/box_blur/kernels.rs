@@ -7,8 +7,7 @@ use super::super::transpose;
 #[cfg(all(not(feature = "parallel"), target_arch = "aarch64"))]
 use super::super::transpose_native_tiled;
 use super::super::{
-    SIMD_BOX_BLUR_BIAS, SIMD_BOX_BLUR_SCALE, simd_blur_pack_u32x16_to_bytes,
-    simd_luma_horizontal_radius_one_rows, simd_luma_load_radius_one_block,
+    SIMD_BOX_BLUR_BIAS, SIMD_BOX_BLUR_SCALE, simd_blur_load_u8x16, simd_blur_pack_u32x16_to_bytes,
 };
 use crate::checked_dims::CheckedDims;
 #[cfg(all(not(feature = "parallel"), target_arch = "x86_64"))]
@@ -22,6 +21,9 @@ mod rgba_avx2;
 mod rgba_neon;
 
 pub(super) use self::luma::simd_luma_box_blur_radius_one_rows;
+pub(in crate::compute::pool_simd::ops::adapters) use self::luma::{
+    simd_luma_horizontal_radius_one_three_passes_rows, simd_luma_vertical_radius_one_rows,
+};
 #[cfg(target_arch = "aarch64")]
 pub(super) use self::rgba_neon::blur_vertical_rows_radius_seven;
 
