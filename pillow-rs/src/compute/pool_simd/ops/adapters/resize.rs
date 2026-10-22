@@ -1,5 +1,10 @@
 //! SIMD Resize family dispatch and mode-specific kernels.
 
+/// Fixed lane widths shared by SIMD resampling and geometric sampling.
+pub(super) const SIMD_RESIZE_LANES: usize = 8;
+pub(super) const SIMD_RESIZE_NEAREST_BYTES: usize = 16;
+pub(super) const SIMD_F64_LANES: usize = 8;
+
 #[path = "resize/coordinates.rs"]
 mod coordinates;
 #[path = "resize/kernels/f32.rs"]

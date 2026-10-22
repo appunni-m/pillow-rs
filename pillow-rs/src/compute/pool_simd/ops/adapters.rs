@@ -163,12 +163,13 @@ use self::reduce::{
     native_reduce_bytes, native_reduce_sparse_rgb_2x2, native_reduce_supported_for_image,
     native_reduce_supported_for_shape,
 };
-pub(crate) use self::resize::{simd_contain, simd_cover, simd_fit, simd_resize, simd_scale};
 use self::resize::{
-    simd_resize_convolution, simd_resize_convolution_boxed, simd_resize_convolution_into,
+    SIMD_F64_LANES, SIMD_RESIZE_LANES, SIMD_RESIZE_NEAREST_BYTES, simd_resize_convolution,
+    simd_resize_convolution_boxed, simd_resize_convolution_into,
     simd_resize_convolution_with_zero_row_elision, simd_resize_f, simd_resize_f_boxed,
     simd_resize_i32, simd_resize_nearest,
 };
+pub(crate) use self::resize::{simd_contain, simd_cover, simd_fit, simd_resize, simd_scale};
 pub(crate) use self::thumbnail::{
     simd_rgb_putpixel_thumbnail_fusion_supported, simd_rgb_putpixel_thumbnail_prepare,
     simd_rgb_putpixel_thumbnail_resize, simd_thumbnail,
@@ -733,15 +734,11 @@ pub(crate) fn simd_execute_in_place(
 
 // ── Native rank-family extrema ─────────────────────────────────────────────
 
-const SIMD_RESIZE_LANES: usize = 8;
-const SIMD_RESIZE_NEAREST_BYTES: usize = 16;
 // Transpose dispatch is implemented in `adapters/transpose.rs`.
 
 // ═══════════════════════════════════════════════════════════════════════
 // Section G: New-buffer ops with PipelineOp dispatch
 // ═══════════════════════════════════════════════════════════════════════
-
-const SIMD_F64_LANES: usize = 8;
 
 // ═══════════════════════════════════════════════════════════════════════
 // Section H: Special/mutating ops
