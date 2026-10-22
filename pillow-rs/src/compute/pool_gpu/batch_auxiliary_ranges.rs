@@ -169,3 +169,60 @@ impl GpuBatchAuxiliaryPreparation<'_> {
         Ok(Some(range))
     }
 }
+
+impl GpuInner {
+    pub(super) fn append_resize_coeff_ranges(
+        &self,
+        img2_arena: &mut Vec<u32>,
+        auxiliary_cache: &GpuAuxiliaryCache,
+        horizontal: &FilterCoeffs,
+        vertical: &FilterCoeffs,
+        storage_alignment: usize,
+    ) -> Result<(BufferRange, BufferRange), PilError> {
+        let horizontal_words = encode_resize_coeffs(horizontal)?;
+        let vertical_words = encode_resize_coeffs(vertical)?;
+        let base_offset = (auxiliary_cache.img2_values.len() * 4) as u64;
+        let mut horizontal_range =
+            append_arena_slice(img2_arena, &horizontal_words, storage_alignment);
+        horizontal_range.offset += base_offset;
+        let mut vertical_range = append_arena_slice(img2_arena, &vertical_words, storage_alignment);
+        vertical_range.offset += base_offset;
+        Ok((horizontal_range, vertical_range))
+    }
+
+    pub(super) fn append_resize_f64_coeff_ranges(
+        &self,
+        img2_arena: &mut Vec<u32>,
+        auxiliary_cache: &GpuAuxiliaryCache,
+        horizontal: &FilterCoeffsF64,
+        vertical: &FilterCoeffsF64,
+        storage_alignment: usize,
+    ) -> Result<(BufferRange, BufferRange), PilError> {
+        let horizontal_words = encode_resize_coeffs_f64(horizontal)?;
+        let vertical_words = encode_resize_coeffs_f64(vertical)?;
+        self.append_resize_coeff_word_ranges(
+            img2_arena,
+            auxiliary_cache,
+            &horizontal_words,
+            &vertical_words,
+            storage_alignment,
+        )
+    }
+
+    pub(super) fn append_resize_coeff_word_ranges(
+        &self,
+        img2_arena: &mut Vec<u32>,
+        auxiliary_cache: &GpuAuxiliaryCache,
+        horizontal_words: &[u32],
+        vertical_words: &[u32],
+        storage_alignment: usize,
+    ) -> Result<(BufferRange, BufferRange), PilError> {
+        let base_offset = (auxiliary_cache.img2_values.len() * 4) as u64;
+        let mut horizontal_range =
+            append_arena_slice(img2_arena, horizontal_words, storage_alignment);
+        horizontal_range.offset += base_offset;
+        let mut vertical_range = append_arena_slice(img2_arena, vertical_words, storage_alignment);
+        vertical_range.offset += base_offset;
+        Ok((horizontal_range, vertical_range))
+    }
+}
