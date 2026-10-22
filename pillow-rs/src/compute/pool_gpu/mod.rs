@@ -72,6 +72,8 @@ mod batch_estimates;
 use batch_estimates::*;
 mod batch_preflight;
 use batch_preflight::*;
+mod batch_normalization;
+use batch_normalization::*;
 #[cfg(target_endian = "little")]
 mod native_composite;
 #[cfg(target_endian = "little")]
@@ -6823,117 +6825,18 @@ impl GpuPool {
         if ops.is_empty() {
             return Ok(img.clone());
         }
-        let source_is_luma_point_run = ops.iter().all(|op| matches!(op, PipelineOp::Eval { .. }))
-            && matches!(img, DynamicImage::ImageLuma8(_))
-            && matches!(mode, None | Some("L"));
-        let native_cover_input_channels = gpu_native_cover_input_channels(ops, img, mode);
-
-        // Keep the public operation list intact for routing and parity, but
-        // execute contiguous exact point runs as one LUT dispatch when the
-        // logical mode matches the source's native byte layout.  The helper
-        // below excludes palette and typed modes whose public point contract
-        // is not represented by the batch-wide GPU mode word.
-        // For unmasked native L/RGB inputs, histogram selection is small
-        // control-plane work compared with the packed full-frame GPU path.
-        // Derive Pillow's exact LUT on the host, then keep the complete pixel
-        // remap on the GPU as one native lookup dispatch. Masked and other
-        // layouts keep the four-pass GPU histogram implementation.
-        let host_autocontrast_lut = if let [PipelineOp::Autocontrast { cutoff, mask }] = ops {
-            let native_layout = matches!(
-                img,
-                DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_)
-            ) && (mode.is_none()
-                || (matches!(img, DynamicImage::ImageLuma8(_)) && mode == Some("L"))
-                || (matches!(img, DynamicImage::ImageRgb8(_)) && mode == Some("RGB")));
-            if mask.is_none()
-                && cutoff.is_finite()
-                && native_layout
-                && img.width() != 0
-                && img.height() != 0
-            {
-                Some(PipelineOp::Eval {
-                    lut: crate::compute::pool_cpu::ops::imageops::autocontrast_lut(
-                        img, *cutoff, None,
-                    )?
-                    .into(),
-                })
-            } else {
-                None
-            }
-        } else {
-            None
+        let normalized = match self.normalize_batch_operations(ops, img, mode)? {
+            BatchNormalization::Continue(normalized) => normalized,
+            BatchNormalization::Return(image) => return Ok(image),
         };
-        let host_autocontrast_luma_lut = host_autocontrast_lut.is_some()
-            && matches!(img, DynamicImage::ImageLuma8(_))
-            && matches!(mode, None | Some("L"));
-        let host_autocontrast_rgb_lut = host_autocontrast_lut.is_some()
-            && matches!(img, DynamicImage::ImageRgb8(_))
-            && matches!(mode, None | Some("RGB"));
-        let mut dispatch_ops: Vec<PipelineOp> = if let Some(op) = host_autocontrast_lut {
-            vec![op]
-        } else {
-            ops.iter()
-                .filter(|op| !gpu_reduce_is_identity(op) && !gpu_sharpness_is_identity(op))
-                .cloned()
-                .collect()
-        };
-        if dispatch_ops.is_empty() {
-            // Exact identities have no pixel invocations. Return an
-            // independent result without paying for upload, dispatch, or
-            // readback. The selected GPU backend still owns completion and
-            // reports an explicit zero-dispatch receipt.
-            crate::compute::record_pipeline_dispatch_count(0);
-            return Ok(img.clone());
-        }
-        dispatch_ops = if gpu_byte_point_mode_allowed(img, mode) {
-            fuse_gpu_point_ops(&dispatch_ops, mode_code(img))
-        } else {
-            dispatch_ops
-        };
-        if gpu_image_layout_is_supported(img) {
-            // Transpose only relocates native samples. Composing it does not
-            // interpret palette indices or the packed I/F words, so the
-            // existing logical-mode preflight below remains authoritative.
-            dispatch_ops = fuse_gpu_transpose_ops(&dispatch_ops);
-            if dispatch_ops.is_empty() {
-                // A cancelled transpose run requires an independent result
-                // but no device work, upload, or readback. Keep the public
-                // operation count while explicitly reporting zero dispatches.
-                crate::compute::record_pipeline_operation_path("native-copy");
-                crate::compute::record_pipeline_dispatch_count(0);
-                return Ok(img.clone());
-            }
-        }
-        dispatch_ops = fuse_gpu_crop_border_ops(&dispatch_ops);
-        // Normalize geometry wrappers before deriving operation-aligned
-        // auxiliary inputs and preflight state.  Thumbnail can expand into a
-        // Reduce + Resize pair, so postponing this step would leave those
-        // vectors with different lengths.
-        dispatch_ops = expand_gpu_geometry_ops(&dispatch_ops, img, img.dimensions(), mode);
-
-        // A packed dispatch has one logical layout uniform. Operations such
-        // as Grayscale, ExtractBand, and PutAlpha change that layout for the
-        // following node, so they cannot share a dispatch with later work.
-        // F resize chains likewise require materialized FLOAT32 words between
-        // public resize calls: split the chain before deriving proof flags so
-        // each segment inspects the preceding result rather than the original
-        // source. Recursion preserves the same receipt aggregation below for
-        // both mode changes and F resize boundaries.
-        if gpu_uniform_blur_can_copy(&dispatch_ops, img) {
-            // A normalized blur preserves every channel of a constant image,
-            // including the edge samples. Replace only the GPU lowering with
-            // an identity dispatch; the public operation remains represented
-            // by the same exact result and the selected backend stays GPU.
-            gpu_log!("[GPU] lowering constant blur to one identity dispatch");
-            dispatch_ops = vec![PipelineOp::Duplicate];
-        }
-        // `putpixel` is queued lazily by Image. Fold one native LA pixel write
-        // immediately before Sharpness into the already-required upload copy,
-        // then let the dedicated shader process the resulting LA frame once.
-        let native_sharpness_la_patch = gpu_native_sharpness_la_putpixel(&dispatch_ops, img, mode);
-        if native_sharpness_la_patch.is_some() {
-            dispatch_ops.remove(0);
-        }
+        let NormalizedGpuBatch {
+            source_is_luma_point_run,
+            native_cover_input_channels,
+            host_autocontrast_luma_lut,
+            host_autocontrast_rgb_lut,
+            native_sharpness_la_patch,
+            dispatch_ops,
+        } = normalized;
         let ops = dispatch_ops.as_slice();
         // Only a standalone L -> RGB Colorize can consume a four-samples-per-
         // word upload; preceding GPU kernels leave the ordinary RGBA transport.
@@ -6972,6 +6875,11 @@ impl GpuPool {
         let packed_native_byte_filter = gpu_packed_native_byte_filter_input(ops, img, mode);
         let packed_luma_pad = gpu_packed_luma_pad_input(ops, img, mode);
         let packed_la_pad = gpu_packed_la_pad_input(ops, img, mode);
+        // A packed dispatch has one logical layout uniform. Operations such
+        // as Grayscale, ExtractBand, and PutAlpha change that layout for the
+        // following node, so they cannot share a dispatch with later work.
+        // F resize chains likewise require materialized FLOAT32 words between
+        // public resize calls, so split before deriving proof flags.
         let segment_boundary = gpu_first_nonterminal_mode_change(ops).or_else(|| {
             (mode == Some("F")
                 && ops.len() > 1

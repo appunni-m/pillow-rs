@@ -121,6 +121,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- batch_encoding.rs
 |   |   |   |   |-- batch_estimates.rs
 |   |   |   |   |-- batch_pipeline.rs
+|   |   |   |   |-- batch_preflight.rs
 |   |   |   |   |-- batch_preparation.rs
 |   |   |   |   |-- fusion.rs
 |   |   |   |   |-- geometry/
