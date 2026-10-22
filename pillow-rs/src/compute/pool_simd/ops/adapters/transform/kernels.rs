@@ -1,11 +1,12 @@
 //! Transform sampling kernel family and shared vector helpers.
 
 use super::super::rotate::rotate_fill_sample;
-use super::super::{
-    SIMD_F64_LANES, SIMD_RESIZE_NEAREST_BYTES, SimdRotateSample, bilinear_rotate_scalar,
-    bilinear_rotate_vector, gather_rotate_neighborhood_vectors, rotate_fused_mul_add,
-    rotate_unpremultiply_vector, simd_rotate_sample_coordinates, simd_unsupported,
+use super::super::rotate::{
+    SimdRotateSample, bilinear_rotate_scalar, bilinear_rotate_vector,
+    gather_rotate_neighborhood_vectors, rotate_fused_mul_add, rotate_unpremultiply_vector,
+    simd_rotate_sample_coordinates,
 };
+use super::super::{SIMD_F64_LANES, SIMD_RESIZE_NEAREST_BYTES, simd_unsupported};
 use super::{
     native_affine_bilinear_layout, native_affine_luma16_transform_supported_for_image,
     native_affine_nearest_transform_channels,

@@ -3,9 +3,11 @@
 use super::super as rotate;
 use super::super::super::transpose::native_transpose;
 use super::super::super::{
-    SIMD_BYTE_VECTOR_LANES, SIMD_F64_LANES, SimdRotateSample, TransposeMethod,
-    bilinear_rotate_scalar, bilinear_rotate_vector, gather_rotate_neighborhood_vectors,
-    native_copy_image_bytes, rotate_fused_mul_add, rotate_unpremultiply_vector,
+    SIMD_BYTE_VECTOR_LANES, SIMD_F64_LANES, TransposeMethod, native_copy_image_bytes,
+};
+use super::super::{
+    SimdRotateSample, bilinear_rotate_scalar, bilinear_rotate_vector,
+    gather_rotate_neighborhood_vectors, rotate_fused_mul_add, rotate_unpremultiply_vector,
     simd_rotate_sample_coordinates,
 };
 use super::super::{

@@ -1,5 +1,6 @@
 //! Rotate-family native kernels selected by the SIMD adapter.
 
+mod interpolation;
 mod kernels;
 
 #[cfg(not(feature = "parallel"))]
@@ -15,6 +16,22 @@ use crate::image::preserve_mode;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::DynamicImage;
 use wide::u8x16;
+
+pub(super) use self::interpolation::{
+    bilinear_rotate_scalar, bilinear_rotate_vector, gather_rotate_neighborhood_vectors,
+    rotate_fused_mul_add, rotate_unpremultiply_vector, simd_rotate_sample_coordinates,
+};
+
+#[derive(Clone, Copy, Default)]
+pub(super) struct SimdRotateSample {
+    pub(super) valid: bool,
+    pub(super) x0: usize,
+    pub(super) x1: usize,
+    pub(super) y0: usize,
+    pub(super) y1: usize,
+    pub(super) fx: f64,
+    pub(super) fy: f64,
+}
 
 /// Return the native byte layout accepted by rotation. Indexed images remain
 /// raw sample planes during Pillow rotation: `1`/`P` are one-byte nearest
