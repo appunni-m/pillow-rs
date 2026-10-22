@@ -12,7 +12,9 @@ use super::{
     transpose_native_collect, transpose_native_collect_admitted, transpose_native_odd_collect,
     transpose_native_odd_collect_admitted,
 };
-use crate::pipeline::TransposeMethod;
+use crate::error::PilError;
+use crate::pipeline::{PipelineOp, TransposeMethod};
+use crate::raster::DynamicImage;
 
 #[inline]
 #[cfg(target_arch = "x86_64")]
@@ -349,4 +351,24 @@ pub(super) fn native_transpose_bytes(
         scalar_tail,
         "native-copy",
     ))
+}
+
+/// Execute Pillow's native transpose family adapter and record its selected kernel path.
+pub(crate) fn simd_transpose(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Transpose { method } = op else {
+        return Err(PilError::ValueError("expected Transpose op".into()));
+    };
+    if let Some((result, vector_blocks, scalar_tail, kernel_path)) =
+        super::native_transpose(img, mode, method.clone())
+    {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        crate::compute::record_pipeline_operation_path(kernel_path);
+        return Ok(result);
+    }
+    Err(super::simd_unsupported("Transpose"))
 }

@@ -72,6 +72,7 @@ pub(crate) use self::thumbnail::{
 };
 pub(crate) use self::transform::simd_transform;
 use self::transpose::native_transpose_bytes;
+pub(crate) use self::transpose::simd_transpose;
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::draw::{
     arc_clip_state, chord_clip_state, chord_line_clip_state, for_each_clipped_ellipse_span,
@@ -22700,28 +22701,7 @@ pub fn simd_subtract(
     Err(simd_unsupported("Subtract"))
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// Section F: Ops that change dimensions (return new pixel buffer)
-// ═══════════════════════════════════════════════════════════════════════
-
-pub fn simd_transpose(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let PipelineOp::Transpose { method } = op else {
-        return Err(PilError::ValueError("expected Transpose op".into()));
-    };
-    if let Some((result, vector_blocks, scalar_tail, kernel_path)) =
-        native_transpose(img, mode, method.clone())
-    {
-        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-        crate::compute::record_pipeline_operation_path(kernel_path);
-        return Ok(result);
-    }
-    Err(simd_unsupported("Transpose"))
-}
+// Transpose dispatch is implemented in `adapters/transpose.rs`.
 
 // ═══════════════════════════════════════════════════════════════════════
 // Section G: New-buffer ops with PipelineOp dispatch
