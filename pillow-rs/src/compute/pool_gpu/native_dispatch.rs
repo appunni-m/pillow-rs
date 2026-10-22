@@ -552,3 +552,27 @@ pub(super) fn packed_rgb_transpose_tiled_dispatch(
     let groups_y = height.div_ceil(16);
     (groups_x <= max_workgroups && groups_y <= max_workgroups).then_some((groups_x, groups_y))
 }
+
+pub(super) fn compact_luma8_transfer_bytes(width: u32, height: u32) -> Result<u64, PilError> {
+    let pixel_count = CheckedDims::new(width, height, 1)?.total_pixels();
+    let transfer_bytes = pixel_count
+        .div_ceil(std::mem::size_of::<u32>())
+        .checked_mul(std::mem::size_of::<u32>())
+        .ok_or_else(|| PilError::ValueError("GPU luma readback is too large".into()))?;
+    u64::try_from(transfer_bytes)
+        .map_err(|_| PilError::ValueError("GPU luma readback is too large".into()))
+}
+
+pub(super) fn compact_native_channel_transfer_bytes(
+    width: u32,
+    height: u32,
+    channels: u8,
+) -> Result<u64, PilError> {
+    let native_bytes = CheckedDims::new(width, height, channels)?.total_bytes();
+    let transfer_bytes = native_bytes
+        .div_ceil(std::mem::size_of::<u32>())
+        .checked_mul(std::mem::size_of::<u32>())
+        .ok_or_else(|| PilError::ValueError("GPU native channel transfer is too large".into()))?;
+    u64::try_from(transfer_bytes)
+        .map_err(|_| PilError::ValueError("GPU native channel transfer is too large".into()))
+}

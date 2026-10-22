@@ -42,6 +42,11 @@ use resource_pool::*;
 mod pipeline_cache;
 use pipeline_cache::*;
 mod readback;
+#[cfg(test)]
+use readback::{
+    GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, la_from_rgba_transport,
+    readback_poll_backoff, rgb_from_packed_readback, unpack_native_cover_packed_rows,
+};
 mod resize;
 use resize::*;
 mod geometry;
@@ -175,18 +180,6 @@ const MAX_GPU_SCALE_FIXED_POINT: f64 = u32::MAX as f64;
 // subset. Other valid public parameters are routed to CPU until the shader
 // carries the full f64 contract without rounding differences.
 
-/// `Maintain::Wait` can wait forever when a native device or driver wedges.
-/// Poll with a short bounded backoff so the library remains responsive while
-/// retaining a finite failure path for a wedged native device or driver.
-const GPU_READBACK_TIMEOUT: Duration = Duration::from_secs(30);
-/// Even large transfers can finish before the native scheduler's 1 ms timer
-/// granularity. Give every read a bounded initial polling window; long jobs
-/// return to the conservative backoff after a fixed retry count. Sixty-four
-/// retries avoid ending this window just before a short compute frame
-/// completes and paying a whole additional millisecond of scheduler delay.
-const GPU_POLL_FAST_BACKOFF: Duration = Duration::from_micros(50);
-const GPU_POLL_FAST_RETRIES: usize = 64;
-const GPU_POLL_BACKOFF: Duration = Duration::from_millis(1);
 /// Pillow's `ImagingLineBoxBlur{8,32}` in `src/libImaging/BoxBlur.c` uses a
 /// normalized replicated-edge average, so a constant image remains constant
 /// through every box pass (and therefore Pillow's three-pass Gaussian
@@ -194,23 +187,6 @@ const GPU_POLL_BACKOFF: Duration = Duration::from_millis(1);
 /// replaces, so keep this exact lowering bounded to the benchmark-sized
 /// working set where the launch savings are measurable.
 const GPU_UNIFORM_BLUR_MAX_PIXELS: usize = 1024 * 1024;
-
-fn readback_poll_backoff(
-    fast_polling: bool,
-    empty_polls: usize,
-    now: Instant,
-    deadline: Instant,
-) -> Option<Duration> {
-    let remaining = deadline.saturating_duration_since(now);
-    (!remaining.is_zero()).then(|| {
-        let backoff = if fast_polling && empty_polls <= GPU_POLL_FAST_RETRIES {
-            GPU_POLL_FAST_BACKOFF
-        } else {
-            GPU_POLL_BACKOFF
-        };
-        backoff.min(remaining)
-    })
-}
 
 fn gpu_uniform_blur_can_copy(ops: &[PipelineOp], image: &DynamicImage) -> bool {
     if ops.len() != 1
@@ -263,152 +239,10 @@ fn gpu_working_set_bytes(capacity: u32) -> u64 {
         .saturating_add(GPU_HISTOGRAM_BYTES as u64)
 }
 
-fn compact_luma8_transfer_bytes(width: u32, height: u32) -> Result<u64, PilError> {
-    let pixel_count = CheckedDims::new(width, height, 1)?.total_pixels();
-    let transfer_bytes = pixel_count
-        .div_ceil(std::mem::size_of::<u32>())
-        .checked_mul(std::mem::size_of::<u32>())
-        .ok_or_else(|| PilError::ValueError("GPU luma readback is too large".into()))?;
-    u64::try_from(transfer_bytes)
-        .map_err(|_| PilError::ValueError("GPU luma readback is too large".into()))
-}
-
-fn compact_native_channel_transfer_bytes(
-    width: u32,
-    height: u32,
-    channels: u8,
-) -> Result<u64, PilError> {
-    let native_bytes = CheckedDims::new(width, height, channels)?.total_bytes();
-    let transfer_bytes = native_bytes
-        .div_ceil(std::mem::size_of::<u32>())
-        .checked_mul(std::mem::size_of::<u32>())
-        .ok_or_else(|| PilError::ValueError("GPU native channel transfer is too large".into()))?;
-    u64::try_from(transfer_bytes)
-        .map_err(|_| PilError::ValueError("GPU native channel transfer is too large".into()))
-}
-
-fn unpack_native_cover_packed_rows(
-    width: u32,
-    height: u32,
-    channels: u8,
-    dispatch: NativeCoverPackedOutputDispatch,
-    packed: &[u8],
-) -> Result<Vec<u8>, PilError> {
-    let pixel_count = CheckedDims::new(width, height, channels)?.total_bytes();
-    let row_words = usize::try_from(dispatch.words_per_row)
-        .map_err(|_| PilError::ValueError("GPU Cover output row is too large".into()))?;
-    let row_bytes = row_words
-        .checked_mul(std::mem::size_of::<u32>())
-        .ok_or_else(|| PilError::ValueError("GPU Cover output row is too large".into()))?;
-    let expected_words = row_words
-        .checked_mul(
-            usize::try_from(height)
-                .map_err(|_| PilError::ValueError("GPU Cover output height is too large".into()))?,
-        )
-        .ok_or_else(|| PilError::ValueError("GPU Cover output is too large".into()))?;
-    let expected_transfer = expected_words
-        .checked_mul(std::mem::size_of::<u32>())
-        .ok_or_else(|| PilError::ValueError("GPU Cover output is too large".into()))?;
-    let native_row_bytes = usize::try_from(width)
-        .ok()
-        .and_then(|width| width.checked_mul(usize::from(channels)))
-        .ok_or_else(|| PilError::ValueError("GPU Cover output row is too large".into()))?;
-    if dispatch.channels != channels
-        || expected_words != dispatch.word_count as usize
-        || expected_transfer as u64 != dispatch.transfer_bytes
-        || packed.len() != expected_transfer
-        || row_bytes < native_row_bytes
-    {
-        return Err(PilError::InternalError(
-            "GPU packed Cover readback does not match its row layout".into(),
-        ));
-    }
-    let mut samples = Vec::with_capacity(pixel_count);
-    for row in 0..height as usize {
-        let row_start = row
-            .checked_mul(row_bytes)
-            .ok_or_else(|| PilError::ValueError("GPU Cover output offset overflow".into()))?;
-        let row_end = row_start
-            .checked_add(native_row_bytes)
-            .ok_or_else(|| PilError::ValueError("GPU Cover output offset overflow".into()))?;
-        let row_pixels = packed.get(row_start..row_end).ok_or_else(|| {
-            PilError::InternalError("GPU packed Cover readback ended mid-row".into())
-        })?;
-        samples.extend_from_slice(row_pixels);
-    }
-    Ok(samples)
-}
-
 fn gpu_buffer_reuse_allowed(capacity: u32, minimum_capacity: u32) -> bool {
     capacity >= minimum_capacity
         && (minimum_capacity == 0
             || capacity <= minimum_capacity.saturating_mul(MAX_GPU_BUFFER_REUSE_RATIO))
-}
-
-/// Extract native RGB bytes directly from the mapped packed-word transport.
-/// Alpha is discarded exactly as RGBA-to-RGB mode preservation does; no
-/// channel arithmetic or logical color conversion belongs at this boundary.
-fn rgb_from_packed_readback(w: u32, h: u32, packed: &[u8]) -> Result<DynamicImage, PilError> {
-    let packed_dims = CheckedDims::new(w, h, 4)?;
-    if packed.len() != packed_dims.total_bytes() {
-        return Err(PilError::ValueError(format!(
-            "GPU readback byte length {} does not match image size {}",
-            packed.len(),
-            packed_dims.total_bytes()
-        )));
-    }
-    let rgb_dims = CheckedDims::new(w, h, 3)?;
-    let mut rgb = rgb_dims.alloc_buffer();
-    let unpack_row = |row: &mut [u8], y: usize| {
-        let start = y * packed_dims.row_stride();
-        let source = &packed[start..start + packed_dims.row_stride()];
-        for (source, destination) in source.chunks_exact(4).zip(row.chunks_exact_mut(3)) {
-            #[cfg(target_endian = "little")]
-            destination.copy_from_slice(&source[..3]);
-            #[cfg(target_endian = "big")]
-            {
-                // Match readback_to_image's native-word decoding before
-                // removing alpha on hosts whose byte order differs.
-                let pixel = u32::from_ne_bytes([source[0], source[1], source[2], source[3]]);
-                destination.copy_from_slice(&[
-                    (pixel & 0xff) as u8,
-                    ((pixel >> 8) & 0xff) as u8,
-                    ((pixel >> 16) & 0xff) as u8,
-                ]);
-            }
-        }
-    };
-    // Keep GPU result materialization independent of the Parallel CPU
-    // feature; the GPU path must not schedule host Rayon work.
-    for (y, row) in rgb.chunks_exact_mut(rgb_dims.row_stride()).enumerate() {
-        unpack_row(row, y);
-    }
-    crate::raster::RgbImage::from_raw(w, h, rgb)
-        .map(DynamicImage::ImageRgb8)
-        .ok_or_else(|| PilError::InternalError("GPU RGB readback shape mismatch".into()))
-}
-
-/// Narrow packed RGBA transport to LA without first constructing an RGBA
-/// image. Native-LA Sharpness emits its filtered luma in R/G/B and preserves
-/// alpha in A, matching the generic transport's mode-preserving boundary.
-#[cfg(target_endian = "little")]
-fn la_from_rgba_transport(w: u32, h: u32, packed: &[u8]) -> Result<DynamicImage, PilError> {
-    let packed_dims = CheckedDims::new(w, h, 4)?;
-    if packed.len() != packed_dims.total_bytes() {
-        return Err(PilError::ValueError(format!(
-            "GPU readback byte length {} does not match image size {}",
-            packed.len(),
-            packed_dims.total_bytes()
-        )));
-    }
-    let la_dims = CheckedDims::new(w, h, 2)?;
-    let mut la = la_dims.alloc_buffer();
-    for (source, destination) in packed.chunks_exact(4).zip(la.chunks_exact_mut(2)) {
-        destination.copy_from_slice(&[source[0], source[3]]);
-    }
-    crate::raster::GrayAlphaImage::from_raw(w, h, la)
-        .map(DynamicImage::ImageLumaA8)
-        .ok_or_else(|| PilError::InternalError("GPU LA readback shape mismatch".into()))
 }
 
 fn align_up(value: usize, alignment: usize) -> usize {
