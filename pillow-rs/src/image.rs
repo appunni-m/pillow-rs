@@ -2800,63 +2800,6 @@ impl Image {
         Ok(Some(result))
     }
 
-    /// Converts the image to X11 bitmap (`XBM`) source bytes.
-    ///
-    /// Mode `"1"` treats any non-zero pixel as white. Other modes are rejected,
-    /// matching Pillow's `not a bitmap` contract.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PilError`] when mode detection or materialization fails.
-    pub fn tobitmap(&self) -> Result<Vec<u8>, PilError> {
-        let mode = self.mode()?;
-        if mode != "1" {
-            return Err(PilError::ValueError("not a bitmap".to_owned()));
-        }
-        let img = self.materialized_shared()?;
-        let gray = img.to_luma8();
-        let (w, h) = (gray.width(), gray.height());
-        let row_bytes = w.div_ceil(8) as usize;
-        let mut bits = vec![0u8; row_bytes * h as usize];
-        for y in 0..h {
-            for x in 0..w {
-                let v = gray.get_pixel(x, y)[0];
-                // The mode check above makes this an `Image` mode "1" path:
-                // Pillow stores any non-zero source value as a set bit.
-                let is_white = v != 0;
-                if is_white {
-                    // PIL XBM: 1 = white, 0 = black; LSB = leftmost pixel
-                    let byte_idx = (x / 8) as usize;
-                    let bit_idx = x % 8;
-                    bits[(y as usize) * row_bytes + byte_idx] |= 1u8 << bit_idx;
-                }
-            }
-        }
-        // PIL tobitmap format: XBM C source, 15 hex values per line
-        let mut xbm = String::new();
-        xbm.push_str(&format!("#define image_width {}\n", w));
-        xbm.push_str(&format!("#define image_height {}\n", h));
-        xbm.push_str("static char image_bits[] = {\n");
-        let hexes: Vec<String> = bits.iter().map(|b| format!("0x{:02x}", b)).collect();
-        let total = hexes.len();
-        for (i, chunk) in hexes.chunks(15).enumerate() {
-            let start = i * 15;
-            let end = (start + chunk.len()).min(total);
-            let is_last = end >= total;
-            if is_last {
-                // Last line: no trailing comma
-                xbm.push_str(&chunk.join(","));
-            } else {
-                // Full line: trailing comma
-                xbm.push_str(&chunk.join(","));
-                xbm.push(',');
-            }
-            xbm.push('\n');
-        }
-        xbm.push_str("};");
-        Ok(xbm.into_bytes())
-    }
-
     /// Seeks to a frame in a multi-frame image.
     ///
     /// Multi-frame decoding is not implemented in core yet, so only frame `0`
