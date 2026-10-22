@@ -2,9 +2,11 @@
 
 use std::sync::Arc;
 
+use crate::error::PilError;
 use crate::pipeline::PipelineOp;
+use crate::raster::DynamicImage;
 
-use super::{Image, PipelineOps, materialization_cache};
+use super::{Image, PipelineOps, image_mode_name, materialization_cache};
 
 impl Image {
     /// Locks this image pipeline to one compute backend.
@@ -94,5 +96,68 @@ impl Image {
             Image::Pipeline { backend, .. } => *backend,
             _ => None,
         }
+    }
+}
+
+impl Image {
+    /// Try applying ImageOps.grayscale immediately for the bounded native-RGB
+    /// CPU/SIMD path. Other inputs keep the ordinary lazy pipeline semantics.
+    pub(crate) fn try_grayscale_eager_rgb(&self) -> Result<Option<Image>, PilError> {
+        if cfg!(feature = "parallel") {
+            return Ok(None);
+        }
+        let Image::Loaded(data) = self else {
+            return Ok(None);
+        };
+        let logical_mode = data
+            .explicit_mode
+            .as_deref()
+            .unwrap_or_else(|| image_mode_name(data.decoded_mode));
+        if logical_mode != "RGB" {
+            return Ok(None);
+        }
+
+        let image = self.materialized_shared()?;
+        if !matches!(image.as_ref(), DynamicImage::ImageRgb8(_)) {
+            return Ok(None);
+        }
+        let dims =
+            crate::checked_dims::CheckedDims::new_allow_empty(image.width(), image.height(), 3)?;
+        let pixels = dims.total_pixels();
+        if pixels == 0 || pixels > 256 || image.as_bytes().len() != dims.total_bytes() {
+            return Ok(None);
+        }
+
+        let Some((backend, _)) = crate::compute::preferred_active_backend()? else {
+            return Ok(None);
+        };
+        let operation = PipelineOp::Grayscale;
+        let grayscale = match backend {
+            crate::compute::Backend::Cpu => crate::compute::execute_eager_cpu_image_operation(
+                "Grayscale",
+                image.as_ref(),
+                false,
+                || crate::compute::registry::execute_cpu(&operation, image.as_ref(), Some("RGB")),
+            )?,
+            crate::compute::Backend::Simd => crate::compute::execute_eager_simd_image_operation(
+                "Grayscale",
+                image.as_ref(),
+                || {
+                    crate::compute::simd_grayscale_with_evidence(
+                        image.as_ref(),
+                        &operation,
+                        Some("RGB"),
+                    )
+                },
+            )?,
+            crate::compute::Backend::Gpu => return Ok(None),
+        };
+
+        let mut result = Image::from_dynamic(grayscale, None);
+        if let Image::Loaded(data) = &mut result {
+            data.info = self.image_info();
+            data.exif = self.exif_metadata();
+        }
+        Ok(Some(result))
     }
 }
