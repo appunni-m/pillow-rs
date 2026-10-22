@@ -224,6 +224,147 @@ impl GpuInner {
     }
 
     #[cfg(target_endian = "little")]
+    pub(in crate::compute::pool_gpu) fn try_execute_native_flip(
+        &self,
+        ops: &[PipelineOp],
+        image: &DynamicImage,
+        mode: Option<&str>,
+        limits: &wgpu::Limits,
+        capacity: u32,
+    ) -> Result<NativeFlipDispatchOutcome, PilError> {
+        let Some(format) = gpu_native_flip_format(ops, image, mode) else {
+            return Ok(NativeFlipDispatchOutcome::NotApplicable);
+        };
+        match format {
+            NativeFlipFormat::Mode1
+            | NativeFlipFormat::L
+            | NativeFlipFormat::Palette
+            | NativeFlipFormat::LA
+            | NativeFlipFormat::PA => self.execute_native_byte_flip_format(image, format, limits),
+            NativeFlipFormat::RGB => self.execute_native_rgb_flip(image, limits),
+            NativeFlipFormat::RGBA => self.execute_native_rgba_flip(image, limits, capacity),
+        }
+    }
+
+    #[cfg(target_endian = "little")]
+    fn execute_native_byte_flip_format(
+        &self,
+        image: &DynamicImage,
+        format: NativeFlipFormat,
+        limits: &wgpu::Limits,
+    ) -> Result<NativeFlipDispatchOutcome, PilError> {
+        let (channels, limit_reason) = match format {
+            NativeFlipFormat::Mode1 => (1, "native byte Flip exceeds adapter or shader limits"),
+            NativeFlipFormat::L => (1, "native L Flip exceeds adapter or shader limits"),
+            NativeFlipFormat::Palette => (
+                1,
+                "native palette-index Flip exceeds adapter or shader limits",
+            ),
+            NativeFlipFormat::LA => (2, "native LA Flip exceeds adapter or shader limits"),
+            NativeFlipFormat::PA => (2, "native PA Flip exceeds adapter or shader limits"),
+            NativeFlipFormat::RGB | NativeFlipFormat::RGBA => {
+                return Err(PilError::InternalError(
+                    "native byte Flip received a multiword layout".into(),
+                ));
+            }
+        };
+        let Some(dispatch) = plan_native_byte_flip_dispatch(
+            image.width(),
+            image.height(),
+            channels,
+            limits.max_compute_workgroups_per_dimension,
+            limits.max_storage_buffer_binding_size,
+            limits.max_buffer_size,
+            GPU_BUFFER_CAPACITY,
+        ) else {
+            return Ok(NativeFlipDispatchOutcome::ExceedsLimits(limit_reason));
+        };
+        let mut buffers = self.acquire_buffers(dispatch.word_count)?;
+        let result = self.execute_native_byte_flip(image, format, dispatch, &mut buffers)?;
+        self.recycle_buffers(buffers);
+        Ok(NativeFlipDispatchOutcome::Executed(result))
+    }
+
+    #[cfg(target_endian = "little")]
+    fn execute_native_rgb_flip(
+        &self,
+        image: &DynamicImage,
+        limits: &wgpu::Limits,
+    ) -> Result<NativeFlipDispatchOutcome, PilError> {
+        let DynamicImage::ImageRgb8(rgb) = image else {
+            return Err(PilError::InternalError(
+                "native RGB Flip admission did not match RGB storage".into(),
+            ));
+        };
+        let Some(layout) = packed_rgb_transpose_layout(
+            rgb.width(),
+            rgb.height(),
+            limits.max_compute_workgroups_per_dimension,
+        ) else {
+            return Ok(NativeFlipDispatchOutcome::ExceedsLimits(
+                "native RGB Flip exceeds adapter or shader limits",
+            ));
+        };
+        let words = u32::try_from(layout.transfer_bytes / 4)
+            .map_err(|_| PilError::ValueError("GPU packed RGB Flip is too large".into()))?;
+        let mut buffers = self.acquire_buffers(words)?;
+        let geometry_as_transpose = PipelineOp::Transpose {
+            method: TransposeMethod::FlipTopBottom,
+        };
+        let result =
+            self.execute_packed_rgb_transpose(&geometry_as_transpose, rgb, &layout, &mut buffers)?;
+        self.recycle_buffers(buffers);
+        Ok(NativeFlipDispatchOutcome::Executed(result))
+    }
+
+    #[cfg(target_endian = "little")]
+    fn execute_native_rgba_flip(
+        &self,
+        image: &DynamicImage,
+        limits: &wgpu::Limits,
+        capacity: u32,
+    ) -> Result<NativeFlipDispatchOutcome, PilError> {
+        let DynamicImage::ImageRgba8(rgba) = image else {
+            return Err(PilError::InternalError(
+                "native RGBA Flip admission did not match RGBA storage".into(),
+            ));
+        };
+        let dimensions = CheckedDims::new(image.width(), image.height(), 4)?;
+        let transfer_bytes = u64::try_from(dimensions.total_bytes())
+            .map_err(|_| PilError::ValueError("GPU native RGBA Flip is too large".into()))?;
+        let workgroup_count = u64::try_from(capacity)
+            .ok()
+            .and_then(|words| words.checked_mul(4))
+            .ok_or_else(|| PilError::ValueError("GPU native RGBA Flip is too large".into()))?;
+        let groups_x = image.width().div_ceil(16);
+        let groups_y = image.height().div_ceil(16);
+        if transfer_bytes > u64::from(limits.max_storage_buffer_binding_size)
+            || transfer_bytes > limits.max_buffer_size
+            || transfer_bytes > workgroup_count
+            || groups_x > limits.max_compute_workgroups_per_dimension
+            || groups_y > limits.max_compute_workgroups_per_dimension
+        {
+            return Ok(NativeFlipDispatchOutcome::ExceedsLimits(
+                "native RGBA Flip exceeds adapter or shader limits",
+            ));
+        }
+        let capacity_words = u32::try_from(capacity)
+            .map_err(|_| PilError::ValueError("GPU native RGBA Flip is too large".into()))?;
+        let mut buffers = self.acquire_buffers(capacity_words)?;
+        let geometry_as_transpose = PipelineOp::Transpose {
+            method: TransposeMethod::FlipTopBottom,
+        };
+        let result = self.execute_rgba_transpose_with_upload(
+            &geometry_as_transpose,
+            rgba,
+            &mut buffers,
+            self.direct_primary_readback,
+        )?;
+        self.recycle_buffers(buffers);
+        Ok(NativeFlipDispatchOutcome::Executed(result))
+    }
+
+    #[cfg(target_endian = "little")]
     fn execute_native_transpose_with_upload(
         &self,
         op: &PipelineOp,

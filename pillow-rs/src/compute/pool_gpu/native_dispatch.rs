@@ -48,6 +48,13 @@ pub(super) enum NativeFlipFormat {
 }
 
 #[cfg(target_endian = "little")]
+pub(super) enum NativeFlipDispatchOutcome {
+    NotApplicable,
+    ExceedsLimits(&'static str),
+    Executed(DynamicImage),
+}
+
+#[cfg(target_endian = "little")]
 impl NativeFlipFormat {
     pub(super) fn channels(self) -> u8 {
         match self {
