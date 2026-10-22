@@ -32268,3 +32268,65 @@ baseline `migration-benchmark-2903a60909764f17ba8141ac8c45d9b0`, post
 reports passed schema validation. Compressed reports, raw samples, attestations,
 and producer receipts are preserved in
 `docs/evidence/geometry/offset-simd-family-layout-arm64-20261022/`.
+
+## SIMD Thumbnail family layout — ARM64 — 2026-10-22
+
+The SIMD Thumbnail adapter moved from
+`pool_simd/ops/adapters/native_thumbnail.rs` to the family-named
+`pool_simd/ops/adapters/thumbnail.rs`. Its F32 and I32 reducers moved under
+`thumbnail/kernels/`, and the RGB PutPixel→Thumbnail fused path now has its own
+`thumbnail/kernels/fusion.rs` module. The algorithm bodies, mode admission,
+registry binding, and public execution routes were preserved.
+
+The frozen parity selection ran before and after on CPU, strict SIMD, and GPU
+requested. CPU covered 23 cases: modes `1`, `L`, `LA`, `P`, and `RGBA`;
+`rgb-reducing-downscale`, `rgba-alpha-downscale`, `l-reducing-downscale`,
+`p-forces-nearest`, `rgb-nearest-simd-path`, `i-specialized-path`,
+`f-mode-specialized-path`, the F/I reducing-gap odd tails, the large RGB/F/I
+cases, resample and reducing-gap parameters, larger-than-image and zero-size
+edges, and both legacy parameter combinations. Strict SIMD and GPU-requested
+each covered `performance-large-rgb-1024x768`,
+`performance-large-f-1024x768`, `performance-large-i-1024x768`,
+`reducing-gap-odd-tail-f-17x13`, and
+`reducing-gap-odd-tail-i-17x13`. All six reports passed every selected case
+with zero failures or infrastructure errors.
+
+Five benchmark workloads ran with Pillow, CPU, and SIMD subjects:
+`pipeline-op.thumbnail.benchmark-materialized`,
+`pipeline-op.thumbnail.matrix-32x24`,
+`pipeline-op.thumbnail.material-rgb-1024x768`,
+`pipeline-op.thumbnail.native-f32-1024x768`, and
+`pipeline-op.thumbnail.native-i32-1024x768`. The small 16×16 and 32×24 cases
+used one warmup, three timed iterations, two samples, and whole-workflow
+materialization. Large RGB used five warmups, 20 iterations, five samples, and
+a parity gate. F and I used the public `thumbnail` call plus receiver
+observation (`tobytes`) with five warmups, 20 iterations, and five samples.
+Median target latency is in milliseconds:
+
+| Workload | CPU before → after | SIMD before → after | SIMD receipt after |
+| --- | ---: | ---: | --- |
+| Materialized 16×16 | 0.022687 → 0.019375 | 0.023646 → 0.024354 | Vector, 10 blocks |
+| 32×24 | 0.018479 → 0.018000 | 0.021146 → 0.020021 | Vector, 10 blocks |
+| RGB 1024×768 with PutPixel | 0.243458 → 0.228687 | 0.425812 → 0.397792 | 96 vector blocks; fused count 2 |
+| F 1024×768 | 0.337395 → 0.339187 | 0.476916 → 0.429605 | Vector, 43,008 blocks |
+| I 1024×768 | 0.447396 → 0.439083 | 0.647646 → 0.616313 | Vector, 18,432 blocks |
+
+The 16×16 SIMD median increased by 0.000708 ms across six timed executions;
+the 32×24 and large SIMD medians decreased. The small-workload difference is
+within a low-sample timing range and does not establish a regression. All SIMD
+receipts remained vector-backed with no fallback, and the RGB PutPixel prefix
+retained its fused count of two. The GPU-requested parity lane passed; no GPU
+latency was measured for this SIMD-only move.
+
+Parity run IDs, before then after: CPU
+`migration-parity-1599eeb7b5604b23875481d425b156e9` →
+`migration-parity-eded7fe25af74728a0b3ab338dd479ca`; strict SIMD
+`migration-parity-9d07dacdce1743a3ae36c27d95d79bbe` →
+`migration-parity-d480d2bc5ea0469781f7ff40bfd57c68`; GPU requested
+`migration-parity-44416dd652b64ae5a8865f33c908f2af` →
+`migration-parity-56e84382f18548b7b673a5af378d7447`. Benchmark run IDs:
+`migration-benchmark-b46169ce196e4d178d99b7a33073b581` before and
+`migration-benchmark-a0191853343945029aba9c069f409567` after. Parity and
+benchmark reports passed schema validation. Complete JSON reports, samples,
+attestations, and producer receipts are preserved under
+`docs/evidence/geometry/thumbnail-simd-family-layout-arm64-20261022/`.

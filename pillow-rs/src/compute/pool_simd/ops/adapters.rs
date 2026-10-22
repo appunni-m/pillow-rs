@@ -29,12 +29,12 @@ mod gaussian_rgba_uniform;
 mod grayscale;
 mod median_filter;
 mod merge;
-mod native_thumbnail;
 mod offset;
 mod projection;
 mod put_pixel;
 mod resize;
 mod rotate;
+mod thumbnail;
 mod transpose;
 pub(crate) use self::effects::{simd_effect_noise, simd_effect_spread};
 pub(crate) use self::extract_band::{simd_extract_band, simd_extract_band_into};
@@ -45,10 +45,6 @@ use self::merge::native_merge_interleave;
 pub(crate) use self::merge::simd_merge;
 #[cfg(test)]
 use self::merge::{native_merge_bytes, native_merge_rgb_luma_owners};
-pub(crate) use self::native_thumbnail::{
-    simd_rgb_putpixel_thumbnail_fusion_supported, simd_rgb_putpixel_thumbnail_prepare,
-    simd_rgb_putpixel_thumbnail_resize, simd_thumbnail,
-};
 pub(crate) use self::offset::simd_offset;
 pub(crate) use self::projection::{
     simd_cmyk_projection, simd_cmyk_projection_from_positive_writes, simd_rgb_projection,
@@ -61,6 +57,10 @@ use self::resize::{
     simd_resize_convolution, simd_resize_convolution_boxed, simd_resize_convolution_into,
     simd_resize_convolution_with_zero_row_elision, simd_resize_i32, simd_resize_impl,
     simd_resize_nearest, simd_resize_nearest_boxed,
+};
+pub(crate) use self::thumbnail::{
+    simd_rgb_putpixel_thumbnail_fusion_supported, simd_rgb_putpixel_thumbnail_prepare,
+    simd_rgb_putpixel_thumbnail_resize, simd_thumbnail,
 };
 use self::transpose::native_transpose_bytes;
 use crate::checked_dims::CheckedDims;
@@ -6297,7 +6297,7 @@ pub(crate) fn simd_supports_for_image(
                 .is_some_and(|(w, h)| native_resize_supported_for_image(img, w, h, *filter, mode))
         }
         PipelineOp::Thumbnail { w, h, filter } => {
-            native_thumbnail::native_thumbnail_supported_for_image(img, *w, *h, *filter, mode)
+            thumbnail::native_thumbnail_supported_for_image(img, *w, *h, *filter, mode)
         }
         PipelineOp::Contain { w, h, filter } => {
             native_contain_supported_for_image(img, *w, *h, *filter, mode)
@@ -7527,7 +7527,7 @@ fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdIma
         }
         PipelineOp::Thumbnail { w, h, .. } => {
             let (output_width, output_height) =
-                native_thumbnail::native_thumbnail_dimensions(shape.width, shape.height, *w, *h)?;
+                thumbnail::native_thumbnail_dimensions(shape.width, shape.height, *w, *h)?;
             next.width = output_width;
             next.height = output_height;
         }
@@ -7796,7 +7796,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 .is_some_and(|(w, h)| native_resize_supported_for_shape(shape, w, h, *filter, mode))
         }
         PipelineOp::Thumbnail { w, h, filter } => {
-            native_thumbnail::native_thumbnail_supported_for_shape(shape, *w, *h, *filter, mode)
+            thumbnail::native_thumbnail_supported_for_shape(shape, *w, *h, *filter, mode)
         }
         PipelineOp::Contain { w, h, filter } => {
             native_contain_supported_for_shape(shape, *w, *h, *filter, mode)

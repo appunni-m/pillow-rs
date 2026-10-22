@@ -121,23 +121,27 @@ and Rust module reachability are both reported as unproven.
 These counts belong to this dirty source snapshot. Regenerate the ignored report
 before relying on them for a later revision.
 
-## Current family/layout review — 2026-10-20
+## Current family/layout review — 2026-10-22
 
-The current crosswalk emits seven `rust_source_family_layout_review` findings.
-These are path-role signals from the shared structure classifier, not dead-code
-findings. I traced their declarations and callers in the current Rust tree:
+The 2026-10-20 crosswalk emitted seven `rust_source_family_layout_review`
+findings. After the completed family moves, the current crosswalk reports three:
+the CPU allocation test module and two Convert children. These are path-role
+signals from the shared structure classifier, not dead-code findings. The
+table also records the moved Thumbnail and Resize routes so their ownership
+stays traceable:
 
 | Path | Reachability evidence | Classification and disposition |
 | --- | --- | --- |
 | `pillow-rs/src/compute/pool_simd/ops/adapters/cmyk_packing_tests.rs` | Included only under `#[cfg(all(test, target_arch = "x86_64"))]` by `adapters.rs:19-20`. It checks the CMYK conversion helper used by `adapters/convert.rs:52` and the SSSE3 packer. | Test-only x86 guard, not a production path. Keep the coverage; review whether it can live under the Convert family's test tree without obscuring private helper ownership (`rxcj`). |
 | `pillow-rs/src/compute/pool_cpu/ops/color_convert_allocation_tests.rs` | Declared through `#[cfg(test)]` and `#[path]` by `pool_cpu/ops/color.rs:190-192`; its tests exercise native LA conversion allocations and alpha semantics. | Test-only CPU conversion contract, not a production path. Keep the assertions; move the module beside a family only when conversion ownership is split. |
-| `pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail.rs` | Declared/re-exported by `adapters.rs:30,45-48`; the registry binds Thumbnail to `adapters::simd_thumbnail` at `compute/registry.rs:2939`. The SIMD pipeline also calls its PutPixel→Thumbnail fusion helpers at `pool_simd/mod.rs:265-290`. | Live family adapter and fusion path. Keep both routes; review the family name and split orchestration from mode kernels under `rxcj`. |
-| `pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail/float.rs` | Declared by `native_thumbnail.rs:17`; its F-mode reduction is selected by the registered `simd_thumbnail` route at `native_thumbnail.rs:431`. | Live F-mode kernel on the SIMD Thumbnail path. Keep it; place it under the family's explicit kernels/responsibility layer in a measured structural move. |
-| `pillow-rs/src/compute/pool_simd/ops/adapters/native_thumbnail/integer.rs` | Declared by `native_thumbnail.rs:18`; I-mode reduction and resampling are selected at `native_thumbnail.rs:420,433`. | Live I-mode kernel on the SIMD Thumbnail path. Keep it; place it under the family's explicit kernels/responsibility layer in a measured structural move. |
-| `pillow-rs/src/compute/pool_simd/ops/adapters/resize_i32.rs` | Declared and imported by `adapters.rs:32,52`; the registered Resize adapter selects it for mode I at `adapters.rs:27780`, and Thumbnail reuses it at `native_thumbnail.rs:508-521`. | Live mode-specific Resize implementation shared with Thumbnail. Keep it; align the I mode with the Resize family under `rxcj`, preserving both direct routes. |
+| `pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail.rs` | Declared/re-exported by `adapters.rs:32,48-51`; the registry binds Thumbnail to `adapters::simd_thumbnail` at `compute/registry.rs:2939`. | Live family adapter for standalone Thumbnail dispatch and support checks. Keep its route; the family layout move is recorded under `rxcj`. |
+| `pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/fusion.rs` | Declared by `thumbnail.rs:21-26` and called by `pool_simd/put_pixel_batch.rs:57-82` for eligible RGB PutPixel prefixes followed by Thumbnail. | Live fused RGB execution path. Keep it under the Thumbnail kernel layer and preserve the fused receipt. |
+| `pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/float.rs` | Declared by `thumbnail.rs:17`; its F-mode reducer is selected by `simd_thumbnail` at `thumbnail.rs:283`. | Live F-mode kernel on the SIMD Thumbnail path. Keep it under the family's explicit kernel layer. |
+| `pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/integer.rs` | Declared by `thumbnail.rs:19`; I-mode reduction and resampling are selected by `simd_thumbnail` at `thumbnail.rs:272,285`. | Live I-mode kernel on the SIMD Thumbnail path. Keep it under the family's explicit kernel layer. |
+| `pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/i32.rs` | Declared/re-exported by `resize.rs:3-12`; Thumbnail calls its I-mode resize helpers from `thumbnail.rs:367-380`. | Live mode-specific Resize implementation shared with Thumbnail. Keep it with Resize and preserve both direct routes. |
 | `pillow-rs/src/compute/pool_simd/ops/adapters/resize_i32/neon.rs` | The parent declares it only for `target_arch = "aarch64"` plus `target_feature = "neon"` (`resize_i32.rs:20-21`); the I32 horizontal planner selects its NEON path under that cfg. | Supported architecture-specific implementation, not an x86-host dead path. Keep it; move it with the I-mode Resize family when its exact cfg and SIMD receipt can be preserved. |
 
-This pass traces five production adapters/kernels and identifies two test-only
+This pass traces six production adapters/kernels and identifies two test-only
 modules. The earlier CPU Filter path findings for `rgb_blur_ring.rs` and
 `uniform_box.rs` no longer appear in the current classifier: both now sit under
 the CPU Filter family, and their direct call paths remain live. This does not
@@ -284,7 +288,7 @@ removed or changed as part of this audit.
 ## Open audit work
 
 The four static GPU shader candidates have current loader-path evidence above,
-and the seven current crosswalk family/layout findings have source routes or a
+and the three current crosswalk family/layout findings have source routes or a
 test-only classification in the bounded review above. Their history and any
 separate removal decision remain open. The current snapshot still has 92 Rust
 files without a direct operation-graph edge and three files with graph edges but

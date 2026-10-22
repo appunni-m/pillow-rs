@@ -309,10 +309,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |   `-- kernels.rs
 |   |   |   |   |   |   |-- median_filter.rs
 |   |   |   |   |   |   |-- merge.rs
-|   |   |   |   |   |   |-- native_thumbnail/
-|   |   |   |   |   |   |   |-- float.rs
-|   |   |   |   |   |   |   `-- integer.rs
-|   |   |   |   |   |   |-- native_thumbnail.rs
 |   |   |   |   |   |   |-- offset/
 |   |   |   |   |   |   |   `-- kernels/
 |   |   |   |   |   |   |       |-- byte.rs
@@ -337,6 +333,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |   |   `-- nearest.rs
 |   |   |   |   |   |   |   `-- kernels.rs
 |   |   |   |   |   |   |-- rotate.rs
+|   |   |   |   |   |   |-- thumbnail/
+|   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- float.rs
+|   |   |   |   |   |   |       `-- integer.rs
+|   |   |   |   |   |   |-- thumbnail.rs
 |   |   |   |   |   |   |-- transpose/
 |   |   |   |   |   |   |   |-- kernels/
 |   |   |   |   |   |   |   |   `-- rgba_avx2.rs
