@@ -32141,3 +32141,68 @@ four, 4/4). The direct-nearest runs passed 2/2 each on CPU
 (`migration-parity-a1e2a636db814e7ebff47a24768264f2`), and GPU-requested
 (`migration-parity-c2156499750049d69ba4f4e1c3c1580c`). The build identifies
 revision `3c7d68f4f95a30702659b2813556a4e80bd83a01` with a dirty worktree.
+
+### SIMD Resize boxed native-byte convolution extraction — 2026-10-22
+
+The boxed native-byte convolution kernel moved from
+`pillow-rs/src/compute/pool_simd/ops/adapters.rs` to
+`pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_boxed_convolution.rs`.
+`resize.rs` re-exports the same function to the existing Resize and
+`ImageOps.fit` callers. The kernel body, shared helper implementations, and
+operation routing were unchanged.
+
+The frozen parity selection contained
+`PIL.Image.Image.resize.nuanced.modes-L-normal-2-fractional-box`,
+`PIL.Image.Image.resize.nuanced.modes-LA-normal-2-fractional-box`,
+`PIL.Image.Image.resize.nuanced.modes-RGB-normal-2-fractional-box`,
+`PIL.Image.Image.resize.nuanced.modes-RGBA-normal-2-fractional-box`,
+`PIL.ImageOps.fit.nuanced.simd-bilinear-la`, and
+`PIL.ImageOps.fit.nuanced.simd-bilinear-rgba`. CPU, strict SIMD, and
+GPU-requested parity each passed all six cases before and after the move.
+The report IDs were `migration-parity-20f01abfab624d6c8edf41ce1e728afd`
+(baseline CPU), `migration-parity-3b0a6759ca314d59987c12f303ad1c66`
+(baseline strict SIMD), `migration-parity-c6b484310fd6402490a5b1b1606dc37c`
+(baseline GPU-requested), `migration-parity-3c8363734e244dfc9eef9a73e34b98ba`
+(post CPU), `migration-parity-4307cee99ba24539a6f8dca3019fd181` (post strict
+SIMD), and `migration-parity-4282bde978e44029b962f7d1803991b4` (post
+GPU-requested).
+
+The benchmark selection covered
+`pipeline-op.resizeboxed.benchmark-materialized`,
+`pipeline-op.resizeboxed.matrix-32x24`, and
+`pipeline-op.fit.matrix-32x24`, using the existing whole-workflow policy of
+one warmup, three timed iterations, two samples, and a `successful_execution`
+gate. Median latency is in milliseconds:
+
+| Workload | Profile | Before | After | Actual route / SIMD receipt |
+| --- | --- | ---: | ---: | --- |
+| ResizeBoxed materialized | Pillow | 0.031042 | 0.029021 | `pillow` |
+| ResizeBoxed materialized | CPU | 0.025334 | 0.024000 | `cpu` |
+| ResizeBoxed materialized | SIMD | 0.024792 | 0.026729 | `simd`, 48 vector blocks, no fallback |
+| ResizeBoxed materialized | GPU | 0.358854 | 0.419667 | `gpu`, no fallback |
+| ResizeBoxed 32×24 | Pillow | 0.026604 | 0.027000 | `pillow` |
+| ResizeBoxed 32×24 | CPU | 0.024417 | 0.023855 | `cpu` |
+| ResizeBoxed 32×24 | SIMD | 0.029521 | 0.058938 | `simd`, 48 vector blocks, no fallback |
+| ResizeBoxed 32×24 | GPU | 0.656667 | 0.369312 | `gpu`, no fallback |
+| Fit 32×24 | Pillow | 0.031084 | 0.032750 | `pillow` |
+| Fit 32×24 | CPU | 0.020875 | 0.020834 | `cpu` |
+| Fit 32×24 | SIMD | 0.023979 | 0.021187 | `simd`, 48 vector blocks, no fallback |
+| Fit 32×24 | GPU | 0.377376 | 0.564125 | `gpu`, no fallback |
+
+The 32×24 ResizeBoxed SIMD post measurement was flagged because its median was
+about twice the baseline. A focused rerun of only that workload, with the same
+policy, measured Pillow at 0.030688 ms, CPU at 0.023584 ms, SIMD at 0.025084 ms,
+and GPU at 0.438688 ms. SIMD again used the vector route with 48 blocks and no
+fallback. This repeat did not reproduce the apparent slowdown. The small
+sample count and run-to-run variation do not establish a performance change;
+the benchmark gate proves successful execution and routing, not exact output
+parity or a causal performance conclusion.
+
+Benchmark reports passed schema validation: baseline
+`migration-benchmark-004be93849ac40d1b2784d88c96e4d1a`, post
+`migration-benchmark-abbc5b545f4c4e92a6ce011db5fc8b83`, and focused repeat
+`migration-benchmark-f6d54813894f41808749fe2cd8c6a3b2`. Reports and raw samples
+are retained under
+`build/migration-parity/boxed-convolution-refactor-20261022/` for the local
+review. No bottleneck was diagnosed, so no causal performance comment was
+added to the implementation.

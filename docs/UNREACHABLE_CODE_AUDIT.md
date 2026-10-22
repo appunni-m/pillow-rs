@@ -337,3 +337,12 @@ Resize and native Thumbnail continue to use the same routes. Shared coordinate
 builders remain in `adapters.rs` because the float and I32 Resize paths also
 call them. The move changes ownership only; it does not change the operation
 graph or add a static reachability claim.
+
+## SIMD Resize boxed native-byte convolution follow-up — 2026-10-22
+
+The boxed native-byte convolution kernel now lives in
+`pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_boxed_convolution.rs`.
+Resize and `ImageOps.fit` keep their existing callers through the `resize`
+module re-export. Shared coefficient and row helpers remain in `adapters.rs`
+because other Resize kernels still use them. This is an ownership-only move;
+the operation graph and static reachability counts are unchanged.

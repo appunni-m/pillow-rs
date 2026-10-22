@@ -2,6 +2,8 @@
 
 #[path = "resize/kernels/i32.rs"]
 mod i32_mode;
+#[path = "resize/kernels/u8_boxed_convolution.rs"]
+mod u8_boxed_convolution;
 #[path = "resize/kernels/u8.rs"]
 mod u8_mode;
 
@@ -9,6 +11,7 @@ pub(super) use self::i32_mode::{
     build_resize_i_horizontal_plan, resize_i_horizontal_values, simd_resize_i32,
     simd_resize_i32_boxed,
 };
+pub(super) use self::u8_boxed_convolution::simd_resize_convolution_boxed;
 use self::u8_mode::simd_resize_convolution_with_parallel_threshold;
 pub(super) use self::u8_mode::{
     simd_resize_convolution, simd_resize_convolution_into,
@@ -19,8 +22,7 @@ use super::{
     native_resize_boxed_bounds, native_resize_boxed_layout_for_image,
     native_resize_boxed_supported_for_image, native_resize_byte_layout_for_image,
     native_resize_supported_for_image, native_small_uniform_byte_image, native_zero_byte_image,
-    simd_resize_convolution_boxed, simd_resize_f, simd_resize_f_boxed, simd_resize_luma16,
-    simd_unsupported,
+    simd_resize_f, simd_resize_f_boxed, simd_resize_luma16, simd_unsupported,
 };
 
 use crate::error::PilError;
