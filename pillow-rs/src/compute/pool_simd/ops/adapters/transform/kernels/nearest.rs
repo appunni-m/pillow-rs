@@ -1,6 +1,9 @@
 //! Transform nearest sampling kernels.
 
-use super::*;
+use super::{
+    DynamicImage, PilError, SIMD_F64_LANES, SIMD_RESIZE_NEAREST_BYTES, f64x8, i64x8,
+    native_affine_nearest_transform_channels, preserve_mode, simd_unsupported, u8x16,
+};
 
 fn simd_affine_fixed_bytes<const CHANNELS: usize>(
     source: &[u8],

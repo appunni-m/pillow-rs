@@ -2,7 +2,7 @@
 
 ## Current release: 12.2.3
 
-Verified 2026-10-21. See the [v12.2.3 GitHub release](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.3)
+Verified 2026-10-22. See the [v12.2.3 GitHub release](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.3)
 for its release record and attached artifacts.
 
 | Registry | Package | Version | Published artifacts |

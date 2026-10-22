@@ -268,22 +268,35 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- adapters/
 |   |   |   |   |   |   |-- alpha_composite.rs
 |   |   |   |   |   |   |-- box_blur/
-|   |   |   |   |   |   |   `-- kernels/
-|   |   |   |   |   |   |       |-- luma.rs
-|   |   |   |   |   |   |       |-- rgba_avx2.rs
-|   |   |   |   |   |   |       `-- rgba_neon.rs
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- la.rs
+|   |   |   |   |   |   |   |   |-- luma.rs
+|   |   |   |   |   |   |   |   |-- rgb.rs
+|   |   |   |   |   |   |   |   |-- rgba.rs
+|   |   |   |   |   |   |   |   |-- rgba_avx2.rs
+|   |   |   |   |   |   |   |   `-- rgba_neon.rs
+|   |   |   |   |   |   |   |-- kernels.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- box_blur.rs
+|   |   |   |   |   |   |-- chops/
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   `-- fused_multiply_screen.rs
+|   |   |   |   |   |   |   `-- kernels.rs
+|   |   |   |   |   |   |-- chops.rs
 |   |   |   |   |   |   |-- color3dlut.rs
+|   |   |   |   |   |   |-- colorize.rs
 |   |   |   |   |   |   |-- convert/
 |   |   |   |   |   |   |   |-- cmyk.rs
-|   |   |   |   |   |   |   |-- cmyk_packing_tests.rs
-|   |   |   |   |   |   |   `-- kernels/
-|   |   |   |   |   |   |       |-- color_space.rs
-|   |   |   |   |   |   |       |-- dispatch.rs
-|   |   |   |   |   |   |       |-- layout.rs
-|   |   |   |   |   |   |       |-- mod.rs
-|   |   |   |   |   |   |       |-- rgba_rgb_neon.rs
-|   |   |   |   |   |   |       `-- rgba_rgb_ssse3.rs
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- color_space.rs
+|   |   |   |   |   |   |   |   |-- dispatch.rs
+|   |   |   |   |   |   |   |   |-- layout.rs
+|   |   |   |   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |   |   |   |-- rgba_rgb_neon.rs
+|   |   |   |   |   |   |   |   `-- rgba_rgb_ssse3.rs
+|   |   |   |   |   |   |   |-- tests/
+|   |   |   |   |   |   |   |   `-- cmyk_packing.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- convert.rs
 |   |   |   |   |   |   |-- crop.rs
 |   |   |   |   |   |   |-- draw/
@@ -292,46 +305,76 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |       |-- shapes.rs
 |   |   |   |   |   |   |       `-- spans.rs
 |   |   |   |   |   |   |-- draw.rs
+|   |   |   |   |   |   |-- duplicate/
+|   |   |   |   |   |   |   `-- tests.rs
+|   |   |   |   |   |   |-- duplicate.rs
+|   |   |   |   |   |   |-- effects/
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- effects.rs
+|   |   |   |   |   |   |-- enhance/
+|   |   |   |   |   |   |   |-- point.rs
+|   |   |   |   |   |   |   `-- tests.rs
+|   |   |   |   |   |   |-- enhance.rs
+|   |   |   |   |   |   |-- expand/
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- expand.rs
 |   |   |   |   |   |   |-- extract_band.rs
 |   |   |   |   |   |   |-- filter/
-|   |   |   |   |   |   |   `-- kernels/
-|   |   |   |   |   |   |       |-- byte_layouts.rs
-|   |   |   |   |   |   |       |-- i32_three_by_three.rs
-|   |   |   |   |   |   |       |-- l.rs
-|   |   |   |   |   |   |       |-- la.rs
-|   |   |   |   |   |   |       |-- mod.rs
-|   |   |   |   |   |   |       |-- rgb_blur_ring.rs
-|   |   |   |   |   |   |       |-- three_by_three.rs
-|   |   |   |   |   |   |       `-- uniform_rgb.rs
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- byte_layouts.rs
+|   |   |   |   |   |   |   |   |-- i32_three_by_three.rs
+|   |   |   |   |   |   |   |   |-- l.rs
+|   |   |   |   |   |   |   |   |-- la.rs
+|   |   |   |   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |   |   |   |-- rgb_blur_ring.rs
+|   |   |   |   |   |   |   |   |-- three_by_three.rs
+|   |   |   |   |   |   |   |   |-- uniform_rgb.rs
+|   |   |   |   |   |   |   |   `-- unsharp.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- filter.rs
 |   |   |   |   |   |   |-- flip.rs
 |   |   |   |   |   |   |-- gaussian_blur/
-|   |   |   |   |   |   |   `-- kernels/
-|   |   |   |   |   |   |       |-- la.rs
-|   |   |   |   |   |   |       `-- rgba_uniform.rs
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- la.rs
+|   |   |   |   |   |   |   |   `-- rgba_uniform.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- gaussian_blur.rs
+|   |   |   |   |   |   |-- gradient.rs
 |   |   |   |   |   |   |-- grayscale/
-|   |   |   |   |   |   |   `-- kernels/
-|   |   |   |   |   |   |       |-- channels.rs
-|   |   |   |   |   |   |       |-- cmyk.rs
-|   |   |   |   |   |   |       |-- mod.rs
-|   |   |   |   |   |   |       |-- rgb_avx2.rs
-|   |   |   |   |   |   |       |-- ycbcr.rs
-|   |   |   |   |   |   |       `-- ycbcr_ssse3.rs
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- channels.rs
+|   |   |   |   |   |   |   |   |-- cmyk.rs
+|   |   |   |   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |   |   |   |-- rgb_avx2.rs
+|   |   |   |   |   |   |   |   |-- ycbcr.rs
+|   |   |   |   |   |   |   |   `-- ycbcr_ssse3.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- grayscale.rs
+|   |   |   |   |   |   |-- histogram.rs
+|   |   |   |   |   |   |-- layout.rs
+|   |   |   |   |   |   |-- lut/
+|   |   |   |   |   |   |   `-- tests.rs
+|   |   |   |   |   |   |-- lut.rs
 |   |   |   |   |   |   |-- mandelbrot.rs
 |   |   |   |   |   |   |-- median_filter/
 |   |   |   |   |   |   |   |-- extrema.rs
-|   |   |   |   |   |   |   `-- kernels.rs
+|   |   |   |   |   |   |   |-- kernels.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- median_filter.rs
+|   |   |   |   |   |   |-- merge/
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- merge.rs
+|   |   |   |   |   |   |-- module_blend.rs
+|   |   |   |   |   |   |-- native_arithmetic.rs
+|   |   |   |   |   |   |-- native_bytes.rs
+|   |   |   |   |   |   |-- neighborhood.rs
 |   |   |   |   |   |   |-- offset/
 |   |   |   |   |   |   |   `-- kernels/
 |   |   |   |   |   |   |       |-- byte.rs
 |   |   |   |   |   |   |       `-- luma16.rs
 |   |   |   |   |   |   |-- offset.rs
+|   |   |   |   |   |   |-- pad/
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- pad.rs
 |   |   |   |   |   |   |-- paste/
 |   |   |   |   |   |   |   |-- kernels/
@@ -342,11 +385,14 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |   |   |-- mod.rs
 |   |   |   |   |   |   |   |   `-- rgb_cmyk.rs
 |   |   |   |   |   |   |   |-- mod.rs
-|   |   |   |   |   |   |   `-- plan.rs
+|   |   |   |   |   |   |   |-- plan.rs
+|   |   |   |   |   |   |   `-- tests.rs
+|   |   |   |   |   |   |-- pipeline.rs
 |   |   |   |   |   |   |-- projection.rs
 |   |   |   |   |   |   |-- put_alpha/
 |   |   |   |   |   |   |   `-- kernels.rs
 |   |   |   |   |   |   |-- put_alpha.rs
+|   |   |   |   |   |   |-- put_data.rs
 |   |   |   |   |   |   |-- put_pixel/
 |   |   |   |   |   |   |   |-- kernels/
 |   |   |   |   |   |   |   |   `-- rgba_batch.rs
@@ -356,20 +402,29 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- reduce.rs
 |   |   |   |   |   |   |-- resize/
-|   |   |   |   |   |   |   `-- kernels/
-|   |   |   |   |   |   |       |-- f32.rs
-|   |   |   |   |   |   |       |-- i32/
-|   |   |   |   |   |   |       |   `-- neon.rs
-|   |   |   |   |   |   |       |-- i32.rs
-|   |   |   |   |   |   |       |-- luma16.rs
-|   |   |   |   |   |   |       |-- u8.rs
-|   |   |   |   |   |   |       |-- u8_boxed_convolution.rs
-|   |   |   |   |   |   |       `-- u8_nearest.rs
+|   |   |   |   |   |   |   |-- coordinates.rs
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- f32.rs
+|   |   |   |   |   |   |   |   |-- i32/
+|   |   |   |   |   |   |   |   |   `-- neon.rs
+|   |   |   |   |   |   |   |   |-- i32.rs
+|   |   |   |   |   |   |   |   |-- luma16.rs
+|   |   |   |   |   |   |   |   |-- u8.rs
+|   |   |   |   |   |   |   |   |-- u8_boxed_convolution.rs
+|   |   |   |   |   |   |   |   |-- u8_convolution.rs
+|   |   |   |   |   |   |   |   |-- u8_cover_i32.rs
+|   |   |   |   |   |   |   |   |-- u8_nearest.rs
+|   |   |   |   |   |   |   |   `-- u8_plan.rs
+|   |   |   |   |   |   |   |-- support.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- resize.rs
 |   |   |   |   |   |   |-- rotate/
+|   |   |   |   |   |   |   |-- interpolation.rs
 |   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- native.rs
 |   |   |   |   |   |   |   |   `-- nearest.rs
-|   |   |   |   |   |   |   `-- kernels.rs
+|   |   |   |   |   |   |   |-- kernels.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- rotate.rs
 |   |   |   |   |   |   |-- thumbnail/
 |   |   |   |   |   |   |   `-- kernels/
@@ -377,12 +432,22 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |       |-- fusion.rs
 |   |   |   |   |   |   |       `-- integer.rs
 |   |   |   |   |   |   |-- thumbnail.rs
+|   |   |   |   |   |   |-- transform/
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- bilinear.rs
+|   |   |   |   |   |   |   |   |-- luma16.rs
+|   |   |   |   |   |   |   |   |-- mesh.rs
+|   |   |   |   |   |   |   |   `-- nearest.rs
+|   |   |   |   |   |   |   |-- kernels.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- transform.rs
 |   |   |   |   |   |   |-- transpose/
 |   |   |   |   |   |   |   |-- kernels/
 |   |   |   |   |   |   |   |   |-- portable.rs
 |   |   |   |   |   |   |   |   `-- rgba_avx2.rs
-|   |   |   |   |   |   |   `-- kernels.rs
+|   |   |   |   |   |   |   |-- kernels.rs
+|   |   |   |   |   |   |   |-- odd_tests.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   `-- transpose.rs
 |   |   |   |   |   |-- adapters.rs
 |   |   |   |   |   |-- mod.rs

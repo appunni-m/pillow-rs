@@ -1,6 +1,9 @@
 //! Transform mesh sampling kernel.
 
-use super::*;
+use super::{
+    DynamicImage, PilError, SIMD_F64_LANES, native_affine_nearest_transform_channels,
+    preserve_mode, simd_unsupported,
+};
 
 #[inline]
 fn mesh_source_point(coefficients: &[f64; 8], local_x: f64, local_y: f64) -> (f64, f64) {

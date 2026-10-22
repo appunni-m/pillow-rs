@@ -1,6 +1,12 @@
 //! Transform bilinear sampling kernels.
 
-use super::*;
+use super::{
+    DynamicImage, PilError, SIMD_F64_LANES, SimdRotateSample, bilinear_rotate_scalar,
+    bilinear_rotate_vector, f64x8, gather_rotate_neighborhood_vectors,
+    native_affine_bilinear_layout, native_affine_nearest_transform_channels, preserve_mode,
+    rotate_fill_sample, rotate_unpremultiply_vector, simd_rotate_sample_coordinates,
+    simd_unsupported,
+};
 
 /// Vectorized bilinear sampling for perspective and quadrilateral transforms.
 ///
