@@ -75,6 +75,8 @@ mod batch_arena_upload;
 use batch_arena_upload::*;
 mod batch_resize_coefficients;
 use batch_resize_coefficients::*;
+mod batch_auxiliary_ranges;
+use batch_auxiliary_ranges::*;
 mod batch_telemetry;
 use batch_telemetry::*;
 mod batch_preparation;
@@ -4219,138 +4221,30 @@ impl GpuInner {
                     .flatten(),
             );
 
-            let second_range =
-                if gpu_transform_uses_geometry_table(op, logical_mode, (cur_w, cur_h)) {
-                    let values = gpu_transform_geometry_words(op, (cur_w, cur_h), logical_mode)?;
-                    let mut range = append_arena_slice(&mut img2_arena, &values, storage_alignment);
-                    range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
-                    Some(range)
-                } else if let PipelineOp::PutData { data, mode } = op {
-                    let second_values = if packed_luma_putdata {
-                        pack_luma8_putdata(data, buffers.capacity)?
-                    } else {
-                        pack_put_data(data, *mode, buffers.capacity)?
-                    };
-                    if second_values.is_empty() {
-                        None
-                    } else {
-                        let mut range =
-                            append_arena_slice(&mut img2_arena, &second_values, storage_alignment);
-                        range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
-                        Some(range)
-                    }
-                } else if let Some(second) = auxiliary_images[index].second.as_ref() {
-                    if matches!(op, PipelineOp::ConvertLab { .. }) {
-                        let key = Arc::as_ptr(second) as usize;
-                        if let Some(range) = auxiliary_cache.second_ranges.get(&key).copied() {
-                            Some(range)
-                        } else if let Some(range) = second_cache.get(&key).copied() {
-                            Some(range)
-                        } else {
-                            let mut range = append_arena_slice(
-                                &mut img2_arena,
-                                crate::lab::gpu_table_words(),
-                                storage_alignment,
-                            );
-                            range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
-                            second_cache.insert(key, range);
-                            Some(range)
-                        }
-                    } else if gpu_luma16_paste_source(op, op_mode, second) {
-                        let DynamicImage::ImageLuma16(source) = second.as_ref() else {
-                            return Err(PilError::InternalError(
-                                "GPU typed Paste source was admitted without an ImageLuma16 buffer"
-                                    .into(),
-                            ));
-                        };
-                        let values = pack_luma16_numeric(source, buffers.capacity)?;
-                        let mut range =
-                            append_arena_slice(&mut img2_arena, &values, storage_alignment);
-                        range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
-                        Some(range)
-                    } else {
-                        let key = Arc::as_ptr(second) as usize;
-                        if index == 0 && direct_alpha_composite_rgba.is_some() {
-                            Some(BufferRange {
-                                offset: 0,
-                                size: direct_alpha_composite_rgba
-                                    .expect("checked direct RGBA auxiliary")
-                                    .len() as u64,
-                            })
-                        } else if let Some(range) = auxiliary_cache.second_ranges.get(&key).copied()
-                        {
-                            Some(range)
-                        } else if let Some(range) = second_cache.get(&key).copied() {
-                            Some(range)
-                        } else {
-                            let mut range = append_dynamic_rgba(
-                                &mut img2_arena,
-                                second.as_ref(),
-                                buffers.capacity,
-                                storage_alignment,
-                            )?;
-                            range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
-                            second_cache.insert(key, range);
-                            Some(range)
-                        }
-                    }
-                } else {
-                    None
-                };
-            img2_ranges.push(second_range);
-
-            let third_range = if let Some(third) = auxiliary_images[index].third.as_ref() {
-                let key = Arc::as_ptr(third) as usize;
-                if let Some(range) = auxiliary_cache.third_ranges.get(&key).copied() {
-                    Some(range)
-                } else if let Some(range) = third_cache.get(&key).copied() {
-                    Some(range)
-                } else {
-                    let mut range = append_dynamic_rgba(
-                        &mut img3_arena,
-                        third.as_ref(),
-                        buffers.capacity,
-                        storage_alignment,
-                    )?;
-                    range.offset += (auxiliary_cache.img3_values.len() * 4) as u64;
-                    third_cache.insert(key, range);
-                    Some(range)
-                }
-            } else {
-                None
-            };
-            img3_ranges.push(third_range);
-
-            let lut_values = if cached.is_lut
-                && !matches!(
-                    cached.variant_name,
-                    "__internal_resize_h"
-                        | "__internal_resize_v"
-                        | "__internal_resize_v_pad_rgbx"
-                        | "__internal_resize_h_pad_luma_packed"
-                        | "__internal_resize_v_pad_luma_packed"
-                ) {
-                Some(extract_lut(op, op_mode).ok_or_else(|| {
-                    PilError::ValueError(format!(
-                        "GPU LUT length does not match source mode for '{}'",
-                        registry::variant_key(op)
-                    ))
-                })?)
-            } else {
-                None
-            };
-            lut_ranges.push(lut_values.map(|lut| {
-                if let Some(range) = auxiliary_cache.lut_ranges.get(&lut).copied() {
-                    range
-                } else if let Some(range) = lut_cache.get(&lut).copied() {
-                    range
-                } else {
-                    let mut range = append_arena_slice(&mut lut_arena, &lut, storage_alignment);
-                    range.offset += (auxiliary_cache.lut_values.len() * 4) as u64;
-                    lut_cache.insert(lut, range);
-                    range
-                }
-            }));
+            let auxiliary_ranges = GpuBatchAuxiliaryPreparation {
+                op,
+                auxiliary: &auxiliary_images[index],
+                index,
+                op_mode,
+                logical_mode,
+                source_dimensions: (cur_w, cur_h),
+                cached_pipeline: &cached,
+                packed_luma_putdata,
+                direct_alpha_composite_rgba,
+                capacity: buffers.capacity,
+                storage_alignment,
+                auxiliary_cache,
+                img2_arena: &mut img2_arena,
+                img3_arena: &mut img3_arena,
+                lut_arena: &mut lut_arena,
+                second_cache: &mut second_cache,
+                third_cache: &mut third_cache,
+                lut_cache: &mut lut_cache,
+            }
+            .prepare()?;
+            img2_ranges.push(auxiliary_ranges.second);
+            img3_ranges.push(auxiliary_ranges.third);
+            lut_ranges.push(auxiliary_ranges.lut);
 
             cur_w = out_w;
             cur_h = out_h;
