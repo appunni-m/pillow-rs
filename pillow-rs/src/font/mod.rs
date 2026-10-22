@@ -10,6 +10,7 @@ use crate::image::Image;
 mod default_aileron;
 pub(crate) mod imagingft;
 pub(crate) mod pilfont;
+pub(crate) mod public_api;
 
 /// Pillow `FreeTypeFont`-compatible handle backed by the pure-Rust FreeType path.
 pub struct FreeTypeFont {
