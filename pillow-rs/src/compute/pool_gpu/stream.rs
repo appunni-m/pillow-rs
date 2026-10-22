@@ -4,6 +4,7 @@
 //! Several command buffers and their terminal staging copies share one queue
 //! submission. This does not concatenate pixels or change image borders.
 
+mod dispatch;
 mod encoding;
 mod graph;
 mod types;
@@ -15,10 +16,7 @@ pub use self::types::{
     GpuImage,
 };
 use self::types::{Credit, Usage};
-use super::{
-    GpuInner, GpuPool, MAX_GPU_OPS_PER_SUBMISSION, MAX_GPU_SHADER_WORK_ITEMS, StagingBuffer,
-    aligned_bytes,
-};
+use super::{GpuInner, GpuPool, StagingBuffer, aligned_bytes};
 use crate::Image;
 use crate::error::PilError;
 use crate::image::GpuResultMetadata;
@@ -382,167 +380,6 @@ impl GpuBatchExecutor {
             input_key: job.key,
             image,
         }))
-    }
-
-    fn dispatch(&mut self) -> Result<(), BatchError> {
-        while !self.pending.is_empty() && self.flights.len() < self.config.max_in_flight {
-            let mut count = 0;
-            let mut chunk_bytes = 0u64;
-            let mut chunk_work = 0u64;
-            let mut chunk_ops = 0usize;
-            for job in &self.pending {
-                let Some(bytes) = chunk_bytes.checked_add(aligned_bytes(job.length, 8) as u64)
-                else {
-                    break;
-                };
-                let Some(work) = chunk_work.checked_add(job.shader_work) else {
-                    break;
-                };
-                let ops = chunk_ops.saturating_add(job.op_count);
-                if count > 0
-                    && (bytes > self.gpu.device.limits().max_buffer_size
-                        || work > MAX_GPU_SHADER_WORK_ITEMS
-                        || ops > MAX_GPU_OPS_PER_SUBMISSION)
-                {
-                    break;
-                }
-                if bytes > self.gpu.device.limits().max_buffer_size {
-                    return Err(error(
-                        Some(job.id),
-                        job.key.clone(),
-                        "dispatch",
-                        BatchErrorKind::Limit,
-                        "terminal arena exceeds device buffer limit",
-                    ));
-                }
-                (chunk_bytes, chunk_work, chunk_ops) = (bytes, work, ops);
-                count += 1;
-                if count >= self.config.max_jobs.div_ceil(self.config.max_in_flight) {
-                    break;
-                }
-                if !self.config.queue {
-                    break;
-                }
-            }
-            let mut jobs: Vec<_> = self.pending.drain(..count).collect();
-            let mut commands = Vec::with_capacity(count + 1);
-            let mut offsets = Vec::with_capacity(count);
-            let mut bytes = 0u64;
-            for job in &mut jobs {
-                offsets.push(bytes);
-                bytes += aligned_bytes(job.length, 8) as u64;
-                commands.push(
-                    job.command
-                        .take()
-                        .expect("unsubmitted job owns its command buffer"),
-                );
-                self.stats.dispatches += job.dispatches;
-                self.stats.upload_bytes += job.upload;
-            }
-            let staging = if self.resident {
-                None
-            } else {
-                // Each job reserved an eight-byte-aligned terminal arena
-                // share at admission. Moving that share keeps the physical
-                // arena charged until its last ready range is consumed.
-                let mut credit = jobs[0].credit.split(0, 0);
-                for job in &mut jobs {
-                    let mut part = job.credit.split(
-                        aligned_bytes(job.length, 8) as u64,
-                        aligned_bytes(job.length, 8) as u64,
-                    );
-                    credit.gpu += part.gpu;
-                    credit.host += part.host;
-                    part.gpu = 0;
-                    part.host = 0; // transfer the charge; dropping part releases its Arc
-                }
-                let buffer = StagingBuffer::new(&self.gpu.device, bytes).buffer;
-                let mut encoder =
-                    self.gpu
-                        .device
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                            label: Some("gpu_stream_terminal_copies"),
-                        });
-                for (job, &offset) in jobs.iter().zip(&offsets) {
-                    encoder.copy_buffer_to_buffer(
-                        job.output.as_ref().expect("terminal buffer retained"),
-                        0,
-                        &buffer,
-                        offset,
-                        aligned_bytes(job.length, 4) as u64,
-                    );
-                }
-                commands.push(encoder.finish());
-                self.stats.readback_bytes += jobs.iter().map(|j| j.length as u64).sum::<u64>();
-                Some(Arc::new(ReadbackArena {
-                    buffer,
-                    bytes,
-                    mapped: AtomicBool::new(false),
-                    _credit: credit,
-                }))
-            };
-            let fence = if let Some(arena) = &staging {
-                arena.clone()
-            } else {
-                let credit = jobs[0].credit.split(8, 8);
-                let buffer = StagingBuffer::new(&self.gpu.device, 8).buffer;
-                let mut encoder =
-                    self.gpu
-                        .device
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                            label: Some("gpu_stream_resident_fence"),
-                        });
-                encoder.copy_buffer_to_buffer(
-                    jobs[0].output.as_ref().expect("terminal buffer retained"),
-                    0,
-                    &buffer,
-                    0,
-                    4,
-                );
-                commands.push(encoder.finish());
-                Arc::new(ReadbackArena {
-                    buffer,
-                    bytes: 8,
-                    mapped: AtomicBool::new(false),
-                    _credit: credit,
-                })
-            };
-            self.gpu.queue.submit(commands);
-            // Buffer mapping is a fence for this chunk's last buffer use. A
-            // queue-wide callback could accidentally wait for unrelated work
-            // submitted concurrently after ours on Pillow's shared queue.
-            let completed = Arc::new(AtomicBool::new(false));
-            let failure = Arc::new(Mutex::new(None));
-            let flag = completed.clone();
-            let failed = failure.clone();
-            let mapped_arena = fence.clone();
-            fence
-                .buffer
-                .slice(..fence.bytes)
-                .map_async(wgpu::MapMode::Read, move |result| {
-                    match result {
-                        Ok(()) => mapped_arena.mapped.store(true, Ordering::Release),
-                        Err(error) => {
-                            *failed.lock().unwrap_or_else(|e| e.into_inner()) =
-                                Some(error.to_string())
-                        }
-                    }
-                    flag.store(true, Ordering::Release);
-                });
-            self.stats.submitted_jobs += count as u64;
-            self.stats.submissions += 1;
-            self.stats.largest_submission = self.stats.largest_submission.max(count);
-            self.flights.push_back(Flight {
-                jobs,
-                completed,
-                failure,
-                _fence: fence,
-                staging,
-                offsets,
-                submitted_at: Instant::now(),
-            });
-        }
-        Ok(())
     }
 
     fn retire_completed(&mut self) -> Result<(), BatchError> {
