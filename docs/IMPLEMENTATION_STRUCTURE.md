@@ -341,7 +341,8 @@ GaussianBlur shares its Luma and RGB passes plus the LA vertical pass and scalar
 pixel helper; Transpose owns
 `transpose.rs` for admission and orientation, with portable tiled kernels in
 `transpose/kernels/portable.rs` and its RGBA AVX2 kernel in
-`transpose/kernels/rgba_avx2.rs`; GaussianBlur owns
+`transpose/kernels/rgba_avx2.rs`, with aligned and parallel odd-width contract
+tests under `transpose/tests.rs` and `transpose/odd_tests.rs`; GaussianBlur owns
 `gaussian_blur.rs` with its RGBA uniform kernel.
 
 SIMD Draw now keeps its operation adapter in `pool_simd/ops/adapters/draw.rs`.

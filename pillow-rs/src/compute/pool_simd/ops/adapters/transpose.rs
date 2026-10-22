@@ -2,6 +2,12 @@
 
 mod kernels;
 
+#[cfg(all(test, feature = "parallel"))]
+#[path = "transpose/odd_tests.rs"]
+mod odd_tests;
+#[cfg(test)]
+mod tests;
+
 use self::kernels::transpose_gathered_row;
 pub(super) use self::kernels::transpose_native_tiled;
 #[cfg(all(test, feature = "parallel"))]
