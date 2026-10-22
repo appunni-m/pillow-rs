@@ -1,12 +1,25 @@
 use super::*;
 
 pub(super) struct NormalizedGpuBatch {
-    pub(super) source_is_luma_point_run: bool,
     pub(super) native_cover_input_channels: Option<u8>,
-    pub(super) host_autocontrast_luma_lut: bool,
-    pub(super) host_autocontrast_rgb_lut: bool,
     pub(super) native_sharpness_la_patch: Option<(usize, [u8; 2])>,
+    pub(super) input_layouts: BatchInputLayoutCandidates,
     pub(super) dispatch_ops: Vec<PipelineOp>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct BatchInputLayoutCandidates {
+    pub(super) packed_luma_colorize: bool,
+    pub(super) packed_luma_convert: bool,
+    pub(super) packed_luma_transform_input: bool,
+    pub(super) native_rgb_compact_input: bool,
+    pub(super) native_la_transform_input: bool,
+    pub(super) packed_luma_point: bool,
+    pub(super) packed_luma_putdata: bool,
+    pub(super) packed_luma_order_statistic: bool,
+    pub(super) packed_native_byte_filter: bool,
+    pub(super) packed_luma_pad: bool,
+    pub(super) packed_la_pad: bool,
 }
 
 pub(super) enum BatchNormalization {
@@ -80,15 +93,77 @@ impl GpuPool {
         if native_sharpness_la_patch.is_some() {
             dispatch_ops.remove(0);
         }
-
-        Ok(BatchNormalization::Continue(NormalizedGpuBatch {
+        let input_layouts = batch_input_layout_candidates(
+            &dispatch_ops,
+            image,
+            mode,
             source_is_luma_point_run,
-            native_cover_input_channels,
             host_autocontrast_luma_lut,
             host_autocontrast_rgb_lut,
+        );
+
+        Ok(BatchNormalization::Continue(NormalizedGpuBatch {
+            native_cover_input_channels,
             native_sharpness_la_patch,
+            input_layouts,
             dispatch_ops,
         }))
+    }
+}
+
+fn batch_input_layout_candidates(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    mode: Option<&str>,
+    source_is_luma_point_run: bool,
+    host_autocontrast_luma_lut: bool,
+    host_autocontrast_rgb_lut: bool,
+) -> BatchInputLayoutCandidates {
+    // Only a standalone L -> RGB Colorize can use the packed four-sample
+    // upload; a preceding GPU operation leaves the ordinary RGBA transport.
+    let packed_luma_colorize = matches!(ops, [PipelineOp::Colorize { .. }])
+        && matches!(image, DynamicImage::ImageLuma8(_));
+    // A standalone L -> RGBA conversion can read native L bytes as a packed
+    // four-samples-per-word source. Other targets and prefixes keep standard
+    // RGBA transport and the existing shader contract.
+    let packed_luma_convert = gpu_packed_luma_convert_input(ops, image, mode);
+    let packed_luma_transform_input = gpu_packed_luma_transform_input(ops, image, mode);
+    let native_rgb_compact_input =
+        gpu_native_rgb_compact_input(ops, image, mode, host_autocontrast_rgb_lut);
+    let native_la_transform_input = gpu_native_la_transform_input(ops, image, mode);
+    let packed_luma_point = gpu_packed_luma_point_input(
+        source_is_luma_point_run,
+        host_autocontrast_luma_lut,
+        ops,
+        image,
+        mode,
+    );
+    // Native L PutData keeps source and replacement bytes compact. P/1 and
+    // mode-converted images retain their separate semantics.
+    let packed_luma_putdata = cfg!(target_endian = "little")
+        && matches!(mode, None | Some("L"))
+        && image.width() != 0
+        && image.height() != 0
+        && matches!(
+            ops,
+            [PipelineOp::PutData {
+                data,
+                mode: PixelMode::L,
+            }] if matches!(image, DynamicImage::ImageLuma8(source)
+                if data.len() <= source.as_raw().len())
+        );
+    BatchInputLayoutCandidates {
+        packed_luma_colorize,
+        packed_luma_convert,
+        packed_luma_transform_input,
+        native_rgb_compact_input,
+        native_la_transform_input,
+        packed_luma_point,
+        packed_luma_putdata,
+        packed_luma_order_statistic: gpu_packed_luma_order_statistic_input(ops, image, mode),
+        packed_native_byte_filter: gpu_packed_native_byte_filter_input(ops, image, mode),
+        packed_luma_pad: gpu_packed_luma_pad_input(ops, image, mode),
+        packed_la_pad: gpu_packed_la_pad_input(ops, image, mode),
     }
 }
 

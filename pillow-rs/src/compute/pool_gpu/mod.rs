@@ -5765,51 +5765,25 @@ impl GpuPool {
             BatchNormalization::Return(image) => return Ok(image),
         };
         let NormalizedGpuBatch {
-            source_is_luma_point_run,
             native_cover_input_channels,
-            host_autocontrast_luma_lut,
-            host_autocontrast_rgb_lut,
             native_sharpness_la_patch,
+            input_layouts,
             dispatch_ops,
         } = normalized;
         let ops = dispatch_ops.as_slice();
-        // Only a standalone L -> RGB Colorize can consume a four-samples-per-
-        // word upload; preceding GPU kernels leave the ordinary RGBA transport.
-        let packed_luma_colorize = matches!(ops, [PipelineOp::Colorize { .. }])
-            && matches!(img, DynamicImage::ImageLuma8(_));
-        // A standalone L -> RGBA conversion can read the native L bytes as a
-        // packed four-samples-per-word source. Other targets and prefixes keep
-        // the existing standard RGBA transport and shader contract.
-        let packed_luma_convert = gpu_packed_luma_convert_input(ops, img, mode);
-        let packed_luma_transform_input = gpu_packed_luma_transform_input(ops, img, mode);
-        let native_rgb_compact_input_candidate =
-            gpu_native_rgb_compact_input(ops, img, mode, host_autocontrast_rgb_lut);
-        let native_la_transform_input = gpu_native_la_transform_input(ops, img, mode);
-        let packed_luma_point = gpu_packed_luma_point_input(
-            source_is_luma_point_run,
-            host_autocontrast_luma_lut,
-            ops,
-            img,
-            mode,
-        );
-        // Native L PutData can keep source and replacement bytes compact.
-        // P/1 and mode-converted images retain their separate semantics.
-        let packed_luma_putdata = cfg!(target_endian = "little")
-            && matches!(mode, None | Some("L"))
-            && img.width() != 0
-            && img.height() != 0
-            && matches!(
-                ops,
-                [PipelineOp::PutData {
-                    data,
-                    mode: PixelMode::L,
-                }] if matches!(img, DynamicImage::ImageLuma8(source)
-                    if data.len() <= source.as_raw().len())
-            );
-        let packed_luma_order_statistic = gpu_packed_luma_order_statistic_input(ops, img, mode);
-        let packed_native_byte_filter = gpu_packed_native_byte_filter_input(ops, img, mode);
-        let packed_luma_pad = gpu_packed_luma_pad_input(ops, img, mode);
-        let packed_la_pad = gpu_packed_la_pad_input(ops, img, mode);
+        let BatchInputLayoutCandidates {
+            packed_luma_colorize,
+            packed_luma_convert,
+            packed_luma_transform_input,
+            native_rgb_compact_input: native_rgb_compact_input_candidate,
+            native_la_transform_input,
+            packed_luma_point,
+            packed_luma_putdata,
+            packed_luma_order_statistic,
+            packed_native_byte_filter,
+            packed_luma_pad,
+            packed_la_pad,
+        } = input_layouts;
         if let Some(result) =
             self.execute_batch_segments_if_needed(ops, img, mode, allow_cpu_fallback)?
         {
