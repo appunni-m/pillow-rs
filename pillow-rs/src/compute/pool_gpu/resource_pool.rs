@@ -638,3 +638,150 @@ impl BufferPool {
         bytes
     }
 }
+
+impl GpuInner {
+    pub(super) fn acquire_buffers(&self, minimum_capacity: u32) -> Result<BufferPool, PilError> {
+        let mut available = self.available_buffers.lock().map_err(|_| {
+            PilError::InternalError("GPU working-buffer pool lock is poisoned".into())
+        })?;
+        let candidate = available
+            .iter()
+            .enumerate()
+            .filter(|(_, buffers)| gpu_buffer_reuse_allowed(buffers.capacity, minimum_capacity))
+            .min_by_key(|(_, buffers)| buffers.capacity)
+            .map(|(index, _)| index);
+        Ok(match candidate {
+            Some(index) => available.swap_remove(index),
+            None => BufferPool::new(&self.device, minimum_capacity, self.direct_primary_readback),
+        })
+    }
+
+    pub(super) fn recycle_buffers(&self, buffers: BufferPool) {
+        self.recycle_buffers_with_limits(
+            buffers,
+            MAX_RETAINED_GPU_WORKING_SETS,
+            MAX_RETAINED_GPU_WORKING_BYTES,
+        );
+    }
+
+    pub(super) fn recycle_buffers_with_limits(
+        &self,
+        buffers: BufferPool,
+        max_sets: usize,
+        max_bytes: u64,
+    ) {
+        if self.failure_detail().is_some() || buffers.retained_bytes() > max_bytes {
+            return;
+        }
+        let Ok(mut available) = self.available_buffers.lock() else {
+            return;
+        };
+        available.push(buffers);
+        available.sort_unstable_by_key(|candidate| candidate.capacity);
+        while available.len() > max_sets
+            || available.iter().fold(0u64, |total, candidate| {
+                total.saturating_add(candidate.retained_bytes())
+            }) > max_bytes
+        {
+            let _ = available.pop();
+        }
+    }
+
+    pub(super) fn acquire_staging(&self, minimum_bytes: u64) -> Result<StagingBuffer, PilError> {
+        let mut available = self.available_staging.lock().map_err(|_| {
+            PilError::InternalError("GPU staging-buffer pool lock is poisoned".into())
+        })?;
+        let candidate = available
+            .iter()
+            .enumerate()
+            .filter(|(_, staging)| staging.capacity_bytes >= minimum_bytes)
+            .min_by_key(|(_, staging)| staging.capacity_bytes)
+            .map(|(index, _)| index);
+        Ok(match candidate {
+            Some(index) => available.swap_remove(index),
+            None => StagingBuffer::new(&self.device, minimum_bytes),
+        })
+    }
+
+    pub(super) fn recycle_staging(&self, staging: StagingBuffer) {
+        if self.failure_detail().is_some()
+            || staging.capacity_bytes > MAX_RETAINED_GPU_STAGING_BYTES
+        {
+            return;
+        }
+        let Ok(mut available) = self.available_staging.lock() else {
+            return;
+        };
+        available.push(staging);
+        available.sort_unstable_by_key(|candidate| candidate.capacity_bytes);
+        while available.len() > MAX_RETAINED_GPU_STAGING_BUFFERS
+            || available.iter().fold(0u64, |total, candidate| {
+                total.saturating_add(candidate.capacity_bytes)
+            }) > MAX_RETAINED_GPU_STAGING_BYTES
+        {
+            let _ = available.pop();
+        }
+    }
+
+    pub(super) fn invalidate_resource_pools(&self) {
+        if let Ok(mut pipelines) = self.pipelines.lock() {
+            pipelines.clear();
+        }
+        if let Ok(mut available) = self.available_buffers.lock() {
+            available.clear();
+        }
+        if let Ok(mut available) = self.available_staging.lock() {
+            available.clear();
+        }
+    }
+
+    pub(super) fn failure_detail(&self) -> Option<String> {
+        self.device_state.lock().ok().and_then(|state| {
+            state
+                .lost
+                .clone()
+                .or_else(|| state.uncaptured_error.clone())
+        })
+    }
+
+    pub(super) fn ensure_healthy(&self, stage: &str) -> Result<(), PilError> {
+        if let Some(detail) = self.failure_detail() {
+            self.invalidate_resource_pools();
+            return Err(PilError::ValueError(format!(
+                "GPU device unavailable during {stage}: {detail}"
+            )));
+        }
+        Ok(())
+    }
+
+    pub(super) fn mark_failed(&self, detail: String) {
+        if let Ok(mut state) = self.device_state.lock() {
+            if state.lost.is_none() {
+                state.lost = Some(detail);
+            }
+        }
+        self.invalidate_resource_pools();
+    }
+
+    pub(super) fn poll_device(&self, stage: &str) -> Result<(), PilError> {
+        self.ensure_healthy(stage)?;
+        self.device.poll(wgpu::Maintain::Poll);
+        self.ensure_healthy(stage)
+    }
+
+    pub(super) fn validate_output_dims(
+        &self,
+        buffers: &BufferPool,
+        w: u32,
+        h: u32,
+    ) -> Result<(), PilError> {
+        let pixels = CheckedDims::new(w, h, 1)?.total_pixels();
+        if pixels > buffers.capacity as usize {
+            return Err(PilError::ValueError(format!(
+                "GPU buffer capacity {} < output image size {}",
+                buffers.capacity, pixels
+            )));
+        }
+        Ok(())
+    }
+}

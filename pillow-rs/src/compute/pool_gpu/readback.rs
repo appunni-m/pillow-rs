@@ -159,6 +159,20 @@ pub(super) fn la_from_rgba_transport(
 }
 
 impl GpuInner {
+    pub(super) fn prepare_readback(
+        &self,
+        source: &wgpu::Buffer,
+        size: u64,
+    ) -> Result<ReadbackTarget, PilError> {
+        // Use the resource's actual usage so a staged working set remains
+        // staged even when this device supports directly mapped storage.
+        if source.usage().contains(wgpu::BufferUsages::MAP_READ) {
+            Ok(ReadbackTarget::Primary)
+        } else {
+            self.acquire_staging(size).map(ReadbackTarget::Staging)
+        }
+    }
+
     pub(super) fn readback_bytes(
         &self,
         size: u64,
