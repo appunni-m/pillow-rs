@@ -122,6 +122,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   `-- dispatch.rs
 |   |   |   |   |-- batch_encoding.rs
 |   |   |   |   |-- batch_estimates.rs
+|   |   |   |   |-- batch_execution/
+|   |   |   |   |   `-- routing.rs
 |   |   |   |   |-- batch_execution.rs
 |   |   |   |   |-- batch_native_routes.rs
 |   |   |   |   |-- batch_normalization.rs

@@ -117,7 +117,6 @@ class PathClassificationTests(unittest.TestCase):
             "pillow-rs/src/compute/pool_cpu/ops/imageops.rs",
             "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
             "pillow-rs/src/compute/pool_simd/ops/adapters.rs",
-            "pillow-rs/src/compute/pool_gpu/mod.rs",
         )
         for path in paths:
             with self.subTest(path=path):
@@ -128,6 +127,11 @@ class PathClassificationTests(unittest.TestCase):
                 tree = classify_path(path, exhaustive=True)
                 self.assertEqual(tree["assessment"], "documented_migration_debt")
                 self.assertEqual(tree["rule"], "documented_multi_family_aggregator")
+
+    def test_gpu_root_is_a_supported_coordinator(self) -> None:
+        result = classify_path("pillow-rs/src/compute/pool_gpu/mod.rs")
+        self.assertEqual(result["assessment"], "supported_backend_support_role")
+        self.assertEqual(result["rule"], "gpu_pool_coordinator")
 
     def test_cpu_registration_and_test_files_are_not_family_implementations(self) -> None:
         self.assertEqual(

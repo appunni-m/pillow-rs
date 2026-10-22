@@ -89,10 +89,6 @@ DOCUMENTED_MIGRATION_DEBT: dict[str, tuple[str, str]] = {
         "pillow-rs/src/compute/pool_simd/ops/adapters.rs as dispatch/re-export facade; adapters/<family>.rs as orchestrators",
         "The SIMD adapters entry still contains dispatch and family implementations; keep hot loops specialized while moving one family at a time.",
     ),
-    "pillow-rs/src/compute/pool_gpu/mod.rs": (
-        "pillow-rs/src/compute/pool_gpu/mod.rs for pool lifecycle; pool_gpu/ops/<family>.rs for operation routing",
-        "The GPU pool module still combines lifecycle, admission, routing, and shader work; preserve GPU receipts and resource leases when separating responsibilities.",
-    ),
 }
 
 
@@ -164,6 +160,13 @@ def classify_path(
 ) -> dict[str, Any]:
     """Classify only clear layout contracts; leave ambiguous roles reviewable."""
     parts = Path(path).as_posix().split("/")
+
+    if path == "pillow-rs/src/compute/pool_gpu/mod.rs":
+        return {
+            "assessment": "supported_backend_support_role",
+            "rule": "gpu_pool_coordinator",
+            "reason": "The GPU root composes focused backend modules and owns lazy device initialization and backend registration.",
+        }
 
     if path in DOCUMENTED_MIGRATION_DEBT:
         expected_shape, reason = DOCUMENTED_MIGRATION_DEBT[path]
