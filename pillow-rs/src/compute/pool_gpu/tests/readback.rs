@@ -15,14 +15,14 @@ fn gpu_primary_readback_admission_excludes_unshared_or_unavailable_memory() {
         (Api::Gl, Kind::IntegratedGpu, feature),
         (Api::BrowserWebGpu, Kind::IntegratedGpu, feature),
     ] {
-        assert!(!super::direct_primary_readback_supported(
+        assert!(!super::device::direct_primary_readback_supported(
             backend,
             device_type,
             features
         ));
     }
     assert_eq!(
-        super::direct_primary_readback_supported(Api::Metal, Kind::IntegratedGpu, feature),
+        super::device::direct_primary_readback_supported(Api::Metal, Kind::IntegratedGpu, feature),
         cfg!(not(target_arch = "wasm32")),
     );
 }
