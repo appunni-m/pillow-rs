@@ -6,7 +6,7 @@ use crate::compute::pool_simd::ops::native_filter::native_filter_load_byte_block
 use wide::f32x8;
 
 /// Evaluate eight or fewer interleaved output samples for the 5x5 kernel.
-/// See [`native_filter_3x3_pixel_block_vector`] for why adjacent pixels are
+/// See [`super::three_by_three::native_filter_3x3_pixel_block_vector`] for why adjacent pixels are
 /// grouped into one contiguous vector block.
 #[inline]
 fn native_filter_5x5_pixel_block_vector(
