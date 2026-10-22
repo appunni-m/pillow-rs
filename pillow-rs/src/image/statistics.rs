@@ -4,15 +4,18 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
+use super::color_count::{
+    PillowColorCounts, RgbGrayscaleColorCounts, SCALAR_I_REPEATED_RUN_MIN_DIRECT_SLOTS,
+    ScalarColorDomainCounts, count_pillow_color_scalar_samples, getcolors_rgb8_grayscale,
+    getcolors_scalar_byte_domain, getcolors_scalar_i_repeated_runs, pillow_color_components,
+    pillow_color_direct_table_slots, pillow_color_pixel, pillow_color_table_parameters,
+    pillow_image_pixel_count, scalar_byte_domain_is_plausible, scalar_i_prefix_has_long_run,
+    scalar_prefix_has_repeated_samples,
+};
 use super::{
-    FormattedExtrema, FormattedPixelValue, Image, PillowColorCounts, RgbGrayscaleColorCounts,
-    SCALAR_I_REPEATED_RUN_MIN_DIRECT_SLOTS, ScalarColorDomainCounts, ScalarImageSamples,
-    StatResult, count_pillow_color_scalar_samples, decode_float_samples, decode_integer_samples,
-    getcolors_rgb8_grayscale, getcolors_scalar_byte_domain, getcolors_scalar_i_repeated_runs,
-    is_l16_mode, pillow_band_count, pillow_color_components, pillow_color_direct_table_slots,
-    pillow_color_pixel, pillow_color_table_parameters, pillow_image_pixel_count,
-    scalar_byte_domain_is_plausible, scalar_i_prefix_has_long_run,
-    scalar_prefix_has_repeated_samples, stat_from_histogram,
+    FormattedExtrema, FormattedPixelValue, Image, ScalarImageSamples, StatResult,
+    decode_float_samples, decode_integer_samples, is_l16_mode, pillow_band_count,
+    stat_from_histogram,
 };
 
 impl Image {
