@@ -4,10 +4,9 @@
 use super::super::SIMD_RESIZE_LANES;
 #[cfg(feature = "parallel")]
 use super::super::simd_rows_mut_serial;
-use super::super::{
-    resize_horizontal_convolution_row, resize_vertical_cover_i32_vector_row,
-    resize_vertical_vector_row, simd_unsupported,
-};
+use super::super::simd_unsupported;
+use super::u8_convolution::{resize_horizontal_convolution_row, resize_vertical_vector_row};
+use super::u8_cover_i32::resize_vertical_cover_i32_vector_row;
 use super::{
     build_resize_horizontal_plan, resize_u8_coefficients_fit_i32,
     resize_vertical_row_touches_nonzero_source,

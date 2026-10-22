@@ -3,11 +3,13 @@
 #[cfg(feature = "parallel")]
 use super::super::{SIMD_RESIZE_LANES, simd_rows_mut_serial};
 use super::super::{
-    compact_resize_coeffs_to_source_span, precompute_coeffs_boxed_for_filter,
-    resize_horizontal_vector_row, resize_premultiply_u8, resize_unpremultiply_u8,
-    resize_vertical_vector_row, simd_unsupported,
+    compact_resize_coeffs_to_source_span, precompute_coeffs_boxed_for_filter, simd_unsupported,
 };
 use super::build_resize_horizontal_plan;
+use super::u8_convolution::{
+    resize_horizontal_vector_row, resize_premultiply_u8, resize_unpremultiply_u8,
+    resize_vertical_vector_row,
+};
 #[cfg(feature = "parallel")]
 use std::sync::atomic::{AtomicBool, Ordering};
 

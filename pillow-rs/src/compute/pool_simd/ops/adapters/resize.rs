@@ -11,6 +11,10 @@ mod luma16_mode;
 mod support;
 #[path = "resize/kernels/u8_boxed_convolution.rs"]
 mod u8_boxed_convolution;
+#[path = "resize/kernels/u8_convolution.rs"]
+mod u8_convolution;
+#[path = "resize/kernels/u8_cover_i32.rs"]
+mod u8_cover_i32;
 #[path = "resize/kernels/u8.rs"]
 mod u8_mode;
 #[path = "resize/kernels/u8_nearest.rs"]
@@ -44,6 +48,14 @@ pub(super) use self::support::{
     native_resize_supported_for_shape, native_scale_dimensions,
 };
 pub(super) use self::u8_boxed_convolution::simd_resize_convolution_boxed;
+#[cfg(test)]
+pub(super) use self::u8_convolution::{
+    resize_horizontal_convolution_row, resize_horizontal_vector_row, resize_vertical_vector_row,
+};
+#[cfg(test)]
+pub(super) use self::u8_cover_i32::{
+    resize_horizontal_hsv_i32_vector_row, resize_vertical_hsv_i32_vector_row,
+};
 use self::u8_mode::simd_resize_convolution_with_parallel_threshold;
 pub(super) use self::u8_mode::{
     simd_resize_convolution, simd_resize_convolution_into,
@@ -51,8 +63,8 @@ pub(super) use self::u8_mode::{
 };
 pub(super) use self::u8_nearest::{simd_resize_nearest, simd_resize_nearest_boxed};
 pub(super) use self::u8_plan::{
-    ResizeHorizontalPlan, build_resize_horizontal_plan, resize_coeff_slice,
-    resize_u8_coefficients_fit_i32, resize_vertical_row_touches_nonzero_source,
+    build_resize_horizontal_plan, resize_u8_coefficients_fit_i32,
+    resize_vertical_row_touches_nonzero_source,
 };
 use super::{
     native_copy_image_bytes, native_small_uniform_byte_image, native_zero_byte_image,
