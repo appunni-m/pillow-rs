@@ -937,3 +937,6 @@ pub(crate) fn simd_rank_filter(
     }
     simd_order_statistic_filter(img, *size, *rank, mode)
 }
+
+#[cfg(test)]
+mod tests;
