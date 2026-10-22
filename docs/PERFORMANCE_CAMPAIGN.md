@@ -32142,6 +32142,12 @@ four, 4/4). The direct-nearest runs passed 2/2 each on CPU
 (`migration-parity-c2156499750049d69ba4f4e1c3c1580c`). The build identifies
 revision `3c7d68f4f95a30702659b2813556a4e80bd83a01` with a dirty worktree.
 
+The nearest implementation was later split into
+`pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_nearest.rs`.
+The static re-export keeps the same Resize and Thumbnail callers. This further
+ownership move did not change the kernel bodies or runtime route; it has no new
+benchmark measurements of its own.
+
 ### SIMD Resize boxed native-byte convolution extraction — 2026-10-22
 
 The boxed native-byte convolution kernel moved from

@@ -6,6 +6,8 @@ mod i32_mode;
 mod u8_boxed_convolution;
 #[path = "resize/kernels/u8.rs"]
 mod u8_mode;
+#[path = "resize/kernels/u8_nearest.rs"]
+mod u8_nearest;
 
 pub(super) use self::i32_mode::{
     build_resize_i_horizontal_plan, resize_i_horizontal_values, simd_resize_i32,
@@ -15,8 +17,9 @@ pub(super) use self::u8_boxed_convolution::simd_resize_convolution_boxed;
 use self::u8_mode::simd_resize_convolution_with_parallel_threshold;
 pub(super) use self::u8_mode::{
     simd_resize_convolution, simd_resize_convolution_into,
-    simd_resize_convolution_with_zero_row_elision, simd_resize_nearest, simd_resize_nearest_boxed,
+    simd_resize_convolution_with_zero_row_elision,
 };
+pub(super) use self::u8_nearest::{simd_resize_nearest, simd_resize_nearest_boxed};
 use super::{
     boxed_nearest_axis_maps_identity, native_copy_image_bytes, native_fit_filter,
     native_resize_boxed_bounds, native_resize_boxed_layout_for_image,

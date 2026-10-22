@@ -336,11 +336,12 @@ registered operation routes; static reachability counts remain unchanged.
 ## SIMD Resize native-byte nearest follow-up — 2026-10-22
 
 The direct and boxed native-byte nearest kernels, plus their byte gather
-helper, now live in `pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8.rs`.
-Resize and native Thumbnail continue to use the same routes. Shared coordinate
-builders remain in `adapters.rs` because the float and I32 Resize paths also
-call them. The move changes ownership only; it does not change the operation
-graph or add a static reachability claim.
+helper, originally moved into `pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8.rs`.
+They now live in the focused `resize/kernels/u8_nearest.rs` module. Resize and
+native Thumbnail continue to use the same routes. Shared coordinate builders
+remain in `adapters.rs` because the float and I32 Resize paths also call them.
+The ownership moves do not change the operation graph or add a static
+reachability claim.
 
 ## SIMD Resize boxed native-byte convolution follow-up — 2026-10-22
 
