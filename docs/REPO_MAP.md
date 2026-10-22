@@ -126,6 +126,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- batch_pipeline.rs
 |   |   |   |   |-- batch_preflight.rs
 |   |   |   |   |-- batch_preparation.rs
+|   |   |   |   |-- batch_resize_coefficients.rs
 |   |   |   |   |-- batch_segmentation.rs
 |   |   |   |   |-- batch_telemetry.rs
 |   |   |   |   |-- batch_upload.rs

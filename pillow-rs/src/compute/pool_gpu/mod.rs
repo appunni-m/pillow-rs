@@ -73,6 +73,8 @@ mod batch_upload;
 use batch_upload::*;
 mod batch_arena_upload;
 use batch_arena_upload::*;
+mod batch_resize_coefficients;
+use batch_resize_coefficients::*;
 mod batch_telemetry;
 use batch_telemetry::*;
 mod batch_preparation;
@@ -4195,167 +4197,21 @@ impl GpuInner {
                 uniform_alignment,
             ));
 
-            let resize_coeff_range = match op {
-                PipelineOp::Resize { filter, .. } => {
-                    let uses_coefficients = !matches!(filter, ResampleFilter::Nearest)
-                        || gpu_resize_nearest_uses_coefficients(logical_mode);
-                    if !uses_coefficients {
-                        None
-                    } else {
-                        let horizontal = gpu_resize_coefficients(out_w, cur_w, *filter);
-                        let vertical = gpu_resize_coefficients(out_h, cur_h, *filter);
-                        if (f_resize_f64_is_exact || f_resize_f64_ordered_is_exact)
-                            && !matches!(filter, ResampleFilter::Nearest)
-                            && (logical_mode == Some("F")
-                                || (op_mode == 5
-                                    && logical_mode.is_none_or(|mode| {
-                                        matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
-                                    }))
-                                || (op_mode == 7 && logical_mode == Some("I")))
-                        {
-                            let (kernel, support) = filter_from_resample(*filter);
-                            let compact_box = f_resize_f64_ordered_is_exact
-                                && logical_mode == Some("F")
-                                && matches!(filter, ResampleFilter::Box)
-                                && gpu_f_resize_compact_box_any_axis(
-                                    (cur_w, cur_h),
-                                    (out_w, out_h),
-                                );
-                            if compact_box {
-                                let horizontal_words =
-                                    if gpu_f_resize_compact_box_axis(cur_w, out_w) {
-                                        encode_resize_compact_box_axis(cur_w, out_w)?
-                                    } else {
-                                        let coeffs =
-                                            precompute_coeffs_f64(out_w, cur_w, kernel, support);
-                                        encode_resize_coeffs_f64(&coeffs)?
-                                    };
-                                let vertical_words = if gpu_f_resize_compact_box_axis(cur_h, out_h)
-                                {
-                                    encode_resize_compact_box_axis(cur_h, out_h)?
-                                } else {
-                                    let coeffs =
-                                        precompute_coeffs_f64(out_h, cur_h, kernel, support);
-                                    encode_resize_coeffs_f64(&coeffs)?
-                                };
-                                Some(self.append_resize_coeff_word_ranges(
-                                    &mut img2_arena,
-                                    auxiliary_cache,
-                                    &horizontal_words,
-                                    &vertical_words,
-                                    storage_alignment,
-                                )?)
-                            } else {
-                                let horizontal_f64 =
-                                    precompute_coeffs_f64(out_w, cur_w, kernel, support);
-                                let vertical_f64 =
-                                    precompute_coeffs_f64(out_h, cur_h, kernel, support);
-                                Some(self.append_resize_f64_coeff_ranges(
-                                    &mut img2_arena,
-                                    auxiliary_cache,
-                                    &horizontal_f64,
-                                    &vertical_f64,
-                                    storage_alignment,
-                                )?)
-                            }
-                        } else {
-                            Some(self.append_resize_coeff_ranges(
-                                &mut img2_arena,
-                                auxiliary_cache,
-                                &horizontal,
-                                &vertical,
-                                storage_alignment,
-                            )?)
-                        }
-                    }
-                }
-                PipelineOp::ResizeBoxed { .. } => {
-                    let (horizontal, vertical) =
-                        boxed_resize_coefficients.as_ref().ok_or_else(|| {
-                            PilError::InternalError(
-                                "GPU ResizeBoxed coefficients were not prepared".into(),
-                            )
-                        })?;
-                    Some(self.append_resize_coeff_ranges(
-                        &mut img2_arena,
-                        auxiliary_cache,
-                        horizontal,
-                        vertical,
-                        storage_alignment,
-                    )?)
-                }
-                PipelineOp::Pad { filter, .. } => {
-                    let ((resize_w, resize_h), _) =
-                        gpu_pad_geometry(op, cur_w, cur_h).ok_or_else(|| {
-                            PilError::ValueError("GPU Pad has no safe geometry".into())
-                        })?;
-                    // An identity contain resize is a byte-preserving copy in
-                    // Pillow. The final placement shader reads the original
-                    // image directly, so it needs no coefficient tables.
-                    if (resize_w, resize_h) == (cur_w, cur_h) {
-                        None
-                    } else {
-                        let resize_filter = if logical_mode == Some("P") {
-                            ResampleFilter::Nearest
-                        } else {
-                            *filter
-                        };
-                        if f_resize_f64_is_exact
-                            && logical_mode == Some("F")
-                            && !matches!(resize_filter, ResampleFilter::Nearest)
-                        {
-                            let (kernel, support) = filter_from_resample(resize_filter);
-                            let horizontal =
-                                precompute_coeffs_f64(resize_w, cur_w, kernel, support);
-                            let vertical = precompute_coeffs_f64(resize_h, cur_h, kernel, support);
-                            Some(self.append_resize_f64_coeff_ranges(
-                                &mut img2_arena,
-                                auxiliary_cache,
-                                &horizontal,
-                                &vertical,
-                                storage_alignment,
-                            )?)
-                        } else {
-                            let horizontal =
-                                gpu_resize_coefficients(resize_w, cur_w, resize_filter);
-                            let vertical = gpu_resize_coefficients(resize_h, cur_h, resize_filter);
-                            Some(self.append_resize_coeff_ranges(
-                                &mut img2_arena,
-                                auxiliary_cache,
-                                &horizontal,
-                                &vertical,
-                                storage_alignment,
-                            )?)
-                        }
-                    }
-                }
-                PipelineOp::Fit {
-                    bleed,
-                    centering,
-                    filter,
-                    ..
-                } => {
-                    let (horizontal, vertical) = gpu_fit_coefficients(
-                        (cur_w, cur_h),
-                        (out_w, out_h),
-                        *bleed,
-                        *centering,
-                        *filter,
-                    )
-                    .ok_or_else(|| {
-                        PilError::ValueError("GPU Fit has no safe crop geometry".into())
-                    })?;
-                    let ranges = self.append_resize_coeff_ranges(
-                        &mut img2_arena,
-                        auxiliary_cache,
-                        &horizontal,
-                        &vertical,
-                        storage_alignment,
-                    )?;
-                    Some(ranges)
-                }
-                _ => None,
-            };
+            let resize_coeff_range = self.prepare_batch_resize_coefficients(
+                BatchResizeCoefficientContext {
+                    op,
+                    input_dimensions: (cur_w, cur_h),
+                    output_dimensions: (out_w, out_h),
+                    logical_mode,
+                    op_mode,
+                    f_resize_f64_is_exact,
+                    f_resize_f64_ordered_is_exact,
+                    boxed_resize_coefficients: boxed_resize_coefficients.as_ref(),
+                    storage_alignment,
+                },
+                &mut img2_arena,
+                auxiliary_cache,
+            )?;
             resize_coeff_ranges.push(resize_coeff_range);
             pad_resize_dims.push(
                 matches!(op, PipelineOp::Pad { .. })
