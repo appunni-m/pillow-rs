@@ -95,123 +95,129 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 23 legacy file ceilings and 197 legacy functions across 101 source
-paths. A dash means that path has no over-limit file entry; function counts and
+Snapshot: 19 legacy file ceilings and 194 legacy functions across 115 source paths.
+A dash means that path has no over-limit file entry; function counts and
 maximum recorded function lines are summarized here, with each exact signature
 and ceiling in the JSON baseline. All listed paths are owned by `lazytrot`;
 each reducer issue is a child of Kata `pillow-rs#m2f1`.
 
 | Source path | Recorded file ceiling | Long functions (count; max lines) | Owner | Reduction task |
 | --- | ---: | ---: | --- | --- |
-| <code>pillow-rs-js/src/lib.rs</code> | 5,445 | 1 (max 124) | lazytrot | pillow-rs#dqs5 |
+| <code>pillow-rs-js/src/lib.rs</code> | 5,445 | 1 (max 124 lines) | lazytrot | pillow-rs#dqs5 |
 | <code>pillow-rs-py/src/lib.rs</code> | 4,972 | 0 | lazytrot | pillow-rs#pxb1 |
 | <code>pillow-rs/src/color.rs</code> | 2,086 | 0 | lazytrot | pillow-rs#bnhk |
-| <code>pillow-rs/src/compute/pool_cpu/mod.rs</code> | — | 1 (max 320) | lazytrot | pillow-rs#7f4d |
-| <code>pillow-rs/src/compute/pool_cpu/ops/color.rs</code> | — | 1 (max 107) | lazytrot | pillow-rs#7f4d |
-| <code>pillow-rs/src/compute/pool_cpu/ops/draw.rs</code> | 1,777 | 2 (max 172) | lazytrot | pillow-rs#mtx1 |
-| <code>pillow-rs/src/compute/pool_cpu/ops/effects.rs</code> | 6,211 | 9 (max 235) | lazytrot | pillow-rs#8rfy |
-| <code>pillow-rs/src/compute/pool_cpu/ops/enhance.rs</code> | — | 1 (max 117) | lazytrot | pillow-rs#7f4d |
-| <code>pillow-rs/src/compute/pool_cpu/ops/filter.rs</code> | 6,897 | 4 (max 260) | lazytrot | pillow-rs#qpfs |
-| <code>pillow-rs/src/compute/pool_cpu/ops/geometry.rs</code> | 5,600 | 11 (max 244) | lazytrot | pillow-rs#wtxv |
-| <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303) | lazytrot | pillow-rs#vamp |
-| <code>pillow-rs/src/compute/pool_gpu/auxiliary_images.rs</code> | — | 1 (max 121) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_estimates.rs</code> | — | 1 (max 238) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_execution.rs</code> | — | 1 (max 269) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_execution/routing.rs</code> | — | 1 (max 659) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_encoding.rs</code> | — | 1 (max 369) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_encoding/dispatch.rs</code> | — | 2 (max 254) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_operation_planning.rs</code> | — | 1 (max 103) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_pipeline.rs</code> | — | 1 (max 628) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_preparation.rs</code> | — | 1 (max 171) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/geometry/native_execution.rs</code> | — | 2 (max 218) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/logical_mode_admission.rs</code> | — | 1 (max 385) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/native_composite.rs</code> | — | 1 (max 210) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/native_hsv_pad.rs</code> | — | 1 (max 147) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/native_paste/execution.rs</code> | — | 3 (max 216) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/native_paste/masked_execution.rs</code> | — | 1 (max 307) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/operation_admission.rs</code> | — | 2 (max 134) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/operation_support.rs</code> | — | 1 (max 226) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/pipeline_cache.rs</code> | — | 1 (max 228) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/point_ops.rs</code> | — | 1 (max 143) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs</code> | — | 3 (max 175) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/point_ops/native_byte_op.rs</code> | — | 1 (max 416) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/projection.rs</code> | — | 1 (max 301) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/resize/compact_box.rs</code> | — | 2 (max 113) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs</code> | — | 4 (max 282) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/resize/integer_arithmetic.rs</code> | — | 1 (max 101) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/resize/ordered_float.rs</code> | — | 1 (max 134) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/resize/tiled.rs</code> | — | 1 (max 194) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/rgb_merge.rs</code> | — | 1 (max 275) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/stream.rs</code> | 2,508 | 5 (max 331) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/mod.rs</code> | — | 1 (max 129) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/native_cover.rs</code> | — | 1 (max 160) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/native_luma.rs</code> | — | 1 (max 249) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/native_transform.rs</code> | — | 1 (max 109) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/palette_projective.rs</code> | — | 3 (max 232) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/projective_filtered.rs</code> | — | 3 (max 144) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs</code> | — | 5 (max 148) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/projective_nearest_proofs.rs</code> | — | 1 (max 420) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/readback.rs</code> | — | 3 (max 137) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/resize_float_execution.rs</code> | — | 1 (max 206) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/resize_float_proofs.rs</code> | — | 3 (max 223) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/resize_ordered_taps.rs</code> | — | 1 (max 135) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/resize_thumbnail.rs</code> | — | 1 (max 103) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs</code> | — | 2 (max 176) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/transpose_execution.rs</code> | — | 1 (max 103) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/transpose_planning.rs</code> | — | 2 (max 128) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/transform/geometry.rs</code> | — | 1 (max 163) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/transform/projective_admission.rs</code> | — | 1 (max 126) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs</code> | — | 1 (max 408) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/transform/safety.rs</code> | — | 2 (max 244) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_simd/mod.rs</code> | — | 1 (max 308) | lazytrot | pillow-rs#nt8w |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters.rs</code> | — | 2 (max 177) | lazytrot | pillow-rs#nt8w |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/box_blur/kernels/rgb.rs</code> | — | 1 (max 114) | lazytrot | pillow-rs#y5m4 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/box_blur/tests.rs</code> | — | 1 (max 103) | lazytrot | pillow-rs#y5m4 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/convert/kernels/dispatch.rs</code> | — | 1 (max 216) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/draw/kernels/shapes.rs</code> | — | 1 (max 180) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/draw/kernels/spans.rs</code> | — | 2 (max 148) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/enhance.rs</code> | — | 1 (max 168) | lazytrot | pillow-rs#5a5k |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/expand.rs</code> | — | 1 (max 145) | lazytrot | pillow-rs#5a5k |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/layout.rs</code> | — | 1 (max 135) | lazytrot | pillow-rs#5a5k |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/pad.rs</code> | — | 1 (max 294) | lazytrot | pillow-rs#5a5k |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/kernels/apply.rs</code> | — | 1 (max 780) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/kernels/luma16.rs</code> | — | 1 (max 147) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/kernels/rgb_cmyk.rs</code> | — | 1 (max 130) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/mod.rs</code> | — | 1 (max 149) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/tests.rs</code> | — | 1 (max 105) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/reduce.rs</code> | — | 1 (max 130) | lazytrot | pillow-rs#5a5k |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize.rs</code> | — | 1 (max 140) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/f32.rs</code> | — | 2 (max 409) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/luma16.rs</code> | — | 1 (max 205) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8.rs</code> | — | 1 (max 367) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_boxed_convolution.rs</code> | — | 1 (max 331) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_nearest.rs</code> | — | 2 (max 198) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/tests.rs</code> | — | 1 (max 111) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/rotate/kernels/native.rs</code> | — | 3 (max 186) | lazytrot | pillow-rs#tbtw |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail.rs</code> | — | 1 (max 189) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/float.rs</code> | — | 1 (max 130) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/integer.rs</code> | — | 1 (max 131) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/bilinear.rs</code> | — | 2 (max 186) | lazytrot | pillow-rs#tbtw |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/luma16.rs</code> | — | 1 (max 126) | lazytrot | pillow-rs#tbtw |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/mesh.rs</code> | — | 1 (max 121) | lazytrot | pillow-rs#tbtw |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/nearest.rs</code> | — | 2 (max 149) | lazytrot | pillow-rs#tbtw |
-| <code>pillow-rs/src/compute/pool_simd/ops/scalar.rs</code> | 4,038 | 4 (max 190) | lazytrot | pillow-rs#nt8w |
-| <code>pillow-rs/src/draw/mod.rs</code> | 3,106 | 3 (max 504) | lazytrot | pillow-rs#mtx1 |
+| <code>pillow-rs/src/compute/pool_cpu/mod.rs</code> | — | 1 (max 320 lines) | lazytrot | pillow-rs#7f4d |
+| <code>pillow-rs/src/compute/pool_cpu/ops/color.rs</code> | — | 1 (max 107 lines) | lazytrot | pillow-rs#7f4d |
+| <code>pillow-rs/src/compute/pool_cpu/ops/draw.rs</code> | 1,777 | 2 (max 172 lines) | lazytrot | pillow-rs#mtx1 |
+| <code>pillow-rs/src/compute/pool_cpu/ops/effects.rs</code> | 6,211 | 9 (max 235 lines) | lazytrot | pillow-rs#8rfy |
+| <code>pillow-rs/src/compute/pool_cpu/ops/enhance.rs</code> | — | 1 (max 117 lines) | lazytrot | pillow-rs#7f4d |
+| <code>pillow-rs/src/compute/pool_cpu/ops/filter.rs</code> | 6,897 | 4 (max 260 lines) | lazytrot | pillow-rs#qpfs |
+| <code>pillow-rs/src/compute/pool_cpu/ops/geometry.rs</code> | 5,600 | 11 (max 244 lines) | lazytrot | pillow-rs#wtxv |
+| <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303 lines) | lazytrot | pillow-rs#vamp |
+| <code>pillow-rs/src/compute/pool_gpu/auxiliary_images.rs</code> | — | 1 (max 121 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/batch_encoding.rs</code> | — | 1 (max 369 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/batch_encoding/dispatch.rs</code> | — | 2 (max 254 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/batch_estimates.rs</code> | — | 1 (max 238 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/batch_execution.rs</code> | — | 1 (max 269 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/batch_execution/routing.rs</code> | — | 1 (max 659 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/batch_operation_planning.rs</code> | — | 1 (max 103 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/batch_pipeline.rs</code> | — | 1 (max 628 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/batch_preparation.rs</code> | — | 1 (max 122 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/geometry/native_execution.rs</code> | — | 2 (max 218 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/logical_mode_admission.rs</code> | — | 1 (max 385 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/native_composite.rs</code> | — | 1 (max 210 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/native_hsv_pad.rs</code> | — | 1 (max 147 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/native_paste/execution.rs</code> | — | 3 (max 216 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/native_paste/masked_execution.rs</code> | — | 1 (max 307 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/operation_admission.rs</code> | — | 2 (max 134 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/operation_support.rs</code> | — | 1 (max 226 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/pipeline_cache.rs</code> | — | 1 (max 228 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/point_ops.rs</code> | — | 1 (max 143 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs</code> | — | 3 (max 175 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/point_ops/native_byte_op.rs</code> | — | 1 (max 416 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/projection.rs</code> | — | 1 (max 301 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/resize/compact_box.rs</code> | — | 2 (max 113 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs</code> | — | 4 (max 282 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/resize/integer_arithmetic.rs</code> | — | 1 (max 101 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/resize/ordered_float.rs</code> | — | 1 (max 134 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/resize/tiled.rs</code> | — | 1 (max 194 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/rgb_merge.rs</code> | — | 1 (max 275 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/stream/encoding.rs</code> | — | 3 (max 271 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/mod.rs</code> | — | 1 (max 129 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/native_cover.rs</code> | — | 1 (max 160 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/native_luma.rs</code> | — | 1 (max 249 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/native_transform.rs</code> | — | 1 (max 109 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/palette_projective.rs</code> | — | 3 (max 232 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/projective_filtered.rs</code> | — | 3 (max 144 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs</code> | — | 5 (max 148 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/projective_nearest_proofs.rs</code> | — | 1 (max 420 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/readback.rs</code> | — | 3 (max 137 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/resize_float_execution.rs</code> | — | 1 (max 206 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/resize_float_proofs.rs</code> | — | 3 (max 223 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/resize_ordered_taps.rs</code> | — | 1 (max 135 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/resize_thumbnail.rs</code> | — | 1 (max 103 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs</code> | — | 2 (max 176 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/transpose_execution.rs</code> | — | 1 (max 103 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/tests/transpose_planning.rs</code> | — | 2 (max 128 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/transform/geometry.rs</code> | — | 1 (max 163 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/transform/projective_admission.rs</code> | — | 1 (max 126 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs</code> | — | 1 (max 408 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/transform/safety.rs</code> | — | 2 (max 244 lines) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_simd/mod.rs</code> | — | 1 (max 308 lines) | lazytrot | pillow-rs#nt8w |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters.rs</code> | — | 2 (max 177 lines) | lazytrot | pillow-rs#nt8w |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/box_blur/kernels/rgb.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#y5m4 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/box_blur/tests.rs</code> | — | 1 (max 103 lines) | lazytrot | pillow-rs#y5m4 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/convert/kernels/dispatch.rs</code> | — | 1 (max 216 lines) | lazytrot | pillow-rs#hezh |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/draw/kernels/shapes.rs</code> | — | 1 (max 180 lines) | lazytrot | pillow-rs#hezh |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/draw/kernels/spans.rs</code> | — | 2 (max 148 lines) | lazytrot | pillow-rs#hezh |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/enhance.rs</code> | — | 1 (max 168 lines) | lazytrot | pillow-rs#5a5k |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/expand.rs</code> | — | 1 (max 145 lines) | lazytrot | pillow-rs#5a5k |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/layout.rs</code> | — | 1 (max 135 lines) | lazytrot | pillow-rs#5a5k |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/pad.rs</code> | — | 1 (max 294 lines) | lazytrot | pillow-rs#5a5k |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/kernels/apply.rs</code> | — | 1 (max 780 lines) | lazytrot | pillow-rs#hezh |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/kernels/luma16.rs</code> | — | 1 (max 147 lines) | lazytrot | pillow-rs#hezh |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/kernels/rgb_cmyk.rs</code> | — | 1 (max 130 lines) | lazytrot | pillow-rs#hezh |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/mod.rs</code> | — | 1 (max 149 lines) | lazytrot | pillow-rs#hezh |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/tests.rs</code> | — | 1 (max 105 lines) | lazytrot | pillow-rs#hezh |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/reduce.rs</code> | — | 1 (max 130 lines) | lazytrot | pillow-rs#5a5k |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize.rs</code> | — | 1 (max 140 lines) | lazytrot | pillow-rs#h8p0 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/f32.rs</code> | — | 2 (max 409 lines) | lazytrot | pillow-rs#h8p0 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/luma16.rs</code> | — | 1 (max 205 lines) | lazytrot | pillow-rs#h8p0 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8.rs</code> | — | 1 (max 367 lines) | lazytrot | pillow-rs#h8p0 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_boxed_convolution.rs</code> | — | 1 (max 331 lines) | lazytrot | pillow-rs#h8p0 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_nearest.rs</code> | — | 2 (max 198 lines) | lazytrot | pillow-rs#h8p0 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/tests.rs</code> | — | 1 (max 111 lines) | lazytrot | pillow-rs#h8p0 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/rotate/kernels/native.rs</code> | — | 3 (max 186 lines) | lazytrot | pillow-rs#tbtw |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail.rs</code> | — | 1 (max 189 lines) | lazytrot | pillow-rs#h8p0 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/float.rs</code> | — | 1 (max 130 lines) | lazytrot | pillow-rs#h8p0 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/integer.rs</code> | — | 1 (max 131 lines) | lazytrot | pillow-rs#h8p0 |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/bilinear.rs</code> | — | 2 (max 186 lines) | lazytrot | pillow-rs#tbtw |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/luma16.rs</code> | — | 1 (max 126 lines) | lazytrot | pillow-rs#tbtw |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/mesh.rs</code> | — | 1 (max 121 lines) | lazytrot | pillow-rs#tbtw |
+| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/nearest.rs</code> | — | 2 (max 149 lines) | lazytrot | pillow-rs#tbtw |
+| <code>pillow-rs/src/compute/pool_simd/ops/scalar.rs</code> | 4,038 | 4 (max 190 lines) | lazytrot | pillow-rs#nt8w |
+| <code>pillow-rs/src/draw/mod.rs</code> | 3,106 | 3 (max 504 lines) | lazytrot | pillow-rs#mtx1 |
 | <code>pillow-rs/src/font/imagingft.rs</code> | 2,561 | 0 | lazytrot | pillow-rs#96je |
-| <code>pillow-rs/src/image.rs</code> | 10,258 | 14 (max 265) | lazytrot | pillow-rs#knsf |
+| <code>pillow-rs/src/image/backend.rs</code> | — | 1 (max 110 lines) | lazytrot | pillow-rs#knsf |
+| <code>pillow-rs/src/image/channel_access.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#knsf |
+| <code>pillow-rs/src/image/construction.rs</code> | — | 2 (max 156 lines) | lazytrot | pillow-rs#knsf |
+| <code>pillow-rs/src/image/data_access.rs</code> | — | 1 (max 101 lines) | lazytrot | pillow-rs#knsf |
+| <code>pillow-rs/src/image/entropy.rs</code> | — | 1 (max 156 lines) | lazytrot | pillow-rs#knsf |
+| <code>pillow-rs/src/image/pipeline_ops.rs</code> | — | 2 (max 160 lines) | lazytrot | pillow-rs#knsf |
+| <code>pillow-rs/src/image/projection.rs</code> | — | 2 (max 208 lines) | lazytrot | pillow-rs#knsf |
+| <code>pillow-rs/src/image/statistics.rs</code> | — | 3 (max 265 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/lib.rs</code> | 1,082 | 0 | lazytrot | pillow-rs#fk3d |
-| <code>pillow-rs/src/ops/analysis.rs</code> | — | 2 (max 181) | lazytrot | pillow-rs#r45k |
-| <code>pillow-rs/src/ops/convert.rs</code> | 1,450 | 1 (max 576) | lazytrot | pillow-rs#bnhk |
-| <code>pillow-rs/src/ops/imageops.rs</code> | 1,899 | 2 (max 134) | lazytrot | pillow-rs#vamp |
+| <code>pillow-rs/src/ops/analysis.rs</code> | — | 2 (max 181 lines) | lazytrot | pillow-rs#r45k |
+| <code>pillow-rs/src/ops/convert.rs</code> | 1,450 | 1 (max 576 lines) | lazytrot | pillow-rs#bnhk |
+| <code>pillow-rs/src/ops/imageops.rs</code> | 1,899 | 2 (max 134 lines) | lazytrot | pillow-rs#vamp |
 | <code>pillow-rs/src/ops/module_fns.rs</code> | 1,122 | 0 | lazytrot | pillow-rs#fk3d |
-| <code>pillow-rs/src/ops/paste.rs</code> | — | 2 (max 123) | lazytrot | pillow-rs#mtx1 |
-| <code>pillow-rs/src/ops/pil_resize.rs</code> | 6,032 | 7 (max 240) | lazytrot | pillow-rs#nsax |
-| <code>pillow-rs/src/ops/quantize.rs</code> | 2,462 | 4 (max 180) | lazytrot | pillow-rs#bnhk |
-| <code>pillow-rs/src/ops/resize.rs</code> | — | 1 (max 101) | lazytrot | pillow-rs#tdnt |
-| <code>pillow-rs/src/ops/transform.rs</code> | — | 2 (max 139) | lazytrot | pillow-rs#tdnt |
-| <code>pillow-rs/src/pipeline.rs</code> | 1,077 | 0 | lazytrot | pillow-rs#fk3d |
+| <code>pillow-rs/src/ops/paste.rs</code> | — | 2 (max 123 lines) | lazytrot | pillow-rs#mtx1 |
+| <code>pillow-rs/src/ops/pil_resize.rs</code> | 6,032 | 7 (max 240 lines) | lazytrot | pillow-rs#nsax |
+| <code>pillow-rs/src/ops/quantize.rs</code> | 2,462 | 4 (max 180 lines) | lazytrot | pillow-rs#bnhk |
+| <code>pillow-rs/src/ops/resize.rs</code> | — | 1 (max 101 lines) | lazytrot | pillow-rs#tdnt |
+| <code>pillow-rs/src/ops/transform.rs</code> | — | 2 (max 139 lines) | lazytrot | pillow-rs#tdnt |
 | <code>pillow-rs/src/raster/buffer.rs</code> | 1,244 | 0 | lazytrot | pillow-rs#4bdq |
-| <code>pillow-rs/src/raster/dynamic.rs</code> | 1,162 | 1 (max 102) | lazytrot | pillow-rs#4bdq |
+| <code>pillow-rs/src/raster/dynamic.rs</code> | 1,162 | 1 (max 102 lines) | lazytrot | pillow-rs#4bdq |
 
 ## Contributor workflow
 
