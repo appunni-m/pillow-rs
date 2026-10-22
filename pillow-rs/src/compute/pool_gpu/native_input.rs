@@ -896,3 +896,41 @@ pub(super) fn gpu_native_reduce_rgb_input(
 ) -> bool {
     false
 }
+
+/// Admit one native LA affine-nearest transform. The matching packed shader
+/// reads and writes two-byte luma/alpha samples directly, without RGBA staging.
+#[cfg(target_endian = "little")]
+pub(super) fn gpu_native_la_transform_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if !matches!(
+        ops,
+        [PipelineOp::Transform {
+            method: TransformMethod::Affine,
+            filter: ResampleFilter::Nearest,
+            ..
+        }]
+    ) || !matches!(logical_mode, None | Some("LA"))
+    {
+        return false;
+    }
+    let DynamicImage::ImageLumaA8(la) = image else {
+        return false;
+    };
+    let Ok(layout) = CheckedDims::new(image.width(), image.height(), 2) else {
+        return false;
+    };
+    let byte_count = layout.total_bytes();
+    byte_count > 0 && byte_count <= u32::MAX as usize && la.as_raw().len() == byte_count
+}
+
+#[cfg(not(target_endian = "little"))]
+pub(super) fn gpu_native_la_transform_input(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> bool {
+    false
+}
