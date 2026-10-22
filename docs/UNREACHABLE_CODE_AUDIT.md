@@ -346,3 +346,15 @@ Resize and `ImageOps.fit` keep their existing callers through the `resize`
 module re-export. Shared coefficient and row helpers remain in `adapters.rs`
 because other Resize kernels still use them. This is an ownership-only move;
 the operation graph and static reachability counts are unchanged.
+
+## SIMD Offset family path follow-up — 2026-10-22
+
+The registered Offset adapter remains `adapters::simd_offset`; its family
+adapter now lives in `pillow-rs/src/compute/pool_simd/ops/adapters/offset.rs`.
+The native byte loops and the Pillow-compatible byte-oriented `I;16*` loops
+live under that family's `kernels/` directory. Native-copy layout, empty-image,
+and shared byte-conversion helpers remain in `adapters.rs` because Flip,
+Mirror, and Crop still call them. The selected 14-case CPU, strict-SIMD, and
+GPU-requested parity lanes passed before and after extraction. This changes
+ownership only; no operation route or reachability count changed. Receipts are
+preserved in `docs/evidence/geometry/offset-simd-family-layout-arm64-20261022/`.

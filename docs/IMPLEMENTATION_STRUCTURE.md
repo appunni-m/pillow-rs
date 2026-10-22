@@ -319,7 +319,7 @@ work, not permission to move files mechanically:
 
 | Current shape | Standard destination | Migration guard |
 | --- | --- | --- |
-| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` contains dispatch plus many family implementations. | A re-export/dispatch facade with family orchestrators under `ops/adapters/<family>.rs` and distinct loops under each family's `kernels/`. | Move one family at a time; prove the same SIMD implementation executes and compare full public-call latency and affected parity. |
+| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` contains dispatch plus many family implementations; SIMD Offset now lives under `adapters/offset.rs` with byte and Luma16 kernels under `offset/kernels/`. | A re-export/dispatch facade with family orchestrators under `ops/adapters/<family>.rs` and distinct loops under each family's `kernels/`. | Move one family at a time; prove the same SIMD implementation executes and compare full public-call latency and affected parity. |
 | `pillow-rs/src/compute/pool_simd/ops/native_filter.rs` holds a byte-block loader used by Filter3x3, Filter5x5, and Sharpness; an LA binomial row loop used by serial AArch64 CPU and SIMD; and an I32 row/vector loop used by SIMD production code (the CPU reference is test-only). | Keep the shared loader and LA loop single-sourced in the current native filter owner. Move the SIMD-only I32 row/vector implementation to `pool_simd/ops/adapters/filter/kernels/i32.rs`, re-export it through that family's `kernels/mod.rs`, and point the CPU differential test at the same implementation. | Preserve the direct SIMD call, vector receipt, and zero-fallback behavior. Use the exact Filter5x5 parity cases and materialized L/LA/I workloads listed below on CPU and SIMD, including terminal materialization. |
 | `pool_simd/ops/adapters/box_blur_luma.rs`, `box_blur_rgba_avx2.rs`, and `box_blur_rgba_neon.rs` place blur loops and architecture variants directly beside adapters. | `pool_simd/ops/adapters/box_blur.rs` for admission/orchestration, with `box_blur/kernels/luma.rs`, `rgba_avx2.rs`, and `rgba_neon.rs` for distinct hot loops. | Move one mode/architecture path at a time; retain the exact SIMD receipt and compare full BoxBlur latency on each affected architecture. |
 | `pool_simd/ops/adapters/native_transpose_avx2.rs` names an architecture kernel as a top-level adapter module. | A `transpose.rs` family orchestrator and `transpose/kernels/rgba_avx2.rs`. | Verify that the AVX2 path still executes and compare full-call parity and latency, including non-tile tails. |
@@ -411,3 +411,13 @@ terminal completion, and no fallback. The focused `SimdPool` test also verified
 all four PutPixel vector receipts, ordered output equality, and fused-operation
 accounting. Full reports are under
 `docs/evidence/put_pixel/family-layout-arm64-20261020/`.
+
+SIMD Offset now follows the same family shape: `adapters.rs` re-exports
+`adapters/offset.rs`, which owns operation admission and receipts;
+`offset/kernels/byte.rs` contains the native byte path, and
+`offset/kernels/luma16.rs` preserves Pillow's byte-oriented `I;16*` behavior.
+Shared native-copy layout and byte-conversion helpers remain in `adapters.rs`
+because Flip, Mirror, and Crop still use them. The selected CPU, strict-SIMD,
+and GPU-requested parity cases passed before and after the move. Full-call
+benchmark receipts and the focused GPU repeat are recorded in
+`docs/evidence/geometry/offset-simd-family-layout-arm64-20261022/`.

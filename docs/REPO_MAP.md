@@ -313,6 +313,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |   |-- float.rs
 |   |   |   |   |   |   |   `-- integer.rs
 |   |   |   |   |   |   |-- native_thumbnail.rs
+|   |   |   |   |   |   |-- offset/
+|   |   |   |   |   |   |   `-- kernels/
+|   |   |   |   |   |   |       |-- byte.rs
+|   |   |   |   |   |   |       `-- luma16.rs
+|   |   |   |   |   |   |-- offset.rs
 |   |   |   |   |   |   |-- projection.rs
 |   |   |   |   |   |   |-- put_pixel/
 |   |   |   |   |   |   |   |-- kernels/
@@ -324,7 +329,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |       |-- i32/
 |   |   |   |   |   |   |       |   `-- neon.rs
 |   |   |   |   |   |   |       |-- i32.rs
-|   |   |   |   |   |   |       `-- u8.rs
+|   |   |   |   |   |   |       |-- u8.rs
+|   |   |   |   |   |   |       `-- u8_boxed_convolution.rs
 |   |   |   |   |   |   |-- resize.rs
 |   |   |   |   |   |   |-- rotate/
 |   |   |   |   |   |   |   |-- kernels/

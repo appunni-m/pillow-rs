@@ -32206,3 +32206,65 @@ are retained under
 `build/migration-parity/boxed-convolution-refactor-20261022/` for the local
 review. No bottleneck was diagnosed, so no causal performance comment was
 added to the implementation.
+
+## SIMD Offset family layout — ARM64 — 2026-10-22
+
+The Offset adapter and its byte and Luma16 kernels moved from the large SIMD
+adapter file into the family directory. The exact parity set was frozen before
+the move and run with CPU, strict SIMD, and GPU requested, both before and
+after. All six lanes passed all 14 cases with no failures or infrastructure
+errors. The case IDs were:
+
+- `PIL.ImageChops.offset.behavior.default`,
+  `PIL.ImageChops.offset.parameter.yoffset`,
+  `PIL.ImageChops.offset.mode.l`, and `PIL.ImageChops.offset.mode.rgba`.
+- `PIL.ImageChops.offset.nuanced.coverage-batch-chops-large-offset-l`,
+  `PIL.ImageChops.offset.nuanced.coverage-batch-chops-large-offset-la`,
+  `PIL.ImageChops.offset.nuanced.coverage-batch-chops-large-offset-rgb`, and
+  `PIL.ImageChops.offset.nuanced.coverage-batch-chops-large-offset-rgba`.
+- `PIL.ImageChops.offset.nuanced.coverage-batch-chops-small-unary-offset-3`,
+  `PIL.ImageChops.offset.nuanced.zero-width`, and
+  `PIL.ImageChops.offset.nuanced.zero-height`.
+- `PIL.ImageChops.offset.nuanced.simd-cov-f27-c01`,
+  `PIL.ImageChops.offset.nuanced.simd-cov-f27-c05`, and
+  `PIL.ImageChops.offset.nuanced.simd-cov-f27-c08`.
+
+The before and after benchmark runs used the same whole-workflow policy: one
+warmup, three timed iterations, two samples, concurrency one, and a
+`successful_execution` gate. Median latency is in milliseconds:
+
+| Workload | Profile | Before | After | Actual route / receipt |
+| --- | --- | ---: | ---: | --- |
+| Offset materialized 16×16 | Pillow | 0.024167 | 0.024709 | `pillow` |
+| Offset materialized 16×16 | CPU | 0.024625 | 0.023250 | `cpu` |
+| Offset materialized 16×16 | SIMD | 0.026833 | 0.022937 | `simd`, 48 vector blocks, no fallback |
+| Offset materialized 16×16 | GPU | 0.315499 | 0.278083 | `gpu`, no fallback |
+| Offset 32×24 | Pillow | 0.024250 | 0.022729 | `pillow` |
+| Offset 32×24 | CPU | 0.040521 | 0.023896 | `cpu` |
+| Offset 32×24 | SIMD | 0.023875 | 0.023251 | `simd`, 144 vector blocks, no fallback |
+| Offset 32×24 | GPU | 0.277895 | 0.506084 | `gpu`, no fallback |
+
+The post-move GPU result was high, so only the 32×24 workload was repeated with
+the same policy and GPU profile. Its median was 0.417167 ms, with samples from
+0.289333 to 1.744833 ms. The initial GPU measurements also had wide spreads.
+The repeat does not isolate a stable GPU regression, and the Offset SIMD move
+does not change the GPU route; no GPU change is attributed to this extraction.
+The SIMD medians stayed near baseline, with the same native-copy path and
+vector-block receipts. These small-sample results establish routing and show no
+clear SIMD latency regression; they do not establish a speedup. The benchmark
+gate proves successful execution, not exact output parity or performance
+causation.
+
+Parity run IDs: baseline CPU
+`migration-parity-790cc8cd580747f09471adfb382b6ad4`, strict SIMD
+`migration-parity-f0fa1894edbe49d49e0c9ca580d4be1e`, GPU requested
+`migration-parity-a6f311a292f84a82be43c314e927875c`; post CPU
+`migration-parity-305f3e9b90ab4024b5519c93c886980f`, strict SIMD
+`migration-parity-30754f0bd17b44a68025f3ec004dd753`, GPU requested
+`migration-parity-b01420ea69fd4e1d9c3af6ec28bb38a8`. Benchmark run IDs:
+baseline `migration-benchmark-2903a60909764f17ba8141ac8c45d9b0`, post
+`migration-benchmark-d9384d262f1b4f70adf78b504fa03d12`, focused GPU repeat
+`migration-benchmark-c03aeffb12164caa9de32a9412b0a3fc`. All benchmark
+reports passed schema validation. Compressed reports, raw samples, attestations,
+and producer receipts are preserved in
+`docs/evidence/geometry/offset-simd-family-layout-arm64-20261022/`.
