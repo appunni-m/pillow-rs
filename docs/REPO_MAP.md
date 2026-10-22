@@ -154,6 +154,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- native_paste.rs
 |   |   |   |   |-- operation_admission.rs
 |   |   |   |   |-- operation_support.rs
+|   |   |   |   |-- pipeline_cache.rs
 |   |   |   |   |-- point_ops/
 |   |   |   |   |   |-- native_alpha.rs
 |   |   |   |   |   `-- native_byte_op.rs
