@@ -1,14 +1,30 @@
-//! SIMD EffectNoise and EffectSpread family adapters.
+//! SIMD native effect adapters.
 
 use super::{
     SimdImageShape, SimdLayout, f64x8, has_empty_native_bytes, has_valid_byte_data,
-    native_copy_layout, shape_has_empty_native_bytes, shape_has_nonempty_byte_data,
-    shape_native_identity_copy_channels,
+    native_copy_layout, native_invert, shape_has_empty_native_bytes, shape_has_nonempty_byte_data,
+    shape_native_identity_copy_channels, simd_unsupported,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView, GrayImage};
 use wide::u8x16;
+
+pub(crate) fn simd_invert(
+    img: &DynamicImage,
+    _op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    native_invert(img, mode, false).ok_or_else(|| simd_unsupported("Invert"))
+}
+
+pub(crate) fn simd_invert_chops(
+    img: &DynamicImage,
+    _op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    native_invert(img, mode, true).ok_or_else(|| simd_unsupported("InvertChops"))
+}
 
 /// EffectNoise writes a native L image.
 pub(super) fn output_layout() -> SimdLayout {

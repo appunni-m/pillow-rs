@@ -39,7 +39,9 @@ mod resize;
 mod rotate;
 mod thumbnail;
 mod transpose;
-pub(crate) use self::effects::{simd_effect_noise, simd_effect_spread};
+pub(crate) use self::effects::{
+    simd_effect_noise, simd_effect_spread, simd_invert, simd_invert_chops,
+};
 pub(crate) use self::extract_band::{simd_extract_band, simd_extract_band_into};
 pub(crate) use self::grayscale::{simd_grayscale, simd_grayscale_with_evidence};
 pub(crate) use self::median_filter::{
@@ -13152,26 +13154,6 @@ fn simd_native_chops(
     Err(PilError::NotImplementedError(
         "SIMD Chops requires matching native byte layouts".into(),
     ))
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// Section A: Simple single-image ops (no extra params beyond mode)
-// ═══════════════════════════════════════════════════════════════════════
-
-pub fn simd_invert(
-    img: &DynamicImage,
-    _op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    native_invert(img, mode, false).ok_or_else(|| simd_unsupported("Invert"))
-}
-
-pub fn simd_invert_chops(
-    img: &DynamicImage,
-    _op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    native_invert(img, mode, true).ok_or_else(|| simd_unsupported("InvertChops"))
 }
 
 // ═══════════════════════════════════════════════════════════════════════
