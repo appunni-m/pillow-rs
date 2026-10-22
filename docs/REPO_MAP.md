@@ -122,6 +122,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   `-- dispatch.rs
 |   |   |   |   |-- batch_encoding.rs
 |   |   |   |   |-- batch_estimates.rs
+|   |   |   |   |-- batch_native_routes.rs
 |   |   |   |   |-- batch_normalization.rs
 |   |   |   |   |-- batch_operation_planning.rs
 |   |   |   |   |-- batch_operations.rs
