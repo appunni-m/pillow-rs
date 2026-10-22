@@ -4,6 +4,7 @@ mod extrema;
 mod kernels;
 pub(crate) use self::extrema::{simd_max_filter, simd_min_filter};
 
+use super::filter::shape_native_filter_byte_channels;
 use super::{
     SIMD_BYTE_VECTOR_LANES, SimdImageShape, native_copy_image_bytes, native_filter_byte_layout,
     native_small_uniform_byte_image, native_typed_filter_layout,
@@ -16,6 +17,108 @@ use crate::raster::DynamicImage;
 use wide::f32x8;
 
 const SIMD_RANK_FILTER_MIN_VECTOR_PIXELS: usize = 1;
+
+pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    let native_filter_byte_channels = native_filter_byte_layout(img, mode);
+    match op {
+        PipelineOp::MaxFilter { size } | PipelineOp::MinFilter { size } => {
+            (native_filter_byte_channels.is_some()
+                && *size != 0
+                && *size % 2 == 1
+                && img.width() != 0
+                && img.height() != 0)
+                || native_float_rank_supported_for_image(
+                    img,
+                    mode,
+                    *size,
+                    if matches!(op, PipelineOp::MaxFilter { .. }) {
+                        size.saturating_mul(*size).saturating_sub(1)
+                    } else {
+                        0
+                    },
+                )
+        }
+        PipelineOp::MedianFilter { size } => {
+            (native_filter_byte_channels.is_some()
+                && *size != 0
+                && *size % 2 == 1
+                && *size <= 15
+                && img.width() != 0
+                && img.height() != 0)
+                || native_float_rank_supported_for_image(
+                    img,
+                    mode,
+                    *size,
+                    size.saturating_mul(*size) / 2,
+                )
+        }
+        PipelineOp::RankFilter { size, rank } => {
+            let area = u64::from(*size).saturating_mul(u64::from(*size));
+            (native_filter_byte_channels.is_some()
+                && *size != 0
+                && *size % 2 == 1
+                && area <= 225
+                && u64::from(*rank) < area
+                && img.width() != 0
+                && img.height() != 0)
+                || native_float_rank_supported_for_image(img, mode, *size, *rank)
+        }
+        _ => false,
+    }
+}
+
+pub(super) fn supports_for_shape(
+    shape: SimdImageShape,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    let native_filter_byte_channels = shape_native_filter_byte_channels(shape, mode);
+    match op {
+        PipelineOp::MaxFilter { size } | PipelineOp::MinFilter { size } => {
+            (native_filter_byte_channels.is_some()
+                && *size != 0
+                && *size % 2 == 1
+                && shape.width != 0
+                && shape.height != 0)
+                || shape_native_float_rank_supported(
+                    shape,
+                    mode,
+                    *size,
+                    if matches!(op, PipelineOp::MaxFilter { .. }) {
+                        size.saturating_mul(*size).saturating_sub(1)
+                    } else {
+                        0
+                    },
+                )
+        }
+        PipelineOp::MedianFilter { size } => {
+            (native_filter_byte_channels.is_some()
+                && *size != 0
+                && *size % 2 == 1
+                && *size <= 15
+                && shape.width != 0
+                && shape.height != 0)
+                || shape_native_float_rank_supported(
+                    shape,
+                    mode,
+                    *size,
+                    size.saturating_mul(*size) / 2,
+                )
+        }
+        PipelineOp::RankFilter { size, rank } => {
+            let area = u64::from(*size).saturating_mul(u64::from(*size));
+            (native_filter_byte_channels.is_some()
+                && *size != 0
+                && *size % 2 == 1
+                && area <= 225
+                && u64::from(*rank) < area
+                && shape.width != 0
+                && shape.height != 0)
+                || shape_native_float_rank_supported(shape, mode, *size, *rank)
+        }
+        _ => false,
+    }
+}
 
 pub(super) fn native_float_rank_supported_for_image(
     img: &DynamicImage,

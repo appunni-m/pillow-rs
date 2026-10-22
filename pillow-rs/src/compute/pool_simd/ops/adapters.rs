@@ -59,7 +59,7 @@ pub(crate) use self::filter::native_filter_3x3_la_binomial_rows;
 use self::filter::{
     native_filter_3x3_channel_block_integer, native_filter_3x3_luma_block_integer,
     native_filter_3x3_pixel_block_integer, native_filter_3x3_rgb_byte_block_integer,
-    native_filter_3x3_vector, shape_native_filter_byte_channels,
+    native_filter_3x3_vector,
 };
 pub(crate) use self::filter::{
     simd_filter_3x3, simd_filter_5x5, simd_unsharp_blend_rgb_150,
@@ -502,7 +502,6 @@ pub(crate) fn simd_supports_for_image(
     if !crate::compute::registry::simd_supports(op).unwrap_or(false) {
         return false;
     }
-    let native_filter_byte_channels = native_filter_byte_layout(img, mode);
     match op {
         // These point operations have native byte kernels. Typed, indexed,
         // and explicitly mode-converted images are deliberately rejected
@@ -577,48 +576,10 @@ pub(crate) fn simd_supports_for_image(
             box_blur::supports_for_image(img, op, mode)
         }
         PipelineOp::GaussianBlur { sigma } => gaussian_blur::supports_for_image(img, *sigma, mode),
-        PipelineOp::MaxFilter { size } | PipelineOp::MinFilter { size } => {
-            (native_filter_byte_channels.is_some()
-                && *size != 0
-                && *size % 2 == 1
-                && img.width() != 0
-                && img.height() != 0)
-                || median_filter::native_float_rank_supported_for_image(
-                    img,
-                    mode,
-                    *size,
-                    if matches!(op, PipelineOp::MaxFilter { .. }) {
-                        size.saturating_mul(*size).saturating_sub(1)
-                    } else {
-                        0
-                    },
-                )
-        }
-        PipelineOp::MedianFilter { size } => {
-            (native_filter_byte_channels.is_some()
-                && *size != 0
-                && *size % 2 == 1
-                && *size <= 15
-                && img.width() != 0
-                && img.height() != 0)
-                || median_filter::native_float_rank_supported_for_image(
-                    img,
-                    mode,
-                    *size,
-                    size.saturating_mul(*size) / 2,
-                )
-        }
-        PipelineOp::RankFilter { size, rank } => {
-            let area = u64::from(*size).saturating_mul(u64::from(*size));
-            (native_filter_byte_channels.is_some()
-                && *size != 0
-                && *size % 2 == 1
-                && area <= 225
-                && u64::from(*rank) < area
-                && img.width() != 0
-                && img.height() != 0)
-                || median_filter::native_float_rank_supported_for_image(img, mode, *size, *rank)
-        }
+        PipelineOp::MaxFilter { .. }
+        | PipelineOp::MinFilter { .. }
+        | PipelineOp::MedianFilter { .. }
+        | PipelineOp::RankFilter { .. } => median_filter::supports_for_image(img, op, mode),
         PipelineOp::PutAlpha { .. } | PipelineOp::PutAlphaData { .. } => {
             put_alpha::supports_for_image(img, op, mode)
         }
@@ -1216,7 +1177,6 @@ pub(crate) fn first_unsupported_simd_op<'a>(
 
 fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<&str>) -> bool {
     let pixel_count = (shape.width as usize).saturating_mul(shape.height as usize);
-    let native_filter_byte_channels = shape_native_filter_byte_channels(shape, mode);
     match op {
         PipelineOp::Invert | PipelineOp::InvertChops => {
             effects::supports_for_shape(shape, op, mode)
@@ -1292,48 +1252,10 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         PipelineOp::GaussianBlur { sigma } => {
             gaussian_blur::supports_for_shape(shape, *sigma, mode)
         }
-        PipelineOp::MaxFilter { size } | PipelineOp::MinFilter { size } => {
-            (native_filter_byte_channels.is_some()
-                && *size != 0
-                && *size % 2 == 1
-                && shape.width != 0
-                && shape.height != 0)
-                || median_filter::shape_native_float_rank_supported(
-                    shape,
-                    mode,
-                    *size,
-                    if matches!(op, PipelineOp::MaxFilter { .. }) {
-                        size.saturating_mul(*size).saturating_sub(1)
-                    } else {
-                        0
-                    },
-                )
-        }
-        PipelineOp::MedianFilter { size } => {
-            (native_filter_byte_channels.is_some()
-                && *size != 0
-                && *size % 2 == 1
-                && *size <= 15
-                && shape.width != 0
-                && shape.height != 0)
-                || median_filter::shape_native_float_rank_supported(
-                    shape,
-                    mode,
-                    *size,
-                    size.saturating_mul(*size) / 2,
-                )
-        }
-        PipelineOp::RankFilter { size, rank } => {
-            let area = u64::from(*size).saturating_mul(u64::from(*size));
-            (native_filter_byte_channels.is_some()
-                && *size != 0
-                && *size % 2 == 1
-                && area <= 225
-                && u64::from(*rank) < area
-                && shape.width != 0
-                && shape.height != 0)
-                || median_filter::shape_native_float_rank_supported(shape, mode, *size, *rank)
-        }
+        PipelineOp::MaxFilter { .. }
+        | PipelineOp::MinFilter { .. }
+        | PipelineOp::MedianFilter { .. }
+        | PipelineOp::RankFilter { .. } => median_filter::supports_for_shape(shape, op, mode),
         PipelineOp::PutAlpha { .. } | PipelineOp::PutAlphaData { .. } => {
             put_alpha::supports_for_shape(shape, op, mode)
         }
