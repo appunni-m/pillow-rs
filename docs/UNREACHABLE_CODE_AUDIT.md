@@ -318,10 +318,11 @@ historical crosswalk counts or claim runtime reachability for unmeasured cfgs.
 
 Direct and boxed Resize admission and mode routing, plus the zero-source helper,
 now live in `pillow-rs/src/compute/pool_simd/ops/adapters/resize.rs`. The
-registered family entry calls this local dispatcher. General byte, float, and
-Luma16 pixel kernels remain in `adapters.rs` for later caller-traced moves.
-This changes file ownership only; it does not alter the historical crosswalk
-counts or infer reachability beyond the selected parity and benchmark paths.
+registered family entry calls this local dispatcher. General byte and float
+pixel kernels and the Luma16 kernel remained in `adapters.rs` at that
+checkpoint; later moves are recorded below. This changes file ownership only;
+it does not alter the historical crosswalk counts or infer reachability beyond
+the selected parity and benchmark paths.
 
 ## SIMD Resize native-byte convolution follow-up — 2026-10-22
 
@@ -351,6 +352,15 @@ Resize and `ImageOps.fit` keep their existing callers through the `resize`
 module re-export. Shared coefficient and row helpers remain in `adapters.rs`
 because other Resize kernels still use them. This is an ownership-only move;
 the operation graph and static reachability counts are unchanged.
+
+## SIMD Resize F-mode kernel follow-up — 2026-10-22
+
+The direct and boxed F-mode Resize kernels now live in
+`pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/f32.rs`. Resize,
+Fit, and aspect-resize callers retain the same function routes through the
+family re-exports. The Luma16 kernel and shared byte coefficient, coordinate,
+and row helpers remain in `adapters.rs` for their existing callers. This is a
+structural move only; no runtime reachability or performance claim is added.
 
 ## SIMD Offset family path follow-up — 2026-10-22
 
