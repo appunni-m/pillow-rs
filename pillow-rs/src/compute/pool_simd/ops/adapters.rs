@@ -249,31 +249,6 @@ fn native_typed_filter_layout(img: &DynamicImage, mode: Option<&str>) -> Option<
         .map(|_| 4)
 }
 
-/// Return the native byte layout accepted by rotation. Indexed images remain
-/// raw sample planes during Pillow rotation: `1`/`P` are one-byte nearest
-/// data and `PA` is a two-byte index/alpha plane. CMYK, RGBa, and RGBX also
-/// remain raw four-byte samples; only straight-alpha `LA`/`RGBA` gets
-/// alpha-aware interpolation. These modes must not use the narrower
-/// ordinary-byte helper just because their storage is backed by the same Rust
-/// image type.
-fn native_rotate_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
-    match img {
-        DynamicImage::ImageLuma8(_) if matches!(mode, Some("1" | "P")) => Some(1),
-        DynamicImage::ImageLumaA8(_) if mode == Some("PA") => Some(2),
-        DynamicImage::ImageLuma16(_)
-            if matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N")) =>
-        {
-            Some(2)
-        }
-        DynamicImage::ImageRgba8(_)
-            if matches!(mode, Some("CMYK" | "RGBa" | "RGBX" | "I" | "F")) =>
-        {
-            Some(4)
-        }
-        _ => native_byte_layout(img, mode),
-    }
-}
-
 fn native_expand_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
@@ -676,204 +651,6 @@ pub(super) fn simd_unsupported(operation: &str) -> PilError {
     ))
 }
 
-fn rotate_identity_contract(
-    angle: f64,
-    center: Option<(f64, f64)>,
-    translate: Option<(f64, f64)>,
-) -> bool {
-    angle.is_finite()
-        && angle.rem_euclid(360.0) == 0.0
-        && center.is_none_or(|(x, y)| x.is_finite() && y.is_finite())
-        && translate.is_none_or(|(x, y)| x == 0.0 && y == 0.0)
-}
-
-#[derive(Clone, Copy)]
-struct SimdRotateGeometry {
-    affine: [f64; 6],
-    width: u32,
-    height: u32,
-}
-
-/// Build the same reverse affine matrix and expanded canvas as Pillow's
-/// `Image.rotate` implementation.
-///
-/// Keeping this calculation separate from the sampler makes it the scalar
-/// control plane: the vector kernel below only gathers native bytes and
-/// stores complete output blocks after these coordinates have been fixed.
-fn simd_rotate_geometry(
-    width: u32,
-    height: u32,
-    angle: f64,
-    expand: bool,
-    center: Option<(f64, f64)>,
-    translate: Option<(f64, f64)>,
-) -> Option<SimdRotateGeometry> {
-    if !angle.is_finite()
-        || center.is_some_and(|(x, y)| !x.is_finite() || !y.is_finite())
-        || translate.is_some_and(|(x, y)| !x.is_finite() || !y.is_finite())
-    {
-        return None;
-    }
-    let sw = f64::from(width);
-    let sh = f64::from(height);
-    let radians = -angle.to_radians();
-    let affine_a = crate::ops::rotate::round_rotate_coefficient(radians.cos());
-    let affine_b = crate::ops::rotate::round_rotate_coefficient(radians.sin());
-    let affine_d = crate::ops::rotate::round_rotate_coefficient(-radians.sin());
-    let affine_e = affine_a;
-    let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
-    let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
-    let mut affine_c =
-        affine_a * (-center_x - translate_x) + affine_b * (-center_y - translate_y) + center_x;
-    let mut affine_f =
-        affine_d * (-center_x - translate_x) + affine_e * (-center_y - translate_y) + center_y;
-    let transform = |x: f64, y: f64| {
-        (
-            affine_a * x + affine_b * y + affine_c,
-            affine_d * x + affine_e * y + affine_f,
-        )
-    };
-    let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
-    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-    for &(corner_x, corner_y) in &corners {
-        let (rotated_x, rotated_y) = transform(corner_x, corner_y);
-        min_x = min_x.min(rotated_x);
-        max_x = max_x.max(rotated_x);
-        min_y = min_y.min(rotated_y);
-        max_y = max_y.max(rotated_y);
-    }
-    let (destination_width, destination_height) = if expand {
-        (max_x.ceil() - min_x.floor(), max_y.ceil() - min_y.floor())
-    } else {
-        (sw, sh)
-    };
-    if !destination_width.is_finite()
-        || !destination_height.is_finite()
-        || destination_width < 0.0
-        || destination_height < 0.0
-        || destination_width > f64::from(u32::MAX)
-        || destination_height > f64::from(u32::MAX)
-    {
-        return None;
-    }
-    let destination_width = destination_width as u32;
-    let destination_height = destination_height as u32;
-    if expand {
-        let shift_x = -(f64::from(destination_width) - sw) / 2.0;
-        let shift_y = -(f64::from(destination_height) - sh) / 2.0;
-        affine_c = affine_a * shift_x + affine_b * shift_y + affine_c;
-        affine_f = affine_d * shift_x + affine_e * shift_y + affine_f;
-    }
-    Some(SimdRotateGeometry {
-        affine: [affine_a, affine_b, affine_c, affine_d, affine_e, affine_f],
-        width: destination_width,
-        height: destination_height,
-    })
-}
-
-/// `execute_rotate` has exact right-angle fast paths. Leave only those exact
-/// angles on the established implementation until a native transpose kernel
-/// is selected explicitly; nearby fractional angles must use Pillow's affine
-/// sampler rather than being rounded into a discrete rotation.
-fn rotate_uses_discrete_fast_path(
-    angle: f64,
-    center: Option<(f64, f64)>,
-    translate: Option<(f64, f64)>,
-    expand: bool,
-    width: u32,
-    height: u32,
-) -> bool {
-    rotate_discrete_fast_angle(angle, center, translate)
-        .is_some_and(|degree| degree == 180 || expand || width == height)
-}
-
-fn rotate_discrete_fast_angle(
-    angle: f64,
-    center: Option<(f64, f64)>,
-    translate: Option<(f64, f64)>,
-) -> Option<u32> {
-    if center.is_some() || translate.is_some() || !angle.is_finite() {
-        return None;
-    }
-    let degree = angle.rem_euclid(360.0);
-    [90.0, 180.0, 270.0]
-        .into_iter()
-        .find(|fast_angle| degree == *fast_angle)
-        .map(|fast_angle| fast_angle as u32)
-}
-
-fn rotate_fill_sample(fill: (u8, u8, u8, u8), channels: usize, channel: usize) -> u8 {
-    if channels == 2 && channel == 1 {
-        fill.3
-    } else {
-        match channel {
-            0 => fill.0,
-            1 => fill.1,
-            2 => fill.2,
-            _ => fill.3,
-        }
-    }
-}
-
-fn rotate_nearest_supported_for_shape(
-    width: u32,
-    height: u32,
-    channels: Option<usize>,
-    angle: f64,
-    expand: bool,
-    center: Option<(f64, f64)>,
-    translate: Option<(f64, f64)>,
-    nearest: bool,
-) -> bool {
-    let Some(channels) = channels else {
-        return false;
-    };
-    if !nearest
-        || width == 0
-        || height == 0
-        || rotate_uses_discrete_fast_path(angle, center, translate, expand, width, height)
-    {
-        return false;
-    }
-    let Some(geometry) = simd_rotate_geometry(width, height, angle, expand, center, translate)
-    else {
-        return false;
-    };
-    // The gather kernel pads a partial final block and writes only active
-    // lanes, so even a single output byte follows the same native SIMD path.
-    // Keep zero-sized geometry out of the admission contract above.
-    geometry
-        .width
-        .checked_mul(geometry.height)
-        .and_then(|pixels| pixels.checked_mul(channels as u32))
-        .is_some_and(|bytes| bytes != 0)
-}
-
-fn rotate_bilinear_supported_for_shape(
-    width: u32,
-    height: u32,
-    channels: Option<usize>,
-    angle: f64,
-    expand: bool,
-    center: Option<(f64, f64)>,
-    translate: Option<(f64, f64)>,
-    nearest: bool,
-) -> bool {
-    if nearest
-        || channels.is_none()
-        || width == 0
-        || height == 0
-        || rotate_uses_discrete_fast_path(angle, center, translate, expand, width, height)
-    {
-        return false;
-    }
-    let Some(geometry) = simd_rotate_geometry(width, height, angle, expand, center, translate)
-    else {
-        return false;
-    };
-    geometry.width != 0 && geometry.height != 0
-}
-
 /// Check the contextual conditions for a real SIMD/native-copy operation.
 ///
 /// The registry answers the cheap operation-only question.  This second
@@ -897,7 +674,6 @@ pub(crate) fn simd_supports_for_image(
     let native_byte_channels = native_byte_layout(img, mode);
     let native_filter_byte_channels = native_filter_byte_layout(img, mode);
     let native_typed_filter_channels = native_typed_filter_layout(img, mode);
-    let native_rotate_channels = native_rotate_layout(img, mode);
     let native_copy = native_copy_layout(img, mode).is_some();
     let native_luma16_transpose = native_luma16_transpose_layout(img, mode);
     let native_luma16_copy =
@@ -1144,86 +920,7 @@ pub(crate) fn simd_supports_for_image(
             *target_mode,
             mode,
         ),
-        PipelineOp::Rotate {
-            angle,
-            expand,
-            center,
-            translate,
-            filter,
-            nearest,
-            ..
-        } => {
-            // Pillow's indexed modes always use nearest-neighbor sampling,
-            // even when the public resample argument was omitted or named a
-            // different filter. Keep that mode rule in the scalar
-            // capability check so a P image reaches the native byte sampler.
-            let nearest = *nearest || matches!(mode, Some("1" | "P"));
-            if (img.width() == 0 || img.height() == 0)
-                && !matches!(img, DynamicImage::ImageLuma16(_))
-            {
-                native_rotate_channels.is_some_and(|channels| {
-                    has_empty_native_bytes(img, channels)
-                        && simd_rotate_geometry(
-                            img.width(),
-                            img.height(),
-                            *angle,
-                            *expand,
-                            *center,
-                            *translate,
-                        )
-                        .is_some()
-                })
-            } else if rotate_identity_contract(*angle, *center, *translate) {
-                native_copy_layout(img, mode).is_some_and(|channels| {
-                    img.width()
-                        .checked_mul(img.height())
-                        .and_then(|pixels| pixels.checked_mul(channels as u32))
-                        .is_some_and(|expected| {
-                            expected != 0 && img.as_bytes().len() == expected as usize
-                        })
-                })
-            } else if rotate_uses_discrete_fast_path(
-                *angle,
-                *center,
-                *translate,
-                *expand,
-                img.width(),
-                img.height(),
-            ) {
-                native_rotate_channels.is_some() && pixel_count != 0
-            } else {
-                if nearest {
-                    rotate_nearest_supported_for_shape(
-                        img.width(),
-                        img.height(),
-                        native_rotate_channels,
-                        *angle,
-                        *expand,
-                        *center,
-                        *translate,
-                        nearest,
-                    )
-                } else if matches!(img, DynamicImage::ImageLuma16(_)) {
-                    false
-                } else if !matches!(filter, ResampleFilter::Bilinear) {
-                    // SIMD's arbitrary-angle kernel is reviewed only for
-                    // Pillow's bilinear arithmetic. Keep bicubic and any
-                    // future filtered rotate requests on the exact CPU path.
-                    false
-                } else {
-                    rotate_bilinear_supported_for_shape(
-                        img.width(),
-                        img.height(),
-                        native_rotate_channels,
-                        *angle,
-                        *expand,
-                        *center,
-                        *translate,
-                        nearest,
-                    )
-                }
-            }
-        }
+        PipelineOp::Rotate { .. } => rotate::supports_for_image(img, op, mode),
         PipelineOp::DrawLine { .. }
         | PipelineOp::DrawPoint { .. }
         | PipelineOp::DrawEllipse { .. }
@@ -1427,16 +1124,6 @@ fn shape_native_byte_channels(shape: SimdImageShape, mode: Option<&str>) -> Opti
 
 fn shape_native_typed_filter_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     (shape.layout == SimdLayout::Rgba8 && matches!(mode, Some("I" | "F"))).then_some(4)
-}
-
-fn shape_native_rotate_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
-    match (shape.layout, mode) {
-        (SimdLayout::Luma8, Some("1" | "P")) => Some(1),
-        (SimdLayout::LumaA8, Some("PA")) => Some(2),
-        (SimdLayout::Luma16, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N")) => Some(2),
-        (SimdLayout::Rgba8, Some("CMYK" | "RGBa" | "RGBX" | "I" | "F")) => Some(4),
-        _ => shape_native_byte_channels(shape, mode),
-    }
 }
 
 fn shape_has_nonempty_byte_data(shape: SimdImageShape, channels: usize) -> bool {
@@ -2075,73 +1762,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             *target_mode,
             mode,
         ),
-        PipelineOp::Rotate {
-            angle,
-            expand,
-            center,
-            translate,
-            filter,
-            nearest,
-            ..
-        } => {
-            let nearest = *nearest || matches!(mode, Some("1" | "P"));
-            if (shape.width == 0 || shape.height == 0) && shape.layout != SimdLayout::Luma16 {
-                shape_native_rotate_channels(shape, mode).is_some()
-                    && simd_rotate_geometry(
-                        shape.width,
-                        shape.height,
-                        *angle,
-                        *expand,
-                        *center,
-                        *translate,
-                    )
-                    .is_some()
-            } else if rotate_identity_contract(*angle, *center, *translate) {
-                shape_native_identity_copy_channels(shape, mode).is_some_and(|channels| {
-                    (shape.width as usize)
-                        .checked_mul(shape.height as usize)
-                        .and_then(|pixels| pixels.checked_mul(channels))
-                        .is_some_and(|bytes| bytes != 0)
-                })
-            } else if rotate_uses_discrete_fast_path(
-                *angle,
-                *center,
-                *translate,
-                *expand,
-                shape.width,
-                shape.height,
-            ) {
-                shape_native_rotate_channels(shape, mode).is_some() && pixel_count != 0
-            } else {
-                if nearest {
-                    rotate_nearest_supported_for_shape(
-                        shape.width,
-                        shape.height,
-                        shape_native_rotate_channels(shape, mode),
-                        *angle,
-                        *expand,
-                        *center,
-                        *translate,
-                        nearest,
-                    )
-                } else if shape.layout == SimdLayout::Luma16 {
-                    false
-                } else if !matches!(filter, ResampleFilter::Bilinear) {
-                    false
-                } else {
-                    rotate_bilinear_supported_for_shape(
-                        shape.width,
-                        shape.height,
-                        shape_native_rotate_channels(shape, mode),
-                        *angle,
-                        *expand,
-                        *center,
-                        *translate,
-                        nearest,
-                    )
-                }
-            }
-        }
+        PipelineOp::Rotate { .. } => rotate::supports_for_shape(shape, op, mode),
         PipelineOp::DrawLine { .. }
         | PipelineOp::DrawPoint { .. }
         | PipelineOp::DrawEllipse { .. }
@@ -7087,14 +6708,14 @@ fn gather_rotate_neighborhood_vectors(
     samples: &[SimdRotateSample; SIMD_F64_LANES],
     alpha_channel: Option<usize>,
 ) -> [f64x8; 4] {
-    let fill_value = rotate_fill_sample(fill, channels, channel) as f64;
+    let fill_value = rotate::rotate_fill_sample(fill, channels, channel) as f64;
     let mut values = [[fill_value; SIMD_F64_LANES]; 4];
     let mut alphas = [[0.0; SIMD_F64_LANES]; 4];
     let premultiply = alpha_channel.is_some_and(|alpha| alpha != channel);
     for (lane, sample) in samples.iter().enumerate() {
         if !sample.valid {
             if let Some(alpha_channel) = alpha_channel {
-                let alpha_fill = rotate_fill_sample(fill, channels, alpha_channel) as f64;
+                let alpha_fill = rotate::rotate_fill_sample(fill, channels, alpha_channel) as f64;
                 alphas[0][lane] = alpha_fill;
                 alphas[1][lane] = alpha_fill;
                 alphas[2][lane] = alpha_fill;
@@ -8693,6 +8314,7 @@ mod tests {
         }
     }
 
+    use super::rotate::rotate_discrete_fast_angle;
     #[cfg(feature = "parallel")]
     use super::{
         TransposeNativeCollectCounters, TransposeNativeOddCollectCounters,
@@ -8701,7 +8323,7 @@ mod tests {
     };
     use super::{
         native_invert, native_lut_apply, native_lut_map_rows, native_lut_tables_for_channels,
-        native_transpose_bytes, rotate_discrete_fast_angle, simd_posterize, simd_resize_f,
+        native_transpose_bytes, simd_posterize, simd_resize_f,
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};

@@ -5,9 +5,11 @@ use super::super::super::transpose::native_transpose;
 use super::super::super::{
     SIMD_BYTE_VECTOR_LANES, SIMD_F64_LANES, SimdRotateSample, TransposeMethod,
     bilinear_rotate_scalar, bilinear_rotate_vector, gather_rotate_neighborhood_vectors,
-    native_copy_image_bytes, native_rotate_layout, rotate_discrete_fast_angle, rotate_fill_sample,
-    rotate_fused_mul_add, rotate_unpremultiply_vector, simd_rotate_geometry,
+    native_copy_image_bytes, rotate_fused_mul_add, rotate_unpremultiply_vector,
     simd_rotate_sample_coordinates,
+};
+use super::super::{
+    native_rotate_layout, rotate_discrete_fast_angle, rotate_fill_sample, simd_rotate_geometry,
 };
 use crate::error::PilError;
 use crate::image::preserve_mode;
