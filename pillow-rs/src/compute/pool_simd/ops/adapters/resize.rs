@@ -14,6 +14,8 @@ mod u8_boxed_convolution;
 mod u8_mode;
 #[path = "resize/kernels/u8_nearest.rs"]
 mod u8_nearest;
+#[path = "resize/kernels/u8_plan.rs"]
+mod u8_plan;
 
 pub(super) use self::coordinates::resize_nearest_vectorizable;
 use self::coordinates::{
@@ -32,6 +34,10 @@ pub(super) use self::u8_mode::{
     simd_resize_convolution_with_zero_row_elision,
 };
 pub(super) use self::u8_nearest::{simd_resize_nearest, simd_resize_nearest_boxed};
+pub(super) use self::u8_plan::{
+    ResizeHorizontalPlan, build_resize_horizontal_plan, resize_coeff_slice,
+    resize_u8_coefficients_fit_i32, resize_vertical_row_touches_nonzero_source,
+};
 use super::{
     SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD, SIMD_FIT_PARALLEL_PIXEL_THRESHOLD,
     native_contain_supported_for_image, native_copy_image_bytes, native_cover_dimensions,
