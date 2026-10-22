@@ -347,3 +347,6 @@ pub(crate) fn simd_gaussian_blur(
     }
     Err(PilError::ValueError("expected GaussianBlur op".into()))
 }
+
+#[cfg(test)]
+mod tests;
