@@ -5,9 +5,12 @@ use std::sync::Arc;
 use image_slash_star::{ImageFormat, ImageInfo};
 
 use crate::error::PilError;
+use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
-use super::{Image, LoadedData, PalettedData, materialization_cache, split_palette_data};
+use super::{
+    Image, LoadedData, PalettedData, materialization_cache, operational_palette, split_palette_data,
+};
 
 impl Image {
     /// Returns the explicit Pillow mode tag carried by this image.
@@ -246,5 +249,127 @@ impl Image {
             _ => unreachable!("putpalette mode was validated"),
         };
         Ok(())
+    }
+}
+
+impl Image {
+    /// Extract palette from Paletted variant (for Pipeline propagation).
+    pub(crate) fn extract_palette(&self) -> Option<Vec<u8>> {
+        match self {
+            Image::Paletted(data) => Some(operational_palette(data)),
+            Image::Loaded(data) => data.palette.clone(),
+            Image::Pipeline { palette, .. } => palette.clone(),
+            Image::Bytes { info, .. } => info
+                .as_ref()
+                .and_then(|info| info.palette.as_ref())
+                .map(|palette| palette.rgb.clone()),
+        }
+    }
+
+    /// Remaps palette indices through `dest_map`.
+    ///
+    /// `P` images operate on palette indices directly. Other modes operate on
+    /// RGB color values and return a `P`-tagged pipeline result. Values absent
+    /// from `dest_map` map to `0`, matching Pillow's inverse-map behavior.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; invalid map behavior is handled during
+    /// pipeline execution.
+    pub fn remap_palette(&self, dest_map: &[u8]) -> Result<Image, PilError> {
+        self.remap_palette_with_source(dest_map, None)
+    }
+
+    /// Remaps indices and installs colors selected from an optional source palette.
+    ///
+    /// Pillow interprets `dest_map[new_index]` as the old index. Pixel samples
+    /// therefore use the inverse mapping, while palette triples are copied in
+    /// `dest_map` order.
+    pub fn remap_palette_with_source(
+        &self,
+        dest_map: &[u8],
+        source_palette: Option<&[u8]>,
+    ) -> Result<Image, PilError> {
+        let mode = self.mode()?;
+        if !matches!(mode.as_str(), "L" | "P") {
+            return Err(PilError::ValueError("illegal image mode".to_owned()));
+        }
+        if dest_map.len() > 256 {
+            return Err(PilError::ValueError(
+                "byte must be in range(0, 256)".to_owned(),
+            ));
+        }
+
+        let uses_attached_palette = source_palette.is_none() && mode == "P";
+        // Pillow's Image.remap_palette treats every explicit palette longer
+        // than 768 bytes as interleaved RGBA, regardless of the source mode.
+        let source_bands = if source_palette.is_some_and(|palette| palette.len() > 768) {
+            4
+        } else {
+            3
+        };
+        let source_palette = source_palette.map_or_else(
+            || {
+                if mode == "P" {
+                    self.extract_palette().unwrap_or_default()
+                } else {
+                    (0u8..=u8::MAX)
+                        .flat_map(|value| [value, value, value])
+                        .collect()
+                }
+            },
+            <[u8]>::to_vec,
+        );
+        let mut remapped_palette = Vec::with_capacity(dest_map.len() * 3);
+        let mut explicit_alpha = (source_bands == 4).then(|| Vec::with_capacity(dest_map.len()));
+        for &old_index in dest_map {
+            let start = usize::from(old_index) * source_bands;
+            if let Some(color) = source_palette.get(start..start + source_bands) {
+                // Pillow 12.2 PIL.Image.remap_palette passes raw palette bands
+                // through unchanged. Core stores the same RGBA layout as RGB
+                // triples plus a per-entry alpha sidecar.
+                remapped_palette.extend_from_slice(&color[..3]);
+                if let Some(alpha) = &mut explicit_alpha {
+                    alpha.push(color[3]);
+                }
+            }
+        }
+
+        let remapped_alpha = if source_bands == 4 {
+            explicit_alpha
+        } else if uses_attached_palette {
+            self.palette_alpha().and_then(|alpha| {
+                if alpha.is_empty() {
+                    return None;
+                }
+                Some(
+                    dest_map
+                        .iter()
+                        .map(|&index| alpha.get(usize::from(index)).copied().unwrap_or(255))
+                        .collect(),
+                )
+            })
+        } else {
+            None
+        };
+
+        let mut result = Image::push_op(
+            self,
+            PipelineOp::RemapPalette {
+                dest_map: dest_map.to_vec().into(),
+            },
+        );
+        if let Image::Pipeline {
+            explicit_mode,
+            palette,
+            palette_alpha,
+            ..
+        } = &mut result
+        {
+            *explicit_mode = Some("P".to_owned());
+            *palette = Some(remapped_palette);
+            *palette_alpha = remapped_alpha;
+        }
+        Ok(result)
     }
 }
