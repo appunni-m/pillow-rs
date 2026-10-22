@@ -552,3 +552,6 @@ pub(crate) fn simd_pad(
     }
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests;
