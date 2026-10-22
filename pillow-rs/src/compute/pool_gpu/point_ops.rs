@@ -1,5 +1,6 @@
 use super::*;
 
+mod native_alpha;
 mod native_byte_op;
 
 /// Extract and pack LUT data from a PipelineOp into [u32; 256] for GPU upload.
