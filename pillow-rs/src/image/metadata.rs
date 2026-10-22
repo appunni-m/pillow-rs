@@ -351,4 +351,145 @@ impl Image {
         }
         Ok(())
     }
+
+    /// Returns child images for multi-frame formats.
+    ///
+    /// Multi-frame decoding is not implemented in core yet, so this currently
+    /// returns an empty vector for all inputs.
+    pub fn get_child_images(&self) -> Vec<Image> {
+        vec![]
+    }
+
+    /// Returns EXIF metadata bytes retained from the encoded source.
+    ///
+    /// JPEG sources carry the EXIF payload in their APP1 segment; TIFF
+    /// sources are themselves a TIFF IFD0 container.  Other formats currently
+    /// expose no EXIF bytes, matching Pillow's empty `Exif` object for images
+    /// without embedded metadata.
+    pub fn getexif(&self) -> Vec<u8> {
+        match self {
+            Image::Loaded(data) => data.exif.clone().unwrap_or_default(),
+            Image::Paletted(data) => data.exif.clone().unwrap_or_default(),
+            Image::Pipeline { source, .. } => source.getexif(),
+            Image::Bytes { source, .. } => match source.info().format {
+                ImageFormat::Jpeg => Self::extract_jpeg_exif(source.bytes()).unwrap_or_default(),
+                ImageFormat::Tiff => {
+                    // Pillow builds its `Exif` object from the TIFF IFD0
+                    // itself; the raw container bytes are the same IFD
+                    // payload the orientation parser consumes.
+                    source.bytes().to_vec()
+                }
+                _ => Vec::new(),
+            },
+        }
+    }
+
+    /// Returns retained EXIF bytes in the optional form used by materialized
+    /// and derived image storage.
+    pub(crate) fn exif_metadata(&self) -> Option<Vec<u8>> {
+        let exif = self.getexif();
+        (!exif.is_empty()).then_some(exif)
+    }
+
+    /// Extracts the Exif APP1 payload from a JPEG byte stream.
+    ///
+    /// Scans the sequential marker list for `0xFFE1` and returns the segment
+    /// payload when it starts with the Exif signature.  This mirrors Pillow's
+    /// `JpegImagePlugin` APP1 handling, which retains the payload starting at
+    /// the `Exif\0\0` signature.
+    fn extract_jpeg_exif(data: &[u8]) -> Option<Vec<u8>> {
+        if data.len() < 4 || data[0] != 0xFF || data[1] != 0xD8 {
+            return None;
+        }
+        let mut offset = 2usize;
+        while offset + 4 <= data.len() {
+            if data[offset] != 0xFF {
+                // Pillow's JpegImagePlugin._open skips non-marker header junk
+                // before reading the next marker. Keep scanning so an APP1
+                // Exif segment after that junk remains observable through
+                // Image.getexif().
+                offset += 1;
+                continue;
+            }
+            let marker = data[offset + 1];
+            // Standalone markers (RST0-7, TEM) and the SOI marker carry no
+            // length field.
+            if marker == 0xD8 || (0xD0..=0xD7).contains(&marker) || marker == 0x01 {
+                offset += 2;
+                continue;
+            }
+            if marker == 0xD9 {
+                return None;
+            }
+            // Pillow's JpegImagePlugin stops collecting header metadata at
+            // SOS and hands the remainder to the entropy decoder. Do not
+            // interpret entropy bytes (including later marker-like bytes) as
+            // additional APP segments.
+            if marker == 0xDA {
+                return None;
+            }
+            let length = usize::from(u16::from_be_bytes([data[offset + 2], data[offset + 3]]));
+            if length < 2 {
+                return None;
+            }
+            let segment_end = offset + 2 + length;
+            if segment_end > data.len() {
+                return None;
+            }
+            if marker == 0xE1 {
+                let payload = &data[offset + 4..segment_end];
+                if payload.len() > 6 && payload.starts_with(b"Exif\x00\x00") {
+                    return Some(payload.to_vec());
+                }
+                return None;
+            }
+            offset = segment_end;
+        }
+        None
+    }
+
+    /// Returns XMP metadata fields.
+    ///
+    /// Core does not currently parse XMP packets from encoded containers, so
+    /// this returns an empty map.
+    pub fn getxmp(&self) -> std::collections::HashMap<String, String> {
+        std::collections::HashMap::new()
+    }
+
+    /// Returns Pillow's internal-image handle equivalent.
+    ///
+    /// Pure Rust core has no C `Imaging` pointer or capsule to expose, so this
+    /// returns `None`. Binding crates may format that as a Pillow-compatible
+    /// placeholder.
+    pub fn getim(&self) -> Option<u64> {
+        None
+    }
+
+    /// Returns the known image format name, if the image came from encoded input.
+    pub fn format_name(&self) -> Option<String> {
+        match self {
+            Image::Loaded(data) => data.source_format.map(|format| format.as_str().to_owned()),
+            Image::Paletted(data) => data.source_format.map(|format| format.as_str().to_owned()),
+            Image::Bytes { format, .. } | Image::Pipeline { format, .. } => {
+                format.map(|format| format.as_str().to_owned())
+            }
+        }
+    }
+
+    /// Replaces retained EXIF bytes after a metadata-only image operation.
+    ///
+    /// The operation is intentionally applied after loading so the lazy image
+    /// representation remains the single source of truth for pixel and
+    /// metadata state.
+    pub(crate) fn with_exif_metadata(mut self, exif: Option<Vec<u8>>) -> Result<Self, PilError> {
+        self.load()?;
+        match &mut self {
+            Image::Loaded(data) => data.exif = exif,
+            Image::Paletted(data) => data.exif = exif,
+            Image::Bytes { .. } | Image::Pipeline { .. } => {
+                unreachable!("load must materialize EXIF metadata target")
+            }
+        }
+        Ok(self)
+    }
 }
