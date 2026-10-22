@@ -506,8 +506,6 @@ pub(crate) fn simd_supports_for_image(
     let native_filter_byte_channels = native_filter_byte_layout(img, mode);
     let native_copy = native_copy_layout(img, mode).is_some();
     let native_luma16_transpose = native_luma16_transpose_layout(img, mode);
-    let native_luma16_copy =
-        has_valid_luma16_copy_bytes(img, mode) && img.width() != 0 && img.height() != 0;
     match op {
         // These point operations have native byte kernels. Typed, indexed,
         // and explicitly mode-converted images are deliberately rejected
@@ -567,16 +565,7 @@ pub(crate) fn simd_supports_for_image(
         // These operations are native memory movement. They do not claim
         // arithmetic vectorization, but they never enter a CPU adapter.
         PipelineOp::Offset { x, .. } => offset::supports_for_image(img, *x, mode),
-        PipelineOp::Flip => {
-            native_copy_layout(img, mode)
-                .is_some_and(|channels| has_nonempty_byte_data(img, channels))
-                || native_luma16_copy
-        }
-        PipelineOp::Mirror => {
-            native_copy_layout(img, mode)
-                .is_some_and(|channels| has_vectorized_mirror_rows(img, channels))
-                || native_luma16_copy
-        }
+        PipelineOp::Flip | PipelineOp::Mirror => flip::supports_for_image(img, op, mode),
         PipelineOp::Transpose { .. } => {
             (native_copy || native_luma16_transpose)
                 && (pixel_count != 0
@@ -1238,8 +1227,6 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
     let native_filter_byte_channels = shape_native_filter_byte_channels(shape, mode);
     let native_copy = shape_native_copy_channels(shape, mode).is_some();
     let native_luma16_transpose = shape_luma16_transpose_layout(shape, mode);
-    let native_luma16_copy =
-        shape_luma16_copy_layout(shape, mode) && shape.width != 0 && shape.height != 0;
     match op {
         PipelineOp::Invert | PipelineOp::InvertChops => {
             effects::supports_for_shape(shape, op, mode)
@@ -1297,16 +1284,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             extract_band::supports_for_shape(shape, *index, mode, pixel_count)
         }
         PipelineOp::Offset { x, .. } => offset::supports_for_shape(shape, *x, mode),
-        PipelineOp::Flip => {
-            shape_native_copy_channels(shape, mode)
-                .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
-                || native_luma16_copy
-        }
-        PipelineOp::Mirror => {
-            shape_native_copy_channels(shape, mode)
-                .is_some_and(|channels| shape_has_vectorized_mirror_rows(shape, channels))
-                || native_luma16_copy
-        }
+        PipelineOp::Flip | PipelineOp::Mirror => flip::supports_for_shape(shape, op, mode),
         PipelineOp::Transpose { .. } => {
             (native_copy || native_luma16_transpose)
                 && (pixel_count != 0

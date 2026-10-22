@@ -1,12 +1,55 @@
 //! SIMD Flip and Mirror family adapters and native-layout kernels.
 
 use super::{
-    copy_native_bytes, has_valid_luma16_copy_bytes, mirror_native_row,
-    native_luma16_image_from_bytes, preserve_mode, simd_unsupported,
+    SimdImageShape, copy_native_bytes, has_nonempty_byte_data, has_valid_luma16_copy_bytes,
+    has_vectorized_mirror_rows, mirror_native_row, native_copy_layout,
+    native_luma16_image_from_bytes, preserve_mode, shape_has_nonempty_byte_data,
+    shape_has_vectorized_mirror_rows, shape_luma16_copy_layout, shape_native_copy_channels,
+    simd_unsupported,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView};
+
+pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    let native_luma16_copy =
+        has_valid_luma16_copy_bytes(img, mode) && img.width() != 0 && img.height() != 0;
+    match op {
+        PipelineOp::Flip => {
+            native_copy_layout(img, mode)
+                .is_some_and(|channels| has_nonempty_byte_data(img, channels))
+                || native_luma16_copy
+        }
+        PipelineOp::Mirror => {
+            native_copy_layout(img, mode)
+                .is_some_and(|channels| has_vectorized_mirror_rows(img, channels))
+                || native_luma16_copy
+        }
+        _ => false,
+    }
+}
+
+pub(super) fn supports_for_shape(
+    shape: SimdImageShape,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    let native_luma16_copy =
+        shape_luma16_copy_layout(shape, mode) && shape.width != 0 && shape.height != 0;
+    match op {
+        PipelineOp::Flip => {
+            shape_native_copy_channels(shape, mode)
+                .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
+                || native_luma16_copy
+        }
+        PipelineOp::Mirror => {
+            shape_native_copy_channels(shape, mode)
+                .is_some_and(|channels| shape_has_vectorized_mirror_rows(shape, channels))
+                || native_luma16_copy
+        }
+        _ => false,
+    }
+}
 
 /// Move complete rows in reverse order through the native byte-copy path.
 /// Callers calculate each mode's own row width and storage width first. A
