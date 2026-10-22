@@ -646,3 +646,46 @@ impl Image {
         }
     }
 }
+
+#[cfg(test)]
+mod compatibility_info_tests {
+    use super::{Image, ImageInfoValue, PilError};
+
+    #[test]
+    fn crop_after_pipeline_preserves_jpeg_info() -> Result<(), PilError> {
+        let image = Image::open_bytes(
+            include_bytes!("../../tests/fixtures/assets/image/rgb-small.jpg").to_vec(),
+        )?;
+        let expected = image.compatibility_info();
+        assert!(expected.iter().any(|(key, _)| key == "jfif"));
+        let inverted = crate::ops::imageops::invert(&image)?;
+        let cropped = inverted.crop(Some((0, 0, 2, 2)))?;
+        assert_eq!(cropped.compatibility_info(), expected);
+        assert!(cropped.source_format().is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn webp_timing_defaults_appear_only_after_load() -> Result<(), PilError> {
+        let mut image = Image::open_bytes(
+            include_bytes!("../../tests/fixtures/assets/image/rgb-small.webp").to_vec(),
+        )?;
+        let expected = [
+            ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
+            ("duration".to_owned(), ImageInfoValue::Integer(0)),
+        ];
+
+        assert!(!image.is_materialized());
+        let lazy_info = image.compatibility_info();
+        assert!(
+            lazy_info
+                .iter()
+                .all(|(key, _)| key != "timestamp" && key != "duration")
+        );
+
+        image.load()?;
+        let loaded_info = image.compatibility_info();
+        assert!(expected.iter().all(|field| loaded_info.contains(field)));
+        Ok(())
+    }
+}

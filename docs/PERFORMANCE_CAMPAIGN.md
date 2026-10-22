@@ -7441,7 +7441,7 @@ make migration-parity-benchmark
 ```
 
 The regression passed with
-`cargo test -p pillow-rs --lib image::putdata_shared_bytes_tests::native_l_putdata_keeps_the_shared_allocation_and_materializes_exactly -- --exact`.
+`cargo test -p pillow-rs --lib image::data_access::putdata_shared_bytes_tests::native_l_putdata_keeps_the_shared_allocation_and_materializes_exactly -- --exact`.
 The binding and test code passed `cargo check --locked -p pillow-rs-py --tests`,
 and the Python parity gate passed all three requested backends. Benchmark output
 and parity receipts were written under a temporary directory and removed after

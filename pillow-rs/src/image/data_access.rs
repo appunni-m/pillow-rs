@@ -778,3 +778,7 @@ impl Image {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "data_access/putdata_shared_bytes_tests.rs"]
+mod putdata_shared_bytes_tests;
