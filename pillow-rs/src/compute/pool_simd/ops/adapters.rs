@@ -93,7 +93,8 @@ pub(crate) use self::effects::{
     simd_effect_noise, simd_effect_spread, simd_invert, simd_invert_chops,
 };
 pub(crate) use self::enhance::{
-    simd_brightness, simd_color_saturation, simd_contrast, simd_sharpness,
+    simd_brightness, simd_color_saturation, simd_contrast, simd_posterize, simd_sharpness,
+    simd_solarize,
 };
 pub(crate) use self::expand::simd_expand;
 pub(crate) use self::extract_band::{simd_extract_band, simd_extract_band_into};
@@ -706,12 +707,11 @@ pub(crate) fn simd_supports_for_image(
         PipelineOp::Reduce { x_factor, y_factor } => {
             native_reduce_supported_for_image(img, *x_factor, *y_factor, mode)
         }
-        PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => {
-            native_byte_channels.is_some_and(|channels| has_nonempty_byte_data(img, channels))
-        }
         PipelineOp::Grayscale => grayscale::supports_image(img, mode),
         PipelineOp::Colorize { .. } => colorize::supports_for_image(img, mode),
-        PipelineOp::Brightness { .. }
+        PipelineOp::Solarize { .. }
+        | PipelineOp::Posterize { .. }
+        | PipelineOp::Brightness { .. }
         | PipelineOp::Contrast { .. }
         | PipelineOp::ColorSaturation { .. }
         | PipelineOp::Sharpness { .. } => enhance::supports_for_image(img, op, mode),
@@ -1503,13 +1503,11 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                     .checked_mul(shape.height as usize)
                     .is_some()
         }
-        PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => {
-            shape_native_byte_channels(shape, mode)
-                .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
-        }
         PipelineOp::Grayscale => grayscale::supports_shape(shape, mode),
         PipelineOp::Colorize { .. } => colorize::supports_for_shape(shape, mode),
-        PipelineOp::Brightness { .. }
+        PipelineOp::Solarize { .. }
+        | PipelineOp::Posterize { .. }
+        | PipelineOp::Brightness { .. }
         | PipelineOp::Contrast { .. }
         | PipelineOp::ColorSaturation { .. }
         | PipelineOp::Sharpness { .. } => enhance::supports_for_shape(shape, op, mode),
@@ -1911,49 +1909,6 @@ where
 }
 
 #[inline]
-fn native_byte_transform<F>(
-    img: &DynamicImage,
-    mode: Option<&str>,
-    transform: F,
-) -> Option<DynamicImage>
-where
-    F: Fn(u8x16) -> u8x16,
-{
-    let Some(channels) = native_byte_layout(img, mode) else {
-        return None;
-    };
-    if !has_nonempty_byte_data(img, channels) {
-        return None;
-    }
-    let result = match img {
-        DynamicImage::ImageLuma8(image) if matches!(mode, None | Some("L")) => {
-            let mut result = image.clone();
-            native_byte_transform_bytes(&mut result, 1, &transform);
-            Some(DynamicImage::ImageLuma8(result))
-        }
-        DynamicImage::ImageLumaA8(image) if matches!(mode, None | Some("LA")) => {
-            let mut result = image.clone();
-            native_byte_transform_bytes(&mut result, 2, &transform);
-            Some(DynamicImage::ImageLumaA8(result))
-        }
-        DynamicImage::ImageRgb8(image) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
-            let mut result = image.clone();
-            native_byte_transform_bytes(&mut result, 3, &transform);
-            Some(DynamicImage::ImageRgb8(result))
-        }
-        DynamicImage::ImageRgba8(image) if matches!(mode, None | Some("RGBA")) => {
-            let mut result = image.clone();
-            native_byte_transform_bytes(&mut result, 4, &transform);
-            Some(DynamicImage::ImageRgba8(result))
-        }
-        _ => None,
-    }?;
-    let vector_blocks = img.as_bytes().len().div_ceil(16) as u64;
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_path("vector");
-    Some(result)
-}
-
 fn apply_native_rows<F>(
     bytes: &mut [u8],
     width: usize,
@@ -1993,43 +1948,6 @@ fn apply_native_rows<F>(
     }
 }
 
-/// Apply a native byte transform to an already-owned intermediate image.
-///
-/// The ordinary adapter takes `&DynamicImage` because the first pipeline
-/// operation must not mutate its source.  Later operations in a SIMD segment
-/// own the previous result, so cloning that result would add a full-frame
-/// allocation with no semantic benefit.  This helper is only called after
-/// contextual SIMD preflight has succeeded and therefore cannot become a CPU
-/// fallback.
-fn native_byte_transform_in_place<F>(
-    img: &mut DynamicImage,
-    mode: Option<&str>,
-    transform: F,
-) -> bool
-where
-    F: Fn(u8x16) -> u8x16 + Send + Sync,
-{
-    let Some(channels) = native_byte_layout(img, mode) else {
-        return false;
-    };
-    let width = img.width() as usize;
-    let height = img.height() as usize;
-    if width == 0 || height == 0 {
-        return false;
-    }
-    let Some(bytes) = img.as_bytes_mut() else {
-        return false;
-    };
-    let row_bytes = width.saturating_mul(channels);
-    let vector_blocks = row_bytes.div_ceil(16).saturating_mul(height) as u64;
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    apply_native_rows(bytes, width, height, channels, |row| {
-        native_byte_transform_bytes(row, channels, &transform);
-    });
-    crate::compute::record_pipeline_operation_path("vector");
-    true
-}
-
 /// Whether an admitted operation can reuse an owned intermediate without
 /// changing its concrete layout.  This is deliberately narrower than SIMD
 /// capability: native-copy, blur, convolution, and other shape-changing
@@ -2041,9 +1959,9 @@ pub(crate) fn simd_in_place_supported(
 ) -> bool {
     match op {
         PipelineOp::Invert | PipelineOp::InvertChops => effects::supports_in_place(img, mode),
-        PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => native_byte_layout(img, mode)
-            .is_some_and(|channels| has_nonempty_byte_data(img, channels)),
-        PipelineOp::Brightness { .. } => enhance::supports_in_place(img, mode),
+        PipelineOp::Solarize { .. }
+        | PipelineOp::Posterize { .. }
+        | PipelineOp::Brightness { .. } => enhance::supports_in_place(img, op, mode),
         PipelineOp::RemapPalette { .. } | PipelineOp::Eval { .. } => {
             lut::in_place_supported(img, op, mode)
         }
@@ -2085,24 +2003,9 @@ pub(crate) fn simd_execute_in_place(
     match op {
         PipelineOp::Invert => Ok(effects::execute_invert_in_place(img, mode, false)),
         PipelineOp::InvertChops => Ok(effects::execute_invert_in_place(img, mode, true)),
-        PipelineOp::Solarize { threshold } => {
-            Ok(native_byte_transform_in_place(img, mode, |input| {
-                input
-                    .simd_ge(u8x16::splat(*threshold))
-                    .select(u8x16::splat(u8::MAX) - input, input)
-            }))
-        }
-        PipelineOp::Posterize { bits } => {
-            let shift = 8u32
-                .checked_sub(*bits as u32)
-                .ok_or_else(|| PilError::ValueError("posterize bits must be at most 8".into()))?;
-            Ok(native_byte_transform_in_place(img, mode, |input| {
-                (input >> shift) << shift
-            }))
-        }
-        PipelineOp::Brightness { factor } => {
-            Ok(enhance::execute_brightness_in_place(img, *factor, mode))
-        }
+        PipelineOp::Solarize { .. }
+        | PipelineOp::Posterize { .. }
+        | PipelineOp::Brightness { .. } => enhance::execute_in_place(img, op, mode),
         PipelineOp::RemapPalette { .. } | PipelineOp::Eval { .. } => {
             Ok(lut::execute_in_place(img, op, mode))
         }
@@ -2522,67 +2425,6 @@ fn materialize_chops_operand(
     // colors. The shared handle keeps a secondary operand alive without a
     // full-image copy, including when it aliases an input pipeline branch.
     arc.materialized_shared()
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// Section B: Single-image with extra params (solarize, posterize, ...)
-// ═══════════════════════════════════════════════════════════════════════
-
-pub fn simd_solarize(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let PipelineOp::Solarize { threshold } = op else {
-        return Err(PilError::ValueError("expected Solarize op".into()));
-    };
-    if let Some(result) = native_byte_transform(img, mode, |input| {
-        input
-            .simd_ge(u8x16::splat(*threshold))
-            .select(u8x16::splat(u8::MAX) - input, input)
-    }) {
-        return Ok(result);
-    }
-    Err(simd_unsupported("Solarize"))
-}
-
-pub fn simd_posterize(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let PipelineOp::Posterize { bits } = op else {
-        return Err(PilError::ValueError("expected Posterize op".into()));
-    };
-
-    // ImageOps.posterize validates the public mode before it queues this
-    // operation: only L and RGB reach the pipeline, and both use the native
-    // byte layouts above. The old packed-u32 fallback therefore had no
-    // supported public input; keep an explicit diagnostic for an invalid
-    // internal dispatch instead of maintaining a second implementation.
-    let shift = 8u32
-        .checked_sub(*bits as u32)
-        .ok_or_else(|| PilError::ValueError("posterize bits must be at most 8".into()))?;
-    let mask = !((1u8 << shift) - 1);
-    let channels = match (img, mode) {
-        (DynamicImage::ImageLuma8(_), None | Some("L")) => 1,
-        (DynamicImage::ImageRgb8(_), None | Some("RGB")) => 3,
-        _ => 0,
-    };
-    if channels == 0 || !has_nonempty_byte_data(img, channels) {
-        return Err(PilError::NotImplementedError(
-            "SIMD posterize requires a validated native L or RGB byte image".into(),
-        ));
-    }
-    let source = img.as_bytes();
-    let mut bytes = vec![0u8; source.len()];
-    native_byte_transform_copy_bytes(source, &mut bytes, &|input| input & u8x16::splat(mask));
-    let vector_blocks = source.len().div_ceil(16) as u64;
-    let result =
-        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), bytes, channels)?;
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_path("vector");
-    Ok(crate::image::preserve_mode(img, result))
 }
 
 // ── Native rank-family extrema ─────────────────────────────────────────────

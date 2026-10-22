@@ -16,8 +16,15 @@ use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 use wide::{f32x8, i16x8, u8x16};
 
+mod point;
+
+pub(crate) use self::point::{simd_posterize, simd_solarize};
+
 pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
     match op {
+        PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => {
+            point::supports_for_image(img, op, mode)
+        }
         PipelineOp::Brightness { factor } => {
             native_brightness_layout(img, mode)
                 .is_some_and(|channels| has_nonempty_byte_data(img, channels))
@@ -43,6 +50,9 @@ pub(super) fn supports_for_shape(
     mode: Option<&str>,
 ) -> bool {
     match op {
+        PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => {
+            point::supports_for_shape(shape, op, mode)
+        }
         PipelineOp::Brightness { factor } => {
             shape_native_brightness_channels(shape, mode)
                 .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
@@ -63,9 +73,29 @@ pub(super) fn supports_for_shape(
     }
 }
 
-pub(super) fn supports_in_place(img: &DynamicImage, mode: Option<&str>) -> bool {
-    native_brightness_layout(img, mode)
-        .is_some_and(|channels| has_nonempty_byte_data(img, channels))
+pub(super) fn supports_in_place(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    match op {
+        PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => {
+            point::supports_in_place(img, mode)
+        }
+        PipelineOp::Brightness { .. } => native_brightness_layout(img, mode)
+            .is_some_and(|channels| has_nonempty_byte_data(img, channels)),
+        _ => false,
+    }
+}
+
+pub(super) fn execute_in_place(
+    img: &mut DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<bool, PilError> {
+    match op {
+        PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => {
+            point::execute_in_place(img, op, mode)
+        }
+        PipelineOp::Brightness { factor } => Ok(execute_brightness_in_place(img, *factor, mode)),
+        _ => Ok(false),
+    }
 }
 
 /// Return the native byte layout accepted by brightness blending.
