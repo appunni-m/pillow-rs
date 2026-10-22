@@ -8,6 +8,7 @@ mod f32_mode;
 mod i32_mode;
 #[path = "resize/kernels/luma16.rs"]
 mod luma16_mode;
+mod support;
 #[path = "resize/kernels/u8_boxed_convolution.rs"]
 mod u8_boxed_convolution;
 #[path = "resize/kernels/u8.rs"]
@@ -27,6 +28,21 @@ pub(super) use self::i32_mode::{
     simd_resize_i32_boxed,
 };
 use self::luma16_mode::simd_resize_luma16;
+use self::support::{
+    SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD, SIMD_FIT_PARALLEL_PIXEL_THRESHOLD,
+    native_contain_supported_for_image, native_contain_supported_for_shape,
+    native_cover_supported_for_image, native_cover_supported_for_shape, native_fit_box,
+    native_fit_filter, native_fit_layout_for_image, native_fit_supported_for_image,
+    native_fit_supported_for_shape, native_resize_boxed_bounds,
+    native_resize_boxed_layout_for_image, native_resize_boxed_supported_for_image,
+    native_resize_boxed_supported_for_shape,
+};
+pub(super) use self::support::{
+    native_cover_dimensions, native_pad_channels_for_image, native_pad_channels_for_shape,
+    native_pad_contained_dimensions, native_pad_round_dimension,
+    native_resize_supported_for_dimensions, native_resize_supported_for_image,
+    native_resize_supported_for_shape, native_scale_dimensions,
+};
 pub(super) use self::u8_boxed_convolution::simd_resize_convolution_boxed;
 use self::u8_mode::simd_resize_convolution_with_parallel_threshold;
 pub(super) use self::u8_mode::{
@@ -39,13 +55,8 @@ pub(super) use self::u8_plan::{
     resize_u8_coefficients_fit_i32, resize_vertical_row_touches_nonzero_source,
 };
 use super::{
-    SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD, SIMD_FIT_PARALLEL_PIXEL_THRESHOLD,
-    native_contain_supported_for_image, native_copy_image_bytes, native_cover_dimensions,
-    native_fit_box, native_fit_filter, native_fit_layout_for_image, native_fit_supported_for_image,
-    native_pad_contained_dimensions, native_resize_boxed_bounds,
-    native_resize_boxed_layout_for_image, native_resize_boxed_supported_for_image,
-    native_resize_supported_for_image, native_scale_dimensions, native_small_uniform_byte_image,
-    native_zero_byte_image, simd_unsupported,
+    native_copy_image_bytes, native_small_uniform_byte_image, native_zero_byte_image,
+    simd_unsupported,
 };
 
 use crate::error::PilError;
@@ -53,6 +64,74 @@ use crate::image::preserve_mode;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::DynamicImage;
 use wide::u8x16;
+
+pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    match op {
+        PipelineOp::ResizeBoxed {
+            w,
+            h,
+            filter,
+            box_coords,
+        } => native_resize_boxed_supported_for_image(img, *w, *h, *filter, *box_coords, mode),
+        PipelineOp::Resize { w, h, filter } => {
+            native_resize_supported_for_image(img, *w, *h, *filter, mode)
+        }
+        PipelineOp::Scale { factor, filter } => {
+            native_scale_dimensions(img.width(), img.height(), *factor)
+                .is_some_and(|(w, h)| native_resize_supported_for_image(img, w, h, *filter, mode))
+        }
+        PipelineOp::Contain { w, h, filter } => {
+            native_contain_supported_for_image(img, *w, *h, *filter, mode)
+        }
+        PipelineOp::Cover { w, h, filter } => {
+            native_cover_supported_for_image(img, *w, *h, *filter, mode)
+        }
+        PipelineOp::Fit {
+            w,
+            h,
+            filter,
+            bleed,
+            centering,
+        } => native_fit_supported_for_image(img, *w, *h, *filter, *bleed, *centering, mode),
+        _ => false,
+    }
+}
+
+pub(super) fn supports_for_shape(
+    shape: super::SimdImageShape,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    match op {
+        PipelineOp::ResizeBoxed {
+            w,
+            h,
+            filter,
+            box_coords,
+        } => native_resize_boxed_supported_for_shape(shape, *w, *h, *filter, *box_coords, mode),
+        PipelineOp::Resize { w, h, filter } => {
+            native_resize_supported_for_shape(shape, *w, *h, *filter, mode)
+        }
+        PipelineOp::Scale { factor, filter } => {
+            native_scale_dimensions(shape.width, shape.height, *factor)
+                .is_some_and(|(w, h)| native_resize_supported_for_shape(shape, w, h, *filter, mode))
+        }
+        PipelineOp::Contain { w, h, filter } => {
+            native_contain_supported_for_shape(shape, *w, *h, *filter, mode)
+        }
+        PipelineOp::Cover { w, h, filter } => {
+            native_cover_supported_for_shape(shape, *w, *h, *filter, mode)
+        }
+        PipelineOp::Fit {
+            w,
+            h,
+            filter,
+            bleed,
+            centering,
+        } => native_fit_supported_for_shape(shape, *w, *h, *filter, *bleed, *centering, mode),
+        _ => false,
+    }
+}
 
 pub(super) fn resize_native_channels_for_image(
     img: &DynamicImage,

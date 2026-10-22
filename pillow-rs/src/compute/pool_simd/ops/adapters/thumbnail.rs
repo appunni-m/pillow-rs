@@ -4,11 +4,11 @@ use super::resize::{
     native_resize_byte_layout_for_image, native_resize_byte_layout_for_shape, simd_resize_i32,
     simd_resize_i32_boxed,
 };
+use super::resize::{native_resize_supported_for_image, native_resize_supported_for_shape};
 use super::{
     SimdImageShape, SimdLayout, native_copy_image_bytes, native_reduce_bytes,
     native_reduce_sparse_rgb_2x2, native_reduce_supported_for_image,
-    native_reduce_supported_for_shape, native_resize_supported_for_image,
-    native_resize_supported_for_shape, simd_resize_convolution, simd_resize_convolution_boxed,
+    native_reduce_supported_for_shape, simd_resize_convolution, simd_resize_convolution_boxed,
     simd_resize_convolution_with_zero_row_elision, simd_resize_f, simd_resize_f_boxed,
     simd_resize_nearest, simd_unsupported,
 };

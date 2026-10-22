@@ -1,8 +1,10 @@
 //! SIMD Pad adapter and native-layout resize/fill orchestration.
 
+use super::resize::{
+    native_pad_channels_for_image, native_pad_channels_for_shape, native_pad_contained_dimensions,
+};
 use super::{
     SimdImageShape, copy_native_bytes, native_expand_fill_sample, native_fill_row,
-    native_pad_channels_for_image, native_pad_channels_for_shape, native_pad_contained_dimensions,
     simd_resize_convolution, simd_resize_convolution_into, simd_resize_f, simd_resize_i32,
     simd_resize_nearest, simd_unsupported,
 };
@@ -25,7 +27,7 @@ fn native_pad_offsets(
     let height_gap = target_height.checked_sub(contained_height)?;
     if width_gap != 0 {
         Some((
-            usize::try_from(super::native_pad_round_dimension(
+            usize::try_from(super::resize::native_pad_round_dimension(
                 f64::from(width_gap) * centering.0.clamp(0.0, 1.0),
             )?)
             .ok()?,
@@ -34,7 +36,7 @@ fn native_pad_offsets(
     } else {
         Some((
             0,
-            usize::try_from(super::native_pad_round_dimension(
+            usize::try_from(super::resize::native_pad_round_dimension(
                 f64::from(height_gap) * centering.1.clamp(0.0, 1.0),
             )?)
             .ok()?,
@@ -79,7 +81,7 @@ fn native_pad_supported_for_image(
     if img.width() == 0 || img.height() == 0 {
         return target_width != 0
             && target_height != 0
-            && super::native_resize_supported_for_dimensions(
+            && super::resize::native_resize_supported_for_dimensions(
                 img.width(),
                 img.height(),
                 target_width,
@@ -88,7 +90,7 @@ fn native_pad_supported_for_image(
                 channels,
             );
     }
-    let Some((contained_width, contained_height)) = super::native_pad_contained_dimensions(
+    let Some((contained_width, contained_height)) = super::resize::native_pad_contained_dimensions(
         img.width(),
         img.height(),
         target_width,
@@ -108,7 +110,7 @@ fn native_pad_supported_for_image(
         return false;
     }
     (img.width(), img.height()) == (contained_width, contained_height)
-        || super::native_resize_supported_for_dimensions(
+        || super::resize::native_resize_supported_for_dimensions(
             img.width(),
             img.height(),
             contained_width,
@@ -132,7 +134,7 @@ fn native_pad_supported_for_shape(
     if shape.width == 0 || shape.height == 0 {
         return target_width != 0
             && target_height != 0
-            && super::native_resize_supported_for_dimensions(
+            && super::resize::native_resize_supported_for_dimensions(
                 shape.width,
                 shape.height,
                 target_width,
@@ -141,7 +143,7 @@ fn native_pad_supported_for_shape(
                 channels,
             );
     }
-    let Some((contained_width, contained_height)) = super::native_pad_contained_dimensions(
+    let Some((contained_width, contained_height)) = super::resize::native_pad_contained_dimensions(
         shape.width,
         shape.height,
         target_width,
@@ -158,7 +160,7 @@ fn native_pad_supported_for_shape(
     )
     .is_some()
         && ((shape.width, shape.height) == (contained_width, contained_height)
-            || super::native_resize_supported_for_dimensions(
+            || super::resize::native_resize_supported_for_dimensions(
                 shape.width,
                 shape.height,
                 contained_width,
