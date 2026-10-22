@@ -1,5 +1,7 @@
 use super::*;
 
+mod native_execution;
+
 /// Compute output dimensions for a size-changing op given current input dimensions.
 /// Returns `None` if the op does not change the image dimensions.
 pub(super) fn round_positive_ties_even(value: f64) -> f64 {
