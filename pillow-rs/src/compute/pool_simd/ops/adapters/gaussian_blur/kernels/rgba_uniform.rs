@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn vector_scan_proves_large_uniform_identity_and_counts_tail() {
         let (radius, whole, fractional) =
-            gaussian_parameters(super::super::gaussian_blur_radius(7.5).unwrap());
+            gaussian_parameters(super::super::gaussian_blur::gaussian_blur_radius(7.5).unwrap());
         let parameters = (radius, whole, fractional);
         let raw = rgba(257, 257, [83, 149, 17, 191]);
         let evidence = prove_identity(&raw, 257, 257, parameters, parameters);
@@ -148,7 +148,7 @@ mod tests {
     #[test]
     fn vector_scan_rejects_an_unsampled_pixel_outside_the_probe_grid() {
         let (radius, whole, fractional) =
-            gaussian_parameters(super::super::gaussian_blur_radius(7.5).unwrap());
+            gaussian_parameters(super::super::gaussian_blur::gaussian_blur_radius(7.5).unwrap());
         let parameters = (radius, whole, fractional);
         let mut raw = rgba(257, 256, [83, 149, 17, 191]);
         raw[(257 + 1) * 4] ^= 1;
@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn minimum_area_rejects_just_below_and_accepts_at_the_threshold() {
         let (radius, whole, fractional) =
-            gaussian_parameters(super::super::gaussian_blur_radius(7.5).unwrap());
+            gaussian_parameters(super::super::gaussian_blur::gaussian_blur_radius(7.5).unwrap());
         let parameters = (radius, whole, fractional);
         let pixel = [83, 149, 17, 191];
 
