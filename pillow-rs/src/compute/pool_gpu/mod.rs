@@ -46,6 +46,10 @@ mod layout_admission;
 use layout_admission::*;
 mod native_input;
 use native_input::*;
+#[cfg(target_endian = "little")]
+mod native_hsv_pad;
+#[cfg(target_endian = "little")]
+use native_hsv_pad::*;
 mod mode;
 use mode::*;
 mod auxiliary_images;
@@ -730,17 +734,6 @@ struct NativePackedChannelOutputDispatch {
     row_tiled: bool,
     output_word_count: u32,
     transfer_bytes: u64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct NativeHsvPadDispatch {
-    output: NativePackedChannelOutputDispatch,
-    input_bytes: usize,
-    input_transfer_bytes: u64,
-    output_width: u32,
-    output_height: u32,
-    offset_y: u32,
-    fill_pixel: u32,
 }
 
 /// Plan one output invocation per packed word. Each 16×16 workgroup owns 256
@@ -5072,164 +5065,6 @@ impl GpuInner {
         result
     }
 
-    /// Keep identity-contain HSV Pad in its native three-byte representation.
-    #[cfg(target_endian = "little")]
-    fn execute_native_hsv_pad(
-        &self,
-        image: &DynamicImage,
-        dispatch: NativeHsvPadDispatch,
-        buffers: &mut BufferPool,
-    ) -> Result<DynamicImage, PilError> {
-        let DynamicImage::ImageRgb8(rgb) = image else {
-            return Err(PilError::InternalError(
-                "GPU native HSV Pad requires ImageRgb8 storage".into(),
-            ));
-        };
-        if rgb.as_raw().len() != dispatch.input_bytes
-            || CheckedDims::new(image.width(), image.height(), 3)?.total_bytes()
-                != dispatch.input_bytes
-            || dispatch.output.transfer_bytes
-                > u64::from(buffers.capacity)
-                    .checked_mul(4)
-                    .ok_or_else(|| PilError::ValueError("GPU HSV Pad buffer is too large".into()))?
-            || dispatch.input_transfer_bytes > u64::from(buffers.capacity) * 4
-        {
-            return Err(PilError::InternalError(
-                "GPU native HSV Pad layout exceeds its checked buffers".into(),
-            ));
-        }
-
-        buffers.upload_native_channel_bytes(
-            &self.queue,
-            image.width(),
-            image.height(),
-            3,
-            rgb.as_raw(),
-        )?;
-        buffers.params_arena.ensure_capacity(
-            &self.device,
-            "gpu_pad_hsv_native_rgb_params",
-            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            64,
-            self.device.limits().min_uniform_buffer_offset_alignment as usize,
-        );
-        let parameters = [
-            image.width(),
-            image.height(),
-            2,
-            0,
-            image.width(),
-            image.height(),
-            3,
-            0,
-            dispatch.output_width,
-            dispatch.output_height,
-            dispatch.fill_pixel,
-            0,
-            dispatch.offset_y,
-            0,
-            0,
-            0,
-        ];
-        self.queue.write_buffer(
-            &buffers.params_arena.buffer,
-            0,
-            bytemuck::cast_slice(&parameters),
-        );
-        let cached = self.resolve_pipeline(
-            "__internal_pad_hsv_native_rgb",
-            "pad_hsv_native_rgb.wgsl",
-            include_str!("shaders/pad_hsv_native_rgb.wgsl"),
-        )?;
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("gpu_pad_hsv_native_rgb"),
-            layout: &cached.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: ranged_binding(
-                        &buffers.buf_a,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.input_transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: ranged_binding(
-                        &buffers.buf_b,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.output.transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: ranged_binding(
-                        &buffers.params_arena.buffer,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: 64,
-                        }),
-                    )?,
-                },
-            ],
-        });
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("gpu_pad_hsv_native_rgb_encoder"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("gpu_pad_hsv_native_rgb_pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&cached.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            crate::compute::record_gpu_shader_dispatch(
-                cached.variant_name,
-                cached.shader_file,
-                u64::from(dispatch.output.groups_x)
-                    .saturating_mul(u64::from(dispatch.output.groups_y)),
-            );
-            pass.dispatch_workgroups(dispatch.output.groups_x, dispatch.output.groups_y, 1);
-        }
-        let readback = self.prepare_readback(&buffers.buf_b, dispatch.output.transfer_bytes)?;
-        if let ReadbackTarget::Staging(staging) = &readback {
-            encoder.copy_buffer_to_buffer(
-                &buffers.buf_b,
-                0,
-                &staging.buffer,
-                0,
-                dispatch.output.transfer_bytes,
-            );
-        }
-        self.queue.submit(Some(encoder.finish()));
-        let result = self.readback_to_native_channels(
-            dispatch.output_width,
-            dispatch.output_height,
-            3,
-            readback.buffer(buffers, false),
-        )?;
-        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
-            upload_bytes: dispatch.input_transfer_bytes,
-            readback_bytes: dispatch.output.transfer_bytes,
-            parameter_bytes: 64,
-            retained_cache_bytes: buffers.retained_bytes(),
-            full_frame_copy_count: 2 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
-            mode_conversion_count: 0,
-            ..PipelineResourceTelemetry::default()
-        });
-        crate::compute::record_pipeline_dispatch_count(1);
-        if let ReadbackTarget::Staging(staging) = readback {
-            self.recycle_staging(staging);
-        }
-        Ok(result)
-    }
-
     fn readback_bytes(&self, size: u64, staging: &wgpu::Buffer) -> Result<Vec<u8>, PilError> {
         self.readback_with(size, staging, |bytes| Ok(bytes.to_vec()))
     }
@@ -8064,7 +7899,7 @@ impl GpuPool {
             limits.max_buffer_size,
         );
         #[cfg(not(target_endian = "little"))]
-        let native_hsv_pad: Option<NativeHsvPadDispatch> = None;
+        let native_hsv_pad: Option<()> = None;
 
         if native_masked_byte_paste.is_none()
             && native_hsv_pad.is_none()
