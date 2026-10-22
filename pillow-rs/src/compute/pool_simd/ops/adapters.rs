@@ -14,6 +14,7 @@ mod chops;
 mod color3dlut;
 mod colorize;
 mod crop;
+mod duplicate;
 pub(crate) use self::alpha_composite::{simd_alpha_composite, simd_alpha_composite_mirror};
 use self::alpha_composite::{
     simd_alpha_composite_operands_supported, simd_alpha_composite_shape_supported,
@@ -33,6 +34,9 @@ pub(crate) use self::chops::{
     simd_multiply, simd_overlay, simd_screen, simd_soft_light, simd_subtract, simd_subtract_modulo,
 };
 pub(crate) use self::crop::{simd_crop, simd_crop_border};
+#[cfg(all(test, target_arch = "aarch64", target_feature = "neon"))]
+use self::duplicate::simd_copy_native_bytes;
+pub use self::duplicate::simd_duplicate;
 mod draw;
 use self::draw::{draw_line_vector_block, native_draw_layout, shape_draw_channels};
 mod effects;
@@ -779,8 +783,7 @@ pub(crate) fn simd_supports_for_image(
             native_expand_contract_for_image(img, *border, mode).is_some()
         }
         PipelineOp::Constant { .. } => img.width() != 0 && img.height() != 0,
-        PipelineOp::Duplicate => native_copy_layout(img, mode)
-            .is_some_and(|channels| has_nonempty_byte_data(img, channels)),
+        PipelineOp::Duplicate => duplicate::supports_for_image(img, mode),
         // The convolution kernels use wide vector blocks for the maintained
         // native-byte layout. Images narrower than one complete interior
         // vector remain automatic CPU work; image *area* is not a capability
@@ -1574,15 +1577,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         }
         PipelineOp::Pad { .. } => pad::supports_for_shape(shape, op, mode),
         PipelineOp::Constant { .. } => shape.width != 0 && shape.height != 0,
-        PipelineOp::Duplicate => shape_native_copy_channels(shape, mode).is_some_and(|channels| {
-            shape.width != 0
-                && shape.height != 0
-                && shape
-                    .width
-                    .checked_mul(shape.height)
-                    .and_then(|pixels| pixels.checked_mul(channels as u32))
-                    .is_some_and(|bytes| bytes != 0)
-        }),
+        PipelineOp::Duplicate => duplicate::supports_for_shape(shape, mode),
         PipelineOp::Filter3x3 { kernel, scale, .. } => {
             valid_convolution_parameters(kernel, *scale)
                 && (native_filter_byte_channels.is_some()
@@ -2379,92 +2374,6 @@ fn native_fill_row(row: &mut [u8], fill: (u8, u8, u8, u8), channels: usize) -> O
         vector_blocks = vector_blocks.saturating_add(1);
     }
     Some((vector_blocks, scalar_tail as u64))
-}
-
-/// Duplicate an image through its native byte layout.
-///
-/// Unlike the packed scalar adapter, this preserves raw P/PA samples and the
-/// fourth CMYK byte. The NEON path copies directly into uninitialized output
-/// storage, so it does not first zero every byte before overwriting it.
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[allow(unsafe_code)]
-fn simd_copy_native_bytes(source: &[u8]) -> (Vec<u8>, u64, u64) {
-    use core::arch::aarch64 as neon;
-
-    let vector_len = source.len() / 64 * 64;
-    let scalar_tail = source.len() - vector_len;
-    let mut output = Vec::<u8>::with_capacity(source.len());
-
-    // SAFETY: `output` has capacity for the full source but its length is
-    // still zero. Each NEON load/store covers a complete 16-byte block within
-    // `vector_len`; the remaining bytes are copied with the exact bounded
-    // scalar-tail length. The source is immutable and cannot overlap the new
-    // allocation. After these writes, every byte in `0..source.len()` is
-    // initialized before the vector length is published.
-    unsafe {
-        let source_ptr = source.as_ptr();
-        let output_ptr = output.as_mut_ptr();
-        for offset in (0..vector_len).step_by(64) {
-            let block = neon::vld1q_u8_x4(source_ptr.add(offset));
-            neon::vst1q_u8_x4(output_ptr.add(offset), block);
-        }
-        std::ptr::copy_nonoverlapping(
-            source_ptr.add(vector_len),
-            output_ptr.add(vector_len),
-            scalar_tail,
-        );
-        output.set_len(source.len());
-    }
-
-    (output, (vector_len / 16) as u64, scalar_tail as u64)
-}
-
-/// Duplicate an image through its native byte layout.
-///
-/// The NEON copy handles full blocks without a zero-fill pass; other targets
-/// retain the portable vector implementation and its bounded final block.
-pub fn simd_duplicate(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    if !matches!(op, PipelineOp::Duplicate) {
-        return Err(PilError::ValueError("expected Duplicate op".into()));
-    }
-    let Some(channels) = native_copy_layout(img, mode) else {
-        return Err(simd_unsupported("Duplicate"));
-    };
-    let (width, height) = img.dimensions();
-    if width == 0 || height == 0 {
-        return Err(simd_unsupported("Duplicate"));
-    }
-    let expected_len = (width as usize)
-        .checked_mul(height as usize)
-        .and_then(|pixels| pixels.checked_mul(channels))
-        .ok_or_else(|| PilError::ValueError("SIMD duplicate image length overflow".into()))?;
-    let source = img.as_bytes();
-    if source.len() != expected_len {
-        return Err(simd_unsupported("Duplicate"));
-    }
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    let (output, vector_blocks, scalar_tail) = simd_copy_native_bytes(source);
-    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-    let (output, vector_blocks, scalar_tail) = {
-        let mut output = vec![0u8; expected_len];
-        let (vector_blocks, scalar_tail) =
-            copy_native_bytes(source, &mut output).ok_or_else(|| {
-                PilError::InternalError("SIMD duplicate buffer shape mismatch".into())
-            })?;
-        (output, vector_blocks, scalar_tail)
-    };
-    let result = crate::image_utils::raw_bytes_to_image(width, height, output, channels)?;
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    crate::compute::record_pipeline_operation_path("neon-copy");
-    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-    crate::compute::record_pipeline_operation_path("native-copy");
-    Ok(preserve_mode(img, result))
 }
 
 /// Copy an identity-like operation in the source's native byte layout.
