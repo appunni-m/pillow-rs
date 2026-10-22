@@ -315,3 +315,6 @@ pub(crate) fn simd_merge(
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests;
