@@ -341,3 +341,13 @@ pub(super) fn native_luma16_image_from_bytes(
     let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(width, height, samples)?;
     Some(DynamicImage::ImageLuma16(image))
 }
+
+#[inline]
+pub(super) fn record_padded_native_row_work(width: usize, height: usize, channels: usize) {
+    let row_bytes = width.saturating_mul(channels);
+    if row_bytes == 0 || height == 0 {
+        return;
+    }
+    let vector_blocks = row_bytes.div_ceil(16).saturating_mul(height);
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
+}
