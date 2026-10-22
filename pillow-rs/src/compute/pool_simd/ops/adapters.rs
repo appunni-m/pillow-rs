@@ -59,10 +59,7 @@ pub(crate) use self::filter::native_filter_3x3_la_binomial_rows;
 use self::filter::{
     native_filter_3x3_channel_block_integer, native_filter_3x3_luma_block_integer,
     native_filter_3x3_pixel_block_integer, native_filter_3x3_rgb_byte_block_integer,
-    native_filter_3x3_vector, native_filter_identity_supported_for_image,
-    shape_native_filter_byte_channels, shape_native_filter_identity_supported,
-    shape_native_i32_convolution_path, use_native_byte_convolution_path,
-    use_native_i32_convolution_path,
+    native_filter_3x3_vector, shape_native_filter_byte_channels,
 };
 pub(crate) use self::filter::{
     simd_filter_3x3, simd_filter_5x5, simd_unsharp_blend_rgb_150,
@@ -480,10 +477,6 @@ fn record_padded_native_row_work(width: usize, height: usize, channels: usize) {
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
 }
 
-fn valid_convolution_parameters(kernel: &[f32], scale: f32) -> bool {
-    scale.is_finite() && scale != 0.0 && kernel.iter().all(|value| value.is_finite())
-}
-
 pub(super) fn simd_unsupported(operation: &str) -> PilError {
     PilError::NotImplementedError(format!(
         "SIMD {operation} is unsupported for the validated image layout/parameters"
@@ -512,7 +505,6 @@ pub(crate) fn simd_supports_for_image(
     let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
     let native_byte_channels = native_byte_layout(img, mode);
     let native_filter_byte_channels = native_filter_byte_layout(img, mode);
-    let native_typed_filter_channels = native_typed_filter_layout(img, mode);
     let native_copy = native_copy_layout(img, mode).is_some();
     let native_luma16_transpose = native_luma16_transpose_layout(img, mode);
     let native_luma16_copy =
@@ -623,26 +615,8 @@ pub(crate) fn simd_supports_for_image(
         }
         PipelineOp::Constant { .. } => img.width() != 0 && img.height() != 0,
         PipelineOp::Duplicate => duplicate::supports_for_image(img, mode),
-        // The convolution kernels use wide vector blocks for the maintained
-        // native-byte layout. Images narrower than one complete interior
-        // vector remain automatic CPU work; image *area* is not a capability
-        // condition because a small image can still contain a real vector
-        // block.
-        PipelineOp::Filter3x3 { kernel, scale, .. } => {
-            valid_convolution_parameters(kernel, *scale)
-                && (use_native_byte_convolution_path(img, mode, 1)
-                    || (mode == Some("I")
-                        && native_typed_filter_channels.is_some()
-                        && use_native_i32_convolution_path(img, mode, 1))
-                    || native_filter_identity_supported_for_image(img, mode, 1))
-        }
-        PipelineOp::Filter5x5 { kernel, scale, .. } => {
-            valid_convolution_parameters(kernel, *scale)
-                && (use_native_byte_convolution_path(img, mode, 2)
-                    || (mode == Some("I")
-                        && native_typed_filter_channels.is_some()
-                        && use_native_i32_convolution_path(img, mode, 2))
-                    || native_filter_identity_supported_for_image(img, mode, 2))
+        PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => {
+            filter::supports_for_image(img, op, mode)
         }
         PipelineOp::BoxBlur { radius } => {
             if *radius == 0 {
@@ -1417,21 +1391,8 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         PipelineOp::Pad { .. } => pad::supports_for_shape(shape, op, mode),
         PipelineOp::Constant { .. } => shape.width != 0 && shape.height != 0,
         PipelineOp::Duplicate => duplicate::supports_for_shape(shape, mode),
-        PipelineOp::Filter3x3 { kernel, scale, .. } => {
-            valid_convolution_parameters(kernel, *scale)
-                && (native_filter_byte_channels.is_some()
-                    && shape.width as usize >= 3
-                    && shape.height as usize > 2
-                    || shape_native_i32_convolution_path(shape, mode, 1)
-                    || shape_native_filter_identity_supported(shape, mode, 1))
-        }
-        PipelineOp::Filter5x5 { kernel, scale, .. } => {
-            valid_convolution_parameters(kernel, *scale)
-                && (native_filter_byte_channels.is_some()
-                    && shape.width as usize >= 5
-                    && shape.height as usize > 4
-                    || shape_native_i32_convolution_path(shape, mode, 2)
-                    || shape_native_filter_identity_supported(shape, mode, 2))
+        PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => {
+            filter::supports_for_shape(shape, op, mode)
         }
         PipelineOp::BoxBlur { radius } => {
             if *radius == 0 {

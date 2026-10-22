@@ -14,6 +14,59 @@ use super::{
 };
 const SIMD_UNIFORM_CONVOLUTION_MAX_PIXELS: usize = 256 * 256;
 
+fn valid_convolution_parameters(kernel: &[f32], scale: f32) -> bool {
+    scale.is_finite() && scale != 0.0 && kernel.iter().all(|value| value.is_finite())
+}
+
+pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    match op {
+        PipelineOp::Filter3x3 { kernel, scale, .. } => {
+            valid_convolution_parameters(kernel, *scale)
+                && (use_native_byte_convolution_path(img, mode, 1)
+                    || (mode == Some("I")
+                        && native_typed_filter_layout(img, mode).is_some()
+                        && use_native_i32_convolution_path(img, mode, 1))
+                    || native_filter_identity_supported_for_image(img, mode, 1))
+        }
+        PipelineOp::Filter5x5 { kernel, scale, .. } => {
+            valid_convolution_parameters(kernel, *scale)
+                && (use_native_byte_convolution_path(img, mode, 2)
+                    || (mode == Some("I")
+                        && native_typed_filter_layout(img, mode).is_some()
+                        && use_native_i32_convolution_path(img, mode, 2))
+                    || native_filter_identity_supported_for_image(img, mode, 2))
+        }
+        _ => false,
+    }
+}
+
+pub(super) fn supports_for_shape(
+    shape: SimdImageShape,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    let native_filter_byte_channels = shape_native_filter_byte_channels(shape, mode);
+    match op {
+        PipelineOp::Filter3x3 { kernel, scale, .. } => {
+            valid_convolution_parameters(kernel, *scale)
+                && (native_filter_byte_channels.is_some()
+                    && shape.width as usize >= 3
+                    && shape.height as usize > 2
+                    || shape_native_i32_convolution_path(shape, mode, 1)
+                    || shape_native_filter_identity_supported(shape, mode, 1))
+        }
+        PipelineOp::Filter5x5 { kernel, scale, .. } => {
+            valid_convolution_parameters(kernel, *scale)
+                && (native_filter_byte_channels.is_some()
+                    && shape.width as usize >= 5
+                    && shape.height as usize > 4
+                    || shape_native_i32_convolution_path(shape, mode, 2)
+                    || shape_native_filter_identity_supported(shape, mode, 2))
+        }
+        _ => false,
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Section D: Filter/window ops (convolution and blur)
 // ═══════════════════════════════════════════════════════════════════════
