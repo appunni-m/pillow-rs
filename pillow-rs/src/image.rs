@@ -34,7 +34,6 @@ use image_slash_star::{
 use std::sync::{Arc, OnceLock};
 
 use crate::checked_dims::CheckedDims;
-use crate::color::color_type_to_mode;
 use crate::error::PilError;
 use crate::pipeline::{ColorMode, PipelineOp, PixelMode, TransposeMethod};
 use crate::raster::{DynamicImage, GenericImageView};
@@ -2727,43 +2726,6 @@ impl StatResult {
 }
 
 impl Image {
-    /// Returns Pillow band names for the current image mode.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PilError`] when neither the retained mode metadata nor lazy
-    /// image data is sufficient to determine the bands.
-    pub fn getbands(&self) -> Result<Vec<String>, PilError> {
-        // Pillow's Image.getbands -> ImagingCore.getbands derives names from
-        // canonical mode metadata without touching pixel storage. `mode()`
-        // already preserves explicit tags for non-standard modes and can read
-        // a decoder header before pixel data is available, so this handles
-        // truncated lazy images without a duplicate pixel-channel fallback.
-        let mode = self.mode()?;
-        let bands: Vec<&str> = match mode.as_str() {
-            "CMYK" => vec!["C", "M", "Y", "K"],
-            "YCbCr" => vec!["Y", "Cb", "Cr"],
-            "HSV" => vec!["H", "S", "V"],
-            "LAB" => vec!["L", "A", "B"],
-            "PA" => vec!["P", "A"],
-            "La" => vec!["L", "a"],
-            "RGBa" => vec!["R", "G", "B", "a"],
-            "RGBX" => vec!["R", "G", "B", "X"],
-            "I" | "F" | "P" | "1" => {
-                vec![mode.as_str()]
-            }
-            // Pillow exposes all unsigned 16-bit luma variants as one logical
-            // band named "I", regardless of their byte order.
-            "I;16" | "I;16L" | "I;16B" | "I;16N" => vec!["I"],
-            "L" => vec!["L"],
-            "LA" => vec!["L", "A"],
-            "RGB" => vec!["R", "G", "B"],
-            "RGBA" => vec!["R", "G", "B", "A"],
-            _ => Vec::new(),
-        };
-        Ok(bands.into_iter().map(str::to_string).collect())
-    }
-
     /// Extract palette from Paletted variant (for Pipeline propagation).
     pub(crate) fn extract_palette(&self) -> Option<Vec<u8>> {
         match self {
@@ -2866,118 +2828,6 @@ impl Image {
             ))
         } else {
             None
-        }
-    }
-
-    /// Returns image dimensions as `(width, height)` in pixels.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PilError`] when a lazy image must be decoded and decoding
-    /// fails.
-    pub fn size(&self) -> Result<(u32, u32), PilError> {
-        match self {
-            Image::Loaded(data) => return Ok(data.image.dimensions()),
-            Image::Paletted(data) => return Ok(data.indices.dimensions()),
-            Image::Bytes {
-                info: Some(info), ..
-            } => return Ok((info.width, info.height)),
-            Image::Pipeline {
-                source, ops, shape, ..
-            } => {
-                let planned = shape.get_or_init(|| {
-                    let mut dimensions = source.size()?;
-                    for op in ops.iter() {
-                        let Some(next) = known_pipeline_op_dimensions(op, dimensions) else {
-                            return Ok(None);
-                        };
-                        dimensions = next;
-                    }
-                    Ok(Some(dimensions))
-                });
-                if let Some(dimensions) = planned.as_ref().map_err(Clone::clone)? {
-                    return Ok(*dimensions);
-                }
-            }
-            _ => {}
-        }
-        let img = self.materialized_shared()?;
-        Ok((img.width(), img.height()))
-    }
-
-    /// Returns the Pillow mode string for this image.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PilError`] when lazy data must be materialized to determine
-    /// the mode and that materialization fails.
-    pub fn mode(&self) -> Result<String, PilError> {
-        match self {
-            Image::Paletted(_) => return Ok("P".to_owned()),
-            Image::Loaded(data) => {
-                return Ok(data
-                    .explicit_mode
-                    .clone()
-                    .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()));
-            }
-            Image::Bytes {
-                info: Some(info), ..
-            } => return Ok(image_mode_name(info.mode).to_owned()),
-            Image::Pipeline {
-                explicit_mode: Some(mode),
-                ..
-            } => return Ok(mode.clone()),
-            Image::Pipeline {
-                source,
-                ops,
-                explicit_mode: None,
-                mode,
-                ..
-            } => {
-                let planned = mode.get_or_init(|| {
-                    let mut current = source.mode()?;
-                    if ops.mode_preserving() {
-                        return Ok(Some(current));
-                    }
-                    for op in ops.iter() {
-                        let Some(next) = known_pipeline_op_mode(op, &current) else {
-                            return Ok(None);
-                        };
-                        current = next;
-                    }
-                    Ok(Some(current))
-                });
-                if let Some(mode) = planned.as_ref().map_err(Clone::clone)? {
-                    return Ok(mode.clone());
-                }
-            }
-            _ => {}
-        }
-        let img = self.materialized_shared()?;
-        Ok(self.mode_from_materialized(&img))
-    }
-
-    /// Returns the mode after the caller has already materialized this image.
-    ///
-    /// The fallible [`Image::mode`] method must decode lazy inputs when no
-    /// header mode is available. Once a concrete buffer is in hand, that
-    /// operation cannot fail; keeping this path infallible also makes it clear
-    /// that mode selection does not trigger a second decode.
-    pub(crate) fn mode_from_materialized(&self, image: &DynamicImage) -> String {
-        match self {
-            Image::Paletted(_) => "P".to_owned(),
-            Image::Loaded(data) => data
-                .explicit_mode
-                .clone()
-                .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()),
-            Image::Bytes {
-                info: Some(info), ..
-            } => image_mode_name(info.mode).to_owned(),
-            Image::Pipeline {
-                explicit_mode: Some(mode),
-                ..
-            } => mode.clone(),
-            _ => color_type_to_mode(image.color()).to_owned(),
         }
     }
 
