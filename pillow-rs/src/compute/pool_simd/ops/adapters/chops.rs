@@ -35,6 +35,14 @@ pub(super) fn materialize_chops_operand(
     arc.materialized_shared()
 }
 
+pub(super) fn supports_constant_for_image(img: &DynamicImage) -> bool {
+    img.width() != 0 && img.height() != 0
+}
+
+pub(super) fn supports_constant_for_shape(shape: SimdImageShape) -> bool {
+    shape.width != 0 && shape.height != 0
+}
+
 /// Return the native channel stride for ImageChops operations.
 ///
 /// Chops treats every stored byte as an active sample. In particular, the

@@ -58,6 +58,24 @@ pub(super) fn simd_alpha_composite_shape_supported(
         && simd_alpha_composite_pixels_supported(shape.width, shape.height)
 }
 
+pub(super) fn supports_for_image(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    let PipelineOp::AlphaComposite { source, dest, src } = op else {
+        return false;
+    };
+    *dest == (0, 0) && *src == (0, 0) && simd_alpha_composite_operands_supported(img, source, mode)
+}
+
+pub(super) fn supports_for_shape(
+    shape: SimdImageShape,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    let PipelineOp::AlphaComposite { source, dest, src } = op else {
+        return false;
+    };
+    *dest == (0, 0) && *src == (0, 0) && simd_alpha_composite_shape_supported(shape, source, mode)
+}
+
 /// Whether an operation preserves the concrete pixel-buffer contract.
 ///
 /// The automatic planner can keep adjacent operations in one backend segment

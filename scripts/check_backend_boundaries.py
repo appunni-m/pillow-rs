@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the Cargo feature and CPU/GPU ownership boundaries."""
+"""Check Cargo features, backend ownership, and the SIMD adapter facade."""
 
 from __future__ import annotations
 
@@ -13,13 +13,34 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_PACKAGES = {"pillow-rs", "pillow-rs-py", "pillow-rs-js"}
-BACKEND_ROOTS = (
-    Path("pillow-rs/src/compute/pool_gpu"),
-    Path("pillow-rs/src/compute/pool_simd"),
+RUST_SOURCE_ROOTS = (
+    Path("pillow-rs/src"),
+    Path("pillow-rs-py/src"),
+    Path("pillow-rs-js/src"),
+)
+CORE_LIBRARY = Path("pillow-rs/src/lib.rs")
+PARALLEL_MODULE = Path("pillow-rs/src/par.rs")
+SIMD_ADAPTER_FACADE = Path("pillow-rs/src/compute/pool_simd/ops/adapters.rs")
+SIMD_FACADE_FUNCTIONS = frozenset(
+    {
+        "simd_unsupported",
+        "simd_supports_for_image",
+        "preserves_native_contract",
+        "simd_supports_for_shape",
+        "simd_in_place_supported",
+        "simd_execute_in_place",
+    }
+)
+TOP_LEVEL_FUNCTION = re.compile(
+    r"(?m)^(?:(?:pub(?:\([^)]*\))?|async|unsafe|const|extern(?:[ \t]+\"[^\"]+\")?)[ \t]+)*"
+    r"fn[ \t]+([A-Za-z_][A-Za-z0-9_]*)\b"
 )
 RAYON_CODE = re.compile(
     r"\brayon\s*::|\buse\s+rayon\b|\.(?:into_)?par_iter(?:_mut)?\s*\(|"
     r"\bpar_chunks(?:_mut)?\s*\("
+)
+DIRECT_FACADE_INSPECTION = re.compile(
+    r"\b(?:img|shape)\s*\."
 )
 
 
@@ -33,6 +54,8 @@ def active_feature_tokens(package: dict[str, object]) -> list[str]:
     while pending:
         token = str(pending.pop())
         if token in features:
+            if "parallel" in token.lower() or "rayon" in token.lower():
+                tokens.append(token)
             if token not in expanded:
                 expanded.add(token)
                 pending.extend(str(value) for value in features[token])
@@ -55,18 +78,78 @@ def cargo_packages() -> list[dict[str, object]]:
     return json.loads(result.stdout).get("packages", [])
 
 
-def rayon_violations() -> list[str]:
+def rayon_violations(root: Path = ROOT) -> list[str]:
     findings: list[str] = []
-    for relative_root in BACKEND_ROOTS:
-        path_root = ROOT / relative_root
+    for relative_root in RUST_SOURCE_ROOTS:
+        path_root = root / relative_root
         if not path_root.exists():
             continue
         for path in sorted(path_root.rglob("*.rs")):
-            relative = path.relative_to(ROOT).as_posix()
-            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            relative_path = path.relative_to(root)
+            relative = relative_path.as_posix()
+            lines = path.read_text(encoding="utf-8").splitlines()
+            for number, line in enumerate(lines, start=1):
                 code = line.split("//", 1)[0]
-                if RAYON_CODE.search(code):
-                    findings.append(f"{relative}:{number}: Rayon-style execution in CPU SIMD/GPU code")
+                if not RAYON_CODE.search(code):
+                    continue
+                if relative_path == PARALLEL_MODULE:
+                    continue
+                if relative_path == CORE_LIBRARY and code.strip() == "use rayon as _;":
+                    previous = lines[number - 2].strip() if number > 1 else ""
+                    if previous == '#[cfg(feature = "parallel")]':
+                        continue
+                findings.append(
+                    f"{relative}:{number}: Rayon belongs in the opt-in Parallel CPU module "
+                    "pillow-rs/src/par.rs, not serial, SIMD, GPU, or binding code"
+                )
+    return findings
+
+
+def parallel_module_gate_violations(root: Path = ROOT) -> list[str]:
+    """Require the Rayon helper module to remain behind the opt-in feature."""
+    path = root / CORE_LIBRARY
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        return [f"{CORE_LIBRARY}: could not inspect the Parallel CPU module gate: {error}"]
+
+    declarations = [
+        index for index, line in enumerate(lines) if re.fullmatch(r"\s*mod par;\s*", line)
+    ]
+    if len(declarations) != 1:
+        return [f"{CORE_LIBRARY}: expected one private `mod par;` declaration"]
+
+    index = declarations[0] - 1
+    while index >= 0 and (not lines[index].strip() or lines[index].lstrip().startswith("///")):
+        index -= 1
+    if index < 0 or lines[index].strip() != '#[cfg(feature = "parallel")]':
+        return [
+            f"{CORE_LIBRARY}:{declarations[0] + 1}: `mod par;` must use "
+            '#[cfg(feature = "parallel")]'
+        ]
+    return []
+
+
+def simd_facade_violations(source: str) -> list[str]:
+    """Keep operation admission and implementation in focused family modules."""
+    defined = set(TOP_LEVEL_FUNCTION.findall(source))
+    unexpected = sorted(defined - SIMD_FACADE_FUNCTIONS)
+    missing = sorted(SIMD_FACADE_FUNCTIONS - defined)
+    findings = [
+        f"{SIMD_ADAPTER_FACADE}: {name} belongs in adapters/<family>.rs, not the dispatch facade"
+        for name in unexpected
+    ]
+    findings.extend(
+        f"{SIMD_ADAPTER_FACADE}: expected dispatch function is missing: {name}"
+        for name in missing
+    )
+    for number, line in enumerate(source.splitlines(), start=1):
+        code = line.split("//", 1)[0]
+        if DIRECT_FACADE_INSPECTION.search(code):
+            findings.append(
+                f"{SIMD_ADAPTER_FACADE}:{number}: image and shape admission belongs in "
+                "adapters/<family>.rs; the facade should delegate it"
+            )
     return findings
 
 
@@ -95,17 +178,39 @@ def main() -> int:
             )
 
     core = found.get("pillow-rs")
-    if core and "parallel" not in core.get("features", {}):
-        errors.append("pillow-rs must retain its explicit opt-in parallel feature")
+    if core:
+        features = core.get("features", {})
+        parallel = features.get("parallel") if isinstance(features, dict) else None
+        if not isinstance(parallel, list):
+            errors.append("pillow-rs must retain its explicit opt-in parallel feature")
+        elif not any(str(token) in {"rayon", "dep:rayon"} for token in parallel):
+            errors.append("pillow-rs parallel feature must enable its optional Rayon dependency")
+        rayon_dependencies = [
+            dependency
+            for dependency in core.get("dependencies", [])
+            if dependency.get("name") == "rayon"
+        ]
+        if not rayon_dependencies or any(not dependency.get("optional") for dependency in rayon_dependencies):
+            errors.append("the core Rayon dependency must remain optional")
 
     errors.extend(rayon_violations())
+    errors.extend(parallel_module_gate_violations())
+    try:
+        facade_source = (ROOT / SIMD_ADAPTER_FACADE).read_text(encoding="utf-8")
+    except OSError as error:
+        errors.append(f"could not read SIMD adapter facade: {error}")
+    else:
+        errors.extend(simd_facade_violations(facade_source))
     if errors:
         print("Backend-boundary violations:", file=sys.stderr)
         for error in errors:
             print(f"  {error}", file=sys.stderr)
         return 1
 
-    print("Backend-boundary checks passed: defaults stay serial and SIMD/GPU code has no Rayon scheduling.")
+    print(
+        "Backend-boundary checks passed: defaults stay serial, SIMD/GPU code has no Rayon scheduling, "
+        "Rayon stays in Parallel CPU, and the SIMD facade delegates family admission."
+    )
     return 0
 
 

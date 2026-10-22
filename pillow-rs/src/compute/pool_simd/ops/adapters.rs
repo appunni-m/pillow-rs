@@ -16,9 +16,6 @@ mod colorize;
 mod crop;
 mod duplicate;
 pub(crate) use self::alpha_composite::{simd_alpha_composite, simd_alpha_composite_mirror};
-use self::alpha_composite::{
-    simd_alpha_composite_operands_supported, simd_alpha_composite_shape_supported,
-};
 pub(crate) use self::box_blur::simd_box_blur;
 use self::box_blur::simd_pil_box_blur;
 pub use self::chops::simd_constant;
@@ -241,13 +238,7 @@ pub(crate) fn simd_supports_for_image(
             matrix,
             dither: _,
         } => native_convert_supported_for_image(img, target, matrix.as_deref(), mode),
-        PipelineOp::ConvertLab { .. } => {
-            matches!(img, DynamicImage::ImageRgb8(_))
-                && matches!(mode, None | Some("RGB"))
-                && (img.width() as usize)
-                    .checked_mul(img.height() as usize)
-                    .is_some_and(|pixels| img.as_bytes().len() == pixels.saturating_mul(3))
-        }
+        PipelineOp::ConvertLab { .. } => convert::supports_lab_for_image(img, mode),
         PipelineOp::Reduce { x_factor, y_factor } => {
             native_reduce_supported_for_image(img, *x_factor, *y_factor, mode)
         }
@@ -278,7 +269,7 @@ pub(crate) fn simd_supports_for_image(
             crop::supports_for_image(img, op, mode)
         }
         PipelineOp::Expand { .. } => expand::supports_for_image(img, op, mode),
-        PipelineOp::Constant { .. } => img.width() != 0 && img.height() != 0,
+        PipelineOp::Constant { .. } => chops::supports_constant_for_image(img),
         PipelineOp::Duplicate => duplicate::supports_for_image(img, mode),
         PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => {
             filter::supports_for_image(img, op, mode)
@@ -329,11 +320,7 @@ pub(crate) fn simd_supports_for_image(
             palette_index: _,
             ..
         } => put_pixel::native_putpixel_supported_for_image(img, *x, *y, mode),
-        PipelineOp::AlphaComposite { source, dest, src } => {
-            *dest == (0, 0)
-                && *src == (0, 0)
-                && simd_alpha_composite_operands_supported(img, source, mode)
-        }
+        PipelineOp::AlphaComposite { .. } => alpha_composite::supports_for_image(img, op, mode),
         PipelineOp::CompositeModule {
             other,
             mask,
@@ -443,7 +430,6 @@ pub(crate) fn preserves_native_contract(op: &PipelineOp) -> bool {
 }
 
 fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<&str>) -> bool {
-    let pixel_count = (shape.width as usize).saturating_mul(shape.height as usize);
     match op {
         PipelineOp::Invert | PipelineOp::InvertChops => {
             effects::supports_for_shape(shape, op, mode)
@@ -473,13 +459,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             matrix,
             dither: _,
         } => native_convert_supported_for_shape(shape, target, matrix.as_deref(), mode),
-        PipelineOp::ConvertLab { .. } => {
-            matches!(shape.layout, SimdLayout::Rgb8)
-                && matches!(mode, None | Some("RGB"))
-                && (shape.width as usize)
-                    .checked_mul(shape.height as usize)
-                    .is_some()
-        }
+        PipelineOp::ConvertLab { .. } => convert::supports_lab_for_shape(shape, mode),
         PipelineOp::Grayscale => grayscale::supports_shape(shape, mode),
         PipelineOp::Colorize { .. } => colorize::supports_for_shape(shape, mode),
         PipelineOp::Solarize { .. }
@@ -497,9 +477,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         PipelineOp::PutData {
             mode: data_mode, ..
         } => put_data::supports_for_shape(shape, *data_mode, mode),
-        PipelineOp::ExtractBand { index } => {
-            extract_band::supports_for_shape(shape, *index, mode, pixel_count)
-        }
+        PipelineOp::ExtractBand { index } => extract_band::supports_for_shape(shape, *index, mode),
         PipelineOp::Offset { x, .. } => offset::supports_for_shape(shape, *x, mode),
         PipelineOp::Flip | PipelineOp::Mirror => flip::supports_for_shape(shape, op, mode),
         PipelineOp::Transpose { .. } => transpose::supports_for_shape(shape, mode),
@@ -508,7 +486,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         }
         PipelineOp::Expand { .. } => expand::supports_for_shape(shape, op, mode),
         PipelineOp::Pad { .. } => pad::supports_for_shape(shape, op, mode),
-        PipelineOp::Constant { .. } => shape.width != 0 && shape.height != 0,
+        PipelineOp::Constant { .. } => chops::supports_constant_for_shape(shape),
         PipelineOp::Duplicate => duplicate::supports_for_shape(shape, mode),
         PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => {
             filter::supports_for_shape(shape, op, mode)
@@ -561,11 +539,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             palette_index: _,
             ..
         } => put_pixel::native_putpixel_supported_for_shape(shape, *x, *y, mode),
-        PipelineOp::AlphaComposite { source, dest, src } => {
-            *dest == (0, 0)
-                && *src == (0, 0)
-                && simd_alpha_composite_shape_supported(shape, source, mode)
-        }
+        PipelineOp::AlphaComposite { .. } => alpha_composite::supports_for_shape(shape, op, mode),
         PipelineOp::CompositeModule {
             other,
             mask,

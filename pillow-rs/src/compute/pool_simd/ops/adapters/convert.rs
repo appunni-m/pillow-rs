@@ -44,6 +44,22 @@ pub(super) struct NativeConvertLayout {
     pub(super) target_is_float: bool,
 }
 
+pub(super) fn supports_lab_for_image(img: &DynamicImage, mode: Option<&str>) -> bool {
+    matches!(img, DynamicImage::ImageRgb8(_))
+        && matches!(mode, None | Some("RGB"))
+        && (img.width() as usize)
+            .checked_mul(img.height() as usize)
+            .is_some_and(|pixels| img.as_bytes().len() == pixels.saturating_mul(3))
+}
+
+pub(super) fn supports_lab_for_shape(shape: SimdImageShape, mode: Option<&str>) -> bool {
+    matches!(shape.layout, SimdLayout::Rgb8)
+        && matches!(mode, None | Some("RGB"))
+        && (shape.width as usize)
+            .checked_mul(shape.height as usize)
+            .is_some()
+}
+
 fn native_convert_target(mode: &ColorMode) -> Option<(usize, bool, bool, bool, bool)> {
     match mode {
         ColorMode::L => Some((1, true, false, false, false)),

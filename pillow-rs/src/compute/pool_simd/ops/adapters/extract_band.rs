@@ -52,12 +52,8 @@ pub(super) fn supports_for_image(img: &DynamicImage, index: u8, mode: Option<&st
     })
 }
 
-pub(super) fn supports_for_shape(
-    shape: SimdImageShape,
-    index: u8,
-    mode: Option<&str>,
-    pixel_count: usize,
-) -> bool {
+pub(super) fn supports_for_shape(shape: SimdImageShape, index: u8, mode: Option<&str>) -> bool {
+    let pixel_count = (shape.width as usize).saturating_mul(shape.height as usize);
     shape_native_extract_channels(shape, mode).is_some_and(|channels| {
         usize::from(index) < channels && pixel_count.saturating_mul(channels) != 0
     })
