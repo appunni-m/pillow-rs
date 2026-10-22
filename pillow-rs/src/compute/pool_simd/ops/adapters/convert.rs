@@ -24,9 +24,11 @@ use self::cmyk::native_cmyk_to_rgb_bytes;
 pub(super) use self::kernels::SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD;
 use self::kernels::native_rgba_to_rgb_bytes;
 pub(super) use self::kernels::{
-    native_convert_bytes, native_convert_layout_block, native_luma_to_rgb_bytes,
-    native_luma_to_rgba_bytes, native_rgb_to_rgba_bytes, native_rgba_color_degenerate,
+    native_convert_bytes, native_convert_layout_block, native_rgb_to_rgba_bytes,
+    native_rgba_color_degenerate,
 };
+#[cfg(test)]
+pub(super) use self::kernels::{native_luma_to_rgb_bytes, native_luma_to_rgba_bytes};
 
 #[derive(Clone, Copy)]
 pub(super) struct NativeConvertLayout {
