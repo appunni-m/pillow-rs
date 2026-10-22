@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 23 legacy file ceilings and 197 legacy functions across 82 source
+Snapshot: 23 legacy file ceilings and 197 legacy functions across 84 source
 paths. A dash means that path has no over-limit file entry; function counts
 and maximum recorded function lines are summarized here, with each exact
 signature and ceiling in the JSON baseline. All listed paths are owned by
@@ -114,7 +114,9 @@ lazytrot; each reducer issue is a child of Kata pillow-rs#m2f1.
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter.rs</code> | 6,897 | 4 (max 260) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/geometry.rs</code> | 5,600 | 11 (max 244) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303) | lazytrot | pillow-rs#vamp |
-| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 20,788 | 36 (max 1741) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/auxiliary_images.rs</code> | — | 1 (max 121) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 18,510 | 34 (max 1741) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/point_ops.rs</code> | — | 1 (max 143) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/compact_box.rs</code> | — | 2 (max 113) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs</code> | — | 4 (max 282) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/integer_arithmetic.rs</code> | — | 1 (max 101) | lazytrot | pillow-rs#ras2 |
