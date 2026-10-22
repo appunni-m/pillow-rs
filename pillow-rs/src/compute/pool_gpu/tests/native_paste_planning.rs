@@ -184,40 +184,6 @@ fn native_rgb_crop_planner_bounds_packed_tails_and_adapter_limits() {
 }
 
 #[test]
-#[cfg(target_endian = "little")]
-fn native_rgb_luma_merge_planner_bounds_compact_transfers_and_grid() {
-    let odd = plan_gpu_native_rgb_merge(3, 2, 65_535, u32::MAX, u64::MAX)
-        .expect("odd native L planes fit compact RGB transfers");
-    assert_eq!(odd.input_bytes, 6);
-    assert_eq!(odd.input_transfer_bytes, 8);
-    assert_eq!(odd.auxiliary_bytes, 12);
-    assert_eq!(odd.auxiliary_transfer_bytes, 12);
-    assert_eq!(odd.output_bytes, 18);
-    assert_eq!(odd.output_transfer_bytes, 20);
-    assert_eq!(odd.output_word_count, 5);
-    assert_eq!(odd.output_pixel_groups, 2);
-    assert_eq!((odd.groups_x, odd.groups_y), (1, 1));
-
-    let tiled = plan_gpu_native_rgb_merge(1_000, 1_000, 200, u32::MAX, u64::MAX)
-        .expect("two-dimensional workgroup tiling fits per-axis limits");
-    assert_eq!((tiled.groups_x, tiled.groups_y), (200, 5));
-    assert!(tiled.groups_x <= 200 && tiled.groups_y <= 200);
-    assert!(plan_gpu_native_rgb_merge(1_000, 1_000, 1, u32::MAX, u64::MAX).is_none());
-
-    let full_4k = plan_gpu_native_rgb_merge(4_096, 4_096, 65_535, u32::MAX, u64::MAX)
-        .expect("4096x4096 compact RGB output fits the default workgroup axis");
-    assert_eq!(full_4k.input_bytes, 16_777_216);
-    assert_eq!(full_4k.auxiliary_bytes, 33_554_432);
-    assert_eq!(full_4k.output_bytes, 50_331_648);
-    assert_eq!(full_4k.groups_y, 1);
-
-    assert!(plan_gpu_native_rgb_merge(3, 2, 65_535, 19, u64::MAX).is_none());
-    assert!(plan_gpu_native_rgb_merge(3, 2, 65_535, u32::MAX, 19).is_none());
-    assert!(plan_gpu_native_rgb_merge(0, 1, 65_535, u32::MAX, u64::MAX).is_none());
-    assert!(plan_gpu_native_rgb_merge(1, 1, 0, u32::MAX, u64::MAX).is_none());
-}
-
-#[test]
 fn native_rgb_to_rgba_paste_planner_bounds_mixed_layout_and_2d_dispatch() {
     let max_workgroups = 65_535;
     let at_boundary_pixels = u64::from(max_workgroups) * 64;

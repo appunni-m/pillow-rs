@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 23 legacy file ceilings and 197 legacy functions across 99 source
+Snapshot: 23 legacy file ceilings and 197 legacy functions across 100 source
 paths. A dash means that path has no over-limit file entry; function counts and
 maximum recorded function lines are summarized here, with each exact signature
 and ceiling in the JSON baseline. All listed paths are owned by `lazytrot`;
@@ -119,7 +119,7 @@ each reducer issue is a child of Kata `pillow-rs#m2f1`.
 | <code>pillow-rs/src/compute/pool_gpu/batch_encoding/dispatch.rs</code> | — | 2 (max 254) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/batch_pipeline.rs</code> | — | 1 (max 628) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/geometry/native_execution.rs</code> | — | 2 (max 218) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 9,636 | 11 (max 1741) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/mod.rs</code> | 9,268 | 10 (max 1741) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/native_composite.rs</code> | — | 1 (max 210) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/native_paste/execution.rs</code> | — | 3 (max 216) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/native_paste/masked_execution.rs</code> | — | 1 (max 307) | lazytrot | pillow-rs#ras2 |
@@ -132,6 +132,7 @@ each reducer issue is a child of Kata `pillow-rs#m2f1`.
 | <code>pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs</code> | — | 4 (max 282) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/integer_arithmetic.rs</code> | — | 1 (max 101) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/resize/ordered_float.rs</code> | — | 1 (max 134) | lazytrot | pillow-rs#ras2 |
+| <code>pillow-rs/src/compute/pool_gpu/rgb_merge.rs</code> | — | 1 (max 275) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/stream.rs</code> | 2,508 | 5 (max 331) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/tests/mod.rs</code> | — | 1 (max 129) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/tests/native_cover.rs</code> | — | 1 (max 160) | lazytrot | pillow-rs#ras2 |

@@ -193,37 +193,6 @@ pub(super) fn gpu_palette_first_rgb_merge_is_supported(
             .all(|band| band.mode().ok().as_deref() == Some("L"))
 }
 
-/// Admit the exact native L,L,L -> RGB merge layout. The compact kernel reads
-/// three independent L planes and writes three-byte RGB, so other band modes,
-/// logical modes, and operation sequences keep the established shader route.
-#[cfg(target_endian = "little")]
-pub(super) fn gpu_native_rgb_luma_merge_bands<'a>(
-    ops: &'a [PipelineOp],
-    image: &DynamicImage,
-    mode: Option<&str>,
-) -> Option<&'a [crate::image::Image]> {
-    if !matches!(mode, None | Some("L")) || !matches!(image, DynamicImage::ImageLuma8(_)) {
-        return None;
-    }
-    let [
-        PipelineOp::Merge {
-            mode: ColorMode::RGB,
-            logical_mode,
-            bands,
-        },
-    ] = ops
-    else {
-        return None;
-    };
-    let dimensions = image.dimensions();
-    (logical_mode == "RGB"
-        && bands.len() == 3
-        && bands.iter().all(|band| {
-            band.size().ok() == Some(dimensions) && band.mode().ok().as_deref() == Some("L")
-        }))
-    .then_some(bands.as_ref())
-}
-
 /// Validate the index space assumptions made by multi-input shaders. A
 /// storage-array read is not bounds-checked by WGSL, so an image that is
 /// smaller than the coordinates used by a shader must never be uploaded for a
