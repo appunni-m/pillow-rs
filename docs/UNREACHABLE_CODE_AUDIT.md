@@ -358,9 +358,19 @@ the operation graph and static reachability counts are unchanged.
 The direct and boxed F-mode Resize kernels now live in
 `pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/f32.rs`. Resize,
 Fit, and aspect-resize callers retain the same function routes through the
-family re-exports. The Luma16 kernel and shared byte coefficient, coordinate,
-and row helpers remain in `adapters.rs` for their existing callers. This is a
-structural move only; no runtime reachability or performance claim is added.
+family re-exports. The Luma16 kernel remained in `adapters.rs` at that
+checkpoint; its later move is recorded below. Shared byte coefficient,
+coordinate, and row helpers remain there for their existing callers. This is
+a structural move only; no runtime reachability or performance claim is added.
+
+## SIMD Resize Luma16 kernel follow-up — 2026-10-22
+
+The `I;16*` SIMD Resize kernel now lives in
+`pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/luma16.rs`. The
+Resize family's typed-mode gate still selects it through the same local
+dispatcher. Its endian handling and shared scalar-compatible resampling
+helpers remain unchanged. This ownership move adds no runtime reachability or
+performance claim.
 
 ## SIMD Offset family path follow-up — 2026-10-22
 
