@@ -372,6 +372,14 @@ dispatcher. Its endian handling and shared scalar-compatible resampling
 helpers remain unchanged. This ownership move adds no runtime reachability or
 performance claim.
 
+## SIMD Resize composite adapter follow-up — 2026-10-22
+
+Scale, Contain, Cover, and Fit adapters and their aspect-resize helper now live
+in `pillow-rs/src/compute/pool_simd/ops/adapters/resize.rs`. The registry keeps
+the same `adapters::simd_*` names through direct family re-exports. No dispatch
+or runtime reachability claim changed; this extraction adds no performance
+claim.
+
 ## SIMD Offset family path follow-up — 2026-10-22
 
 The registered Offset adapter remains `adapters::simd_offset`; its family
