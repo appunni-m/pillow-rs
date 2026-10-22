@@ -7038,111 +7038,42 @@ impl GpuPool {
 
         let gpu = Self::ensure_init()?;
         gpu.ensure_healthy("GPU batch start")?;
-        let packed_luma_point = packed_luma_point
-            && plan_packed_point_luma_dispatch(
-                img.width(),
-                img.height(),
-                gpu.device.limits().max_compute_workgroups_per_dimension,
-            )
-            .is_ok();
-        let packed_luma_putdata = packed_luma_putdata
-            && plan_packed_luma_dispatch(
-                img.width(),
-                img.height(),
-                gpu.device.limits().max_compute_workgroups_per_dimension,
-            )
-            .is_ok();
-        let packed_luma_order_statistic_requested = packed_luma_order_statistic;
-        let packed_luma_order_statistic = packed_luma_order_statistic_requested
-            && plan_packed_luma_dispatch(
-                img.width(),
-                img.height(),
-                gpu.device.limits().max_compute_workgroups_per_dimension,
-            )
-            .is_ok();
-        let packed_native_byte_filter_requested = packed_native_byte_filter;
-        let packed_native_byte_filter = packed_native_byte_filter_requested
-            && if matches!(mode, Some("LA")) {
-                plan_packed_la_dispatch(
-                    img.width(),
-                    img.height(),
-                    gpu.device.limits().max_compute_workgroups_per_dimension,
-                )
-                .is_ok()
-            } else {
-                plan_packed_luma_dispatch(
-                    img.width(),
-                    img.height(),
-                    gpu.device.limits().max_compute_workgroups_per_dimension,
-                )
-                .is_ok()
-            };
-        let packed_luma_pad_requested = packed_luma_pad;
-        let packed_luma_pad = packed_luma_pad_requested
-            && matches!(ops, [op @ PipelineOp::Pad { .. }]
-                if gpu_packed_luma_pad_dispatch_supported(
-                    op,
-                    img.dimensions(),
-                    gpu.device.limits().max_compute_workgroups_per_dimension,
-                )
-            );
-        if packed_luma_pad_requested && !packed_luma_pad {
-            gpu_log!(
-                "[GPU] dispatch preflight routed packed-L Pad to CPU: adapter workgroup limit"
-            );
-            return self.preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                "adapter workgroup limit",
-            );
-        }
-        let packed_la_pad_requested = packed_la_pad;
-        let packed_la_pad = packed_la_pad_requested
-            && matches!(ops, [op @ PipelineOp::Pad { .. }]
-                if gpu_packed_la_pad_dispatch_supported(
-                    op,
-                    img.dimensions(),
-                    gpu.device.limits().max_compute_workgroups_per_dimension,
-                )
-            );
-        if packed_la_pad_requested && !packed_la_pad {
-            gpu_log!(
-                "[GPU] dispatch preflight routed packed-LA Pad to CPU: adapter workgroup limit"
-            );
-            return self.preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                "adapter workgroup limit",
-            );
-        }
-        if packed_luma_order_statistic_requested && !packed_luma_order_statistic {
-            gpu_log!(
-                "[GPU] dispatch preflight routed packed L order statistic to CPU: adapter workgroup limit"
-            );
-            return self.preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                "adapter workgroup limit",
-            );
-        }
-        if packed_native_byte_filter_requested && !packed_native_byte_filter {
-            gpu_log!(
-                "[GPU] dispatch preflight routed packed native blur to CPU: adapter workgroup limit"
-            );
-            return self.preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                "adapter workgroup limit",
-            );
-        }
+        let max_workgroups_per_dimension = gpu.device.limits().max_compute_workgroups_per_dimension;
+        let packed_dispatch_candidates = GpuPackedDispatchCandidates {
+            packed_luma_point,
+            packed_luma_putdata,
+            packed_luma_order_statistic,
+            packed_native_byte_filter,
+            packed_luma_pad,
+            packed_la_pad,
+        };
+        let packed_dispatch_plan = plan_gpu_packed_dispatches(
+            ops,
+            img,
+            mode,
+            max_workgroups_per_dimension,
+            packed_dispatch_candidates,
+        );
+        let packed_dispatch_plan = match self.preflight_packed_dispatches(
+            ops,
+            img,
+            mode,
+            allow_cpu_fallback,
+            max_workgroups_per_dimension,
+            packed_dispatch_plan,
+        )? {
+            BatchPackedDispatchPreflight::Continue(plan) => plan,
+            BatchPackedDispatchPreflight::Return(image) => return Ok(image),
+        };
+        let GpuPackedDispatchPlan {
+            packed_luma_point,
+            packed_luma_putdata,
+            packed_luma_order_statistic,
+            packed_native_byte_filter,
+            packed_luma_pad,
+            packed_la_pad,
+            ..
+        } = packed_dispatch_plan;
         let image_pixels = CheckedDims::new(img.width(), img.height(), 1)?.total_pixels();
         let full_luma_putdata = packed_luma_putdata
             && matches!(ops, [PipelineOp::PutData { data, mode: PixelMode::L }]

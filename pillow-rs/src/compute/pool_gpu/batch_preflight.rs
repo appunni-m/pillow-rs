@@ -10,6 +10,84 @@ pub(super) enum BatchResolvedInputPreflight {
     Return(DynamicImage),
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct GpuPackedDispatchCandidates {
+    pub(super) packed_luma_point: bool,
+    pub(super) packed_luma_putdata: bool,
+    pub(super) packed_luma_order_statistic: bool,
+    pub(super) packed_native_byte_filter: bool,
+    pub(super) packed_luma_pad: bool,
+    pub(super) packed_la_pad: bool,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct GpuPackedDispatchPlan {
+    pub(super) packed_luma_point: bool,
+    pub(super) packed_luma_putdata: bool,
+    pub(super) packed_luma_order_statistic_requested: bool,
+    pub(super) packed_luma_order_statistic: bool,
+    pub(super) packed_native_byte_filter_requested: bool,
+    pub(super) packed_native_byte_filter: bool,
+    pub(super) packed_luma_pad_requested: bool,
+    pub(super) packed_luma_pad: bool,
+    pub(super) packed_la_pad_requested: bool,
+    pub(super) packed_la_pad: bool,
+}
+
+pub(super) enum BatchPackedDispatchPreflight {
+    Continue(GpuPackedDispatchPlan),
+    Return(DynamicImage),
+}
+
+pub(super) fn plan_gpu_packed_dispatches(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    mode: Option<&str>,
+    max_workgroups_per_dimension: u32,
+    candidates: GpuPackedDispatchCandidates,
+) -> GpuPackedDispatchPlan {
+    let packed_luma_point = candidates.packed_luma_point
+        && plan_packed_point_luma_dispatch(
+            image.width(),
+            image.height(),
+            max_workgroups_per_dimension,
+        )
+        .is_ok();
+    let packed_luma_putdata = candidates.packed_luma_putdata
+        && plan_packed_luma_dispatch(image.width(), image.height(), max_workgroups_per_dimension)
+            .is_ok();
+    let packed_luma_order_statistic = candidates.packed_luma_order_statistic
+        && plan_packed_luma_dispatch(image.width(), image.height(), max_workgroups_per_dimension)
+            .is_ok();
+    let packed_native_byte_filter = candidates.packed_native_byte_filter
+        && if matches!(mode, Some("LA")) {
+            plan_packed_la_dispatch(image.width(), image.height(), max_workgroups_per_dimension)
+                .is_ok()
+        } else {
+            plan_packed_luma_dispatch(image.width(), image.height(), max_workgroups_per_dimension)
+                .is_ok()
+        };
+    let packed_luma_pad = candidates.packed_luma_pad
+        && matches!(ops, [op @ PipelineOp::Pad { .. }]
+        if gpu_packed_luma_pad_dispatch_supported(
+            op,
+            image.dimensions(),
+            max_workgroups_per_dimension,
+        ));
+    GpuPackedDispatchPlan {
+        packed_luma_point,
+        packed_luma_putdata,
+        packed_luma_order_statistic_requested: candidates.packed_luma_order_statistic,
+        packed_luma_order_statistic,
+        packed_native_byte_filter_requested: candidates.packed_native_byte_filter,
+        packed_native_byte_filter,
+        packed_luma_pad_requested: candidates.packed_luma_pad,
+        packed_luma_pad,
+        packed_la_pad_requested: candidates.packed_la_pad,
+        packed_la_pad: false,
+    }
+}
+
 pub(super) struct GpuBatchResizeProofs {
     pub(super) constant_bits: Option<u32>,
     pub(super) box_copy_is_exact: bool,
@@ -69,6 +147,81 @@ pub(super) fn gpu_batch_resize_proofs(
 }
 
 impl GpuPool {
+    pub(super) fn preflight_packed_dispatches(
+        &self,
+        ops: &[PipelineOp],
+        image: &DynamicImage,
+        mode: Option<&str>,
+        allow_cpu_fallback: bool,
+        max_workgroups_per_dimension: u32,
+        mut plan: GpuPackedDispatchPlan,
+    ) -> Result<BatchPackedDispatchPreflight, PilError> {
+        if plan.packed_luma_pad_requested && !plan.packed_luma_pad {
+            gpu_log!(
+                "[GPU] dispatch preflight routed packed-L Pad to CPU: adapter workgroup limit"
+            );
+            return self
+                .preflight_failure(
+                    ops,
+                    image,
+                    mode,
+                    allow_cpu_fallback,
+                    "adapter workgroup limit",
+                )
+                .map(BatchPackedDispatchPreflight::Return);
+        }
+        plan.packed_la_pad = plan.packed_la_pad_requested
+            && matches!(ops, [op @ PipelineOp::Pad { .. }]
+            if gpu_packed_la_pad_dispatch_supported(
+                op,
+                image.dimensions(),
+                max_workgroups_per_dimension,
+            ));
+        if plan.packed_la_pad_requested && !plan.packed_la_pad {
+            gpu_log!(
+                "[GPU] dispatch preflight routed packed-LA Pad to CPU: adapter workgroup limit"
+            );
+            return self
+                .preflight_failure(
+                    ops,
+                    image,
+                    mode,
+                    allow_cpu_fallback,
+                    "adapter workgroup limit",
+                )
+                .map(BatchPackedDispatchPreflight::Return);
+        }
+        if plan.packed_luma_order_statistic_requested && !plan.packed_luma_order_statistic {
+            gpu_log!(
+                "[GPU] dispatch preflight routed packed L order statistic to CPU: adapter workgroup limit"
+            );
+            return self
+                .preflight_failure(
+                    ops,
+                    image,
+                    mode,
+                    allow_cpu_fallback,
+                    "adapter workgroup limit",
+                )
+                .map(BatchPackedDispatchPreflight::Return);
+        }
+        if plan.packed_native_byte_filter_requested && !plan.packed_native_byte_filter {
+            gpu_log!(
+                "[GPU] dispatch preflight routed packed native blur to CPU: adapter workgroup limit"
+            );
+            return self
+                .preflight_failure(
+                    ops,
+                    image,
+                    mode,
+                    allow_cpu_fallback,
+                    "adapter workgroup limit",
+                )
+                .map(BatchPackedDispatchPreflight::Return);
+        }
+        Ok(BatchPackedDispatchPreflight::Continue(plan))
+    }
+
     pub(super) fn preflight_resolved_batch_inputs(
         &self,
         ops: &[PipelineOp],
