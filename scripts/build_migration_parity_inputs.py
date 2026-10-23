@@ -12609,8 +12609,8 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     degenerate image dimensions, an RGB image produced by public mode
     conversion, and copy-on-write behavior after branching a channel. They are
     added to parity inputs only; they do not participate in managed coverage
-    plans. GPU profiles are omitted from the empty-image cases because the GPU
-    channel extraction path cannot launch a zero-pixel shader grid.
+    plans. Every generated workflow is shared across the configured target
+    backends; each parity runner selects its backend independently.
     """
 
     if surface_id != "PIL.Image.Image":
@@ -12621,9 +12621,6 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         "PIL.Image.Image.getchannel.parameter.channel",
         "PIL.Image.Image.getchannel.mode.rgb",
     ]
-    nonempty_profiles = list(BENCHMARK_TARGET_PROFILES)
-    empty_profiles = ["python-cpu", "python-simd"]
-
     def new_image(
         step_id: str,
         mode: str,
@@ -12685,7 +12682,6 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
 
     def case(
         case_suffix: str,
-        profiles: list[str],
         steps: list[dict[str, Any]],
         observations: list[str],
         assets: list[dict[str, Any]] | None = None,
@@ -12718,7 +12714,6 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         cases.append(
             case(
                 f"rgb-tail-residue-{residue}-all-bands",
-                nonempty_profiles,
                 steps,
                 observations,
             )
@@ -12731,7 +12726,7 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         steps = [new_image("rgb-input", "RGB", size, [17, 53, 109])]
         extraction_steps, observations = extract_all_bands("rgb-input")
         steps.extend(extraction_steps)
-        cases.append(case(suffix, empty_profiles, steps, observations))
+        cases.append(case(suffix, steps, observations))
 
     for residue in (1, 2, 3):
         width = 260 + residue
@@ -12768,7 +12763,6 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         cases.append(
             case(
                 f"rgb-deferred-tail-residue-{residue}-wide-all-bands",
-                nonempty_profiles,
                 steps,
                 observations,
                 assets=[pixel_asset],
@@ -12807,7 +12801,6 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     cases.append(
         case(
             "pipeline-rgba-converted-to-rgb-all-bands",
-            nonempty_profiles,
             steps,
             observations,
         )
@@ -12857,7 +12850,6 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     cases.append(
         case(
             "pipeline-parent-mutation-after-channel-branch",
-            nonempty_profiles,
             steps,
             ["green-channel", "green-channel-bytes", "mutated-parent-bytes"],
         )
