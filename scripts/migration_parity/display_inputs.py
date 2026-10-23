@@ -10,6 +10,15 @@ DISPLAY_OPERATIONS = {
     ("PIL.ImageShow", "register"),
     ("PIL.ImageShow", "show"),
 }
+PLATFORM_VIEWER_CLASSES = (
+    "WindowsViewer",
+    "MacViewer",
+    "XDGViewer",
+    "DisplayViewer",
+    "GmDisplayViewer",
+    "EogViewer",
+    "XVViewer",
+)
 
 
 def _literal(value: Any) -> dict[str, Any]:
@@ -80,6 +89,15 @@ def display_case(
 
 def default_display_case(surface, operation, requirement, case_id):
     """Keep default requirement generation safe for the display family."""
+    if requirement["dimension"] == "error_path":
+        return platform_viewer_case(
+            surface,
+            operation["id"],
+            case_id,
+            requirement["id"],
+            "XDGViewer",
+            launch_failure="file-not-found",
+        )
     registrations = None
     if operation["id"] == "register":
         registrations = ({"order": 1, "registration": "class"},)
@@ -93,6 +111,87 @@ def default_display_case(surface, operation, requirement, case_id):
         options={"capture_option": "forwarded"}
         if ".parameter.options" in requirement["id"] else None,
     )
+
+
+def platform_viewer_case(
+    surface: str,
+    operation: str,
+    case_id: str,
+    requirement_id: str,
+    viewer_class: str,
+    *,
+    launch_failure: str | None = None,
+) -> dict[str, Any]:
+    """Exercise a built-in viewer while capturing, never launching, processes."""
+    steps = [
+        _step(
+            "image",
+            "PIL.Image",
+            "new",
+            {
+                "mode": _literal("LA"),
+                "size": _literal([2, 1]),
+                "color": _literal([109, 233]),
+            },
+        ),
+        _step(
+            "register",
+            "PIL.ImageShow",
+            "register",
+            {
+                "viewer": _literal(
+                    {
+                        "protocol": "capture-platform-viewer",
+                        "viewer_id": "platform-viewer",
+                        "image_step_id": "image",
+                        "viewer_class": viewer_class,
+                        "launch_failure": launch_failure,
+                    }
+                ),
+                "order": _literal(0),
+            },
+        ),
+    ]
+    call_id = "call"
+    if surface == "PIL.Image.Image":
+        steps.append(
+            _step(
+                call_id,
+                surface,
+                operation,
+                {"title": _literal("viewer title λ")},
+                _binding("image"),
+            )
+        )
+    else:
+        steps.append(
+            _step(
+                call_id,
+                "PIL.ImageShow",
+                "show",
+                {
+                    "image": _binding("image"),
+                    "title": _literal("viewer title λ"),
+                    "options": _literal({}),
+                },
+            )
+        )
+    observations = ["register", call_id]
+    if launch_failure is None:
+        steps.append(
+            _step("callbacks", "PIL.Image.Image", "info", {}, _binding("image"))
+        )
+        observations.append("callbacks")
+    return {
+        "case_id": case_id,
+        "surface": surface,
+        "operation": operation,
+        "covers": [requirement_id],
+        "target_profiles": ["python-cpu"],
+        "assets": [],
+        "steps": steps,
+        "observations": observations,
+    }
 
 
 def nuanced_display_cases(surface, operations):
@@ -133,4 +232,26 @@ def nuanced_display_cases(surface, operations):
         ):
             cases.append(display_case(surface, operation, f"{prefix}.{label}", [requirement],
                 registrations=registrations))
+        launch_requirement = f"{surface}.{operation}.error.viewer-launch"
+        for viewer_class in PLATFORM_VIEWER_CLASSES:
+            viewer_slug = viewer_class.removesuffix("Viewer").lower()
+            cases.append(
+                platform_viewer_case(
+                    surface,
+                    operation,
+                    f"{prefix}.platform.{viewer_slug}.process",
+                    requirement,
+                    viewer_class,
+                )
+            )
+            cases.append(
+                platform_viewer_case(
+                    surface,
+                    operation,
+                    f"{prefix}.platform.{viewer_slug}.launch-failure",
+                    launch_requirement,
+                    viewer_class,
+                    launch_failure="file-not-found",
+                )
+            )
     return cases

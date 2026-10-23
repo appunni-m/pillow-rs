@@ -135,6 +135,23 @@ CAPTURE_VIEWER_LITERAL_FIELDS = {
     "registration",
     "hook",
 }
+CAPTURE_PLATFORM_VIEWER_LITERAL_FIELDS = {
+    "protocol",
+    "viewer_id",
+    "image_step_id",
+    "viewer_class",
+    "launch_failure",
+}
+CAPTURE_PLATFORM_VIEWER_CLASSES = {
+    "WindowsViewer",
+    "MacViewer",
+    "XDGViewer",
+    "DisplayViewer",
+    "GmDisplayViewer",
+    "EogViewer",
+    "XVViewer",
+}
+DISPLAY_LITERAL_PROTOCOLS = {"capture-viewer", "capture-platform-viewer"}
 
 
 def _error(path: str, message: str) -> ValueError:
@@ -595,15 +612,47 @@ def _validate_capture_viewer_literal(
         raise _error(f"{path}.hook", "expected show, show_image, or show_file")
 
 
-def _reject_nested_capture_viewer(value: Any, path: str, *, root: bool = True) -> None:
+def _validate_capture_platform_viewer_literal(
+    value: Any,
+    path: str,
+    prior_steps: set[str],
+    prior_image_steps: set[str],
+) -> None:
+    value = _exact(value, CAPTURE_PLATFORM_VIEWER_LITERAL_FIELDS, path)
+    if value["protocol"] != "capture-platform-viewer":
+        raise _error(f"{path}.protocol", "unsupported literal protocol")
+    _string(value["viewer_id"], f"{path}.viewer_id")
+    image_step_id = _string(value["image_step_id"], f"{path}.image_step_id")
+    if image_step_id not in prior_steps:
+        raise _error(
+            f"{path}.image_step_id",
+            "platform viewer must reference an earlier workflow step",
+        )
+    if image_step_id not in prior_image_steps:
+        raise _error(
+            f"{path}.image_step_id",
+            "platform viewer must reference an earlier image result",
+        )
+    viewer_class = _string(value["viewer_class"], f"{path}.viewer_class")
+    if viewer_class not in CAPTURE_PLATFORM_VIEWER_CLASSES:
+        raise _error(f"{path}.viewer_class", "unsupported platform viewer class")
+    if value["launch_failure"] not in (None, "file-not-found"):
+        raise _error(
+            f"{path}.launch_failure",
+            "expected null or 'file-not-found'",
+        )
+
+
+def _reject_nested_display_protocol(value: Any, path: str, *, root: bool = True) -> None:
     if isinstance(value, dict):
-        if not root and value.get("protocol") == "capture-viewer":
-            raise _error(path, "capture-viewer must be a top-level literal value")
+        protocol = value.get("protocol")
+        if not root and isinstance(protocol, str) and protocol in DISPLAY_LITERAL_PROTOCOLS:
+            raise _error(path, "display viewer protocol must be a top-level literal value")
         for key, item in value.items():
-            _reject_nested_capture_viewer(item, f"{path}.{key}", root=False)
+            _reject_nested_display_protocol(item, f"{path}.{key}", root=False)
     elif isinstance(value, list):
         for index, item in enumerate(value):
-            _reject_nested_capture_viewer(item, f"{path}[{index}]", root=False)
+            _reject_nested_display_protocol(item, f"{path}[{index}]", root=False)
 
 
 def _validate_descriptor(
@@ -618,12 +667,22 @@ def _validate_descriptor(
     if kind == "literal":
         _exact(descriptor, {"kind", "value"}, path)
         literal = descriptor["value"]
-        _reject_nested_capture_viewer(literal, f"{path}.value")
+        _reject_nested_display_protocol(literal, f"{path}.value")
         if (
             isinstance(literal, dict)
             and literal.get("protocol") == "capture-viewer"
         ):
             _validate_capture_viewer_literal(
+                literal,
+                f"{path}.value",
+                prior_steps,
+                prior_image_steps,
+            )
+        elif (
+            isinstance(literal, dict)
+            and literal.get("protocol") == "capture-platform-viewer"
+        ):
+            _validate_capture_platform_viewer_literal(
                 literal,
                 f"{path}.value",
                 prior_steps,
@@ -717,7 +776,8 @@ def _literal_type(value: Any) -> str:
     if isinstance(value, list):
         return "sequence"
     if isinstance(value, dict):
-        if value.get("protocol") == "capture-viewer":
+        protocol = value.get("protocol")
+        if isinstance(protocol, str) and protocol in DISPLAY_LITERAL_PROTOCOLS:
             return "handle"
         if value.get("protocol") == "outline":
             return "handle"

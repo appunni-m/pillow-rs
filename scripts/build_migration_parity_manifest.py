@@ -121,10 +121,10 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
         "pillow-rs/src/ops/module_fns.rs",
         "pillow-rs/src/ops/analysis.rs",
         "pillow-rs/src/ops/array.rs",
-        "pillow-rs/src/ops/convert.rs",
+        "pillow-rs/src/ops/convert/mod.rs",
         "pillow-rs/src/ops/crop.rs",
         "pillow-rs/src/ops/paste.rs",
-        "pillow-rs/src/ops/quantize.rs",
+        "pillow-rs/src/ops/quantize/mod.rs",
         "pillow-rs/src/ops/resize.rs",
         "pillow-rs/src/ops/rotate.rs",
         "pillow-rs/src/ops/split.rs",
@@ -160,11 +160,11 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
     ),
     "image-color": (
         "pillow-rs-py/python/pillow_rs/imagecolor.py",
-        "pillow-rs/src/color.rs",
+        "pillow-rs/src/color/mod.rs",
     ),
     "image-palette": (
         "pillow-rs-py/python/pillow_rs/imagepalette.py",
-        "pillow-rs/src/color.rs",
+        "pillow-rs/src/color/mod.rs",
     ),
     "image-font": (
         "pillow-rs-py/python/pillow_rs/imagefont.py",
@@ -831,6 +831,15 @@ def operation_requirements(
             ["parity", "coverage"],
         )
     ]
+    if endpoint.source_path in {"PIL.Image.Image.show", "PIL.ImageShow.show"}:
+        requirements.append(
+            requirement(
+                f"{prefix}.error.viewer-launch",
+                "error_path",
+                "Propagate a registered viewer process-launch failure.",
+                ["parity", "coverage"],
+            )
+        )
     for parameter in parameters:
         if parameter["style"] == "receiver":
             continue

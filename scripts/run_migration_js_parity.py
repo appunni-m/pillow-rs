@@ -640,6 +640,32 @@ def compatible_case(
     return None
 
 
+def _contains_platform_viewer_protocol(value: Any) -> bool:
+    if isinstance(value, dict):
+        if value.get("protocol") == "capture-platform-viewer":
+            return True
+        return any(_contains_platform_viewer_protocol(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_platform_viewer_protocol(item) for item in value)
+    return False
+
+
+def _native_platform_viewer_case(case: dict[str, Any]) -> bool:
+    """Whether a workflow requires a native OS viewer process boundary."""
+    return any(
+        _contains_platform_viewer_protocol(step)
+        for step in case.get("steps", [])
+    )
+
+
+def _exclude_native_platform_viewer_cases(
+    cases: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    """Keep native OS process contracts out of the WASM execution lane."""
+    excluded = sum(1 for case in cases if _native_platform_viewer_case(case))
+    return [case for case in cases if not _native_platform_viewer_case(case)], excluded
+
+
 def operation_payload(
     cases: list[dict[str, Any]],
     operation_index: dict[tuple[str, str], dict[str, Any]],
@@ -1245,12 +1271,22 @@ def run_streaming(args: argparse.Namespace, output: Path) -> int:
     )
     if args.limit is not None:
         cases = cases[: args.limit]
+    cases, native_viewer_excluded = _exclude_native_platform_viewer_cases(cases)
     if not cases:
+        if native_viewer_excluded:
+            raise ValueError(
+                "selected cases require a native OS viewer process and are not "
+                "applicable to WASM"
+            )
         raise ValueError("no active parity cases selected")
     if args.chunk_size <= 0:
         raise ValueError("JS/WASM chunk size must be positive")
     operation_index = build_operation_index(manifest)
     diagnostic_hints: collections.Counter[str] = collections.Counter()
+    if native_viewer_excluded:
+        diagnostic_hints["native-platform-viewer-process-not-applicable-to-wasm"] += (
+            native_viewer_excluded
+        )
     for case in cases:
         reason = compatible_case(case, operation_index)
         if reason is not None:
@@ -1553,12 +1589,22 @@ def run(args: argparse.Namespace) -> int:
     )
     if args.limit is not None:
         cases = cases[: args.limit]
+    cases, native_viewer_excluded = _exclude_native_platform_viewer_cases(cases)
     if not cases:
+        if native_viewer_excluded:
+            raise ValueError(
+                "selected cases require a native OS viewer process and are not "
+                "applicable to WASM"
+            )
         raise ValueError("no active parity cases selected")
     if args.chunk_size <= 0:
         raise ValueError("JS/WASM chunk size must be positive")
     operation_index = build_operation_index(manifest)
     diagnostic_hints: collections.Counter[str] = collections.Counter()
+    if native_viewer_excluded:
+        diagnostic_hints["native-platform-viewer-process-not-applicable-to-wasm"] += (
+            native_viewer_excluded
+        )
     for case in cases:
         reason = compatible_case(case, operation_index)
         if reason is not None:

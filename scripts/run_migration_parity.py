@@ -45,14 +45,18 @@ try:
     from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
     from validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
     from migration_parity.display import (
+        DISPLAY_PROTOCOLS,
         build_capture_viewer,
+        build_platform_viewer,
         isolated_viewer_registry,
     )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity`` in tests
     from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
     from scripts.validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
     from scripts.migration_parity.display import (
+        DISPLAY_PROTOCOLS,
         build_capture_viewer,
+        build_platform_viewer,
         isolated_viewer_registry,
     )
 
@@ -746,6 +750,16 @@ def resolve_descriptor(
         value = descriptor.get("value")
         if isinstance(value, dict) and value.get("protocol") == "capture-viewer":
             return build_capture_viewer(
+                value,
+                side=side,
+                bindings=bindings,
+                import_surface=import_surface,
+            )
+        if (
+            isinstance(value, dict)
+            and value.get("protocol") == "capture-platform-viewer"
+        ):
+            return build_platform_viewer(
                 value,
                 side=side,
                 bindings=bindings,
@@ -1645,7 +1659,7 @@ def _descriptor_binding_steps(value: Any) -> set[str]:
     """Collect workflow step references from an input descriptor tree."""
 
     if isinstance(value, dict):
-        if value.get("protocol") == "capture-viewer":
+        if value.get("protocol") in DISPLAY_PROTOCOLS:
             image_step_id = value.get("image_step_id")
             return {image_step_id} if isinstance(image_step_id, str) else set()
         if value.get("kind") == "binding":
