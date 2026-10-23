@@ -318,15 +318,15 @@ row below; they are intentionally not inferred from a shader filename.
 | `Expand` | `pool_cpu/ops/imageops.rs` | Track new dimensions and fill placement; use one output allocation and fuse the placement into a compatible geometry writer. |
 | `CropBorder` | `pool_cpu/ops/imageops.rs` | Treat as a checked copy/view rectangle; preserve Pillow errors for invalid borders before backend selection. Fuse with a following compatible read when possible. |
 | `Transform` | `pool_cpu/ops/effects.rs` | Keep affine/perspective/quad/mesh method, fill, pixel-center, and palette behavior explicit. Use the current exact sampler and GPU admission proof; this is a hard fusion boundary without a proven coordinate composition. |
-| `Filter3x3` | `pool_cpu/ops/filter.rs` | Neighborhood node with kernel/scale/offset and exact boundary/rounding policy. Reuse the rolling/tiled SIMD and proven GPU paths; capability must match parameter proof. |
-| `Filter5x5` | `pool_cpu/ops/filter.rs` | Same contract as `Filter3x3` with a larger halo and scratch footprint. Tile by output region without changing accumulation order. |
-| `GaussianBlur` | `pool_cpu/ops/filter.rs` | Represent exact separable passes and their intermediate lifetimes. Reuse current rolling CPU/SIMD/GPU components; avoid allocating a full frame per pass when a compatible scratch slot is free. |
-| `BoxBlur` | `pool_cpu/ops/filter.rs` | Same neighborhood plan, including edge and radius behavior. Lower to existing horizontal/vertical code only when the discrete radius contract matches. |
-| `BoxBlurXY` | `pool_cpu/ops/filter.rs` | Store independent radii and pass count; schedule the existing separable kernels as one operation with leased scratch. Preserve exact pass order. |
-| `MedianFilter` | `pool_cpu/ops/filter.rs` | Order-statistic node. Keep size/mode-specific kernels and current SIMD/GPU specializations; reuse row windows/tiles instead of rescanning and reallocating. |
-| `MaxFilter` | `pool_cpu/ops/filter.rs` | Neighborhood reduction node. Share window/tile machinery with min/max only when semantics match; retain mode and border behavior. |
-| `MinFilter` | `pool_cpu/ops/filter.rs` | Same as max with exact min semantics; consider paired min/max only if both outputs are requested and share the same input. |
-| `RankFilter` | `pool_cpu/ops/filter.rs` | Order-statistic node with rank as a required parameter. Share selection/window infrastructure without changing tie, border, or rank behavior. |
+| `Filter3x3` | `pool_cpu/ops/filter/filter3x3.rs` | Neighborhood node with kernel/scale/offset and exact boundary/rounding policy. Reuse the rolling/tiled SIMD and proven GPU paths; capability must match parameter proof. |
+| `Filter5x5` | `pool_cpu/ops/filter/filter5x5.rs` | Same contract as `Filter3x3` with a larger halo and scratch footprint. Tile by output region without changing accumulation order. |
+| `GaussianBlur` | `pool_cpu/ops/filter/blur.rs` | Represent exact separable passes and their intermediate lifetimes. Reuse current rolling CPU/SIMD/GPU components; avoid allocating a full frame per pass when a compatible scratch slot is free. |
+| `BoxBlur` | `pool_cpu/ops/filter/blur.rs` | Same neighborhood plan, including edge and radius behavior. Lower to existing horizontal/vertical code only when the discrete radius contract matches. |
+| `BoxBlurXY` | `pool_cpu/ops/filter/blur.rs` | Store independent radii and pass count; schedule the existing separable kernels as one operation with leased scratch. Preserve exact pass order. |
+| `MedianFilter` | `pool_cpu/ops/filter/rank.rs` | Order-statistic node. Keep size/mode-specific kernels and current SIMD/GPU specializations; reuse row windows/tiles instead of rescanning and reallocating. |
+| `MaxFilter` | `pool_cpu/ops/filter/rank.rs` | Neighborhood reduction node. Share window/tile machinery with min/max only when semantics match; retain mode and border behavior. |
+| `MinFilter` | `pool_cpu/ops/filter/rank.rs` | Same as max with exact min semantics; consider paired min/max only if both outputs are requested and share the same input. |
+| `RankFilter` | `pool_cpu/ops/filter/rank.rs` | Order-statistic node with rank as a required parameter. Share selection/window infrastructure without changing tie, border, or rank behavior. |
 | `Autocontrast` | `pool_cpu/ops/imageops.rs` | Global histogram/range-control plus LUT application. Keep mask/cutoff and per-band rules; fuse the remap with adjacent point ops after its LUT is known. |
 | `Equalize` | `pool_cpu/ops/imageops.rs` | Histogram plus LUT node. Reuse current CPU/SIMD/GPU histogram improvements; compute only required statistics and write the final remap directly when legal. |
 | `EqualizeMasked` | `pool_cpu/ops/imageops.rs` | Preserve the mask as a first-class dependency, not a validation-only value. Reuse the masked histogram/LUT path and permit result reuse only after all mask readers finish. |

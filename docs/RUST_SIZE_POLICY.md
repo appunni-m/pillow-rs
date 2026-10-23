@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 14 legacy file ceilings and 194 legacy functions across 121 source paths.
+Snapshot: 13 legacy file ceilings and 194 legacy functions across 124 source paths.
 A dash means that path has no over-limit file entry; function counts and
 maximum recorded function lines are summarized here, with each exact signature
 and ceiling in the JSON baseline. All listed paths are owned by `lazytrot`;
@@ -111,7 +111,10 @@ each reducer issue is a child of Kata `pillow-rs#m2f1`.
 | <code>pillow-rs/src/compute/pool_cpu/ops/draw.rs</code> | 1,777 | 2 (max 172 lines) | lazytrot | pillow-rs#mtx1 |
 | <code>pillow-rs/src/compute/pool_cpu/ops/effects.rs</code> | 6,211 | 9 (max 235 lines) | lazytrot | pillow-rs#8rfy |
 | <code>pillow-rs/src/compute/pool_cpu/ops/enhance.rs</code> | — | 1 (max 117 lines) | lazytrot | pillow-rs#7f4d |
-| <code>pillow-rs/src/compute/pool_cpu/ops/filter.rs</code> | 6,897 | 4 (max 260 lines) | lazytrot | pillow-rs#qpfs |
+| <code>pillow-rs/src/compute/pool_cpu/ops/filter/blur.rs</code> | — | 1 (max 260 lines) | lazytrot | pillow-rs#qpfs |
+| <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs</code> | — | 1 (max 157 lines) | lazytrot | pillow-rs#qpfs |
+| <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5/int32.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#qpfs |
+| <code>pillow-rs/src/compute/pool_cpu/ops/filter/rank.rs</code> | — | 1 (max 110 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303 lines) | lazytrot | pillow-rs#vamp |
 | <code>pillow-rs/src/compute/pool_cpu/ops/reduce.rs</code> | — | 2 (max 244 lines) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/resize/float.rs</code> | — | 1 (max 156 lines) | lazytrot | pillow-rs#wtxv |
