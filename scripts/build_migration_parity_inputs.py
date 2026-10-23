@@ -55652,6 +55652,12 @@ def build_inputs(
                     ),
                 }
             )
+            if isolated_display:
+                # Display APIs are measured at their public host boundary.
+                # Keep their API timings separate from compute-backend
+                # comparisons and performance cohorts.
+                workloads[-1]["measurement"]["execution_scope"] = "host_boundary"
+                workloads[-1]["context"]["operation_class"] = "terminal"
             members.append({"workload_id": workload_id, "weight": 1})
             if workload_id == "pil-image-image.split.standard":
                 f_case_id = (
@@ -57163,19 +57169,42 @@ def build_inputs(
                     members.append({"workload_id": workload_id, "weight": 1})
         benchmark_relative = f"inputs/benchmark/{storage_slug}.json"
         benchmark_path = output_root / benchmark_relative
-        suites = (
-            [
+        workload_by_id = {
+            workload["workload_id"]: workload for workload in workloads
+        }
+        host_boundary_members = [
+            member
+            for member in members
+            if workload_by_id[member["workload_id"]]["measurement"].get(
+                "execution_scope"
+            )
+            == "host_boundary"
+        ]
+        backend_members = [
+            member for member in members if member not in host_boundary_members
+        ]
+        suites = []
+        if backend_members:
+            suites.append(
                 {
                     "suite_id": f"{storage_slug}.benchmark-suite",
                     "description": (
                         f"Equal-weight public workloads for {surface_id}."
                     ),
-                    "members": members,
+                    "members": backend_members,
                 }
-            ]
-            if members
-            else []
-        )
+            )
+        for member in host_boundary_members:
+            workload_id = member["workload_id"]
+            suites.append(
+                {
+                    "suite_id": f"{workload_id}.host-boundary",
+                    "description": (
+                        f"Direct host-boundary comparison for {workload_id}."
+                    ),
+                    "members": [member],
+                }
+            )
         write_json(
             benchmark_path,
             {

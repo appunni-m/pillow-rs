@@ -1081,6 +1081,13 @@ def benchmark(result: dict[str, Any]) -> None:
             raise ValueError(f"{prefix}.context.build_profile: unsupported build profile")
         if not isinstance(workload["measurement_policy"], dict):
             raise ValueError(f"{prefix}.measurement_policy: expected object")
+        execution_scope = workload["measurement_policy"].get(
+            "execution_scope", "compute_backend"
+        )
+        if execution_scope not in {"compute_backend", "host_boundary"}:
+            raise ValueError(
+                f"{prefix}.measurement_policy.execution_scope: invalid scope"
+            )
         exact(workload["correctness"], {"gate", "outcome", "evidence_id"}, f"{prefix}.correctness")
         if workload["correctness"]["gate"] not in {"parity_pass", "source_target_match", "successful_execution", "not_applicable"}:
             raise ValueError(f"{prefix}.correctness.gate: invalid gate")
@@ -1131,6 +1138,20 @@ def benchmark(result: dict[str, Any]) -> None:
                 f"{sprefix}.execution",
                 allowed_step_ids=allowed_step_ids,
             )
+            if execution_scope == "host_boundary" and subject["kind"] == "target_profile":
+                receipt = subject["execution"]
+                if (
+                    receipt["status"] != "not_applicable"
+                    or receipt["actual_backend"] is not None
+                    or receipt["actual_backend_counts"] != {}
+                    or receipt["sample_count"] != 0
+                    or receipt["fallback_reason_counts"] != {}
+                    or receipt.get("errors")
+                ):
+                    raise ValueError(
+                        f"{sprefix}.execution: host-boundary timings cannot claim "
+                        "compute-backend attribution"
+                    )
         unique(subject_ids, f"{prefix}.subjects")
         for budget_index, budget in enumerate(workload["budgets"]):
             exact(budget, {"requirement_id", "subject_id", "baseline_subject", "metric", "statistic", "operator", "required", "observed", "unit", "outcome"}, f"{prefix}.budgets[{budget_index}]")

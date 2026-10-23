@@ -182,7 +182,7 @@ def active_target_profiles() -> tuple[str, ...]:
 
 
 def suite_subject_is_comparable(
-    subject: dict[str, Any], subject_id: str
+    subject: dict[str, Any], subject_id: str, *, execution_scope: str = "compute_backend"
 ) -> bool:
     """Return whether a subject can contribute to a paired suite ratio.
 
@@ -191,7 +191,9 @@ def suite_subject_is_comparable(
     missing, partial, or host-controlled.  Such a row remains in the
     independent suite coverage summary, but it must not enter a speedup
     cohort.  The Pillow oracle has an explicit non-pipeline receipt and is
-    the only non-terminal exception.
+    the only non-terminal exception. Explicit host-boundary workloads may
+    compare completed public-call timings without claiming an image-backend
+    receipt; their target receipt must carry no backend attribution.
     """
 
     if subject.get("status") != "completed":
@@ -223,6 +225,16 @@ def suite_subject_is_comparable(
         )
 
     expected_backend = runtime_backend_for_profile(subject_id)
+
+    if execution_scope == "host_boundary":
+        return (
+            execution.get("status") == "not_applicable"
+            and execution.get("terminal_complete") is False
+            and execution.get("requested_backend") == expected_backend
+            and execution.get("actual_backend") is None
+            and execution.get("actual_backend_counts") == {}
+            and execution.get("sample_count") == 0
+        )
 
     if execution.get("status") != "completed":
         return False
@@ -1379,7 +1391,17 @@ def execution_result(
         and not errors
         and not_applicable_count == len(measured)
     )
-    if all_not_applicable:
+    host_boundary_without_backend_receipt = (
+        policy.get("execution_scope") == "host_boundary"
+        and not errors
+        and not actual_counts
+        and not fallback_counts
+        and not completed_candidates
+        and not cached_candidates
+        and partial_count == 0
+        and not has_partial
+    )
+    if all_not_applicable or host_boundary_without_backend_receipt:
         # Public lifecycle/draw/metadata calls can be valid benchmark timings
         # without entering the compute-pipeline telemetry boundary. Keep that
         # distinction explicit instead of calling the row ``not_proven`` (or
@@ -2658,6 +2680,16 @@ def run(args: argparse.Namespace) -> int:
         }
         declared_members = list(suite["members"])
         declared_member_count = len(declared_members)
+        host_boundary_suite = bool(declared_members) and all(
+            workload_by_id.get(member["workload_id"], {})
+            .get("measurement_policy", {})
+            .get("execution_scope")
+            == "host_boundary"
+            for member in declared_members
+        )
+        minimum_common_members = (
+            1 if host_boundary_suite else MIN_COMPARABLE_SUITE_MEMBERS
+        )
         suite_target_profiles = [
             subject_id
             for subject_kind, subject_id in result_subject_order
@@ -2696,7 +2728,11 @@ def run(args: argparse.Namespace) -> int:
                 if suite_subject_is_comparable(
                     baseline_subject, baseline_subject_id
                 ) and suite_subject_is_comparable(
-                    target_member_subject, target_profile
+                    target_member_subject,
+                    target_profile,
+                    execution_scope=workload["measurement_policy"].get(
+                        "execution_scope", "compute_backend"
+                    ),
                 ):
                     common_members.append(member)
                 else:
@@ -2771,7 +2807,7 @@ def run(args: argparse.Namespace) -> int:
                     "excluded_members": excluded_members,
                     "status": (
                         "comparable"
-                        if len(common_ids) >= MIN_COMPARABLE_SUITE_MEMBERS
+                        if len(common_ids) >= minimum_common_members
                         else "not_comparable"
                     ),
                 })

@@ -52,6 +52,21 @@ so its receipts must not be described as five warmups, 20 iterations, and five
 samples. The reference policy above applies to the standard rows that declare
 it; the runner never silently overrides a workload's input policy.
 
+Workloads default to `measurement.execution_scope: compute_backend`. Mark a
+parity-backed public call as `host_boundary` when the measured unit is the
+public API lifecycle rather than a compute-backend operation. This scope may
+include host-side conversion, encoding, file work, or viewer handoff. Workloads
+in this scope use observed steps and a passing parity gate. The runner
+records the target pipeline receipt as `not_applicable` only when it has no
+backend attribution, fallback, partial work, or execution error. Each gets a
+direct comparison suite separate from compute workloads. Its Pillow ratio
+describes public-call latency; it does not count as CPU, SIMD, GPU, or Parallel
+CPU performance.
+
+The display workloads use a registered capture viewer. They measure the
+display API through that viewer callback without launching a desktop process,
+so they do not represent GUI startup latency.
+
 The benchmark runner records setup, pipeline, terminal, dispatch, fallback,
 resource, and timing data where the adapter exposes them. Resource receipts
 include checked host pixel-buffer allocation count and bytes; they are not a

@@ -1,0 +1,123 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "workloads": [
+    {
+      "workload_id": "pil-imageshow.register.standard",
+      "covers": [
+        "PIL.ImageShow.register.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageShow.register.performance.standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass",
+        "execution_scope": "host_boundary"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 3,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pil-imageshow.show.standard",
+      "covers": [
+        "PIL.ImageShow.show.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageShow.show.performance.standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass",
+        "execution_scope": "host_boundary"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 3,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "pil-imageshow.register.standard.host-boundary",
+      "description": "Direct host-boundary comparison for pil-imageshow.register.standard.",
+      "members": [
+        {
+          "workload_id": "pil-imageshow.register.standard",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "suite_id": "pil-imageshow.show.standard.host-boundary",
+      "description": "Direct host-boundary comparison for pil-imageshow.show.standard.",
+      "members": [
+        {
+          "workload_id": "pil-imageshow.show.standard",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

@@ -1026,6 +1026,7 @@ def _validate_benchmark_document(document: Any, relative: str, operation_index: 
     document = _exact(document, {"schema", "workloads", "suites"}, relative)
     _reject_output_fields(document, relative)
     workload_ids: set[str] = set()
+    workload_execution_scopes: dict[str, str] = {}
     for index, workload in enumerate(_list(document["workloads"], f"{relative}.workloads")):
         path = f"{relative}.workloads[{index}]"
         workload = _exact(workload, {"workload_id", "covers", "subjects", "input", "measurement", "context"}, path)
@@ -1101,10 +1102,41 @@ def _validate_benchmark_document(document: Any, relative: str, operation_index: 
             _relative_path(input_spec["path"], f"{path}.input.path")
         else:
             raise _error(f"{path}.input.kind", "unsupported benchmark input kind")
-        measurement = _exact(workload["measurement"], {"boundary", "step_ids", "metrics", "warmup_iterations", "measurement_iterations", "samples", "concurrency", "cache_state", "correctness_gate"}, f"{path}.measurement")
+        measurement_value = _mapping(
+            workload["measurement"], f"{path}.measurement"
+        )
+        measurement_keys = {
+            "boundary",
+            "step_ids",
+            "metrics",
+            "warmup_iterations",
+            "measurement_iterations",
+            "samples",
+            "concurrency",
+            "cache_state",
+            "correctness_gate",
+        }
+        if "execution_scope" in measurement_value:
+            measurement_keys.add("execution_scope")
+        measurement = _exact(
+            measurement_value, measurement_keys, f"{path}.measurement"
+        )
+        execution_scope = measurement.get("execution_scope", "compute_backend")
+        if execution_scope not in {"compute_backend", "host_boundary"}:
+            raise _error(f"{path}.measurement.execution_scope", "unsupported execution scope")
+        workload_execution_scopes[workload_id] = execution_scope
         if measurement["boundary"] not in {"observed_steps", "whole_workflow", "process", "artifact"}:
             raise _error(f"{path}.measurement.boundary", "unsupported measurement boundary")
         _id_array(measurement["step_ids"], f"{path}.measurement.step_ids")
+        if execution_scope == "host_boundary" and (
+            measurement["boundary"] != "observed_steps"
+            or not measurement["step_ids"]
+            or measurement["correctness_gate"] != "parity_pass"
+        ):
+            raise _error(
+                f"{path}.measurement",
+                "host-boundary timing requires observed parity-backed steps",
+            )
         metrics = _id_array(measurement["metrics"], f"{path}.measurement.metrics")
         if any(metric not in {"latency", "throughput", "allocations", "peak_memory", "resident_memory", "artifact_size", "encoded_size", "startup_time", "cpu_time"} for metric in metrics):
             raise _error(f"{path}.measurement.metrics", "unsupported benchmark metric")
@@ -1137,6 +1169,14 @@ def _validate_benchmark_document(document: Any, relative: str, operation_index: 
             member_ids.add(member["workload_id"])
             if not isinstance(member["weight"], (int, float)) or member["weight"] <= 0:
                 raise _error(f"{mpath}.weight", "weight must be positive")
+        member_scopes = {
+            workload_execution_scopes[member_id] for member_id in member_ids
+        }
+        if len(member_scopes) != 1:
+            raise _error(
+                f"{path}.members",
+                "suite members must share one execution scope",
+            )
 
 
 def validate_active_tree(manifest_path: Path) -> dict[str, dict[str, Any]]:
