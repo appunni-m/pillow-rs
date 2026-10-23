@@ -115,7 +115,6 @@ owner and reducer issue recorded for that path.
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs</code> | — | 1 (max 157 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5/int32.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/rank.rs</code> | — | 1 (max 110 lines) | lazytrot | pillow-rs#qpfs |
-| <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303 lines) | lazytrot | pillow-rs#vamp |
 | <code>pillow-rs/src/compute/pool_cpu/ops/paste.rs</code> | — | 2 (max 235 lines) | lazytrot | pillow-rs#8rfy |
 | <code>pillow-rs/src/compute/pool_cpu/ops/reduce.rs</code> | — | 2 (max 244 lines) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/resize/float.rs</code> | — | 1 (max 156 lines) | lazytrot | pillow-rs#wtxv |
@@ -187,7 +186,6 @@ owner and reducer issue recorded for that path.
 | <code>pillow-rs/src/image/projection.rs</code> | — | 2 (max 208 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/image/statistics.rs</code> | — | 3 (max 265 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/ops/convert.rs</code> | 1,450 | 1 (max 576 lines) | lazytrot | pillow-rs#bnhk |
-| <code>pillow-rs/src/ops/imageops.rs</code> | 1,899 | 2 (max 134 lines) | lazytrot | pillow-rs#vamp |
 | <code>pillow-rs/src/ops/paste.rs</code> | — | 2 (max 123 lines) | lazytrot | pillow-rs#mtx1 |
 | <code>pillow-rs/src/ops/pil_resize/boxed.rs</code> | — | 2 (max 240 lines) | lazytrot | pillow-rs#nsax |
 | <code>pillow-rs/src/ops/pil_resize/horizontal_passes.rs</code> | — | 2 (max 131 lines) | lazytrot | pillow-rs#nsax |
