@@ -49530,6 +49530,9 @@ TERMINAL_SCALAR_ANALYSIS_CASE_ID = (
 TERMINAL_SCALAR_NO_RUN_CASE_ID = (
     "PIL.Image.Image.getcolors.nuanced.no-adjacent-scalar-if-1024x768"
 )
+SCALAR_RUN_EDGE_GETCOLORS_CASE_ID = (
+    "PIL.Image.Image.getcolors.nuanced.scalar-run-edge-cases"
+)
 SIGNED_RUN_GETCOLORS_CASES = (
     (
         "pipeline-chain.terminal-read.getcolors.late-negative-signed-run-i-1024x768",
@@ -49819,6 +49822,104 @@ def _add_signed_run_getcolors_parity_cases(
             )
         parity_cases.append(case)
         existing_signatures.add(signature)
+
+
+def _scalar_run_edge_getcolors_parity_case(
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    """Exercise empty, constant, and capped repeated runs in scalar I/F modes."""
+
+    parity_requirement = "PIL.Image.Image.getcolors.behavior.default"
+    requirements = {
+        item["id"]
+        for item in operations[("PIL.Image.Image", "getcolors")]["requirements"]
+    }
+    if parity_requirement not in requirements:
+        raise ValueError(
+            "scalar-run GetColors parity requires "
+            f"{parity_requirement}"
+        )
+
+    steps: list[dict[str, Any]] = []
+    observations: list[str] = []
+    scalar_inputs = (
+        ("i", "I", -7, [-7, -7, 12, 12, -7]),
+        ("f", "F", 1.5, [1.5, 1.5, -2.25, -2.25, 1.5]),
+    )
+    for label, mode, constant, repeated_values in scalar_inputs:
+        for shape, size, color, data, maxcolors in (
+            ("empty", [0, 0], 0, None, 1),
+            ("constant", [3, 1], constant, None, 1),
+            ("repeated-after-cap", [5, 1], constant, repeated_values, 2),
+        ):
+            image_step = f"{shape}-{label}-image"
+            image_binding = binding(image_step)
+            steps.append(
+                {
+                    "step_id": image_step,
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal(mode),
+                        "size": literal(size),
+                        "color": literal(color),
+                    },
+                }
+            )
+            if data is not None:
+                steps.append(
+                    {
+                        "step_id": f"{shape}-{label}-putdata",
+                        "surface": "PIL.Image.Image",
+                        "operation": "putdata",
+                        "receiver": image_binding,
+                        "arguments": {"data": literal(data)},
+                    }
+                )
+            call_step = f"{shape}-{label}-getcolors"
+            steps.append(
+                {
+                    "step_id": call_step,
+                    "surface": "PIL.Image.Image",
+                    "operation": "getcolors",
+                    "receiver": image_binding,
+                    "arguments": {"maxcolors": literal(maxcolors)},
+                }
+            )
+            observations.append(call_step)
+
+    return {
+        "case_id": SCALAR_RUN_EDGE_GETCOLORS_CASE_ID,
+        "surface": "PIL.Image.Image",
+        "operation": "getcolors",
+        "covers": [parity_requirement],
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        "assets": [],
+        "steps": steps,
+        "observations": observations,
+    }
+
+
+def _add_scalar_run_edge_getcolors_parity_case(
+    parity_cases: list[dict[str, Any]],
+    existing_signatures: set[str],
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> None:
+    """Keep scalar run and cap edge cases in the generated parity corpus."""
+
+    case = _scalar_run_edge_getcolors_parity_case(operations)
+    signature = case_signature(case)
+    if signature in existing_signatures:
+        raise ValueError(
+            "scalar-run GetColors case duplicates an existing case"
+        )
+    if any(item["case_id"] == case["case_id"] for item in parity_cases):
+        raise ValueError(
+            f"duplicate scalar-run GetColors case ID: {case['case_id']}"
+        )
+    parity_cases.append(case)
+    existing_signatures.add(signature)
 
 
 def _terminal_scalar_analysis_workflow(
@@ -55288,6 +55389,11 @@ def build_inputs(
                 operations,
             )
             _add_signed_run_getcolors_parity_cases(
+                parity_cases,
+                existing_signatures,
+                operations,
+            )
+            _add_scalar_run_edge_getcolors_parity_case(
                 parity_cases,
                 existing_signatures,
                 operations,
