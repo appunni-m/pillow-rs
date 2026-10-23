@@ -45,7 +45,6 @@ def _step(
 
 def _seeded_corner_case(
     size: tuple[int, int],
-    target_profiles: Sequence[str],
 ) -> dict[str, Any]:
     width, height = size
     size_label = f"{width}x{height}"
@@ -121,7 +120,6 @@ def _seeded_corner_case(
         "surface": GETCHANNEL_SURFACE,
         "operation": "getchannel",
         "covers": list(GETCHANNEL_CASE_REQUIREMENTS),
-        "target_profiles": list(target_profiles),
         "assets": [],
         "steps": steps,
         "observations": observations,
@@ -130,14 +128,13 @@ def _seeded_corner_case(
 
 def seeded_corner_parity_cases(
     surface_id: str,
-    target_profiles: Sequence[str],
 ) -> list[dict[str, Any]]:
     """Build parity-only small and material RGBA→RGB→GetChannel workflows."""
 
     if surface_id != GETCHANNEL_SURFACE:
         return []
     return [
-        _seeded_corner_case(size, target_profiles)
+        _seeded_corner_case(size)
         for size in ((16, 16), (1024, 768))
     ]
 

@@ -444,7 +444,7 @@ def load_parity_cases(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     inputs: dict[str, str] = {}
     for relative in manifest["input_index"]["parity"]:
         payload = json.loads((FIXTURE_ROOT / relative).read_text(encoding="utf-8"))
-        if payload.get("schema") != "migration-parity/parity-input@1":
+        if payload.get("schema") != "migration-parity/parity-input@2":
             raise ValueError(f"{relative}: invalid parity input schema")
         for case in payload["cases"]:
             if case["case_id"] in cases:
@@ -574,6 +574,7 @@ def validate_reused_parity(
     manifest: Path,
     cases: list[dict[str, Any]],
     *,
+    selected_profiles_by_case: dict[str, set[str]],
     report_path: Path,
     attestation: dict[str, Any],
     expected_inputs: list[dict[str, str]],
@@ -654,9 +655,11 @@ def validate_reused_parity(
 
     expected: set[tuple[str, str]] = set()
     for case in cases:
-        declared = set(case.get("target_profiles", []))
         for profile in TARGET_PROFILES:
-            if not declared or profile_applies_to_case(profile, case):
+            if (
+                parity_profile_for_subject(profile)
+                in selected_profiles_by_case.get(case["case_id"], set())
+            ):
                 expected.add((case["case_id"], profile))
     expected_profiles = {profile for _case_id, profile in expected}
     targets = identity.get("targets", [])
@@ -714,6 +717,7 @@ def run_parity(
     timeout: int,
     cases: list[dict[str, Any]],
     *,
+    selected_profiles_by_case: dict[str, set[str]],
     attestation_output: Path | None = None,
     producer_attestation_output: Path | None = None,
 ) -> dict[str, Any]:
@@ -730,14 +734,11 @@ def run_parity(
         temporary = Path(directory)
         for backend in TARGET_BACKENDS:
             target_profile = target_profile_for_backend(backend)
-            # A benchmark may reference a parity case whose manifest target
-            # profile is CPU-only.  The parity preflight verifies that case on
-            # its declared target; the timed benchmark below still executes
-            # every requested backend and retains its own unsupported receipt.
             backend_cases = [
                 case
                 for case in cases
-                if profile_applies_to_case(target_profile, case)
+                if parity_profile_for_subject(target_profile)
+                in selected_profiles_by_case.get(case["case_id"], set())
             ]
             if not backend_cases:
                 continue
@@ -1551,7 +1552,7 @@ def identity(
         "finished_at": now(),
         "manifest": {
             "path": str(manifest.relative_to(ROOT)),
-            "schema": "migration-parity/manifest@2",
+            "schema": "migration-parity/manifest@3",
             "sha256": sha256(manifest),
         },
         "inputs": [
@@ -1560,7 +1561,7 @@ def identity(
                 "schema": (
                     "migration-parity/benchmark-input@1"
                     if "/benchmark/" in path
-                    else "migration-parity/parity-input@1"
+                    else "migration-parity/parity-input@2"
                 ),
                 "sha256": sha256(FIXTURE_ROOT / path),
             }
@@ -1649,11 +1650,6 @@ def benchmark_workflow_case(
     return {
         "case_id": f"benchmark-workflow.{workload['workload_id']}",
         "covers": workload["covers"],
-        "target_profiles": [
-            subject["id"]
-            for subject in workload["subjects"]
-            if subject["kind"] == "target_profile"
-        ],
         "assets": input_spec["assets"],
         "steps": input_spec["steps"],
         "observations": input_spec["observations"],
@@ -1661,17 +1657,6 @@ def benchmark_workflow_case(
         # benchmark result artifact.
         "_benchmark_cache_state": workload["context"]["cache_state"],
     }
-
-
-def profile_applies_to_case(profile: str, case: dict[str, Any]) -> bool:
-    """Treat Parallel CPU as the CPU capability set in declared inputs."""
-
-    declared = set(case.get("target_profiles", []))
-    if not declared:
-        return True
-    if profile == "python-parallel-cpu":
-        return "python-cpu" in declared
-    return profile in declared
 
 
 def select_workloads(
@@ -1865,7 +1850,6 @@ def parity_profile_for_subject(subject_profile: str) -> str:
 
 def applicable_parity_profiles(
     target_profiles: list[str],
-    case: dict[str, Any],
     *,
     active_profiles: tuple[str, ...] | list[str] | None = None,
 ) -> list[str]:
@@ -1877,7 +1861,6 @@ def applicable_parity_profiles(
         profile
         for profile in active
         if parity_profile_for_subject(profile) in requested
-        and profile_applies_to_case(profile, case)
     ]
 
 
@@ -2071,9 +2054,7 @@ def run(args: argparse.Namespace) -> int:
                     f"{workload_id}: benchmark references missing parity case: "
                     f"{case_id}"
                 )
-            timed_case = dict(cases_by_id[case_id])
-            timed_case["target_profiles"] = workload_target_profiles(workload)
-            workload_cases[workload_id] = timed_case
+            workload_cases[workload_id] = dict(cases_by_id[case_id])
             parity_case_ids.append(case_id)
             requested_profiles = {
                 parity_profile_for_subject(profile)
@@ -2092,31 +2073,16 @@ def run(args: argparse.Namespace) -> int:
 
     parity_case_ids = list(dict.fromkeys(parity_case_ids))
     measured_cases: list[dict[str, Any]] = []
-    parity_cases_by_id: dict[str, dict[str, Any]] = {}
     for case_id in parity_case_ids:
-        source_case = cases_by_id[case_id]
-        requested_profiles = requested_parity_profiles_by_case[case_id]
-        source_profiles = set(source_case.get("target_profiles", []))
-        supported_profiles = (
-            source_profiles if source_profiles else set(FROZEN_TARGET_PROFILES)
-        )
-        effective_profiles = [
-            profile
-            for profile in FROZEN_TARGET_PROFILES
-            if profile in requested_profiles and profile in supported_profiles
-        ]
-        parity_case = dict(source_case)
-        parity_case["target_profiles"] = effective_profiles
-        parity_cases_by_id[case_id] = parity_case
-        if effective_profiles:
+        parity_case = dict(cases_by_id[case_id])
+        if requested_parity_profiles_by_case[case_id]:
             measured_cases.append(parity_case)
     for workload in selected_workloads:
         if workload["input"]["kind"] != "parity_case":
             continue
         workload_id = workload["workload_id"]
-        case = parity_cases_by_id[workload["input"]["case_id"]]
         parity_profiles_by_workload[workload_id] = applicable_parity_profiles(
-            workload_target_profiles(workload), case
+            workload_target_profiles(workload)
         )
     parity_output = args.parity_output.resolve()
     reuse_runtime_hashes: dict[tuple[str, str], str] = {}
@@ -2131,7 +2097,7 @@ def run(args: argparse.Namespace) -> int:
         expected_inputs = [
             {
                 "path": input_path,
-                "schema": "migration-parity/parity-input@1",
+                "schema": "migration-parity/parity-input@2",
                 "sha256": sha256(FIXTURE_ROOT / input_path),
             }
             for input_path in sorted(
@@ -2142,6 +2108,7 @@ def run(args: argparse.Namespace) -> int:
             parity,
             manifest,
             measured_cases,
+            selected_profiles_by_case=requested_parity_profiles_by_case,
             report_path=resolved_reuse_path,
             attestation=parity_attestation,
             expected_inputs=expected_inputs,
@@ -2160,6 +2127,7 @@ def run(args: argparse.Namespace) -> int:
             parity_output,
             args.timeout,
             measured_cases,
+            selected_profiles_by_case=requested_parity_profiles_by_case,
             attestation_output=(
                 parity_attestation_output.resolve()
                 if parity_attestation_output is not None
@@ -2179,7 +2147,7 @@ def run(args: argparse.Namespace) -> int:
             "finished_at": now(),
             "manifest": {
                 "path": str(manifest.relative_to(ROOT)),
-                "schema": "migration-parity/manifest@2",
+                "schema": "migration-parity/manifest@3",
                 "sha256": sha256(manifest),
             },
             "inputs": [],
@@ -2262,6 +2230,9 @@ def run(args: argparse.Namespace) -> int:
     timing_groups: dict[
         tuple[str, tuple[str, ...], str, int, int, int], dict[str, dict[str, Any]]
     ] = {}
+    timing_group_profiles: dict[
+        tuple[str, tuple[str, ...], str, int, int, int], dict[str, set[str]]
+    ] = {}
     timing_workloads: dict[
         tuple[str, tuple[str, ...], str, int, int, int], list[dict[str, Any]]
     ] = {}
@@ -2296,39 +2267,26 @@ def run(args: argparse.Namespace) -> int:
             int(policy["samples"]),
         )
         group_cases = timing_groups.setdefault(key, {})
+        group_profiles = timing_group_profiles.setdefault(key, {})
         timed_case = workload_cases[workload_id]
-        if case_id in group_cases:
-            group_cases[case_id]["target_profiles"] = list(
-                dict.fromkeys(
-                    group_cases[case_id]["target_profiles"]
-                    + timed_case["target_profiles"]
-                )
-            )
-        else:
-            group_cases[case_id] = dict(timed_case)
+        group_cases.setdefault(case_id, dict(timed_case))
+        group_profiles.setdefault(case_id, set()).update(
+            workload_target_profiles(workload)
+        )
         timing_workloads.setdefault(key, []).append(workload)
-    for (
-        timing_boundary,
-        timing_step_ids,
-        lifecycle,
-        warmup_iterations,
-        measurement_iterations,
-        samples,
-    ), group_cases in timing_groups.items():
+    for group_key, group_cases in timing_groups.items():
+        (
+            timing_boundary,
+            timing_step_ids,
+            lifecycle,
+            warmup_iterations,
+            measurement_iterations,
+            samples,
+        ) = group_key
         timing_cases = list(group_cases.values())
         repeat = warmup_iterations + measurement_iterations * samples
         attestation_kwargs = {"attestation": attestation} if attestation is not None else {}
-        sample_workloads = timing_workloads.get(
-            (
-                timing_boundary,
-                timing_step_ids,
-                lifecycle,
-                warmup_iterations,
-                measurement_iterations,
-                samples,
-            ),
-            [],
-        )
+        sample_workloads = timing_workloads.get(group_key, [])
         def values_by_workload(values: dict[str, Any]) -> dict[str, Any]:
             # A parity case may be timed under several boundaries or sampling
             # policies. Keep each group's values under its workload identity;
@@ -2394,7 +2352,8 @@ def run(args: argparse.Namespace) -> int:
             backend_cases = [
                 case
                 for case in timing_cases
-                if profile in case.get("target_profiles", [])
+                if profile
+                in timing_group_profiles[group_key].get(case["case_id"], set())
             ]
             if not backend_cases:
                 continue

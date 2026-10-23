@@ -18,13 +18,12 @@ from build_migration_parity_inputs import (
 from validate_migration_parity_contract import validate_inputs
 
 
-QUARANTINE_SCHEMA = "migration-parity/crash-quarantine-input@1"
+QUARANTINE_SCHEMA = "migration-parity/crash-quarantine-input@2"
 QUARANTINE_CASE_KEYS = {
     "case_id",
     "surface",
     "operation",
     "covers",
-    "target_profiles",
     "assets",
     "steps",
     "observations",
@@ -83,7 +82,7 @@ def validate_crash_quarantine(path: Path) -> None:
         for key in ("surface", "operation"):
             if not isinstance(case[key], str) or not case[key]:
                 raise SystemExit(f"{case_path}.{key}: expected non-empty string")
-        for key in ("covers", "target_profiles", "assets", "steps", "observations"):
+        for key in ("covers", "assets", "steps", "observations"):
             if not isinstance(case[key], list) or not case[key]:
                 raise SystemExit(f"{case_path}.{key}: expected non-empty array")
     _reject_output_fields(document, str(path))

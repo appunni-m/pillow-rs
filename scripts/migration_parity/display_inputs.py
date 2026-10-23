@@ -82,7 +82,7 @@ def display_case(
     steps.append(_step("callbacks", "PIL.Image.Image", "info", {}, _binding("image")))
     return {
         "case_id": case_id, "surface": surface, "operation": operation,
-        "covers": covers, "target_profiles": ["python-cpu"], "assets": [],
+        "covers": covers, "assets": [],
         "steps": steps, "observations": [*register_ids, call_id, "callbacks"],
     }
 
@@ -187,7 +187,6 @@ def platform_viewer_case(
         "surface": surface,
         "operation": operation,
         "covers": [requirement_id],
-        "target_profiles": ["python-cpu"],
         "assets": [],
         "steps": steps,
         "observations": observations,

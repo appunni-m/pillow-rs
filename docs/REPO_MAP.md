@@ -73,7 +73,15 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |-- Cargo.toml
 |   |-- src/
 |   |   |-- checked_dims.rs
-|   |   |-- color.rs
+|   |   |-- color/
+|   |   |   |-- conversion.rs
+|   |   |   |-- grayscale.rs
+|   |   |   |-- mod.rs
+|   |   |   |-- mode.rs
+|   |   |   |-- palette.rs
+|   |   |   |-- parse.rs
+|   |   |   |-- resolve.rs
+|   |   |   `-- tests.rs
 |   |   |-- color_grayscale_allocation_tests.rs
 |   |   |-- compute/
 |   |   |   |-- automatic_segments.rs
@@ -85,6 +93,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- mod.rs
 |   |   |   |-- phase_telemetry.rs
 |   |   |   |-- pool_cpu/
+|   |   |   |   |-- batch_execution.rs
 |   |   |   |   |-- mod.rs
 |   |   |   |   `-- ops/
 |   |   |   |       |-- chops.rs
@@ -95,6 +104,16 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- composite.rs
 |   |   |   |       |-- crop.rs
+|   |   |   |       |-- draw/
+|   |   |   |       |   |-- arcs.rs
+|   |   |   |       |   |-- canvas.rs
+|   |   |   |       |   |-- clipping.rs
+|   |   |   |       |   |-- dispatch.rs
+|   |   |   |       |   |-- ellipse.rs
+|   |   |   |       |   |-- operations.rs
+|   |   |   |       |   |-- polygon.rs
+|   |   |   |       |   |-- primitives.rs
+|   |   |   |       |   `-- rounded_rect.rs
 |   |   |   |       |-- draw.rs
 |   |   |   |       |-- effects.rs
 |   |   |   |       |-- enhance.rs
@@ -134,6 +153,16 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- filter.rs
 |   |   |   |       |-- geometry.rs
 |   |   |   |       |-- grayscale.rs
+|   |   |   |       |-- imageops/
+|   |   |   |       |   |-- colorize.rs
+|   |   |   |       |   |-- expand.rs
+|   |   |   |       |   |-- geometry.rs
+|   |   |   |       |   |-- histogram.rs
+|   |   |   |       |   |-- pad/
+|   |   |   |       |   |   |-- native.rs
+|   |   |   |       |   |   `-- tests.rs
+|   |   |   |       |   |-- pad.rs
+|   |   |   |       |   `-- pixel.rs
 |   |   |   |       |-- imageops.rs
 |   |   |   |       |-- mod.rs
 |   |   |   |       |-- paste/
@@ -708,7 +737,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- lab-identity-profile.icc
 |   |   |   `-- lcms-lab-lut.u16le
 |   |   |-- draw/
-|   |   |   `-- mod.rs
+|   |   |   |-- bitmap.rs
+|   |   |   |-- curves.rs
+|   |   |   |-- geometry.rs
+|   |   |   |-- mod.rs
+|   |   |   |-- primitives.rs
+|   |   |   `-- text.rs
 |   |   |-- error.rs
 |   |   |-- font/
 |   |   |   |-- courb08.luma
@@ -768,10 +802,26 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- analysis.rs
 |   |   |   |-- array.rs
 |   |   |   |-- chops.rs
-|   |   |   |-- convert.rs
+|   |   |   |-- convert/
+|   |   |   |   |-- binary.rs
+|   |   |   |   |-- dispatch.rs
+|   |   |   |   |-- input.rs
+|   |   |   |   |-- luma16.rs
+|   |   |   |   |-- mod.rs
+|   |   |   |   |-- mode.rs
+|   |   |   |   |-- nonstandard.rs
+|   |   |   |   |-- operation.rs
+|   |   |   |   |-- palette.rs
+|   |   |   |   |-- support.rs
+|   |   |   |   `-- tests.rs
 |   |   |   |-- crop.rs
 |   |   |   |-- enhance.rs
 |   |   |   |-- filter.rs
+|   |   |   |-- imageops/
+|   |   |   |   |-- color.rs
+|   |   |   |   |-- exif.rs
+|   |   |   |   |-- geometry.rs
+|   |   |   |   `-- point.rs
 |   |   |   |-- imageops.rs
 |   |   |   |-- lut_hardlight.bin
 |   |   |   |-- lut_overlay.bin
@@ -781,6 +831,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- point.rs
 |   |   |   |-- module_fns.rs
 |   |   |   |-- param_filters.rs
+|   |   |   |-- paste/
+|   |   |   |   |-- color.rs
+|   |   |   |   |-- input.rs
+|   |   |   |   |-- operations.rs
+|   |   |   |   `-- types.rs
 |   |   |   |-- paste.rs
 |   |   |   |-- pil_resize/
 |   |   |   |   |-- alpha.rs
@@ -796,7 +851,15 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- samples.rs
 |   |   |   |   `-- vertical_passes.rs
 |   |   |   |-- pil_resize.rs
-|   |   |   |-- quantize.rs
+|   |   |   |-- quantize/
+|   |   |   |   |-- fixed_palette.rs
+|   |   |   |   |-- input.rs
+|   |   |   |   |-- maxcoverage.rs
+|   |   |   |   |-- median_cut.rs
+|   |   |   |   |-- mod.rs
+|   |   |   |   |-- octree.rs
+|   |   |   |   |-- operations.rs
+|   |   |   |   `-- web_palette.rs
 |   |   |   |-- resize/
 |   |   |   |   `-- reducing_gap.rs
 |   |   |   |-- resize.rs
@@ -847,8 +910,24 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |-- package-lock.json
 |   |-- package.json
 |   `-- src/
+|       |-- backend.rs
+|       |-- color.rs
+|       |-- draw.rs
+|       |-- effects.rs
+|       |-- font.rs
+|       |-- image/
+|       |   |-- filters.rs
+|       |   `-- pixels.rs
+|       |-- image.rs
+|       |-- image_chops.rs
 |       |-- image_io.rs
-|       `-- lib.rs
+|       |-- image_ops.rs
+|       |-- inputs.rs
+|       |-- lib.rs
+|       |-- palette.rs
+|       |-- pipeline_telemetry.rs
+|       |-- statistics.rs
+|       `-- values.rs
 |-- pillow-rs-parallel/
 |   |-- LICENSE
 |   |-- README.md
@@ -879,8 +958,27 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |       |-- imagestat.py
 |   |       `-- operations.py
 |   `-- src/
+|       |-- backend.rs
+|       |-- draw.rs
+|       |-- errors.rs
+|       |-- font.rs
 |       |-- getcolors.rs
 |       |-- gpu_batch.rs
+|       |-- image/
+|       |   |-- analysis.rs
+|       |   |-- arrays.rs
+|       |   |-- constructors.rs
+|       |   |-- creation.rs
+|       |   |-- data.rs
+|       |   |-- mod.rs
+|       |   |-- operations.rs
+|       |   |-- point.rs
+|       |   |-- properties.rs
+|       |   `-- sequence.rs
+|       |-- image_chops.rs
+|       |-- image_color.rs
+|       |-- image_filter.rs
+|       |-- image_ops.rs
 |       |-- lib.rs
 |       |-- putdata.rs
 |       |-- save_options.rs

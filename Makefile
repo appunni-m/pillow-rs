@@ -41,6 +41,8 @@ FIXTURES_DIR := pillow-rs/tests/fixtures
 REPORT       := /tmp/report.json
 TIMEOUT      := 300
 MIGRATION_PARITY_OUTPUT ?= build/migration-parity/parity-result.json
+MIGRATION_PARITY_OUTPUTS ?= $(MIGRATION_PARITY_OUTPUT)
+MIGRATION_PARITY_AGGREGATE_ARGS = $(foreach output,$(MIGRATION_PARITY_OUTPUTS),--parity $(output))
 MIGRATION_PARALLEL_CPU_PARITY_OUTPUT ?= build/migration-parity/parity-result-parallel-cpu.json
 MIGRATION_PARITY_ARGS ?=
 MIGRATION_PARITY_CASE_IDS ?=
@@ -778,7 +780,7 @@ migration-parity-aggregate: ## Join compatible parity, coverage, and benchmark e
 	if [ -f "$(MIGRATION_RUST_COVERAGE_OUTPUT)" ]; then coverage_evidence="$(MIGRATION_RUST_COVERAGE_OUTPUT)"; fi; \
 	set +e; \
 	$(PYTHON) scripts/aggregate_migration_parity.py \
-		--parity $(MIGRATION_PARITY_OUTPUT) \
+		$(MIGRATION_PARITY_AGGREGATE_ARGS) \
 		--coverage "$$coverage_evidence" \
 		--benchmark $(MIGRATION_BENCHMARK_OUTPUT) \
 		--output $(MIGRATION_STATUS_OUTPUT); \

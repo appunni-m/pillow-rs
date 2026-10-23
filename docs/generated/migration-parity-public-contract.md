@@ -6,8 +6,8 @@ contract and indexed input mappings only; it contains no measured result.
 ```yaml
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
-manifest_schema: migration-parity/manifest@2
-manifest_sha256: a113f249e059678178cdc13dec599b023c055d682a8794e1762aa8bc066548cc
+manifest_schema: migration-parity/manifest@3
+manifest_sha256: fc368cc87723cb70e454e2d7322cce35ac46aacc0060ac61a4f90f77e81bfc48
 statement_status: declared
 ```
 
@@ -16,12 +16,13 @@ statement_status: declared
 - Scope: `pillow-rs-selected-public-contract` (`full`)
 - Oracle: `Pillow 12.2.0`
 - Target profiles: `python-cpu`, `python-simd`, `python-gpu`, `python-parallel-cpu`
+- Parity cases and requirements are shared across target profiles; the runner selects the backend and records it in the result.
 - Public surfaces: 25
 - Operations: 212
-- Requirements: 1823
-- Indexed parity cases: 17316
+- Requirements: 1818
+- Indexed parity cases: 17304
 - Indexed coverage plans: 25
-- Indexed benchmark workloads: 996
+- Indexed benchmark workloads: 1032
 
 ## Declared operations
 
@@ -116,7 +117,7 @@ statement_status: declared
 | `PIL.ImageChops` | `multiply` | `function` | `PIL.ImageChops.multiply` | `pillow_rs.ImageChops.multiply` | 8 |
 | `PIL.ImageChops` | `offset` | `function` | `PIL.ImageChops.offset` | `pillow_rs.ImageChops.offset` | 8 |
 | `PIL.ImageChops` | `overlay` | `function` | `PIL.ImageChops.overlay` | `pillow_rs.ImageChops.overlay` | 6 |
-| `PIL.ImageChops` | `screen` | `function` | `PIL.ImageChops.screen` | `pillow_rs.ImageChops.screen` | 12 |
+| `PIL.ImageChops` | `screen` | `function` | `PIL.ImageChops.screen` | `pillow_rs.ImageChops.screen` | 8 |
 | `PIL.ImageChops` | `soft_light` | `function` | `PIL.ImageChops.soft_light` | `pillow_rs.ImageChops.soft_light` | 8 |
 | `PIL.ImageChops` | `subtract` | `function` | `PIL.ImageChops.subtract` | `pillow_rs.ImageChops.subtract` | 10 |
 | `PIL.ImageChops` | `subtract_modulo` | `function` | `PIL.ImageChops.subtract_modulo` | `pillow_rs.ImageChops.subtract_modulo` | 8 |
@@ -215,7 +216,7 @@ statement_status: declared
 | `PIL.ImageOps` | `invert` | `function` | `PIL.ImageOps.invert` | `pillow_rs.ImageOps.invert` | 7 |
 | `PIL.ImageOps` | `mirror` | `function` | `PIL.ImageOps.mirror` | `pillow_rs.ImageOps.mirror` | 7 |
 | `PIL.ImageOps` | `pad` | `function` | `PIL.ImageOps.pad` | `pillow_rs.ImageOps.pad` | 11 |
-| `PIL.ImageOps` | `posterize` | `function` | `PIL.ImageOps.posterize` | `pillow_rs.ImageOps.posterize` | 9 |
+| `PIL.ImageOps` | `posterize` | `function` | `PIL.ImageOps.posterize` | `pillow_rs.ImageOps.posterize` | 8 |
 | `PIL.ImageOps` | `scale` | `function` | `PIL.ImageOps.scale` | `pillow_rs.ImageOps.scale` | 9 |
 | `PIL.ImageOps` | `solarize` | `function` | `PIL.ImageOps.solarize` | `pillow_rs.ImageOps.solarize` | 8 |
 | `PIL.ImagePalette` | `ImagePalette` | `type` | `PIL.ImagePalette.ImagePalette` | `pillow_rs.ImagePalette.ImagePalette` | 4 |

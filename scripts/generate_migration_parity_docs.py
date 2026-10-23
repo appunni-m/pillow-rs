@@ -70,6 +70,7 @@ def specification(manifest: dict[str, Any], manifest_path: Path, inputs: dict[st
         f"- Scope: `{manifest['scope']['id']}` (`{manifest['scope']['mode']}`)",
         f"- Oracle: `{manifest['oracles'][0]['name']} {manifest['oracles'][0]['version']}`",
         f"- Target profiles: {', '.join(f'`{item["id"]}`' for item in manifest['target_profiles'])}",
+        "- Parity cases and requirements are shared across target profiles; the runner selects the backend and records it in the result.",
         f"- Public surfaces: {len(manifest['surfaces'])}",
         f"- Operations: {len(operations)}",
         f"- Requirements: {requirements}",

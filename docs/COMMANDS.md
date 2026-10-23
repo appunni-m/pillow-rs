@@ -16,6 +16,8 @@ enabled.
 | Build for application use | `make build` | Installs the replacement into the selected environment |
 | Build npm package | `make build-wasm-release` | Compiles the shared Node/browser WASM artifact |
 | One parity case | `make migration-parity-case CASE_ID=<id>` | Runs the selected input against source and target |
+| Same cases on CPU and SIMD | Set `MIGRATION_TARGET_BACKEND=cpu` or `simd` and run `make migration-parity-test` with the same `MIGRATION_PARITY_CASE_IDS` | The runner selects the backend; parity inputs and requirements are backend-neutral |
+| Aggregate backend parity | `MIGRATION_PARITY_OUTPUTS='build/migration-parity/cpu.json build/migration-parity/simd.json' make migration-parity-aggregate` | Joins each parity receipt to its recorded target profile; repeated result paths are supported |
 | Review repetitive cases | `make migration-parity-reduction MIGRATION_REDUCTION_ARGS='--candidates <pairs.json> --output-dir <directory>'` | Measures removal batches and binary restoration against separate CPU/SIMD/GPU baselines; see [coverage](COVERAGE.md#reduce-repetitive-parity-inputs) |
 | Complete runtime campaign | `make test` | Runs backend, Node/browser, and reverse Pillow coverage lanes |
 | Format check / fix | `make fmt` / `make fmt-fix` | Checks / changes Rust formatting |
@@ -53,6 +55,12 @@ Ctrl-C. CPU/GPU parity and coverage require the dependencies described in
 Each specialized target accepts its documented selectors and output paths.
 Do not run two campaigns against the same mutable Python installation or output
 directory. Parallel Make is appropriate only for independent targets.
+
+Parity case documents do not declare backend applicability. Run the same case
+IDs with `MIGRATION_TARGET_BACKEND=cpu`, `simd`, or another supported backend;
+the selected runner configuration is recorded in the result identity. The
+aggregator accepts repeated `--parity` artifacts through
+`MIGRATION_PARITY_OUTPUTS` and reports each result against the same case set.
 
 The root fontdone targets own a pinned checkout under `build/`. To contribute
 to fontdone itself, clone that repository separately and use its own Makefile.

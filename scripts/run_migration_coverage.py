@@ -277,7 +277,7 @@ def coverage_identity(
                 "schema": (
                     "migration-parity/coverage-input@1"
                     if "/coverage/" in path
-                    else "migration-parity/parity-input@1"
+                    else "migration-parity/parity-input@2"
                 ),
                 "sha256": sha256_file(FIXTURE_ROOT / path),
             }

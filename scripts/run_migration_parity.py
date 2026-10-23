@@ -3300,7 +3300,7 @@ def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: 
     for relative in manifest["input_index"]["parity"]:
         path = ROOT / "pillow-rs" / "tests" / "fixtures" / relative
         payload = json.loads(path.read_text(encoding="utf-8"))
-        if payload.get("schema") != "migration-parity/parity-input@1":
+        if payload.get("schema") != "migration-parity/parity-input@2":
             raise ValueError(f"{relative}: invalid parity input schema")
         for case in payload["cases"]:
             known_case_ids.add(case["case_id"])
@@ -3959,7 +3959,7 @@ def build_identity(
         "inputs": [
             {
                 "path": path,
-                "schema": "migration-parity/parity-input@1",
+                "schema": "migration-parity/parity-input@2",
                 "sha256": sha256_file(ROOT / "pillow-rs" / "tests" / "fixtures" / path),
             }
             for path in input_paths

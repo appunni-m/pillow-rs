@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-SCHEMA_MANIFEST = "migration-parity/manifest@2"
+SCHEMA_MANIFEST = "migration-parity/manifest@3"
 SCHEMA_BY_LANE = {
-    "parity": "migration-parity/parity-input@1",
+    "parity": "migration-parity/parity-input@2",
     "coverage": "migration-parity/coverage-input@1",
     "benchmark": "migration-parity/benchmark-input@1",
 }
@@ -109,7 +109,6 @@ REQUIREMENT_DIMENSIONS = {
     "abi_variant",
     "asset_family",
     "boundary",
-    "backend",
     "runtime",
     "feature",
     "historical_divergence",
@@ -237,6 +236,35 @@ def _requirement_index(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _requirement_operation(
+    requirement_id: str,
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any] | None:
+    matches = [
+        (f"{surface}.{operation}", value)
+        for (surface, operation), value in operation_index.items()
+        if requirement_id.startswith(f"{surface}.{operation}.")
+    ]
+    return max(matches, key=lambda item: len(item[0]))[1] if matches else None
+
+
+def _requirement_applies_to_profile(
+    requirement_id: str,
+    lane: str,
+    profile: str,
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+) -> bool:
+    operation = _requirement_operation(requirement_id, operation_index)
+    if operation is None:
+        return False
+    policy = operation.get(lane, {})
+    if policy.get("applicability") not in {"required", "optional"}:
+        return False
+    if lane == "parity":
+        return True
+    return profile in policy.get("target_profiles", [])
+
+
 def _validate_manifest_operation(operation: dict[str, Any], surface_id: str, requirement_ids: set[str], known_requirement_ids: set[str], command_ids: set[str], profile_ids: set[str], target_ids: set[str], component_ids: set[str]) -> None:
     path = f"surfaces[{surface_id}].operations[{operation.get('id', '?')}]"
     _exact(operation, {"id", "kind", "classification", "lifecycle", "source", "targets", "requirements", "parity", "coverage", "benchmark"}, path)
@@ -344,7 +372,7 @@ def _validate_manifest_operation(operation: dict[str, Any], surface_id: str, req
     requirements = _list(operation["requirements"], f"{path}.requirements")
     for index, requirement in enumerate(requirements):
         rpath = f"{path}.requirements[{index}]"
-        requirement = _exact(requirement, {"id", "dimension", "description", "lanes", "target_profiles"}, rpath)
+        requirement = _exact(requirement, {"id", "dimension", "description", "lanes"}, rpath)
         requirement_id = _string(requirement["id"], f"{rpath}.id")
         if requirement_id in requirement_ids:
             raise _error(f"{rpath}.id", "duplicate requirement ID")
@@ -355,9 +383,6 @@ def _validate_manifest_operation(operation: dict[str, Any], surface_id: str, req
         lanes = _id_array(requirement["lanes"], f"{rpath}.lanes")
         if any(lane not in LANES for lane in lanes):
             raise _error(f"{rpath}.lanes", "unsupported lane")
-        profiles = _id_array(requirement["target_profiles"], f"{rpath}.target_profiles")
-        if any(profile not in profile_ids for profile in profiles):
-            raise _error(f"{rpath}.target_profiles", "unknown target profile")
     for lane in LANES:
         policy = _mapping(operation[lane], f"{path}.{lane}")
         applicability = policy.get("applicability")
@@ -365,15 +390,18 @@ def _validate_manifest_operation(operation: dict[str, Any], surface_id: str, req
             _exact(policy, {"applicability", "reason"}, f"{path}.{lane}")
             _string(policy["reason"], f"{path}.{lane}.reason")
         elif applicability in {"required", "optional"}:
-            expected = {"applicability", "target_profiles"}
+            expected = {"applicability"}
+            if lane != "parity":
+                expected.add("target_profiles")
             if lane == "coverage":
                 expected.add("component_ids")
             if lane == "benchmark":
                 expected.add("metrics")
             _exact(policy, expected, f"{path}.{lane}")
-            profiles = _id_array(policy["target_profiles"], f"{path}.{lane}.target_profiles")
-            if any(profile not in profile_ids for profile in profiles):
-                raise _error(f"{path}.{lane}.target_profiles", "unknown target profile")
+            if lane != "parity":
+                profiles = _id_array(policy["target_profiles"], f"{path}.{lane}.target_profiles")
+                if any(profile not in profile_ids for profile in profiles):
+                    raise _error(f"{path}.{lane}.target_profiles", "unknown target profile")
             if lane == "coverage":
                 components = _id_array(policy["component_ids"], f"{path}.{lane}.component_ids")
                 if any(component not in component_ids for component in components):
@@ -501,7 +529,7 @@ def validate_manifest(manifest: Any, *, manifest_path: Path | None = None) -> di
                 raise _error(f"manifest.{label}[{index}].identity_command_id", "unknown command")
     interfaces = _exact(manifest["interfaces"], {"parity", "coverage", "benchmark", "aggregation"}, "manifest.interfaces")
     expected_lanes = {
-        "parity": ("migration-parity/parity-input@1", "migration-parity/parity-result@1"),
+        "parity": ("migration-parity/parity-input@2", "migration-parity/parity-result@1"),
         "coverage": ("migration-parity/coverage-input@1", "migration-parity/coverage-result@1"),
         "benchmark": ("migration-parity/benchmark-input@1", "migration-parity/benchmark-result@1"),
     }
@@ -851,7 +879,7 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
                 raise _error(relative, f"invalid JSON: {exc}") from exc
             expected_schema = SCHEMA_BY_LANE[current_lane]
             if current_lane == "parity":
-                _validate_parity_document(document, relative, operation_index, requirement_index, profile_ids, fixture_root, item_ids)
+                _validate_parity_document(document, relative, operation_index, requirement_index, fixture_root, item_ids)
                 parity_case_ids.update(item_ids)
             elif current_lane == "coverage":
                 _validate_coverage_document(document, relative, operation_index, requirement_index, profile_ids, command_ids, component_ids, item_ids, parity_case_ids)
@@ -874,17 +902,17 @@ def _reject_output_fields(value: Any, path: str) -> None:
             _reject_output_fields(child, f"{path}[{index}]")
 
 
-def _validate_parity_document(document: Any, relative: str, operation_index: dict[tuple[str, str], dict[str, Any]], requirement_index: dict[str, dict[str, Any]], profile_ids: set[str], fixture_root: Path, item_ids: set[str]) -> None:
+def _validate_parity_document(document: Any, relative: str, operation_index: dict[tuple[str, str], dict[str, Any]], requirement_index: dict[str, dict[str, Any]], fixture_root: Path, item_ids: set[str]) -> None:
     document = _exact(document, {"schema", "cases"}, relative)
     _reject_output_fields(document, relative)
     for index, case in enumerate(_list(document["cases"], f"{relative}.cases")):
         path = f"{relative}.cases[{index}]"
         case = _optional_exact(
             case,
-            {"case_id", "surface", "operation", "covers", "target_profiles", "assets", "steps", "observations", "comparisons"},
+            {"case_id", "surface", "operation", "covers", "assets", "steps", "observations", "comparisons"},
             path,
         )
-        required_case_keys = {"case_id", "surface", "operation", "covers", "target_profiles", "assets", "steps", "observations"}
+        required_case_keys = {"case_id", "surface", "operation", "covers", "assets", "steps", "observations"}
         missing_case_keys = required_case_keys - set(case)
         if missing_case_keys:
             raise _error(path, f"missing required keys {sorted(missing_case_keys)}")
@@ -896,9 +924,6 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
         operation = _string(case["operation"], f"{path}.operation")
         if (surface, operation) not in operation_index:
             raise _error(path, "unknown primary operation")
-        profiles = _id_array(case["target_profiles"], f"{path}.target_profiles")
-        if not profiles or any(profile not in profile_ids for profile in profiles):
-            raise _error(f"{path}.target_profiles", "unknown or missing target profile")
         covers = _id_array(case["covers"], f"{path}.covers")
         if not covers:
             raise _error(f"{path}.covers", "a parity case must cover at least one requirement")
@@ -906,7 +931,7 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
             if requirement_id not in requirement_index:
                 raise _error(f"{path}.covers", f"unknown requirement {requirement_id!r}")
             requirement = requirement_index[requirement_id]
-            if "parity" not in requirement["lanes"] or not set(profiles).intersection(requirement["target_profiles"]):
+            if "parity" not in requirement["lanes"]:
                 raise _error(f"{path}.covers", f"requirement {requirement_id!r} is not applicable to this case")
         assets = _list(case["assets"], f"{path}.assets")
         asset_ids: set[str] = set()
@@ -1004,7 +1029,16 @@ def _validate_coverage_document(document: Any, relative: str, operation_index: d
             raise _error(f"{path}.covers", "coverage plan must cover at least one requirement")
         for requirement_id in covers:
             requirement = requirement_index.get(requirement_id)
-            if requirement is None or "coverage" not in requirement["lanes"] or plan["target_profile"] not in requirement["target_profiles"]:
+            if (
+                requirement is None
+                or "coverage" not in requirement["lanes"]
+                or not _requirement_applies_to_profile(
+                    requirement_id,
+                    "coverage",
+                    plan["target_profile"],
+                    operation_index,
+                )
+            ):
                 raise _error(f"{path}.covers", f"invalid coverage requirement {requirement_id!r}")
         selectors = _exact(plan["selectors"], {"parity_case_ids", "command_ids"}, f"{path}.selectors")
         selected_case_ids = _id_array(selectors["parity_case_ids"], f"{path}.selectors.parity_case_ids")

@@ -81,7 +81,7 @@ def load_indexed_documents(
 
 def load_inputs(manifest: dict[str, Any]) -> dict[str, Any]:
     parity_docs = load_indexed_documents(
-        manifest, "parity", "migration-parity/parity-input@1"
+        manifest, "parity", "migration-parity/parity-input@2"
     )
     coverage_docs = load_indexed_documents(
         manifest, "coverage", "migration-parity/coverage-input@1"
@@ -142,11 +142,8 @@ def operation_records(manifest: dict[str, Any]) -> list[tuple[dict[str, Any], di
 
 
 def operation_requirements(operation: dict[str, Any], profile: str) -> list[str]:
-    return [
-        item["id"]
-        for item in operation.get("requirements", [])
-        if profile in item.get("target_profiles", [])
-    ]
+    del profile
+    return [item["id"] for item in operation.get("requirements", [])]
 
 
 def requirements_for_lane(
@@ -154,11 +151,13 @@ def requirements_for_lane(
 ) -> set[str]:
     result: set[str] = set()
     for _, operation in operation_records(manifest):
+        policy = operation.get(lane, {})
+        if policy.get("applicability") not in {"required", "optional"}:
+            continue
+        if lane != "parity" and profile not in policy.get("target_profiles", []):
+            continue
         for requirement in operation.get("requirements", []):
-            if (
-                lane in requirement.get("lanes", [])
-                and profile in requirement.get("target_profiles", [])
-            ):
+            if lane in requirement.get("lanes", []):
                 result.add(requirement["id"])
     return result
 
@@ -218,7 +217,7 @@ def check_identity(
 
     allowed: dict[str, str] = {}
     for path in manifest["input_index"]["parity"]:
-        allowed[path] = "migration-parity/parity-input@1"
+        allowed[path] = "migration-parity/parity-input@2"
     if lane in {"coverage", "benchmark"}:
         for path in manifest["input_index"][lane]:
             allowed[path] = f"migration-parity/{lane}-input@1"
@@ -266,7 +265,7 @@ def check_identity(
 
 def lane_applicability(operation: dict[str, Any], lane: str, profile: str) -> str:
     declaration = operation.get(lane, {})
-    if profile not in declaration.get("target_profiles", []):
+    if lane != "parity" and profile not in declaration.get("target_profiles", []):
         return "not_applicable"
     return declaration.get("applicability", "not_proven")
 
@@ -298,10 +297,9 @@ def static_mapping(
     operation_inputs: dict[str, list[str]] = {}
     if lane == "parity":
         for case_id, case in inputs["cases"].items():
-            if profile in case.get("target_profiles", []):
-                covered.update(case.get("covers", []))
-                key = f"{case['surface']}\0{case['operation']}"
-                operation_inputs.setdefault(key, []).append(case_id)
+            covered.update(case.get("covers", []))
+            key = f"{case['surface']}\0{case['operation']}"
+            operation_inputs.setdefault(key, []).append(case_id)
     elif lane == "coverage":
         for plan_id, plan in inputs["plans"].items():
             if profile == plan["target_profile"]:
@@ -330,13 +328,20 @@ def static_mapping(
 
 
 def parity_outcome(
-    case_ids: list[str], result: dict[str, Any] | None, compatible: bool
+    case_ids: list[str],
+    result: dict[str, Any] | None,
+    compatible: bool,
+    target_profile: str,
 ) -> tuple[str, str | None, list[str]]:
     if not case_ids:
         return "not_proven", None, ["no indexed parity case"]
     if result is None or not compatible:
         return "not_proven", None, ["compatible parity evidence unavailable"]
-    by_id = {item["case_id"]: item for item in result["comparisons"]}
+    by_id = {
+        item["case_id"]: item
+        for item in result["comparisons"]
+        if item["target_profile"] == target_profile
+    }
     selected = [by_id.get(case_id) for case_id in case_ids]
     missing = sum(item is None for item in selected)
     outcomes = [item["outcome"] for item in selected if item is not None]
@@ -429,7 +434,7 @@ def completeness(
     manifest: dict[str, Any],
     inputs: dict[str, Any],
     profiles: dict[str, dict[str, Any]],
-    results: dict[str, tuple[dict[str, Any] | None, bool]],
+    results: dict[str, Any],
 ) -> list[dict[str, Any]]:
     operations = operation_records(manifest)
     profile_ids = list(profiles)
@@ -461,14 +466,14 @@ def completeness(
                 evidence_id = None
             elif dimension == "parity_outcome":
                 lane = "parity"
-                denominator_ids = {
-                    case_id
-                    for case_id, case in inputs["cases"].items()
-                    if profile_id in case.get("target_profiles", [])
-                }
-                result, compatible = results[lane]
+                denominator_ids = set(inputs["cases"])
+                result, compatible = results[lane].get(profile_id, (None, False))
                 evidence_id = result["identity"]["run_id"] if result and compatible else None
-                by_id = {item["case_id"]: item for item in result["comparisons"]} if result and compatible else {}
+                by_id = {
+                    item["case_id"]: item
+                    for item in result["comparisons"]
+                    if item["target_profile"] == profile_id
+                } if result and compatible else {}
                 covered = {case_id for case_id, item in by_id.items() if item["outcome"] == "pass"}
             elif dimension in {"function_coverage", "line_coverage", "branch_coverage", "region_coverage"}:
                 lane = "coverage"
@@ -509,7 +514,9 @@ def completeness(
                     for item in operation.get("requirements", [])
                     if item.get("dimension") == "performance"
                     and lane in item.get("lanes", [])
-                    and profile_id in item.get("target_profiles", [])
+                    and item["id"] in requirements_for_lane(
+                        manifest, profile_id, lane
+                    )
                 }
                 result, compatible = results[lane]
                 evidence_id = result["identity"]["run_id"] if result and compatible else None
@@ -539,18 +546,62 @@ def aggregate(args: argparse.Namespace) -> dict[str, Any]:
     inputs = load_inputs(manifest)
     profiles = profile_map(manifest)
     target_map = {item["id"]: item for item in manifest["targets"]}
-    result_paths = {
-        "parity": args.parity.resolve(),
-        "coverage": args.coverage.resolve(),
-        "benchmark": args.benchmark.resolve(),
+    results: dict[str, Any] = {
+        "parity": {},
+        "coverage": (None, False),
+        "benchmark": (None, False),
     }
-    results: dict[str, tuple[dict[str, Any] | None, bool]] = {}
     stale: list[dict[str, Any]] = []
     evidence: list[dict[str, Any]] = []
-    for lane in LANES:
-        path = result_paths[lane]
+    parity_paths = args.parity or [ROOT / "build" / "migration-parity" / "parity-result.json"]
+    duplicate_profiles: set[str] = set()
+    for raw_path in parity_paths:
+        path = raw_path.resolve()
         if not path.is_file():
-            results[lane] = (None, False)
+            continue
+        value = json.loads(path.read_text(encoding="utf-8"))
+        validate_result("parity", value)
+        differences = check_identity("parity", value, manifest, inputs, profiles, target_map)
+        compatible = not differences
+        reported_profiles = sorted({
+            item["target_profile"] for item in value["identity"]["targets"]
+        })
+        if not reported_profiles:
+            differences.append("identity.targets")
+            compatible = False
+        if compatible:
+            evidence.append({
+                "lane": "parity",
+                "run_id": value["identity"]["run_id"],
+                "snapshot_id": None,
+            })
+        else:
+            stale.append({
+                "lane": "parity",
+                "run_id": value["identity"]["run_id"],
+                "reason": "identity or freshness check failed",
+                "identity_diff": sorted(set(differences)),
+            })
+        for profile_id in reported_profiles:
+            if profile_id not in profiles:
+                continue
+            if profile_id in results["parity"] or profile_id in duplicate_profiles:
+                results["parity"].pop(profile_id, None)
+                duplicate_profiles.add(profile_id)
+                stale.append({
+                    "lane": "parity",
+                    "run_id": value["identity"]["run_id"],
+                    "reason": "more than one parity artifact claims this target profile",
+                    "identity_diff": [
+                        f"identity.targets.target_profile={profile_id}"
+                    ],
+                })
+                continue
+            results["parity"][profile_id] = (value, compatible)
+
+    for lane in ("coverage", "benchmark"):
+        path = getattr(args, lane).resolve()
+        if not path.is_file():
             continue
         value = json.loads(path.read_text(encoding="utf-8"))
         validate_result(lane, value)
@@ -574,8 +625,12 @@ def aggregate(args: argparse.Namespace) -> dict[str, Any]:
     target_profiles: list[dict[str, Any]] = []
     for profile in manifest["target_profiles"]:
         identity = target_identity_from_profile(profile, target_map)
-        for lane in LANES:
-            value, compatible = results[lane]
+        lane_results = [
+            results["parity"].get(profile["id"], (None, False)),
+            results["coverage"],
+            results["benchmark"],
+        ]
+        for value, compatible in lane_results:
             if not value or not compatible:
                 continue
             found = next(
@@ -612,13 +667,17 @@ def aggregate(args: argparse.Namespace) -> dict[str, Any]:
             parity_ids = static_maps["parity"][profile_id].get(key, [])
             coverage_ids = static_maps["coverage"][profile_id].get(key, [])
             benchmark_ids = static_maps["benchmark"][profile_id].get(key, [])
-            parity_result, parity_compatible = results["parity"]
+            parity_result, parity_compatible = results["parity"].get(
+                profile_id, (None, False)
+            )
             coverage_result, coverage_compatible = results["coverage"]
             benchmark_result, benchmark_compatible = results["benchmark"]
             parity_app = lane_applicability(operation, "parity", profile_id)
             coverage_app = lane_applicability(operation, "coverage", profile_id)
             benchmark_app = lane_applicability(operation, "benchmark", profile_id)
-            parity = parity_outcome(parity_ids, parity_result, parity_compatible)
+            parity = parity_outcome(
+                parity_ids, parity_result, parity_compatible, profile_id
+            )
             coverage = coverage_outcome(operation, coverage_ids, coverage_result, coverage_compatible)
             benchmark = benchmark_outcome(benchmark_ids, benchmark_result, benchmark_compatible)
             if static_support == "unsupported":
@@ -667,7 +726,7 @@ def aggregate(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
-    parser.add_argument("--parity", type=Path, default=ROOT / "build" / "migration-parity" / "parity-result.json")
+    parser.add_argument("--parity", type=Path, action="append", default=None)
     parser.add_argument("--coverage", type=Path, default=ROOT / "build" / "migration-parity" / "coverage-result.json")
     parser.add_argument("--benchmark", type=Path, default=ROOT / "build" / "migration-parity" / "benchmark-result.json")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)

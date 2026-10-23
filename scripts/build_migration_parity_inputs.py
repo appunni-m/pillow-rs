@@ -39,15 +39,6 @@ except ModuleNotFoundError:
     )
 
 try:
-    from migration_parity.parallel_cpu_inputs import (
-        add_parallel_cpu_parity_profiles,
-    )
-except ModuleNotFoundError:
-    from scripts.migration_parity.parallel_cpu_inputs import (
-        add_parallel_cpu_parity_profiles,
-    )
-
-try:
     from migration_parity.channel_inputs import (
         seeded_corner_benchmark_workloads,
         seeded_corner_parity_cases,
@@ -1978,7 +1969,8 @@ def case_signature(case: dict[str, Any]) -> str:
     """Identify a workflow independently of case, requirement and step labels.
 
     Normalize only workflow bindings and observation IDs. Literal payloads,
-    target profiles, assets, comparisons and public operations stay distinct.
+    assets, comparisons and public operations stay distinct. Backend selection
+    is stored by the runner and is not part of a parity case.
     """
 
     step_ids = {
@@ -7364,16 +7356,6 @@ def build_parity_case(
                 **(scenario_values or {}),
                 "in_place": literal(True),
             }
-    if (
-        surface == "PIL.ImageChops"
-        and operation["id"] == "screen"
-        and requirement["dimension"] == "backend"
-        and ".backend.gpu-mode-" in requirement["id"]
-    ):
-        # A backend requirement is separate from the public mode requirement,
-        # but its input still has to exercise that mode. Keep each GPU proof
-        # case distinct instead of merging four identical default RGB calls.
-        scenario_mode = requirement["id"].rsplit("gpu-mode-", 1)[1].upper()
     builder = WorkflowBuilder(
         operations=operations,
         primary_surface=surface,
@@ -7412,11 +7394,6 @@ def build_parity_case(
         "surface": surface,
         "operation": operation["id"],
         "covers": [requirement["id"]],
-        "target_profiles": (
-            list(requirement["target_profiles"])
-            if surface == "PIL.ImageChops" and operation["id"] == "screen"
-            else [TARGET_PROFILE]
-        ),
         "assets": assets,
         "steps": steps,
         "observations": observations,
@@ -7480,7 +7457,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "transpose",
             "covers": ["PIL.Image.Image.transpose.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", [17, 83, 149]),
@@ -7507,7 +7483,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.ImageFilter",
             "operation": "GaussianBlur",
             "covers": ["PIL.ImageFilter.GaussianBlur.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", [23, 97, 181]),
@@ -7541,7 +7516,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.ImageChops",
             "operation": "multiply",
             "covers": ["PIL.ImageChops.multiply.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image-1", [31, 109, 197]),
@@ -7575,7 +7549,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.ImageOps",
             "operation": "invert",
             "covers": ["PIL.ImageOps.invert.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", [47, 131, 223]),
@@ -7602,7 +7575,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "resize",
             "covers": ["PIL.Image.Image.resize.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image(
@@ -7627,7 +7599,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "resize",
             "covers": ["PIL.Image.Image.resize.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image("setup-image", "LA", [256, 256], [173, 191]),
@@ -7650,7 +7621,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "resize",
             "covers": ["PIL.Image.Image.resize.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image(
@@ -7682,7 +7652,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "resize",
             "covers": ["PIL.Image.Image.resize.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image("setup-image", "LA", [256, 256], [17, 191]),
@@ -7712,7 +7681,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "resize",
             "covers": ["PIL.Image.Image.resize.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image(
@@ -7737,7 +7705,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "resize",
             "covers": ["PIL.Image.Image.resize.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image("setup-image", "LA", [512, 512], [143, 127]),
@@ -7760,7 +7727,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "resize",
             "covers": ["PIL.Image.Image.resize.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image(
@@ -7785,7 +7751,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "resize",
             "covers": ["PIL.Image.Image.resize.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image("setup-image", "LA", [128, 128], [211, 191]),
@@ -7808,7 +7773,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "transpose",
             "covers": ["PIL.Image.Image.transpose.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image(
@@ -7830,7 +7794,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "transpose",
             "covers": ["PIL.Image.Image.transpose.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image("setup-image", "RGB", [1024, 768], [211, 127, 43]),
@@ -7850,7 +7813,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "crop",
             "covers": ["PIL.Image.Image.crop.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image("setup-image", "RGB", [1024, 768], [31, 109, 197]),
@@ -7870,7 +7832,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "reduce",
             "covers": ["PIL.Image.Image.reduce.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image("setup-image", "RGB", [1024, 768], [191, 83, 17]),
@@ -7890,7 +7851,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "reduce",
             "covers": ["PIL.Image.Image.reduce.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image(
@@ -7912,7 +7872,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "rotate",
             "covers": ["PIL.Image.Image.rotate.performance.standard"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_mode_image(
@@ -8003,7 +7962,6 @@ def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
                         "surface": surface_id,
                         "operation": "getdata",
                         "covers": ["PIL.Image.Image.getdata.performance.standard"],
-                        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                         "assets": [],
                         "steps": steps,
                         "observations": ["band-data"],
@@ -8187,7 +8145,6 @@ def pipeline_composition_cases(
                 behavior("PIL.ImageChops", "screen"),
                 behavior("PIL.Image.Image", "point"),
             ],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": steps,
             # The declared primary operation must be observed explicitly; the
@@ -8266,7 +8223,6 @@ def pipeline_composition_cases(
                 behavior("PIL.ImageChops", "multiply"),
                 behavior("PIL.ImageChops", "screen"),
             ],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": steps,
             "observations": [
@@ -8379,7 +8335,6 @@ def pipeline_composition_cases(
                 behavior("PIL.ImageChops", "screen"),
                 behavior("PIL.Image.Image", "point"),
             ],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": steps,
             "observations": [
@@ -8453,7 +8408,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "covers": [behavior("PIL.Image.Image", "paste")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": steps,
             "observations": ["cached-paste-000", "cached-paste-001", "materialize"],
@@ -8512,7 +8466,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "covers": [behavior("PIL.Image.Image", "paste")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": steps,
             "observations": [
@@ -8552,7 +8505,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "filter",
             "covers": [behavior("PIL.Image.Image", "filter")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", mode, size, color),
@@ -8657,7 +8609,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "transpose",
             "covers": [behavior("PIL.Image.Image", "transpose")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": steps,
             "observations": [
@@ -8675,7 +8626,6 @@ def pipeline_composition_cases(
                 behavior("PIL.Image.Image", "thumbnail"),
                 behavior("PIL.Image.Image", "size"),
             ],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", "RGB", [46, 22], [17, 83, 149]),
@@ -8705,7 +8655,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "filter",
             "covers": [behavior("PIL.Image.Image", "filter")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", "RGB", [24, 17], [17, 83, 149]),
@@ -8746,7 +8695,6 @@ def pipeline_composition_cases(
             "surface": "PIL.ImageOps",
             "operation": "posterize",
             "covers": [behavior("PIL.ImageOps", "posterize")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", "L", [29, 13], 173),
@@ -8791,7 +8739,6 @@ def pipeline_composition_cases(
                 behavior("PIL.ImageOps", "posterize"),
                 behavior("PIL.Image.Image", "point"),
             ],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", "L", [31, 17], 37),
@@ -8848,7 +8795,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "resize",
             "covers": [behavior("PIL.Image.Image", "resize")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", "RGBA", [31, 19], [17, 83, 149, 191]),
@@ -8888,7 +8834,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "quantize",
             "covers": [behavior("PIL.Image.Image", "quantize")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", "RGB", [27, 21], [191, 83, 17]),
@@ -8922,7 +8867,6 @@ def pipeline_composition_cases(
             "surface": "PIL.ImageChops",
             "operation": "screen",
             "covers": [behavior("PIL.ImageChops", "screen")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image-1", "RGB", [25, 23], [31, 109, 197]),
@@ -8966,7 +8910,6 @@ def pipeline_composition_cases(
                 behavior("PIL.ImageChops", "multiply"),
                 behavior("PIL.ImageChops", "screen"),
             ],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [
                 {
                     "id": "opened-shared-rgb-source",
@@ -9035,7 +8978,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "crop",
             "covers": [behavior("PIL.Image.Image", "crop")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 # A plain Crop-only pipeline is intentionally routed to the
@@ -9071,7 +9013,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "alpha_composite",
             "covers": [behavior("PIL.Image.Image", "alpha_composite")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image-1", "RGBA", [22, 18], [17, 83, 149, 191]),
@@ -9109,7 +9050,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "transpose",
             "covers": [behavior("PIL.Image.Image", "transpose")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", "L", [18, 26], 211),
@@ -9143,7 +9083,6 @@ def pipeline_composition_cases(
             "surface": "PIL.ImageOps",
             "operation": "expand",
             "covers": [behavior("PIL.ImageOps", "expand")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", "RGB", [28, 20], [191, 83, 17]),
@@ -9177,7 +9116,6 @@ def pipeline_composition_cases(
             "surface": "PIL.ImageOps",
             "operation": "equalize",
             "covers": [behavior("PIL.ImageOps", "equalize")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", "L", [33, 15], 143),
@@ -9211,7 +9149,6 @@ def pipeline_composition_cases(
             "surface": "PIL.Image.Image",
             "operation": "filter",
             "covers": [behavior("PIL.Image.Image", "filter")],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 new_image("setup-image", "L", [21, 21], 173),
@@ -9255,7 +9192,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image",
                 "operation": "linear_gradient",
                 "covers": [behavior("PIL.Image", "linear_gradient")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     {
@@ -9305,7 +9241,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image",
                 "operation": "radial_gradient",
                 "covers": [behavior("PIL.Image", "radial_gradient")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     {
@@ -9348,7 +9283,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image",
                 "operation": "effect_mandelbrot",
                 "covers": [behavior("PIL.Image", "effect_mandelbrot")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     {
@@ -9388,7 +9322,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "putalpha",
                 "covers": [behavior("PIL.Image.Image", "putalpha")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [24, 20], [17, 83, 149, 128]),
@@ -9436,7 +9369,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "putpixel",
                 "covers": [behavior("PIL.Image.Image", "putpixel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "LA", [12, 10], [17, 128]),
@@ -9473,7 +9405,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "quantize",
                 "covers": [behavior("PIL.Image.Image", "quantize")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "P", [20, 16], 3),
@@ -9517,7 +9448,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageChops",
                 "operation": "blend",
                 "covers": [behavior("PIL.ImageChops", "blend")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image-1", "RGB", [18, 14], [31, 109, 197]),
@@ -9569,7 +9499,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "alpha_composite",
                 "covers": [behavior("PIL.Image.Image", "alpha_composite")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image-1", "RGBA", [22, 18], [17, 83, 149, 191]),
@@ -9607,7 +9536,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageDraw.ImageDraw",
                 "operation": "line",
                 "covers": [behavior("PIL.ImageDraw.ImageDraw", "line")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [32, 24], [17, 83, 149]),
@@ -9670,7 +9598,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageDraw.ImageDraw",
                 "operation": "polygon",
                 "covers": [behavior("PIL.ImageDraw.ImageDraw", "polygon")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [256, 192], [17, 83, 149]),
@@ -9823,7 +9750,6 @@ def pipeline_composition_cases(
                 "covers": [
                     behavior("PIL.ImageDraw.ImageDraw", "rounded_rectangle")
                 ],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [192, 128], [17, 83, 149, 191]),
@@ -9889,7 +9815,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "transform",
                 "covers": [behavior("PIL.Image.Image", "transform")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [16, 16], [17, 83, 149, 191]),
@@ -9939,7 +9864,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "load",
                 "covers": [behavior("PIL.Image.Image", "load")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "P", [12, 10], [10, 20, 30]),
@@ -9969,7 +9893,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "verify",
                 "covers": [behavior("PIL.Image.Image", "verify")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "P", [12, 10], [10, 20, 30]),
@@ -9999,7 +9922,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "load",
                 "covers": [behavior("PIL.Image.Image", "load")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "PA", [12, 10], [3, 128]),
@@ -10029,7 +9951,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "verify",
                 "covers": [behavior("PIL.Image.Image", "verify")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "PA", [12, 10], [3, 128]),
@@ -10059,7 +9980,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "verify",
                 "covers": [behavior("PIL.Image.Image", "verify")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [17, 13], [17, 83, 149]),
@@ -10093,7 +10013,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "verify",
                 "covers": [behavior("PIL.Image.Image", "verify")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [19, 15], 173),
@@ -10120,7 +10039,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageChops",
                 "operation": "difference",
                 "covers": [behavior("PIL.ImageChops", "difference")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image-1", "L", [13, 11], 40),
@@ -10158,7 +10076,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "load",
                 "covers": [behavior("PIL.Image.Image", "load")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [14, 12], [17, 83, 149]),
@@ -10195,7 +10112,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "verify",
                 "covers": [behavior("PIL.Image.Image", "verify")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [14, 12], [17, 83, 149]),
@@ -10236,7 +10152,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "getdata",
                 "covers": [behavior("PIL.Image.Image", "getdata")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [
                     {
                         "id": "pipeline-composition-i16-data",
@@ -10281,7 +10196,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [10, 8], [17, 83, 149]),
@@ -10308,7 +10222,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [10, 8], [191, 83, 17]),
@@ -10335,7 +10248,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [10, 8], [31, 109, 197]),
@@ -10362,7 +10274,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [10, 8], [73, 137, 211]),
@@ -10389,7 +10300,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [10, 8], [211, 127, 43]),
@@ -10416,7 +10326,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [10, 8], 173),
@@ -10443,7 +10352,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "LA", [10, 8], [173, 191]),
@@ -10470,7 +10378,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [10, 8], 129),
@@ -10500,7 +10407,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     {
@@ -10533,7 +10439,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [10, 8], [17, 83, 149, 127]),
@@ -10568,7 +10473,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "P", [8, 6], 0),
@@ -10608,7 +10512,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "P", [8, 6], 1),
@@ -10628,7 +10531,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "CMYK", [8, 6], [17, 83, 149, 31]),
@@ -10651,7 +10553,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "CMYK", [9, 7], [211, 127, 43, 19]),
@@ -10671,7 +10572,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "CMYK", [8, 6], [17, 83, 149, 31]),
@@ -10691,7 +10591,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "CMYK", [8, 6], [211, 127, 43, 19]),
@@ -10711,7 +10610,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "1", [8, 6], 1),
@@ -10731,7 +10629,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "CMYK", [8, 6], [17, 83, 149, 31]),
@@ -10751,7 +10648,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [8, 6], [17, 83, 149, 127]),
@@ -10778,7 +10674,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "CMYK", [8, 6], [211, 127, 43, 19]),
@@ -10802,7 +10697,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "1", [8, 6], 1),
@@ -10829,7 +10723,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [8, 6], [17, 83, 149]),
@@ -10856,7 +10749,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [8, 6], [17, 83, 149, 127]),
@@ -10883,7 +10775,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [8, 6], 173),
@@ -10910,7 +10801,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "P", [8, 6], 3),
@@ -10937,7 +10827,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "CMYK", [8, 6], [17, 83, 149, 31]),
@@ -10964,7 +10853,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "HSV", [8, 6], [31, 109, 197]),
@@ -10991,7 +10879,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "YCbCr", [8, 6], [31, 109, 197]),
@@ -11018,7 +10905,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "I", [8, 6], 173),
@@ -11045,7 +10931,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "F", [8, 6], 1.25),
@@ -11076,7 +10961,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [9, 7], [17, 83, 149, 127]),
@@ -11103,7 +10987,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
@@ -11130,7 +11013,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [9, 7], 173),
@@ -11157,7 +11039,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [9, 7], 173),
@@ -11184,7 +11065,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
@@ -11211,7 +11091,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "convert",
                 "covers": [behavior("PIL.Image.Image", "convert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
@@ -11238,7 +11117,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "remap_palette",
                 "covers": [behavior("PIL.Image.Image", "remap_palette")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [9, 7], 173),
@@ -11258,7 +11136,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "getchannel",
                 "covers": [behavior("PIL.Image.Image", "getchannel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [9, 7], [17, 83, 149, 127]),
@@ -11285,7 +11162,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "getchannel",
                 "covers": [behavior("PIL.Image.Image", "getchannel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     # getchannel(1) is the alpha band, so the source must be
@@ -11316,7 +11192,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "transform",
                 "covers": [behavior("PIL.Image.Image", "transform")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [12, 10], [17, 83, 149]),
@@ -11356,7 +11231,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageOps",
                 "operation": "pad",
                 "covers": [behavior("PIL.ImageOps", "pad")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
@@ -11389,7 +11263,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageOps",
                 "operation": "pad",
                 "covers": [behavior("PIL.ImageOps", "pad")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [9, 7], 173),
@@ -11421,7 +11294,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageOps",
                 "operation": "pad",
                 "covers": [behavior("PIL.ImageOps", "pad")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "LA", [9, 7], [173, 127]),
@@ -11453,7 +11325,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageOps",
                 "operation": "pad",
                 "covers": [behavior("PIL.ImageOps", "pad")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [9, 7], [17, 83, 149, 127]),
@@ -11485,7 +11356,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageOps",
                 "operation": "pad",
                 "covers": [behavior("PIL.ImageOps", "pad")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "P", [9, 7], 3),
@@ -11517,7 +11387,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "transform",
                 "covers": [behavior("PIL.Image.Image", "transform")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [9, 7], 173),
@@ -11550,7 +11419,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "transform",
                 "covers": [behavior("PIL.Image.Image", "transform")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
@@ -11582,7 +11450,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "transform",
                 "covers": [behavior("PIL.Image.Image", "transform")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
@@ -11614,7 +11481,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "transform",
                 "covers": [behavior("PIL.Image.Image", "transform")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [8, 8], [17, 83, 149, 127]),
@@ -11648,7 +11514,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "transform",
                 "covers": [behavior("PIL.Image.Image", "transform")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "LA", [8, 8], [173, 127]),
@@ -11691,7 +11556,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageChops",
                 "operation": "invert",
                 "covers": [behavior("PIL.ImageChops", "invert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "LA", [11, 9], [173, 127]),
@@ -11718,7 +11582,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageChops",
                 "operation": "invert",
                 "covers": [behavior("PIL.ImageChops", "invert")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [10, 8], [17, 83, 149, 127]),
@@ -11745,7 +11608,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "resize",
                 "covers": [behavior("PIL.Image.Image", "resize")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "F", [13, 9], 1.5),
@@ -11775,7 +11637,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "resize",
                 "covers": [behavior("PIL.Image.Image", "resize")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "I", [12, 10], -12345),
@@ -11810,7 +11671,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageOps",
                 "operation": "contain",
                 "covers": [behavior("PIL.ImageOps", "contain")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "F", [13, 9], 1.5),
@@ -11845,7 +11705,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageOps",
                 "operation": "cover",
                 "covers": [behavior("PIL.ImageOps", "cover")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "I", [12, 10], -12345),
@@ -11881,7 +11740,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageEnhance",
                 "operation": "Contrast",
                 "covers": [behavior("PIL.ImageEnhance", "Contrast")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "CMYK", [10, 8], [17, 83, 149, 31]),
@@ -11922,7 +11780,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageEnhance",
                 "operation": "Brightness",
                 "covers": [behavior("PIL.ImageEnhance", "Brightness")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "CMYK", [10, 8], [211, 127, 43, 19]),
@@ -11963,7 +11820,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageOps",
                 "operation": "mirror",
                 "covers": [behavior("PIL.ImageOps", "mirror")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "F", [11, 9], 1.5),
@@ -11997,7 +11853,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "transpose",
                 "covers": [behavior("PIL.Image.Image", "transpose")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "I", [11, 9], -12345),
@@ -12033,7 +11888,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageFilter",
                 "operation": "Kernel",
                 "covers": [behavior("PIL.ImageFilter", "Kernel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [11, 9], 83),
@@ -12070,7 +11924,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageFilter",
                 "operation": "Kernel",
                 "covers": [behavior("PIL.ImageFilter", "Kernel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [11, 9], [17, 83, 149]),
@@ -12107,7 +11960,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageFilter",
                 "operation": "Kernel",
                 "covers": [behavior("PIL.ImageFilter", "Kernel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [11, 9], [17, 83, 149, 127]),
@@ -12144,7 +11996,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageFilter",
                 "operation": "Kernel",
                 "covers": [behavior("PIL.ImageFilter", "Kernel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "LA", [11, 9], [173, 127]),
@@ -12182,7 +12033,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageFilter",
                 "operation": "Kernel",
                 "covers": [behavior("PIL.ImageFilter", "Kernel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "I", [11, 9], -12345),
@@ -12222,7 +12072,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageFilter",
                 "operation": "Kernel",
                 "covers": [behavior("PIL.ImageFilter", "Kernel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "F", [11, 9], 1.5),
@@ -12266,7 +12115,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageFilter",
                 "operation": "Kernel",
                 "covers": [behavior("PIL.ImageFilter", "Kernel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "L", [13, 11], 127),
@@ -12308,7 +12156,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageFilter",
                 "operation": "Kernel",
                 "covers": [behavior("PIL.ImageFilter", "Kernel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGB", [13, 11], [17, 83, 149]),
@@ -12351,7 +12198,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageFilter",
                 "operation": "Kernel",
                 "covers": [behavior("PIL.ImageFilter", "Kernel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "LA", [13, 11], [173, 127]),
@@ -12389,7 +12235,6 @@ def pipeline_composition_cases(
                 "surface": "PIL.ImageFilter",
                 "operation": "Kernel",
                 "covers": [behavior("PIL.ImageFilter", "Kernel")],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     new_image("setup-image", "RGBA", [13, 11], [17, 83, 149, 127]),
@@ -12597,7 +12442,7 @@ def pipeline_composition_cases(
                 "case_id": f"pipeline-composition.backend-f-chain-{label}-{resample}",
                 "surface": "PIL.Image.Image", "operation": "resize",
                 "covers": [behavior("PIL.Image.Image", "resize")],
-                "target_profiles": [TARGET_PROFILE], "assets": [{
+                 "assets": [{
                     "id": "f-chain-words", "kind": "inline", "encoding": "base64",
                     "data": base64.b64encode(sample_data).decode("ascii"),
                     "sha256": hashlib.sha256(sample_data).hexdigest(),
@@ -12684,7 +12529,6 @@ def pipeline_composition_cases(
                     behavior("PIL.Image", "alpha_composite"),
                     behavior("PIL.ImageOps", "mirror"),
                 ],
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "assets": assets,
                 "steps": steps,
                 "observations": ["composited", "mirrored", "materialize"],
@@ -12704,7 +12548,6 @@ def pipeline_composition_cases(
                     behavior("PIL.Image", "alpha_composite"),
                     behavior("PIL.ImageOps", "mirror"),
                 ],
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "assets": [],
                 "steps": [
                     {
@@ -12847,7 +12690,6 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": surface_id,
             "operation": "getchannel",
             "covers": list(covers),
-            "target_profiles": list(profiles),
             "assets": list(assets or []),
             "steps": steps,
             "observations": observations,
@@ -15807,11 +15649,7 @@ def build_nuanced_cases(
             "edge": "noise-ref-fill",
             "seed": 20261015,
             "observe_result": "tobytes",
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
-            "additional_requirement_suffixes": [
-                "mode.rgb",
-                "backend.gpu-mode-rgb",
-            ],
+            "additional_requirement_suffixes": ["mode.rgb"],
         },
         *(
             {
@@ -15825,7 +15663,6 @@ def build_nuanced_cases(
                 "pixel": pixel,
                 "values": {"channel": literal(channel)},
                 "observe_result": "tobytes",
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, pixel, channel in GETCHANNEL_PERFORMANCE_CASES
         ),
@@ -15839,7 +15676,6 @@ def build_nuanced_cases(
                 "size": size,
                 "edge": "noise-fill",
                 "seed": seed,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, seed in GETCOLORS_PERFORMANCE_CASES
         ),
@@ -15853,7 +15689,6 @@ def build_nuanced_cases(
                 "size": size,
                 "edge": "grayscale-cycle-rgb-fill",
                 "values": {"maxcolors": literal(1_000_000)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size in GETCOLORS_FULL_SCAN_CASES
         ),
@@ -15866,7 +15701,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "noise-fill",
             "seed": 20260926,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
             "timed_filter_result": True,
         },
@@ -15880,7 +15714,6 @@ def build_nuanced_cases(
                 "size": size,
                 "edge": "noise-fill",
                 "seed": seed,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, seed in GETCOLORS_SLOT_ORDER_CASES
         ),
@@ -16256,7 +16089,6 @@ def build_nuanced_cases(
             "requirement_suffix": "performance.standard",
             "name": "loaded-pilfont-parity",
             "chain": "pilfont-load-getlength",
-            "target_profiles": ["python-cpu"],
         },
         {
             "surface": "PIL.ImageFont.ImageFont",
@@ -16264,7 +16096,6 @@ def build_nuanced_cases(
             "requirement_suffix": "performance.standard",
             "name": "loaded-pilfont-parity",
             "chain": "pilfont-load-getbbox",
-            "target_profiles": ["python-cpu"],
         },
         {
             "surface": "PIL.ImageFont.ImageFont",
@@ -17304,7 +17135,6 @@ def build_nuanced_cases(
                 "fill": literal([231, 73, 19]),
             },
             "observe_receiver": True,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
@@ -17323,7 +17153,6 @@ def build_nuanced_cases(
                 "fill": literal([231, 73, 19, 96]),
             },
             "observe_receiver": True,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
@@ -18074,7 +17903,6 @@ def build_nuanced_cases(
                 "xy": literal([0, 0]),
                 "fill": literal([221, 37, 109, 96]),
             },
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
@@ -18090,7 +17918,6 @@ def build_nuanced_cases(
                 "xy": literal([0, 0]),
                 "fill": literal([221, 37, 109, 203]),
             },
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
@@ -23590,7 +23417,6 @@ def build_nuanced_cases(
                 **({"im_mode": im_mode} if im_mode is not None else {}),
                 "values": {"box": literal([2, 2])},
                 "observe_receiver": True,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, seed, im_mode in PASTE_PERFORMANCE_CASES
         ),
@@ -23607,7 +23433,6 @@ def build_nuanced_cases(
                 "mask_mode": "L",
                 "values": {"box": literal([2, 2])},
                 "observe_receiver": True,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, seed in PASTE_MASKED_PERFORMANCE_CASES
         ),
@@ -23623,7 +23448,6 @@ def build_nuanced_cases(
             "mask_mode": "RGBa",
             "values": {"box": literal([2, 1])},
             "observe_receiver": True,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -23636,7 +23460,6 @@ def build_nuanced_cases(
             "seed": 20261003,
             "values": {"box": literal([-2, -1])},
             "observe_receiver": True,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -23650,7 +23473,6 @@ def build_nuanced_cases(
             "im_mode": "RGB",
             "values": {"box": literal([-1, -1])},
             "observe_receiver": True,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -24871,7 +24693,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "merge-rgb-channel-pattern",
             "observe_result": "tobytes",
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image",
@@ -25061,7 +24882,6 @@ def build_nuanced_cases(
                 "extent": literal([-2.5, -1.5, 2.5, 1.5]),
                 "quality": literal(100),
             },
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
         {
@@ -25074,7 +24894,6 @@ def build_nuanced_cases(
                 "extent": literal([-1.0, -0.5, 1.0, 0.5]),
                 "quality": literal(200),
             },
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
         {
@@ -25087,7 +24906,6 @@ def build_nuanced_cases(
                 "extent": literal([0.24, -0.01, 0.26, 0.01]),
                 "quality": literal(1000),
             },
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
         {
@@ -25100,7 +24918,6 @@ def build_nuanced_cases(
                 "extent": literal([-0.76, -0.01, -0.74, 0.01]),
                 "quality": literal(1000),
             },
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
         {
@@ -25156,7 +24973,6 @@ def build_nuanced_cases(
             "seed": 20261004,
             "materialize_result": True,
             "observe_result": "tobytes",
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "values": {
                 "args": literal([[
                     *((sample * 3 + 5) % 256 for sample in range(256)),
@@ -28416,17 +28232,15 @@ def build_nuanced_cases(
             {
                 "surface": "PIL.ImageChops",
                 "operation": "screen",
-                "requirement_suffix": f"backend.gpu-mode-{mode.lower()}",
-                "name": f"gpu-native-byte-tail-{mode.lower()}-5x5",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"odd-size-tail-{mode.lower()}-5x5",
                 "mode": mode,
                 "size": [5, 5],
                 "edge": "noise-fill",
                 "seed": 20261015 + index,
                 "observe_result": "tobytes",
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "additional_requirement_suffixes": [
                     "performance.standard",
-                    f"mode.{mode.lower()}",
                 ],
             }
             for index, mode in enumerate(("L", "LA", "RGB", "RGBA"))
@@ -28503,7 +28317,6 @@ def build_nuanced_cases(
             # Reuse the existing native-L RankFilter performance asset.
             "seed": 20261126,
             "observe_result": "tobytes",
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.ImageChops",
@@ -31163,7 +30976,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "noise-fill",
             "seed": 20261008,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
         {
@@ -31175,7 +30987,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "noise-fill",
             "seed": 20261008,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
         *(
@@ -31187,7 +30998,6 @@ def build_nuanced_cases(
                 "mode": mode,
                 "size": [1024, 768],
                 "edge": edge,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "observe_result": "tobytes",
                 **({"seed": seed} if seed is not None else {}),
                 **({"pixel": pixel} if pixel is not None else {}),
@@ -31223,7 +31033,6 @@ def build_nuanced_cases(
                 "size": [1024, 768],
                 "edge": "noise-fill",
                 "seed": 20260929,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "values": {"bits": literal(4)},
                 "observe_result": "tobytes",
             }
@@ -31239,7 +31048,6 @@ def build_nuanced_cases(
                 "size": [3, 1],
                 "edge": "noise-fill",
                 "seed": 20260929,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "values": {"bits": literal(bits)},
                 "observe_result": "tobytes",
             }
@@ -31315,7 +31123,6 @@ def build_nuanced_cases(
             "size": [3, 1],
             "edge": "nonzero-pixel",
             "pixel": [12, 34, 56],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
         {
@@ -31327,7 +31134,6 @@ def build_nuanced_cases(
             "size": [3, 1],
             "edge": "noise-fill",
             "seed": 20260930,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
         {
@@ -31339,7 +31145,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "noise-fill",
             "seed": 20260929,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
         {
@@ -31351,7 +31156,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "noise-fill",
             "seed": 20260931,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
         {
@@ -31433,7 +31237,6 @@ def build_nuanced_cases(
                     "fill": literal(fill),
                 },
                 "observe_result": "tobytes",
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, seed, fill in EXPAND_PERFORMANCE_CASES
         ),
@@ -31452,7 +31255,6 @@ def build_nuanced_cases(
                     "fill": literal([17, 83, 149]),
                 },
                 "observe_result": "tobytes",
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for mode, seed in (("CMYK", 20261103), ("RGBX", 20261104))
         ),
@@ -31563,7 +31365,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "noise-fill",
             "seed": 20260927,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
             "values": {
                 "black": literal("black"),
@@ -32985,7 +32786,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "uniform-fill",
             "pixel": 0,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -32996,7 +32796,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "uniform-fill",
             "pixel": [1, 2, 3],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -33007,7 +32806,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "backend-filter-rgb-noise-ref",
             "seed": 20260928,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -33018,7 +32816,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "uniform-fill",
             "pixel": 1,
-            "target_profiles": ["python-cpu"],
         },
         {
             "surface": "PIL.Image.Image",
@@ -33029,7 +32826,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "uniform-fill",
             "pixel": 0,
-            "target_profiles": ["python-cpu"],
         },
         {
             "surface": "PIL.Image.Image",
@@ -33040,7 +32836,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "nonzero-pixel-center",
             "pixel": -17,
-            "target_profiles": ["python-cpu"],
         },
         {
             "surface": "PIL.Image.Image",
@@ -33051,7 +32846,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "nonzero-pixel-bottom-right",
             "pixel": -17,
-            "target_profiles": ["python-cpu"],
         },
         {
             "surface": "PIL.Image.Image",
@@ -33657,7 +33451,6 @@ def build_nuanced_cases(
             "edge": "noise-fill",
             "seed": 20261020,
             "values": {"alpha": literal(192)},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         *(
             {
@@ -33669,7 +33462,6 @@ def build_nuanced_cases(
                 "size": size,
                 "edge": "noise-fill",
                 "seed": seed,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, seed in ENTROPY_PERFORMANCE_CASES
         ),
@@ -33685,7 +33477,6 @@ def build_nuanced_cases(
                 "seed": seed,
                 "values": {"alpha": literal(192)},
                 "observe_receiver": True,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, seed in PUTALPHA_PERFORMANCE_CASES
         ),
@@ -33701,7 +33492,6 @@ def build_nuanced_cases(
                 "seed": seed,
                 "mask_mode": "L",
                 "observe_receiver": True,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, seed in PUTALPHA_MASK_PERFORMANCE_CASES
         ),
@@ -35782,7 +35572,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "nonzero-pixel",
             "pixel": 305419896,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -35793,7 +35582,6 @@ def build_nuanced_cases(
             "size": [1024, 768],
             "edge": "nonzero-pixel",
             "pixel": 1.25,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -36435,7 +36223,6 @@ def build_nuanced_cases(
             "operation": "rotate",
             "requirement_suffix": "parameter.resample",
             "name": "rgb-nearest-1deg-noise-recovered-20261016-1024x768",
-            "target_profiles": ["python-cpu", "python-simd"],
             "observe_result": "tobytes",
             "mode": "RGB",
             "edge": "noise-fill",
@@ -36452,7 +36239,6 @@ def build_nuanced_cases(
             "operation": "rotate",
             "requirement_suffix": "parameter.fillcolor",
             "name": "rgba-nearest-37deg-noise-fill-20261016-1024x768",
-            "target_profiles": ["python-cpu", "python-simd"],
             "observe_result": "tobytes",
             "mode": "RGBA",
             "edge": "noise-fill",
@@ -37642,7 +37428,6 @@ def build_nuanced_cases(
             "mode": "LA",
             "mask_mode": "L",
             "edge": "mask-nonzero-pixel",
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -40456,7 +40241,6 @@ def build_nuanced_cases(
             "edge": "nonzero-pixel",
             "pixel": [180, 120, 60],
             "observe_receiver": True,
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "values": {
                 "size": literal([256, 256]),
                 "resample": literal(2),
@@ -40473,7 +40257,6 @@ def build_nuanced_cases(
                 "edge": "noise-ref-fill",
                 "seed": 240931 if mode == "F" else 240932,
                 "observe_receiver": True,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "values": {
                     "size": literal([width // 4, width // 4]),
                     "resample": literal(3),
@@ -40494,7 +40277,6 @@ def build_nuanced_cases(
                 "edge": "noise-fill",
                 "seed": 240941 if mode == "F" else 240942,
                 "observe_receiver": True,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "values": {
                     "size": literal([4, 3]),
                     "resample": literal(3),
@@ -42413,7 +42195,6 @@ def build_nuanced_cases(
         "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
         "seed": 20260927, "observe_result": "tobytes",
         "values": {"factor": literal(1.0)},
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
     },)
 
     # The active kernel must have a large non-identity workload. Use byte-backed
@@ -42426,7 +42207,6 @@ def build_nuanced_cases(
         "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
         "seed": 20260927, "observe_result": "tobytes",
         "values": {"factor": literal(1.5)},
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
     },)
 
     # GPU Sharpness currently expands L to the generic RGBA transport even
@@ -42440,7 +42220,6 @@ def build_nuanced_cases(
         "mode": "L", "size": [1024, 768], "edge": "noise-fill",
         "seed": 20261033, "observe_result": "tobytes",
         "values": {"factor": literal(1.5)},
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
     },)
     specs += ({
         "surface": "PIL.ImageEnhance.Sharpness", "operation": "enhance",
@@ -42449,7 +42228,6 @@ def build_nuanced_cases(
         "mode": "L", "size": [17, 9], "edge": "noise-fill",
         "seed": 20261034, "observe_result": "tobytes",
         "values": {"factor": literal(1.5)},
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
     },)
 
     # RGBX shares four-byte storage with RGBA, but Pillow Sharpness filters
@@ -42463,7 +42241,6 @@ def build_nuanced_cases(
         "mode": "RGBX", "size": [3, 3], "edge": "noise-fill",
         "seed": 20260929, "observe_result": "tobytes",
         "values": {"factor": literal(1.5)},
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
     },)
 
     specs += ({
@@ -42473,7 +42250,6 @@ def build_nuanced_cases(
         "mode": "RGBX", "size": [1024, 768], "edge": "noise-fill",
         "seed": 20260929, "observe_result": "tobytes",
         "values": {"factor": literal(1.5)},
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
     },)
 
     # Image.blend preserves equal edge samples exactly. A weighted f64 blend
@@ -42485,7 +42261,6 @@ def build_nuanced_cases(
         "mode": "RGB", "size": [3, 3], "edge": "nonzero-pixel-origin",
         "pixel": [3, 0, 0], "observe_result": "tobytes",
         "values": {"factor": literal(0.3)},
-        "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
     },)
 
     specs += ({
@@ -42495,7 +42270,6 @@ def build_nuanced_cases(
         "mode": "RGB", "size": [3, 3], "edge": "sharpness-fma-cancellation",
         "observe_result": "tobytes",
         "values": {"factor": literal(1.1)},
-        "target_profiles": ["python-cpu", "python-simd"],
     },)
 
     if surface_id == "PIL.ImageOps":
@@ -42510,7 +42284,6 @@ def build_nuanced_cases(
                     "size": literal(target_size),
                     "method": literal(method),
                 },
-                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
             },)
 
         # Cover from a 4:3 source to a portrait target forces a material resize
@@ -42524,7 +42297,6 @@ def build_nuanced_cases(
                 "mode": mode, "size": size, "edge": "noise-fill", "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal([768, 1024])},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
         # Materialize the pad assembly on noisy native byte layouts. The 4:3
@@ -42538,7 +42310,6 @@ def build_nuanced_cases(
                 "mode": mode, "size": size, "edge": "noise-fill", "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal([1024, 1024]), "color": literal(fill)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
         # This case forces a real contain resize before padding. Keep it
@@ -42553,7 +42324,6 @@ def build_nuanced_cases(
                 "mode": mode, "size": size, "edge": "noise-fill", "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(target_size), "color": literal(fill)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
         # RGBX stores its padding byte in the four-byte carrier. Keep the
@@ -42566,7 +42336,6 @@ def build_nuanced_cases(
             "mode": "RGBX", "size": [3, 2], "edge": "noise-fill",
             "seed": 20261033, "observe_result": "tobytes",
             "values": {"size": literal([3, 3]), "color": literal(None)},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
         specs += ({
             "surface": "PIL.ImageOps", "operation": "pad",
@@ -42575,7 +42344,6 @@ def build_nuanced_cases(
             "mode": "RGBX", "size": [3, 2], "edge": "noise-fill",
             "seed": 20261034, "observe_result": "tobytes",
             "values": {"size": literal([3, 3]), "color": literal(17)},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
         # Native-L packed Pad keeps the source dimensions unchanged while
         # filling an odd-width canvas. Six source bytes and fifteen output
@@ -42593,7 +42361,6 @@ def build_nuanced_cases(
                 "color": literal(173),
                 "centering": literal([0.5, 0.5]),
             },
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
         # This filtered case forces Pillow's ties-to-even contain height
         # (3 * 5 / 6 = 2.5 -> 2) and paste offset ((5 - 2) / 2 = 1.5 -> 2).
@@ -42609,7 +42376,6 @@ def build_nuanced_cases(
                 "size": literal([5, 5]),
                 "color": literal([17, 83, 149, 31]),
             },
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
     if surface_id == "PIL.Image.Image":
@@ -42625,7 +42391,6 @@ def build_nuanced_cases(
             "mode": "L", "size": [1024, 768], "edge": "noise-fill",
             "seed": 20260932, "observe_result": "tobytes",
             "values": {"lut": literal(point_lut)},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
         for mode, channels, seed in (
             ("L", 1, 20260936),
@@ -42645,7 +42410,6 @@ def build_nuanced_cases(
                 "mode": mode, "size": [67, 19], "edge": "noise-fill",
                 "seed": seed, "observe_result": "tobytes",
                 "values": {"lut": literal(lut)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
         specs += ({
@@ -42655,7 +42419,6 @@ def build_nuanced_cases(
             "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
             "seed": 20260928, "observe_result": "tobytes",
             "values": {"box": literal([97, 65, 928, 704])},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
         specs += ({
@@ -42665,7 +42428,6 @@ def build_nuanced_cases(
             "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
             "seed": 20260928, "observe_result": "tobytes",
             "values": {"box": literal([0, 65, 1024, 704])},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
         # Keep crop channel packing and row-tail behavior visible on every
@@ -42678,7 +42440,6 @@ def build_nuanced_cases(
                 "mode": mode, "size": [65, 47], "edge": "noise-fill",
                 "seed": seed, "observe_result": "tobytes",
                 "values": {"box": literal([5, 7, 62, 41])},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
         specs += ({
@@ -42688,7 +42449,6 @@ def build_nuanced_cases(
             "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
             "seed": 20260928, "observe_result": "tobytes",
             "values": {"factor": literal([3, 5])},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
         # Keep cross-backend parity sensitive to alpha handling and the
@@ -42705,7 +42465,6 @@ def build_nuanced_cases(
                 "mode": mode, "size": [64, 48], "edge": "noise-fill",
                 "seed": seed, "observe_result": "tobytes",
                 "values": {"factor": literal([3, 5])},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
     if surface_id == "PIL.ImageFilter":
@@ -42720,7 +42479,6 @@ def build_nuanced_cases(
                 "mode": mode, "size": [65, 47], "edge": "noise-fill",
                 "seed": seed, "observe_result": "tobytes",
                 "values": {"radius": literal(1.0)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
         specs += ({
@@ -42730,7 +42488,6 @@ def build_nuanced_cases(
             "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
             "seed": 20260929, "observe_result": "tobytes",
             "values": {"radius": literal(2.0)},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
         # Keep a material native-L case beside the RGB GaussianBlur baseline.
@@ -42743,7 +42500,6 @@ def build_nuanced_cases(
             "mode": "L", "size": [1024, 768], "edge": "noise-fill",
             "seed": 20260930, "observe_result": "tobytes",
             "values": {"radius": literal(2.0)},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
         # LA has two independent stored bands, but the generic GPU blur route
@@ -42757,7 +42513,6 @@ def build_nuanced_cases(
             "mode": "LA", "size": [1024, 768], "edge": "noise-fill",
             "seed": 20261013, "observe_result": "tobytes",
             "values": {"radius": literal(2.0)},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
         # BoxBlur's default benchmark image is constant, allowing the blur
@@ -42771,7 +42526,6 @@ def build_nuanced_cases(
             "mode": "L", "size": [1024, 768], "edge": "noise-fill",
             "seed": 20261108, "observe_result": "tobytes",
             "values": {"radius": literal(1.0)},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
         # The RGB BoxBlur entry in pipeline-operations is a constant image,
@@ -42785,7 +42539,6 @@ def build_nuanced_cases(
             "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
             "seed": 20261003, "observe_result": "tobytes",
             "values": {"radius": literal(1.0)},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
         # The standard UnsharpMask input is a tiny constant RGB image. Keep a
@@ -42802,7 +42555,6 @@ def build_nuanced_cases(
                 "percent": literal(150),
                 "threshold": literal(3),
             },
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
         # Keep a tiny nonuniform RGB case whose packed byte length ends in a
@@ -42819,7 +42571,6 @@ def build_nuanced_cases(
                 "percent": literal(150),
                 "threshold": literal(3),
             },
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
         # MedianFilter's maintained material workload used a constant image,
@@ -42839,7 +42590,6 @@ def build_nuanced_cases(
                 "edge": "noise-fill", "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(3)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
         # Keep LA's alpha channel in the workload and exercise odd row/column
@@ -42858,7 +42608,6 @@ def build_nuanced_cases(
                 "edge": "noise-fill", "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(3)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
         # RGB is a native three-byte layout. Keep material and boundary inputs
@@ -42877,7 +42626,6 @@ def build_nuanced_cases(
                 "edge": "noise-fill", "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(3)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
         # Keep RGB MaxFilter and MinFilter benchmark inputs reproducible. The
@@ -42921,7 +42669,6 @@ def build_nuanced_cases(
                     "edge": edge,
                     "observe_result": "tobytes",
                     "values": {"size": literal(3)},
-                    "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 }
                 if seed is not None:
                     spec["seed"] = seed
@@ -42969,7 +42716,6 @@ def build_nuanced_cases(
                 "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(3)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             if extra_requirements:
                 spec["additional_requirement_suffixes"] = list(extra_requirements)
@@ -43014,7 +42760,6 @@ def build_nuanced_cases(
                 "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(3)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             if extra_requirements:
                 spec["additional_requirement_suffixes"] = list(extra_requirements)
@@ -43055,7 +42800,6 @@ def build_nuanced_cases(
                 "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(3)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             if extra_requirements:
                 spec["additional_requirement_suffixes"] = list(extra_requirements)
@@ -43096,7 +42840,6 @@ def build_nuanced_cases(
                 "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(3)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             if extra_requirements:
                 spec["additional_requirement_suffixes"] = list(extra_requirements)
@@ -43122,7 +42865,6 @@ def build_nuanced_cases(
                 "edge": "noise-fill", "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(9), "rank": literal(rank)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
         # Keep L RankFilter(3, rank=1) boundary and material inputs in the
@@ -43158,7 +42900,6 @@ def build_nuanced_cases(
                 "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(3), "rank": literal(1)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             specs += (spec,)
 
@@ -43211,7 +42952,6 @@ def build_nuanced_cases(
                 "seed": seed,
                 "observe_result": "tobytes",
                 "values": {"size": literal(3), "rank": literal(rank)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             if extra_requirements:
                 spec["additional_requirement_suffixes"] = list(extra_requirements)
@@ -43231,7 +42971,6 @@ def build_nuanced_cases(
                 "mode": mode, "size": [65, 47], "edge": "noise-fill",
                 "seed": seed, "observe_result": "tobytes",
                 "values": {"radius": literal(2.0)},
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
@@ -43336,8 +43075,6 @@ def build_nuanced_cases(
             observe_filter["receiver"]["step_id"] = "call"
             case["steps"] = [setup_image, setup_filter, apply_filter, observe_filter]
             case["observations"] = ["setup-filter", "call", "observe-result"]
-        if "target_profiles" in spec:
-            case["target_profiles"] = list(spec["target_profiles"])
         for suffix in spec.get("additional_requirement_suffixes", []):
             additional = requirements[key].get(suffix)
             if additional is None:
@@ -43408,7 +43145,6 @@ def build_nuanced_cases(
                 "surface": surface_id,
                 "operation": "getdata",
                 "covers": ["PIL.Image.Image.getdata.behavior.default"],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     {
@@ -43472,7 +43208,6 @@ def build_nuanced_cases(
                 "surface": surface_id,
                 "operation": "getdata",
                 "covers": ["PIL.Image.Image.getdata.parameter.band"],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     {
@@ -43513,7 +43248,7 @@ def build_nuanced_cases(
 
 
 def putdata_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
-    """Exercise full and partial PutData writes on every image backend."""
+    """Exercise PutData inputs with the backend selected by the runner."""
     if surface_id != "PIL.Image.Image":
         return []
 
@@ -43535,7 +43270,6 @@ def putdata_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         *,
         partial: bool = False,
         packed_integers: bool = False,
-        target_profiles: tuple[str, ...] = BENCHMARK_TARGET_PROFILES,
     ) -> dict[str, Any]:
         channels = {"1": 1, "L": 1, "P": 1, "LA": 2, "RGB": 3, "RGBA": 4}[mode]
         pixel_count = size[0] * size[1]
@@ -43609,7 +43343,6 @@ def putdata_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": "PIL.Image.Image",
             "operation": "putdata",
             "covers": ["PIL.Image.Image.putdata.performance.standard"],
-            "target_profiles": list(target_profiles),
             "assets": assets,
             "steps": [
                 {
@@ -43649,19 +43382,16 @@ def putdata_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             20260941,
         ),
         make_case("L", (67, 19), "backend-partial-l-noise-67x19-bytes", 20260942, partial=True),
-        # Keep tuple inputs as CPU binding-semantic checks. They deliberately
-        # use putdata_value_at and do not claim queued backend coverage.
+        # Tuple inputs exercise binding semantics rather than queued kernel
+        # coverage; they still use the same fixture under each runner backend.
         make_case(
             "LA", (67, 19), "semantic-full-la-noise-67x19-tuples", 20260943,
-            target_profiles=("python-cpu",),
         ),
         make_case(
             "RGB", (67, 19), "semantic-full-rgb-noise-67x19-tuples", 20260944,
-            target_profiles=("python-cpu",),
         ),
         make_case(
             "RGBA", (67, 19), "semantic-full-rgba-noise-67x19-tuples", 20260945,
-            target_profiles=("python-cpu",),
         ),
         make_case(
             "LA", (67, 19), "backend-full-la-noise-67x19-packed", 20260946,
@@ -43721,7 +43451,6 @@ def putpixel_input_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "case_id": f"{surface_id}.putpixel.nuanced.input-audit-{mode}-{name}",
                 "surface": surface_id, "operation": "putpixel",
                 "covers": [f"{surface_id}.putpixel.behavior.default"],
-                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
                 "assets": [], "steps": [
                     {"step_id": "image", "surface": "PIL.Image", "operation": "new",
                      "receiver": None, "arguments": {"mode": literal(mode), "size": literal(size)}},
@@ -43748,7 +43477,6 @@ def putpixel_input_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                             "case_id": f"{surface_id}.putpixel.nuanced.palette-audit-{mode}-{palette_mode}-{count}-{index}-{xy[0]}",
                             "surface": surface_id, "operation": "putpixel",
                             "covers": [f"{surface_id}.putpixel.behavior.default"],
-                            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
                             "assets": [], "steps": [
                                 {"step_id": "image", "surface": "PIL.Image", "operation": "new",
                                  "receiver": None, "arguments": {"mode": literal(mode), "size": literal([2, 2])}},
@@ -43795,7 +43523,6 @@ def convert_mode_audit_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         return {"case_id": f"{surface_id}.convert.nuanced.mode-audit-{mode}-to-{target}-{label}",
                 "surface": surface_id, "operation": "convert",
                 "covers": [f"{surface_id}.convert.behavior.default"],
-                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
                 "assets": assets, "steps": steps, "observations": ["call", "materialize"]}
 
     for mode, channels in modes.items():
@@ -43845,7 +43572,6 @@ def rgba_to_pa_performance_parity_cases(surface_id: str) -> list[dict[str, Any]]
                 f"{surface_id}.convert.behavior.default",
                 f"{surface_id}.convert.performance.standard",
             ],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "rgba-noise",
@@ -43908,7 +43634,6 @@ def pa_to_rgba_performance_parity_cases(surface_id: str) -> list[dict[str, Any]]
                 f"{surface_id}.convert.behavior.default",
                 f"{surface_id}.convert.performance.standard",
             ],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "pa-pixels",
@@ -43980,7 +43705,6 @@ def rgb_to_l_performance_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 f"{surface_id}.convert.behavior.default",
                 f"{surface_id}.convert.performance.standard",
             ],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "rgb-pixels",
@@ -44042,7 +43766,6 @@ def l_to_rgb_performance_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 f"{surface_id}.convert.behavior.default",
                 f"{surface_id}.convert.performance.standard",
             ],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "l-pixels",
@@ -44104,7 +43827,6 @@ def l_to_rgba_performance_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 f"{surface_id}.convert.behavior.default",
                 f"{surface_id}.convert.performance.standard",
             ],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "l-pixels",
@@ -44166,7 +43888,6 @@ def rgb_to_rgba_performance_parity_cases(surface_id: str) -> list[dict[str, Any]
                 f"{surface_id}.convert.behavior.default",
                 f"{surface_id}.convert.performance.standard",
             ],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "rgb-pixels",
@@ -44221,7 +43942,6 @@ def getbbox_f_signed_zero_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": surface_id,
             "operation": "getbbox",
             "covers": [f"{surface_id}.getbbox.behavior.default"],
-            "target_profiles": ["python-cpu"],
             "assets": [
                 {
                     "id": "f-negative-zero-sample",
@@ -44260,11 +43980,9 @@ def getbbox_f_signed_zero_parity_cases(surface_id: str) -> list[dict[str, Any]]:
 def getprojection_performance_parity_cases(
     surface_id: str,
 ) -> list[dict[str, Any]]:
-    """Exercise multi-backend getprojection scans at dense and tail sizes."""
+    """Build dense and tail GetProjection cases for the selected runner backend."""
     if surface_id != "PIL.Image.Image":
         return []
-
-    target_profiles = ["python-cpu", "python-simd", "python-gpu"]
 
     def case(
         suffix: str,
@@ -44312,7 +44030,6 @@ def getprojection_performance_parity_cases(
             "surface": surface_id,
             "operation": "getprojection",
             "covers": [f"{surface_id}.getprojection.performance.standard"],
-            "target_profiles": target_profiles.copy(),
             "assets": [],
             "steps": steps,
             "observations": ["call"],
@@ -44448,7 +44165,6 @@ def getprojection_cmyk_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "surface": surface_id,
                 "operation": "getprojection",
                 "covers": [f"{surface_id}.getprojection.behavior.default"],
-                "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
                     {
@@ -44490,7 +44206,6 @@ def getprojection_cmyk_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": surface_id,
             "operation": "getprojection",
             "covers": [f"{surface_id}.getprojection.behavior.default"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 {
@@ -44560,7 +44275,6 @@ def getprojection_cmyk_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": surface_id,
             "operation": "getprojection",
             "covers": [f"{surface_id}.getprojection.behavior.default"],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": sparse_steps,
             "observations": ["call"],
@@ -44580,7 +44294,6 @@ def cmyk_to_rgb_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": surface_id,
             "operation": "convert",
             "covers": [f"{surface_id}.convert.behavior.default"],
-            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
             "assets": [],
             "steps": [
                 {
@@ -44645,7 +44358,6 @@ def cmyk_to_1_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         "surface": surface_id,
         "operation": "convert",
         "covers": [f"{surface_id}.convert.parameter.dither"],
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         "assets": [
             {
                 "id": "cmyk-binary-threshold-boundaries",
@@ -44692,7 +44404,6 @@ def cmyk_to_1_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": surface_id,
             "operation": "convert",
             "covers": [f"{surface_id}.convert.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [],
             "steps": [
                 {
@@ -44738,15 +44449,12 @@ def cmyk_grayscale_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         name: str,
         size: list[int],
         color: list[int],
-        target_profiles: list[str] | None = None,
     ) -> dict[str, Any]:
         return {
             "case_id": f"{surface_id}.grayscale.nuanced.{name}",
             "surface": surface_id,
             "operation": "grayscale",
             "covers": [f"{surface_id}.grayscale.behavior.default"],
-            "target_profiles": target_profiles
-            or ["python-cpu", "python-simd", "python-gpu"],
             "assets": [],
             "steps": [
                 {
@@ -44797,7 +44505,6 @@ def cmyk_grayscale_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": surface_id,
             "operation": "grayscale",
             "covers": [f"{surface_id}.grayscale.behavior.default"],
-            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
             "assets": [
                 {
                     "id": "cmyk-pixels",
@@ -44843,7 +44550,6 @@ def cmyk_grayscale_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "device-grid-boundary-cmyk-4096x4096",
             [4096, 4096],
             [13, 89, 210, 31],
-            target_profiles=["python-cpu", "python-gpu"],
         )
     )
     return cases
@@ -44898,7 +44604,7 @@ def rotate_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "case_id": f"{surface_id}.rotate.nuanced.modes-{mode}-{resample}-{name}",
                     "surface": surface_id, "operation": "rotate",
                     "covers": [f"{surface_id}.rotate.behavior.default"],
-                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                     "assets": assets,
                     "steps": steps, "observations": ["call", "materialize"],
                 })
     return cases
@@ -44957,7 +44663,7 @@ def transform_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "case_id": f"{surface_id}.transform.nuanced.modes-{mode}-{resample}-{name}",
                     "surface": surface_id, "operation": "transform",
                     "covers": [f"{surface_id}.transform.behavior.default"],
-                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                     "assets": assets,
                     "steps": steps, "observations": ["call", "materialize"],
                 })
     # Fixed-point selection differs from direct f64 coordinates only after
@@ -45013,7 +44719,7 @@ def resize_argument_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "case_id": f"{surface_id}.resize.nuanced.arguments-{mode}-{resample}-{name}",
                     "surface": surface_id, "operation": "resize",
                     "covers": [f"{surface_id}.resize.parameter.{parameter}"],
-                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                     "assets": assets,
                     "steps": steps, "observations": ["call", "materialize"],
                 })
     return cases
@@ -45075,7 +44781,7 @@ def resize_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                         "case_id": f"{surface_id}.resize.nuanced.modes-{mode}-{geometry}-{resample}-{name}",
                         "surface": surface_id, "operation": "resize",
                         "covers": [f"{surface_id}.resize.behavior.default"],
-                        "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                         "assets": assets,
                         "steps": steps, "observations": ["call", "materialize"],
                     })
 
@@ -45112,7 +44818,6 @@ def resize_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "surface": surface_id,
                     "operation": "resize",
                     "covers": [f"{surface_id}.resize.behavior.default"],
-                    "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                     "assets": [asset],
                     "steps": [
                         {
@@ -45170,7 +44875,6 @@ def f_boxed_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, 
             "surface": surface_id,
             "operation": "resize",
             "covers": [f"{surface_id}.resize.parameter.box"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "pixels",
@@ -45222,7 +44926,6 @@ def f_boxed_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, 
             "surface": surface_id,
             "operation": "resize",
             "covers": [f"{surface_id}.resize.parameter.box"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "pixels",
@@ -45297,7 +45000,6 @@ def f_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": surface_id,
             "operation": "resize",
             "covers": [f"{surface_id}.resize.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "pixels",
@@ -45364,7 +45066,6 @@ def i_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": surface_id,
             "operation": "resize",
             "covers": [f"{surface_id}.resize.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "pixels",
@@ -45437,7 +45138,6 @@ def i_filter_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         "surface": surface_id,
         "operation": "filter",
         "covers": [f"{surface_id}.filter.behavior.default"],
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         "assets": [
             {
                 "id": "pixels",
@@ -45559,7 +45259,6 @@ def l_filter_materialized_parity_cases(
             "surface": surface_id,
             "operation": "filter",
             "covers": [f"{surface_id}.filter.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 {
                     "id": "pixels",
@@ -45667,7 +45366,6 @@ def la_filter_materialized_parity_cases(
             "surface": surface_id,
             "operation": "filter",
             "covers": [f"{surface_id}.filter.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [asset],
             "steps": [
                 {
@@ -45815,7 +45513,6 @@ def la_filter3x3_materialized_parity_cases(
             "surface": surface_id,
             "operation": "filter",
             "covers": [f"{surface_id}.filter.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [asset],
             "steps": [
                 {
@@ -45949,7 +45646,7 @@ def grayscale_premultiplied_parity_cases(surface_id: str) -> list[dict[str, Any]
                 "case_id": f"{surface_id}.{operation}.nuanced.grayscale-premultiplied-{mode}-{width}",
                 "surface": surface_id, "operation": operation,
                 "covers": [f"{surface_id}.{operation}.behavior.default"],
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                 "assets": assets,
                 "steps": steps, "observations": ["image", "call", "materialize"],
             })
     return cases
@@ -45980,7 +45677,6 @@ def lab_constructor_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "case_id": f"PIL.Image.{operation}.nuanced.lab-blend-setup-{size[0]}x{size[1]}",
             "surface": surface_id, "operation": operation,
             "covers": [f"PIL.Image.{operation}.behavior.default"],
-            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
             "assets": assets,
             "steps": [{"step_id": "call", "surface": surface_id, "operation": operation,
                        "receiver": None, "arguments": arguments}],
@@ -46017,7 +45713,6 @@ def frombytes_bytearray_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "surface": surface_id,
                 "operation": "frombytes",
                 "covers": covers,
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "assets": [
                     {"id": asset_id, "kind": "builtin", "name": asset_name}
                 ],
@@ -46075,7 +45770,7 @@ def image_blend_native_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         source(mode1, 'first', 29)
         source(mode2, 'second', 163)
         steps.extend([{'step_id': 'call', 'surface': 'PIL.Image', 'operation': 'blend', 'receiver': None, 'arguments': {'im1': binding('first'), 'im2': binding('second'), 'alpha': literal(alpha)}}, {'step_id': 'materialize', 'surface': 'PIL.Image.Image', 'operation': 'tobytes', 'receiver': binding('call'), 'arguments': {}}])
-        return {'case_id': f'PIL.Image.blend.nuanced.native-{mode1}-{mode2}-{label}', 'surface': 'PIL.Image', 'operation': 'blend', 'covers': ['PIL.Image.blend.behavior.default'], 'target_profiles': ['python-cpu', 'python-simd', 'python-gpu'], 'assets': assets, 'steps': steps, 'observations': ['call', 'materialize']}
+        return {'case_id': f'PIL.Image.blend.nuanced.native-{mode1}-{mode2}-{label}', 'surface': 'PIL.Image', 'operation': 'blend', 'covers': ['PIL.Image.blend.behavior.default'],  'assets': assets, 'steps': steps, 'observations': ['call', 'materialize']}
     for mode in modes:
         for (factor_index, alpha) in enumerate((-1, 0, 0.3, 0.7, 1, 1.2, 3.33333)):
             cases.append(make_case(mode, mode, alpha, f'factor{factor_index}'))
@@ -46125,7 +45820,6 @@ def solarize_threshold_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         return {"case_id": f"{surface_id}.solarize.nuanced.audit-{mode}-{label}",
                 "surface": surface_id, "operation": "solarize",
                 "covers": [f"{surface_id}.solarize.behavior.default"],
-                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
                 "assets": assets, "steps": steps, "observations": ["call", "materialize"]}
 
     modes = {"1": 0, "L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "RGBa": 4, "La": 2,
@@ -46207,7 +45901,6 @@ def contrast_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "case_id": f"{surface_id}.enhance.nuanced.audit-{mode}-{label}-{factor}",
             "surface": surface_id, "operation": "enhance",
             "covers": [f"{surface_id}.enhance.behavior.default"],
-            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
             "assets": [{"id": "pixels", "kind": "inline", "encoding": "base64",
                         "data": base64.b64encode(raw).decode(),
                         "sha256": hashlib.sha256(raw).hexdigest(),
@@ -46272,7 +45965,6 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "surface": target,
                 "operation": "enhance",
                 "covers": [f"{target}.enhance.parameter.factor"],
-                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
                 "assets": [
                     {
                         "id": "pixels",
@@ -46347,7 +46039,6 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "surface": target,
                     "operation": "enhance",
                     "covers": [f"{target}.enhance.parameter.factor"],
-                    "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
                     "assets": [
                         {
                             "id": "pixels",
@@ -46446,7 +46137,6 @@ def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "surface": target,
                 "operation": "paste",
                 "covers": [f"{target}.paste.behavior.default"],
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "assets": [
                     asset(destination_asset, destination_raw),
                     asset(source_asset, source_raw),
@@ -46525,7 +46215,6 @@ def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": target,
             "operation": "paste",
             "covers": [f"{target}.paste.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 inline_asset(destination_asset, destination_raw),
                 inline_asset(source_asset, source_raw),
@@ -46618,7 +46307,6 @@ def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": target,
             "operation": "paste",
             "covers": [f"{target}.paste.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 inline_asset(rgb_destination_asset, rgb_destination_raw),
                 inline_asset(rgb_source_asset, rgb_source_raw),
@@ -46718,7 +46406,6 @@ def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": target,
             "operation": "paste",
             "covers": [f"{target}.paste.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 inline_asset(la_destination_asset, la_destination_raw),
                 inline_asset(la_source_asset, la_source_raw),
@@ -46840,7 +46527,6 @@ def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": target,
             "operation": "paste",
             "covers": [f"{target}.paste.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": [
                 inline_asset(even_destination_asset, even_destination_raw),
                 inline_asset(even_source_asset, even_source_raw),
@@ -46923,7 +46609,6 @@ def quantize_fast_octree_rgb_performance_parity_cases(
             "surface": target,
             "operation": "quantize",
             "covers": [f"{target}.quantize.parameter.method"],
-            "target_profiles": ["python-cpu"],
             "assets": [
                 {
                     "id": "pixels",
@@ -47015,7 +46700,7 @@ def alpha_composite_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         return {"case_id": f"{surface_id}.alpha_composite.nuanced.pixels-{mode}-{label}",
                 "surface": surface_id, "operation": "alpha_composite",
                 "covers": [f"{surface_id}.alpha_composite.behavior.default"],
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                 "assets": assets,
                 "steps": steps, "observations": ["call", "materialize", "source_bytes"]}
 
     for mode in ("LA", "RGBA"):
@@ -47140,7 +46825,6 @@ def composite_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "surface": surface_id,
             "operation": "composite",
             "covers": [f"{surface_id}.composite.behavior.default"],
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "assets": assets,
             "steps": steps,
             "observations": ["call", "materialize"],
@@ -47277,7 +46961,7 @@ def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         return {"case_id": f"{surface_id}.{operation}.nuanced.{mode}-{label}",
                 "surface": surface_id, "operation": operation,
                 "covers": [f"{surface_id}.{operation}.behavior.default"],
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                 "assets": assets,
                 "steps": steps, "observations": ["call", "materialize"]}
 
     for mode, channels in modes.items():
@@ -47455,7 +47139,7 @@ def chops_clipped_dimensions_parity_cases(surface_id: str) -> list[dict[str, Any
                     "case_id": f"{surface_id}.{operation}.nuanced.clipped-{mode.lower()}-{left_size[0]}",
                     "surface": surface_id, "operation": operation,
                     "covers": [f"{surface_id}.{operation}.behavior.default"],
-                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                     "assets": assets,
                     "steps": steps, "observations": ["call", "materialize"],
                 })
     return cases
@@ -47500,7 +47184,7 @@ def chops_affine_rounding_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "case_id": f"{surface_id}.{operation}.nuanced.float32-domain-{mode.lower()}-{scale}-{offset}",
                     "surface": surface_id, "operation": operation,
                     "covers": [f"{surface_id}.{operation}.parameter.scale"],
-                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                     "assets": assets,
                     "steps": steps, "observations": ["call", "materialize"],
                 })
     return cases
@@ -47542,7 +47226,7 @@ def blend_rounding_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "case_id": f"{surface_id}.blend.nuanced.fused-float32-{mode.lower()}-{alpha}",
                 "surface": surface_id, "operation": "blend",
                 "covers": [f"{surface_id}.blend.behavior.default"],
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                 "assets": assets,
                 "steps": steps, "observations": ["call", "materialize"],
             })
     return cases
@@ -47590,7 +47274,7 @@ def autocontrast_rounding_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "case_id": f"PIL.ImageOps.autocontrast.nuanced.binary64-{mode.lower()}-{low}-{high}-{'mask' if masked else 'full'}",
                     "surface": "PIL.ImageOps", "operation": "autocontrast",
                     "covers": ["PIL.ImageOps.autocontrast.behavior.default"],
-                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                     "assets": assets,
                     "steps": steps, "observations": ["call", "materialize"],
                 })
     return cases
@@ -47647,7 +47331,7 @@ def equalize_mask_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "case_id": f"PIL.ImageOps.equalize.nuanced.histogram-mask-{mode.lower()}-{mask_mode.lower()}-{pattern}",
                     "surface": "PIL.ImageOps", "operation": "equalize",
                     "covers": ["PIL.ImageOps.equalize.parameter.mask"],
-                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                     "assets": assets,
                     "steps": steps, "observations": ["call", "materialize"],
                 })
     return cases
@@ -47683,7 +47367,6 @@ def filtered_alpha_transform_parity_cases(surface_id: str) -> list[dict[str, Any
                 "case_id": f"{surface_id}.transform.nuanced.filtered-alpha-{mode.lower()}-{name}",
                 "surface": surface_id, "operation": "transform",
                 "covers": [f"{surface_id}.transform.behavior.default"],
-                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
                 "assets": [{
                     "id": "alpha-source", "kind": "inline", "encoding": "base64",
                     "data": base64.b64encode(source).decode("ascii"),
@@ -47737,7 +47420,7 @@ def constructor_and_raw_export_parity_cases(
                 "case_id": f"{surface_id}.new.nuanced.{name}",
                 "surface": surface_id, "operation": "new",
                 "covers": [f"{surface_id}.new.behavior.default"],
-                "target_profiles": profiles, "assets": [],
+                 "assets": [],
                 "steps": [{
                     "step_id": "source", "surface": surface_id,
                     "operation": "new", "receiver": None,
@@ -47786,7 +47469,6 @@ def constructor_and_raw_export_parity_cases(
             "case_id": f"{surface_id}.tobytes.nuanced.shared-owned-{slug(mode)}",
             "surface": surface_id, "operation": "tobytes",
             "covers": [f"{surface_id}.tobytes.behavior.default"],
-            "target_profiles": profiles,
             "assets": [{
                 "id": "raw-source", "kind": "inline", "encoding": "base64",
                 "data": base64.b64encode(data).decode("ascii"),
@@ -47904,7 +47586,6 @@ def transpose_tiled_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "case_id": f"{surface_id}.transpose.nuanced.tiled-{name}",
             "surface": surface_id, "operation": "transpose",
             "covers": [f"{surface_id}.transpose.behavior.default"],
-            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
             "assets": [{
                 "id": "transpose-source", "kind": "inline", "encoding": "base64",
                 "data": base64.b64encode(data).decode("ascii"),
@@ -48019,7 +47700,6 @@ def transpose_tiled_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "case_id": f"{surface_id}.transpose.nuanced.metadata-{assignment}-{method}",
                 "surface": surface_id, "operation": "transpose",
                 "covers": [f"{surface_id}.transpose.behavior.default"],
-                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
                 "assets": [],
                 "steps": [{
                     "step_id": "transposed", "surface": surface_id,
@@ -48070,7 +47750,6 @@ def transpose_tiled_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "case_id": f"{surface_id}.transpose.nuanced.metadata-webp-{int(loaded)}-{method}",
                 "surface": surface_id, "operation": "transpose",
                 "covers": [f"{surface_id}.transpose.behavior.default"],
-                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
                 "assets": [{"id": "webp-source", "kind": "builtin",
                             "name": "encoded-webp-input"}],
                 "steps": steps,
@@ -48116,7 +47795,7 @@ def release_cleanup_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "case_id": f"pipeline-composition.eval-fusion-release-{mode.lower()}",
             "surface": surface_id, "operation": "point",
             "covers": [f"{surface_id}.point.behavior.default"],
-            "target_profiles": [TARGET_PROFILE], "assets": [], "steps": steps,
+             "assets": [], "steps": steps,
             "observations": [receiver, "materialize"],
         })
     return cases
@@ -49380,7 +49059,6 @@ def build_pipeline_parity_case(
     identity = {
         "surface": spec.surface,
         "operation": spec.operation,
-        "target_profiles": [TARGET_PROFILE],
         "assets": workflow["assets"],
         "steps": workflow["steps"],
         "observations": workflow["observations"],
@@ -49398,7 +49076,6 @@ def build_pipeline_parity_case(
         "surface": spec.surface,
         "operation": spec.operation,
         "covers": [requirement_id],
-        "target_profiles": [TARGET_PROFILE],
         "assets": workflow["assets"],
         "steps": workflow["steps"],
         "observations": workflow["observations"],
@@ -49466,7 +49143,6 @@ def _filter_blur_rgb_noise_parity_case(
         "surface": "PIL.Image.Image",
         "operation": "filter",
         "covers": required_covers,
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         "assets": [pixels],
         "steps": [
             {
@@ -49605,7 +49281,6 @@ def _terminal_scalar_no_run_parity_case(
         "surface": "PIL.Image.Image",
         "operation": "getcolors",
         "covers": [parity_requirement, getcolors_requirement],
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         "assets": [
             {
                 "id": "scalar-no-adjacent-l-png",
@@ -49726,7 +49401,6 @@ def _signed_run_getcolors_parity_cases(
             "surface": "PIL.Image.Image",
             "operation": "getcolors",
             "covers": [parity_requirement],
-            "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
                 {
@@ -49909,7 +49583,6 @@ def _scalar_run_edge_getcolors_parity_case(
         "surface": "PIL.Image.Image",
         "operation": "getcolors",
         "covers": [parity_requirement],
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         "assets": [],
         "steps": steps,
         "observations": observations,
@@ -49959,7 +49632,6 @@ def _f_nan_payload_getcolors_parity_case(
         "surface": "PIL.Image.Image",
         "operation": "getcolors",
         "covers": [parity_requirement],
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         "assets": [
             {
                 "id": "f-nan-payload-samples",
@@ -50122,7 +49794,6 @@ def _terminal_scalar_analysis_parity_case(
         "surface": "PIL.Image.Image",
         "operation": "getcolors",
         "covers": parity_covers,
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         **workflow,
     }
 
@@ -50544,7 +50215,6 @@ def _gaussian_rgba_material_parity_case(
         "covers": [
             _performance_requirement(operations, "PIL.Image.Image", "filter")
         ],
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         "assets": workflow["assets"],
         "steps": workflow["steps"],
         "observations": workflow["observations"],
@@ -50570,7 +50240,6 @@ def _gaussian_rgba_noise_parity_case(
         "covers": [
             _performance_requirement(operations, "PIL.Image.Image", "filter")
         ],
-        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         "assets": workflow["assets"],
         "steps": workflow["steps"],
         "observations": workflow["observations"],
@@ -50643,7 +50312,6 @@ def _gaussian_rgba_sparse_guard_parity_case(
         "covers": [
             _performance_requirement(operations, "PIL.Image.Image", "filter")
         ],
-        "target_profiles": [TARGET_PROFILE],
         "assets": workflow["assets"],
         "steps": workflow["steps"],
         "observations": workflow["observations"],
@@ -50868,8 +50536,6 @@ def _transpose_tiled_benchmark_workloads(
     for name, case_suffix in definitions:
         case_id = f"PIL.Image.Image.transpose.nuanced.tiled-{case_suffix}"
         case = cases_by_id[case_id]
-        if set(case["target_profiles"]) != set(BENCHMARK_TARGET_PROFILES):
-            raise ValueError(f"transpose benchmark requires all backend profiles: {case_id}")
         transpose_steps = [step["step_id"] for step in case["steps"]
                            if step["operation"] == "transpose"]
         context = _workflow_benchmark_context(
@@ -55179,6 +54845,7 @@ def build_inputs(
     generated = {"parity": set(), "coverage": set(), "benchmark": set()}
     case_by_requirement: dict[str, str] = {}
     all_cases_by_id: dict[str, dict[str, Any]] = {}
+    all_case_aliases: dict[str, str] = {}
     counts = {
         "parity_cases": 0,
         "coverage_plans": 0,
@@ -55190,10 +54857,12 @@ def build_inputs(
         operations,
         active_assets_root,
     )
+    if any("target_profiles" in case for case in crash_quarantine_cases):
+        raise ValueError("crash-quarantine cases cannot declare target profiles")
     write_json(
         output_root / CRASH_QUARANTINE_RELATIVE,
         {
-            "schema": "migration-parity/crash-quarantine-input@1",
+            "schema": "migration-parity/crash-quarantine-input@2",
             "status": "quarantined",
             "active": False,
             "execution": "manual",
@@ -55274,21 +54943,29 @@ def build_inputs(
             )
             if f_resize_requirement not in f_resize_case["covers"]:
                 f_resize_case["covers"].append(f_resize_requirement)
-        existing_signatures = {case_signature(case) for case in parity_cases}
+        existing_cases_by_signature = {
+            case_signature(case): case for case in parity_cases
+        }
+        existing_signatures = set(existing_cases_by_signature)
+        pre_merge_case_aliases: dict[str, str] = {}
         added_nuanced_cases = 0
         appended_nuanced: list[dict[str, Any]] = []
         for nuanced_case in nuanced_cases:
             signature = case_signature(nuanced_case)
-            if signature not in existing_signatures:
+            retained = existing_cases_by_signature.get(signature)
+            if retained is None:
                 parity_cases.append(nuanced_case)
+                existing_cases_by_signature[signature] = nuanced_case
                 existing_signatures.add(signature)
                 appended_nuanced.append(nuanced_case)
                 added_nuanced_cases += 1
-        add_parallel_cpu_parity_profiles(
-            surface_id,
-            parity_cases,
-            case_by_requirement,
-        )
+            else:
+                pre_merge_case_aliases[nuanced_case["case_id"]] = retained[
+                    "case_id"
+                ]
+                retained["covers"] = list(
+                    dict.fromkeys([*retained["covers"], *nuanced_case["covers"]])
+                )
         pipeline_case_pool = {
             **all_cases_by_id,
             **{case["case_id"]: case for case in parity_cases},
@@ -55361,7 +55038,6 @@ def build_inputs(
                     "PIL.Image.Image.mode.performance.standard",
                     "PIL.Image.Image.size.performance.standard",
                 ],
-                "target_profiles": ["python-cpu"],
                 "assets": [],
                 "steps": [
                     {
@@ -55426,10 +55102,7 @@ def build_inputs(
         # The seeded-corner composed workflows are parity-only performance
         # inputs. Keep them out of `appended_nuanced` so managed coverage
         # selection and its object list remain unchanged.
-        for channel_case in seeded_corner_parity_cases(
-            surface_id,
-            BENCHMARK_TARGET_PROFILES,
-        ):
+        for channel_case in seeded_corner_parity_cases(surface_id):
             signature = case_signature(channel_case)
             if signature not in existing_signatures:
                 parity_cases.append(channel_case)
@@ -55501,9 +55174,19 @@ def build_inputs(
         # Benchmark smoke aliases must share the same execution as an
         # existing parity workflow when their only difference is step labels.
         parity_cases, case_aliases = merge_workflow_aliases(parity_cases)
+        case_aliases = {**pre_merge_case_aliases, **case_aliases}
+        for alias, canonical in list(case_aliases.items()):
+            while canonical in case_aliases and case_aliases[canonical] != canonical:
+                canonical = case_aliases[canonical]
+            case_aliases[alias] = canonical
+        all_case_aliases.update(case_aliases)
         duplicate_count += len(case_aliases)
 
         for case in parity_cases:
+            if "target_profiles" in case:
+                raise ValueError(
+                    f"parity case {case['case_id']} declares target profiles"
+                )
             case_id = case["case_id"]
             if case_id in all_cases_by_id:
                 raise ValueError(f"parity case mapped twice: {case_id}")
@@ -55514,7 +55197,7 @@ def build_inputs(
         write_json(
             parity_path,
             {
-                "schema": "migration-parity/parity-input@1",
+                "schema": "migration-parity/parity-input@2",
                 "cases": parity_cases,
             },
         )
@@ -57420,10 +57103,24 @@ def build_inputs(
         counts["benchmark_suites"] += len(suites)
 
     pipeline_relative = "inputs/benchmark/pipeline-operations.json"
+    pipeline_case_pool = dict(all_cases_by_id)
+    pipeline_case_pool.update(
+        {
+            alias: all_cases_by_id[canonical]
+            for alias, canonical in all_case_aliases.items()
+            if canonical in all_cases_by_id
+        }
+    )
     pipeline_document = build_pipeline_benchmark_document(
         operations,
-        all_cases_by_id,
+        pipeline_case_pool,
     )
+    for workload in pipeline_document["workloads"]:
+        input_spec = workload.get("input", {})
+        if input_spec.get("kind") == "parity_case":
+            case_id = input_spec.get("case_id")
+            if isinstance(case_id, str):
+                input_spec["case_id"] = all_case_aliases.get(case_id, case_id)
     excluded_ids = set(BENCHMARK_DEFAULT_EXCLUSIONS)
     pipeline_document["workloads"] = [
         workload
@@ -57469,7 +57166,7 @@ def main() -> None:
         "--manifest",
         type=Path,
         default=DEFAULT_MANIFEST,
-        help="Fixed manifest@2 path.",
+        help="Fixed manifest@3 path.",
     )
     parser.add_argument(
         "--output-root",

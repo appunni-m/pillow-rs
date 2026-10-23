@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the fixed project-wide migration-parity manifest.
 
-This is a deterministic migration aid for the initial manifest@2 conversion.
+This is a deterministic migration aid for the manifest@3 conversion.
 It joins the frozen deprecated authority inventory with the pinned Pillow
 12.2.0 public signatures and the current public PIL facade signatures backed
 by the internal pillow_rs binding.
@@ -34,18 +34,6 @@ from migration_parity_inventory import (
     load_authority,
 )
 
-try:
-    from migration_parity.parallel_cpu_inputs import (
-        PARALLEL_CPU_PROFILE,
-        parallel_cpu_contract_for_operation,
-    )
-except ModuleNotFoundError:
-    from scripts.migration_parity.parallel_cpu_inputs import (
-        PARALLEL_CPU_PROFILE,
-        parallel_cpu_contract_for_operation,
-    )
-
-
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = (
     WORKSPACE_ROOT / "pillow-rs" / "tests" / "fixtures" / "manifest.yaml"
@@ -64,11 +52,6 @@ BENCHMARK_TARGET_PROFILE_OVERRIDES = {
     "PIL.Image.Image.getprojection": ["python-cpu", "python-simd", "python-gpu"],
     "PIL.ImageChops.screen": ["python-cpu", "python-simd", "python-gpu"],
     "PIL.Image.Image.filter": ["python-cpu", "python-simd"],
-}
-PARITY_TARGET_PROFILE_OVERRIDES = {
-    "PIL.Image.Image.getprojection": ["python-cpu", "python-simd", "python-gpu"],
-    "PIL.ImageChops.screen": ["python-cpu", "python-simd", "python-gpu"],
-    "PIL.ImageOps.posterize": ["python-cpu", PARALLEL_CPU_PROFILE],
 }
 CPU_ONLY_API_BENCHMARK_ENDPOINTS = {
     "PIL.Image.Image::show",
@@ -777,15 +760,12 @@ def requirement(
     dimension: str,
     description: str,
     lanes: list[str],
-    *,
-    target_profiles: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": requirement_id,
         "dimension": dimension,
         "description": description,
         "lanes": lanes,
-        "target_profiles": list(target_profiles or [TARGET_PROFILE]),
     }
 
 
@@ -821,6 +801,7 @@ def operation_requirements(
     row_map: dict[str, dict[str, Any]],
     *,
     benchmark_applicable: bool,
+    coverage_applicable: bool,
 ) -> list[dict[str, Any]]:
     prefix = requirement_prefix(endpoint)
     requirements = [
@@ -873,19 +854,6 @@ def operation_requirements(
                 ["parity", "coverage"],
             )
         )
-        if endpoint.source_path == "PIL.ImageChops.screen":
-            requirements.append(
-                requirement(
-                    f"{prefix}.backend.gpu-mode-{slug(str(mode))}",
-                    "backend",
-                    (
-                        "Exact public Screen output parity through the native "
-                        f"GPU path for mode {mode!r}."
-                    ),
-                    ["parity"],
-                    target_profiles=["python-gpu"],
-                )
-            )
     if endpoint.source_path == "PIL.Image.Image.histogram":
         # The target keeps an unsigned-16-bit histogram path that predates the
         # frozen authority row. Preserve its existing public requirement in
@@ -937,33 +905,21 @@ def operation_requirements(
                 ["parity", "coverage"],
             )
         )
-    parallel_cpu_contract = parallel_cpu_contract_for_operation(
-        endpoint.source_path
-    )
-    if parallel_cpu_contract is not None:
-        requirements.append(
-            requirement(
-                parallel_cpu_contract["requirement_id"],
-                "backend",
-                parallel_cpu_contract["description"],
-                ["parity"],
-                target_profiles=[PARALLEL_CPU_PROFILE],
-            )
-        )
     if benchmark_applicable:
-        benchmark_profiles = benchmark_target_profiles(endpoint)
         requirements.append(
             requirement(
                 f"{prefix}.performance.standard",
                 "performance",
                 f"Deterministic standard workload for {endpoint.source_path}.",
                 ["parity", "benchmark"],
-                target_profiles=benchmark_profiles,
             )
         )
     ids = [item["id"] for item in requirements]
     if len(ids) != len(set(ids)):
         raise ValueError(f"{endpoint.id}: duplicate requirement IDs")
+    if not coverage_applicable:
+        for item in requirements:
+            item["lanes"] = [lane for lane in item["lanes"] if lane != "coverage"]
     return requirements
 
 
@@ -1141,13 +1097,14 @@ def operation_contract(
             if parameter["id"] == "fillcolor":
                 add_unique(parameter["value_types"], "any_json")
     benchmark_applicable = endpoint.kind != "constant"
+    coverage_exclusion_reason = COVERAGE_NOT_APPLICABLE_ENDPOINTS.get(endpoint.id)
     requirements = operation_requirements(
         endpoint,
         parameters,
         row_map,
         benchmark_applicable=benchmark_applicable,
+        coverage_applicable=coverage_exclusion_reason is None,
     )
-    coverage_exclusion_reason = COVERAGE_NOT_APPLICABLE_ENDPOINTS.get(endpoint.id)
     target_path, target = resolve_target(endpoint)
     if (
         target is not None
@@ -1195,14 +1152,7 @@ def operation_contract(
             }
         ],
         "requirements": requirements,
-        "parity": {
-            "applicability": "required",
-            "target_profiles": list(
-                PARITY_TARGET_PROFILE_OVERRIDES.get(
-                    endpoint.source_path, [TARGET_PROFILE]
-                )
-            ),
-        },
+        "parity": {"applicability": "required"},
         "coverage": (
             {
                 "applicability": "not_applicable",
@@ -1329,7 +1279,7 @@ def build_manifest() -> dict[str, Any]:
     input_index["benchmark"].append("inputs/benchmark/pipeline-operations.json")
 
     return {
-        "schema": "migration-parity/manifest@2",
+        "schema": "migration-parity/manifest@3",
         "scope": {
             "id": "pillow-rs-selected-public-contract",
             "mode": "full",
@@ -1439,7 +1389,7 @@ def build_manifest() -> dict[str, Any]:
         ],
         "interfaces": {
             "parity": {
-                "input_schema": "migration-parity/parity-input@1",
+                "input_schema": "migration-parity/parity-input@2",
                 "result_schema": "migration-parity/parity-result@1",
                 "command_id": "parity",
             },
