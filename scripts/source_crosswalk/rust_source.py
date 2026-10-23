@@ -8,6 +8,7 @@ from typing import Any, Iterator
 
 PIPELINE_PATH = Path("pillow-rs/src/pipeline.rs")
 REGISTRY_PATH = Path("pillow-rs/src/compute/registry.rs")
+REGISTRATION_ROOT = Path("pillow-rs/src/compute/registry/registration")
 CPU_ROOT = Path("pillow-rs/src/compute/pool_cpu/ops")
 SIMD_ROOT = Path("pillow-rs/src/compute/pool_simd")
 SHADER_ROOT = Path("pillow-rs/src/compute/pool_gpu/shaders")
@@ -352,9 +353,67 @@ def parse_registry(source: str) -> tuple[list[dict[str, Any]], list[dict[str, An
     return registrations, simd_entries
 
 
+def parse_registry_modules(
+    sources: dict[str, str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Index operation registrations split across registry initializer modules."""
+    module_path = (REGISTRATION_ROOT / "mod.rs").as_posix()
+    module_source = sources[module_path]
+    draw_macro, _ = item_body(module_source, r"\bmacro_rules!\s+draw_entry\b")
+    draw_shader_match = re.search(r'"([^"\n]+\.wgsl)"', draw_macro)
+    draw_shader = draw_shader_match.group(1) if draw_shader_match else None
+
+    registrations = []
+    simd_entries = []
+    for path, source in sorted(sources.items()):
+        for call, offset in invocations(source, r"\bm\.insert\s*\("):
+            key_match = re.search(r'\(\s*"([A-Za-z0-9_]+)"', call)
+            if not key_match:
+                continue
+            shaders = re.findall(r'"([^"\n]+\.wgsl)"', call)
+            registrations.append(
+                {
+                    "key": key_match.group(1),
+                    "path": path,
+                    "line": line_number(source, offset),
+                    "text": call,
+                    "shader": shaders[-1] if shaders else None,
+                }
+            )
+        for call, offset in invocations(source, r"\bdraw_entry\s*!\s*"):
+            key_match = re.search(r'\(\s*[^,]+,\s*"([A-Za-z0-9_]+)"', call)
+            if key_match:
+                registrations.append(
+                    {
+                        "key": key_match.group(1),
+                        "path": path,
+                        "line": line_number(source, offset),
+                        "text": call,
+                        "shader": draw_shader,
+                    }
+                )
+        for call, offset in invocations(source, r"\bsimd_set\s*\("):
+            match = re.search(
+                r'\(\s*m\s*,\s*"([A-Za-z0-9_]+)"\s*,\s*adapters::([A-Za-z_][A-Za-z0-9_]*)\s*\)',
+                call,
+            )
+            if not match:
+                continue
+            simd_entries.append(
+                {
+                    "key": match.group(1),
+                    "symbol": match.group(2),
+                    "path": path,
+                    "line": line_number(source, offset),
+                }
+            )
+    return registrations, simd_entries
+
+
 def cpu_registration_imports(source: str) -> dict[str, str]:
     """Map local names imported from pool_cpu operation modules to their symbols."""
-    body, _ = item_body(source, r"\bfn\s+register_all\s*\(")
+    register_all = re.search(r"\bfn\s+register_all\s*\(", code_only(source))
+    body = item_body(source, r"\bfn\s+register_all\s*\(")[0] if register_all else source
     masked = code_only(body)
     imported: dict[str, str] = {}
     use_pattern = re.compile(

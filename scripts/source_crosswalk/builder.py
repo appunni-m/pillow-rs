@@ -28,9 +28,19 @@ from .pyo3_bindings import (
     python_native_calls,
 )
 from .rust_source import (
-    CPU_ROOT, PIPELINE_PATH, REGISTRY_PATH, SHADER_ROOT, SIMD_ROOT,
-    code_only, cpu_registration_imports, cpu_registration_references,
-    enum_variants, function_index, macro_generated_functions, parse_registry,
+    CPU_ROOT,
+    PIPELINE_PATH,
+    REGISTRATION_ROOT,
+    REGISTRY_PATH,
+    SHADER_ROOT,
+    SIMD_ROOT,
+    code_only,
+    cpu_registration_imports,
+    cpu_registration_references,
+    enum_variants,
+    function_index,
+    macro_generated_functions,
+    parse_registry_modules,
     variant_key_edges,
 )
 from .rust_modules import (
@@ -162,10 +172,16 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
     pyo3_index = PyO3Index(py_source_files(root), root)
     pipeline_source = (root / PIPELINE_PATH).read_text(encoding="utf-8")
     registry_source = (root / REGISTRY_PATH).read_text(encoding="utf-8")
+    registration_sources = {
+        path.relative_to(root).as_posix(): path.read_text(encoding="utf-8")
+        for path in sorted((root / REGISTRATION_ROOT).glob("*.rs"))
+    }
     variants = enum_variants(pipeline_source)
     mappings = variant_key_edges(registry_source)
-    registrations, simd_entries = parse_registry(registry_source)
-    cpu_imports = cpu_registration_imports(registry_source)
+    registrations, simd_entries = parse_registry_modules(registration_sources)
+    cpu_imports = cpu_registration_imports(
+        registration_sources[(REGISTRATION_ROOT / "prelude.rs").as_posix()]
+    )
     cpu_functions = function_index(root / CPU_ROOT, root)
     simd_functions = function_index(root / SIMD_ROOT, root)
     simd_generated = macro_generated_functions(root / SIMD_ROOT, root)
@@ -848,13 +864,14 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                     "flag": "duplicate_registry_registration",
                     "subject": key_id,
                     "evidence": [
-                        {"path": REGISTRY_PATH.as_posix(), "line": item["line"]}
+                        {"path": item["path"], "line": item["line"]}
                         for item in key_registrations
                     ],
                     "reason_for_review": "Multiple registry insertions use this key.",
                 }
             )
         for registration in key_registrations:
+            registration_path = registration["path"]
             referenced_cpu_names = cpu_registration_references(
                 registration["text"], cpu_imports
             )
@@ -864,7 +881,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                     {
                         "flag": "cpu_registration_function_unresolved",
                         "subject": key_id,
-                        "evidence": [{"path": REGISTRY_PATH.as_posix(), "line": registration["line"]}],
+                        "evidence": [{"path": registration_path, "line": registration["line"]}],
                         "reason_for_review": "The registry expression did not resolve to a function definition under pool_cpu/ops.",
                     }
                 )
@@ -874,7 +891,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                         {
                             "flag": "cpu_registration_function_unresolved",
                             "subject": f"{key_id}:{name}",
-                            "evidence": [{"path": REGISTRY_PATH.as_posix(), "line": registration["line"]}],
+                            "evidence": [{"path": registration_path, "line": registration["line"]}],
                             "reason_for_review": f"Imported CPU operation symbol {name!r} has no parsed definition under pool_cpu/ops.",
                         }
                     )
@@ -895,7 +912,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                             "from": key_id,
                             "relation": "registry_expression_references_cpu_function",
                             "to": symbol_id,
-                            "site": {"path": REGISTRY_PATH.as_posix(), "line": registration["line"]},
+                            "site": {"path": registration_path, "line": registration["line"]},
                             "evidence_kind": "function_symbol_reference",
                             "status": "static_source_registration",
                         }
@@ -918,7 +935,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                         "from": key_id,
                         "relation": "registers_default_gpu_shader",
                         "to": shader_id,
-                        "site": {"path": REGISTRY_PATH.as_posix(), "line": registration["line"]},
+                        "site": {"path": registration_path, "line": registration["line"]},
                         "evidence_kind": "gpu_entry_shader_literal",
                         "status": "conditional_registration",
                         "cfg": ["feature = gpu"],
@@ -930,7 +947,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                     {
                         "flag": "gpu_default_shader_unresolved",
                         "subject": key_id,
-                        "evidence": [{"path": REGISTRY_PATH.as_posix(), "line": registration["line"]}],
+                        "evidence": [{"path": registration_path, "line": registration["line"]}],
                         "reason_for_review": "No default shader literal was parsed; custom dispatch may select shader assets elsewhere.",
                     }
                 )
@@ -938,6 +955,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
     simd_by_key: dict[str, list[dict[str, Any]]] = {}
     registered_symbols = {entry["symbol"] for entry in simd_entries}
     for entry in simd_entries:
+        registration_path = entry["path"]
         simd_by_key.setdefault(entry["key"], []).append(entry)
         key_id = f"registry-key:{entry['key']}"
         adapter_id = f"simd-adapter:{entry['symbol']}"
@@ -948,7 +966,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                 {
                     "flag": "simd_adapter_definition_unresolved",
                     "subject": adapter_id,
-                    "evidence": [{"path": REGISTRY_PATH.as_posix(), "line": entry["line"]}],
+                    "evidence": [{"path": registration_path, "line": entry["line"]}],
                     "reason_for_review": "The registered SIMD adapter symbol has no parsed definition under pool_simd.",
                 }
             )
@@ -962,7 +980,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                     "from": key_id,
                     "relation": "registers_simd_adapter",
                     "to": adapter_id,
-                    "site": {"path": REGISTRY_PATH.as_posix(), "line": entry["line"]},
+                    "site": {"path": registration_path, "line": entry["line"]},
                     "evidence_kind": "simd_set_entry",
                     "status": "static_source_registration",
                 }
@@ -984,7 +1002,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                     "from": key_id,
                     "relation": "registers_simd_adapter",
                     "to": adapter_id,
-                    "site": {"path": REGISTRY_PATH.as_posix(), "line": entry["line"]},
+                    "site": {"path": registration_path, "line": entry["line"]},
                     "implementation_site": {
                         "path": generated_at["path"],
                         "line": generated_at["line"],

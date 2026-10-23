@@ -11,10 +11,8 @@ declared parity and benchmark inputs to Python bindings, PyO3 registration,
 pipeline variants, Rust module declarations, re-exports, and literal include
 references. Generate it with
 `make operation-source-crosswalk`; its ignored report is
-`target/operation-source-crosswalk.json`. Run
-`make operation-source-crosswalk-test` for the focused parser and completeness
-contracts. The generator's source parser and Rust module inventory are
-implemented in `scripts/source_crosswalk/`.
+`target/operation-source-crosswalk.json`. The generator's source parser and
+Rust module inventory are implemented in `scripts/source_crosswalk/`.
 
 The crosswalk is a static index. It does not evaluate `cfg` or Cargo feature
 sets, expand macros or procedural macros, inspect build output, establish
@@ -27,7 +25,48 @@ to be checked with generated fixture parity and fault-contract cases, using
 explicit case IDs and backend profiles. Static source checks remain inventory
 evidence and do not substitute for those fixture contracts.
 
-## Current operation-to-family and fixture snapshot — 2026-10-21
+## Current operation/source and fixture snapshot — 2026-10-23
+
+The schema-10 crosswalk was regenerated on dirty revision
+`955234cb39a39c0361535d3937377fe50b3290ca` after updating its static index for
+the split registry and PyO3 module layout. It read 831 source and fixture
+inputs with fingerprint
+`503e04961e2a8355924379abc23dfcbf9e1f22ed7cc3436d6aaa97d4264a21a9`. The
+ignored report `target/operation-source-crosswalk.json` has SHA-256
+`f58d0bd8388ded4a015bd1faafd11bc016bb519c0bbf8e58df3bbc26b8522f0e`.
+
+| Generated measure | Count |
+| --- | ---: |
+| Manifest operations mapped to Python | 212 / 212 |
+| Declared parity cases across public operations | 17,316 across all 212 |
+| Declared benchmark workloads across public operations | 996 across 209 |
+| Python native calls mapped to registered PyO3 declarations | 157 / 157 |
+| Direct PyO3 core API calls mapped | 103 / 103 |
+| Direct PyO3 receiver calls mapped | 35 / 97; 62 unresolved |
+| Pipeline variants / variant-key edges | 84 / 84 |
+| Registry keys / SIMD registrations | 81 / 81 |
+| Rust source files / files with static public routes | 593 / 73 |
+| Static graph edges without full route / files without graph edge | 30 / 490 |
+| Files with a possible dynamic-callback route | 11 |
+| Family/layout findings / shader candidates | 34 / 4 |
+| Unresolved module edges / unmapped fixture references | 0 / 0 |
+
+The three operations without an indexed benchmark workload are
+`PIL.Image.Image.toqimage`, `PIL.Image.Image.toqpixmap`, and
+`PIL.ImageFont.MAX_STRING_LENGTH`. Parity and benchmark counts are declarations;
+they do not prove case selection, execution, exact parity, or backend receipts.
+All static route counts are review evidence, not runtime reachability claims.
+
+The earlier crosswalk parser expected registry entries inside one `register_all`
+body and missed class registration when PyO3 methods were split into child
+modules. It now indexes registration modules and resolves `PyImage` methods
+through the separately registered class and its `inner: pillow_rs::Image`
+field declaration. The generator completed, and the counts above include those
+routes. No unit tests, parity, benchmarks, or coverage were run for this static
+inventory-tool change. Source mappings and fixture declarations still do not
+prove runtime reachability or test execution.
+
+## Historical operation-to-family and fixture snapshot — 2026-10-21
 
 The crosswalk schema is now `pillow-rs/operation-source-crosswalk@10`. It was
 generated from dirty revision `418d5f0cde51ca64a97cbd007ea731da72d68abf` using
@@ -124,12 +163,13 @@ and Rust module reachability are both reported as unproven.
 These counts belong to this dirty source snapshot. Regenerate the ignored report
 before relying on them for a later revision.
 
-## Current family/layout review — 2026-10-22
+## Historical family/layout review — 2026-10-22
 
 The 2026-10-20 crosswalk emitted seven `rust_source_family_layout_review`
-findings. After the completed family moves, the current crosswalk reports three:
-the CPU allocation test module and two Convert children. These are path-role
-signals from the shared structure classifier, not dead-code findings. The
+findings. At the 2026-10-22 checkpoint, after the completed family moves, the
+crosswalk reported three: the CPU allocation test module and two Convert
+children. These are path-role signals from the shared structure classifier,
+not dead-code findings. The
 table also records the moved Thumbnail and Resize routes so their ownership
 stays traceable:
 
@@ -290,29 +330,21 @@ removed or changed as part of this audit.
 
 ## Open audit work
 
-The generated crosswalk could not be refreshed from `main` on 2026-10-23:
-`make operation-source-crosswalk` fails because
-`scripts/source_crosswalk/rust_source.py::parse_registry` expects
-`register_all` and `draw_entry!` in `pillow-rs/src/compute/registry.rs`, while
-the current registry delegates to `registry/registration/mod.rs` and splits
-entries across that directory's modules. The ignored schema-10 report at
-`target/operation-source-crosswalk.json` is marked dirty and records source
-revision `87bf8d9`; it is not a fresh snapshot for this checkout. Adapt the
-static parser to the current registration layout before refreshing the source
-and fixture inventory. No unit tests, parity, benchmarks, or coverage were run
-for this check.
+The current crosswalk is refreshable, but its report still has 62 unresolved
+direct PyO3 receiver calls, 30 files with static graph edges but no complete
+public-operation route, 490 files without a static operation-graph edge, and
+34 family/layout findings. The 11 callback-route files remain possible routes,
+not proven runtime execution. Triage these queues by module ownership,
+callers, cfg/features, macro/generated paths, and test role; do not infer
+unreachability from their counts.
 
-The four static GPU shader candidates have current loader-path evidence above,
-and the three current crosswalk family/layout findings have source routes or a
-test-only classification in the bounded review above. Their history and any
-separate removal decision remain open. The current snapshot still has 92 Rust
-files without a direct operation-graph edge and three files with graph edges but
-no static public-operation route; these need classification by module
-ownership, callers, cfg/features, macro/generated paths, and test role. The
-audit still needs compiler-proven dead items, private caller chains, refactor
-duplicates, platform/feature paths, binding and callback routes, and
-test/parity workflow selection. Static operation-to-binding edges do not prove
-that every production path is selected by a test or benchmark.
+The four shader candidates have source-loader evidence but still need their
+history and a separate removal decision. The audit also needs supported-target
+and feature reviews, compiler-backed dead-item evidence where justified, private
+caller-chain review, refactor duplicate review, and fixture selection checks.
+For behavior, use generated fixture parity and fault-contract cases with
+explicit case IDs and backend profiles. The static crosswalk does not prove
+that a runner selects or executes a declared case.
 
 No automatic cleanup is supported by this report. Each finding must end as
 documented retained code, a focused test-selection repair, a further

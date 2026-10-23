@@ -51,21 +51,61 @@ class PyO3Index:
         self.source_root = source_root
         self.repo_root = repo_root
         self.declarations: dict[tuple[str, str | None, str], PyO3Declaration] = {}
-        for path in sorted(source_root.rglob("*.rs")):
-            source = path.read_text(encoding="utf-8")
-            self._index_source(path, source)
+        sources = [
+            (path, path.read_text(encoding="utf-8"))
+            for path in sorted(source_root.rglob("*.rs"))
+        ]
+        registered_classes: set[str] = set()
+        receiver_fields: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for _, source in sources:
+            masked = code_only(source)
+            registered_classes.update(
+                re.findall(
+                    r"\badd_class\s*::<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>\s*\(",
+                    masked,
+                )
+            )
+            for owner, field in (("PyImage", "inner"), ("PyDraw", "draw")):
+                if re.search(rf"\bstruct\s+{owner}\s*\{{", masked):
+                    receiver_fields.setdefault((owner, field), []).append(
+                        struct_field_type(source, owner, field)
+                    )
+        receiver_field_types = {
+            key: values[0]
+            if len(values) == 1
+            else {"field": key[1], "resolution": "ambiguous_struct"}
+            for key, values in receiver_fields.items()
+        }
+        for path, source in sources:
+            self._index_source(
+                path,
+                source,
+                registered_classes=registered_classes,
+                receiver_field_types=receiver_field_types,
+            )
 
     def _relative(self, path: Path) -> str:
         return path.relative_to(self.repo_root).as_posix()
 
-    def _index_source(self, path: Path, source: str) -> None:
+    def _index_source(
+        self,
+        path: Path,
+        source: str,
+        *,
+        registered_classes: set[str] | None = None,
+        receiver_field_types: dict[tuple[str, str], dict[str, Any]] | None = None,
+    ) -> None:
         masked = code_only(source)
         registered_functions = set(
             re.findall(r"\bwrap_pyfunction!\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,", masked)
         )
-        registered_classes = set(
-            re.findall(r"\badd_class\s*::<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>\s*\(", masked)
-        )
+        if registered_classes is None:
+            registered_classes = set(
+                re.findall(
+                    r"\badd_class\s*::<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>\s*\(",
+                    masked,
+                )
+            )
 
         for attribute in re.finditer(r"#\s*\[\s*pyfunction(?:\s*\([^]]*\))?\s*\]", masked):
             function = re.search(
@@ -96,11 +136,15 @@ class PyO3Index:
                 continue
             owner = impl.group(1)
             receiver_field = {"PyImage": "inner", "PyDraw": "draw"}.get(owner)
-            receiver_field_type = (
-                struct_field_type(source, owner, receiver_field)
-                if receiver_field is not None
-                else None
-            )
+            receiver_field_type = None
+            if receiver_field is not None:
+                field_key = (owner, receiver_field)
+                if receiver_field_types and field_key in receiver_field_types:
+                    receiver_field_type = receiver_field_types[field_key]
+                else:
+                    receiver_field_type = struct_field_type(
+                        source, owner, receiver_field
+                    )
             opening = attribute.end() + impl.end() - 1
             closing = matching_delimiter(source, opening, "{", "}")
             body = source[opening + 1 : closing]
