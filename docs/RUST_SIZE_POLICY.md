@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 15 legacy file ceilings and 194 legacy functions across 115 source paths.
+Snapshot: 14 legacy file ceilings and 194 legacy functions across 121 source paths.
 A dash means that path has no over-limit file entry; function counts and
 maximum recorded function lines are summarized here, with each exact signature
 and ceiling in the JSON baseline. All listed paths are owned by `lazytrot`;
@@ -112,8 +112,14 @@ each reducer issue is a child of Kata `pillow-rs#m2f1`.
 | <code>pillow-rs/src/compute/pool_cpu/ops/effects.rs</code> | 6,211 | 9 (max 235 lines) | lazytrot | pillow-rs#8rfy |
 | <code>pillow-rs/src/compute/pool_cpu/ops/enhance.rs</code> | — | 1 (max 117 lines) | lazytrot | pillow-rs#7f4d |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter.rs</code> | 6,897 | 4 (max 260 lines) | lazytrot | pillow-rs#qpfs |
-| <code>pillow-rs/src/compute/pool_cpu/ops/geometry.rs</code> | 5,600 | 11 (max 244 lines) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303 lines) | lazytrot | pillow-rs#vamp |
+| <code>pillow-rs/src/compute/pool_cpu/ops/reduce.rs</code> | — | 2 (max 244 lines) | lazytrot | pillow-rs#wtxv |
+| <code>pillow-rs/src/compute/pool_cpu/ops/resize/float.rs</code> | — | 1 (max 156 lines) | lazytrot | pillow-rs#wtxv |
+| <code>pillow-rs/src/compute/pool_cpu/ops/resize/integer.rs</code> | — | 1 (max 133 lines) | lazytrot | pillow-rs#wtxv |
+| <code>pillow-rs/src/compute/pool_cpu/ops/rotate/affine.rs</code> | — | 2 (max 237 lines) | lazytrot | pillow-rs#wtxv |
+| <code>pillow-rs/src/compute/pool_cpu/ops/rotate/scalar.rs</code> | — | 1 (max 159 lines) | lazytrot | pillow-rs#wtxv |
+| <code>pillow-rs/src/compute/pool_cpu/ops/thumbnail.rs</code> | — | 3 (max 133 lines) | lazytrot | pillow-rs#wtxv |
+| <code>pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs</code> | — | 1 (max 105 lines) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_gpu/auxiliary_images.rs</code> | — | 1 (max 121 lines) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/batch_encoding.rs</code> | — | 1 (max 369 lines) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/batch_encoding/dispatch.rs</code> | — | 2 (max 254 lines) | lazytrot | pillow-rs#ras2 |

@@ -303,13 +303,13 @@ row below; they are intentionally not inferred from a shader filename.
 
 | `PipelineOp` | Current CPU owner | Planned treatment and required change |
 | --- | --- | --- |
-| `Resize` | `pool_cpu/ops/geometry.rs` | Resampling node with explicit source/output layouts and coefficient/scratch lifetimes. Reuse exact horizontal/vertical kernels; do not fuse two resizes unless the intermediate rounding contract is preserved. |
-| `ResizeBoxed` | `pool_cpu/ops/geometry.rs` | Keep public box bounds and float32 decisions in its contract; lower to the existing resize machinery only after exact bound conversion. Reuse scratch with `Resize`. |
-| `Crop` | `pool_cpu/ops/geometry.rs` | Copy/view node with a source rectangle. Let compatible following kernels consume the rectangle directly; otherwise allocate one exact crop result. Treat terminal ownership separately. |
-| `Rotate` | `pool_cpu/ops/geometry.rs` | Lower exact right-angle cases to the existing orientation path and arbitrary angles to transform/resample stages; preserve fill, center, expansion, and rounding rules. |
-| `Transpose` | `pool_cpu/ops/geometry.rs` | Keep current D4 composition/cancellation. Make composed orientation a plan lowering and reuse its destination buffer rules. |
-| `Thumbnail` | `pool_cpu/ops/geometry.rs` | Represent resize/reduce decisions in one semantic node. Avoid an intermediate only where the existing Pillow rounding and intermediate-size behavior are unchanged. |
-| `Reduce` | `pool_cpu/ops/geometry.rs` | Shape-changing reduction node. Carry factors, partial edge blocks, alpha behavior, and exact fixed-point semantics to all backends. |
+| `Resize` | `pool_cpu/ops/resize.rs` | Resampling node with explicit source/output layouts and coefficient/scratch lifetimes. Reuse exact horizontal/vertical kernels; do not fuse two resizes unless the intermediate rounding contract is preserved. |
+| `ResizeBoxed` | `pool_cpu/ops/resize.rs` | Keep public box bounds and float32 decisions in its contract; lower to the existing resize machinery only after exact bound conversion. Reuse scratch with `Resize`. |
+| `Crop` | `pool_cpu/ops/crop.rs` | Copy/view node with a source rectangle. Let compatible following kernels consume the rectangle directly; otherwise allocate one exact crop result. Treat terminal ownership separately. |
+| `Rotate` | `pool_cpu/ops/rotate.rs` | Lower exact right-angle cases to the existing orientation path and arbitrary angles to transform/resample stages; preserve fill, center, expansion, and rounding rules. |
+| `Transpose` | `pool_cpu/ops/transpose.rs` | Keep current D4 composition/cancellation. Make composed orientation a plan lowering and reuse its destination buffer rules. |
+| `Thumbnail` | `pool_cpu/ops/thumbnail.rs` | Represent resize/reduce decisions in one semantic node. Avoid an intermediate only where the existing Pillow rounding and intermediate-size behavior are unchanged. |
+| `Reduce` | `pool_cpu/ops/reduce.rs` | Shape-changing reduction node. Carry factors, partial edge blocks, alpha behavior, and exact fixed-point semantics to all backends. |
 | `Contain` | `pool_cpu/ops/imageops.rs` | Geometry wrapper lowered to the existing checked size/resize path. Preserve aspect-ratio and dimension rounding; do not add a second resize algorithm. |
 | `Cover` | `pool_cpu/ops/imageops.rs` | Geometry wrapper plus exact crop. Plan the crop offset with resize so an unnecessary full-size intermediate can be avoided only when output pixels remain exact. |
 | `Fit` | `pool_cpu/ops/imageops.rs` | Keep fractional crop/centering/bleed in the descriptor; lower to existing resize/crop kernels only after exact coordinate proof. |

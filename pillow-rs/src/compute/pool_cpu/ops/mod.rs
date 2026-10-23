@@ -1,5 +1,6 @@
 pub(crate) mod chops;
 pub(crate) mod color;
+pub(crate) mod crop;
 pub(crate) mod draw;
 pub(crate) mod effects;
 pub(crate) mod enhance;
@@ -7,3 +8,8 @@ pub(crate) mod filter;
 pub(crate) mod geometry;
 pub(crate) mod grayscale;
 pub(crate) mod imageops;
+pub(crate) mod reduce;
+pub(crate) mod resize;
+pub(crate) mod rotate;
+pub(crate) mod thumbnail;
+pub(crate) mod transpose;

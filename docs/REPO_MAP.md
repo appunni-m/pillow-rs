@@ -90,6 +90,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- chops.rs
 |   |   |   |       |-- color.rs
 |   |   |   |       |-- color_convert_allocation_tests.rs
+|   |   |   |       |-- crop.rs
 |   |   |   |       |-- draw.rs
 |   |   |   |       |-- effects.rs
 |   |   |   |       |-- enhance.rs
@@ -102,18 +103,38 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- uniform_box.rs
 |   |   |   |       |   `-- uniform_box_tests.rs
 |   |   |   |       |-- filter.rs
-|   |   |   |       |-- geometry/
-|   |   |   |       |   |-- float_resize.rs
-|   |   |   |       |   |-- float_resize_tests.rs
-|   |   |   |       |   |-- kernels/
-|   |   |   |       |   |   `-- transpose_rgba/
-|   |   |   |       |   |       `-- x86_64.rs
-|   |   |   |       |   |-- native_transpose.rs
-|   |   |   |       |   `-- transpose.rs
 |   |   |   |       |-- geometry.rs
 |   |   |   |       |-- grayscale.rs
 |   |   |   |       |-- imageops.rs
-|   |   |   |       `-- mod.rs
+|   |   |   |       |-- mod.rs
+|   |   |   |       |-- reduce/
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       |-- reduce.rs
+|   |   |   |       |-- resize/
+|   |   |   |       |   |-- filter.rs
+|   |   |   |       |   |-- float.rs
+|   |   |   |       |   |-- float_resize.rs
+|   |   |   |       |   |-- float_resize_tests.rs
+|   |   |   |       |   |-- integer.rs
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       |-- resize.rs
+|   |   |   |       |-- rotate/
+|   |   |   |       |   |-- affine.rs
+|   |   |   |       |   |-- cubic.rs
+|   |   |   |       |   |-- scalar.rs
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       |-- rotate.rs
+|   |   |   |       |-- thumbnail/
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       |-- thumbnail.rs
+|   |   |   |       |-- transpose/
+|   |   |   |       |   |-- arch.rs
+|   |   |   |       |   |-- kernels/
+|   |   |   |       |   |   `-- transpose_rgba/
+|   |   |   |       |   |       `-- x86_64.rs
+|   |   |   |       |   |-- native.rs
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       `-- transpose.rs
 |   |   |   |-- pool_gpu/
 |   |   |   |   |-- auxiliary_images.rs
 |   |   |   |   |-- batch_arena_upload.rs
@@ -138,6 +159,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- batch_segmentation.rs
 |   |   |   |   |-- batch_telemetry.rs
 |   |   |   |   |-- batch_upload.rs
+|   |   |   |   |-- device.rs
 |   |   |   |   |-- fusion.rs
 |   |   |   |   |-- geometry/
 |   |   |   |   |   `-- native_execution.rs
@@ -324,6 +346,14 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- transpose.wgsl
 |   |   |   |   |   |-- transpose_rgb.wgsl
 |   |   |   |   |   `-- transpose_rgb_tiled.wgsl
+|   |   |   |   |-- stream/
+|   |   |   |   |   |-- dispatch.rs
+|   |   |   |   |   |-- encoding.rs
+|   |   |   |   |   |-- graph/
+|   |   |   |   |   |   |-- layout.rs
+|   |   |   |   |   |   `-- resources.rs
+|   |   |   |   |   |-- graph.rs
+|   |   |   |   |   `-- types.rs
 |   |   |   |   |-- stream.rs
 |   |   |   |   |-- tests/
 |   |   |   |   |   |-- affine_geometry.rs
@@ -603,13 +633,45 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- default_aileron.LICENSE.txt
 |   |   |   |-- default_aileron.rs
 |   |   |   |-- default_aileron.ttf
+|   |   |   |-- imagingft/
+|   |   |   |   |-- layout.rs
+|   |   |   |   |-- render.rs
+|   |   |   |   `-- variation.rs
 |   |   |   |-- imagingft.rs
 |   |   |   |-- mod.rs
-|   |   |   `-- pilfont.rs
+|   |   |   |-- pilfont.rs
+|   |   |   `-- public_api.rs
 |   |   |-- format.rs
 |   |   |-- image/
+|   |   |   |-- backend.rs
+|   |   |   |-- byte_export/
+|   |   |   |   `-- tests.rs
+|   |   |   |-- byte_export.rs
+|   |   |   |-- channel_access.rs
+|   |   |   |-- color_count/
+|   |   |   |   |-- pillow_table.rs
+|   |   |   |   |-- specialized.rs
+|   |   |   |   `-- tests.rs
+|   |   |   |-- color_count.rs
+|   |   |   |-- construction.rs
+|   |   |   |-- data_access/
+|   |   |   |   `-- putdata_shared_bytes_tests.rs
+|   |   |   |-- data_access.rs
 |   |   |   |-- encode.rs
-|   |   |   `-- pipeline_admission.rs
+|   |   |   |-- entropy.rs
+|   |   |   |-- materialization.rs
+|   |   |   |-- metadata.rs
+|   |   |   |-- palette.rs
+|   |   |   |-- pipeline_admission.rs
+|   |   |   |-- pipeline_ops.rs
+|   |   |   |-- pixel_access.rs
+|   |   |   |-- projection/
+|   |   |   |   |-- getprojection_cmyk_tests.rs
+|   |   |   |   `-- getprojection_rgb_pipeline_tests.rs
+|   |   |   |-- projection.rs
+|   |   |   |-- statistics/
+|   |   |   |   `-- result.rs
+|   |   |   `-- statistics.rs
 |   |   |-- image.rs
 |   |   |-- image_getchannel_receipt_tests.rs
 |   |   |-- image_sequence.rs
@@ -629,9 +691,24 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- lut_overlay.bin
 |   |   |   |-- lut_softlight.bin
 |   |   |   |-- mod.rs
+|   |   |   |-- module_fns/
+|   |   |   |   `-- point.rs
 |   |   |   |-- module_fns.rs
 |   |   |   |-- param_filters.rs
 |   |   |   |-- paste.rs
+|   |   |   |-- pil_resize/
+|   |   |   |   |-- alpha.rs
+|   |   |   |   |-- boxed.rs
+|   |   |   |   |-- coefficients.rs
+|   |   |   |   |-- filters.rs
+|   |   |   |   |-- float.rs
+|   |   |   |   |-- horizontal_passes.rs
+|   |   |   |   |-- integer_modes.rs
+|   |   |   |   |-- integer_modes_tests.rs
+|   |   |   |   |-- luma16.rs
+|   |   |   |   |-- resize.rs
+|   |   |   |   |-- samples.rs
+|   |   |   |   `-- vertical_passes.rs
 |   |   |   |-- pil_resize.rs
 |   |   |   |-- quantize.rs
 |   |   |   |-- resize.rs
@@ -643,6 +720,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- transpose.rs
 |   |   |   `-- utils.rs
 |   |   |-- par.rs
+|   |   |-- pipeline/
+|   |   |   `-- support.rs
 |   |   |-- pipeline.rs
 |   |   `-- raster/
 |   |       |-- buffer.rs

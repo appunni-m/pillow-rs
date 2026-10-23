@@ -81,8 +81,14 @@ pub(super) fn execute_axis_swap(
     let output_dims = CheckedDims::new(height, width, channels as u8)?;
     let mut output = output_dims.alloc_buffer();
     #[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
-    if super::transpose::try_rotate270_rgba_tiled(img, method, &mut output, width, height, channels)
-    {
+    if super::transpose_arch::try_rotate270_rgba_tiled(
+        img,
+        method,
+        &mut output,
+        width,
+        height,
+        channels,
+    ) {
         return raw_bytes_to_image(height, width, output, channels).map(Some);
     }
 
