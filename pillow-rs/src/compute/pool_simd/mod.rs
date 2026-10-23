@@ -13,9 +13,11 @@
 use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
+use crate::pipeline::PipelineOp;
 #[cfg(feature = "gpu")]
 use crate::pipeline::TransposeMethod;
-use crate::pipeline::{PipelineOp, TransposeTransform};
+#[cfg(feature = "gpu")]
+use crate::pipeline::TransposeTransform;
 use crate::raster::DynamicImage;
 
 mod batch_execution;

@@ -23,9 +23,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 mod terminals;
+pub(crate) use terminals::{execute_prepared_cpu_terminal, execute_prepared_simd_terminal};
+#[cfg(feature = "gpu")]
 pub(crate) use terminals::{
-    execute_prepared_cpu_terminal, execute_prepared_gpu_cmyk_projection_terminal,
-    execute_prepared_gpu_rgb_projection_terminal, execute_prepared_simd_terminal,
+    execute_prepared_gpu_cmyk_projection_terminal, execute_prepared_gpu_rgb_projection_terminal,
 };
 
 // ── Router ─────────────────────────────────────────────────────────────────

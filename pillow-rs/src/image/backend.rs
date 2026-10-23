@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+#[cfg(feature = "gpu")]
 use image_slash_star::{ImageFormat, ImageInfo};
 
 use crate::error::PilError;

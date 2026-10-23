@@ -59,15 +59,18 @@ pub(crate) use telemetry::{
     begin_pipeline_operation_telemetry, cancel_eager_cpu_operation_telemetry,
     execute_eager_simd_bytes, finish_eager_cpu_operation_telemetry,
     finish_pipeline_operation_telemetry, host_resource_telemetry,
-    record_eager_cpu_operation_receipt, record_gpu_shader_dispatch, record_pipeline_allocation,
-    record_pipeline_backend_fallback, record_pipeline_dispatch_count,
-    record_pipeline_operation_handoff, record_pipeline_operation_mode_conversion,
-    record_pipeline_operation_path, record_pipeline_operation_scalar_tail,
-    record_pipeline_operation_unsupported, record_pipeline_operation_vector_blocks,
-    record_pipeline_resize_coeff_cache_hit, record_pipeline_resize_coeff_cache_miss,
-    record_pipeline_resource_telemetry, reset_pipeline_allocation_telemetry,
-    reset_pipeline_operation_telemetry, restore_pipeline_backend_override,
+    record_eager_cpu_operation_receipt, record_pipeline_allocation,
+    record_pipeline_backend_fallback, record_pipeline_operation_handoff,
+    record_pipeline_operation_mode_conversion, record_pipeline_operation_path,
+    record_pipeline_operation_scalar_tail, record_pipeline_operation_unsupported,
+    record_pipeline_operation_vector_blocks, record_pipeline_resize_coeff_cache_hit,
+    record_pipeline_resize_coeff_cache_miss, record_pipeline_resource_telemetry,
+    reset_pipeline_allocation_telemetry, reset_pipeline_operation_telemetry,
     take_pipeline_allocation_telemetry, take_pipeline_operation_telemetry,
+};
+#[cfg(feature = "gpu")]
+pub(crate) use telemetry::{
+    record_gpu_shader_dispatch, record_pipeline_dispatch_count, restore_pipeline_backend_override,
 };
 
 pub use backend_state::{
@@ -79,22 +82,28 @@ pub(crate) use backend_state::{
 pub(crate) use eager::{
     begin_eager_cpu_mandelbrot_telemetry, execute_eager_cpu_getprojection,
     execute_eager_cpu_image_operation, execute_eager_cpu_shared_result,
-    execute_eager_gpu_rgb_getprojection, execute_eager_simd_getprojection,
-    execute_eager_simd_image_operation, finish_eager_cpu_mandelbrot_telemetry,
-    gpu_cmyk_projection_terminal_supported, gpu_rgb_projection_supported,
-    gpu_rgb_projection_terminal_supported, simd_cmyk_projection,
+    execute_eager_simd_getprojection, execute_eager_simd_image_operation,
+    finish_eager_cpu_mandelbrot_telemetry, simd_cmyk_projection,
     simd_cmyk_projection_from_positive_writes, simd_rgb_projection, simd_unsharp_blend_rgb_150,
     try_simd_linear_gradient, try_simd_mandelbrot, try_simd_radial_gradient,
+};
+#[cfg(feature = "gpu")]
+pub(crate) use eager::{
+    execute_eager_gpu_rgb_getprojection, gpu_cmyk_projection_terminal_supported,
+    gpu_rgb_projection_supported, gpu_rgb_projection_terminal_supported,
 };
 #[cfg(test)]
 use execution::execute_automatic_simd_segments;
 #[allow(unused_imports)]
 pub(crate) use execution::validate_backend_support;
 pub(crate) use execution::{
-    PreparedExecution, execute_prepared, execute_prepared_cpu_terminal,
+    PreparedExecution, execute_prepared, execute_prepared_cpu_terminal, execute_prepared_shared,
+    execute_prepared_simd_terminal, prepare_execution,
+};
+#[cfg(feature = "gpu")]
+pub(crate) use execution::{
     execute_prepared_gpu_cmyk_projection_terminal, execute_prepared_gpu_rgb_projection_terminal,
-    execute_prepared_shared, execute_prepared_simd_terminal, merge_pipeline_resource_telemetry,
-    prepare_execution,
+    merge_pipeline_resource_telemetry,
 };
 #[cfg(target_arch = "x86_64")]
 pub(crate) use phase_telemetry::record_transpose_avx2_executor_timing;
