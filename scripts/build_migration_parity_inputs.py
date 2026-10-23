@@ -49891,6 +49891,18 @@ def _scalar_run_edge_getcolors_parity_case(
                 }
             )
             observations.append(call_step)
+            if shape == "empty":
+                zero_limit_step = f"empty-{label}-getcolors-zero-limit"
+                steps.append(
+                    {
+                        "step_id": zero_limit_step,
+                        "surface": "PIL.Image.Image",
+                        "operation": "getcolors",
+                        "receiver": image_binding,
+                        "arguments": {"maxcolors": literal(0)},
+                    }
+                )
+                observations.append(zero_limit_step)
 
     return {
         "case_id": SCALAR_RUN_EDGE_GETCOLORS_CASE_ID,
