@@ -1,9 +1,9 @@
 # Support
 
-Start with the [README](README.md), the [documentation map](docs/DOCUMENTATION_CHECKLIST.md),
-and the package-specific README for the interface you are using. Build and
-parity commands are listed in the root `Makefile`; use an isolated virtual
-environment for Python work.
+Start with the [README](README.md), the [installation guide](docs/INSTALLATION.md),
+the [supported APIs and limitations](docs/COMPATIBILITY.md), and the quickstart
+for the interface you use: [Python](docs/PYTHON.md), [Rust](docs/RUST.md), or
+[JavaScript](pillow-rs-js/README.md).
 
 For a reproducible bug, open a [GitHub issue](https://github.com/appunni-m/pillow-rs/issues)
 with the package and version, operating system, Rust/Python/Node versions, the

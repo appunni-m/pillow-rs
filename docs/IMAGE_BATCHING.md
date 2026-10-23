@@ -4,17 +4,15 @@
 **Latest release: [12.2.3](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.3).**
 <!-- /release:summary -->
 
-`GpuBatchExecutor` is available in pillow-rs 12.2.1. It schedules existing lazy
-image graphs on the pillow-rs GPU device, separately from normal Image routing.
-The earlier ImageBatch prototype was never part of the public API; this executor
-uses the existing `PipelineOp` and image graph directly.
+`GpuBatchExecutor` batches existing lazy image operations into explicit GPU
+submissions and can stream keyed inputs. It is opt-in; normal Image routing is
+unchanged. The executor accepts only pending operation contexts supported by
+its GPU planner.
 
 ## Submit the existing operation result
 
-`ImageOps.invert(image)` returns an Image backed by the canonical Rust
-[`Image::Pipeline`](../pillow-rs/src/image.rs) and
-[`PipelineOp`](../pillow-rs/src/pipeline.rs). Submit that Image directly;
-there is no additional operation class, conversion method, or callback API.
+`ImageOps.invert(image)` returns a lazy image result that can be submitted
+directly:
 
 ```python
 from PIL import Image, ImageOps, GpuBatchExecutor

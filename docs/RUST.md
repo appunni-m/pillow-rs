@@ -41,12 +41,9 @@ The reference describes arguments, return values, and errors.
 
 The [Cargo manifest](../pillow-rs/Cargo.toml) defines defaults and optional
 features. Codec features select image-slash-star support. `gpu` enables GPU
-infrastructure; it does not make every operation native GPU work. The default
-build keeps Rayon `parallel` disabled; enable it explicitly with
-`--features parallel` only in runs reported as Parallel CPU. Keep those results
-separate from default single-thread SIMD and GPU measurements. The SIMD
-backend keeps row scheduling serial even when `parallel` is enabled, and GPU
-readback never schedules Rayon work.
+infrastructure, but not every operation and mode can use it. The default build
+keeps Rayon `parallel` disabled. Enable it explicitly with `--features parallel`
+for the separate Parallel CPU execution profile; it does not enable SIMD or GPU.
 
 The [compatibility guide](COMPATIBILITY.md) explains the supported scope.
 GPU availability and acceleration depend on the operation and host.
@@ -67,9 +64,9 @@ Run your corpus with the features and target you will ship. The published
 Python and WASM evidence does not establish every Rust feature/target
 combination. Report regressions with the smallest input and public call sequence.
 
-## New integrations
+## Upgrades
 
-Treat each alpha as a greenfield integration. Pin an exact version, use the
-current API reference, and validate the modes, arguments, outputs, and errors
-your application needs before adopting another alpha. No alpha-to-alpha
-migration path or compatibility guarantee is provided.
+Pin an exact version and validate the APIs, modes, arguments, outputs, and
+errors your application needs before upgrading. The version prefix identifies
+the Pillow compatibility target; it does not promise complete Pillow API or
+mode compatibility.

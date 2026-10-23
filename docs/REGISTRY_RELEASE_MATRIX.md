@@ -21,12 +21,10 @@ separately built Parallel CPU companion wheel; it does not change Cargo features
 in an already installed wheel. See [installation](INSTALLATION.md) for package
 selection and the supported-platform requirements.
 
-The PyPI project page for `pillow-rs` still displays the README embedded in its
-12.2.3 upload, which names 12.2.2 as current. The registry version and the
-[installation command](INSTALLATION.md) above are 12.2.3. PyPI reads the long
-description from the uploaded package metadata; a later upload is needed to
-refresh it. See PyPI's [project-description guidance](https://docs.pypi.org/project-management/project-descriptions/)
-and [upload troubleshooting](https://docs.pypi.org/publishing/troubleshooting/).
+The [PyPI 12.2.3 page](https://pypi.org/project/pillow-rs/12.2.3/) still shows
+the long description uploaded with 12.2.2, including its old install command.
+The published release files and the installation guide above are 12.2.3; PyPI's
+description will refresh with a future package upload.
 
 Earlier releases and their records are available from the
 [GitHub release list](https://github.com/appunni-m/pillow-rs/releases).

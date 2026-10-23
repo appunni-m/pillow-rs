@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 5 legacy file ceilings and 127 legacy functions across 83 source paths.
+Snapshot: 2 legacy file ceilings and 122 legacy functions across 80 source paths.
 A dash means that path has no over-limit file entry; function counts and
 maximum recorded function lines are summarized here, with each exact
 signature and ceiling in the JSON baseline. Each table row repeats the
@@ -105,7 +105,6 @@ owner and reducer issue recorded for that path.
 | --- | ---: | ---: | --- | --- |
 | <code>pillow-rs-js/src/lib.rs</code> | 5,445 | 1 (max 124 lines) | lazytrot | pillow-rs#dqs5 |
 | <code>pillow-rs-py/src/lib.rs</code> | 4,972 | 0 | lazytrot | pillow-rs#pxb1 |
-| <code>pillow-rs/src/color.rs</code> | 2,086 | 0 | lazytrot | pillow-rs#bnhk |
 | <code>pillow-rs/src/compute/pool_cpu/ops/composite.rs</code> | — | 1 (max 136 lines) | lazytrot | pillow-rs#8rfy |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/blur.rs</code> | — | 1 (max 260 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs</code> | — | 1 (max 157 lines) | lazytrot | pillow-rs#qpfs |
@@ -180,9 +179,7 @@ owner and reducer issue recorded for that path.
 | <code>pillow-rs/src/image/pipeline_ops.rs</code> | — | 2 (max 160 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/image/projection.rs</code> | — | 2 (max 208 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/image/statistics.rs</code> | — | 3 (max 265 lines) | lazytrot | pillow-rs#knsf |
-| <code>pillow-rs/src/ops/convert.rs</code> | 1,450 | 1 (max 576 lines) | lazytrot | pillow-rs#bnhk |
 | <code>pillow-rs/src/ops/pil_resize/boxed.rs</code> | — | 2 (max 240 lines) | lazytrot | pillow-rs#nsax |
 | <code>pillow-rs/src/ops/pil_resize/horizontal_passes.rs</code> | — | 2 (max 131 lines) | lazytrot | pillow-rs#nsax |
 | <code>pillow-rs/src/ops/pil_resize/resize.rs</code> | — | 1 (max 194 lines) | lazytrot | pillow-rs#nsax |
 | <code>pillow-rs/src/ops/pil_resize/vertical_passes.rs</code> | — | 2 (max 116 lines) | lazytrot | pillow-rs#nsax |
-| <code>pillow-rs/src/ops/quantize.rs</code> | 2,462 | 4 (max 180 lines) | lazytrot | pillow-rs#bnhk |
