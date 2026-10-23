@@ -28,12 +28,12 @@ evidence and do not substitute for those fixture contracts.
 ## Current operation/source and fixture snapshot — 2026-10-23
 
 The schema-10 crosswalk was regenerated on dirty revision
-`955234cb39a39c0361535d3937377fe50b3290ca` after updating its static index for
-the split registry and PyO3 module layout. It read 831 source and fixture
-inputs with fingerprint
-`503e04961e2a8355924379abc23dfcbf9e1f22ed7cc3436d6aaa97d4264a21a9`. The
+`1d17f0be7f69df06047f8596809252b8d1aef03b` after updating its static index for
+the split registry, PyO3 modules, and core `Image`/`Draw` method trees. It read
+831 source and fixture inputs with fingerprint
+`553e7b5b61adbfe6c30266046d0582b270bfbe2ee2e0d54c5bc82a4f7f525549`. The
 ignored report `target/operation-source-crosswalk.json` has SHA-256
-`f58d0bd8388ded4a015bd1faafd11bc016bb519c0bbf8e58df3bbc26b8522f0e`.
+`d9a2bf33bece033a1931604237e0a10c4720d28289abd86e9447a850537c4294`.
 
 | Generated measure | Count |
 | --- | ---: |
@@ -42,11 +42,13 @@ ignored report `target/operation-source-crosswalk.json` has SHA-256
 | Declared benchmark workloads across public operations | 996 across 209 |
 | Python native calls mapped to registered PyO3 declarations | 157 / 157 |
 | Direct PyO3 core API calls mapped | 103 / 103 |
-| Direct PyO3 receiver calls mapped | 35 / 97; 62 unresolved |
+| Direct PyO3 receiver calls mapped | 97 / 97 |
 | Pipeline variants / variant-key edges | 84 / 84 |
 | Registry keys / SIMD registrations | 81 / 81 |
-| Rust source files / files with static public routes | 593 / 73 |
-| Static graph edges without full route / files without graph edge | 30 / 490 |
+| Core methods reached from PyO3 | 206 |
+| Rust source files / files with static public-operation routes | 593 / 97 |
+| Static graph edges without full route / files without graph edge | 24 / 472 |
+| Operation-graph source review candidates | 496 |
 | Files with a possible dynamic-callback route | 11 |
 | Family/layout findings / shader candidates | 34 / 4 |
 | Unresolved module edges / unmapped fixture references | 0 / 0 |
@@ -61,10 +63,11 @@ The earlier crosswalk parser expected registry entries inside one `register_all`
 body and missed class registration when PyO3 methods were split into child
 modules. It now indexes registration modules and resolves `PyImage` methods
 through the separately registered class and its `inner: pillow_rs::Image`
-field declaration. The generator completed, and the counts above include those
-routes. No unit tests, parity, benchmarks, or coverage were run for this static
-inventory-tool change. Source mappings and fixture declarations still do not
-prove runtime reachability or test execution.
+field declaration. The core receiver index now scans the `image/` and `draw/`
+module trees as well as operation modules, resolving all 97 direct PyO3
+receiver calls. No unit tests, parity, benchmarks, or coverage were run for
+these static inventory-tool changes. Source mappings and fixture declarations
+still do not prove runtime reachability or test execution.
 
 ## Historical operation-to-family and fixture snapshot — 2026-10-21
 
@@ -330,11 +333,11 @@ removed or changed as part of this audit.
 
 ## Open audit work
 
-The current crosswalk is refreshable, but its report still has 62 unresolved
-direct PyO3 receiver calls, 30 files with static graph edges but no complete
-public-operation route, 490 files without a static operation-graph edge, and
-34 family/layout findings. The 11 callback-route files remain possible routes,
-not proven runtime execution. Triage these queues by module ownership,
+The current crosswalk has no unresolved direct PyO3 receiver calls. It still
+has 24 files with static graph edges but no complete public-operation route,
+472 files without a static operation-graph edge, and 34 family/layout findings.
+The 11 callback-route files remain possible routes, not proven runtime
+execution. Triage these queues by module ownership,
 callers, cfg/features, macro/generated paths, and test role; do not infer
 unreachability from their counts.
 

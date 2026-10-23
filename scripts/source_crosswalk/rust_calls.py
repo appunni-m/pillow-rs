@@ -301,9 +301,13 @@ def inherent_method_definitions(
 
 
 def core_image_method_index(root: Path) -> dict[str, list[dict[str, Any]]]:
-    """Index inherent `Image` methods in the core crate, including private helpers."""
+    """Index inherent `Image` methods across its module and operation trees."""
     source_root = root / "pillow-rs/src"
-    paths = [source_root / "image.rs", *sorted((source_root / "ops").rglob("*.rs"))]
+    paths = [
+        source_root / "image.rs",
+        *sorted((source_root / "image").rglob("*.rs")),
+        *sorted((source_root / "ops").rglob("*.rs")),
+    ]
     methods: dict[str, list[dict[str, Any]]] = {}
     for path in paths:
         if not path.is_file():
@@ -316,15 +320,14 @@ def core_image_method_index(root: Path) -> dict[str, list[dict[str, Any]]]:
 
 
 def core_draw_method_index(root: Path) -> dict[str, list[dict[str, Any]]]:
-    """Index inherent `Draw` methods in the core crate."""
-    path = root / "pillow-rs/src/draw/mod.rs"
+    """Index inherent `Draw` methods across the draw module tree."""
+    source_root = root / "pillow-rs/src/draw"
     methods: dict[str, list[dict[str, Any]]] = {}
-    if not path.is_file():
-        return methods
-    source = path.read_text(encoding="utf-8")
-    relative = path.relative_to(root).as_posix()
-    for method in inherent_method_definitions(source, relative, "Draw"):
-        methods.setdefault(method["symbol"], []).append(method)
+    for path in sorted(source_root.rglob("*.rs")):
+        source = path.read_text(encoding="utf-8")
+        relative = path.relative_to(root).as_posix()
+        for method in inherent_method_definitions(source, relative, "Draw"):
+            methods.setdefault(method["symbol"], []).append(method)
     return methods
 
 
