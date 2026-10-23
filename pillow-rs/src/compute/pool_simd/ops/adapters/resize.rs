@@ -36,8 +36,8 @@ use self::coordinates::{
 };
 pub(super) use self::f32_mode::{simd_resize_f, simd_resize_f_boxed};
 pub(super) use self::i32_mode::{
-    build_resize_i_horizontal_plan, resize_i_horizontal_values, simd_resize_i32,
-    simd_resize_i32_boxed,
+    ResizeIHorizontalBlockPlan, build_resize_i_horizontal_plan, resize_i_horizontal_values,
+    simd_resize_i32, simd_resize_i32_boxed,
 };
 use self::luma16_mode::simd_resize_luma16;
 use self::support::{
@@ -71,7 +71,7 @@ pub(super) use self::u8_mode::{
 };
 pub(super) use self::u8_nearest::{simd_resize_nearest, simd_resize_nearest_boxed};
 pub(super) use self::u8_plan::{
-    build_resize_horizontal_plan, resize_u8_coefficients_fit_i32,
+    ResizeHorizontalPlan, build_resize_horizontal_plan, resize_u8_coefficients_fit_i32,
     resize_vertical_row_touches_nonzero_source,
 };
 use super::{
@@ -753,85 +753,20 @@ pub(crate) fn simd_fit(
     )
     .ok_or_else(|| simd_unsupported("Fit"))?;
     let resize_filter = native_fit_filter(mode, *filter);
-    // Pillow's `_resize` takes an integer crop shortcut before selecting the
-    // filter. Keep the shortcut only for complete-source identities. A
-    // filtered LA/RGBA non-full crop first converts to
-    // premultiplied storage, so returning the original bytes here would skip
-    // that observable round trip.
-    let box_left_f32 = box_left as f32;
-    let box_top_f32 = box_top as f32;
-    let box_right_f32 = box_right as f32;
-    let box_bottom_f32 = box_bottom as f32;
-    let finite_box = box_left_f32.is_finite()
-        && box_top_f32.is_finite()
-        && box_right_f32.is_finite()
-        && box_bottom_f32.is_finite();
-    let full_source_identity = finite_box
-        && img.width() == output_width
-        && img.height() == output_height
-        && box_left_f32 == 0.0
-        && box_top_f32 == 0.0
-        && box_right_f32 == img.width() as f32
-        && box_bottom_f32 == img.height() as f32;
-    if full_source_identity {
-        if let Some(result) = native_copy_image_bytes(img, mode)? {
-            return Ok(result);
-        }
-    }
-    // `_imaging.c::_resize` takes exact integer crops before dispatching to a
-    // filter. Preserve that ordering for F so special values in discarded
-    // source pixels cannot participate in a floating-point tail.
-    let integer_crop = finite_box
-        && box_left_f32.fract() == 0.0
-        && box_top_f32.fract() == 0.0
-        && box_right_f32 - box_left_f32 == output_width as f32
-        && box_bottom_f32 - box_top_f32 == output_height as f32;
-    if integer_crop && mode == Some("F") {
-        let left = box_left_f32 as u32;
-        let top = box_top_f32 as u32;
-        return Ok(preserve_mode(
-            img,
-            img.crop_imm(left, top, output_width, output_height),
-        ));
-    }
-    if mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
-        return simd_resize_f_boxed(
-            img,
-            output_width,
-            output_height,
-            box_left,
-            box_top,
-            box_right,
-            box_bottom,
-            *filter,
-        );
+    if let Some(result) = simd_fit_crop_or_float_shortcut(
+        img,
+        output_width,
+        output_height,
+        mode,
+        (box_left, box_top, box_right, box_bottom),
+        resize_filter,
+    )? {
+        return Ok(result);
     }
     let (channels, premultiplied_alpha) =
         native_fit_layout_for_image(img, mode).ok_or_else(|| simd_unsupported("Fit"))?;
     if img.width() == 0 {
-        let output_len = usize::try_from(output_width)
-            .ok()
-            .and_then(|width| usize::try_from(output_height).ok()?.checked_mul(width))
-            .and_then(|pixels| pixels.checked_mul(channels))
-            .ok_or_else(|| simd_unsupported("Fit"))?;
-        let mut output = vec![0u8; output_len];
-        let zero_block = u8x16::splat(0).to_array();
-        let mut vector_blocks = 0u64;
-        for block in output.chunks_exact_mut(zero_block.len()) {
-            block.copy_from_slice(&zero_block);
-            vector_blocks = vector_blocks.saturating_add(1);
-        }
-        let remainder = output.len() % zero_block.len();
-        if remainder != 0 {
-            let start = output.len() - remainder;
-            output[start..].copy_from_slice(&zero_block[..remainder]);
-        }
-        crate::compute::record_pipeline_operation_path("vector");
-        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-        crate::compute::record_pipeline_operation_scalar_tail(u64::from(remainder != 0));
-        let result =
-            crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
-        return Ok(preserve_mode(img, result));
+        return simd_fit_empty_source(img, output_width, output_height, channels);
     }
     // A zero source remains zero through Pillow's normalized boxed filters,
     // including the premultiply/unpremultiply alpha path. Fit calls the boxed
@@ -839,18 +774,7 @@ pub(crate) fn simd_fit(
     // coefficient construction. Nearest sampling is cheap enough that scanning
     // the whole source would add work instead of removing it.
     if !matches!(resize_filter, ResampleFilter::Nearest) && native_zero_byte_image(img, channels) {
-        let output_len = usize::try_from(output_width)
-            .ok()
-            .and_then(|width| usize::try_from(output_height).ok()?.checked_mul(width))
-            .and_then(|pixels| pixels.checked_mul(channels))
-            .ok_or_else(|| simd_unsupported("Fit"))?;
-        let output = vec![0; output_len];
-        crate::compute::record_pipeline_operation_path("native-zero-fill");
-        crate::compute::record_pipeline_operation_vector_blocks((output_len / 16) as u64);
-        crate::compute::record_pipeline_operation_scalar_tail((output_len % 16) as u64);
-        let result =
-            crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
-        return Ok(preserve_mode(img, result));
+        return simd_fit_zero_image(img, output_width, output_height, channels);
     }
     if matches!(resize_filter, ResampleFilter::Nearest) {
         return simd_resize_nearest_boxed(
@@ -877,4 +801,121 @@ pub(crate) fn simd_fit(
         premultiplied_alpha,
         SIMD_FIT_PARALLEL_PIXEL_THRESHOLD,
     )
+}
+
+fn simd_fit_crop_or_float_shortcut(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    mode: Option<&str>,
+    bounds: (f64, f64, f64, f64),
+    resize_filter: ResampleFilter,
+) -> Result<Option<DynamicImage>, PilError> {
+    let (box_left, box_top, box_right, box_bottom) = bounds;
+    // Pillow's `_resize` takes an integer crop shortcut before selecting the
+    // filter. Keep the shortcut only for complete-source identities. A
+    // filtered LA/RGBA non-full crop first converts to
+    // premultiplied storage, so returning the original bytes here would skip
+    // that observable round trip.
+    let box_left_f32 = box_left as f32;
+    let box_top_f32 = box_top as f32;
+    let box_right_f32 = box_right as f32;
+    let box_bottom_f32 = box_bottom as f32;
+    let finite_box = box_left_f32.is_finite()
+        && box_top_f32.is_finite()
+        && box_right_f32.is_finite()
+        && box_bottom_f32.is_finite();
+    let full_source_identity = finite_box
+        && img.width() == output_width
+        && img.height() == output_height
+        && box_left_f32 == 0.0
+        && box_top_f32 == 0.0
+        && box_right_f32 == img.width() as f32
+        && box_bottom_f32 == img.height() as f32;
+    if full_source_identity {
+        if let Some(result) = native_copy_image_bytes(img, mode)? {
+            return Ok(Some(result));
+        }
+    }
+    // `_imaging.c::_resize` takes exact integer crops before dispatching to a
+    // filter. Preserve that ordering for F so special values in discarded
+    // source pixels cannot participate in a floating-point tail.
+    let integer_crop = finite_box
+        && box_left_f32.fract() == 0.0
+        && box_top_f32.fract() == 0.0
+        && box_right_f32 - box_left_f32 == output_width as f32
+        && box_bottom_f32 - box_top_f32 == output_height as f32;
+    if integer_crop && mode == Some("F") {
+        let left = box_left_f32 as u32;
+        let top = box_top_f32 as u32;
+        return Ok(Some(preserve_mode(
+            img,
+            img.crop_imm(left, top, output_width, output_height),
+        )));
+    }
+    if mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
+        return simd_resize_f_boxed(
+            img,
+            output_width,
+            output_height,
+            box_left,
+            box_top,
+            box_right,
+            box_bottom,
+            resize_filter,
+        )
+        .map(Some);
+    }
+    Ok(None)
+}
+
+fn simd_fit_empty_source(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    channels: usize,
+) -> Result<DynamicImage, PilError> {
+    let output_len = usize::try_from(output_width)
+        .ok()
+        .and_then(|width| usize::try_from(output_height).ok()?.checked_mul(width))
+        .and_then(|pixels| pixels.checked_mul(channels))
+        .ok_or_else(|| simd_unsupported("Fit"))?;
+    let mut output = vec![0u8; output_len];
+    let zero_block = u8x16::splat(0).to_array();
+    let mut vector_blocks = 0u64;
+    for block in output.chunks_exact_mut(zero_block.len()) {
+        block.copy_from_slice(&zero_block);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    let remainder = output.len() % zero_block.len();
+    if remainder != 0 {
+        let start = output.len() - remainder;
+        output[start..].copy_from_slice(&zero_block[..remainder]);
+    }
+    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(u64::from(remainder != 0));
+    let result =
+        crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
+    Ok(preserve_mode(img, result))
+}
+
+fn simd_fit_zero_image(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    channels: usize,
+) -> Result<DynamicImage, PilError> {
+    let output_len = usize::try_from(output_width)
+        .ok()
+        .and_then(|width| usize::try_from(output_height).ok()?.checked_mul(width))
+        .and_then(|pixels| pixels.checked_mul(channels))
+        .ok_or_else(|| simd_unsupported("Fit"))?;
+    let output = vec![0; output_len];
+    crate::compute::record_pipeline_operation_path("native-zero-fill");
+    crate::compute::record_pipeline_operation_vector_blocks((output_len / 16) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail((output_len % 16) as u64);
+    let result =
+        crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
+    Ok(preserve_mode(img, result))
 }

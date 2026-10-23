@@ -7,11 +7,26 @@ use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbaImage};
 
 #[test]
 fn f_boxed_resize_sample_view_matches_cpu_reference() {
-    use crate::ops::pil_resize::pil_resize_boxed;
-    use crate::pipeline::ResampleFilter;
-    use crate::raster::{DynamicImage, RgbaImage};
+    for case in f_boxed_resize_cases() {
+        assert_f_boxed_resize_case(case);
+    }
+}
 
-    let cases = [
+type FBoxedResizeCase = (
+    &'static str,
+    u32,
+    u32,
+    u32,
+    u32,
+    f64,
+    f64,
+    f64,
+    f64,
+    ResampleFilter,
+);
+
+fn f_boxed_resize_cases() -> [FBoxedResizeCase; 4] {
+    [
         (
             "bicubic scale two",
             512,
@@ -60,9 +75,11 @@ fn f_boxed_resize_sample_view_matches_cpu_reference() {
             384.0,
             ResampleFilter::Lanczos,
         ),
-    ];
+    ]
+}
 
-    for (
+fn assert_f_boxed_resize_case(
+    (
         case,
         source_width,
         source_height,
@@ -73,54 +90,118 @@ fn f_boxed_resize_sample_view_matches_cpu_reference() {
         box_right,
         box_bottom,
         filter,
-    ) in cases
-    {
-        let samples = (0..source_width as usize * source_height as usize)
-            .map(|index| (((index * 41 % 1021) as i32 - 510) as f32) / 37.0)
-            .collect::<Vec<_>>();
-        let bytes = samples
-            .iter()
-            .flat_map(|sample| sample.to_le_bytes())
-            .collect();
-        let image = DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(source_width, source_height, bytes).expect("packed F samples"),
-        );
-        let expected = pil_resize_boxed(
-            &image,
-            output_width,
-            output_height,
-            box_left,
-            box_top,
-            box_right,
-            box_bottom,
-            filter,
-            Some("F"),
-        );
-        let actual = super::simd_resize_f_boxed(
-            &image,
-            output_width,
-            output_height,
-            box_left,
-            box_top,
-            box_right,
-            box_bottom,
-            filter,
-        )
-        .expect("SIMD boxed F resize");
+    ): FBoxedResizeCase,
+) {
+    use crate::ops::pil_resize::pil_resize_boxed;
 
-        let actual_bytes = actual.as_bytes();
-        let expected_bytes = expected.as_bytes();
-        let first_mismatch = actual_bytes
-            .iter()
-            .zip(expected_bytes)
-            .position(|(actual, expected)| actual != expected);
-        assert!(
-            actual_bytes.len() == expected_bytes.len() && first_mismatch.is_none(),
-            "{case}: first mismatching byte {first_mismatch:?}; actual={:?}, expected={:?}",
-            first_mismatch.and_then(|index| actual_bytes.get(index..index + 4)),
-            first_mismatch.and_then(|index| expected_bytes.get(index..index + 4)),
-        );
-    }
+    let samples = (0..source_width as usize * source_height as usize)
+        .map(|index| (((index * 41 % 1021) as i32 - 510) as f32) / 37.0)
+        .collect::<Vec<_>>();
+    let bytes = samples
+        .iter()
+        .flat_map(|sample| sample.to_le_bytes())
+        .collect();
+    let image = DynamicImage::ImageRgba8(
+        RgbaImage::from_raw(source_width, source_height, bytes).expect("packed F samples"),
+    );
+    let expected = pil_resize_boxed(
+        &image,
+        output_width,
+        output_height,
+        box_left,
+        box_top,
+        box_right,
+        box_bottom,
+        filter,
+        Some("F"),
+    );
+    let actual = super::simd_resize_f_boxed(
+        &image,
+        output_width,
+        output_height,
+        box_left,
+        box_top,
+        box_right,
+        box_bottom,
+        filter,
+    )
+    .expect("SIMD boxed F resize");
+
+    let actual_bytes = actual.as_bytes();
+    let expected_bytes = expected.as_bytes();
+    let first_mismatch = actual_bytes
+        .iter()
+        .zip(expected_bytes)
+        .position(|(actual, expected)| actual != expected);
+    assert!(
+        actual_bytes.len() == expected_bytes.len() && first_mismatch.is_none(),
+        "{case}: first mismatching byte {first_mismatch:?}; actual={:?}, expected={:?}",
+        first_mismatch.and_then(|index| actual_bytes.get(index..index + 4)),
+        first_mismatch.and_then(|index| expected_bytes.get(index..index + 4)),
+    );
+}
+
+#[test]
+fn i16_resize_matches_cpu_reference() {
+    let (width, height, output_width, output_height) = (19, 13, 11, 9);
+    let samples = (0..width * height)
+        .map(|index| match index % 7 {
+            0 => 0,
+            1 => u16::MAX,
+            _ => (index * 7919 + 113) as u16,
+        })
+        .collect::<Vec<_>>();
+    let image = DynamicImage::ImageLuma16(
+        crate::raster::ImageBuffer::from_raw(width, height, samples).expect("I;16 source shape"),
+    );
+    let filter = ResampleFilter::Bicubic;
+    let operation = PipelineOp::Resize {
+        w: output_width,
+        h: output_height,
+        filter,
+    };
+    let actual = super::simd_resize(&image, &operation, Some("I;16")).expect("SIMD I;16 resize");
+    let expected = crate::compute::pool_cpu::ops::resize::execute_resize(
+        &image,
+        output_width,
+        output_height,
+        &filter,
+        Some("I;16"),
+    )
+    .expect("CPU I;16 resize");
+    assert_eq!(actual.as_bytes(), expected.as_bytes());
+}
+
+#[test]
+fn rgba_fit_matches_cpu_reference() {
+    let (width, height) = (37, 23);
+    let samples = (0..width as usize * height as usize * 4)
+        .map(|index| ((index * 67 + index / 9 * 31 + 13) % 256) as u8)
+        .collect();
+    let image = DynamicImage::ImageRgba8(
+        RgbaImage::from_raw(width, height, samples).expect("RGBA source shape"),
+    );
+    let (output_width, output_height) = (17, 19);
+    let (bleed, centering, filter) = (0.0625, (0.25, 0.75), ResampleFilter::Bicubic);
+    let operation = PipelineOp::Fit {
+        w: output_width,
+        h: output_height,
+        filter,
+        bleed,
+        centering,
+    };
+    let actual = super::simd_fit(&image, &operation, Some("RGBA")).expect("SIMD RGBA fit");
+    let expected = crate::compute::pool_cpu::ops::imageops::op_fit(
+        &image,
+        output_width,
+        output_height,
+        filter,
+        bleed,
+        centering,
+        Some("RGBA"),
+    )
+    .expect("CPU RGBA fit");
+    assert_eq!(actual.as_bytes(), expected.as_bytes());
 }
 
 #[test]

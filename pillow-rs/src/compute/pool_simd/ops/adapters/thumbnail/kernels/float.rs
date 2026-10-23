@@ -218,75 +218,133 @@ pub(super) fn simd_thumbnail_reduce_f(
         && output_height == source_height / 2
         && output_width % SIMD_RESIZE_LANES == 0
     {
-        let output_len = output_pixels
-            .checked_mul(4)
-            .ok_or_else(|| simd_unsupported("Thumbnail"))?;
-        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-        {
-            let mut output = Vec::with_capacity(output_len);
-            let vector_blocks = simd_thumbnail_reduce_f_2x2_neon(
-                &source,
-                source_width,
-                source_height,
-                output_width,
-                output_height,
-                &mut output,
-            )?;
-            let result = crate::image_utils::raw_bytes_to_image(
-                output_width as u32,
-                output_height as u32,
-                output,
-                4,
-            )?;
-            return Ok((result, vector_blocks, 0));
-        }
-
-        #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-        {
-            let mut output = Vec::with_capacity(output_len);
-            let mut vector_blocks = 0u64;
-            for output_y in 0..output_height {
-                let source_row_top = output_y * 2 * source_width;
-                let source_row_bottom = source_row_top + source_width;
-                for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
-                    let source_x = output_x * 2;
-                    let top_left = f32x8::new(std::array::from_fn(|lane| {
-                        source[source_row_top + source_x + lane * 2]
-                    }));
-                    let top_right = f32x8::new(std::array::from_fn(|lane| {
-                        source[source_row_top + source_x + lane * 2 + 1]
-                    }));
-                    let bottom_left = f32x8::new(std::array::from_fn(|lane| {
-                        source[source_row_bottom + source_x + lane * 2]
-                    }));
-                    let bottom_right = f32x8::new(std::array::from_fn(|lane| {
-                        source[source_row_bottom + source_x + lane * 2 + 1]
-                    }));
-                    let quartets =
-                        (((top_left + top_right) + bottom_left) + bottom_right).to_array();
-                    let values = quartets.map(|quartet| {
-                        let mut sum = 0.0f64;
-                        sum += f64::from(quartet);
-                        (sum * 0.25) as f32
-                    });
-                    #[cfg(target_endian = "little")]
-                    output.extend_from_slice(bytemuck::cast_slice(&values));
-                    #[cfg(target_endian = "big")]
-                    for value in values {
-                        output.extend_from_slice(&value.to_le_bytes());
-                    }
-                    vector_blocks = vector_blocks.saturating_add(1);
-                }
-            }
-            let result = crate::image_utils::raw_bytes_to_image(
-                output_width as u32,
-                output_height as u32,
-                output,
-                4,
-            )?;
-            return Ok((result, vector_blocks, 0));
-        }
+        let (image, vector_blocks) = simd_thumbnail_reduce_f_even_2x2(
+            &source,
+            source_width,
+            source_height,
+            output_width,
+            output_height,
+            output_pixels,
+        )?;
+        return Ok((image, vector_blocks, 0));
     }
+    simd_thumbnail_reduce_f_general(
+        &source,
+        source_width,
+        source_height,
+        factor_x,
+        factor_y,
+        output_width,
+        output_height,
+        output_pixels,
+    )
+}
+
+fn simd_thumbnail_reduce_f_even_2x2(
+    source: &[f32],
+    source_width: usize,
+    _source_height: usize,
+    output_width: usize,
+    output_height: usize,
+    output_pixels: usize,
+) -> Result<(DynamicImage, u64), PilError> {
+    let output_len = output_pixels
+        .checked_mul(4)
+        .ok_or_else(|| simd_unsupported("Thumbnail"))?;
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    {
+        let mut output = Vec::with_capacity(output_len);
+        let vector_blocks = simd_thumbnail_reduce_f_2x2_neon(
+            source,
+            source_width,
+            _source_height,
+            output_width,
+            output_height,
+            &mut output,
+        )?;
+        let result = crate::image_utils::raw_bytes_to_image(
+            output_width as u32,
+            output_height as u32,
+            output,
+            4,
+        )?;
+        Ok((result, vector_blocks))
+    }
+    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+    {
+        let mut output = Vec::with_capacity(output_len);
+        let mut vector_blocks = 0u64;
+        for output_y in 0..output_height {
+            let source_row_top = output_y * 2 * source_width;
+            let source_row_bottom = source_row_top + source_width;
+            vector_blocks = vector_blocks.saturating_add(reduce_f_even_2x2_row(
+                source,
+                source_row_top,
+                source_row_bottom,
+                output_width,
+                &mut output,
+            ));
+        }
+        let result = crate::image_utils::raw_bytes_to_image(
+            output_width as u32,
+            output_height as u32,
+            output,
+            4,
+        )?;
+        Ok((result, vector_blocks))
+    }
+}
+
+#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+fn reduce_f_even_2x2_row(
+    source: &[f32],
+    source_row_top: usize,
+    source_row_bottom: usize,
+    output_width: usize,
+    output: &mut Vec<u8>,
+) -> u64 {
+    let mut vector_blocks = 0u64;
+    for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
+        let source_x = output_x * 2;
+        let top_left = f32x8::new(std::array::from_fn(|lane| {
+            source[source_row_top + source_x + lane * 2]
+        }));
+        let top_right = f32x8::new(std::array::from_fn(|lane| {
+            source[source_row_top + source_x + lane * 2 + 1]
+        }));
+        let bottom_left = f32x8::new(std::array::from_fn(|lane| {
+            source[source_row_bottom + source_x + lane * 2]
+        }));
+        let bottom_right = f32x8::new(std::array::from_fn(|lane| {
+            source[source_row_bottom + source_x + lane * 2 + 1]
+        }));
+        let quartets = (((top_left + top_right) + bottom_left) + bottom_right).to_array();
+        let values = quartets.map(|quartet| {
+            let mut sum = 0.0f64;
+            sum += f64::from(quartet);
+            (sum * 0.25) as f32
+        });
+        #[cfg(target_endian = "little")]
+        output.extend_from_slice(bytemuck::cast_slice(&values));
+        #[cfg(target_endian = "big")]
+        for value in values {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    vector_blocks
+}
+
+fn simd_thumbnail_reduce_f_general(
+    source: &[f32],
+    source_width: usize,
+    source_height: usize,
+    factor_x: usize,
+    factor_y: usize,
+    output_width: usize,
+    output_height: usize,
+    output_pixels: usize,
+) -> Result<(DynamicImage, u64, u64), PilError> {
     let mut output = Vec::with_capacity(
         output_pixels
             .checked_mul(4)
@@ -301,7 +359,7 @@ pub(super) fn simd_thumbnail_reduce_f(
             let output_y = index / output_width;
             let output_x = index % output_width;
             values[lane] = thumbnail_f_reduce_value(
-                &source,
+                source,
                 source_width,
                 source_height,
                 factor_x,

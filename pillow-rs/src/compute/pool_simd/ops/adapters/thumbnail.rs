@@ -278,175 +278,283 @@ pub(crate) fn simd_thumbnail(
             effective_filter,
         );
     }
-    let typed_scalar = matches!(mode, Some("F" | "I"));
-    let mut sparse_rgb_reduction = false;
-    let work_img = if factor_x != 1 || factor_y != 1 {
-        let (reduced, vector_blocks, scalar_tail) = if typed_scalar && mode == Some("F") {
-            simd_thumbnail_reduce_f(img, factor_x, factor_y)?
-        } else if typed_scalar && mode == Some("I") {
-            simd_thumbnail_reduce_i(img, factor_x, factor_y)?
-        } else {
-            let channels = native_resize_byte_layout_for_image(img, mode)
-                .map(|(channels, _)| channels)
-                .ok_or_else(|| simd_unsupported("Thumbnail"))?;
-            let sparse_rgb = if matches!(img, DynamicImage::ImageRgb8(_))
-                && matches!(mode, None | Some("RGB"))
-                && factor_x == 2
-                && factor_y == 2
-            {
-                native_reduce_sparse_rgb_2x2(img)
-            } else {
-                None
-            };
-            let (output, width, height, vector_blocks, scalar_tail) =
-                if let Some((output, width, height)) = sparse_rgb {
-                    sparse_rgb_reduction = true;
-                    (output, width, height, 0, 0)
-                } else {
-                    native_reduce_bytes(
-                        img,
-                        channels,
-                        native_thumbnail_has_alpha(img, mode),
-                        factor_x,
-                        factor_y,
-                        false,
-                    )
-                    .ok_or_else(|| simd_unsupported("Thumbnail"))?
-                };
-            (
-                crate::image_utils::raw_bytes_to_image(width, height, output, channels)?,
-                vector_blocks,
-                scalar_tail,
-            )
-        };
-        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-        reduced
-    } else {
-        img.clone()
+    let (work_img, sparse_rgb_reduction) =
+        simd_thumbnail_reduced_source(img, mode, factor_x, factor_y)?;
+    match mode {
+        Some("F") => simd_thumbnail_resize_f(
+            img,
+            &work_img,
+            output_width,
+            output_height,
+            factor_x,
+            factor_y,
+            effective_filter,
+        ),
+        Some("I") => simd_thumbnail_resize_i(
+            img,
+            &work_img,
+            output_width,
+            output_height,
+            factor_x,
+            factor_y,
+            effective_filter,
+        ),
+        _ => simd_thumbnail_resize_bytes(
+            img,
+            &work_img,
+            mode,
+            output_width,
+            output_height,
+            factor_x,
+            factor_y,
+            effective_filter,
+            sparse_rgb_reduction,
+        ),
+    }
+}
+
+fn simd_thumbnail_reduced_source(
+    img: &DynamicImage,
+    mode: Option<&str>,
+    factor_x: u32,
+    factor_y: u32,
+) -> Result<(DynamicImage, bool), PilError> {
+    if factor_x == 1 && factor_y == 1 {
+        return Ok((img.clone(), false));
+    }
+    let (reduced, vector_blocks, scalar_tail, sparse_rgb_reduction) = match mode {
+        Some("F") => {
+            let (image, blocks, tail) = simd_thumbnail_reduce_f(img, factor_x, factor_y)?;
+            (image, blocks, tail, false)
+        }
+        Some("I") => {
+            let (image, blocks, tail) = simd_thumbnail_reduce_i(img, factor_x, factor_y)?;
+            (image, blocks, tail, false)
+        }
+        _ => simd_thumbnail_reduce_bytes_source(img, mode, factor_x, factor_y)?,
     };
-    if typed_scalar && mode == Some("F") {
-        if factor_x != 1 || factor_y != 1 {
-            // Current Apple ARM64 controls for native F 1024x768 are slower
-            // than CPU (0.417/0.437 ms SIMD vs 0.325/0.323 ms CPU; see
-            // docs/evidence/filter/thumbnail-fi-rank9-arm64-20261022/README.md).
-            // Profiles place most SIMD samples in simd_resize_f, but do not
-            // split its stages. Source inspection shows scalar source and
-            // coefficient lane gathers feeding ordered f64x8 updates; their
-            // overhead likely outweighs vector work on this 256x192 result.
-            let box_right = f64::from(img.width()) / f64::from(factor_x);
-            let box_bottom = f64::from(img.height()) / f64::from(factor_y);
-            // The reducing-gap box is identical to ordinary F resize only
-            // when it reaches the reduced image's exact final pixel bounds.
-            // Keep ceil-sized partial edges on the boxed reference path.
-            if box_right == f64::from(work_img.width())
-                && box_bottom == f64::from(work_img.height())
-            {
-                return simd_resize_f(&work_img, output_width, output_height, &effective_filter);
-            }
-            return simd_resize_f_boxed(
-                &work_img,
-                output_width,
-                output_height,
-                0.0,
-                0.0,
-                box_right,
-                box_bottom,
-                effective_filter,
-            );
-        }
-        return simd_resize_f(&work_img, output_width, output_height, &effective_filter);
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    Ok((reduced, sparse_rgb_reduction))
+}
+
+fn simd_thumbnail_reduce_bytes_source(
+    img: &DynamicImage,
+    mode: Option<&str>,
+    factor_x: u32,
+    factor_y: u32,
+) -> Result<(DynamicImage, u64, u64, bool), PilError> {
+    let channels = native_resize_byte_layout_for_image(img, mode)
+        .map(|(channels, _)| channels)
+        .ok_or_else(|| simd_unsupported("Thumbnail"))?;
+    let sparse_rgb = if matches!(img, DynamicImage::ImageRgb8(_))
+        && matches!(mode, None | Some("RGB"))
+        && factor_x == 2
+        && factor_y == 2
+    {
+        native_reduce_sparse_rgb_2x2(img)
+    } else {
+        None
+    };
+    if let Some((output, width, height)) = sparse_rgb {
+        return Ok((
+            crate::image_utils::raw_bytes_to_image(width, height, output, channels)?,
+            0,
+            0,
+            true,
+        ));
     }
-    if typed_scalar && mode == Some("I") {
-        if factor_x != 1 || factor_y != 1 {
-            let box_right = f64::from(img.width()) / f64::from(factor_x);
-            let box_bottom = f64::from(img.height()) / f64::from(factor_y);
-            if box_right == f64::from(work_img.width())
-                && box_bottom == f64::from(work_img.height())
-            {
-                // A complete reduced image has ordinary resize coefficients;
-                // retain boxed convolution only for fractional source edges.
-                return simd_resize_i32(&work_img, output_width, output_height, &effective_filter);
-            }
-            return simd_resize_i32_boxed(
-                &work_img,
-                output_width,
-                output_height,
-                0.0,
-                0.0,
-                box_right,
-                box_bottom,
-                effective_filter,
-            );
-        }
-        return simd_resize_i32(&work_img, output_width, output_height, &effective_filter);
+    let (output, width, height, vector_blocks, scalar_tail) = native_reduce_bytes(
+        img,
+        channels,
+        native_thumbnail_has_alpha(img, mode),
+        factor_x,
+        factor_y,
+        false,
+    )
+    .ok_or_else(|| simd_unsupported("Thumbnail"))?;
+    Ok((
+        crate::image_utils::raw_bytes_to_image(width, height, output, channels)?,
+        vector_blocks,
+        scalar_tail,
+        false,
+    ))
+}
+
+fn simd_thumbnail_resize_f(
+    img: &DynamicImage,
+    work_img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    factor_x: u32,
+    factor_y: u32,
+    filter: ResampleFilter,
+) -> Result<DynamicImage, PilError> {
+    if factor_x == 1 && factor_y == 1 {
+        return simd_resize_f(work_img, output_width, output_height, &filter);
     }
-    let (channels, premultiplied_alpha) = native_resize_byte_layout_for_image(&work_img, mode)
+    // Current Apple ARM64 controls for native F 1024x768 are slower than CPU
+    // (0.417/0.437 ms SIMD vs 0.325/0.323 ms CPU; see
+    // docs/evidence/filter/thumbnail-fi-rank9-arm64-20261022/README.md).
+    // Profiles place most SIMD samples in simd_resize_f, but do not split its
+    // stages. Source inspection shows scalar source/coefficient lane gathers
+    // feeding ordered f64x8 updates; their overhead likely outweighs vector
+    // work on this 256x192 result.
+    let box_right = f64::from(img.width()) / f64::from(factor_x);
+    let box_bottom = f64::from(img.height()) / f64::from(factor_y);
+    // The reducing-gap box is identical to ordinary F resize only when it
+    // reaches the reduced image's exact final pixel bounds. Keep ceil-sized
+    // partial edges on the boxed reference path.
+    if box_right == f64::from(work_img.width()) && box_bottom == f64::from(work_img.height()) {
+        return simd_resize_f(work_img, output_width, output_height, &filter);
+    }
+    simd_resize_f_boxed(
+        work_img,
+        output_width,
+        output_height,
+        0.0,
+        0.0,
+        box_right,
+        box_bottom,
+        filter,
+    )
+}
+
+fn simd_thumbnail_resize_i(
+    img: &DynamicImage,
+    work_img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    factor_x: u32,
+    factor_y: u32,
+    filter: ResampleFilter,
+) -> Result<DynamicImage, PilError> {
+    if factor_x == 1 && factor_y == 1 {
+        return simd_resize_i32(work_img, output_width, output_height, &filter);
+    }
+    let box_right = f64::from(img.width()) / f64::from(factor_x);
+    let box_bottom = f64::from(img.height()) / f64::from(factor_y);
+    if box_right == f64::from(work_img.width()) && box_bottom == f64::from(work_img.height()) {
+        // A complete reduced image has ordinary resize coefficients; retain
+        // boxed convolution only for fractional source edges.
+        return simd_resize_i32(work_img, output_width, output_height, &filter);
+    }
+    simd_resize_i32_boxed(
+        work_img,
+        output_width,
+        output_height,
+        0.0,
+        0.0,
+        box_right,
+        box_bottom,
+        filter,
+    )
+}
+
+fn simd_thumbnail_resize_bytes(
+    img: &DynamicImage,
+    work_img: &DynamicImage,
+    mode: Option<&str>,
+    output_width: u32,
+    output_height: u32,
+    factor_x: u32,
+    factor_y: u32,
+    filter: ResampleFilter,
+    sparse_rgb_reduction: bool,
+) -> Result<DynamicImage, PilError> {
+    let (channels, premultiplied_alpha) = native_resize_byte_layout_for_image(work_img, mode)
         .ok_or_else(|| simd_unsupported("Thumbnail"))?;
     if factor_x != 1 || factor_y != 1 {
-        let box_right = f64::from(img.width()) / f64::from(factor_x);
-        let box_bottom = f64::from(img.height()) / f64::from(factor_y);
-        if matches!(work_img, DynamicImage::ImageRgb8(_))
-            && matches!(mode, None | Some("RGB"))
-            && box_right == f64::from(work_img.width())
-            && box_bottom == f64::from(work_img.height())
-        {
-            // An aligned full-source box is exactly the ordinary Resize
-            // geometry. Reuse its proven checked 32-bit RGB convolution path;
-            // the boxed general kernel otherwise accumulates these byte
-            // samples in wider lanes on the common reducing-gap thumbnail.
-            if sparse_rgb_reduction {
-                return simd_resize_convolution_with_zero_row_elision(
-                    &work_img,
-                    output_width,
-                    output_height,
-                    effective_filter,
-                    channels,
-                    premultiplied_alpha,
-                    true,
-                    0,
-                    false,
-                    true,
-                );
-            }
-            return simd_resize_convolution(
-                &work_img,
-                output_width,
-                output_height,
-                effective_filter,
-                channels,
-                premultiplied_alpha,
-                true,
-            );
-        }
-        return simd_resize_convolution_boxed(
-            &work_img,
+        return simd_thumbnail_resize_boxed_bytes(
+            img,
+            work_img,
+            mode,
             output_width,
             output_height,
-            0.0,
-            0.0,
-            box_right,
-            box_bottom,
-            effective_filter,
+            factor_x,
+            factor_y,
+            filter,
             channels,
             premultiplied_alpha,
-            0,
+            sparse_rgb_reduction,
         );
     }
-    match effective_filter {
+    match filter {
         ResampleFilter::Nearest => {
-            simd_resize_nearest(&work_img, output_width, output_height, channels)
+            simd_resize_nearest(work_img, output_width, output_height, channels)
         }
         _ => simd_resize_convolution(
-            &work_img,
+            work_img,
             output_width,
             output_height,
-            effective_filter,
+            filter,
             channels,
             premultiplied_alpha,
             false,
         ),
     }
+}
+
+fn simd_thumbnail_resize_boxed_bytes(
+    img: &DynamicImage,
+    work_img: &DynamicImage,
+    mode: Option<&str>,
+    output_width: u32,
+    output_height: u32,
+    factor_x: u32,
+    factor_y: u32,
+    filter: ResampleFilter,
+    channels: usize,
+    premultiplied_alpha: bool,
+    sparse_rgb_reduction: bool,
+) -> Result<DynamicImage, PilError> {
+    let box_right = f64::from(img.width()) / f64::from(factor_x);
+    let box_bottom = f64::from(img.height()) / f64::from(factor_y);
+    let aligned_rgb = matches!(work_img, DynamicImage::ImageRgb8(_))
+        && matches!(mode, None | Some("RGB"))
+        && box_right == f64::from(work_img.width())
+        && box_bottom == f64::from(work_img.height());
+    if aligned_rgb {
+        // An aligned full-source box is exactly the ordinary Resize geometry.
+        // Reuse its checked 32-bit RGB convolution path; boxed general work
+        // otherwise accumulates byte samples in wider lanes.
+        if sparse_rgb_reduction {
+            return simd_resize_convolution_with_zero_row_elision(
+                work_img,
+                output_width,
+                output_height,
+                filter,
+                channels,
+                premultiplied_alpha,
+                true,
+                0,
+                false,
+                true,
+            );
+        }
+        return simd_resize_convolution(
+            work_img,
+            output_width,
+            output_height,
+            filter,
+            channels,
+            premultiplied_alpha,
+            true,
+        );
+    }
+    simd_resize_convolution_boxed(
+        work_img,
+        output_width,
+        output_height,
+        0.0,
+        0.0,
+        box_right,
+        box_bottom,
+        filter,
+        channels,
+        premultiplied_alpha,
+        0,
+    )
 }
 
 #[cfg(test)]

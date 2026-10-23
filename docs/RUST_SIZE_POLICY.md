@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 12 legacy file ceilings and 176 legacy functions across 116 source paths.
+Snapshot: 12 legacy file ceilings and 164 legacy functions across 106 source paths.
 A dash means that path has no over-limit file entry; function counts and
 maximum recorded function lines are summarized here, with each exact
 signature and ceiling in the JSON baseline. Each table row repeats the
@@ -186,16 +186,6 @@ owner and reducer issue recorded for that path.
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/layout.rs</code> | — | 1 (max 135 lines) | lazytrot | pillow-rs#5a5k |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/pad.rs</code> | — | 1 (max 294 lines) | lazytrot | pillow-rs#5a5k |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/reduce.rs</code> | — | 1 (max 130 lines) | lazytrot | pillow-rs#5a5k |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize.rs</code> | — | 1 (max 140 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/f32.rs</code> | — | 2 (max 409 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/luma16.rs</code> | — | 1 (max 205 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8.rs</code> | — | 1 (max 367 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_boxed_convolution.rs</code> | — | 1 (max 331 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_nearest.rs</code> | — | 2 (max 198 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/tests.rs</code> | — | 1 (max 111 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail.rs</code> | — | 1 (max 189 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/float.rs</code> | — | 1 (max 130 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/integer.rs</code> | — | 1 (max 131 lines) | lazytrot | pillow-rs#h8p0 |
 | <code>pillow-rs/src/compute/pool_simd/ops/scalar.rs</code> | 4,038 | 4 (max 190 lines) | lazytrot | pillow-rs#nt8w |
 | <code>pillow-rs/src/draw/mod.rs</code> | 3,106 | 3 (max 504 lines) | lazytrot | pillow-rs#mtx1 |
 | <code>pillow-rs/src/image/backend.rs</code> | — | 1 (max 110 lines) | lazytrot | pillow-rs#knsf |
@@ -219,13 +209,3 @@ owner and reducer issue recorded for that path.
 | <code>pillow-rs/src/ops/transform.rs</code> | — | 2 (max 139 lines) | lazytrot | pillow-rs#tdnt |
 | <code>pillow-rs/src/raster/buffer.rs</code> | 1,244 | 0 | lazytrot | pillow-rs#4bdq |
 | <code>pillow-rs/src/raster/dynamic.rs</code> | 1,162 | 1 (max 102 lines) | lazytrot | pillow-rs#4bdq |
-
-## Contributor workflow
-
-Before changing a listed module, read its callers and use the operation or
-backend boundaries in [docs/IMPLEMENTATION_STRUCTURE.md](IMPLEMENTATION_STRUCTURE.md).
-Keep mode-specific behavior in its format-specific path, retain real SIMD
-kernels under the SIMD owner, and preserve exact Pillow behavior. Size
-reductions must not add generic or dynamic dispatch to pixel paths or hide a
-performance regression. Verify only the affected behavior and backend lanes
-when the refactor changes execution.

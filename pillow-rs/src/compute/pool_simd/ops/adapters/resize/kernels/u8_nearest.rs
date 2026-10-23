@@ -35,6 +35,104 @@ fn nearest_gather_block(
     Some(block)
 }
 
+/// Select adjacent source bytes for one native nearest-neighbour SIMD block.
+/// Use a shuffle when the source span fits the portable sixteen-byte window;
+/// otherwise retain the scalar gather and vectorized output pack.
+fn nearest_resize_vector_block(
+    source: &[u8],
+    source_row: usize,
+    x_indices: &[usize],
+    output_x: usize,
+    pixel_count: usize,
+    channels: usize,
+) -> Option<[u8; SIMD_RESIZE_NEAREST_BYTES]> {
+    let source_start = x_indices.get(output_x)?.checked_mul(channels)?;
+    let source_end = x_indices
+        .get(output_x.checked_add(pixel_count)?.checked_sub(1)?)?
+        .checked_mul(channels)?
+        .checked_add(channels)?;
+    let span = source_end.checked_sub(source_start)?;
+    if span > SIMD_RESIZE_NEAREST_BYTES {
+        return nearest_gather_block(
+            source,
+            source_row,
+            x_indices,
+            output_x,
+            pixel_count,
+            channels,
+        );
+    }
+
+    let source_slice_start = source_row.checked_add(source_start)?;
+    let source_slice_end = source_slice_start.checked_add(span)?;
+    let mut source_block = [0u8; SIMD_RESIZE_NEAREST_BYTES];
+    source_block[..span].copy_from_slice(source.get(source_slice_start..source_slice_end)?);
+    let mut indices = [0u8; SIMD_RESIZE_NEAREST_BYTES];
+    for pixel in 0..pixel_count {
+        let source_pixel = x_indices[output_x + pixel]
+            .checked_mul(channels)?
+            .checked_sub(source_start)?;
+        for channel in 0..channels {
+            indices[pixel * channels + channel] = u8::try_from(source_pixel + channel).ok()?;
+        }
+    }
+    Some(
+        u8x16::new(source_block)
+            .swizzle_relaxed(u8x16::new(indices))
+            .to_array(),
+    )
+}
+
+fn write_nearest_resize_row(
+    source: &[u8],
+    source_row: usize,
+    x_indices: &[usize],
+    output_width: usize,
+    channels: usize,
+    output: &mut [u8],
+    output_row: usize,
+) -> Option<(u64, u64)> {
+    let pixels_per_vector = SIMD_RESIZE_NEAREST_BYTES / channels;
+    let vector_width = output_width / pixels_per_vector * pixels_per_vector;
+    let block_bytes = pixels_per_vector * channels;
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    if output_width < pixels_per_vector {
+        let values =
+            nearest_resize_vector_block(source, source_row, x_indices, 0, output_width, channels)?;
+        let output_bytes = output_width.checked_mul(channels)?;
+        output
+            .get_mut(output_row..output_row.checked_add(output_bytes)?)?
+            .copy_from_slice(&values[..output_bytes]);
+        return Some((1, 0));
+    }
+
+    for output_x in (0..vector_width).step_by(pixels_per_vector) {
+        let values = nearest_resize_vector_block(
+            source,
+            source_row,
+            x_indices,
+            output_x,
+            pixels_per_vector,
+            channels,
+        )?;
+        let output_start = output_row.checked_add(output_x.checked_mul(channels)?)?;
+        output
+            .get_mut(output_start..output_start.checked_add(block_bytes)?)?
+            .copy_from_slice(&values[..block_bytes]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    for output_x in vector_width..output_width {
+        let source_start = source_row.checked_add(x_indices[output_x].checked_mul(channels)?)?;
+        let output_start = output_row.checked_add(output_x.checked_mul(channels)?)?;
+        output
+            .get_mut(output_start..output_start.checked_add(channels)?)?
+            .copy_from_slice(source.get(source_start..source_start.checked_add(channels)?)?);
+        scalar_tail = scalar_tail.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail))
+}
+
 pub(in crate::compute::pool_simd::ops::adapters) fn simd_resize_nearest(
     img: &DynamicImage,
     output_width: u32,
@@ -65,9 +163,6 @@ pub(in crate::compute::pool_simd::ops::adapters) fn simd_resize_nearest(
             "SIMD resize source buffer shape mismatch".into(),
         ));
     }
-    let pixels_per_vector = SIMD_RESIZE_NEAREST_BYTES / channels;
-    let vector_width = output_width_usize / pixels_per_vector * pixels_per_vector;
-    let block_bytes = pixels_per_vector * channels;
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
@@ -80,162 +175,18 @@ pub(in crate::compute::pool_simd::ops::adapters) fn simd_resize_nearest(
             .checked_mul(output_width_usize)
             .and_then(|offset| offset.checked_mul(channels))
             .ok_or_else(|| simd_unsupported("Resize"))?;
-        if output_width_usize < pixels_per_vector {
-            // A short row still has a vector data plane: gather the selected
-            // samples into a padded u8x16 block and store only the valid
-            // prefix. This keeps narrow ImageOps.pad/resize rows out of the
-            // scalar-only admission bucket without reading past the source.
-            let source_start = x_indices[0]
-                .checked_mul(channels)
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            let source_end = x_indices[output_width_usize - 1]
-                .checked_mul(channels)
-                .and_then(|offset| offset.checked_add(channels))
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            let span = source_end
-                .checked_sub(source_start)
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            let values = if span <= SIMD_RESIZE_NEAREST_BYTES {
-                let mut source_block = [0u8; SIMD_RESIZE_NEAREST_BYTES];
-                let source_slice_start = source_row
-                    .checked_add(source_start)
-                    .ok_or_else(|| simd_unsupported("Resize"))?;
-                let source_slice_end = source_slice_start
-                    .checked_add(span)
-                    .ok_or_else(|| simd_unsupported("Resize"))?;
-                source_block[..span].copy_from_slice(
-                    source
-                        .get(source_slice_start..source_slice_end)
-                        .ok_or_else(|| simd_unsupported("Resize"))?,
-                );
-                let mut indices = [0u8; SIMD_RESIZE_NEAREST_BYTES];
-                for pixel in 0..output_width_usize {
-                    let source_pixel = x_indices[pixel]
-                        .checked_mul(channels)
-                        .and_then(|offset| offset.checked_sub(source_start))
-                        .ok_or_else(|| simd_unsupported("Resize"))?;
-                    for channel in 0..channels {
-                        indices[pixel * channels + channel] = u8::try_from(source_pixel + channel)
-                            .map_err(|_| simd_unsupported("Resize"))?;
-                    }
-                }
-                u8x16::new(source_block)
-                    .swizzle_relaxed(u8x16::new(indices))
-                    .to_array()
-            } else {
-                u8x16::new(
-                    nearest_gather_block(
-                        source,
-                        source_row,
-                        &x_indices,
-                        0,
-                        output_width_usize,
-                        channels,
-                    )
-                    .ok_or_else(|| simd_unsupported("Resize"))?,
-                )
-                .to_array()
-            };
-            let output_bytes = output_width_usize
-                .checked_mul(channels)
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            output
-                .get_mut(output_row..output_row + output_bytes)
-                .ok_or_else(|| simd_unsupported("Resize"))?
-                .copy_from_slice(&values[..output_bytes]);
-            vector_blocks = vector_blocks.saturating_add(1);
-            continue;
-        }
-        for output_x in (0..vector_width).step_by(pixels_per_vector) {
-            let source_start = x_indices[output_x]
-                .checked_mul(channels)
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            let source_end = x_indices[output_x + pixels_per_vector - 1]
-                .checked_mul(channels)
-                .and_then(|offset| offset.checked_add(channels))
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            let span = source_end
-                .checked_sub(source_start)
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            let values = if span <= SIMD_RESIZE_NEAREST_BYTES {
-                let mut source_block = [0u8; SIMD_RESIZE_NEAREST_BYTES];
-                let source_slice_start = source_row
-                    .checked_add(source_start)
-                    .ok_or_else(|| simd_unsupported("Resize"))?;
-                let source_slice_end = source_slice_start
-                    .checked_add(span)
-                    .ok_or_else(|| simd_unsupported("Resize"))?;
-                source_block[..span].copy_from_slice(
-                    source
-                        .get(source_slice_start..source_slice_end)
-                        .ok_or_else(|| simd_unsupported("Resize"))?,
-                );
-                let mut indices = [0u8; SIMD_RESIZE_NEAREST_BYTES];
-                for pixel in 0..pixels_per_vector {
-                    let source_pixel = x_indices[output_x + pixel]
-                        .checked_mul(channels)
-                        .and_then(|offset| offset.checked_sub(source_start))
-                        .ok_or_else(|| simd_unsupported("Resize"))?;
-                    for channel in 0..channels {
-                        indices[pixel * channels + channel] = u8::try_from(source_pixel + channel)
-                            .map_err(|_| simd_unsupported("Resize"))?;
-                    }
-                }
-                u8x16::new(source_block)
-                    .swizzle_relaxed(u8x16::new(indices))
-                    .to_array()
-            } else {
-                u8x16::new(
-                    nearest_gather_block(
-                        source,
-                        source_row,
-                        &x_indices,
-                        output_x,
-                        pixels_per_vector,
-                        channels,
-                    )
-                    .ok_or_else(|| simd_unsupported("Resize"))?,
-                )
-                .to_array()
-            };
-            let output_start = output_row
-                .checked_add(
-                    output_x
-                        .checked_mul(channels)
-                        .ok_or_else(|| simd_unsupported("Resize"))?,
-                )
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            output
-                .get_mut(output_start..output_start + block_bytes)
-                .ok_or_else(|| simd_unsupported("Resize"))?
-                .copy_from_slice(&values[..block_bytes]);
-            vector_blocks = vector_blocks.saturating_add(1);
-        }
-        for output_x in vector_width..output_width_usize {
-            let source_start = source_row
-                .checked_add(
-                    x_indices[output_x]
-                        .checked_mul(channels)
-                        .ok_or_else(|| simd_unsupported("Resize"))?,
-                )
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            let output_start = output_row
-                .checked_add(
-                    output_x
-                        .checked_mul(channels)
-                        .ok_or_else(|| simd_unsupported("Resize"))?,
-                )
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            output
-                .get_mut(output_start..output_start + channels)
-                .ok_or_else(|| simd_unsupported("Resize"))?
-                .copy_from_slice(
-                    source
-                        .get(source_start..source_start + channels)
-                        .ok_or_else(|| simd_unsupported("Resize"))?,
-                );
-            scalar_tail = scalar_tail.saturating_add(1);
-        }
+        let (row_blocks, row_tail) = write_nearest_resize_row(
+            source,
+            source_row,
+            &x_indices,
+            output_width_usize,
+            channels,
+            &mut output,
+            output_row,
+        )
+        .ok_or_else(|| simd_unsupported("Resize"))?;
+        vector_blocks = vector_blocks.saturating_add(row_blocks);
+        scalar_tail = scalar_tail.saturating_add(row_tail);
     }
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
@@ -290,9 +241,6 @@ pub(in crate::compute::pool_simd::ops::adapters) fn simd_resize_nearest_boxed(
         ));
     }
     let source = img.as_bytes();
-    let pixels_per_vector = SIMD_RESIZE_NEAREST_BYTES / channels;
-    let vector_width = output_width / pixels_per_vector * pixels_per_vector;
-    let block_bytes = pixels_per_vector * channels;
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
@@ -305,73 +253,18 @@ pub(in crate::compute::pool_simd::ops::adapters) fn simd_resize_nearest_boxed(
             .checked_mul(output_width)
             .and_then(|offset| offset.checked_mul(channels))
             .ok_or_else(|| simd_unsupported("Fit"))?;
-        if output_width < pixels_per_vector {
-            let values = u8x16::new(
-                nearest_gather_block(source, source_row, &x_indices, 0, output_width, channels)
-                    .ok_or_else(|| simd_unsupported("Fit"))?,
-            )
-            .to_array();
-            let output_bytes = output_width
-                .checked_mul(channels)
-                .ok_or_else(|| simd_unsupported("Fit"))?;
-            output
-                .get_mut(output_row..output_row + output_bytes)
-                .ok_or_else(|| simd_unsupported("Fit"))?
-                .copy_from_slice(&values[..output_bytes]);
-            vector_blocks = vector_blocks.saturating_add(1);
-            continue;
-        }
-        for output_x in (0..vector_width).step_by(pixels_per_vector) {
-            let values = u8x16::new(
-                nearest_gather_block(
-                    source,
-                    source_row,
-                    &x_indices,
-                    output_x,
-                    pixels_per_vector,
-                    channels,
-                )
-                .ok_or_else(|| simd_unsupported("Fit"))?,
-            )
-            .to_array();
-            let output_start = output_row
-                .checked_add(
-                    output_x
-                        .checked_mul(channels)
-                        .ok_or_else(|| simd_unsupported("Fit"))?,
-                )
-                .ok_or_else(|| simd_unsupported("Fit"))?;
-            output
-                .get_mut(output_start..output_start + block_bytes)
-                .ok_or_else(|| simd_unsupported("Fit"))?
-                .copy_from_slice(&values[..block_bytes]);
-            vector_blocks = vector_blocks.saturating_add(1);
-        }
-        for output_x in vector_width..output_width {
-            let source_start = source_row
-                .checked_add(
-                    x_indices[output_x]
-                        .checked_mul(channels)
-                        .ok_or_else(|| simd_unsupported("Fit"))?,
-                )
-                .ok_or_else(|| simd_unsupported("Fit"))?;
-            let output_start = output_row
-                .checked_add(
-                    output_x
-                        .checked_mul(channels)
-                        .ok_or_else(|| simd_unsupported("Fit"))?,
-                )
-                .ok_or_else(|| simd_unsupported("Fit"))?;
-            output
-                .get_mut(output_start..output_start + channels)
-                .ok_or_else(|| simd_unsupported("Fit"))?
-                .copy_from_slice(
-                    source
-                        .get(source_start..source_start + channels)
-                        .ok_or_else(|| simd_unsupported("Fit"))?,
-                );
-            scalar_tail = scalar_tail.saturating_add(1);
-        }
+        let (row_blocks, row_tail) = write_nearest_boxed_row(
+            source,
+            source_row,
+            &x_indices,
+            output_width,
+            channels,
+            &mut output,
+            output_row,
+        )
+        .ok_or_else(|| simd_unsupported("Fit"))?;
+        vector_blocks = vector_blocks.saturating_add(row_blocks);
+        scalar_tail = scalar_tail.saturating_add(row_tail);
     }
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
@@ -383,4 +276,61 @@ pub(in crate::compute::pool_simd::ops::adapters) fn simd_resize_nearest_boxed(
         channels,
     )?;
     Ok(preserve_mode(img, result))
+}
+
+fn write_nearest_boxed_row(
+    source: &[u8],
+    source_row: usize,
+    x_indices: &[usize],
+    output_width: usize,
+    channels: usize,
+    output: &mut [u8],
+    output_row: usize,
+) -> Option<(u64, u64)> {
+    let pixels_per_vector = SIMD_RESIZE_NEAREST_BYTES / channels;
+    let vector_width = output_width / pixels_per_vector * pixels_per_vector;
+    let block_bytes = pixels_per_vector * channels;
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    if output_width < pixels_per_vector {
+        let values = u8x16::new(nearest_gather_block(
+            source,
+            source_row,
+            x_indices,
+            0,
+            output_width,
+            channels,
+        )?)
+        .to_array();
+        let output_bytes = output_width.checked_mul(channels)?;
+        output
+            .get_mut(output_row..output_row.checked_add(output_bytes)?)?
+            .copy_from_slice(&values[..output_bytes]);
+        return Some((1, 0));
+    }
+    for output_x in (0..vector_width).step_by(pixels_per_vector) {
+        let values = u8x16::new(nearest_gather_block(
+            source,
+            source_row,
+            x_indices,
+            output_x,
+            pixels_per_vector,
+            channels,
+        )?)
+        .to_array();
+        let output_start = output_row.checked_add(output_x.checked_mul(channels)?)?;
+        output
+            .get_mut(output_start..output_start.checked_add(block_bytes)?)?
+            .copy_from_slice(&values[..block_bytes]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    for output_x in vector_width..output_width {
+        let source_start = source_row.checked_add(x_indices[output_x].checked_mul(channels)?)?;
+        let output_start = output_row.checked_add(output_x.checked_mul(channels)?)?;
+        output
+            .get_mut(output_start..output_start.checked_add(channels)?)?
+            .copy_from_slice(source.get(source_start..source_start.checked_add(channels)?)?);
+        scalar_tail = scalar_tail.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail))
 }

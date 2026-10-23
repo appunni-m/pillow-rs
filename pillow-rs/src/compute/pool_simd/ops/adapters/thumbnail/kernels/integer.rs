@@ -1,6 +1,8 @@
 //! Native scalar-I SIMD thumbnail reduction and streaming resample kernels.
 
-use super::super::resize::{build_resize_i_horizontal_plan, resize_i_horizontal_values};
+use super::super::resize::{
+    ResizeIHorizontalBlockPlan, build_resize_i_horizontal_plan, resize_i_horizontal_values,
+};
 use super::super::{SIMD_RESIZE_LANES, simd_unsupported};
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::geometry::resample_kernel;
@@ -196,62 +198,27 @@ pub(super) fn simd_thumbnail_i_reduce2x2_resample(
                 .ok_or_else(|| simd_unsupported("Thumbnail"))?;
             let top = &source[top_start..top_start + source_width];
             let bottom = &source[bottom_start..bottom_start + source_width];
-            for (output_x, reduced) in reduced_row.iter_mut().enumerate() {
-                let source_x = output_x * 2;
-                let quartet = top[source_x]
-                    .wrapping_add(top[source_x + 1])
-                    .wrapping_add(bottom[source_x])
-                    .wrapping_add(bottom[source_x + 1]);
-                *reduced = round_up(f64::from(quartet) / 4.0) as i32;
-            }
+            reduce_i_thumbnail_2x2_row(top, bottom, &mut reduced_row);
 
             let ring_start = (next_reduced_row & ring_mask) * output_width;
             let horizontal_row = &mut ring[ring_start..ring_start + output_width];
-            for (block_index, block) in horizontal_plan.blocks.iter().enumerate() {
-                let output_x = block_index * SIMD_RESIZE_LANES;
-                let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
-                let mut sums = f64x8::splat(0.0);
-                for tap in &block.taps {
-                    sums = tap.weights.mul_add(
-                        f64x8::new(resize_i_horizontal_values(&reduced_row, tap)),
-                        sums,
-                    );
-                }
-                for (lane, value) in sums.to_array().into_iter().take(count).enumerate() {
-                    horizontal_row[output_x + lane] = round_up(value) as i32;
-                }
-                vector_blocks = vector_blocks.saturating_add(1);
-            }
+            vector_blocks = vector_blocks.saturating_add(resize_i_thumbnail_horizontal_row(
+                &reduced_row,
+                &horizontal_plan.blocks,
+                horizontal_row,
+                output_width,
+            ));
             next_reduced_row += 1;
         }
 
-        for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
-            let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
-            let mut sums = f64x8::splat(0.0);
-            for (tap, &weight) in vertical_weights.iter().enumerate() {
-                let source_y = first_vertical_row + tap;
-                let source_start = (source_y & ring_mask) * output_width + output_x;
-                let values = std::array::from_fn(|lane| {
-                    if lane < count {
-                        f64::from(ring[source_start + lane])
-                    } else {
-                        0.0
-                    }
-                });
-                sums = f64x8::splat(weight).mul_add(f64x8::new(values), sums);
-            }
-            for (lane, value) in sums
-                .to_array()
-                .map(|value| round_up(value) as i32)
-                .into_iter()
-                .take(count)
-                .enumerate()
-            {
-                let byte_start = (output_x + lane) * 4;
-                output_row[byte_start..byte_start + 4].copy_from_slice(&value.to_le_bytes());
-            }
-            vector_blocks = vector_blocks.saturating_add(1);
-        }
+        vector_blocks = vector_blocks.saturating_add(resize_i_thumbnail_vertical_row(
+            &ring,
+            ring_mask,
+            output_width,
+            first_vertical_row,
+            vertical_weights,
+            output_row,
+        ));
     }
 
     crate::compute::record_pipeline_operation_path("vector");
@@ -264,4 +231,79 @@ pub(super) fn simd_thumbnail_i_reduce2x2_resample(
         4,
     )?;
     Ok(preserve_mode(img, result))
+}
+
+fn reduce_i_thumbnail_2x2_row(top: &[i32], bottom: &[i32], reduced_row: &mut [i32]) {
+    for (output_x, reduced) in reduced_row.iter_mut().enumerate() {
+        let source_x = output_x * 2;
+        let quartet = top[source_x]
+            .wrapping_add(top[source_x + 1])
+            .wrapping_add(bottom[source_x])
+            .wrapping_add(bottom[source_x + 1]);
+        *reduced = round_up(f64::from(quartet) / 4.0) as i32;
+    }
+}
+
+fn resize_i_thumbnail_horizontal_row(
+    reduced_row: &[i32],
+    blocks: &[ResizeIHorizontalBlockPlan],
+    horizontal_row: &mut [i32],
+    output_width: usize,
+) -> u64 {
+    let mut vector_blocks = 0u64;
+    for (block_index, block) in blocks.iter().enumerate() {
+        let output_x = block_index * SIMD_RESIZE_LANES;
+        let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
+        let mut sums = f64x8::splat(0.0);
+        for tap in &block.taps {
+            sums = tap.weights.mul_add(
+                f64x8::new(resize_i_horizontal_values(reduced_row, tap)),
+                sums,
+            );
+        }
+        for (lane, value) in sums.to_array().into_iter().take(count).enumerate() {
+            horizontal_row[output_x + lane] = round_up(value) as i32;
+        }
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    vector_blocks
+}
+
+fn resize_i_thumbnail_vertical_row(
+    ring: &[i32],
+    ring_mask: usize,
+    output_width: usize,
+    first_vertical_row: usize,
+    vertical_weights: &[f64],
+    output_row: &mut [u8],
+) -> u64 {
+    let mut vector_blocks = 0u64;
+    for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
+        let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
+        let mut sums = f64x8::splat(0.0);
+        for (tap, &weight) in vertical_weights.iter().enumerate() {
+            let source_y = first_vertical_row + tap;
+            let source_start = (source_y & ring_mask) * output_width + output_x;
+            let values = std::array::from_fn(|lane| {
+                if lane < count {
+                    f64::from(ring[source_start + lane])
+                } else {
+                    0.0
+                }
+            });
+            sums = f64x8::splat(weight).mul_add(f64x8::new(values), sums);
+        }
+        for (lane, value) in sums
+            .to_array()
+            .map(|value| round_up(value) as i32)
+            .into_iter()
+            .take(count)
+            .enumerate()
+        {
+            let byte_start = (output_x + lane) * 4;
+            output_row[byte_start..byte_start + 4].copy_from_slice(&value.to_le_bytes());
+        }
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    vector_blocks
 }
