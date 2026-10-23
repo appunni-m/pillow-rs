@@ -18,8 +18,15 @@ in an already installed wheel. See [installation](INSTALLATION.md) for package
 selection and the supported-platform requirements.
 
 The PyPI release page contains all four `pillow-rs` files and all three
-`pillow-rs-parallel` wheels for 12.2.3. The PyPI project description still
-shows a `12.2.2` install example; use the current pinned command in the
+`pillow-rs-parallel` wheels for 12.2.3. The description embedded in the core
+PyPI release still labels 12.2.2 as current, pins 12.2.2, and includes older
+implementation and contributor-tooling detail. The source package points to
+the current root README, but PyPI displays description metadata from an
+uploaded distribution; its release filenames cannot be reused. The hosted
+description therefore needs a new version upload to reflect the current
+README. See PyPI's [project-description guidance](https://docs.pypi.org/project-management/project-descriptions/)
+and [upload troubleshooting](https://docs.pypi.org/publishing/troubleshooting/)
+for those metadata rules. Until then, use the pinned command in the
 [installation guide](INSTALLATION.md).
 
 Previous versions and their release records are available from the
