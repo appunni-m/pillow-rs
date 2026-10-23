@@ -441,3 +441,81 @@ Mirror, and Crop still call them. The selected 14-case CPU, strict-SIMD, and
 GPU-requested parity lanes passed before and after extraction. This changes
 ownership only; no operation route or reachability count changed. Receipts are
 preserved in `docs/evidence/geometry/offset-simd-family-layout-arm64-20261022/`.
+
+## Filter scalar and GPU profile follow-up — 2026-10-23
+
+### Private packed scalar filter helpers
+
+The module split in `77fe11803` moved the packed filter helpers to
+`pillow-rs/src/compute/pool_simd/ops/scalar/filters.rs`. A read-only scanner
+under `/tmp` inspected 590 Rust files across core, Rust tests, and the Python
+and JavaScript bindings, including cfg and macro text. In the SIMD ops tree,
+the only module hit is the private `mod scalar` declaration in `ops/mod.rs`;
+no current import or call reaches the filter functions. Bare
+function names collide with public `Image` methods and separate CPU helpers,
+so they are not evidence of a caller. `#[allow(dead_code)]` suppresses
+compiler warnings, and this source scan is not a compiler proof.
+
+The helpers were an active fallback before `3501013f3` replaced their adapter
+calls with strict native-layout implementations. Current admission rejects
+unsupported inputs before SIMD adapter execution; automatic planning selects
+another backend where supported, while a strict SIMD lock reports the
+unsupported operation. The packed helpers are not the present fallback.
+Disposition: review removal of only `scalar/filters.rs` and its re-exports in
+a separate focused change; update the stale fallback comments. Keep unrelated
+scalar operation families. The filter-only recommendation and route evidence
+are tracked in `pillow-rs#aqsq`; no source was deleted here.
+
+Generated public parity fixtures remain the behavior contract, though they do
+not reach the now-unreferenced scalar module. Relevant selectors include
+`PIL.Image.Image.filter.nuanced.l-mode-detail-fused-row`,
+`PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-noise-1024x768`,
+`PIL.ImageFilter.MedianFilter.nuanced.coverage-batch-filter-l-size-3`,
+`PIL.ImageFilter.MaxFilter.nuanced.coverage-batch-filter-rgb-size-5`,
+`PIL.ImageFilter.MinFilter.nuanced.coverage-batch-filter-la-size-3`,
+`PIL.ImageFilter.RankFilter.nuanced.coverage-batch-rank-rgb-size-9-rank-40`,
+`PIL.ImageFilter.BoxBlur.nuanced.coverage-batch-filter-la-radius-1`, and
+`PIL.ImageEnhance.Sharpness.enhance.nuanced.parity-blend-rounding-factor-0-3-border-rgb-3x3`.
+Preserve the existing fault-contract fixtures
+`PIL.ImageFilter.MaxFilter.nuanced.coverage-batch-filter-invalid-even-size`,
+`PIL.ImageFilter.MinFilter.nuanced.coverage-batch-filter-invalid-even-size`,
+`PIL.ImageFilter.MedianFilter.nuanced.coverage-batch-filter-invalid-even-size`,
+`PIL.ImageFilter.RankFilter.nuanced.coverage-batch-filter-invalid-even-size`,
+`PIL.ImageFilter.RankFilter.nuanced.palette-rejected`, and
+`PIL.ImageFilter.BoxBlur.nuanced.negative-radius-error`. Do not add unit tests;
+future behavior changes should run only the affected generated-fixture parity
+and fault-contract selectors with explicit backend profiles.
+
+The five existing F-mode order-statistic fixtures are declared `python-cpu`:
+`PIL.Image.Image.filter.nuanced.f-mode-max-filter`,
+`PIL.Image.Image.filter.nuanced.f-mode-min-filter`,
+`PIL.Image.Image.filter.nuanced.f-mode-median-filter`,
+`PIL.Image.Image.filter.nuanced.f-mode-rank-filter`, and
+`PIL.Image.Image.filter.nuanced.f-mode-large-rank-filter`. A focused strict-SIMD
+run selected all five IDs and passed 5/5 with zero infrastructure errors at
+revision `374a3b7bd`. The recorded command was:
+
+```sh
+MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.filter.nuanced.f-mode-max-filter,PIL.Image.Image.filter.nuanced.f-mode-min-filter,PIL.Image.Image.filter.nuanced.f-mode-median-filter,PIL.Image.Image.filter.nuanced.f-mode-rank-filter,PIL.Image.Image.filter.nuanced.f-mode-large-rank-filter' \
+  make migration-parity-test-simd-strict
+```
+
+The result is `build/migration-parity/simd-strict-parity-result.json`. This
+proves the selected strict-SIMD calls passed on that dirty build, but their
+current `target_profiles` do not yet credit the SIMD profile. The selection
+and profile question remains tracked in `pillow-rs#8nq8`.
+
+### GPU projection fixture/profile mismatch
+
+The public GPU projection path currently compiles
+`getprojection_atomic.wgsl`; the CMYK terminal checks are separate admission
+and validation code, and strict GPU reports CMYK projection unsupported. The
+old `getprojection_cmyk.wgsl` has no current source loader/reference. However,
+`PIL.Image.Image.getprojection.parity.material-cmyk-1024x768` declares
+`python-gpu` in `pillow-rs/tests/fixtures/inputs/parity/pil-image-image.json`.
+That declared profile is not backed by the inspected GPU route and is a fixture
+contract mismatch to resolve in a focused task. Keep the case for CPU and SIMD
+parity; either make strict GPU CMYK support real and verify it with the same
+fixture or remove the unsupported GPU profile claim. Do not infer GPU execution
+from public parity alone. The source/history evidence is recorded under
+`pillow-rs#h2sn`.
