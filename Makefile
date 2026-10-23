@@ -1188,14 +1188,14 @@ release-sdist-test: ## Build and install the source distribution in isolation an
 
 release-crate-package: ## Compile and package the core crate after dependency publication
 	$(CARGO) package --locked -p $(CORE_SRC)
-	python3 scripts/check_release_licenses.py --crate
+	$(PYTHON) scripts/check_release_licenses.py --crate
 	$(PYTHON) scripts/check_release_crate.py
 
 release-npm-pack: ## Build, test, and pack the single Node/browser npm package
 	cd $(JS_SRC) && npm ci && npm run build:release && npm run test:package
 	mkdir -p dist/release/npm
 	cd $(JS_SRC) && npm pack --ignore-scripts --pack-destination ../dist/release/npm
-	python3 scripts/check_release_licenses.py dist/release/npm/pillow-rs-$$(node -p "require('./$(JS_SRC)/package.json').version").tgz
+	$(PYTHON) scripts/check_release_licenses.py dist/release/npm/pillow-rs-$$(node -p "require('./$(JS_SRC)/package.json').version").tgz
 
 .PHONY: docs-js-test
 docs-js-test: ## Execute the README example and verify the already-built npm package
