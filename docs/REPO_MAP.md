@@ -89,11 +89,18 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- ops/
 |   |   |   |       |-- chops.rs
 |   |   |   |       |-- color.rs
+|   |   |   |       |-- color3dlut.rs
 |   |   |   |       |-- color_convert_allocation_tests.rs
+|   |   |   |       |-- composite/
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       |-- composite.rs
 |   |   |   |       |-- crop.rs
 |   |   |   |       |-- draw.rs
 |   |   |   |       |-- effects.rs
 |   |   |   |       |-- enhance.rs
+|   |   |   |       |-- eval/
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       |-- eval.rs
 |   |   |   |       |-- filter/
 |   |   |   |       |   |-- blur/
 |   |   |   |       |   |   |-- box_rows.rs
@@ -129,6 +136,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- grayscale.rs
 |   |   |   |       |-- imageops.rs
 |   |   |   |       |-- mod.rs
+|   |   |   |       |-- paste/
+|   |   |   |       |   |-- kernels.rs
+|   |   |   |       |   |-- layout.rs
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       |-- paste.rs
+|   |   |   |       |-- put.rs
 |   |   |   |       |-- reduce/
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- reduce.rs
@@ -149,6 +162,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- thumbnail/
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- thumbnail.rs
+|   |   |   |       |-- transform/
+|   |   |   |       |   |-- affine.rs
+|   |   |   |       |   |-- projective.rs
+|   |   |   |       |   |-- scalar.rs
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       |-- transform.rs
 |   |   |   |       |-- transpose/
 |   |   |   |       |   |-- arch.rs
 |   |   |   |       |   |-- kernels/
@@ -424,6 +443,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   `-- safety.rs
 |   |   |   |   `-- transform.rs
 |   |   |   |-- pool_simd/
+|   |   |   |   |-- batch_execution.rs
 |   |   |   |   |-- mod.rs
 |   |   |   |   |-- ops/
 |   |   |   |   |   |-- adapters/
@@ -450,6 +470,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |   |-- cmyk.rs
 |   |   |   |   |   |   |   |-- kernels/
 |   |   |   |   |   |   |   |   |-- color_space.rs
+|   |   |   |   |   |   |   |   |-- dispatch/
+|   |   |   |   |   |   |   |   |   |-- layout.rs
+|   |   |   |   |   |   |   |   |   |-- luma.rs
+|   |   |   |   |   |   |   |   |   `-- typed.rs
 |   |   |   |   |   |   |   |   |-- dispatch.rs
 |   |   |   |   |   |   |   |   |-- layout.rs
 |   |   |   |   |   |   |   |   |-- mod.rs
@@ -461,10 +485,15 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- convert.rs
 |   |   |   |   |   |   |-- crop.rs
 |   |   |   |   |   |   |-- draw/
-|   |   |   |   |   |   |   `-- kernels/
-|   |   |   |   |   |   |       |-- mod.rs
-|   |   |   |   |   |   |       |-- shapes.rs
-|   |   |   |   |   |   |       `-- spans.rs
+|   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |   |   |   |-- shapes/
+|   |   |   |   |   |   |   |   |   `-- rounded_rect.rs
+|   |   |   |   |   |   |   |   |-- shapes.rs
+|   |   |   |   |   |   |   |   |-- spans/
+|   |   |   |   |   |   |   |   |   `-- line.rs
+|   |   |   |   |   |   |   |   `-- spans.rs
+|   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- draw.rs
 |   |   |   |   |   |   |-- duplicate/
 |   |   |   |   |   |   |   `-- tests.rs
@@ -539,6 +568,14 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- pad.rs
 |   |   |   |   |   |   |-- paste/
 |   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- apply/
+|   |   |   |   |   |   |   |   |   |-- cmyk_l.rs
+|   |   |   |   |   |   |   |   |   |-- generic.rs
+|   |   |   |   |   |   |   |   |   |-- l.rs
+|   |   |   |   |   |   |   |   |   |-- la.rs
+|   |   |   |   |   |   |   |   |   |-- pa.rs
+|   |   |   |   |   |   |   |   |   |-- rgb.rs
+|   |   |   |   |   |   |   |   |   `-- rgba.rs
 |   |   |   |   |   |   |   |   |-- apply.rs
 |   |   |   |   |   |   |   |   |-- blend.rs
 |   |   |   |   |   |   |   |   |-- luma.rs
@@ -547,6 +584,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |   |   `-- rgb_cmyk.rs
 |   |   |   |   |   |   |   |-- mod.rs
 |   |   |   |   |   |   |   |-- plan.rs
+|   |   |   |   |   |   |   |-- rgb_to_rgba.rs
 |   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- pipeline.rs
 |   |   |   |   |   |   |-- projection.rs
@@ -582,11 +620,16 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- rotate/
 |   |   |   |   |   |   |   |-- interpolation.rs
 |   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- native/
+|   |   |   |   |   |   |   |   |   |-- bilinear.rs
+|   |   |   |   |   |   |   |   |   |-- nearest.rs
+|   |   |   |   |   |   |   |   |   `-- typed_bilinear.rs
 |   |   |   |   |   |   |   |   |-- native.rs
 |   |   |   |   |   |   |   |   `-- nearest.rs
 |   |   |   |   |   |   |   |-- kernels.rs
 |   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- rotate.rs
+|   |   |   |   |   |   |-- support.rs
 |   |   |   |   |   |   |-- thumbnail/
 |   |   |   |   |   |   |   `-- kernels/
 |   |   |   |   |   |   |       |-- float.rs
@@ -595,9 +638,15 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- thumbnail.rs
 |   |   |   |   |   |   |-- transform/
 |   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- bilinear/
+|   |   |   |   |   |   |   |   |   |-- affine.rs
+|   |   |   |   |   |   |   |   |   `-- projective.rs
 |   |   |   |   |   |   |   |   |-- bilinear.rs
 |   |   |   |   |   |   |   |   |-- luma16.rs
 |   |   |   |   |   |   |   |   |-- mesh.rs
+|   |   |   |   |   |   |   |   |-- nearest/
+|   |   |   |   |   |   |   |   |   |-- affine.rs
+|   |   |   |   |   |   |   |   |   `-- projective.rs
 |   |   |   |   |   |   |   |   `-- nearest.rs
 |   |   |   |   |   |   |   |-- kernels.rs
 |   |   |   |   |   |   |   `-- tests.rs
@@ -617,6 +666,18 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- native_channel.rs
 |   |   |   |   |   |-- native_filter.rs
 |   |   |   |   |   |-- native_merge.rs
+|   |   |   |   |   |-- scalar/
+|   |   |   |   |   |   |-- chops.rs
+|   |   |   |   |   |   |-- convert.rs
+|   |   |   |   |   |   |-- filters.rs
+|   |   |   |   |   |   |-- histogram.rs
+|   |   |   |   |   |   |-- layout.rs
+|   |   |   |   |   |   |-- lut.rs
+|   |   |   |   |   |   |-- merge.rs
+|   |   |   |   |   |   |-- mutation.rs
+|   |   |   |   |   |   |-- point.rs
+|   |   |   |   |   |   |-- resize.rs
+|   |   |   |   |   |   `-- transform.rs
 |   |   |   |   |   `-- scalar.rs
 |   |   |   |   |-- point_batch.rs
 |   |   |   |   `-- put_pixel_batch.rs
@@ -701,6 +762,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |-- lab.rs
 |   |   |-- lib.rs
 |   |   |-- ops/
+|   |   |   |-- analysis/
+|   |   |   |   |-- bbox.rs
+|   |   |   |   `-- histogram.rs
 |   |   |   |-- analysis.rs
 |   |   |   |-- array.rs
 |   |   |   |-- chops.rs
@@ -733,11 +797,16 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- vertical_passes.rs
 |   |   |   |-- pil_resize.rs
 |   |   |   |-- quantize.rs
+|   |   |   |-- resize/
+|   |   |   |   `-- reducing_gap.rs
 |   |   |   |-- resize.rs
 |   |   |   |-- rotate/
 |   |   |   |   `-- nearest.rs
 |   |   |   |-- rotate.rs
 |   |   |   |-- split.rs
+|   |   |   |-- transform/
+|   |   |   |   |-- fill.rs
+|   |   |   |   `-- public.rs
 |   |   |   |-- transform.rs
 |   |   |   |-- transpose.rs
 |   |   |   `-- utils.rs
@@ -746,6 +815,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   `-- support.rs
 |   |   |-- pipeline.rs
 |   |   `-- raster/
+|   |       |-- buffer/
+|   |       |   `-- iterators.rs
 |   |       |-- buffer.rs
 |   |       |-- color/
 |   |       |   |-- blend.rs
@@ -756,6 +827,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |       |   |-- pixel_luma.rs
 |   |       |   |-- pixel_rgb.rs
 |   |       |   `-- types.rs
+|   |       |-- dynamic/
+|   |       |   `-- transform.rs
 |   |       |-- dynamic.rs
 |   |       |-- error.rs
 |   |       |-- mod.rs
