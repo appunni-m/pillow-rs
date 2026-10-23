@@ -1,5 +1,7 @@
 #[cfg(not(feature = "parallel"))]
-use super::{fixed_coordinate_in_bounds_span, nearest_contiguous_rgb_run_len};
+use super::affine::fixed_coordinate_in_bounds_span;
+#[cfg(not(feature = "parallel"))]
+use crate::ops::rotate::nearest_contiguous_rgb_run_len;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
 

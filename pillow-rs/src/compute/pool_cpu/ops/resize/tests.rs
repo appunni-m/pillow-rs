@@ -1,5 +1,3 @@
-#[cfg(not(feature = "parallel"))]
-use super::round_up;
 #[cfg(target_arch = "x86_64")]
 use super::{F64MulAdd, X86FmaToken, f_resize_samples_allow_finite_fma};
 use super::{resize_f, resize_i_sum_eight};
@@ -8,6 +6,8 @@ use super::{resize_f_with_fma, resize_i_with_fma};
 #[cfg(not(feature = "parallel"))]
 use super::{resize_i_contiguous_eight_tap_weights, resize_i_round_up_to_i32};
 use crate::ops::pil_resize::PortableFma;
+#[cfg(not(feature = "parallel"))]
+use crate::ops::pil_resize::round_up;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, RgbaImage};
 
