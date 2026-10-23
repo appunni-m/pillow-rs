@@ -465,11 +465,11 @@ pub(super) fn shape_has_vectorized_mirror_rows(shape: SimdImageShape, channels: 
     shape.height != 0 && shape.width != 0 && matches!(channels, 1..=4)
 }
 
-pub(super) fn shape_after_simd_op(
+fn update_shape_crop_geometry(
+    next: &mut SimdImageShape,
     shape: SimdImageShape,
     op: &PipelineOp,
-) -> Option<SimdImageShape> {
-    let mut next = shape;
+) -> Option<bool> {
     match op {
         PipelineOp::Crop {
             left,
@@ -483,6 +483,7 @@ pub(super) fn shape_after_simd_op(
             }
             next.width = *right - *left;
             next.height = *bottom - *top;
+            Some(true)
         }
         PipelineOp::CropBorder { border } => {
             let twice = border.saturating_mul(2);
@@ -491,15 +492,27 @@ pub(super) fn shape_after_simd_op(
             }
             next.width = shape.width - twice;
             next.height = shape.height - twice;
+            Some(true)
         }
+        _ => Some(false),
+    }
+}
+
+fn update_shape_geometry(
+    next: &mut SimdImageShape,
+    shape: SimdImageShape,
+    op: &PipelineOp,
+) -> Option<bool> {
+    if update_shape_crop_geometry(next, shape, op)? {
+        return Some(true);
+    }
+    match op {
         PipelineOp::Expand { border, .. } => {
             let twice = border.checked_mul(2)?;
             next.width = shape.width.checked_add(twice)?;
             next.height = shape.height.checked_add(twice)?;
+            Some(true)
         }
-        PipelineOp::Constant { .. } => next.layout = SimdLayout::Luma8,
-        PipelineOp::Grayscale => next.layout = SimdLayout::Luma8,
-        PipelineOp::Colorize { .. } => next.layout = SimdLayout::Rgb8,
         PipelineOp::Transpose { method } => {
             if matches!(
                 method,
@@ -510,40 +523,34 @@ pub(super) fn shape_after_simd_op(
             ) {
                 std::mem::swap(&mut next.width, &mut next.height);
             }
+            Some(true)
         }
-        PipelineOp::ExtractBand { .. } => next.layout = SimdLayout::Luma8,
-        PipelineOp::EffectNoise { .. } => next.layout = effects::output_layout(),
-        PipelineOp::Convert { mode, .. } => {
-            next.layout = match mode {
-                ColorMode::L => SimdLayout::Luma8,
-                ColorMode::LA => SimdLayout::LumaA8,
-                ColorMode::RGB | ColorMode::YCbCr | ColorMode::HSV => SimdLayout::Rgb8,
-                ColorMode::RGBA | ColorMode::CMYK => SimdLayout::Rgba8,
-                _ => SimdLayout::Unsupported,
-            };
-        }
-        PipelineOp::ConvertLab { .. } => next.layout = SimdLayout::Rgb8,
         PipelineOp::Reduce { x_factor, y_factor } => {
             next.width = shape.width.div_ceil((*x_factor).max(1));
             next.height = shape.height.div_ceil((*y_factor).max(1));
+            Some(true)
         }
         PipelineOp::Resize { w, h, .. } => {
             next.width = *w;
             next.height = *h;
+            Some(true)
         }
         PipelineOp::ResizeBoxed { w, h, .. } => {
             next.width = *w;
             next.height = *h;
+            Some(true)
         }
         PipelineOp::Scale { factor, .. } => {
             (next.width, next.height) =
                 resize::native_scale_dimensions(shape.width, shape.height, *factor)?;
+            Some(true)
         }
         PipelineOp::Thumbnail { w, h, .. } => {
             let (output_width, output_height) =
                 thumbnail::native_thumbnail_dimensions(shape.width, shape.height, *w, *h)?;
             next.width = output_width;
             next.height = output_height;
+            Some(true)
         }
         PipelineOp::Contain { w, h, .. } => {
             if shape.width != 0 && shape.height != 0 {
@@ -552,24 +559,61 @@ pub(super) fn shape_after_simd_op(
                 next.width = output_width;
                 next.height = output_height;
             }
+            Some(true)
         }
         PipelineOp::Cover { w, h, .. } => {
             let (output_width, output_height) =
                 resize::native_cover_dimensions(shape.width, shape.height, *w, *h)?;
             next.width = output_width;
             next.height = output_height;
+            Some(true)
         }
         PipelineOp::Fit { w, h, .. } => {
             next.width = (*w).max(1);
             next.height = (*h).max(1);
+            Some(true)
         }
         PipelineOp::Transform { w, h, .. } => {
             next.width = *w;
             next.height = *h;
+            Some(true)
         }
         PipelineOp::Pad { w, h, .. } => {
             next.width = *w;
             next.height = *h;
+            Some(true)
+        }
+        _ => Some(false),
+    }
+}
+
+fn update_shape_layout(next: &mut SimdImageShape, op: &PipelineOp) -> Option<bool> {
+    match op {
+        PipelineOp::Constant { .. } | PipelineOp::Grayscale => {
+            next.layout = SimdLayout::Luma8;
+            Some(true)
+        }
+        PipelineOp::Colorize { .. } | PipelineOp::ConvertLab { .. } => {
+            next.layout = SimdLayout::Rgb8;
+            Some(true)
+        }
+        PipelineOp::ExtractBand { .. } => {
+            next.layout = SimdLayout::Luma8;
+            Some(true)
+        }
+        PipelineOp::EffectNoise { .. } => {
+            next.layout = effects::output_layout();
+            Some(true)
+        }
+        PipelineOp::Convert { mode, .. } => {
+            next.layout = match mode {
+                ColorMode::L => SimdLayout::Luma8,
+                ColorMode::LA => SimdLayout::LumaA8,
+                ColorMode::RGB | ColorMode::YCbCr | ColorMode::HSV => SimdLayout::Rgb8,
+                ColorMode::RGBA | ColorMode::CMYK => SimdLayout::Rgba8,
+                _ => SimdLayout::Unsupported,
+            };
+            Some(true)
         }
         PipelineOp::Color3DLut { target_mode, .. } => {
             next.layout = match target_mode {
@@ -577,6 +621,7 @@ pub(super) fn shape_after_simd_op(
                 PixelMode::RGBA | PixelMode::CMYK => SimdLayout::Rgba8,
                 _ => SimdLayout::Unsupported,
             };
+            Some(true)
         }
         PipelineOp::Merge { mode, .. } => {
             next.layout = match mode {
@@ -586,6 +631,7 @@ pub(super) fn shape_after_simd_op(
                 ColorMode::RGBA | ColorMode::CMYK => SimdLayout::Rgba8,
                 _ => SimdLayout::Unsupported,
             };
+            Some(true)
         }
         PipelineOp::CompositeModule { other, .. } => {
             let output_mode = other.mode().ok()?;
@@ -597,11 +643,24 @@ pub(super) fn shape_after_simd_op(
                 "RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F" => SimdLayout::Rgba8,
                 _ => SimdLayout::Unsupported,
             };
+            Some(true)
         }
         PipelineOp::PutAlpha { .. } | PipelineOp::PutAlphaData { .. } => {
-            put_alpha::update_shape(&mut next, op);
+            put_alpha::update_shape(next, op);
+            Some(true)
         }
-        _ => {}
+        _ => Some(false),
     }
+}
+
+pub(super) fn shape_after_simd_op(
+    shape: SimdImageShape,
+    op: &PipelineOp,
+) -> Option<SimdImageShape> {
+    let mut next = shape;
+    if update_shape_geometry(&mut next, shape, op)? {
+        return Some(next);
+    }
+    update_shape_layout(&mut next, op)?;
     Some(next)
 }

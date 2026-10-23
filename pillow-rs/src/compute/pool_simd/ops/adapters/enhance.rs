@@ -529,6 +529,174 @@ pub fn simd_color_saturation(
 /// before they enter the blend. Edge pixels use the original byte as their
 /// filtered value, preserving the reference's exact-copy border behavior.
 /// LA/RGBA alpha stays copied from the source.
+#[derive(Clone, Copy)]
+struct NativeSharpnessPlan<'a> {
+    source: &'a [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    active_channels: usize,
+    row_stride: usize,
+    kernel: &'a [f32; 9],
+    rounding_bias: f32,
+    alpha: f32,
+    grouped_rgb_bytes: bool,
+    grouped_pixels: bool,
+    pixels_per_block: usize,
+}
+
+#[inline]
+fn native_sharpness_rgb_row(plan: &NativeSharpnessPlan<'_>, y: usize, row: &mut [u8]) {
+    // RGB's channel bytes are contiguous, so vectorize them as one native
+    // stream instead of gathering one channel across eight pixels at a time.
+    let interior_end = (plan.width - 1) * plan.channels;
+    let source_row = y * plan.row_stride;
+    let mut byte_offset = plan.channels;
+    while byte_offset < interior_end {
+        let active_bytes = (interior_end - byte_offset).min(8);
+        let smooth = native_filter_3x3_rgb_byte_block_integer(
+            plan.source,
+            plan.width,
+            y,
+            byte_offset,
+            active_bytes,
+        );
+        let original =
+            native_filter_load_byte_block(plan.source, source_row + byte_offset, active_bytes);
+        let values = native_sharpness_blend_lanes(original, smooth, plan.alpha).to_array();
+        for (lane, value) in values.into_iter().enumerate().take(active_bytes) {
+            row[byte_offset + lane] = native_sharpness_blend_result(value);
+        }
+        byte_offset += active_bytes;
+    }
+}
+
+#[inline]
+fn native_sharpness_rgbx_row(plan: &NativeSharpnessPlan<'_>, y: usize, row: &mut [u8]) {
+    // RGBX processes X as stored data; group adjacent pixels so the four
+    // strided channel gathers fill one compact eight-lane block.
+    let source_row = y * plan.row_stride;
+    let mut x = 1usize;
+    while x < plan.width - 1 {
+        let active_pixels = (plan.width - 1 - x).min(plan.pixels_per_block);
+        let smooth_bytes = native_filter_3x3_pixel_block_integer(
+            plan.source,
+            plan.width,
+            plan.channels,
+            y,
+            x,
+            active_pixels * plan.channels,
+        );
+        let active_bytes = active_pixels * plan.channels;
+        let source_start = source_row + x * plan.channels;
+        let original_bytes = std::array::from_fn(|lane| {
+            if lane < active_bytes {
+                plan.source[source_start + lane]
+            } else {
+                0
+            }
+        });
+        let values = native_sharpness_blend_integer_block(original_bytes, smooth_bytes, plan.alpha);
+        for pixel in 0..active_pixels {
+            for channel in 0..plan.channels {
+                let lane = pixel * plan.channels + channel;
+                row[(x + pixel) * plan.channels + channel] = values[lane];
+            }
+        }
+        x += active_pixels;
+    }
+}
+
+#[inline]
+fn native_sharpness_channels_row(plan: &NativeSharpnessPlan<'_>, y: usize, row: &mut [u8]) {
+    let source_row = y * plan.row_stride;
+    for channel in 0..plan.active_channels {
+        let first = source_row + channel;
+        row[channel] =
+            native_sharpness_blend_value(plan.source[first], plan.source[first], plan.alpha);
+        let mut x = 1usize;
+        while x < plan.width - 1 {
+            let active = (plan.width - 1 - x).min(8);
+            let smooth = if plan.alpha.is_finite() {
+                if plan.channels == 1 && active == 8 {
+                    native_filter_3x3_luma_block_integer(plan.source, plan.width, y, x)
+                        .unwrap_or_else(|| {
+                            native_filter_3x3_channel_block_integer(
+                                plan.source,
+                                plan.width,
+                                plan.channels,
+                                channel,
+                                y,
+                                x,
+                                active,
+                            )
+                        })
+                } else {
+                    native_filter_3x3_channel_block_integer(
+                        plan.source,
+                        plan.width,
+                        plan.channels,
+                        channel,
+                        y,
+                        x,
+                        active,
+                    )
+                }
+            } else {
+                // Preserve the floating gather when a finite f64 factor
+                // overflows as f32; it also defines NaN border behavior.
+                let smooth = native_filter_3x3_vector(
+                    plan.source,
+                    plan.width,
+                    plan.channels,
+                    channel,
+                    y,
+                    x,
+                    plan.kernel,
+                    plan.rounding_bias,
+                );
+                f32x8::from(smooth.map(f32::from))
+            };
+            let original: [f32; 8] = std::array::from_fn(|lane| {
+                let pixel_x = (x + lane).min(plan.width - 2);
+                f32::from(plan.source[source_row + pixel_x * plan.channels + channel])
+            });
+            let values =
+                native_sharpness_blend_lanes(f32x8::from(original), smooth, plan.alpha).to_array();
+            for (lane, value) in values.into_iter().enumerate().take(active) {
+                row[(x + lane) * plan.channels + channel] = native_sharpness_blend_result(value);
+            }
+            x += active;
+        }
+        let last = source_row + (plan.width - 1) * plan.channels + channel;
+        row[(plan.width - 1) * plan.channels + channel] =
+            native_sharpness_blend_value(plan.source[last], plan.source[last], plan.alpha);
+    }
+}
+
+#[inline]
+fn native_sharpness_blend_row(plan: &NativeSharpnessPlan<'_>, y: usize, row: &mut [u8]) {
+    if !(1..plan.height - 1).contains(&y) {
+        let source_row = y * plan.row_stride;
+        for x in 0..plan.width {
+            for channel in 0..plan.active_channels {
+                let index = source_row + x * plan.channels + channel;
+                row[x * plan.channels + channel] = native_sharpness_blend_value(
+                    plan.source[index],
+                    plan.source[index],
+                    plan.alpha,
+                );
+            }
+        }
+    } else if plan.grouped_rgb_bytes {
+        native_sharpness_rgb_row(plan, y, row);
+    } else if plan.grouped_pixels {
+        native_sharpness_rgbx_row(plan, y, row);
+    } else {
+        native_sharpness_channels_row(plan, y, row);
+    }
+}
+
 fn native_sharpness_filter_blend(
     source: &[u8],
     output: &mut [u8],
@@ -552,12 +720,11 @@ fn native_sharpness_filter_blend(
     {
         return None;
     }
+    let alpha = factor as f32;
     let interior_width = width - 2;
     let interior_height = height - 2;
-    let alpha = factor as f32;
-    // Preserve the scalar-gather path for finite f64 factors that overflow
-    // when Pillow's blend factor is narrowed to f32. That path also defines
-    // the unusual NaN behavior at unchanged border samples.
+    // A finite f64 that overflows when narrowed to f32 uses the scalar-gather
+    // path, which also preserves NaN border behavior.
     let grouped_rgb_bytes = channels == 3 && active_channels == 3 && alpha.is_finite();
     let grouped_pixels =
         mode == Some("RGBX") && active_channels == channels && channels == 4 && alpha.is_finite();
@@ -578,132 +745,19 @@ fn native_sharpness_filter_blend(
         return None;
     }
     let scalar_tail = (width * 2 + height * 2 - 4).saturating_mul(active_channels);
-    let apply_row = |y: usize, row: &mut [u8]| {
-        let source_row = y * row_stride;
-        if (1..height - 1).contains(&y) {
-            if grouped_rgb_bytes {
-                // RGB's channel bytes are contiguous. Vectorize that native
-                // stream directly instead of gathering one channel across
-                // eight pixels for each of the three channels.
-                let interior_end = (width - 1) * channels;
-                let mut byte_offset = channels;
-                while byte_offset < interior_end {
-                    let active_bytes = (interior_end - byte_offset).min(8);
-                    let smooth = native_filter_3x3_rgb_byte_block_integer(
-                        source,
-                        width,
-                        y,
-                        byte_offset,
-                        active_bytes,
-                    );
-                    let original = native_filter_load_byte_block(
-                        source,
-                        source_row + byte_offset,
-                        active_bytes,
-                    );
-                    let values = native_sharpness_blend_lanes(original, smooth, alpha).to_array();
-                    for (lane, value) in values.into_iter().enumerate().take(active_bytes) {
-                        row[byte_offset + lane] = native_sharpness_blend_result(value);
-                    }
-                    byte_offset += active_bytes;
-                }
-            } else if grouped_pixels {
-                // RGBX sharpness processes the padding byte too. One x-vector
-                // per channel performs four separate strided gathers; group
-                // two adjacent pixels so the eight lanes are one compact span.
-                let mut x = 1usize;
-                while x < width - 1 {
-                    let active_pixels = (width - 1 - x).min(pixels_per_block);
-                    let smooth_bytes = native_filter_3x3_pixel_block_integer(
-                        source,
-                        width,
-                        channels,
-                        y,
-                        x,
-                        active_pixels * channels,
-                    );
-                    let active_bytes = active_pixels * channels;
-                    let source_start = source_row + x * channels;
-                    let original_bytes = std::array::from_fn(|lane| {
-                        if lane < active_bytes {
-                            source[source_start + lane]
-                        } else {
-                            0
-                        }
-                    });
-                    let values =
-                        native_sharpness_blend_integer_block(original_bytes, smooth_bytes, alpha);
-                    for pixel in 0..active_pixels {
-                        for channel in 0..channels {
-                            let lane = pixel * channels + channel;
-                            row[(x + pixel) * channels + channel] = values[lane];
-                        }
-                    }
-                    x += active_pixels;
-                }
-            } else {
-                for channel in 0..active_channels {
-                    let first = source_row + channel;
-                    row[channel] =
-                        native_sharpness_blend_value(source[first], source[first], alpha);
-                    let mut x = 1usize;
-                    while x < width - 1 {
-                        let active = (width - 1 - x).min(8);
-                        let smooth = if alpha.is_finite() {
-                            if channels == 1 && active == 8 {
-                                native_filter_3x3_luma_block_integer(source, width, y, x)
-                                    .unwrap_or_else(|| {
-                                        native_filter_3x3_channel_block_integer(
-                                            source, width, channels, channel, y, x, active,
-                                        )
-                                    })
-                            } else {
-                                native_filter_3x3_channel_block_integer(
-                                    source, width, channels, channel, y, x, active,
-                                )
-                            }
-                        } else {
-                            // Keep the established floating path for finite
-                            // f64 factors that overflow when narrowed to f32.
-                            let smooth = native_filter_3x3_vector(
-                                source,
-                                width,
-                                channels,
-                                channel,
-                                y,
-                                x,
-                                kernel,
-                                rounding_bias,
-                            );
-                            f32x8::from(smooth.map(f32::from))
-                        };
-                        let original: [f32; 8] = std::array::from_fn(|lane| {
-                            let pixel_x = (x + lane).min(width - 2);
-                            f32::from(source[source_row + pixel_x * channels + channel])
-                        });
-                        let values =
-                            native_sharpness_blend_lanes(f32x8::from(original), smooth, alpha)
-                                .to_array();
-                        for (lane, value) in values.into_iter().enumerate().take(active) {
-                            row[(x + lane) * channels + channel] =
-                                native_sharpness_blend_result(value);
-                        }
-                        x += active;
-                    }
-                    let last = source_row + (width - 1) * channels + channel;
-                    row[(width - 1) * channels + channel] =
-                        native_sharpness_blend_value(source[last], source[last], alpha);
-                }
-            }
-        } else {
-            for x in 0..width {
-                for channel in 0..active_channels {
-                    let index = source_row + x * channels + channel;
-                    row[x * channels + channel] =
-                        native_sharpness_blend_value(source[index], source[index], alpha);
-                }
-            }
-        }
+    let plan = NativeSharpnessPlan {
+        source,
+        width,
+        height,
+        channels,
+        active_channels,
+        row_stride,
+        kernel,
+        rounding_bias,
+        alpha,
+        grouped_rgb_bytes,
+        grouped_pixels,
+        pixels_per_block,
     };
 
     #[cfg(feature = "parallel")]
@@ -712,13 +766,13 @@ fn native_sharpness_filter_blend(
         row_stride,
         height,
         |_row_start, _row_end, y, row| {
-            apply_row(y as usize, row);
+            native_sharpness_blend_row(&plan, y as usize, row);
         }
     );
     #[cfg(not(feature = "parallel"))]
     for y in 0..height {
         let row_start = y * row_stride;
-        apply_row(y, &mut output[row_start..row_start + row_stride]);
+        native_sharpness_blend_row(&plan, y, &mut output[row_start..row_start + row_stride]);
     }
     Some((vector_blocks as u64, scalar_tail as u64))
 }

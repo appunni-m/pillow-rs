@@ -703,6 +703,91 @@ pub(super) fn native_reduce_sparse_rgb_2x2(img: &DynamicImage) -> Option<(Vec<u8
     Some((output, output_width as u32, output_height as u32))
 }
 
+#[inline]
+fn native_reduce_process_row(
+    source: &[u8],
+    geometry: &NativeReduceGeometry,
+    output_width: usize,
+    channels: usize,
+    premultiplied_alpha: bool,
+    rgb_3x5_fast_path: bool,
+    y: usize,
+    row: &mut [u8],
+) -> bool {
+    let vector_limit = if output_width < SIMD_REDUCE_LANES {
+        output_width
+    } else {
+        output_width / SIMD_REDUCE_LANES * SIMD_REDUCE_LANES
+    };
+    for local in (0..vector_limit).step_by(SIMD_REDUCE_LANES) {
+        let valid_pixels = (output_width - local).min(SIMD_REDUCE_LANES);
+        let Some(block) = native_reduce_vector_block(
+            source,
+            geometry,
+            local,
+            y,
+            valid_pixels,
+            channels,
+            premultiplied_alpha,
+            rgb_3x5_fast_path,
+        ) else {
+            return false;
+        };
+        let dst_start = local * channels;
+        let dst_end = dst_start + valid_pixels * channels;
+        let Some(dst) = row.get_mut(dst_start..dst_end) else {
+            return false;
+        };
+        dst.copy_from_slice(&block[..valid_pixels * channels]);
+    }
+    for local in vector_limit..output_width {
+        let Some(pixel) =
+            native_reduce_scalar_pixel(source, geometry, channels, premultiplied_alpha, local, y)
+        else {
+            return false;
+        };
+        let dst_start = local * channels;
+        let dst_end = dst_start + channels;
+        let Some(dst) = row.get_mut(dst_start..dst_end) else {
+            return false;
+        };
+        dst.copy_from_slice(&pixel[..channels]);
+    }
+    true
+}
+
+fn native_reduce_zero_output(
+    output: Vec<u8>,
+    output_width: usize,
+    output_height: usize,
+    output_pixels: usize,
+) -> (Vec<u8>, u32, u32, u64, u64) {
+    (
+        output,
+        output_width as u32,
+        output_height as u32,
+        output_pixels.div_ceil(SIMD_REDUCE_LANES) as u64,
+        0,
+    )
+}
+
+fn native_reduce_row_telemetry(output_width: usize, output_height: usize) -> (u64, u64) {
+    let vector_blocks_per_row = if output_width < SIMD_REDUCE_LANES {
+        1
+    } else {
+        output_width / SIMD_REDUCE_LANES
+    };
+    let scalar_tail_per_row = if output_width < SIMD_REDUCE_LANES {
+        0
+    } else {
+        output_width % SIMD_REDUCE_LANES
+    };
+    (
+        (vector_blocks_per_row * output_height) as u64,
+        (scalar_tail_per_row * output_height) as u64,
+    )
+}
+
 pub(super) fn native_reduce_bytes(
     img: &DynamicImage,
     channels: usize,
@@ -727,79 +812,20 @@ pub(super) fn native_reduce_bytes(
     }
     let output_pixels = output_width.checked_mul(output_height)?;
     if native_zero_byte_image(img, channels) {
-        let vector_blocks = output_pixels.div_ceil(SIMD_REDUCE_LANES) as u64;
-        return Some((
+        return Some(native_reduce_zero_output(
             vec![0u8; output_len],
-            output_width as u32,
-            output_height as u32,
-            vector_blocks,
-            0,
+            output_width,
+            output_height,
+            output_pixels,
         ));
     }
     let geometry = NativeReduceGeometry::new(width, height, x_factor, y_factor)?;
     let mut output = vec![0u8; output_len];
-    let vector_blocks_per_row = if output_width < SIMD_REDUCE_LANES {
-        1
-    } else {
-        output_width / SIMD_REDUCE_LANES
-    };
-    let scalar_tail_per_row = if output_width < SIMD_REDUCE_LANES {
-        0
-    } else {
-        output_width % SIMD_REDUCE_LANES
-    };
+    let (vector_blocks, scalar_tail) = native_reduce_row_telemetry(output_width, output_height);
 
     // Reduction output rows are independent. Keep their SIMD arithmetic and
     // exact source gathers while traversing rows serially; Parallel CPU is a
     // distinct backend and does not change the SIMD scheduler.
-    let process_row = |y: usize, row: &mut [u8]| -> bool {
-        let vector_limit = if output_width < SIMD_REDUCE_LANES {
-            output_width
-        } else {
-            output_width / SIMD_REDUCE_LANES * SIMD_REDUCE_LANES
-        };
-        for local in (0..vector_limit).step_by(SIMD_REDUCE_LANES) {
-            let valid_pixels = (output_width - local).min(SIMD_REDUCE_LANES);
-            let Some(block) = native_reduce_vector_block(
-                source,
-                &geometry,
-                local,
-                y,
-                valid_pixels,
-                channels,
-                premultiplied_alpha,
-                rgb_3x5_fast_path,
-            ) else {
-                return false;
-            };
-            let dst_start = local * channels;
-            let dst_end = dst_start + valid_pixels * channels;
-            let Some(dst) = row.get_mut(dst_start..dst_end) else {
-                return false;
-            };
-            dst.copy_from_slice(&block[..valid_pixels * channels]);
-        }
-        for local in vector_limit..output_width {
-            let Some(pixel) = native_reduce_scalar_pixel(
-                source,
-                &geometry,
-                channels,
-                premultiplied_alpha,
-                local,
-                y,
-            ) else {
-                return false;
-            };
-            let dst_start = local * channels;
-            let dst_end = dst_start + channels;
-            let Some(dst) = row.get_mut(dst_start..dst_end) else {
-                return false;
-            };
-            dst.copy_from_slice(&pixel[..channels]);
-        }
-        true
-    };
-
     #[cfg(feature = "parallel")]
     if output_pixels >= SIMD_REDUCE_PARALLEL_PIXEL_THRESHOLD {
         let failed = AtomicBool::new(false);
@@ -808,7 +834,16 @@ pub(super) fn native_reduce_bytes(
             output_width * channels,
             output_height,
             |_row_start, _row_end, y, row| {
-                if !process_row(y as usize, row) {
+                if !native_reduce_process_row(
+                    source,
+                    &geometry,
+                    output_width,
+                    channels,
+                    premultiplied_alpha,
+                    rgb_3x5_fast_path,
+                    y as usize,
+                    row,
+                ) {
                     failed.store(true, Ordering::Relaxed);
                 }
             }
@@ -819,7 +854,13 @@ pub(super) fn native_reduce_bytes(
     } else {
         for y in 0..output_height {
             let row_start = y * output_width * channels;
-            if !process_row(
+            if !native_reduce_process_row(
+                source,
+                &geometry,
+                output_width,
+                channels,
+                premultiplied_alpha,
+                rgb_3x5_fast_path,
                 y,
                 &mut output[row_start..row_start + output_width * channels],
             ) {
@@ -831,15 +872,19 @@ pub(super) fn native_reduce_bytes(
     #[cfg(not(feature = "parallel"))]
     for y in 0..output_height {
         let row_start = y * output_width * channels;
-        if !process_row(
+        if !native_reduce_process_row(
+            source,
+            &geometry,
+            output_width,
+            channels,
+            premultiplied_alpha,
+            rgb_3x5_fast_path,
             y,
             &mut output[row_start..row_start + output_width * channels],
         ) {
             return None;
         }
     }
-    let vector_blocks = (vector_blocks_per_row * output_height) as u64;
-    let scalar_tail = (scalar_tail_per_row * output_height) as u64;
     Some((
         output,
         output_width as u32,
