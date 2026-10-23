@@ -109,8 +109,44 @@ fn simd_l_masked_paste_uses_neon_and_keeps_exact_rounding_and_tail() {
     assert_eq!(operation.scalar_tail_count, 2);
 }
 
-#[test]
-fn simd_rgba_l_masked_paste_uses_native_mask_expansion_and_exact_clipped_tail() {
+struct RgbaLMaskedPasteFixture {
+    source_width: usize,
+    destination_width: usize,
+    destination_height: usize,
+    source_bytes: Vec<u8>,
+    destination_bytes: Vec<u8>,
+    mask_bytes: Vec<u8>,
+    destination: crate::raster::DynamicImage,
+    op: crate::pipeline::PipelineOp,
+}
+
+impl RgbaLMaskedPasteFixture {
+    fn expected(&self) -> Vec<u8> {
+        let mut expected = self.destination_bytes.clone();
+        // x=-2 shifts source and L mask by two pixels; y=1 leaves two rows.
+        for destination_y in 1..self.destination_height {
+            let source_y = destination_y - 1;
+            for destination_x in 0..self.destination_width {
+                let source_x = destination_x + 2;
+                let mask_value =
+                    u32::from(self.mask_bytes[source_y * self.source_width + source_x]);
+                for channel in 0..4 {
+                    let source_index = (source_y * self.source_width + source_x) * 4 + channel;
+                    let destination_index =
+                        (destination_y * self.destination_width + destination_x) * 4 + channel;
+                    let source_value = u32::from(self.source_bytes[source_index]);
+                    let destination_value = u32::from(expected[destination_index]);
+                    expected[destination_index] =
+                        ((source_value * mask_value + destination_value * (255 - mask_value) + 127)
+                            / 255) as u8;
+                }
+            }
+        }
+        expected
+    }
+}
+
+fn rgba_l_masked_paste_fixture() -> RgbaLMaskedPasteFixture {
     use crate::pipeline::PipelineOp;
     use crate::raster::{DynamicImage, GrayImage, RgbaImage};
     use std::sync::Arc;
@@ -176,41 +212,34 @@ fn simd_rgba_l_masked_paste_uses_native_mask_expansion_and_exact_clipped_tail() 
         mask: Some(mask),
         mask_alpha: false,
     };
+    RgbaLMaskedPasteFixture {
+        source_width,
+        destination_width,
+        destination_height,
+        source_bytes,
+        destination_bytes,
+        mask_bytes,
+        destination,
+        op,
+    }
+}
 
+#[test]
+fn simd_rgba_l_masked_paste_uses_native_mask_expansion_and_exact_clipped_tail() {
+    let fixture = rgba_l_masked_paste_fixture();
     let previous = crate::compute::Backend::set_pipeline_telemetry_enabled(true);
     crate::compute::begin_pipeline_operation_telemetry("Paste");
-    let output = super::simd_paste(&destination, &op, Some("RGBA"))
+    let output = super::simd_paste(&fixture.destination, &fixture.op, Some("RGBA"))
         .expect("SIMD RGBA/L Paste must use its native mask expansion path");
     crate::compute::finish_pipeline_operation_telemetry();
     let telemetry = crate::compute::Backend::take_pipeline_operation_telemetry();
     crate::compute::Backend::set_pipeline_telemetry_enabled(previous);
 
-    let mut expected = destination_bytes;
-    // x=-2 shifts source and L mask by two pixels; y=1 leaves only two
-    // complete source rows visible in the destination.
-    for destination_y in 1..destination_height {
-        let source_y = destination_y - 1;
-        for destination_x in 0..destination_width {
-            let source_x = destination_x + 2;
-            let mask_value = u32::from(mask_bytes[source_y * source_width + source_x]);
-            for channel in 0..4 {
-                let source_index = (source_y * source_width + source_x) * 4 + channel;
-                let destination_index =
-                    (destination_y * destination_width + destination_x) * 4 + channel;
-                let source_value = u32::from(source_bytes[source_index]);
-                let destination_value = u32::from(expected[destination_index]);
-                expected[destination_index] =
-                    ((source_value * mask_value + destination_value * (255 - mask_value) + 127)
-                        / 255) as u8;
-            }
-        }
-    }
     assert_eq!(
         output.as_bytes(),
-        expected,
+        fixture.expected(),
         "RGBA alpha is blended as stored data"
     );
-
     let operation = telemetry
         .first()
         .expect("SIMD Paste must publish operation telemetry");

@@ -4,19 +4,17 @@
 mod kernels;
 #[path = "plan.rs"]
 mod plan;
+mod rgb_to_rgba;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "parallel")]
-use super::SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD;
-use super::put_alpha::simd_put_alpha_rgb_row;
 use super::{
     NativeConvertLayout, copy_native_bytes, native_convert_layout_block, simd_unsupported,
 };
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, RgbImage, RgbaImage};
+use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, RgbImage};
 use std::sync::Arc;
 
 pub(super) use self::kernels::native_paste_apply;
@@ -34,6 +32,7 @@ pub(super) use self::plan::{
     native_paste_rgb_to_rgba_supported_for_shape, native_paste_rgba_to_rgb_supported,
     native_paste_rgba_to_rgb_supported_for_shape, native_paste_shape_layout,
 };
+pub(super) use self::rgb_to_rgba::simd_paste_rgb_to_rgba;
 
 /// Composite two images through their native byte planes.
 ///
@@ -201,165 +200,6 @@ fn simd_paste_rgba_to_rgb(
 
 /// Copy RGB pixels into an RGBA paste region and insert opaque alpha in the
 /// same four-pixel shuffle that writes each destination block.
-pub(super) fn simd_paste_rgb_to_rgba(
-    img: &DynamicImage,
-    source: &DynamicImage,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-) -> Result<DynamicImage, PilError> {
-    let (destination, source) = match (img, source) {
-        (DynamicImage::ImageRgba8(destination), DynamicImage::ImageRgb8(source)) => {
-            (destination, source)
-        }
-        _ => return Err(simd_unsupported("Paste")),
-    };
-    let source_width = u32::try_from(width).map_err(|_| simd_unsupported("Paste"))?;
-    let source_height = u32::try_from(height).map_err(|_| simd_unsupported("Paste"))?;
-    if source.dimensions() != (source_width, source_height) {
-        return Err(simd_unsupported("Paste"));
-    }
-    let expected_destination = (img.width() as usize)
-        .checked_mul(img.height() as usize)
-        .and_then(|pixels| pixels.checked_mul(4))
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let expected_source = (source_width as usize)
-        .checked_mul(source_height as usize)
-        .and_then(|pixels| pixels.checked_mul(3))
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    if destination.as_raw().len() != expected_destination
-        || source.as_raw().len() != expected_source
-    {
-        return Err(simd_unsupported("Paste"));
-    }
-
-    let region = native_paste_region(img.width(), img.height(), source_width, source_height, x, y)
-        .unwrap_or(NativePasteRegion {
-            source_left: 0,
-            source_top: 0,
-            destination_left: 0,
-            destination_top: 0,
-            width: 0,
-            height: 0,
-        });
-    if region.width == 0 || region.height == 0 {
-        crate::compute::record_pipeline_operation_path("vector-rgb-to-rgba-copy");
-        return Ok(preserve_mode(
-            img,
-            DynamicImage::ImageRgba8(destination.clone()),
-        ));
-    }
-    let source_stride = (source_width as usize)
-        .checked_mul(3)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_stride = (img.width() as usize)
-        .checked_mul(4)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_x_bytes = region
-        .source_left
-        .checked_mul(3)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_row_bytes = region
-        .width
-        .checked_mul(3)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_x_end = source_x_bytes
-        .checked_add(source_row_bytes)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_x_bytes = region
-        .destination_left
-        .checked_mul(4)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_row_bytes = region
-        .width
-        .checked_mul(4)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_x_end = destination_x_bytes
-        .checked_add(destination_row_bytes)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_rows_start = region
-        .source_top
-        .checked_mul(source_stride)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_rows_len = region
-        .height
-        .checked_mul(source_stride)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_rows_end = source_rows_start
-        .checked_add(source_rows_len)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_rows_start = region
-        .destination_top
-        .checked_mul(destination_stride)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_rows_len = region
-        .height
-        .checked_mul(destination_stride)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_rows_end = destination_rows_start
-        .checked_add(destination_rows_len)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_rows = source
-        .as_raw()
-        .get(source_rows_start..source_rows_end)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let mut output = destination.as_raw().clone();
-    let destination_rows = output
-        .get_mut(destination_rows_start..destination_rows_end)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let copy_row = |source_row: &[u8], destination_row: &mut [u8]| {
-        simd_put_alpha_rgb_row(
-            &source_row[source_x_bytes..source_x_end],
-            &mut destination_row[destination_x_bytes..destination_x_end],
-            region.width,
-            255,
-        );
-    };
-    #[cfg(feature = "parallel")]
-    if region.height > 1
-        && region.width.saturating_mul(region.height) >= SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD
-    {
-        super::simd_rows_mut_serial!(
-            destination_rows,
-            destination_stride,
-            region.height,
-            |_row_start, _row_end, row_index, destination_row| {
-                let source_start = row_index as usize * source_stride;
-                copy_row(
-                    &source_rows[source_start..source_start + source_stride],
-                    destination_row,
-                );
-            }
-        );
-    } else {
-        for (source_row, destination_row) in source_rows
-            .chunks_exact(source_stride)
-            .zip(destination_rows.chunks_exact_mut(destination_stride))
-        {
-            copy_row(source_row, destination_row);
-        }
-    }
-    #[cfg(not(feature = "parallel"))]
-    for (source_row, destination_row) in source_rows
-        .chunks_exact(source_stride)
-        .zip(destination_rows.chunks_exact_mut(destination_stride))
-    {
-        copy_row(source_row, destination_row);
-    }
-    let vector_blocks = (region.width / 4).saturating_mul(region.height) as u64;
-    let scalar_tail = (region.width % 4).saturating_mul(region.height) as u64;
-    if vector_blocks != 0 {
-        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    }
-    if scalar_tail != 0 {
-        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    }
-    crate::compute::record_pipeline_operation_path("vector-rgb-to-rgba-copy");
-    let result = RgbaImage::from_raw(img.width(), img.height(), output)
-        .ok_or_else(|| PilError::InternalError("SIMD Paste RGBA buffer shape mismatch".into()))?;
-    Ok(preserve_mode(img, DynamicImage::ImageRgba8(result)))
-}
 
 pub fn simd_paste(
     img: &DynamicImage,

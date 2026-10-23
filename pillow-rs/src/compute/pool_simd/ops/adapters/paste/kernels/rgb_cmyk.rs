@@ -166,6 +166,61 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_rgb_l_masked_ro
 /// Blend native CMYK pixels with one L-mask byte per pixel. The fourth source
 /// lane is K, not alpha; all four stored samples use the same byte blend.
 #[inline]
+fn native_paste_cmyk_l_masked_tail(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    vector_len8: usize,
+    allow_short_masked_tail: bool,
+) -> (u64, u64) {
+    let tail = source.len() - vector_len8;
+    if tail == 0 {
+        return (0, 0);
+    }
+    if allow_short_masked_tail {
+        let mut source_block = [0u8; 8];
+        let mut destination_block = [0u8; 8];
+        source_block[..tail].copy_from_slice(&source[vector_len8..]);
+        destination_block[..tail].copy_from_slice(&destination[vector_len8..]);
+        let mask_block = std::array::from_fn(|lane| {
+            if lane < tail {
+                mask[(vector_len8 + lane) / 4]
+            } else {
+                0
+            }
+        });
+        let blended = native_paste_blend_vector8(source_block, destination_block, mask_block);
+        destination[vector_len8..].copy_from_slice(&blended[..tail]);
+        (1, tail as u64)
+    } else {
+        let mut scalar_tail = 0u64;
+        for index in vector_len8..source.len() {
+            let mask_value = u16::from(mask[index / 4]);
+            let source_value = u16::from(source[index]);
+            let destination_value = u16::from(destination[index]);
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+            )]
+            let inverse = 255 - mask_value;
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+            )]
+            let weighted = source_value * mask_value + destination_value * inverse + 127;
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "DIV255 yields an 8-bit convex blend of byte channels"
+            )]
+            let blended = (weighted / 255) as u8;
+            destination[index] = blended;
+            scalar_tail = scalar_tail.saturating_add(1);
+        }
+        (0, scalar_tail)
+    }
+}
+
+#[inline]
 pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_cmyk_l_masked_row(
     source: &[u8],
     destination: &mut [u8],
@@ -262,50 +317,15 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_cmyk_l_masked_r
         vector_blocks = vector_blocks.saturating_add(1);
     }
 
-    let tail = source.len() - vector_len8;
-    if tail == 0 {
-        return (vector_blocks, scalar_tail, used_neon);
-    }
-    if allow_short_masked_tail {
-        let mut source_block = [0u8; 8];
-        let mut destination_block = [0u8; 8];
-        source_block[..tail].copy_from_slice(&source[vector_len8..]);
-        destination_block[..tail].copy_from_slice(&destination[vector_len8..]);
-        let mask_block = std::array::from_fn(|lane| {
-            if lane < tail {
-                mask[(vector_len8 + lane) / 4]
-            } else {
-                0
-            }
-        });
-        let blended = native_paste_blend_vector8(source_block, destination_block, mask_block);
-        destination[vector_len8..].copy_from_slice(&blended[..tail]);
-        vector_blocks = vector_blocks.saturating_add(1);
-        scalar_tail = scalar_tail.saturating_add(tail as u64);
-    } else {
-        for index in vector_len8..source.len() {
-            let mask_value = u16::from(mask[index / 4]);
-            let source_value = u16::from(source[index]);
-            let destination_value = u16::from(destination[index]);
-            #[expect(
-                clippy::arithmetic_side_effects,
-                reason = "mask is a byte, so subtracting it from 255 cannot underflow"
-            )]
-            let inverse = 255 - mask_value;
-            #[expect(
-                clippy::arithmetic_side_effects,
-                reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
-            )]
-            let weighted = source_value * mask_value + destination_value * inverse + 127;
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "DIV255 yields an 8-bit convex blend of byte channels"
-            )]
-            let blended = (weighted / 255) as u8;
-            destination[index] = blended;
-            scalar_tail = scalar_tail.saturating_add(1);
-        }
-    }
+    let (tail_blocks, tail_bytes) = native_paste_cmyk_l_masked_tail(
+        source,
+        destination,
+        mask,
+        vector_len8,
+        allow_short_masked_tail,
+    );
+    vector_blocks = vector_blocks.saturating_add(tail_blocks);
+    scalar_tail = scalar_tail.saturating_add(tail_bytes);
 
     (vector_blocks, scalar_tail, used_neon)
 }
