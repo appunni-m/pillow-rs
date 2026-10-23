@@ -83,52 +83,7 @@ pub fn op_convert(
         }
         ColorMode::I => Ok(convert_rgb_to_i(img)),
         ColorMode::F => Ok(convert_rgb_to_f(img)),
-        ColorMode::CMYK => {
-            // Pillow's Convert.c routes luma sources ("L", "LA") through the
-            // gray branch: C=M=Y=0 and K=255-gray.  Every other source goes
-            // through the RGB inverse: C=255-R, M=255-G, Y=255-B, K=0
-            // (ImagingConvertCMYK with INVERSE=1).
-            if matches!(
-                img,
-                DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
-            ) {
-                let (w, h) = img.dimensions();
-                let mut out = crate::raster::RgbaImage::new(w, h);
-                // Convert.c's luma-to-CMYK branch copies L directly before
-                // subtracting it from 255 for K.  The generic grayscale
-                // helper would first allocate an RGB image and a second L
-                // image even though that conversion is an identity for L/LA;
-                // read the native luma byte directly while preserving the
-                // exact C=M=Y=0, K=255-L result.
-                match img {
-                    DynamicImage::ImageLuma8(luma) => {
-                        for (op, gp) in out.pixels_mut().zip(luma.pixels()) {
-                            *op = crate::raster::Rgba([0u8, 0u8, 0u8, 255u8.wrapping_sub(gp[0])]);
-                        }
-                    }
-                    DynamicImage::ImageLumaA8(la) => {
-                        for (op, gp) in out.pixels_mut().zip(la.pixels()) {
-                            *op = crate::raster::Rgba([0u8, 0u8, 0u8, 255u8.wrapping_sub(gp[0])]);
-                        }
-                    }
-                    _ => unreachable!("luma CMYK conversion matched an invalid layout"),
-                }
-                Ok(DynamicImage::ImageRgba8(out))
-            } else {
-                let rgb = img.to_rgb8();
-                let (w, h) = rgb.dimensions();
-                let mut out = crate::raster::RgbaImage::new(w, h);
-                for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-                    *op = crate::raster::Rgba([
-                        255u8.wrapping_sub(ip[0]),
-                        255u8.wrapping_sub(ip[1]),
-                        255u8.wrapping_sub(ip[2]),
-                        0u8,
-                    ]);
-                }
-                Ok(DynamicImage::ImageRgba8(out))
-            }
-        }
+        ColorMode::CMYK => Ok(convert_to_cmyk(img)),
         ColorMode::HSV => {
             // Convert to HSV: RGB→HSV using PIL's exact algorithm.
             // HSV is stored in an Rgb8 container (H→R, S→G, V→B).
@@ -155,6 +110,47 @@ pub fn op_convert(
         ColorMode::Mode1 | ColorMode::P => Err(PilError::ValueError(
             "deferred conversion mode must be materialized first".into(),
         )),
+    }
+}
+
+fn convert_to_cmyk(img: &DynamicImage) -> DynamicImage {
+    // Pillow's Convert.c routes luma sources ("L", "LA") through the gray
+    // branch: C=M=Y=0 and K=255-gray. Every other source uses the RGB inverse.
+    if matches!(
+        img,
+        DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
+    ) {
+        let (w, h) = img.dimensions();
+        let mut out = crate::raster::RgbaImage::new(w, h);
+        // Convert.c copies L before subtracting it from 255 for K. Read the
+        // native luma byte directly instead of widening L/LA through RGB.
+        match img {
+            DynamicImage::ImageLuma8(luma) => {
+                for (op, gp) in out.pixels_mut().zip(luma.pixels()) {
+                    *op = crate::raster::Rgba([0, 0, 0, 255u8.wrapping_sub(gp[0])]);
+                }
+            }
+            DynamicImage::ImageLumaA8(la) => {
+                for (op, gp) in out.pixels_mut().zip(la.pixels()) {
+                    *op = crate::raster::Rgba([0, 0, 0, 255u8.wrapping_sub(gp[0])]);
+                }
+            }
+            _ => unreachable!("luma CMYK conversion matched an invalid layout"),
+        }
+        DynamicImage::ImageRgba8(out)
+    } else {
+        let rgb = img.to_rgb8();
+        let (w, h) = rgb.dimensions();
+        let mut out = crate::raster::RgbaImage::new(w, h);
+        for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
+            *op = crate::raster::Rgba([
+                255u8.wrapping_sub(ip[0]),
+                255u8.wrapping_sub(ip[1]),
+                255u8.wrapping_sub(ip[2]),
+                0,
+            ]);
+        }
+        DynamicImage::ImageRgba8(out)
     }
 }
 

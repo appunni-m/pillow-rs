@@ -129,39 +129,7 @@ pub fn op_enhance_brightness(
     if let DynamicImage::ImageLuma8(source) = img
         && matches!(mode, None | Some("L"))
     {
-        // L brightness is a scalar multiply. Avoid expanding each sample to
-        // three equal RGB channels only to convert the result back to L.
-        let mut luma = source.clone();
-        let (width, height) = luma.dimensions();
-        if let Some(shift) = luma_brightness_shift(factor) {
-            // These exact binary fractions truncate to the same values as
-            // Pillow's byte blend, while avoiding one floating multiply per
-            // sample on the serial CPU path.
-            apply_enhance_rows(
-                luma.as_mut(),
-                width as usize,
-                height as usize,
-                1,
-                |_y, row| {
-                    for sample in row {
-                        *sample >>= shift;
-                    }
-                },
-            );
-        } else {
-            apply_enhance_rows(
-                luma.as_mut(),
-                width as usize,
-                height as usize,
-                1,
-                |_y, row| {
-                    for sample in row {
-                        *sample = (*sample as f64 * factor).clamp(0.0, 255.0) as u8;
-                    }
-                },
-            );
-        }
-        return Ok(DynamicImage::ImageLuma8(luma));
+        return Ok(brightness_luma(source, factor));
     }
     if matches!(img, DynamicImage::ImageRgba8(_)) {
         let mut rgba = img.to_rgba8();
@@ -198,6 +166,41 @@ pub fn op_enhance_brightness(
         },
     );
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
+}
+
+fn brightness_luma(source: &crate::raster::GrayImage, factor: f64) -> DynamicImage {
+    // L brightness is a scalar multiply. Avoid expanding each sample to three
+    // equal RGB channels only to convert the result back to L.
+    let mut luma = source.clone();
+    let (width, height) = luma.dimensions();
+    if let Some(shift) = luma_brightness_shift(factor) {
+        // These exact binary fractions truncate like Pillow's byte blend and
+        // avoid a floating multiply per sample on the serial CPU path.
+        apply_enhance_rows(
+            luma.as_mut(),
+            width as usize,
+            height as usize,
+            1,
+            |_y, row| {
+                for sample in row {
+                    *sample >>= shift;
+                }
+            },
+        );
+    } else {
+        apply_enhance_rows(
+            luma.as_mut(),
+            width as usize,
+            height as usize,
+            1,
+            |_y, row| {
+                for sample in row {
+                    *sample = (*sample as f64 * factor).clamp(0.0, 255.0) as u8;
+                }
+            },
+        );
+    }
+    DynamicImage::ImageLuma8(luma)
 }
 
 pub fn op_enhance_contrast(
