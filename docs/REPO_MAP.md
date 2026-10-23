@@ -1041,7 +1041,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |   |-- channel_inputs.py
     |   |-- display.py
     |   |-- display_inputs.py
-    |   `-- parallel_cpu_inputs.py
+    |   `-- quantize_inputs.py
     |-- migration_parity_inventory.py
     |-- migration_producer_attestation.py
     |-- migration_producer_identity.py

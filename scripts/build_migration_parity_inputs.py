@@ -50,6 +50,11 @@ except ModuleNotFoundError:
     )
 
 try:
+    from migration_parity.quantize_inputs import quantize_boundary_parity_cases
+except ModuleNotFoundError:
+    from scripts.migration_parity.quantize_inputs import quantize_boundary_parity_cases
+
+try:
     from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
 except ModuleNotFoundError:  # imported as ``scripts.build_migration_parity_inputs`` in tests
     from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
@@ -43104,6 +43109,7 @@ def build_nuanced_cases(
     cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(brightness_pixel_parity_cases(surface_id))
     cases.extend(quantize_fast_octree_rgb_performance_parity_cases(surface_id))
+    cases.extend(quantize_boundary_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
     cases.extend(rgba_to_pa_performance_parity_cases(surface_id))
