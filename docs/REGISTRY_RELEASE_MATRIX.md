@@ -18,9 +18,9 @@ in an already installed wheel. See [installation](INSTALLATION.md) for package
 selection and the supported-platform requirements.
 
 The PyPI release page contains all four `pillow-rs` files and all three
-`pillow-rs-parallel` wheels for 12.2.3. The `pillow-rs` page's embedded project
-description still shows a 12.2.2 install example; this repository documentation
-update does not change the description already attached to the published artifact.
+`pillow-rs-parallel` wheels for 12.2.3. The PyPI project description still
+shows a `12.2.2` install example; use the current pinned command in the
+[installation guide](INSTALLATION.md).
 
 Previous versions and their release records are available from the
 [GitHub release list](https://github.com/appunni-m/pillow-rs/releases). The
