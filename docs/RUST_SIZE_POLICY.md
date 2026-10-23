@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 16 legacy file ceilings and 194 legacy functions across 112 source paths.
+Snapshot: 15 legacy file ceilings and 194 legacy functions across 115 source paths.
 A dash means that path has no over-limit file entry; function counts and
 maximum recorded function lines are summarized here, with each exact signature
 and ceiling in the JSON baseline. All listed paths are owned by `lazytrot`;
@@ -209,7 +209,10 @@ each reducer issue is a child of Kata `pillow-rs#m2f1`.
 | <code>pillow-rs/src/ops/convert.rs</code> | 1,450 | 1 (max 576 lines) | lazytrot | pillow-rs#bnhk |
 | <code>pillow-rs/src/ops/imageops.rs</code> | 1,899 | 2 (max 134 lines) | lazytrot | pillow-rs#vamp |
 | <code>pillow-rs/src/ops/paste.rs</code> | — | 2 (max 123 lines) | lazytrot | pillow-rs#mtx1 |
-| <code>pillow-rs/src/ops/pil_resize.rs</code> | 6,032 | 7 (max 240 lines) | lazytrot | pillow-rs#nsax |
+| <code>pillow-rs/src/ops/pil_resize/boxed.rs</code> | — | 2 (max 240 lines) | lazytrot | pillow-rs#nsax |
+| <code>pillow-rs/src/ops/pil_resize/horizontal_passes.rs</code> | — | 2 (max 131 lines) | lazytrot | pillow-rs#nsax |
+| <code>pillow-rs/src/ops/pil_resize/resize.rs</code> | — | 1 (max 194 lines) | lazytrot | pillow-rs#nsax |
+| <code>pillow-rs/src/ops/pil_resize/vertical_passes.rs</code> | — | 2 (max 116 lines) | lazytrot | pillow-rs#nsax |
 | <code>pillow-rs/src/ops/quantize.rs</code> | 2,462 | 4 (max 180 lines) | lazytrot | pillow-rs#bnhk |
 | <code>pillow-rs/src/ops/resize.rs</code> | — | 1 (max 101 lines) | lazytrot | pillow-rs#tdnt |
 | <code>pillow-rs/src/ops/transform.rs</code> | — | 2 (max 139 lines) | lazytrot | pillow-rs#tdnt |
