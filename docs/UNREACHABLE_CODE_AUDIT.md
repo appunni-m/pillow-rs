@@ -22,7 +22,10 @@ runtime loading, or prove that a test or parity case executes a specific
 implementation. Operation mappings establish discoverability, not coverage or
 execution. Items below remain review candidates until those boundaries are
 traced. This audit uses no coverage data and has not deleted or simplified
-code.
+code. It does not add unit tests. Behavioral gaps and public-route claims are
+to be checked with generated fixture parity and fault-contract cases, using
+explicit case IDs and backend profiles. Static source checks remain inventory
+evidence and do not substitute for those fixture contracts.
 
 ## Current operation-to-family and fixture snapshot — 2026-10-21
 
@@ -286,6 +289,18 @@ history and checks all supported build configurations. No code or test was
 removed or changed as part of this audit.
 
 ## Open audit work
+
+The generated crosswalk could not be refreshed from `main` on 2026-10-23:
+`make operation-source-crosswalk` fails because
+`scripts/source_crosswalk/rust_source.py::parse_registry` expects
+`register_all` and `draw_entry!` in `pillow-rs/src/compute/registry.rs`, while
+the current registry delegates to `registry/registration/mod.rs` and splits
+entries across that directory's modules. The ignored schema-10 report at
+`target/operation-source-crosswalk.json` is marked dirty and records source
+revision `87bf8d9`; it is not a fresh snapshot for this checkout. Adapt the
+static parser to the current registration layout before refreshing the source
+and fixture inventory. No unit tests, parity, benchmarks, or coverage were run
+for this check.
 
 The four static GPU shader candidates have current loader-path evidence above,
 and the three current crosswalk family/layout findings have source routes or a
