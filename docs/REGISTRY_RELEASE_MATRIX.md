@@ -1,9 +1,13 @@
 # Registry release matrix
 
-## Current release: 12.2.3
+<!-- release:summary -->
+**Latest release: [12.2.3](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.3).**
+<!-- /release:summary -->
 
-Verified 2026-10-23. See the [v12.2.3 GitHub release](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.3)
-for its release record and attached artifacts.
+## Current registry versions
+
+Verified 2026-10-23. See the [GitHub release](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.3)
+for release notes and artifact checksums.
 
 | Registry | Package | Version | Published artifacts |
 | --- | --- | --- | --- |
@@ -17,18 +21,12 @@ separately built Parallel CPU companion wheel; it does not change Cargo features
 in an already installed wheel. See [installation](INSTALLATION.md) for package
 selection and the supported-platform requirements.
 
-The PyPI release page contains all four `pillow-rs` files and all three
-`pillow-rs-parallel` wheels for 12.2.3. The description embedded in the core
-PyPI release still labels 12.2.2 as current, pins 12.2.2, and includes older
-implementation and contributor-tooling detail. The source package points to
-the current root README, but PyPI displays description metadata from an
-uploaded distribution; its release filenames cannot be reused. The hosted
-description therefore needs a new version upload to reflect the current
-README. See PyPI's [project-description guidance](https://docs.pypi.org/project-management/project-descriptions/)
-and [upload troubleshooting](https://docs.pypi.org/publishing/troubleshooting/)
-for those metadata rules. Until then, use the pinned command in the
-[installation guide](INSTALLATION.md).
+The PyPI project page for `pillow-rs` still displays the README embedded in its
+12.2.3 upload, which names 12.2.2 as current. The registry version and the
+[installation command](INSTALLATION.md) above are 12.2.3. PyPI reads the long
+description from the uploaded package metadata; a later upload is needed to
+refresh it. See PyPI's [project-description guidance](https://docs.pypi.org/project-management/project-descriptions/)
+and [upload troubleshooting](https://docs.pypi.org/publishing/troubleshooting/).
 
-Previous versions and their release records are available from the
-[GitHub release list](https://github.com/appunni-m/pillow-rs/releases). The
-maintainer workflow is documented in [`RELEASING.md`](../RELEASING.md).
+Earlier releases and their records are available from the
+[GitHub release list](https://github.com/appunni-m/pillow-rs/releases).

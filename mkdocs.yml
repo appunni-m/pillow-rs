@@ -68,6 +68,7 @@ nav:
   - Contribute:
       - Contributor guide: contributing.md
   - Project:
+      - Registry versions: registry-release-matrix.md
       - Releases: https://github.com/appunni-m/pillow-rs/releases
       - Changelog: changelog.md
       - Support: support.md
