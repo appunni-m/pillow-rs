@@ -637,3 +637,6 @@ pub(crate) fn simd_draw_pieslice(
     )?
     .ok_or_else(|| simd_unsupported("DrawPieslice"))
 }
+
+#[cfg(test)]
+mod tests;

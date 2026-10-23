@@ -95,11 +95,11 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 13 legacy file ceilings and 194 legacy functions across 124 source paths.
+Snapshot: 12 legacy file ceilings and 176 legacy functions across 116 source paths.
 A dash means that path has no over-limit file entry; function counts and
-maximum recorded function lines are summarized here, with each exact signature
-and ceiling in the JSON baseline. All listed paths are owned by `lazytrot`;
-each reducer issue is a child of Kata `pillow-rs#m2f1`.
+maximum recorded function lines are summarized here, with each exact
+signature and ceiling in the JSON baseline. Each table row repeats the
+owner and reducer issue recorded for that path.
 
 | Source path | Recorded file ceiling | Long functions (count; max lines) | Owner | Reduction task |
 | --- | ---: | ---: | --- | --- |
@@ -108,20 +108,25 @@ each reducer issue is a child of Kata `pillow-rs#m2f1`.
 | <code>pillow-rs/src/color.rs</code> | 2,086 | 0 | lazytrot | pillow-rs#bnhk |
 | <code>pillow-rs/src/compute/pool_cpu/mod.rs</code> | — | 1 (max 320 lines) | lazytrot | pillow-rs#7f4d |
 | <code>pillow-rs/src/compute/pool_cpu/ops/color.rs</code> | — | 1 (max 107 lines) | lazytrot | pillow-rs#7f4d |
+| <code>pillow-rs/src/compute/pool_cpu/ops/composite.rs</code> | — | 1 (max 136 lines) | lazytrot | pillow-rs#8rfy |
 | <code>pillow-rs/src/compute/pool_cpu/ops/draw.rs</code> | 1,777 | 2 (max 172 lines) | lazytrot | pillow-rs#mtx1 |
-| <code>pillow-rs/src/compute/pool_cpu/ops/effects.rs</code> | 6,211 | 9 (max 235 lines) | lazytrot | pillow-rs#8rfy |
 | <code>pillow-rs/src/compute/pool_cpu/ops/enhance.rs</code> | — | 1 (max 117 lines) | lazytrot | pillow-rs#7f4d |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/blur.rs</code> | — | 1 (max 260 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs</code> | — | 1 (max 157 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5/int32.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/rank.rs</code> | — | 1 (max 110 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/imageops.rs</code> | 2,647 | 5 (max 303 lines) | lazytrot | pillow-rs#vamp |
+| <code>pillow-rs/src/compute/pool_cpu/ops/paste.rs</code> | — | 2 (max 235 lines) | lazytrot | pillow-rs#8rfy |
 | <code>pillow-rs/src/compute/pool_cpu/ops/reduce.rs</code> | — | 2 (max 244 lines) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/resize/float.rs</code> | — | 1 (max 156 lines) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/resize/integer.rs</code> | — | 1 (max 133 lines) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/rotate/affine.rs</code> | — | 2 (max 237 lines) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/rotate/scalar.rs</code> | — | 1 (max 159 lines) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_cpu/ops/thumbnail.rs</code> | — | 3 (max 133 lines) | lazytrot | pillow-rs#wtxv |
+| <code>pillow-rs/src/compute/pool_cpu/ops/transform.rs</code> | — | 1 (max 216 lines) | lazytrot | pillow-rs#8rfy |
+| <code>pillow-rs/src/compute/pool_cpu/ops/transform/affine.rs</code> | — | 1 (max 150 lines) | lazytrot | pillow-rs#8rfy |
+| <code>pillow-rs/src/compute/pool_cpu/ops/transform/projective.rs</code> | — | 2 (max 169 lines) | lazytrot | pillow-rs#8rfy |
+| <code>pillow-rs/src/compute/pool_cpu/ops/transform/scalar.rs</code> | — | 2 (max 146 lines) | lazytrot | pillow-rs#8rfy |
 | <code>pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs</code> | — | 1 (max 105 lines) | lazytrot | pillow-rs#wtxv |
 | <code>pillow-rs/src/compute/pool_gpu/auxiliary_images.rs</code> | — | 1 (max 121 lines) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/batch_encoding.rs</code> | — | 1 (max 369 lines) | lazytrot | pillow-rs#ras2 |
@@ -176,18 +181,10 @@ each reducer issue is a child of Kata `pillow-rs#m2f1`.
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters.rs</code> | — | 2 (max 177 lines) | lazytrot | pillow-rs#nt8w |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/box_blur/kernels/rgb.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#y5m4 |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/box_blur/tests.rs</code> | — | 1 (max 103 lines) | lazytrot | pillow-rs#y5m4 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/convert/kernels/dispatch.rs</code> | — | 1 (max 216 lines) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/draw/kernels/shapes.rs</code> | — | 1 (max 180 lines) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/draw/kernels/spans.rs</code> | — | 2 (max 148 lines) | lazytrot | pillow-rs#hezh |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/enhance.rs</code> | — | 1 (max 168 lines) | lazytrot | pillow-rs#5a5k |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/expand.rs</code> | — | 1 (max 145 lines) | lazytrot | pillow-rs#5a5k |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/layout.rs</code> | — | 1 (max 135 lines) | lazytrot | pillow-rs#5a5k |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/pad.rs</code> | — | 1 (max 294 lines) | lazytrot | pillow-rs#5a5k |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/kernels/apply.rs</code> | — | 1 (max 780 lines) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/kernels/luma16.rs</code> | — | 1 (max 147 lines) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/kernels/rgb_cmyk.rs</code> | — | 1 (max 130 lines) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/mod.rs</code> | — | 1 (max 149 lines) | lazytrot | pillow-rs#hezh |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/paste/tests.rs</code> | — | 1 (max 105 lines) | lazytrot | pillow-rs#hezh |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/reduce.rs</code> | — | 1 (max 130 lines) | lazytrot | pillow-rs#5a5k |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize.rs</code> | — | 1 (max 140 lines) | lazytrot | pillow-rs#h8p0 |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/f32.rs</code> | — | 2 (max 409 lines) | lazytrot | pillow-rs#h8p0 |
