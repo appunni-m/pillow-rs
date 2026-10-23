@@ -196,14 +196,9 @@ each reducer issue is a child of Kata `pillow-rs#m2f1`.
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_boxed_convolution.rs</code> | — | 1 (max 331 lines) | lazytrot | pillow-rs#h8p0 |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/u8_nearest.rs</code> | — | 2 (max 198 lines) | lazytrot | pillow-rs#h8p0 |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/resize/tests.rs</code> | — | 1 (max 111 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/rotate/kernels/native.rs</code> | — | 3 (max 186 lines) | lazytrot | pillow-rs#tbtw |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail.rs</code> | — | 1 (max 189 lines) | lazytrot | pillow-rs#h8p0 |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/float.rs</code> | — | 1 (max 130 lines) | lazytrot | pillow-rs#h8p0 |
 | <code>pillow-rs/src/compute/pool_simd/ops/adapters/thumbnail/kernels/integer.rs</code> | — | 1 (max 131 lines) | lazytrot | pillow-rs#h8p0 |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/bilinear.rs</code> | — | 2 (max 186 lines) | lazytrot | pillow-rs#tbtw |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/luma16.rs</code> | — | 1 (max 126 lines) | lazytrot | pillow-rs#tbtw |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/mesh.rs</code> | — | 1 (max 121 lines) | lazytrot | pillow-rs#tbtw |
-| <code>pillow-rs/src/compute/pool_simd/ops/adapters/transform/kernels/nearest.rs</code> | — | 2 (max 149 lines) | lazytrot | pillow-rs#tbtw |
 | <code>pillow-rs/src/compute/pool_simd/ops/scalar.rs</code> | 4,038 | 4 (max 190 lines) | lazytrot | pillow-rs#nt8w |
 | <code>pillow-rs/src/draw/mod.rs</code> | 3,106 | 3 (max 504 lines) | lazytrot | pillow-rs#mtx1 |
 | <code>pillow-rs/src/image/backend.rs</code> | — | 1 (max 110 lines) | lazytrot | pillow-rs#knsf |

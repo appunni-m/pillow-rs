@@ -30,59 +30,9 @@ pub(in super::super) fn simd_affine_luma16_transform_bytes(
         return Ok(None);
     };
     if matches!(filter, ResampleFilter::Bilinear) {
-        // SPECIAL filtered transforms sample the first width bytes of each
-        // native row. Reuse the exact byte SIMD kernel, then restore the
-        // untouched second fill byte instead of filtering numeric u16 values.
-        let big_endian = mode == Some("I;16B")
-            || (cfg!(target_endian = "big") && matches!(mode, Some("I;16" | "I;16N")));
-        let encode = |value: u16| {
-            if big_endian {
-                value.to_be_bytes()
-            } else {
-                value.to_le_bytes()
-            }
-        };
-        let fill_value = fill.map_or(0, |color| u16::from_le_bytes([color.0, color.1]));
-        let fill_bytes = encode(fill_value);
-        let mut bytes = Vec::with_capacity(source.width() as usize * source.height() as usize);
-        for row in source.as_raw().chunks_exact(source.width() as usize) {
-            bytes.extend(
-                row.iter()
-                    .flat_map(|&value| encode(value))
-                    .take(source.width() as usize),
-            );
-        }
-        let plane = DynamicImage::ImageLuma8(
-            ImageBuffer::from_raw(source.width(), source.height(), bytes)
-                .ok_or_else(|| PilError::InternalError("SIMD I;16 byte plane shape".into()))?,
+        return simd_affine_luma16_filtered_transform_bytes(
+            source, width, height, data, fill, mode,
         );
-        let Some(sampled) = simd_affine_bilinear_transform_bytes(
-            &plane,
-            width,
-            height,
-            data,
-            Some((fill_bytes[0], 0, 0, 0)),
-            Some("L"),
-        )?
-        else {
-            return Ok(None);
-        };
-        let values = sampled
-            .as_bytes()
-            .iter()
-            .map(|&byte| {
-                let bytes = [byte, fill_bytes[1]];
-                if big_endian {
-                    u16::from_be_bytes(bytes)
-                } else {
-                    u16::from_le_bytes(bytes)
-                }
-            })
-            .collect();
-        return ImageBuffer::from_raw(width, height, values)
-            .map(DynamicImage::ImageLuma16)
-            .map(Some)
-            .ok_or_else(|| PilError::InternalError("SIMD I;16 transform output shape".into()));
     }
     let source_width = source.width() as usize;
     let source_height = source.height() as usize;
@@ -145,4 +95,67 @@ pub(in super::super) fn simd_affine_luma16_transform_bytes(
         .map(DynamicImage::ImageLuma16)
         .map(Some)
         .ok_or_else(|| PilError::InternalError("SIMD transform I;16 buffer shape mismatch".into()))
+}
+
+fn simd_affine_luma16_filtered_transform_bytes(
+    source: &ImageBuffer<Luma<u16>, Vec<u16>>,
+    width: u32,
+    height: u32,
+    data: &[f64],
+    fill: Option<(u8, u8, u8, u8)>,
+    mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    // SPECIAL filtered transforms sample the first width bytes of each
+    // native row. Reuse the exact byte SIMD kernel, then restore the
+    // untouched second fill byte instead of filtering numeric u16 values.
+    let big_endian = mode == Some("I;16B")
+        || (cfg!(target_endian = "big") && matches!(mode, Some("I;16" | "I;16N")));
+    let encode = |value: u16| {
+        if big_endian {
+            value.to_be_bytes()
+        } else {
+            value.to_le_bytes()
+        }
+    };
+    let fill_value = fill.map_or(0, |color| u16::from_le_bytes([color.0, color.1]));
+    let fill_bytes = encode(fill_value);
+    let mut bytes = Vec::with_capacity(source.width() as usize * source.height() as usize);
+    for row in source.as_raw().chunks_exact(source.width() as usize) {
+        bytes.extend(
+            row.iter()
+                .flat_map(|&value| encode(value))
+                .take(source.width() as usize),
+        );
+    }
+    let plane = DynamicImage::ImageLuma8(
+        ImageBuffer::from_raw(source.width(), source.height(), bytes)
+            .ok_or_else(|| PilError::InternalError("SIMD I;16 byte plane shape".into()))?,
+    );
+    let Some(sampled) = simd_affine_bilinear_transform_bytes(
+        &plane,
+        width,
+        height,
+        data,
+        Some((fill_bytes[0], 0, 0, 0)),
+        Some("L"),
+    )?
+    else {
+        return Ok(None);
+    };
+    let values = sampled
+        .as_bytes()
+        .iter()
+        .map(|&byte| {
+            let bytes = [byte, fill_bytes[1]];
+            if big_endian {
+                u16::from_be_bytes(bytes)
+            } else {
+                u16::from_le_bytes(bytes)
+            }
+        })
+        .collect();
+    ImageBuffer::from_raw(width, height, values)
+        .map(DynamicImage::ImageLuma16)
+        .map(Some)
+        .ok_or_else(|| PilError::InternalError("SIMD I;16 transform output shape".into()))
 }

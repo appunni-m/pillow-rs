@@ -21,6 +21,72 @@ fn mesh_source_point(coefficients: &[f64; 8], local_x: f64, local_y: f64) -> (f6
     (source_x, source_y)
 }
 
+struct MeshTransformRecord {
+    coefficients: [f64; 8],
+    destination_x0: i64,
+    destination_y0: i64,
+    destination_x1: i64,
+    destination_y1: i64,
+}
+
+fn mesh_transform_record(
+    mesh: &[f64],
+    destination_width: i64,
+    destination_height: i64,
+) -> Option<MeshTransformRecord> {
+    // These are integer box coordinates at Pillow's public boundary. The
+    // cast mirrors the C long conversion used before GenericTransform.
+    let x0_d = mesh[0] as i64;
+    let y0_d = mesh[1] as i64;
+    let x1_d = mesh[2] as i64;
+    let y1_d = mesh[3] as i64;
+    let box_width = x1_d.saturating_sub(x0_d);
+    let box_height = y1_d.saturating_sub(y0_d);
+    if box_width <= 0 || box_height <= 0 {
+        return None;
+    }
+
+    let inverse_width = 1.0 / box_width as f64;
+    let inverse_height = 1.0 / box_height as f64;
+    let coefficients = [
+        mesh[4],
+        (mesh[10] - mesh[4]) * inverse_width,
+        (mesh[6] - mesh[4]) * inverse_height,
+        (mesh[8] - mesh[6] - mesh[10] + mesh[4]) * inverse_width * inverse_height,
+        mesh[5],
+        (mesh[11] - mesh[5]) * inverse_width,
+        (mesh[7] - mesh[5]) * inverse_height,
+        (mesh[9] - mesh[7] - mesh[11] + mesh[5]) * inverse_width * inverse_height,
+    ];
+
+    // GenericTransform clips the destination box and resets the local
+    // origin to the clipped lower-left corner. The map keeps original box
+    // dimensions while rows use the clipped origin.
+    let destination_x0 = x0_d.max(0).min(destination_width);
+    let destination_y0 = y0_d.max(0).min(destination_height);
+    let destination_x1 = x1_d.max(0).min(destination_width);
+    let destination_y1 = y1_d.max(0).min(destination_height);
+    if destination_x0 >= destination_x1 || destination_y0 >= destination_y1 {
+        return None;
+    }
+
+    Some(MeshTransformRecord {
+        coefficients,
+        destination_x0,
+        destination_y0,
+        destination_x1,
+        destination_y1,
+    })
+}
+
+fn mesh_fill_output(destination_len: usize, channels: usize, fill: [u8; 4]) -> Vec<u8> {
+    let mut output = vec![0u8; destination_len];
+    for destination in output.chunks_exact_mut(channels) {
+        destination.copy_from_slice(&fill[..channels]);
+    }
+    output
+}
+
 pub(in super::super) fn simd_mesh_transform_bytes(
     img: &DynamicImage,
     width: u32,
@@ -62,10 +128,7 @@ pub(in super::super) fn simd_mesh_transform_bytes(
     }
     let fill = fill.unwrap_or((0, 0, 0, 0));
     let fill = [fill.0, fill.1, fill.2, fill.3];
-    let mut output = vec![0u8; destination_len];
-    for destination in output.chunks_exact_mut(channels) {
-        destination.copy_from_slice(&fill[..channels]);
-    }
+    let mut output = mesh_fill_output(destination_len, channels, fill);
     let destination_width_i64 = i64::from(width);
     let destination_height_i64 = i64::from(height);
     let source_width_i64 = i64::from(img.width());
@@ -73,54 +136,26 @@ pub(in super::super) fn simd_mesh_transform_bytes(
     let mut vector_blocks = 0u64;
 
     for mesh in data.chunks_exact(12) {
-        // These are integer box coordinates at Pillow's public boundary. The
-        // cast mirrors the C long conversion used before GenericTransform.
-        let x0_d = mesh[0] as i64;
-        let y0_d = mesh[1] as i64;
-        let x1_d = mesh[2] as i64;
-        let y1_d = mesh[3] as i64;
-        let box_width = x1_d.saturating_sub(x0_d);
-        let box_height = y1_d.saturating_sub(y0_d);
-        if box_width <= 0 || box_height <= 0 {
+        let Some(record) =
+            mesh_transform_record(mesh, destination_width_i64, destination_height_i64)
+        else {
             continue;
-        }
+        };
 
-        let inverse_width = 1.0 / box_width as f64;
-        let inverse_height = 1.0 / box_height as f64;
-        let coefficients = [
-            mesh[4],
-            (mesh[10] - mesh[4]) * inverse_width,
-            (mesh[6] - mesh[4]) * inverse_height,
-            (mesh[8] - mesh[6] - mesh[10] + mesh[4]) * inverse_width * inverse_height,
-            mesh[5],
-            (mesh[11] - mesh[5]) * inverse_width,
-            (mesh[7] - mesh[5]) * inverse_height,
-            (mesh[9] - mesh[7] - mesh[11] + mesh[5]) * inverse_width * inverse_height,
-        ];
-
-        // GenericTransform clips the destination box and resets the local
-        // origin to the clipped lower-left corner. The box dimensions above
-        // remain the original (unclipped) dimensions.
-        let bx0 = x0_d.max(0).min(destination_width_i64);
-        let by0 = y0_d.max(0).min(destination_height_i64);
-        let bx1 = x1_d.max(0).min(destination_width_i64);
-        let by1 = y1_d.max(0).min(destination_height_i64);
-        if bx0 >= bx1 || by0 >= by1 {
-            continue;
-        }
-
-        for destination_y in by0..by1 {
-            let local_y = (destination_y - by0) as f64 + 0.5;
-            let mut destination_x = bx0;
-            while destination_x < bx1 {
-                let count = ((bx1 - destination_x) as usize).min(SIMD_F64_LANES);
+        for destination_y in record.destination_y0..record.destination_y1 {
+            let local_y = (destination_y - record.destination_y0) as f64 + 0.5;
+            let mut destination_x = record.destination_x0;
+            while destination_x < record.destination_x1 {
+                let count = ((record.destination_x1 - destination_x) as usize).min(SIMD_F64_LANES);
                 // Coordinates are a scalar control plane; the native sample
                 // bytes are still gathered and written in complete blocks.
                 // This preserves exact COORD truncation while retaining the
                 // adapter's vector-block data path and receipts.
                 for lane in 0..count {
-                    let local_x = (destination_x - bx0 + lane as i64) as f64 + 0.5;
-                    let (source_x, source_y) = mesh_source_point(&coefficients, local_x, local_y);
+                    let local_x =
+                        (destination_x - record.destination_x0 + lane as i64) as f64 + 0.5;
+                    let (source_x, source_y) =
+                        mesh_source_point(&record.coefficients, local_x, local_y);
                     let input_x = if source_x.is_finite() && source_x >= 0.0 {
                         source_x as i64
                     } else {
