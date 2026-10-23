@@ -49533,6 +49533,9 @@ TERMINAL_SCALAR_NO_RUN_CASE_ID = (
 SCALAR_RUN_EDGE_GETCOLORS_CASE_ID = (
     "PIL.Image.Image.getcolors.nuanced.scalar-run-edge-cases"
 )
+F_NAN_PAYLOAD_GETCOLORS_CASE_ID = (
+    "PIL.Image.Image.getcolors.nuanced.f-nan-payloads"
+)
 SIGNED_RUN_GETCOLORS_CASES = (
     (
         "pipeline-chain.terminal-read.getcolors.late-negative-signed-run-i-1024x768",
@@ -49917,6 +49920,82 @@ def _add_scalar_run_edge_getcolors_parity_case(
     if any(item["case_id"] == case["case_id"] for item in parity_cases):
         raise ValueError(
             f"duplicate scalar-run GetColors case ID: {case['case_id']}"
+        )
+    parity_cases.append(case)
+    existing_signatures.add(signature)
+
+
+def _f_nan_payload_getcolors_parity_case(
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    """Keep distinct F-mode NaN payloads observable through GetColors."""
+
+    parity_requirement = "PIL.Image.Image.getcolors.behavior.default"
+    requirements = {
+        item["id"]
+        for item in operations[("PIL.Image.Image", "getcolors")]["requirements"]
+    }
+    if parity_requirement not in requirements:
+        raise ValueError(
+            "F NaN-payload GetColors parity requires "
+            f"{parity_requirement}"
+        )
+
+    samples = struct.pack("<III", 0x7FC00001, 0xFFC12345, 0x7FC00001)
+    return {
+        "case_id": F_NAN_PAYLOAD_GETCOLORS_CASE_ID,
+        "surface": "PIL.Image.Image",
+        "operation": "getcolors",
+        "covers": [parity_requirement],
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        "assets": [
+            {
+                "id": "f-nan-payload-samples",
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(samples).decode("ascii"),
+                "sha256": hashlib.sha256(samples).hexdigest(),
+                "media_type": "application/octet-stream",
+            }
+        ],
+        "steps": [
+            {
+                "step_id": "source",
+                "surface": "PIL.Image",
+                "operation": "frombytes",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("F"),
+                    "size": literal([3, 1]),
+                    "data": asset_value("f-nan-payload-samples"),
+                },
+            },
+            {
+                "step_id": "getcolors",
+                "surface": "PIL.Image.Image",
+                "operation": "getcolors",
+                "receiver": binding("source"),
+                "arguments": {"maxcolors": literal(2)},
+            },
+        ],
+        "observations": ["getcolors"],
+    }
+
+
+def _add_f_nan_payload_getcolors_parity_case(
+    parity_cases: list[dict[str, Any]],
+    existing_signatures: set[str],
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> None:
+    """Keep exact F NaN payloads in the generated GetColors parity corpus."""
+
+    case = _f_nan_payload_getcolors_parity_case(operations)
+    signature = case_signature(case)
+    if signature in existing_signatures:
+        raise ValueError("F NaN-payload GetColors case duplicates an input")
+    if any(item["case_id"] == case["case_id"] for item in parity_cases):
+        raise ValueError(
+            f"duplicate F NaN-payload GetColors case ID: {case['case_id']}"
         )
     parity_cases.append(case)
     existing_signatures.add(signature)
@@ -55394,6 +55473,11 @@ def build_inputs(
                 operations,
             )
             _add_scalar_run_edge_getcolors_parity_case(
+                parity_cases,
+                existing_signatures,
+                operations,
+            )
+            _add_f_nan_payload_getcolors_parity_case(
                 parity_cases,
                 existing_signatures,
                 operations,
