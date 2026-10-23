@@ -197,28 +197,9 @@ Cancellation stops pulling from the input iterator; it does not call that
 iterator's `close()`. If you retain a generator or another resource-owning
 producer, close its resources yourself.
 
-## Parity and performance evidence
+## Performance
 
-The [focused validation guide](GPU_BATCH_VALIDATION.md) records exact live
-Pillow comparisons, lifecycle checks, and completed-work timings. The benchmark
-includes fresh graph construction, GPU upload/execution, materialization, and
-terminal bytes. It uses normal sequential Pillow as its baseline.
-
-Queue depth affects performance: grouping submissions does not guarantee
-concurrent kernels or a speedup for every size/mode. Resident output skips
-scheduler readback, while explicit downloads still transfer native bytes.
-
-## Future codec destination integration
-
-image-slash-star currently decodes into owned CPU bytes and has no public GPU
-buffer API. Its `decode_into_with_policy` decodes into a Vec then copies;
-using it would not establish direct decoding into GPU memory. This feature
-therefore keeps existing decoding and removes intermediate GPU downloads.
-
-A later integration can add a genuine codec destination API receiving only
-`&mut [u8]`: Pillow owns a fresh mapped buffer, lends its native sample slice,
-drops the view, and unmaps before GPU use on the same Device/Queue. CPU decoding
-remains CPU decoding; driver transfers may still occur. Repeated mapping needs
-legal usage/features, and a portable fallback uses mapped staging plus a GPU
-copy. This is separate work with its own parity and measured benefit. See the
-pinned [wgpu Buffer contract](https://docs.rs/wgpu/24.0.5/wgpu/struct.Buffer.html).
+Batching does not guarantee concurrent kernels or a speedup for every size or
+mode. GPU-resident outputs avoid readback until you download them; downloads
+still transfer native bytes. Measure the workload and data path your application
+uses.
