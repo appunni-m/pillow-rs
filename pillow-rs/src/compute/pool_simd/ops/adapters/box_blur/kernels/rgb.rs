@@ -239,6 +239,90 @@ pub(in crate::compute::pool_simd::ops::adapters) fn simd_rgb_vertical_radius_one
 /// Stream horizontal RGB BoxBlur(1) rows through a three-row SIMD ring before
 /// applying Pillow's rounded vertical pass. The horizontal bytes stay in
 /// cache-sized row storage instead of a full-frame intermediate.
+#[derive(Clone, Copy)]
+struct RgbBoxBlurRadiusOnePlan {
+    width: usize,
+    height: usize,
+    row_stride: usize,
+    ring_rows: usize,
+    horizontal_weight: u32,
+    horizontal_fractional_weight: u32,
+    horizontal_weight_vector: u32x16,
+    horizontal_fractional_weight_vector: u32x16,
+    horizontal_rounding_bias: u32x16,
+    vertical_weight: u32x16,
+}
+
+#[inline]
+fn simd_rgb_box_blur_stream_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    ring: &mut [u8],
+    plan: &RgbBoxBlurRadiusOnePlan,
+) {
+    let RgbBoxBlurRadiusOnePlan {
+        width,
+        height,
+        row_stride,
+        ring_rows,
+        horizontal_weight,
+        horizontal_fractional_weight,
+        horizontal_weight_vector,
+        horizontal_fractional_weight_vector,
+        horizontal_rounding_bias,
+        vertical_weight,
+    } = *plan;
+    let mut previous_slot = 0usize;
+    let mut current_slot = 0usize;
+    let mut next_slot = 1usize;
+    let bias = u32x16::splat(SIMD_BOX_BLUR_BIAS);
+    for y in 0..height {
+        let previous = previous_slot * row_stride;
+        let current = current_slot * row_stride;
+        let next = next_slot * row_stride;
+        let output = y * row_stride;
+        for x in (0..row_stride).step_by(16) {
+            let count = (row_stride - x).min(16);
+            let load = |start: usize| {
+                if count == 16 {
+                    u16x16::from(simd_blur_load_u8x16(ring, start + x))
+                } else {
+                    let mut padded = [0u8; 16];
+                    padded[..count].copy_from_slice(&ring[start + x..start + x + count]);
+                    u16x16::from(u8x16::new(padded))
+                }
+            };
+            let sum = u32x16::from(load(previous) + load(current) + load(next));
+            let weighted = sum * vertical_weight + bias;
+            let packed = simd_blur_pack_u32x16_to_bytes(weighted >> 24u32);
+            destination[output + x..output + x + count].copy_from_slice(&packed[..count]);
+        }
+
+        if y + 1 < height {
+            previous_slot = current_slot;
+            current_slot = next_slot;
+            if y + 2 < height {
+                next_slot = (next_slot + 1) % ring_rows;
+                let source_y = y + 2;
+                let source_start = source_y * row_stride;
+                let ring_start = next_slot * row_stride;
+                simd_rgb_horizontal_radius_one_row_with_vectors(
+                    &source[source_start..source_start + row_stride],
+                    &mut ring[ring_start..ring_start + row_stride],
+                    width,
+                    horizontal_weight,
+                    horizontal_fractional_weight,
+                    horizontal_weight_vector,
+                    horizontal_fractional_weight_vector,
+                    horizontal_rounding_bias,
+                );
+            } else {
+                next_slot = current_slot;
+            }
+        }
+    }
+}
+
 pub(in crate::compute::pool_simd::ops::adapters::box_blur) fn simd_rgb_box_blur_radius_one_rows(
     source: &[u8],
     destination: &mut [u8],
@@ -318,54 +402,17 @@ pub(in crate::compute::pool_simd::ops::adapters::box_blur) fn simd_rgb_box_blur_
         horizontal_rounding_bias,
     );
 
-    let mut previous_slot = 0usize;
-    let mut current_slot = 0usize;
-    let mut next_slot = 1usize;
-    let weight = u32x16::splat(vertical_weight);
-    let bias = u32x16::splat(SIMD_BOX_BLUR_BIAS);
-    for y in 0..height {
-        let previous = previous_slot * row_stride;
-        let current = current_slot * row_stride;
-        let next = next_slot * row_stride;
-        let output = y * row_stride;
-        for x in (0..row_stride).step_by(16) {
-            let count = (row_stride - x).min(16);
-            let load = |start: usize| {
-                if count == 16 {
-                    u16x16::from(simd_blur_load_u8x16(&ring, start + x))
-                } else {
-                    let mut padded = [0u8; 16];
-                    padded[..count].copy_from_slice(&ring[start + x..start + x + count]);
-                    u16x16::from(u8x16::new(padded))
-                }
-            };
-            let sum = u32x16::from(load(previous) + load(current) + load(next));
-            let weighted = sum * weight + bias;
-            let packed = simd_blur_pack_u32x16_to_bytes(weighted >> 24u32);
-            destination[output + x..output + x + count].copy_from_slice(&packed[..count]);
-        }
-
-        if y + 1 < height {
-            previous_slot = current_slot;
-            current_slot = next_slot;
-            if y + 2 < height {
-                next_slot = (next_slot + 1) % ring_rows;
-                let source_y = y + 2;
-                let source_start = source_y * row_stride;
-                let ring_start = next_slot * row_stride;
-                simd_rgb_horizontal_radius_one_row_with_vectors(
-                    &source[source_start..source_start + row_stride],
-                    &mut ring[ring_start..ring_start + row_stride],
-                    width,
-                    horizontal_weight,
-                    horizontal_fractional_weight,
-                    horizontal_weight_vector,
-                    horizontal_fractional_weight_vector,
-                    horizontal_rounding_bias,
-                );
-            } else {
-                next_slot = current_slot;
-            }
-        }
-    }
+    let plan = RgbBoxBlurRadiusOnePlan {
+        width,
+        height,
+        row_stride,
+        ring_rows,
+        horizontal_weight,
+        horizontal_fractional_weight,
+        horizontal_weight_vector,
+        horizontal_fractional_weight_vector,
+        horizontal_rounding_bias,
+        vertical_weight: u32x16::splat(vertical_weight),
+    };
+    simd_rgb_box_blur_stream_rows(source, destination, &mut ring, &plan);
 }

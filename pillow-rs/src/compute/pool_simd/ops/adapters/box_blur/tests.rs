@@ -318,6 +318,85 @@ fn rgb_radius_one_direct_horizontal_passes_match_generic_simd() {
     }
 }
 
+fn assert_la_horizontal_radius_one_matches_generic(
+    dimensions: &crate::checked_dims::CheckedDims,
+    source: &[u8],
+    whole_weight: u32,
+    fractional_weight: u32,
+    radius: f32,
+) {
+    let (width, height) = (dimensions.width as usize, dimensions.height as usize);
+    let mut expected = dimensions.alloc_buffer();
+    super::simd_blur_rows::<false>(
+        source,
+        &mut expected,
+        width,
+        height,
+        2,
+        1,
+        whole_weight,
+        fractional_weight,
+    );
+    let transposed_dimensions =
+        crate::checked_dims::CheckedDims::new(dimensions.height, dimensions.width, 2)
+            .expect("transposed LA dimensions fit");
+    let mut transposed = transposed_dimensions.alloc_buffer();
+    super::simd_transpose_interleaved_rows(source, &mut transposed, width, height, 2);
+    let mut transposed_actual = transposed_dimensions.alloc_buffer();
+    super::simd_la_vertical_radius_one_rows(
+        &transposed,
+        &mut transposed_actual,
+        height,
+        width,
+        whole_weight,
+        fractional_weight,
+    );
+    let mut actual = dimensions.alloc_buffer();
+    super::simd_transpose_interleaved_rows(&transposed_actual, &mut actual, height, width, 2);
+    assert_eq!(
+        actual, expected,
+        "horizontal dimensions={width}x{height} radius={radius}"
+    );
+}
+
+fn assert_la_vertical_radius_one_matches_generic(
+    dimensions: &crate::checked_dims::CheckedDims,
+    source: &[u8],
+    whole_weight: u32,
+    fractional_weight: u32,
+    radius: f32,
+) {
+    let (width, height) = (dimensions.width as usize, dimensions.height as usize);
+    let mut transposed = dimensions.alloc_buffer();
+    super::simd_transpose_interleaved_rows(source, &mut transposed, width, height, 2);
+    let mut transposed_blurred = dimensions.alloc_buffer();
+    super::simd_blur_rows::<false>(
+        &transposed,
+        &mut transposed_blurred,
+        height,
+        width,
+        2,
+        1,
+        whole_weight,
+        fractional_weight,
+    );
+    let mut expected = dimensions.alloc_buffer();
+    super::simd_transpose_interleaved_rows(&transposed_blurred, &mut expected, height, width, 2);
+    let mut actual = dimensions.alloc_buffer();
+    super::simd_la_vertical_radius_one_rows(
+        source,
+        &mut actual,
+        width,
+        height,
+        whole_weight,
+        fractional_weight,
+    );
+    assert_eq!(
+        actual, expected,
+        "vertical dimensions={width}x{height} radius={radius}"
+    );
+}
+
 #[test]
 fn la_radius_one_direct_passes_match_generic_simd() {
     for radius in [1.0f32, 1.25, 1.9] {
@@ -340,90 +419,19 @@ fn la_radius_one_direct_passes_match_generic_simd() {
             let source: Vec<u8> = (0..dimensions.total_bytes())
                 .map(|index| (index.wrapping_mul(59).wrapping_add(17) % 256) as u8)
                 .collect();
-
-            let mut horizontal_expected = dimensions.alloc_buffer();
-            super::simd_blur_rows::<false>(
+            assert_la_horizontal_radius_one_matches_generic(
+                &dimensions,
                 &source,
-                &mut horizontal_expected,
-                width as usize,
-                height as usize,
-                2,
-                1,
                 whole_weight,
                 fractional_weight,
+                radius,
             );
-            let transposed_dimensions = crate::checked_dims::CheckedDims::new(height, width, 2)
-                .expect("transposed LA dimensions fit");
-            let mut transposed = transposed_dimensions.alloc_buffer();
-            super::simd_transpose_interleaved_rows(
+            assert_la_vertical_radius_one_matches_generic(
+                &dimensions,
                 &source,
-                &mut transposed,
-                width as usize,
-                height as usize,
-                2,
-            );
-            let mut transposed_horizontal_actual = transposed_dimensions.alloc_buffer();
-            super::simd_la_vertical_radius_one_rows(
-                &transposed,
-                &mut transposed_horizontal_actual,
-                height as usize,
-                width as usize,
                 whole_weight,
                 fractional_weight,
-            );
-            let mut horizontal_actual = dimensions.alloc_buffer();
-            super::simd_transpose_interleaved_rows(
-                &transposed_horizontal_actual,
-                &mut horizontal_actual,
-                height as usize,
-                width as usize,
-                2,
-            );
-            assert_eq!(
-                horizontal_actual, horizontal_expected,
-                "horizontal dimensions={width}x{height} radius={radius}"
-            );
-
-            let mut transposed = dimensions.alloc_buffer();
-            super::simd_transpose_interleaved_rows(
-                &source,
-                &mut transposed,
-                width as usize,
-                height as usize,
-                2,
-            );
-            let mut transposed_blurred = dimensions.alloc_buffer();
-            super::simd_blur_rows::<false>(
-                &transposed,
-                &mut transposed_blurred,
-                height as usize,
-                width as usize,
-                2,
-                1,
-                whole_weight,
-                fractional_weight,
-            );
-            let mut vertical_expected = dimensions.alloc_buffer();
-            super::simd_transpose_interleaved_rows(
-                &transposed_blurred,
-                &mut vertical_expected,
-                height as usize,
-                width as usize,
-                2,
-            );
-
-            let mut vertical_actual = dimensions.alloc_buffer();
-            super::simd_la_vertical_radius_one_rows(
-                &source,
-                &mut vertical_actual,
-                width as usize,
-                height as usize,
-                whole_weight,
-                fractional_weight,
-            );
-            assert_eq!(
-                vertical_actual, vertical_expected,
-                "vertical dimensions={width}x{height} radius={radius}"
+                radius,
             );
         }
     }
