@@ -67,6 +67,11 @@ The display workloads use a registered capture viewer. They measure the
 display API through that viewer callback without launching a desktop process,
 so they do not represent GUI startup latency.
 
+The current focused `Image.show` results are recorded in the
+[`Image.show` host-boundary evidence](evidence/display/imageshow-host-boundary-python-cpu-arm64-20261023/README.md).
+That run includes 127 generated parity fixtures and one directly comparable
+public-call workload; its result is not attributed to a compute backend.
+
 The benchmark runner records setup, pipeline, terminal, dispatch, fallback,
 resource, and timing data where the adapter exposes them. Resource receipts
 include checked host pixel-buffer allocation count and bytes; they are not a
