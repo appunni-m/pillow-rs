@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 9 legacy file ceilings and 147 legacy functions across 93 source paths.
+Snapshot: 5 legacy file ceilings and 127 legacy functions across 83 source paths.
 A dash means that path has no over-limit file entry; function counts and
 maximum recorded function lines are summarized here, with each exact
 signature and ceiling in the JSON baseline. Each table row repeats the
@@ -106,11 +106,7 @@ owner and reducer issue recorded for that path.
 | <code>pillow-rs-js/src/lib.rs</code> | 5,445 | 1 (max 124 lines) | lazytrot | pillow-rs#dqs5 |
 | <code>pillow-rs-py/src/lib.rs</code> | 4,972 | 0 | lazytrot | pillow-rs#pxb1 |
 | <code>pillow-rs/src/color.rs</code> | 2,086 | 0 | lazytrot | pillow-rs#bnhk |
-| <code>pillow-rs/src/compute/pool_cpu/mod.rs</code> | — | 1 (max 320 lines) | lazytrot | pillow-rs#7f4d |
-| <code>pillow-rs/src/compute/pool_cpu/ops/color.rs</code> | — | 1 (max 107 lines) | lazytrot | pillow-rs#7f4d |
 | <code>pillow-rs/src/compute/pool_cpu/ops/composite.rs</code> | — | 1 (max 136 lines) | lazytrot | pillow-rs#8rfy |
-| <code>pillow-rs/src/compute/pool_cpu/ops/draw.rs</code> | 1,777 | 2 (max 172 lines) | lazytrot | pillow-rs#mtx1 |
-| <code>pillow-rs/src/compute/pool_cpu/ops/enhance.rs</code> | — | 1 (max 117 lines) | lazytrot | pillow-rs#7f4d |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/blur.rs</code> | — | 1 (max 260 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs</code> | — | 1 (max 157 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5/int32.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#qpfs |
@@ -176,7 +172,6 @@ owner and reducer issue recorded for that path.
 | <code>pillow-rs/src/compute/pool_gpu/transform/projective_admission.rs</code> | — | 1 (max 126 lines) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs</code> | — | 1 (max 408 lines) | lazytrot | pillow-rs#ras2 |
 | <code>pillow-rs/src/compute/pool_gpu/transform/safety.rs</code> | — | 2 (max 244 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/draw/mod.rs</code> | 3,106 | 3 (max 504 lines) | lazytrot | pillow-rs#mtx1 |
 | <code>pillow-rs/src/image/backend.rs</code> | — | 1 (max 110 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/image/channel_access.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/image/construction.rs</code> | — | 2 (max 156 lines) | lazytrot | pillow-rs#knsf |
@@ -186,11 +181,8 @@ owner and reducer issue recorded for that path.
 | <code>pillow-rs/src/image/projection.rs</code> | — | 2 (max 208 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/image/statistics.rs</code> | — | 3 (max 265 lines) | lazytrot | pillow-rs#knsf |
 | <code>pillow-rs/src/ops/convert.rs</code> | 1,450 | 1 (max 576 lines) | lazytrot | pillow-rs#bnhk |
-| <code>pillow-rs/src/ops/paste.rs</code> | — | 2 (max 123 lines) | lazytrot | pillow-rs#mtx1 |
 | <code>pillow-rs/src/ops/pil_resize/boxed.rs</code> | — | 2 (max 240 lines) | lazytrot | pillow-rs#nsax |
 | <code>pillow-rs/src/ops/pil_resize/horizontal_passes.rs</code> | — | 2 (max 131 lines) | lazytrot | pillow-rs#nsax |
 | <code>pillow-rs/src/ops/pil_resize/resize.rs</code> | — | 1 (max 194 lines) | lazytrot | pillow-rs#nsax |
 | <code>pillow-rs/src/ops/pil_resize/vertical_passes.rs</code> | — | 2 (max 116 lines) | lazytrot | pillow-rs#nsax |
 | <code>pillow-rs/src/ops/quantize.rs</code> | 2,462 | 4 (max 180 lines) | lazytrot | pillow-rs#bnhk |
-| <code>pillow-rs/src/ops/resize.rs</code> | — | 1 (max 101 lines) | lazytrot | pillow-rs#tdnt |
-| <code>pillow-rs/src/ops/transform.rs</code> | — | 2 (max 139 lines) | lazytrot | pillow-rs#tdnt |
