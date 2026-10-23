@@ -545,46 +545,36 @@ python3 scripts/build_performance_optimization_matrix.py \
 The current published workload matrix has 9,376 rows: 9,229 records from the
 clean full snapshot across 707 workloads and 147 records from the separate
 Pillow-SIMD snapshot across 37 workloads. Both snapshots identify clean
-revision `df92b7e78baa7a54264b8d1903958d7518990fde`. The full JSON was measured
-`2026-10-17T12:38:46.453082Z` (SHA-256
-`d660e749aac667f062ed75e4965ff15b483b15df070b4ca47d961504d6c36b14`); the
-Pillow-SIMD JSON was measured `2026-10-17T12:34:18.150813Z` (SHA-256
-`c9e5970408edf59a58ec586734d8e6e0452b590c80908876c2584037a521d9bd`). The
-operation matrix has 1,632 rows for 408 public API paths; 209 map to the
-selected manifest and 199 remain explicit inventory gaps. The generated
-workload and operation matrices have SHA-256 values
-`f71bd72144921f417496e0ecffb5256a4c4a58619917447b43d94cf41c31bc40` and
-`9644df7dc7039af7029ba5f8271a63c107b23bf5748b05ff0c8dd3dc32e977e1`.
+revision `5db7197532eb08b37d748a78fb789545ab8aa577`. The full JSON was measured
+`2026-10-21T11:26:29.269699Z` (SHA-256
+`ea7ecf063a8fbc4c42fa94f18e49678da4b0aad6eb87d5fbbae788f01d32aac8`); the
+Pillow-SIMD JSON was measured `2026-10-21T10:19:29.477450Z` (SHA-256
+`dff3e7cea2bf85285741ccd4e5c35710b12c2c20155c06a94f755c1e81f6b4bc`). The
+current manifest selects 212 operations and 996 benchmark workloads. The
+operation matrix has 848 rows, four backend profiles per operation. The API
+census has 408 paths: 212 selected paths, of which 209 map to a workload, and
+196 paths outside the selected manifest. The workload and operation matrix
+SHA-256 values are
+`8a2595d4aed6bc00b688116f9e4fd8a8a2f76982ccf527f3dd0248260db6a74d` and
+`4216ff8085266b2672084f5d87baf4085d66a10c2b3d37c8024d40f2a8326f3a`.
 Only rows with exact parity, completed execution, no fallback, and backend
 receipts are eligible for speed claims.
 
-The workload matrix contains 319 evidence-backed serial CPU ratios; 22 are
-slower than Pillow and 112 are below 2×. The worst verified rows include
-YCbCr Grayscale at 0.226829× on the paired Ubuntu x86_64 cohort, YCbCr
-Grayscale at 0.503471× on Ubuntu ARM64, and the RGBA-to-RGB conversion plus
-three-channel-extraction chain at 0.520673× on macOS ARM64. RGB Grayscale is
-0.662085× on Ubuntu x86_64, and that same three-channel chain is 0.694033× on
-Ubuntu x86_64. The exact workload, mode, runner, and paired medians remain in
-the matrix. The GetChannel chain creates RGBA input, seeds four corners,
-converts to RGB, extracts R/G/B, and materializes each result; its ratio is not
-an isolated GetChannel measurement. One
-`analysis-scalar-if` row at 0.800506× is a composed chain containing GetBBox,
-GetColors, GetExtrema, GetPixel, and GetProjection; it does not isolate any one
-of those APIs as the cause.
+In this snapshot, serial CPU has 319 verified ratios: 15 are slower than
+Pillow and 111 are below 2×. SIMD has 259 verified ratios: 10 are slower than
+Pillow, 77 are below 2×, and 195 are below the 5× goal. The separately built
+Parallel CPU profile has 245 verified ratios: 20 are slower than Pillow and
+102 are below 2×. Keep Parallel CPU separate from serial CPU and SIMD. GPU has
+55 verified latency ratios against SIMD; 40 are slower than SIMD, and sustained
+GPU throughput remains unmeasured. The operation matrix's GPU latency baseline
+is SIMD; its `below_baseline_comparisons` field is not a Pillow comparison.
 
-SIMD has 261 evidence-backed ratios: 32 are slower than Pillow, 93 are below
-2×, and 203 are below the repository's 5× goal. The separately built Parallel
-CPU profile has 245 evidence-backed ratios, 33 slower than Pillow and 109
-below 2×. Keep Parallel CPU separate from serial CPU and SIMD. GPU has 56
-verified latency ratios against SIMD; 37 are slower than SIMD and sustained GPU
-throughput remains unmeasured. The operation matrix's GPU latency baseline is
-SIMD; its `below_baseline_comparisons` field is not a Pillow comparison.
-
-The version-matched Pillow-SIMD snapshot now covers 37 workloads. Compatibility
-and ratio eligibility are workload-specific; incompatible source rows remain
-visible without eligible ratios. The operation matrix records 32 eligible
-Pillow-SIMD comparisons. Use those matched rows to prioritize Pillow-SIMD gaps
-only after the verified CPU misses clear the CPU sequencing gate.
+The Pillow-SIMD snapshot covers 37 workloads; the operation matrix records 32
+eligible comparisons. Compatibility and ratio eligibility are workload-
+specific, and incompatible source rows remain visible without eligible ratios.
+Use those matched rows to prioritize Pillow-SIMD gaps only after the verified
+CPU misses clear the CPU sequencing gate. Counts and ratios describe this dated
+published snapshot; they are not a live API-support declaration.
 
 ### Rejected CPU alpha-composite-plus-mirror fusion trial
 

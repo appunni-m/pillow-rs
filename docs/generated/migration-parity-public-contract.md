@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: b7ba089baec686a207a09c136f5c2e4eb6911d7db1f9d3258a8a844e87bc83e3
+manifest_sha256: a113f249e059678178cdc13dec599b023c055d682a8794e1762aa8bc066548cc
 statement_status: declared
 ```
 
@@ -16,12 +16,12 @@ statement_status: declared
 - Scope: `pillow-rs-selected-public-contract` (`full`)
 - Oracle: `Pillow 12.2.0`
 - Target profiles: `python-cpu`, `python-simd`, `python-gpu`, `python-parallel-cpu`
-- Public surfaces: 24
-- Operations: 209
-- Requirements: 1803
-- Indexed parity cases: 17062
-- Indexed coverage plans: 24
-- Indexed benchmark workloads: 929
+- Public surfaces: 25
+- Operations: 212
+- Requirements: 1823
+- Indexed parity cases: 17316
+- Indexed coverage plans: 25
+- Indexed benchmark workloads: 996
 
 ## Declared operations
 
@@ -86,6 +86,7 @@ statement_status: declared
 | `PIL.Image.Image` | `rotate` | `method` | `PIL.Image.Image.rotate` | `pillow_rs.Image.rotate` | 23 |
 | `PIL.Image.Image` | `save` | `method` | `PIL.Image.Image.save` | `pillow_rs.Image.save` | 22 |
 | `PIL.Image.Image` | `seek` | `method` | `PIL.Image.Image.seek` | `pillow_rs.Image.seek` | 11 |
+| `PIL.Image.Image` | `show` | `method` | `PIL.Image.Image.show` | `pillow_rs.Image.show` | 5 |
 | `PIL.Image.Image` | `size` | `property_get` | `PIL.Image.Image.size` | `pillow_rs.Image.size` | 2 |
 | `PIL.Image.Image` | `split` | `method` | `PIL.Image.Image.split` | `pillow_rs.Image.split` | 8 |
 | `PIL.Image.Image` | `tell` | `method` | `PIL.Image.Image.tell` | `pillow_rs.Image.tell` | 10 |
@@ -115,7 +116,7 @@ statement_status: declared
 | `PIL.ImageChops` | `multiply` | `function` | `PIL.ImageChops.multiply` | `pillow_rs.ImageChops.multiply` | 8 |
 | `PIL.ImageChops` | `offset` | `function` | `PIL.ImageChops.offset` | `pillow_rs.ImageChops.offset` | 8 |
 | `PIL.ImageChops` | `overlay` | `function` | `PIL.ImageChops.overlay` | `pillow_rs.ImageChops.overlay` | 6 |
-| `PIL.ImageChops` | `screen` | `function` | `PIL.ImageChops.screen` | `pillow_rs.ImageChops.screen` | 8 |
+| `PIL.ImageChops` | `screen` | `function` | `PIL.ImageChops.screen` | `pillow_rs.ImageChops.screen` | 12 |
 | `PIL.ImageChops` | `soft_light` | `function` | `PIL.ImageChops.soft_light` | `pillow_rs.ImageChops.soft_light` | 8 |
 | `PIL.ImageChops` | `subtract` | `function` | `PIL.ImageChops.subtract` | `pillow_rs.ImageChops.subtract` | 10 |
 | `PIL.ImageChops` | `subtract_modulo` | `function` | `PIL.ImageChops.subtract_modulo` | `pillow_rs.ImageChops.subtract_modulo` | 8 |
@@ -214,7 +215,7 @@ statement_status: declared
 | `PIL.ImageOps` | `invert` | `function` | `PIL.ImageOps.invert` | `pillow_rs.ImageOps.invert` | 7 |
 | `PIL.ImageOps` | `mirror` | `function` | `PIL.ImageOps.mirror` | `pillow_rs.ImageOps.mirror` | 7 |
 | `PIL.ImageOps` | `pad` | `function` | `PIL.ImageOps.pad` | `pillow_rs.ImageOps.pad` | 11 |
-| `PIL.ImageOps` | `posterize` | `function` | `PIL.ImageOps.posterize` | `pillow_rs.ImageOps.posterize` | 8 |
+| `PIL.ImageOps` | `posterize` | `function` | `PIL.ImageOps.posterize` | `pillow_rs.ImageOps.posterize` | 9 |
 | `PIL.ImageOps` | `scale` | `function` | `PIL.ImageOps.scale` | `pillow_rs.ImageOps.scale` | 9 |
 | `PIL.ImageOps` | `solarize` | `function` | `PIL.ImageOps.solarize` | `pillow_rs.ImageOps.solarize` | 8 |
 | `PIL.ImagePalette` | `ImagePalette` | `type` | `PIL.ImagePalette.ImagePalette` | `pillow_rs.ImagePalette.ImagePalette` | 4 |
@@ -226,6 +227,8 @@ statement_status: declared
 | `PIL.ImageSequence` | `Iterator` | `type` | `PIL.ImageSequence.Iterator` | `pillow_rs.ImageSequence.Iterator` | 5 |
 | `PIL.ImageSequence.Iterator` | `__iter__` | `method` | `PIL.ImageSequence.Iterator.__iter__` | `pillow_rs.ImageSequence.Iterator.__iter__` | 2 |
 | `PIL.ImageSequence.Iterator` | `__next__` | `method` | `PIL.ImageSequence.Iterator.__next__` | `pillow_rs.ImageSequence.Iterator.__next__` | 2 |
+| `PIL.ImageShow` | `register` | `function` | `PIL.ImageShow.register` | `pillow_rs.imageshow.register` | 4 |
+| `PIL.ImageShow` | `show` | `function` | `PIL.ImageShow.show` | `pillow_rs.imageshow.show` | 6 |
 | `PIL.ImageStat` | `Stat` | `type` | `PIL.ImageStat.Stat` | `pillow_rs.ImageStat.Stat` | 7 |
 | `PIL.ImageStat.Stat` | `count` | `property_get` | `PIL.ImageStat.Stat.count` | `pillow_rs.ImageStat.Stat.count` | 5 |
 | `PIL.ImageStat.Stat` | `extrema` | `property_get` | `PIL.ImageStat.Stat.extrema` | `pillow_rs.ImageStat.Stat.extrema` | 5 |
@@ -245,6 +248,6 @@ accepted as input truth.
 
 | Lane | Documents |
 | --- | ---: |
-| parity | 24 |
-| coverage | 24 |
-| benchmark | 25 |
+| parity | 25 |
+| coverage | 25 |
+| benchmark | 26 |

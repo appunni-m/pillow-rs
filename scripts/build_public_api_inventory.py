@@ -22,6 +22,11 @@ from typing import Any
 
 import yaml
 
+try:
+    from aggregate_migration_parity import load_indexed_documents
+except ModuleNotFoundError:  # imported as ``scripts.build_public_api_inventory``
+    from scripts.aggregate_migration_parity import load_indexed_documents
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON_SOURCE = ROOT / "pillow-rs-py/python"
@@ -185,8 +190,14 @@ def selected_contract() -> tuple[dict[str, dict[str, str]], dict[str, list[str]]
                     requirement_owner[requirement_id] = operation_id
 
     specs: dict[str, dict[str, Any]] = {}
-    for path in sorted((ROOT / "pillow-rs/tests/fixtures/inputs/benchmark").glob("*.json")):
-        document = json.loads(path.read_text(encoding="utf-8"))
+    # Do not let orphaned or experimental files in the input folder inflate
+    # the public inventory beyond the manifest's closed benchmark index.
+    benchmark_documents = load_indexed_documents(
+        manifest,
+        "benchmark",
+        "migration-parity/benchmark-input@1",
+    )
+    for _, document in benchmark_documents:
         for item in document.get("workloads", []):
             workload_id = item.get("workload_id")
             if isinstance(workload_id, str):

@@ -23,11 +23,13 @@ import yaml
 
 try:
     from simd_evidence import SIMD_POSITIVE_VECTOR_PATHS, simd_vector_evidence
+    from aggregate_migration_parity import load_indexed_documents
 except ModuleNotFoundError:  # imported as ``scripts.build_performance_optimization_matrix``
     from scripts.simd_evidence import (
         SIMD_POSITIVE_VECTOR_PATHS,
         simd_vector_evidence,
     )
+    from scripts.aggregate_migration_parity import load_indexed_documents
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -164,9 +166,14 @@ def read_snapshot(path: Path, name: str) -> tuple[dict[str, Any], str]:
 
 def read_workload_specs() -> dict[str, dict[str, Any]]:
     specs: dict[str, dict[str, Any]] = {}
-    input_root = ROOT / "pillow-rs/tests/fixtures/inputs/benchmark"
-    for path in sorted(input_root.glob("*.json")):
-        document = json.loads(path.read_text(encoding="utf-8"))
+    manifest_path = ROOT / "pillow-rs/tests/fixtures/manifest.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    # The folder can retain unindexed workload specs for investigation. Only
+    # documents named by the generated manifest belong in the denominator.
+    documents = load_indexed_documents(
+        manifest, "benchmark", "migration-parity/benchmark-input@1"
+    )
+    for _, document in documents:
         for workload in document.get("workloads", []):
             workload_id = workload.get("workload_id")
             if not isinstance(workload_id, str):

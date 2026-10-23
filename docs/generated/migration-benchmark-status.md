@@ -7,25 +7,25 @@ lane inputs, and it does not turn missing evidence into a pass.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: b7ba089baec686a207a09c136f5c2e4eb6911d7db1f9d3258a8a844e87bc83e3
+manifest_sha256: a113f249e059678178cdc13dec599b023c055d682a8794e1762aa8bc066548cc
 lane: benchmark
 ```
 
 ## Evidence state
 
 - Compatible evidence IDs: none
-- Operation outcomes: not_proven=208
-- Stale/incompatible artifacts: 3
+- Operation outcomes: not_proven=220
+- Stale/incompatible artifacts: 2
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
-| `benchmark_input_mapping` | `python-cpu` | 206 | 208 | `not_proven` |
-| `benchmark_input_mapping` | `python-simd` | 1 | 1 | `not_proven` |
-| `benchmark_input_mapping` | `python-gpu` | 1 | 1 | `not_proven` |
+| `benchmark_input_mapping` | `python-cpu` | 209 | 211 | `not_proven` |
+| `benchmark_input_mapping` | `python-simd` | 5 | 5 | `not_proven` |
+| `benchmark_input_mapping` | `python-gpu` | 4 | 4 | `not_proven` |
 | `benchmark_input_mapping` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
-| `benchmark_budget_outcome` | `python-cpu` | 0 | 208 | `not_proven` |
-| `benchmark_budget_outcome` | `python-simd` | 0 | 1 | `not_proven` |
-| `benchmark_budget_outcome` | `python-gpu` | 0 | 1 | `not_proven` |
+| `benchmark_budget_outcome` | `python-cpu` | 0 | 211 | `not_proven` |
+| `benchmark_budget_outcome` | `python-simd` | 0 | 5 | `not_proven` |
+| `benchmark_budget_outcome` | `python-gpu` | 0 | 4 | `not_proven` |
 | `benchmark_budget_outcome` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
 
 ## Interpretation

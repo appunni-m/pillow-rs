@@ -34,7 +34,7 @@ refer to the previous batch policy. A checkpoint is not completion: unmet
 targets stay in the matrix and can be revisited after other operations receive
 their first pass.
 
-## Operation-wide baseline
+## Historical operation-wide baseline — 2026-09-24
 
 On 2026-09-24, the unchanged standard benchmark completed all 768 indexed
 workloads across Pillow, CPU, SIMD, and GPU. Its receipt is
@@ -71,63 +71,35 @@ current local outputs are `build/migration-parity/optimization-goals.json` and
 `build/migration-parity/optimization-goals.md`. See
 [the reporting command](BENCHMARKING.md#correctness-gate-and-budget-gate).
 
-## Published cross-runner inventory — refreshed 2026-10-17
+## Published cross-runner inventory — refreshed 2026-10-23
 
 The committed [full per-workload matrix](evidence/performance-optimization-matrix.csv),
 [public API census](evidence/performance-optimization-public-api.csv), and
 [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
-use the deployed GitHub Pages benchmark JSON and Pillow-SIMD JSON. Both current
-snapshots are clean at revision `df92b7e78baa7a54264b8d1903958d7518990fde`.
-The full JSON was measured `2026-10-17T12:38:46.453082Z`, SHA-256
-`d660e749aac667f062ed75e4965ff15b483b15df070b4ca47d961504d6c36b14`, with
-9,229 rows across 707 workloads. The separate Pillow-SIMD JSON was measured
-`2026-10-17T12:34:18.150813Z`, SHA-256
-`c9e5970408edf59a58ec586734d8e6e0452b590c80908876c2584037a521d9bd`, with 147
-rows across 37 workloads. The flattened matrix has 9,376 rows. The operation
-matrix has 1,632 profile rows for 408 public API paths: 209 map to the selected
-manifest and 199 remain explicit inventory gaps. The CSV checksums are
-`f71bd72144921f417496e0ecffb5256a4c4a58619917447b43d94cf41c31bc40` for the
-workload matrix and
-`9644df7dc7039af7029ba5f8271a63c107b23bf5748b05ff0c8dd3dc32e977e1` for the
-operation matrix.
+use the deployed GitHub Pages benchmark JSON and Pillow-SIMD JSON. Both source
+snapshots are clean at revision `5db7197532eb08b37d748a78fb789545ab8aa577`.
+The full JSON was measured `2026-10-21T11:26:29.269699Z`, SHA-256
+`ea7ecf063a8fbc4c42fa94f18e49678da4b0aad6eb87d5fbbae788f01d32aac8`, with
+9,229 rows across 707 workloads. The Pillow-SIMD JSON was measured
+`2026-10-21T10:19:29.477450Z`, SHA-256
+`dff3e7cea2bf85285741ccd4e5c35710b12c2c20155c06a94f755c1e81f6b4bc`, with 147
+rows across 37 workloads. The flattened matrix has 9,376 rows. The current
+manifest selects 212 operations and 996 benchmark workloads. Its operation
+matrix has 848 rows, four backend profiles per operation. The API census has
+408 paths: 212 selected, 209 with workload mappings, and 196 outside the
+selected manifest. Matrix checksums are `8a2595d4aed6bc00b688116f9e4fd8a8a2f76982ccf527f3dd0248260db6a74d`
+for the workload matrix and `4216ff8085266b2672084f5d87baf4085d66a10c2b3d37c8024d40f2a8326f3a`
+for the operation matrix.
 
-The workload matrix has 319 evidence-backed serial-CPU ratios; 22 are slower
-than Pillow and 112 are below the interim 2× threshold. The current highest
-priority verified misses are:
-
-| API / pipeline | CPU / Pillow | Workload | Runner |
-| --- | ---: | --- | --- |
-| YCbCr Grayscale | 0.226829× | `pipeline-op.grayscale.material-ycbcr-noise-1024x768` | Ubuntu x86_64, Pillow-SIMD-paired cohort |
-| YCbCr Grayscale | 0.503471× | `pipeline-op.grayscale.material-ycbcr-noise-1024x768` | Ubuntu ARM64 |
-| RGBA→RGB plus three GetChannel results | 0.520673× | `pipeline-chain.getchannel.seeded-corners-1024x768-all-bands` | macOS ARM64 |
-| RGB Grayscale | 0.662085× | `pipeline-op.grayscale.material-rgb-noise-1024x768` | Ubuntu x86_64 |
-| RGBA→RGB plus three GetChannel results | 0.694033× | `pipeline-chain.getchannel.seeded-corners-1024x768-all-bands` | Ubuntu x86_64 |
-| GaussianBlur RGBA | 0.833174× | `pipeline-chain.blur-material.gaussian-rgba-noise-1024x768` | macOS ARM64 |
-
-Each ratio uses a same-run Pillow reference and exact parity with completed
-backend receipts, terminal materialization, and no fallback. The
-GetChannel rows include seeded RGBA input, one RGBA→RGB conversion, three
-channel extractions, and each output's byte materialization; they are composed
-workflow comparisons, not isolated GetChannel costs. The
-`analysis-scalar-if` row at 0.800506× is a composed workload containing five
-terminal APIs and does not isolate which API accounts for the miss. Keep each
-workload and runner distinct; local results on another host do not replace a
-published comparison. First clear CPU misses to the interim 2× sequencing
-gate, then continue with the remaining CPU rows below 2×. The final CPU goal is
-latency no slower than Pillow.
-
-SIMD has 261 evidence-backed comparisons: 32 are slower than Pillow, 93 are
-below 2×, and 203 are below the 5× goal. The SIMD target label alone is not
-proof of vector work; the matrix credits only rows with operation-level vector
-evidence. Parallel CPU remains separate with 245 evidence-backed ratios: 33
-are slower than Pillow and 109 are below 2×. GPU has 56 verified latency pairs
-against SIMD, 37 slower than SIMD. Sustained GPU throughput remains
-unmeasured, and fallback rows do not count as accelerated execution.
-
-The current Pillow-SIMD snapshot has 37 workloads; 32 comparisons are eligible
-in the per-operation matrix. Source incompatibilities and missing proofs stay
-visible without a ratio. Use the matched Pillow-SIMD JSON comparisons only after
-the verified CPU misses clear the CPU sequencing gate.
+This snapshot has 319 evidence-backed serial-CPU ratios; 15 are slower than
+Pillow and 111 are below the interim 2× threshold. SIMD has 259 evidence-backed
+ratios: 10 are slower than Pillow, 77 are below 2×, and 195 are below the 5×
+goal. Parallel CPU remains separate with 245 verified ratios: 20 are slower
+than Pillow and 102 are below 2×. GPU has 55 verified latency pairs against
+SIMD, 40 slower than SIMD. Sustained GPU throughput remains unmeasured. The
+Pillow-SIMD comparison has 32 eligible pairs. Exact workload and runner details
+remain in the matrices; do not combine runner results into a platform-wide
+claim or treat them as a current support declaration.
 
 ### Native-LA Filter5x5 x86 CPU verification — 2026-10-17
 
