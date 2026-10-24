@@ -888,9 +888,72 @@ def all_backends(result: dict[str, Any]) -> None:
             string(lane["artifact"], f"{prefix}.artifact")
         if "summary" in lane:
             summary = lane["summary"]
-            exact(summary, {"selected", "executed", "passed", "failed", "not_run", "infrastructure_errors"}, f"{prefix}.summary")
+            summary_fields = {
+                "selected",
+                "executed",
+                "passed",
+                "failed",
+                "not_run",
+                "infrastructure_errors",
+            }
+            versioned_summary_fields = summary_fields | {
+                "parity_cases",
+                "fault_contracts",
+            }
+            if not isinstance(summary, dict) or frozenset(summary) not in {
+                frozenset(summary_fields),
+                frozenset(versioned_summary_fields),
+            }:
+                raise ValueError(
+                    f"{prefix}.summary: unsupported parity summary fields"
+                )
             for field, value in summary.items():
-                non_negative_int(value, f"{prefix}.summary.{field}")
+                if field not in {"parity_cases", "fault_contracts"}:
+                    non_negative_int(value, f"{prefix}.summary.{field}")
+            if set(summary) == versioned_summary_fields:
+                outcome_fields = {
+                    "selected",
+                    "executed",
+                    "passed",
+                    "failed",
+                    "not_run",
+                }
+                for kind in ("parity_cases", "fault_contracts"):
+                    kind_summary = summary[kind]
+                    exact(
+                        kind_summary,
+                        outcome_fields,
+                        f"{prefix}.summary.{kind}",
+                    )
+                    for field in outcome_fields:
+                        non_negative_int(
+                            kind_summary[field],
+                            f"{prefix}.summary.{kind}.{field}",
+                        )
+                    if kind_summary["selected"] != (
+                        kind_summary["executed"] + kind_summary["not_run"]
+                    ):
+                        raise ValueError(
+                            f"{prefix}.summary.{kind}: selected count is inconsistent"
+                        )
+                    if kind_summary["executed"] != (
+                        kind_summary["passed"] + kind_summary["failed"]
+                    ):
+                        raise ValueError(
+                            f"{prefix}.summary.{kind}: executed count is inconsistent"
+                        )
+                    for field in outcome_fields:
+                        if summary[field] != sum(
+                            summary[other][field]
+                            for other in ("parity_cases", "fault_contracts")
+                        ):
+                            raise ValueError(
+                                f"{prefix}.summary.{field} does not match its lane counts"
+                            )
+                if summary["fault_contracts"]["selected"] != 0:
+                    raise ValueError(
+                        f"{prefix}.summary: target-only fault contracts cannot enter all-backend parity lanes"
+                    )
         if "scope" in lane:
             validate_scope(lane["scope"], f"{prefix}.scope", execution=True)
         if "shader_coverage" in lane:

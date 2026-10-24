@@ -640,6 +640,33 @@ def compatible_case(
     return None
 
 
+def select_oracle_parity_cases(
+    cases: list[dict[str, Any]], *, explicitly_selected: set[str]
+) -> list[dict[str, Any]]:
+    """Keep target-only fault contracts out of the source/WASM parity lane."""
+
+    target_only = [
+        case
+        for case in cases
+        if case.get("verification", "parity") != "parity"
+    ]
+    explicitly_selected_target_only = sorted(
+        case["case_id"]
+        for case in target_only
+        if case["case_id"] in explicitly_selected
+    )
+    if explicitly_selected_target_only:
+        raise ValueError(
+            "target-only fault-contract cases cannot run in JS/WASM parity: "
+            + ", ".join(explicitly_selected_target_only)
+        )
+    return [
+        case
+        for case in cases
+        if case.get("verification", "parity") == "parity"
+    ]
+
+
 def _contains_platform_viewer_protocol(value: Any) -> bool:
     if isinstance(value, dict):
         if value.get("protocol") == "capture-platform-viewer":
@@ -1269,6 +1296,7 @@ def run_streaming(args: argparse.Namespace, output: Path) -> int:
     cases, _case_inputs = load_cases(
         manifest, case_ids=requested or None, surface=args.surface
     )
+    cases = select_oracle_parity_cases(cases, explicitly_selected=requested)
     if args.limit is not None:
         cases = cases[: args.limit]
     cases, native_viewer_excluded = _exclude_native_platform_viewer_cases(cases)
@@ -1587,6 +1615,7 @@ def run(args: argparse.Namespace) -> int:
         case_ids=requested or None,
         surface=args.surface,
     )
+    cases = select_oracle_parity_cases(cases, explicitly_selected=requested)
     if args.limit is not None:
         cases = cases[: args.limit]
     cases, native_viewer_excluded = _exclude_native_platform_viewer_cases(cases)

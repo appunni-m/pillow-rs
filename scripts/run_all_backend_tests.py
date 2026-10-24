@@ -8,11 +8,12 @@ active corpus once per backend.  It also sends the same public corpus through
 Node WASM and a real browser WASM page, recording both lanes and their
 capability probes in one generated evidence file.
 
-GPU is gated by one bounded public parity case, then the full GPU corpus is
-requested by default with a separate hard deadline.  Adapter absence is
-recorded as explicitly skipped/not proven.  A timeout, crash, parity mismatch,
-or other real GPU failure remains fatal.  Every child lane starts in its own
-process group so a native driver wedge cannot outlive the lane deadline.
+GPU is gated by one fixed, strict public parity case that must execute on the
+GPU, then the full GPU corpus is requested by default with a separate hard
+deadline.  Adapter absence is recorded as explicitly skipped/not proven.  A
+timeout, crash, parity mismatch, or other real GPU failure remains fatal.
+Every child lane starts in its own process group so a native driver wedge
+cannot outlive the lane deadline.
 """
 
 from __future__ import annotations
@@ -308,15 +309,24 @@ def merge_gpu_shader_coverage(
 
 
 def public_case_ids(manifest_path: Path = DEFAULT_MANIFEST) -> list[str]:
-    """Load the canonical public parity IDs used by every backend lane."""
+    """Load the canonical oracle-parity IDs used by every backend lane.
+
+    Target-only fault contracts share the input index, but they do not belong
+    in the CPU/SIMD/GPU or WASM parity denominator.  Their dedicated target
+    profile is run by its own fault-contract command.
+    """
 
     manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     ids: list[str] = []
+    all_ids: list[str] = []
     fixture_root = manifest_path.parent
     for relative in manifest["input_index"]["parity"]:
         document = json.loads((fixture_root / relative).read_text(encoding="utf-8"))
-        ids.extend(case["case_id"] for case in document["cases"])
-    if len(ids) != len(set(ids)):
+        for case in document["cases"]:
+            all_ids.append(case["case_id"])
+            if case.get("verification", "parity") == "parity":
+                ids.append(case["case_id"])
+    if len(all_ids) != len(set(all_ids)):
         raise ValueError("public parity input IDs are not unique")
     return sorted(ids)
 
@@ -956,14 +966,22 @@ def run_parity_lane(
             ),
             **(
                 {
-                    # Keep the normal GPU lane on the target's documented
-                    # fallback behavior.  The sidecar records only actual
-                    # WGSL dispatches, so fallback execution cannot be
-                    # mistaken for shader coverage.  Strict GPU-only
-                    # capability auditing belongs in its own lane.
+                    # Collect WGSL dispatch telemetry for every GPU lane. The
+                    # full corpus can exercise documented fallback behavior;
+                    # the strict smoke gate separately proves native GPU use.
                     "MIGRATION_GPU_WGSL_COVERAGE_OUTPUT": str(shader_artifact),
                 }
                 if shader_artifact is not None
+                else {}
+            ),
+            **(
+                {
+                    # The bounded smoke case is the GPU adapter gate.  Require
+                    # native GPU execution here so a CPU fallback cannot open
+                    # the full GPU lane.
+                    "MIGRATION_STRICT_TARGET_BACKEND": "1",
+                }
+                if smoke and backend == "gpu"
                 else {}
             ),
             "MIGRATION_PARITY_EXECUTION_OUTPUT": str(execution_artifact),
@@ -1265,7 +1283,9 @@ def run_campaign(args: argparse.Namespace) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     requested_case_ids = sorted(set(args.case_id or []))
     scope = public_case_scope(requested_case_ids)
-    smoke_case = requested_case_ids[0] if requested_case_ids else GPU_SMOKE_CASE
+    # Keep the adapter gate independent from a caller's filtered parity scope.
+    # The selected case may be CPU-only or may otherwise fall back on GPU.
+    smoke_case = GPU_SMOKE_CASE
 
     lanes: list[dict[str, Any]] = []
     started_at = now()
