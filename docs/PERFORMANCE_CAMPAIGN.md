@@ -32330,3 +32330,48 @@ are absent. Default direct-workflow rows are excluded from performance claims.
 This ARM64 result does not exercise the x86 AVX2 path. Full receipts and
 per-run results are in
 [`simd-family-extraction-arm64-20261022`](evidence/transpose/simd-family-extraction-arm64-20261022/README.md).
+
+## `ImageDraw.bitmap` blend correction and backend-neutral checkpoint — ARM64 — 2026-10-24
+
+The partial-coverage bitmap paths passed destination before fill/ink to
+`pil_blend`, whose arguments are foreground, background, and coverage. The
+focused L parity case returned 105 instead of Pillow's 106. Correcting that
+argument order across the native format paths fixed the discrepancy without
+changing their format-specific loops or transparency rules.
+
+The same 14 case IDs from
+`inputs/parity/pil-imagedraw-imagedraw.json` (SHA-256
+`5016e339dbad2f7fda784fec3df0a5e07f8e781245da5c6d7e2217cae9a7afaa`) passed
+on CPU, SIMD, and GPU runner selections (14/14 each). The fixture and case
+specs are backend-neutral: `run_migration_parity.py` loads cases without a
+backend filter, then selects the backend in the target process through
+`MIGRATION_TARGET_BACKEND`. The collected receipts mark all 14 operations as
+outside pipeline execution, so the SIMD and GPU selections do not prove vector
+or GPU work.
+
+The focused benchmark ran the four existing workload IDs from the unchanged
+benchmark fixture (SHA-256
+`e3d8a7907575eb4225cfa57de75323c4d9768aaef5daa3ca0f59991ee89d3e20`) for
+Pillow and each runner profile, using CPython 3.12.13 and Pillow 12.2.0 on
+macOS 15.7.7 arm64. Each subject has 100 measured samples (5 warmups × 20
+iterations × 5 samples, concurrency 1). Median latency is milliseconds:
+
+| Workload | Pillow | CPU profile | SIMD profile | GPU-requested profile |
+| --- | ---: | ---: | ---: | ---: |
+| L 16×16 | 0.015167 | 0.014250 | 0.014000 | 0.013896 |
+| Native RGB 1024×768 | 1.698938 | 1.490875 | 1.495916 | 1.527229 |
+| CMYK 1024×768 | 1.689834 | 0.939313 | 0.950146 | 0.987146 |
+| RGBA context over RGB 1024×768 | 1.760376 | 1.487438 | 1.482625 | 1.513646 |
+
+Every target profile row reports `actual_backend = null` and
+`execution.status = not_proven`. These are direct observations from the same
+workload specs, but they do not establish CPU, SIMD, or GPU execution or
+backend-specific speedups. GPU sustained throughput was not measured, and the
+run declared no performance budgets. The benchmark result passed schema
+validation; its correctness gate reused the matching 12-case parity evidence.
+
+This is local dirty-checkout evidence, not a published matrix update. The
+bitmap optimization item remains open pending backend-attributed execution
+evidence and its remaining acceptance criteria. Full reports, samples, parity
+receipts, and attestations are in
+[`bitmap-cpu-simd-gpu-arm64-20261024`](evidence/draw/bitmap-cpu-simd-gpu-arm64-20261024/README.md).

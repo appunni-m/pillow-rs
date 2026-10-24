@@ -151,11 +151,11 @@ impl Draw {
                             destination[destination_offset + 2] = color.2;
                         } else {
                             destination[destination_offset] =
-                                pil_blend(destination[destination_offset], color.0, m);
+                                pil_blend(color.0, destination[destination_offset], m);
                             destination[destination_offset + 1] =
-                                pil_blend(destination[destination_offset + 1], color.1, m);
+                                pil_blend(color.1, destination[destination_offset + 1], m);
                             destination[destination_offset + 2] =
-                                pil_blend(destination[destination_offset + 2], color.2, m);
+                                pil_blend(color.2, destination[destination_offset + 2], m);
                         }
                     }
                 }
@@ -226,7 +226,7 @@ impl Draw {
                             pixel.copy_from_slice(&ink);
                         } else {
                             for channel in 0..4 {
-                                pixel[channel] = pil_blend(pixel[channel], ink[channel], coverage);
+                                pixel[channel] = pil_blend(ink[channel], pixel[channel], coverage);
                             }
                         }
                     }
@@ -274,13 +274,13 @@ impl Draw {
                         if existing[3] == 0 {
                             foreground
                         } else {
-                            pil_blend(background, foreground, m)
+                            pil_blend(foreground, background, m)
                         }
                     };
                     let r = blend_rgb(existing[0], color.0);
                     let g = blend_rgb(existing[1], color.1);
                     let b = blend_rgb(existing[2], color.2);
-                    let a = pil_blend(existing[3], color.3, m);
+                    let a = pil_blend(color.3, existing[3], m);
                     canvas.put_pixel(dx as u32, dy as u32, crate::raster::Rgba([r, g, b, a]));
                 }
             }
@@ -315,7 +315,7 @@ impl Draw {
                     let v = if m == 255 {
                         ink
                     } else {
-                        pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m)
+                        pil_blend(ink, luma.get_pixel(dx as u32, dy as u32)[0], m)
                     };
                     luma.put_pixel(dx as u32, dy as u32, crate::raster::Luma([v]));
                 }
@@ -353,7 +353,7 @@ impl Draw {
                     let v = if m == 255 {
                         ink
                     } else {
-                        pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m)
+                        pil_blend(ink, luma.get_pixel(dx as u32, dy as u32)[0], m)
                     };
                     luma.put_pixel(dx as u32, dy as u32, crate::raster::Luma([v]));
                 }
@@ -392,8 +392,8 @@ impl Draw {
                     // fully transparent destination the L ink is
                     // written directly (`src/libImaging/Paste.c`).
                     let l_mask = if existing[1] == 0 { 255 } else { m };
-                    let l = pil_blend(existing[0], ink_l, l_mask);
-                    let a = pil_blend(existing[1], ink_a, m);
+                    let l = pil_blend(ink_l, existing[0], l_mask);
+                    let a = pil_blend(ink_a, existing[1], m);
                     la.put_pixel(dx as u32, dy as u32, crate::raster::LumaA([l, a]));
                 }
             }
@@ -431,22 +431,22 @@ impl Draw {
                     let c = if m == 255 {
                         ink[0]
                     } else {
-                        pil_blend(existing[0], ink[0], m)
+                        pil_blend(ink[0], existing[0], m)
                     };
                     let m_ch = if m == 255 {
                         ink[1]
                     } else {
-                        pil_blend(existing[1], ink[1], m)
+                        pil_blend(ink[1], existing[1], m)
                     };
                     let y_ch = if m == 255 {
                         ink[2]
                     } else {
-                        pil_blend(existing[2], ink[2], m)
+                        pil_blend(ink[2], existing[2], m)
                     };
                     let k = if m == 255 {
                         ink[3]
                     } else {
-                        pil_blend(existing[3], ink[3], m)
+                        pil_blend(ink[3], existing[3], m)
                     };
                     rgba.put_pixel(
                         dx as u32,
@@ -502,7 +502,7 @@ impl Draw {
                         let v = if m == 255 {
                             ink
                         } else {
-                            pil_blend(indices.get_pixel(dx as u32, dy as u32)[0], ink, m)
+                            pil_blend(ink, indices.get_pixel(dx as u32, dy as u32)[0], m)
                         };
                         indices.put_pixel(dx as u32, dy as u32, crate::raster::Luma([v]));
                     }
@@ -534,7 +534,7 @@ impl Draw {
                         let v = if m == 255 {
                             ink
                         } else {
-                            pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m)
+                            pil_blend(ink, luma.get_pixel(dx as u32, dy as u32)[0], m)
                         };
                         luma.put_pixel(dx as u32, dy as u32, crate::raster::Luma([v]));
                     }
@@ -577,22 +577,22 @@ impl Draw {
                     let b0 = if m == 255 {
                         ink[0]
                     } else {
-                        pil_blend(existing[0], ink[0], m)
+                        pil_blend(ink[0], existing[0], m)
                     };
                     let b1 = if m == 255 {
                         ink[1]
                     } else {
-                        pil_blend(existing[1], ink[1], m)
+                        pil_blend(ink[1], existing[1], m)
                     };
                     let b2 = if m == 255 {
                         ink[2]
                     } else {
-                        pil_blend(existing[2], ink[2], m)
+                        pil_blend(ink[2], existing[2], m)
                     };
                     let b3 = if m == 255 {
                         ink[3]
                     } else {
-                        pil_blend(existing[3], ink[3], m)
+                        pil_blend(ink[3], existing[3], m)
                     };
                     rgba.put_pixel(dx as u32, dy as u32, crate::raster::Rgba([b0, b1, b2, b3]));
                 }
@@ -632,22 +632,22 @@ impl Draw {
                     let r = if m == 255 {
                         color.0
                     } else {
-                        pil_blend(existing[0], color.0, m)
+                        pil_blend(color.0, existing[0], m)
                     };
                     let g = if m == 255 {
                         color.1
                     } else {
-                        pil_blend(existing[1], color.1, m)
+                        pil_blend(color.1, existing[1], m)
                     };
                     let b = if m == 255 {
                         color.2
                     } else {
-                        pil_blend(existing[2], color.2, m)
+                        pil_blend(color.2, existing[2], m)
                     };
                     let a = if m == 255 {
                         color.3
                     } else {
-                        pil_blend(existing[3], color.3, m)
+                        pil_blend(color.3, existing[3], m)
                     };
                     canvas.put_pixel(dx as u32, dy as u32, crate::raster::Rgba([r, g, b, a]));
                 }
