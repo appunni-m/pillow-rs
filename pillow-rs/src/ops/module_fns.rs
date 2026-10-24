@@ -75,6 +75,37 @@ fn parse_gradient_mode(mode: &str) -> Result<GradientMode, PilError> {
     }
 }
 
+// Eager generators bypass PipelineOp routing. When their SIMD path declines a
+// mode or GPU is selected, record the host implementation instead of letting
+// a strict backend run pass without an executor receipt.
+fn execute_eager_cpu_gradient(
+    operation: &'static str,
+    output_bytes: usize,
+    execute: impl FnOnce() -> Result<Image, PilError>,
+) -> Result<Image, PilError> {
+    let requested_backend = if crate::compute::Backend::pipeline_telemetry_enabled() {
+        crate::compute::preferred_active_backend()
+            .ok()
+            .flatten()
+            .filter(|(_, only_active_backend)| *only_active_backend)
+            .map(|(backend, _)| backend)
+    } else {
+        None
+    };
+    let telemetry =
+        crate::compute::begin_eager_cpu_operation_telemetry(operation, requested_backend);
+    match execute() {
+        Ok(image) => {
+            crate::compute::finish_eager_cpu_operation_telemetry(telemetry, output_bytes);
+            Ok(image)
+        }
+        Err(error) => {
+            crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+            Err(error)
+        }
+    }
+}
+
 /// Creates an image from raw bytes using Pillow's supported raw decoder.
 ///
 /// Decoder selection is part of the public operation contract, not a binding
@@ -432,55 +463,57 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
         GradientMode::Integer | GradientMode::Float => (4, 256),
     };
     let size: usize = row_bytes * 256 * bytes_per_pixel;
-    let mut data = if mode == "L" {
-        Vec::with_capacity(size)
-    } else {
-        vec![0u8; size]
-    };
+    execute_eager_cpu_gradient("LinearGradient", size, || {
+        let mut data = if mode == "L" {
+            Vec::with_capacity(size)
+        } else {
+            vec![0u8; size]
+        };
 
-    for y in 0..256usize {
-        if mode == "L" {
-            // Each native-L row is one repeated sample; initialize every
-            // output byte once instead of zeroing the frame before filling it.
-            data.resize((y + 1) * 256, y as u8);
-            continue;
+        for y in 0..256usize {
+            if mode == "L" {
+                // Each native-L row is one repeated sample; initialize every
+                // output byte once instead of zeroing the frame before filling it.
+                data.resize((y + 1) * 256, y as u8);
+                continue;
+            }
+            let row_start = y * row_bytes * bytes_per_pixel;
+            match gradient_mode {
+                GradientMode::Byte => {
+                    let val = y as u8;
+                    data[row_start..row_start + 256].fill(val);
+                }
+                GradientMode::One => {
+                    // Pillow's mode-1 gradient is a binary threshold, not an
+                    // 8-bit luma gradient: only the first row remains black.
+                    if y != 0 {
+                        data[row_start..row_start + row_bytes].fill(0xff);
+                    }
+                }
+                GradientMode::Integer => {
+                    // 4-byte i32 LE per pixel
+                    let val = y as i32;
+                    let bytes = val.to_le_bytes();
+                    for x in 0..256 {
+                        let off = row_start + x * 4;
+                        data[off..off + 4].copy_from_slice(&bytes);
+                    }
+                }
+                GradientMode::Float => {
+                    // 4-byte f32 LE per pixel
+                    let val = y as f32;
+                    let bytes = val.to_le_bytes();
+                    for x in 0..256 {
+                        let off = row_start + x * 4;
+                        data[off..off + 4].copy_from_slice(&bytes);
+                    }
+                }
+            }
         }
-        let row_start = y * row_bytes * bytes_per_pixel;
-        match gradient_mode {
-            GradientMode::Byte => {
-                let val = y as u8;
-                data[row_start..row_start + 256].fill(val);
-            }
-            GradientMode::One => {
-                // Pillow's mode-1 gradient is a binary threshold, not an
-                // 8-bit luma gradient: only the first row remains black.
-                if y != 0 {
-                    data[row_start..row_start + row_bytes].fill(0xff);
-                }
-            }
-            GradientMode::Integer => {
-                // 4-byte i32 LE per pixel
-                let val = y as i32;
-                let bytes = val.to_le_bytes();
-                for x in 0..256 {
-                    let off = row_start + x * 4;
-                    data[off..off + 4].copy_from_slice(&bytes);
-                }
-            }
-            GradientMode::Float => {
-                // 4-byte f32 LE per pixel
-                let val = y as f32;
-                let bytes = val.to_le_bytes();
-                for x in 0..256 {
-                    let off = row_start + x * 4;
-                    data[off..off + 4].copy_from_slice(&bytes);
-                }
-            }
-        }
-    }
-    // The generated buffer is already the final raster, so transfer ownership
-    // instead of copying it through the borrowed `frombytes` constructor.
-    Image::frombytes_owned(mode, (256, 256), data)
+        // The generated buffer is already the final raster, so transfer ownership
+        // instead of copying it through the borrowed `frombytes` constructor.
+        Image::frombytes_owned(mode, (256, 256), data)
+    })
 }
 
 /// Generates a 256 by 256 radial gradient.
@@ -500,7 +533,11 @@ pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
     if mode == "L" {
         // L is the fixed dense one-byte output, so reuse its exact constant
         // raster and allocate only the owned result buffer.
-        return Image::frombytes_owned(mode, (256, 256), RADIAL_GRADIENT_L_TEMPLATE.to_vec());
+        return execute_eager_cpu_gradient(
+            "RadialGradient",
+            RADIAL_GRADIENT_L_TEMPLATE.len(),
+            || Image::frombytes_owned(mode, (256, 256), RADIAL_GRADIENT_L_TEMPLATE.to_vec()),
+        );
     }
 
     let (bytes_per_pixel, row_bytes) = match gradient_mode {
@@ -509,43 +546,45 @@ pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
         GradientMode::Integer | GradientMode::Float => (4, 256),
     };
     let size: usize = row_bytes * 256 * bytes_per_pixel;
-    let mut data = vec![0u8; size];
+    execute_eager_cpu_gradient("RadialGradient", size, || {
+        let mut data = vec![0u8; size];
 
-    for y in 0..256 {
-        for x in 0..256 {
-            let dx = x as f64 - 128.0;
-            let dy = y as f64 - 128.0;
-            // PIL exact formula: d = (int) sqrt((dx*dx + dy*dy) * 2.0)
-            let d = ((dx * dx + dy * dy) * 2.0).sqrt() as i32;
-            let val = if d >= 255 { 255u8 } else { d as u8 };
+        for y in 0..256 {
+            for x in 0..256 {
+                let dx = x as f64 - 128.0;
+                let dy = y as f64 - 128.0;
+                // PIL exact formula: d = (int) sqrt((dx*dx + dy*dy) * 2.0)
+                let d = ((dx * dx + dy * dy) * 2.0).sqrt() as i32;
+                let val = if d >= 255 { 255u8 } else { d as u8 };
 
-            match gradient_mode {
-                GradientMode::Byte => {
-                    data[y * 256 + x] = val;
-                }
-                GradientMode::One => {
-                    // Mode-1 output keeps every nonzero radial sample white;
-                    // the single zero-valued center sample remains black.
-                    if val != 0 {
-                        let byte_idx = y * row_bytes + x / 8;
-                        let bit_idx = 7 - (x % 8);
-                        data[byte_idx] |= 1 << bit_idx;
+                match gradient_mode {
+                    GradientMode::Byte => {
+                        data[y * 256 + x] = val;
                     }
-                }
-                GradientMode::Integer => {
-                    let bytes = (val as i32).to_le_bytes();
-                    let off = (y * 256 + x) * 4;
-                    data[off..off + 4].copy_from_slice(&bytes);
-                }
-                GradientMode::Float => {
-                    let bytes = (val as f32).to_le_bytes();
-                    let off = (y * 256 + x) * 4;
-                    data[off..off + 4].copy_from_slice(&bytes);
+                    GradientMode::One => {
+                        // Mode-1 output keeps every nonzero radial sample white;
+                        // the single zero-valued center sample remains black.
+                        if val != 0 {
+                            let byte_idx = y * row_bytes + x / 8;
+                            let bit_idx = 7 - (x % 8);
+                            data[byte_idx] |= 1 << bit_idx;
+                        }
+                    }
+                    GradientMode::Integer => {
+                        let bytes = (val as i32).to_le_bytes();
+                        let off = (y * 256 + x) * 4;
+                        data[off..off + 4].copy_from_slice(&bytes);
+                    }
+                    GradientMode::Float => {
+                        let bytes = (val as f32).to_le_bytes();
+                        let off = (y * 256 + x) * 4;
+                        data[off..off + 4].copy_from_slice(&bytes);
+                    }
                 }
             }
         }
-    }
-    Image::frombytes(mode, (256, 256), &data)
+        Image::frombytes(mode, (256, 256), &data)
+    })
 }
 
 /// Generates a Mandelbrot effect image.
