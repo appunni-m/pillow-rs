@@ -95,7 +95,7 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 2 legacy file ceilings and 122 legacy functions across 80 source paths.
+Snapshot: 0 legacy file ceilings and 121 legacy functions across 78 source paths.
 A dash means that path has no over-limit file entry; function counts and
 maximum recorded function lines are summarized here, with each exact
 signature and ceiling in the JSON baseline. Each table row repeats the
@@ -103,8 +103,6 @@ owner and reducer issue recorded for that path.
 
 | Source path | Recorded file ceiling | Long functions (count; max lines) | Owner | Reduction task |
 | --- | ---: | ---: | --- | --- |
-| <code>pillow-rs-js/src/lib.rs</code> | 5,445 | 1 (max 124 lines) | lazytrot | pillow-rs#dqs5 |
-| <code>pillow-rs-py/src/lib.rs</code> | 4,972 | 0 | lazytrot | pillow-rs#pxb1 |
 | <code>pillow-rs/src/compute/pool_cpu/ops/composite.rs</code> | — | 1 (max 136 lines) | lazytrot | pillow-rs#8rfy |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/blur.rs</code> | — | 1 (max 260 lines) | lazytrot | pillow-rs#qpfs |
 | <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs</code> | — | 1 (max 157 lines) | lazytrot | pillow-rs#qpfs |
