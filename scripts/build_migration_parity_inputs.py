@@ -5544,6 +5544,26 @@ class WorkflowBuilder:
                     step_id="setup-pa-putpalette-transform",
                 )
                 receiver_step = image_step
+            elif chain == "p-putpalette-transform":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-p-putpalette-transform-palette",
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(image_step),
+                    arguments={"xy": literal([0, 0]), "value": literal(1)},
+                    step_id="setup-p-putpalette-transform-pixel",
+                )
+                receiver_step = image_step
             elif chain == "p-resize-convert-verify":
                 image_step = self.ensure_image(mode="P")
                 resized_step = self.add_step(
@@ -42969,6 +42989,51 @@ def build_nuanced_cases(
                 "seed": seed, "observe_result": "tobytes",
                 "values": {"radius": literal(2.0)},
             },)
+
+    # Preserve Pillow's public P-affine fill parsing through the live parity
+    # matrix. JSON arrays normally become tuples; use the existing list
+    # protocol and byte-asset descriptor where Python's concrete type matters.
+    p_affine_fill_contracts = (
+        ("scalar-negative", literal(-1), True),
+        ("scalar-bool", literal(True), True),
+        ("scalar-256", literal(256), True),
+        ("scalar-300", literal(300), True),
+        ("single-tuple-negative", literal([-1]), True),
+        ("single-tuple-256", literal([256]), True),
+        ("list-rgb", literal({"protocol": "list", "items": [1, 2, 3]}), True),
+        ("single-list", literal({"protocol": "list", "items": [-1]}), False),
+        ("hex-color", literal("#010203"), True),
+        ("explicit-none", literal(None), True),
+        ("float-scalar", literal(1.5), False),
+        ("empty-tuple", literal([]), False),
+        ("empty-list", literal({"protocol": "list", "items": []}), False),
+        ("tuple-float", literal([1.5, 2, 3]), False),
+        ("bytes", {"kind": "bytes", "value": [120]}, False),
+        ("tuple-rgb-high", literal([300, 2, 3]), False),
+        ("tuple-rgb-low", literal([-1, 2, 3]), False),
+        ("unknown-color", literal("not-a-color"), False),
+        ("empty-color", literal(""), False),
+        ("oversized-integer", literal(1 << 80), False),
+        ("oversized-single-tuple", literal([1 << 80]), False),
+    )
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.fillcolor",
+            "name": f"p-affine-fill-contract-{name}",
+            "mode": "P",
+            "chain": "p-putpalette-transform",
+            "values": {
+                "size": literal([2, 1]),
+                "method": literal(0),
+                "data": literal([1, 0, -1, 0, 1, 0]),
+                "fillcolor": fillcolor,
+            },
+            **({"observe_result": "tobytes"} if observe_result else {}),
+        }
+        for name, fillcolor, observe_result in p_affine_fill_contracts
+    )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
     for surface in manifest["surfaces"]:

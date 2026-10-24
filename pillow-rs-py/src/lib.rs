@@ -304,12 +304,111 @@ fn transform_data_from_python(
     )))
 }
 
+fn palette_transform_fill_type_error() -> PyErr {
+    PyTypeError::new_err("color must be int or single-element tuple")
+}
+
+fn palette_transform_integer_from_python(value: &Bound<'_, PyAny>) -> PyResult<i64> {
+    value.extract::<i64>().map_err(|error| {
+        if error.is_instance_of::<PyOverflowError>(value.py()) {
+            PyOverflowError::new_err("int too big to convert")
+        } else {
+            error
+        }
+    })
+}
+
+fn palette_transform_sequence_from_python<'py>(
+    values: impl IntoIterator<Item = Bound<'py, PyAny>>,
+    len: usize,
+    allow_single: bool,
+) -> PyResult<pillow_rs::TransformFill> {
+    let mut values = values.into_iter();
+    if allow_single && len == 1 {
+        let Some(value) = values.next() else {
+            return Err(palette_transform_fill_type_error());
+        };
+        if !value.is_instance_of::<PyInt>() {
+            return Err(palette_transform_fill_type_error());
+        }
+        return palette_transform_integer_from_python(&value).map(pillow_rs::TransformFill::Scalar);
+    }
+    if !matches!(len, 3 | 4) {
+        return Err(palette_transform_fill_type_error());
+    }
+
+    let (Some(first), Some(second), Some(third)) = (values.next(), values.next(), values.next())
+    else {
+        return Err(palette_transform_fill_type_error());
+    };
+    let alpha = if len == 4 {
+        let Some(value) = values.next() else {
+            return Err(palette_transform_fill_type_error());
+        };
+        Some(value)
+    } else {
+        None
+    };
+    if !first.is_instance_of::<PyInt>()
+        || !second.is_instance_of::<PyInt>()
+        || !third.is_instance_of::<PyInt>()
+        || alpha
+            .as_ref()
+            .is_some_and(|value| !value.is_instance_of::<PyInt>())
+    {
+        return Err(palette_transform_fill_type_error());
+    }
+    if alpha
+        .as_ref()
+        .is_some_and(|value| value.extract::<i64>().ok() != Some(i64::from(u8::MAX)))
+    {
+        return Err(PyValueError::new_err(
+            "cannot add non-opaque RGBA color to RGB palette",
+        ));
+    }
+
+    let mut components = Vec::with_capacity(len);
+    for value in [first, second, third] {
+        components.push(
+            value
+                .extract::<i64>()
+                .map_err(|_| PyValueError::new_err("bytes must be in range(0, 256)"))?,
+        );
+    }
+    if len == 4 {
+        components.push(i64::from(u8::MAX));
+    }
+    Ok(pillow_rs::TransformFill::Components(components))
+}
+
+fn palette_transform_fill_from_python(
+    value: &Bound<'_, PyAny>,
+) -> PyResult<pillow_rs::TransformFill> {
+    if value.is_instance_of::<PyInt>() {
+        return palette_transform_integer_from_python(value).map(pillow_rs::TransformFill::Scalar);
+    }
+    if let Ok(value) = value.extract::<String>() {
+        return Ok(pillow_rs::TransformFill::Name(value));
+    }
+    if let Ok(values) = value.cast::<PyTuple>() {
+        return palette_transform_sequence_from_python(values.iter(), values.len(), true);
+    }
+    if let Ok(values) = value.cast::<PyList>() {
+        return palette_transform_sequence_from_python(values.iter(), values.len(), false);
+    }
+    Err(palette_transform_fill_type_error())
+}
+
 fn transform_fill_from_python(
     value: Option<&Bound<'_, PyAny>>,
+    mode: &str,
 ) -> PyResult<Option<pillow_rs::TransformFill>> {
     let Some(value) = value else {
         return Ok(None);
     };
+    if mode == "P" {
+        return palette_transform_fill_from_python(value).map(Some);
+    }
     if let Ok(value) = value.extract::<i64>() {
         return Ok(Some(pillow_rs::TransformFill::Scalar(value)));
     }
