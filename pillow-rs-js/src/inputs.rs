@@ -85,6 +85,66 @@ pub(crate) fn js_optional_i32(value: &JsValue) -> Result<Option<i32>, JsValue> {
     })?))
 }
 
+pub(crate) fn js_chops_offset(value: &JsValue) -> Result<i32, JsValue> {
+    if value.is_undefined() {
+        return Ok(0);
+    }
+    if value.is_null() {
+        return Err(chops_offset_type_error("NoneType"));
+    }
+
+    let integer = if let Some(boolean) = value.as_bool() {
+        if boolean { 1 } else { 0 }
+    } else if value.is_bigint() {
+        let bigint = value.clone().unchecked_into::<js_sys::BigInt>();
+        let integer = bigint
+            .to_string(10)
+            .ok()
+            .and_then(|value| value.as_string())
+            .and_then(|value| value.parse::<i64>().ok())
+            .ok_or_else(chops_offset_c_long_overflow)?;
+        integer
+    } else if has_python_float_marker(value) {
+        return Err(chops_offset_type_error("float"));
+    } else if let Some(number) = value.as_f64() {
+        if !number.is_finite() || number.fract() != 0.0 {
+            return Err(chops_offset_type_error("float"));
+        }
+        let positive_i64_limit = -(i64::MIN as f64);
+        if number < i64::MIN as f64 || number >= positive_i64_limit {
+            return Err(chops_offset_c_long_overflow());
+        }
+        number as i64
+    } else {
+        return Err(chops_offset_type_error(&js_value_type_name(value)));
+    };
+
+    i32::try_from(integer).map_err(|_| {
+        let message = if integer < i64::from(i32::MIN) {
+            "signed integer is less than minimum"
+        } else {
+            "signed integer is greater than maximum"
+        };
+        err(pillow_rs::PilError::OverflowError(message.to_owned()))
+    })
+}
+
+fn has_python_float_marker(value: &JsValue) -> bool {
+    js_sys::Reflect::has(value, &JsValue::from_str("__pillow_rs_python_float__")).unwrap_or(false)
+}
+
+fn chops_offset_type_error(type_name: &str) -> JsValue {
+    err(pillow_rs::PilError::TypeError(format!(
+        "'{type_name}' object cannot be interpreted as an integer"
+    )))
+}
+
+fn chops_offset_c_long_overflow() -> JsValue {
+    err(pillow_rs::PilError::OverflowError(
+        "Python int too large to convert to C long".to_owned(),
+    ))
+}
+
 pub(crate) fn js_python_dither(value: &JsValue) -> pillow_rs::PythonDitherInput {
     if value.is_null() || value.is_undefined() {
         return pillow_rs::PythonDitherInput::None;

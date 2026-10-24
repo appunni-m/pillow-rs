@@ -957,6 +957,10 @@ def run_parity_lane(
         command,
         env={
             "MIGRATION_TARGET_BACKEND": backend,
+            # Each lane is one canonical backend profile. Do not let a shell
+            # override relabel CPU as Parallel CPU or select a fault profile.
+            "MIGRATION_TARGET_PROFILE": "",
+            "MIGRATION_PARITY_BENCHMARK_ADAPTER": "0",
             # The orchestrator bounds GPU lanes to the smoke/full deadlines
             # below, but the parity adapter has its own shorter default.  Pass
             # the same bounded deadline through so a valid full lane cannot
@@ -977,18 +981,11 @@ def run_parity_lane(
                 if shader_artifact is not None
                 else {}
             ),
-            **(
-                {
-                    # Focused case-filtered SIMD/GPU lanes are backend audits:
-                    # reject fallback so parity cannot pass on CPU execution.
-                    # The full corpus retains fallback accounting for valid
-                    # operations that are outside a backend's capabilities.
-                    # The bounded GPU smoke gate is always strict so CPU
-                    # fallback cannot open the full GPU lane.
-                    "MIGRATION_STRICT_TARGET_BACKEND": "1",
-                }
-                if backend in {"simd", "gpu"} and (case_ids or smoke)
-                else {}
+            # Focused case-filtered SIMD/GPU lanes are strict backend audits;
+            # the full corpus may account for documented fallback. Setting
+            # both values prevents inherited shell state changing this policy.
+            "MIGRATION_STRICT_TARGET_BACKEND": (
+                "1" if backend in {"simd", "gpu"} and (case_ids or smoke) else "0"
             ),
             "MIGRATION_PARITY_EXECUTION_OUTPUT": str(execution_artifact),
             **({"MIGRATION_PARITY_CASE_IDS": ",".join(case_ids)} if case_ids and not smoke else {}),

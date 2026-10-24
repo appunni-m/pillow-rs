@@ -1347,6 +1347,21 @@ def putdata_custom_index_literal(value: int) -> dict[str, Any]:
     }
 
 
+def public_index_literal(value: int) -> dict[str, Any]:
+    """Build a public integer-like object for Python ``__index__`` parity."""
+
+    return {
+        "protocol": "public-index",
+        "value": value,
+    }
+
+
+def invalid_argument_type_literal(value: Any) -> dict[str, Any]:
+    """Mark an intentional public-call input outside its declared type union."""
+
+    return literal({"protocol": "invalid-argument-type", "value": value})
+
+
 def list_literal(value: list[Any]) -> dict[str, Any]:
     """Build an exact public list without changing nested tuple semantics."""
 
@@ -43172,6 +43187,7 @@ def build_nuanced_cases(
     cases.extend(autocontrast_rounding_parity_cases(surface_id))
     cases.extend(blend_rounding_parity_cases(surface_id))
     cases.extend(chops_affine_rounding_parity_cases(surface_id))
+    cases.extend(chops_affine_offset_coercion_parity_cases(surface_id))
     cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
     cases.extend(native_blend_mode_parity_cases(surface_id))
     cases.extend(putdata_materialized_parity_cases(surface_id))
@@ -47264,6 +47280,80 @@ def chops_affine_rounding_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                      "assets": assets,
                     "steps": steps, "observations": ["call", "materialize"],
                 })
+    return cases
+
+
+def chops_affine_offset_coercion_parity_cases(
+    surface_id: str,
+) -> list[dict[str, Any]]:
+    """Keep offset coercion and range behavior in shared backend-neutral cases."""
+
+    if surface_id != "PIL.ImageChops":
+        return []
+    offsets = (
+        ("float-zero", literal(0.0)),
+        ("fractional-float", literal(0.5)),
+        ("null", invalid_argument_type_literal(None)),
+        ("string", invalid_argument_type_literal("1")),
+        ("positive-overflow", literal(2**31)),
+        ("negative-overflow", literal(-(2**31) - 1)),
+        ("large-integer", literal(2**100)),
+        ("boolean", invalid_argument_type_literal(True)),
+        ("minimum-integer", literal(-(2**31))),
+        ("maximum-integer", literal(2**31 - 1)),
+        ("index-protocol", literal(public_index_literal(7))),
+    )
+    cases: list[dict[str, Any]] = []
+    for operation in ("add", "subtract"):
+        requirement_id = f"{surface_id}.{operation}.parameter.offset"
+        for name, offset in offsets:
+            cases.append(
+                {
+                    "case_id": (
+                        f"{surface_id}.{operation}.nuanced.offset-coercion-{name}"
+                    ),
+                    "surface": surface_id,
+                    "operation": operation,
+                    "covers": [requirement_id],
+                    "assets": [],
+                    "steps": [
+                        {
+                            "step_id": "setup-image1",
+                            "surface": "PIL.Image",
+                            "operation": "new",
+                            "receiver": None,
+                            "arguments": {
+                                "mode": literal("L"),
+                                "size": literal([16, 1]),
+                                "color": literal(17),
+                            },
+                        },
+                        {
+                            "step_id": "setup-image2",
+                            "surface": "PIL.Image",
+                            "operation": "new",
+                            "receiver": None,
+                            "arguments": {
+                                "mode": literal("L"),
+                                "size": literal([16, 1]),
+                                "color": literal(31),
+                            },
+                        },
+                        {
+                            "step_id": "call",
+                            "surface": surface_id,
+                            "operation": operation,
+                            "receiver": None,
+                            "arguments": {
+                                "image1": binding("setup-image1"),
+                                "image2": binding("setup-image2"),
+                                "offset": offset,
+                            },
+                        },
+                    ],
+                    "observations": ["call"],
+                }
+            )
     return cases
 
 

@@ -1,86 +1,106 @@
-"""Check Chops Python argument boundaries against isolated live Pillow.
+#!/usr/bin/env python3
+"""Run generated ImageChops offset cases through shared backend parity runners.
 
-Run after ``make build-parity``. Invalid literals cannot be represented by the
-migration manifest's declared parameter value types, so retain them here.
+The active fixture owns the inputs and public observations. This focused
+wrapper only selects those shared case IDs. It sends that unchanged case set
+through the standard Python parity runner with CPU, SIMD, and GPU selected at
+the runner boundary, then through Node and browser WASM parity. Focused SIMD
+and GPU lanes require native backend receipts.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
-import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ROOT / "pillow-rs-py/python"
+INPUT = ROOT / "pillow-rs/tests/fixtures/inputs/parity/pil-imagechops.json"
+CASE_PREFIX = "PIL.ImageChops."
+CASE_MARKER = ".nuanced.offset-coercion-"
+DEFAULT_OUTPUT_DIR = ROOT / "build/migration-parity/chops-affine"
 
 
-class IntegerOffset:
-    def __index__(self):
-        return 7
+def selected_case_ids() -> list[str]:
+    """Return the shared generated ImageChops offset-coercion case IDs."""
 
-
-def observations(backend):
-    from PIL import Image, ImageChops
-
-    if backend != "pillow":
-        import pillow_rs
-        for name in ("cpu", "simd", "gpu"):
-            pillow_rs.disable_backend(name)
-        if not pillow_rs.enable_backend(backend):
-            raise RuntimeError(f"backend unavailable: {backend}")
-    records = {}
-    offsets = (0.0, 0.5, None, "1", 2**31, -2**31 - 1,
-               2**100, True, -2**31, 2**31 - 1, IntegerOffset())
-    for operation in ("add", "subtract"):
-        for index, offset in enumerate(offsets):
-            try:
-                result = getattr(ImageChops, operation)(
-                    Image.new("L", (16, 1), 17), Image.new("L", (16, 1), 31),
-                    offset=offset,
-                )
-                record = {"mode": result.mode, "size": result.size,
-                          "bytes": result.tobytes().hex()}
-            except Exception as error:
-                record = {"error": type(error).__name__, "message": str(error)}
-            records[f"{operation}-offset-{index}"] = record
-    return records
-
-
-def run_side(backend):
-    env = os.environ.copy()
-    paths = [p for p in env.get("PYTHONPATH", "").split(os.pathsep)
-             if p and Path(p).resolve() != TARGET]
-    if backend != "pillow":
-        paths.insert(0, str(TARGET))
-    env["PYTHONPATH"] = os.pathsep.join(paths)
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
-    process = subprocess.run(
-        [sys.executable, str(Path(__file__).resolve()), "--worker", backend],
-        env=env, cwd=ROOT, capture_output=True, text=True, check=True, timeout=60,
+    document = json.loads(INPUT.read_text(encoding="utf-8"))
+    return sorted(
+        case["case_id"]
+        for case in document["cases"]
+        if case.get("case_id", "").startswith(CASE_PREFIX)
+        and CASE_MARKER in case["case_id"]
     )
-    result = json.loads(process.stdout)
-    if Path(result["module"]).is_relative_to(TARGET) != (backend != "pillow"):
-        raise RuntimeError(f"wrong PIL import for {backend}: {result['module']}")
-    return result["records"]
 
 
-class ChopsAffineParityTests(unittest.TestCase):
-    def test_integer_offset_protocol_and_bounds(self):
-        expected = run_side("pillow")
-        for backend in ("cpu", "simd", "gpu"):
-            actual = run_side(backend)
-            self.assertEqual(set(actual), set(expected))
-            for name in expected:
-                with self.subTest(backend=backend, case=name):
-                    self.assertEqual(actual[name], expected[name])
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    args = parser.parse_args()
+    case_ids = selected_case_ids()
+    if not case_ids:
+        parser.error("the generated ImageChops offset cases are missing")
+
+    output_dir = args.output_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for command in (["make", "build-parity"], ["make", "build-wasm-core"]):
+        result = subprocess.run(command, cwd=ROOT, check=False)
+        if result.returncode:
+            return result.returncode
+
+    case_list = ",".join(case_ids)
+    for backend in ("cpu", "simd", "gpu"):
+        output = output_dir / f"{backend}.json"
+        environment = os.environ.copy()
+        environment.pop("MIGRATION_TARGET_PROFILE", None)
+        environment.update(
+            {
+                "MIGRATION_TARGET_BACKEND": backend,
+                "MIGRATION_STRICT_TARGET_BACKEND": (
+                    "1" if backend in {"simd", "gpu"} else "0"
+                ),
+                "MIGRATION_PARITY_BENCHMARK_ADAPTER": "0",
+                "MIGRATION_PARITY_EXECUTION_OUTPUT": str(
+                    output_dir / f"{backend}-execution.json"
+                ),
+            }
+        )
+        command = [
+            "make",
+            "migration-parity-test",
+            f"MIGRATION_PARITY_OUTPUT={output}",
+            f"MIGRATION_PARITY_CASE_IDS={case_list}",
+        ]
+        result = subprocess.run(command, cwd=ROOT, env=environment, check=False)
+        if result.returncode:
+            return result.returncode
+
+    for host in ("node", "browser"):
+        command = [
+            sys.executable,
+            "scripts/run_migration_js_parity.py",
+            "--host",
+            host,
+            "--output",
+            str(output_dir / f"{host}-wasm.json"),
+            *[argument for case_id in case_ids for argument in ("--case-id", case_id)],
+        ]
+        environment = os.environ.copy()
+        oracle_python = ROOT / ".venv/bin/python"
+        if oracle_python.is_file():
+            environment.setdefault("MIGRATION_ORACLE_PYTHON", str(oracle_python))
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            env=environment,
+            check=False,
+        )
+        if result.returncode:
+            return result.returncode
+    return 0
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == "--worker":
-        import PIL
-        print(json.dumps({"module": PIL.__file__, "records": observations(sys.argv[2])},
-                         sort_keys=True))
-    else:
-        unittest.main()
+    raise SystemExit(main())

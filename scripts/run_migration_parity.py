@@ -473,6 +473,16 @@ class PutDataCustomIndexValue:
         return self._value
 
 
+class PublicIndexValue:
+    """Public integer-like scalar exposing only Python's ``__index__``."""
+
+    def __init__(self, value: int):
+        self._value = value
+
+    def __index__(self) -> int:
+        return self._value
+
+
 def decode_numpy_array(value: dict[str, Any]) -> Any:
     """Build a real buffer-backed array for valid ``fromarray`` parity."""
 
@@ -527,6 +537,14 @@ def decode_literal(
         return converted if preserve_lists else tuple(converted)
     if isinstance(value, dict):
         protocol = value.get("protocol")
+        if protocol == "invalid-argument-type":
+            if set(value) != {"protocol", "value"}:
+                raise ValueError(
+                    "invalid-argument-type requires only a value field"
+                )
+            return decode_literal(
+                value["value"], side=side, preserve_lists=preserve_lists
+            )
         if protocol == "outline":
             return decode_outline(value, side=side)
         if protocol == "numpy-array":
@@ -547,6 +565,11 @@ def decode_literal(
             if not isinstance(value, int) or isinstance(value, bool):
                 raise ValueError("putdata-custom-index requires an integer value")
             return PutDataCustomIndexValue(value)
+        if protocol == "public-index":
+            value = value.get("value")
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ValueError("public-index requires an integer value")
+            return PublicIndexValue(value)
         if protocol == "list":
             items = value.get("items")
             if not isinstance(items, list):

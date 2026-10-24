@@ -240,13 +240,13 @@ def js_json_value(value: Any) -> Any:
     return value
 
 
-def putpixel_js_value(value: Any) -> Any:
+def python_numeric_js_value(value: Any) -> Any:
     """Preserve Python numeric types that JSON/JavaScript would otherwise erase.
 
-    The putpixel wrapper distinguishes Python integers from floats and rejects
-    integers outside its C integer ranges.  Encoding these only on putpixel
-    inputs keeps the general host protocol unchanged while allowing the JS
-    adapter to reproduce those public checks exactly.
+    The target adapter needs numeric type identity for parameters whose Python
+    contract distinguishes integers from floats. Encoding remains limited to
+    those declared parameter inputs, so ordinary JavaScript numbers keep their
+    established host representation.
     """
 
     if isinstance(value, bool):
@@ -256,9 +256,9 @@ def putpixel_js_value(value: Any) -> Any:
     if isinstance(value, float):
         return {"__pillow_rs_python_float__": repr(value)}
     if isinstance(value, list):
-        return [putpixel_js_value(item) for item in value]
+        return [python_numeric_js_value(item) for item in value]
     if isinstance(value, dict):
-        return {key: putpixel_js_value(item) for key, item in value.items()}
+        return {key: python_numeric_js_value(item) for key, item in value.items()}
     return value
 
 
@@ -273,7 +273,33 @@ def typed_putpixel_cases(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
             for name in ("xy", "value"):
                 descriptor = step.get("arguments", {}).get(name)
                 if isinstance(descriptor, dict) and descriptor.get("kind") == "literal":
-                    descriptor["value"] = putpixel_js_value(descriptor.get("value"))
+                    descriptor["value"] = python_numeric_js_value(
+                        descriptor.get("value")
+                    )
+    return prepared
+
+
+def typed_imagechops_offset_cases(
+    cases: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Retain Python integer/float identity for ImageChops offset inputs."""
+
+    prepared = copy.deepcopy(cases)
+    for case in prepared:
+        for step in case.get("steps", []):
+            if (
+                step.get("surface") != "PIL.ImageChops"
+                or step.get("operation") not in {"add", "subtract"}
+            ):
+                continue
+            descriptor = step.get("arguments", {}).get("offset")
+            if (
+                isinstance(descriptor, dict)
+                and descriptor.get("kind") == "literal"
+            ):
+                descriptor["value"] = python_numeric_js_value(
+                    descriptor.get("value")
+                )
     return prepared
 
 
@@ -721,7 +747,9 @@ def _host_payload(
     return json.dumps(
         js_json_value(
             {
-                "cases": typed_putpixel_cases(cases),
+                "cases": typed_imagechops_offset_cases(
+                    typed_putpixel_cases(cases)
+                ),
                 "operations": operation_payload(cases, operation_index),
                 "assets": assets,
             }

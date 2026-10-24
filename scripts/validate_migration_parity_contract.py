@@ -862,6 +862,12 @@ def _literal_type(value: Any) -> str:
         return "sequence"
     if isinstance(value, dict):
         protocol = value.get("protocol")
+        if (
+            protocol == "public-index"
+            and set(value) == {"protocol", "value"}
+            and type(value.get("value")) is int
+        ):
+            return "integer"
         if isinstance(protocol, str) and protocol in DISPLAY_LITERAL_PROTOCOLS:
             return "handle"
         if value.get("protocol") == "outline":
@@ -1122,8 +1128,31 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
                     prior_step_ids,
                     prior_image_steps,
                 )
-                if descriptor["kind"] == "literal" and not _literal_matches(descriptor.get("value"), parameters[name]["value_types"]):
-                    raise _error(f"{spath}.arguments.{name}", "literal does not match declared parameter value_types")
+                if descriptor["kind"] == "literal":
+                    value = descriptor.get("value")
+                    path = f"{spath}.arguments.{name}"
+                    if (
+                        isinstance(value, dict)
+                        and value.get("protocol") == "invalid-argument-type"
+                    ):
+                        if (
+                            set(value) != {"protocol", "value"}
+                            or _literal_matches(
+                                value.get("value"), parameters[name]["value_types"]
+                            )
+                        ):
+                            raise _error(
+                                path,
+                                "invalid-argument-type must wrap a value outside "
+                                "the declared parameter value_types",
+                            )
+                    elif not _literal_matches(
+                        value, parameters[name]["value_types"]
+                    ):
+                        raise _error(
+                            path,
+                            "literal does not match declared parameter value_types",
+                        )
             step_map[step_id] = step
             step_ids.add(step_id)
             if operation_definition["source"]["result"]["shape"] == "image":

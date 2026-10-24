@@ -30,17 +30,18 @@ does not.
 ## Current operation/source and fixture snapshot — 2026-10-24
 
 The schema-10 crosswalk was regenerated at revision
-`ce15a8824597abf707d4d36843da267c1d491530`. Its dirty marker reflects existing
-untracked workspace artifacts. It read 837 source and fixture inputs with
+`d24971717e663b9bd01d39347e0dde1c85147760`. Its dirty marker reflects tracked
+in-progress changes and existing untracked workspace artifacts. It read 837
+source and fixture inputs with
 fingerprint
-`9e6b8aec90eb86e0b411785e02111a25bbae6bdec0f9bc4408c7d27d159d857f`. The
+`7413a70a77005338df3eae9259284f26f938c53536513c16952ec3dddea1b2d4`. The
 ignored report `target/operation-source-crosswalk.json` has SHA-256
-`201f39e42ef635b832a6c107d10e77b07e043390ac7bef3ab17bdf08ee004bd7`.
+`7c5d65fb17a72b4e23f75401167630d8da6067124d86c0ab7f1cc375491c5d9d`.
 
 | Generated measure | Count |
 | --- | ---: |
 | Manifest operations mapped to Python | 214 / 214 |
-| Indexed parity-input cases, including 1 fault contract | 17,317 across all 214 |
+| Indexed parity-input cases, including 1 fault contract | 17,339 across all 214 |
 | Declared benchmark workloads across public operations | 1,032 across 209 |
 | Python native calls mapped to registered PyO3 declarations | 157 / 157 |
 | Direct PyO3 core API calls mapped | 103 / 103 |
@@ -77,7 +78,7 @@ declarations still do not prove general runtime reachability.
 
 ## Backend-neutral parity selection and backend execution audit — 2026-10-24
 
-The active manifest indexes 27 parity input files containing 17,316 ordinary
+The active manifest indexes 27 parity input files containing 17,338 ordinary
 oracle-parity cases and one target-only fault contract. None of those cases has
 a `target_profiles` field, and none of the 214 operation-level parity policies
 declares `target_profiles`. The parity policy requires 212 operations; the two
@@ -163,6 +164,69 @@ The parity results, execution sidecars, and WGSL receipt are in
 `build/migration-parity/backend-bypass-audit-{simd-strict,gpu-strict}*`.
 This proves the selected cases use both backends; it is not a claim that every
 ordinary operation has a SIMD or GPU implementation.
+
+The shared ImageChops fixture now also contains 22 offset-coercion cases: 11
+input forms each for `add` and `subtract`. The fixture and public requirement
+IDs contain no backend tags. `scripts/test_chops_affine_parity.py` selects those
+IDs and sends the same fixture inputs through the canonical Python parity
+runner with CPU, strict SIMD, and strict GPU selected at the runner boundary,
+then through the Node and browser WASM parity runners. All five lanes pass
+22/22 with case digest
+`9439a86dcb06f80e00674f7715828151046912031bc50e91f994b2977d64b157` and parity
+input digest
+`303d277ea91260c8ad065375747191c50fff2abd44e88427c8c9ebd421ac7d72`. The
+Pillow 12.2.0 source identity is the same in every lane.
+
+Each Python execution sidecar classifies 14 argument-validation cases as not
+pipeline-applicable and records eight complete receipts. CPU reports eight
+`actual_backend=cpu` receipts. SIMD reports eight `actual_backend=simd`
+vector-path receipts (16 vector blocks, no scalar tails); GPU reports eight
+completed dispatches with `actual_backend=gpu`. SIMD and GPU have no fallback
+reason, missing receipt, or partial receipt. Node and browser WASM each report
+22/22 with no pending cases. Their eight static host-value hints are
+diagnostics only and do not filter execution.
+
+Run IDs: CPU `migration-parity-bf2267ae4d0f45ffb6e6446e5ff4a6c8`, SIMD
+`migration-parity-a713f04b14184ba195bb8d8ff1741692`, and GPU
+`migration-parity-ebaaf605ed9341daa9a58f57aea4fba3`. Parity outputs and
+execution sidecars are under `build/migration-parity/chops-affine/`.
+
+The initial WASM run exposed differences in float, `None`, string, and integer
+overflow handling. The JS host adapter now preserves Python numeric type for
+the declared ImageChops offset input, while the public WASM binding performs
+the integer and range validation. The generic input-only
+`invalid-argument-type` and `public-index` protocols remain backend-neutral
+and contain no expected outputs. No fixture selection or expected result is
+special-cased by target or backend.
+
+## Standalone parity routes and bypass inventory — 2026-10-24
+
+The active fixture/runner path is `run_migration_parity.py`, with
+`run_all_backend_tests.py` as the multi-lane orchestrator. A source scan for
+standalone live-Pillow comparisons and direct backend activation found the
+following exceptions. “Outside fixtures” means the inputs or expected
+observations are constructed in the script rather than selected by active
+fixture IDs; it does not mean their current code necessarily has a backend
+fallback bug.
+
+| Script | Current route | Bypass and disposition |
+| --- | --- | --- |
+| `scripts/test_chops_affine_parity.py` | **Repaired.** Selects active ImageChops fixture IDs and sends the identical case set to the standard Python runner for CPU, strict SIMD, and strict GPU, then Node and browser WASM runners. | Previously made direct `enable_backend()` calls and compared results without recording the actual backend. All five lanes now pass 22/22; SIMD/GPU receipts prove native execution for the eight pipeline-applicable cases. |
+| `scripts/run_all_backend_tests.py` | Multi-lane orchestrator launches a separate Python parity process per backend and separate Node/browser WASM lanes. | It now clears inherited target-profile and benchmark-adapter overrides and explicitly sets strict fallback policy per Python lane, preventing caller shell state from relabeling or changing the selected backend. |
+| `scripts/test_grayscale_rgb_domain.py` | Custom exhaustive Pillow/target diagnostic enumerating all 16,777,216 RGB triples in 256 blocks. It uses `lock_target_image_pipeline`, strict backend settings, checks one native receipt per block, and compares exact output bytes. | Inputs and output comparisons bypass the active fixture matrix, though backend locking/receipts are strict. Keep it classified as supplemental exhaustive evidence, not fixture parity or benchmark evidence. It is manually invoked and was not rerun for this inventory. |
+| `scripts/test_font_variant_parity.py` | Isolated source and target subprocesses compare font creation, mutable source/path settings, variants, and rendered observations. | It uses a fixture font asset but owns the scenarios and result dictionary; it has no active parity case IDs, backend option, or execution receipts, so it proves only the default Python route. It is not wired to a Make target. |
+| `scripts/test_getdata_sequence_parity.py` | Inline Pillow/target probes compare indexes, slices, banded modes, palette snapshots, and errors. | It has no generated case IDs or backend option/receipt and proves only the default Python route. It is not wired to a Make target. |
+| `scripts/test_putdata_sequence_parity.py` | Inline live-Pillow probes exercise mutable callbacks, custom sequences, bytes subclasses, coercion order, and partial writes. | It has no generated case IDs or backend option/receipt and proves only the default Python route. Existing declarative sequence protocols cover ordinary values but cannot express the callback side effects exercised here. It is not wired to a Make target. |
+| `scripts/test_gpu_batch.py` | A Make-wired, explicit `GpuBatchExecutor` oracle comparison creates image graphs from a local generator and compares terminal results with live Pillow; its `--contracts` mode checks queue/resource behavior. | This is a distinct target-only batching API and is not the normal CPU/SIMD/GPU image backend runner. Its graph inputs bypass active fixture IDs. Keep its admission, identity, and queue contracts in the dedicated GPU-batch lane; do not cite it as ordinary GPU parity. |
+
+`scripts/benchmark_gpu_batch.py` and the other backend-specific benchmark
+drivers are benchmark workloads rather than parity runners, so their profile
+selection belongs to the benchmark runner and is not counted as a parity
+bypass here. Coverage/native probes also do not compare against live Pillow
+and are outside this inventory. The standalone parity scripts above should be
+migrated only when their input behavior can be represented by generated
+fixtures without losing callbacks, state lifetime, or the specialized
+exhaustive/batch contract. No such migration is performed by this audit.
 
 ## Historical operation-to-family and fixture snapshot — 2026-10-21
 

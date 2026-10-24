@@ -1,4 +1,5 @@
 use crate::Image;
+use crate::js_chops_offset;
 use crate::values::*;
 use pillow_rs::Image as RsImage;
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
@@ -12,32 +13,24 @@ impl ImageChops {
         a: &Image,
         b: &Image,
         scale: Option<f64>,
-        offset: Option<f64>,
+        offset: JsValue,
     ) -> Result<Image, JsValue> {
-        pillow_rs::chops_add(
-            &a.inner,
-            &b.inner,
-            scale.unwrap_or(1.0),
-            offset.unwrap_or(0.0),
-        )
-        .map(|i| Image { inner: i })
-        .map_err(err)
+        let offset = js_chops_offset(&offset)?;
+        pillow_rs::chops_add(&a.inner, &b.inner, scale.unwrap_or(1.0), f64::from(offset))
+            .map(|i| Image { inner: i })
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "subtract")]
     pub fn sub(
         a: &Image,
         b: &Image,
         scale: Option<f64>,
-        offset: Option<f64>,
+        offset: JsValue,
     ) -> Result<Image, JsValue> {
-        pillow_rs::chops_subtract(
-            &a.inner,
-            &b.inner,
-            scale.unwrap_or(1.0),
-            offset.unwrap_or(0.0),
-        )
-        .map(|i| Image { inner: i })
-        .map_err(err)
+        let offset = js_chops_offset(&offset)?;
+        pillow_rs::chops_subtract(&a.inner, &b.inner, scale.unwrap_or(1.0), f64::from(offset))
+            .map(|i| Image { inner: i })
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "multiply")]
     pub fn mul(a: &Image, b: &Image) -> Result<Image, JsValue> {

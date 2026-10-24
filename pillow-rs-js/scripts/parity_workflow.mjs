@@ -137,6 +137,12 @@ function decodeInputValue(value) {
         if (marker === 'Infinity') return Number.POSITIVE_INFINITY;
         if (marker === '-Infinity') return Number.NEGATIVE_INFINITY;
         if (value.__pillow_rs_negative_zero__ === true) return -0;
+        if (value.protocol === 'invalid-argument-type') {
+            return decodeInputValue(value.value);
+        }
+        if (value.protocol === 'public-index') {
+            return Number(value.value);
+        }
         // The manifest uses explicit protocols to preserve Python's list and
         // sequence inputs during source execution.  JavaScript has one
         // ordinary sequence representation, so decode those protocols before
@@ -2006,7 +2012,7 @@ function staticMethod(wasm, surface, operation, args, receiver = null, displayVi
                 args.image1,
                 args.image2,
                 args.scale ?? null,
-                args.offset ?? null,
+                args.offset,
             );
         }
         return wasm.ImageChops[name](args.image1, args.image2);
