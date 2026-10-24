@@ -12,11 +12,20 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
+# These root-reexported palette APIs preserve their existing String error
+# signatures for the host bindings; their shared implementation returns PilError.
 PUBLIC_PALETTE_STRING_APIS = {
     "palette_getcolor_append",
     "palette_getcolor_validate",
     "palette_getcolor_validate_input",
 }
+PUBLIC_PALETTE_STRING_PATHS = {
+    "pillow-rs/src/color.rs",  # retained for the existing synthetic scanner contract
+    "pillow-rs/src/color/palette.rs",
+}
+# This fault hook is compiled only by the opt-in test-api feature and is
+# exercised by fixture-driven fault-contract runners, not production builds.
+TEST_API_STRING_APIS = {("pillow-rs/src/lib.rs", "arm_fault")}
 TEST_MODULE = re.compile(r"^\s*#\[cfg\(test\)\]")
 FUNCTION_DECLARATION = re.compile(
     r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\b"
@@ -67,8 +76,13 @@ def scan_source(path: str, text: str) -> list[Finding]:
                 continue
             if (
                 contract == "string_error_types"
-                and path == "pillow-rs/src/color.rs"
+                and path in PUBLIC_PALETTE_STRING_PATHS
                 and function_name in PUBLIC_PALETTE_STRING_APIS
+            ):
+                continue
+            if (
+                contract == "string_error_types"
+                and (path, function_name) in TEST_API_STRING_APIS
             ):
                 continue
             findings.append(Finding(path, line_number, contract, line.strip()))
