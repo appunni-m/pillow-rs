@@ -21,53 +21,148 @@ implementation. Operation mappings establish discoverability, not coverage or
 execution. Items below remain review candidates until those boundaries are
 traced. This audit uses no coverage data and has not deleted or simplified
 code. It does not add unit tests. Behavioral gaps and public-route claims are
-to be checked with generated fixture parity and fault-contract cases, using
-explicit case IDs and backend profiles. Static source checks remain inventory
-evidence and do not substitute for those fixture contracts.
+checked with the same generated fixture and requirement IDs while the runner
+selects CPU, SIMD, or GPU. Ordinary parity inputs and operation parity policies
+must not select a backend. Strict backend runs and their execution receipts
+establish whether a pipeline actually used the selected backend; parity alone
+does not.
 
-## Current operation/source and fixture snapshot — 2026-10-23
+## Current operation/source and fixture snapshot — 2026-10-24
 
-The schema-10 crosswalk was regenerated on dirty revision
-`1d17f0be7f69df06047f8596809252b8d1aef03b` after updating its static index for
-the split registry, PyO3 modules, and core `Image`/`Draw` method trees. It read
-831 source and fixture inputs with fingerprint
-`553e7b5b61adbfe6c30266046d0582b270bfbe2ee2e0d54c5bc82a4f7f525549`. The
+The schema-10 crosswalk was regenerated at revision
+`ce15a8824597abf707d4d36843da267c1d491530`. Its dirty marker reflects existing
+untracked workspace artifacts. It read 837 source and fixture inputs with
+fingerprint
+`9e6b8aec90eb86e0b411785e02111a25bbae6bdec0f9bc4408c7d27d159d857f`. The
 ignored report `target/operation-source-crosswalk.json` has SHA-256
-`d9a2bf33bece033a1931604237e0a10c4720d28289abd86e9447a850537c4294`.
+`201f39e42ef635b832a6c107d10e77b07e043390ac7bef3ab17bdf08ee004bd7`.
 
 | Generated measure | Count |
 | --- | ---: |
-| Manifest operations mapped to Python | 212 / 212 |
-| Declared parity cases across public operations | 17,316 across all 212 |
-| Declared benchmark workloads across public operations | 996 across 209 |
+| Manifest operations mapped to Python | 214 / 214 |
+| Indexed parity-input cases, including 1 fault contract | 17,317 across all 214 |
+| Declared benchmark workloads across public operations | 1,032 across 209 |
 | Python native calls mapped to registered PyO3 declarations | 157 / 157 |
 | Direct PyO3 core API calls mapped | 103 / 103 |
-| Direct PyO3 receiver calls mapped | 97 / 97 |
+| Direct PyO3 receiver calls mapped | 98 / 98 |
 | Pipeline variants / variant-key edges | 84 / 84 |
 | Registry keys / SIMD registrations | 81 / 81 |
-| Core methods reached from PyO3 | 206 |
-| Rust source files / files with static public-operation routes | 593 / 97 |
-| Static graph edges without full route / files without graph edge | 24 / 472 |
-| Operation-graph source review candidates | 496 |
+| Core methods reached from PyO3 | 207 |
+| Rust source files / files with static public-operation routes | 594 / 97 |
+| Static graph edges without full route / files without graph edge | 24 / 473 |
+| Operation-graph source review candidates | 497 |
 | Files with a possible dynamic-callback route | 11 |
 | Family/layout findings / shader candidates | 34 / 4 |
-| Unresolved module edges / unmapped fixture references | 0 / 0 |
+| Unresolved module edges / unmapped fixture operation references | 0 / 0 |
 
-The three operations without an indexed benchmark workload are
+The five operations without an indexed benchmark workload are
+`PIL.GpuBatchExecutor`, `PIL.GpuBatchExecutor.submit`,
 `PIL.Image.Image.toqimage`, `PIL.Image.Image.toqpixmap`, and
-`PIL.ImageFont.MAX_STRING_LENGTH`. Parity and benchmark counts are declarations;
-they do not prove case selection, execution, exact parity, or backend receipts.
-All static route counts are review evidence, not runtime reachability claims.
+`PIL.ImageFont.MAX_STRING_LENGTH`. The two GPU batch API operations are
+target-only and have no Pillow parity equivalent. Parity and benchmark counts
+are declarations; they do not prove case selection, execution, exact parity,
+or backend receipts. All static route counts are review evidence, not runtime
+reachability claims.
 
 The earlier crosswalk parser expected registry entries inside one `register_all`
 body and missed class registration when PyO3 methods were split into child
 modules. It now indexes registration modules and resolves `PyImage` methods
 through the separately registered class and its `inner: pillow_rs::Image`
 field declaration. The core receiver index now scans the `image/` and `draw/`
-module trees as well as operation modules, resolving all 97 direct PyO3
-receiver calls. No unit tests, parity, benchmarks, or coverage were run for
-these static inventory-tool changes. Source mappings and fixture declarations
-still do not prove runtime reachability or test execution.
+module trees as well as operation modules, resolving all 98 direct PyO3
+receiver calls. No unit tests, benchmarks, or coverage were run for these
+static inventory-tool changes. The selected parity runs below verify backend
+execution for one shared operation slice; source mappings and fixture
+declarations still do not prove general runtime reachability.
+
+## Backend-neutral parity selection and backend execution audit — 2026-10-24
+
+The active manifest indexes 27 parity input files containing 17,316 ordinary
+oracle-parity cases and one target-only fault contract. None of those cases has
+a `target_profiles` field, and none of the 214 operation-level parity policies
+declares `target_profiles`. The parity policy requires 212 operations; the two
+GPU batch API operations are explicitly not-applicable to Pillow. The fault
+contract is selected through its dedicated profile and command; it is not an
+ordinary oracle-parity case.
+
+`scripts/run_migration_parity.py::select_cases_for_profile` appends every
+ordinary parity case for the CPU, SIMD, GPU, and Parallel CPU runtime profiles.
+It excludes ordinary parity only under the separate GPU fault-contract profile;
+the profile filter otherwise applies only to target-only fault contracts. The
+same case IDs can therefore be passed to
+`make migration-parity-test-simd-strict` or
+`make migration-parity-test-gpu-strict`; the backend is a runner option. The
+strict runner activates one backend and rejects fallback or missing terminal
+proof for backend-relevant deferred pipelines.
+
+`MIGRATION_TARGET_BACKEND=simd` or `gpu` by itself does not require that
+backend to execute; normal parity permits the documented CPU fallback. Use
+the strict target or inspect the execution sidecar before crediting a backend.
+`scripts/run_all_backend_tests.py` records receipts for its full SIMD and GPU
+lanes, but those lanes are not strict. If parity passes with incomplete backend
+receipts, the artifact is `passed_with_backend_gaps`; the script currently
+returns exit code zero for that status. A CI job that checks only the exit code
+can therefore miss an execution gap.
+
+`scripts/run_all_backend_tests.py::public_case_ids` also builds one shared
+ordinary-parity denominator and forwards an explicit case filter to CPU, SIMD,
+and the optional full GPU lane. Its separate GPU smoke gate always selects the
+fixed `PIL.ImageFilter.UnsharpMask.behavior.default` case, including when the
+full-lane filter omits it. The all-backend SIMD and full GPU lanes intentionally
+allow documented fallback and collect receipts; fallback or incomplete receipt
+coverage changes the result to `passed_with_backend_gaps`. That status currently
+returns process exit code zero, so automation that needs an execution guarantee
+must inspect `backend_coverage.status` or use the strict backend targets. Setting
+`MIGRATION_GPU_FULL=0` runs only the smoke gate and reports the full GPU lane as
+skipped. The JS/WASM runner separately excludes target-only fault contracts and
+native platform-viewer workflows at runner level; those exclusions do not alter
+the CPU/SIMD/GPU fixture set.
+
+Five non-indexed files under `pillow-rs/tests/fixtures/inputs/parity/` still
+contain 23 case-level profile-tagged records: `getbbox-i-rowor-20261018.json`,
+`getbbox-f-filled-1024x768.json`, `convolution-uniform-color-trial-20261014.json`,
+`convert-cmyk-trial.json`, and `getdata-hsv-band2-x86-20261014.json`. Their 27
+profile assignments are historical input metadata, not cases selected by the
+active manifest. Four standalone slice manifests and one evidence manifest
+still index these files:
+
+| Historical manifest | Legacy parity profile scope |
+| --- | --- |
+| `pillow-rs/tests/fixtures/manifest.convolution-uniform-color-trial-20261014.yaml` | 10 operation policies select CPU; 10 cases select CPU except one SIMD-only case. |
+| `pillow-rs/tests/fixtures/manifest-getbbox-i-rowor-20261018.yaml` | 4 operation policies and all 10 cases select CPU. |
+| `pillow-rs/tests/fixtures/manifest.convert-cmyk-trial.yaml` | 212 operation policies select CPU, with Convert also tagged SIMD/GPU; its one case selects CPU, SIMD, and GPU. |
+| `pillow-rs/tests/fixtures/manifest.getdata-x86-run.yaml` | 2 operation policies select CPU; its one case selects CPU, SIMD, and GPU. |
+| `docs/evidence/getbbox-f-row-scan-20261016/manifest.yaml` | 2 operation policies and its one case select CPU. |
+
+The evidence YAML search found 26 snapshots with operation-level parity
+profile tags; five of those also index profile-tagged cases. These snapshots
+preserve older experiment and PerfDB identities and are not the active parity
+specification. Do not rewrite their digests in place. The current
+`validate_migration_parity_contract.py` rejects `target_profiles` on parity
+operation policies, `build_migration_parity_inputs.py` rejects generated
+parity cases with profile tags, and `run_migration_parity.py::load_manifest`
+uses that validator before running a custom manifest. The aggregator's
+`requirements_for_lane` also ignores target profiles for parity, so legacy
+profile tags are not an executable case filter. New cross-backend parity work
+must use the active manifest and one shared fixture set.
+
+The same nine active `PIL.ImageChops.screen` case IDs were run through the
+strict SIMD and strict GPU targets at the current revision. Both parity results
+passed 9/9. Each execution sidecar reports nine pipeline-applicable cases, nine
+terminal-complete receipts, the requested backend for all nine cases, zero
+fallback reasons, and zero missing or partial receipts. The SIMD run ID is
+`migration-parity-b83147deacc64a53b612edebacfa1be7`; the GPU run ID is
+`migration-parity-c68f646308034280b965efc951f6ec31`. Both sidecars have the
+same selected-case digest,
+`80c08204b4a49847b0843c9e3763246afd48721243ce3e66a01160771642d4eb`.
+The selected cases are the L/LA/RGB/RGBA 5×5 tails, the L/LA/RGB/RGBA
+large-wide workloads, and the materialized RGB-noise 1024×768 workload.
+The GPU WGSL sidecar records 13 dispatches across those cases: nine
+`Screen` dispatches from `screen.wgsl` and four input `PutPixel` dispatches.
+The parity results, execution sidecars, and WGSL receipt are in
+`build/migration-parity/backend-bypass-audit-{simd-strict,gpu-strict}*`.
+This proves the selected cases use both backends; it is not a claim that every
+ordinary operation has a SIMD or GPU implementation.
 
 ## Historical operation-to-family and fixture snapshot — 2026-10-21
 
@@ -335,7 +430,7 @@ removed or changed as part of this audit.
 
 The current crosswalk has no unresolved direct PyO3 receiver calls. It still
 has 24 files with static graph edges but no complete public-operation route,
-472 files without a static operation-graph edge, and 34 family/layout findings.
+473 files without a static operation-graph edge, and 34 family/layout findings.
 The 11 callback-route files remain possible routes, not proven runtime
 execution. Triage these queues by module ownership,
 callers, cfg/features, macro/generated paths, and test role; do not infer
@@ -345,9 +440,10 @@ The four shader candidates have source-loader evidence but still need their
 history and a separate removal decision. The audit also needs supported-target
 and feature reviews, compiler-backed dead-item evidence where justified, private
 caller-chain review, refactor duplicate review, and fixture selection checks.
-For behavior, use generated fixture parity and fault-contract cases with
-explicit case IDs and backend profiles. The static crosswalk does not prove
-that a runner selects or executes a declared case.
+For behavior, reuse generated fixture parity and fault-contract IDs and select
+the backend at the runner. Use strict SIMD/GPU lanes when actual backend
+execution is the claim. The static crosswalk does not prove that a runner
+selects or executes a declared case.
 
 No automatic cleanup is supported by this report. Each finding must end as
 documented retained code, a focused test-selection repair, a further
@@ -442,7 +538,7 @@ GPU-requested parity lanes passed before and after extraction. This changes
 ownership only; no operation route or reachability count changed. Receipts are
 preserved in `docs/evidence/geometry/offset-simd-family-layout-arm64-20261022/`.
 
-## Filter scalar and GPU profile follow-up — 2026-10-23
+## Filter scalar and GPU route follow-up — 2026-10-24
 
 ### Private packed scalar filter helpers
 
@@ -482,40 +578,43 @@ Preserve the existing fault-contract fixtures
 `PIL.ImageFilter.MedianFilter.nuanced.coverage-batch-filter-invalid-even-size`,
 `PIL.ImageFilter.RankFilter.nuanced.coverage-batch-filter-invalid-even-size`,
 `PIL.ImageFilter.RankFilter.nuanced.palette-rejected`, and
-`PIL.ImageFilter.BoxBlur.nuanced.negative-radius-error`. Do not add unit tests;
-future behavior changes should run only the affected generated-fixture parity
-and fault-contract selectors with explicit backend profiles.
+`PIL.ImageFilter.BoxBlur.nuanced.negative-radius-error`. Do not add unit tests.
+For a behavior change, run the affected generated-fixture IDs with the backend
+selected by the runner; use strict SIMD/GPU when the claim is that those
+backends execute the operation.
 
-The five existing F-mode order-statistic fixtures are declared `python-cpu`:
+The five active F-mode order-statistic fixtures are backend-neutral; none has a
+`target_profiles` field:
 `PIL.Image.Image.filter.nuanced.f-mode-max-filter`,
 `PIL.Image.Image.filter.nuanced.f-mode-min-filter`,
 `PIL.Image.Image.filter.nuanced.f-mode-median-filter`,
 `PIL.Image.Image.filter.nuanced.f-mode-rank-filter`, and
-`PIL.Image.Image.filter.nuanced.f-mode-large-rank-filter`. A focused strict-SIMD
-run selected all five IDs and passed 5/5 with zero infrastructure errors at
-revision `374a3b7bd`. The recorded command was:
+`PIL.Image.Image.filter.nuanced.f-mode-large-rank-filter`. A strict-SIMD run
+selected all five IDs and passed 5/5 with zero infrastructure errors at
+revision `374a3b7bd`; that result is historical and does not make the fixtures
+SIMD-specific. The current requirement is to keep one shared ID set while
+selecting each backend in the runner. The earlier case-count/profile discussion
+is tracked in `pillow-rs#8nq8`.
 
 ```sh
 MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.filter.nuanced.f-mode-max-filter,PIL.Image.Image.filter.nuanced.f-mode-min-filter,PIL.Image.Image.filter.nuanced.f-mode-median-filter,PIL.Image.Image.filter.nuanced.f-mode-rank-filter,PIL.Image.Image.filter.nuanced.f-mode-large-rank-filter' \
   make migration-parity-test-simd-strict
 ```
 
-The result is `build/migration-parity/simd-strict-parity-result.json`. This
-proves the selected strict-SIMD calls passed on that dirty build, but their
-current `target_profiles` do not yet credit the SIMD profile. The selection
-and profile question remains tracked in `pillow-rs#8nq8`.
+The old result was written to
+`build/migration-parity/simd-strict-parity-result.json`. Current active cases
+remain backend-neutral; do not add per-case profile credit to parity inputs.
 
-### GPU projection fixture/profile mismatch
+### GPU projection backend-neutral case
 
 The public GPU projection path currently compiles
 `getprojection_atomic.wgsl`; the CMYK terminal checks are separate admission
 and validation code, and strict GPU reports CMYK projection unsupported. The
-old `getprojection_cmyk.wgsl` has no current source loader/reference. However,
-`PIL.Image.Image.getprojection.parity.material-cmyk-1024x768` declares
-`python-gpu` in `pillow-rs/tests/fixtures/inputs/parity/pil-image-image.json`.
-That declared profile is not backed by the inspected GPU route and is a fixture
-contract mismatch to resolve in a focused task. Keep the case for CPU and SIMD
-parity; either make strict GPU CMYK support real and verify it with the same
-fixture or remove the unsupported GPU profile claim. Do not infer GPU execution
-from public parity alone. The source/history evidence is recorded under
-`pillow-rs#h2sn`.
+old `getprojection_cmyk.wgsl` has no current source loader/reference.
+`PIL.Image.Image.getprojection.parity.material-cmyk-1024x768` is an active,
+backend-neutral case. The earlier statement that it declared `python-gpu` was
+stale. Keep one shared case and use the strict GPU runner to expose the current
+unsupported route; a normal GPU parity pass can include CPU fallback and does
+not prove GPU execution. GPU benchmark applicability is a separate operation
+policy and does not tag the parity case. The source/history evidence is
+recorded under `pillow-rs#h2sn`.
