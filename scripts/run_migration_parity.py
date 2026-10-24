@@ -51,6 +51,14 @@ try:
         build_platform_viewer,
         isolated_viewer_registry,
     )
+    from migration_parity.pipeline_contract import (
+        PIPELINE_ALWAYS_OPS as _PIPELINE_ALWAYS_OPS,
+        PIPELINE_MAYBE_OPS as _PIPELINE_MAYBE_OPS,
+        PIPELINE_MUTATING_OPS as _PIPELINE_MUTATING_OPS,
+        PIPELINE_RESULT_OPS as _PIPELINE_RESULT_OPS,
+        TERMINAL_OBSERVATION_OPS as _TERMINAL_OBSERVATION_OPS,
+        workflow_pipeline_observation_gaps,
+    )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity`` in tests
     from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
     from scripts.validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
@@ -59,6 +67,14 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity`` in t
         build_capture_viewer,
         build_platform_viewer,
         isolated_viewer_registry,
+    )
+    from scripts.migration_parity.pipeline_contract import (
+        PIPELINE_ALWAYS_OPS as _PIPELINE_ALWAYS_OPS,
+        PIPELINE_MAYBE_OPS as _PIPELINE_MAYBE_OPS,
+        PIPELINE_MUTATING_OPS as _PIPELINE_MUTATING_OPS,
+        PIPELINE_RESULT_OPS as _PIPELINE_RESULT_OPS,
+        TERMINAL_OBSERVATION_OPS as _TERMINAL_OBSERVATION_OPS,
+        workflow_pipeline_observation_gaps,
     )
 
 try:
@@ -1467,151 +1483,11 @@ def set_receipt_terminal_complete(
     return receipt
 
 
-# These are the public operations for which the target image implementation
-# creates a deferred pipeline node on a successful call.  The receipt sidecar
-# is deliberately more conservative than this list: operations with a
-# mode-/argument-dependent eager path are kept in ``_PIPELINE_MAYBE_OPS`` and
-# become ``indeterminate`` when a workflow has no receipt.  This keeps a
-# missing receipt visible instead of allowing a heuristic to erase a backend
-# proof obligation.
-_PIPELINE_ALWAYS_OPS = {
-    ("PIL.Image", "alpha_composite"),
-    ("PIL.Image", "blend"),
-    ("PIL.Image", "composite"),
-    ("PIL.Image", "eval"),
-    ("PIL.Image", "merge"),
-    ("PIL.Image.Image", "crop"),
-    ("PIL.Image.Image", "filter"),
-    ("PIL.Image.Image", "getchannel"),
-    ("PIL.Image.Image", "point"),
-    ("PIL.Image.Image", "reduce"),
-    ("PIL.Image.Image", "resize"),
-    ("PIL.Image.Image", "rotate"),
-    ("PIL.Image.Image", "transform"),
-    ("PIL.Image.Image", "transpose"),
-    ("PIL.ImageChops", "add"),
-    ("PIL.ImageChops", "add_modulo"),
-    ("PIL.ImageChops", "blend"),
-    ("PIL.ImageChops", "composite"),
-    ("PIL.ImageChops", "darker"),
-    ("PIL.ImageChops", "difference"),
-    ("PIL.ImageChops", "hard_light"),
-    ("PIL.ImageChops", "invert"),
-    ("PIL.ImageChops", "lighter"),
-    ("PIL.ImageChops", "logical_and"),
-    ("PIL.ImageChops", "logical_or"),
-    ("PIL.ImageChops", "logical_xor"),
-    ("PIL.ImageChops", "multiply"),
-    ("PIL.ImageChops", "offset"),
-    ("PIL.ImageChops", "overlay"),
-    ("PIL.ImageChops", "screen"),
-    ("PIL.ImageChops", "soft_light"),
-    ("PIL.ImageChops", "subtract"),
-    ("PIL.ImageChops", "subtract_modulo"),
-    ("PIL.ImageEnhance.Brightness", "enhance"),
-    ("PIL.ImageEnhance.Color", "enhance"),
-    ("PIL.ImageEnhance.Contrast", "enhance"),
-    ("PIL.ImageEnhance.Sharpness", "enhance"),
-    ("PIL.ImageFilter", "BLUR"),
-    ("PIL.ImageFilter", "BoxBlur"),
-    ("PIL.ImageFilter", "CONTOUR"),
-    ("PIL.ImageFilter", "DETAIL"),
-    ("PIL.ImageFilter", "EDGE_ENHANCE"),
-    ("PIL.ImageFilter", "EDGE_ENHANCE_MORE"),
-    ("PIL.ImageFilter", "EMBOSS"),
-    ("PIL.ImageFilter", "FIND_EDGES"),
-    ("PIL.ImageFilter", "GaussianBlur"),
-    ("PIL.ImageFilter", "Kernel"),
-    ("PIL.ImageFilter", "MaxFilter"),
-    ("PIL.ImageFilter", "MedianFilter"),
-    ("PIL.ImageFilter", "MinFilter"),
-    ("PIL.ImageFilter", "ModeFilter"),
-    ("PIL.ImageFilter", "RankFilter"),
-    ("PIL.ImageFilter", "SHARPEN"),
-    ("PIL.ImageFilter", "SMOOTH"),
-    ("PIL.ImageFilter", "SMOOTH_MORE"),
-    ("PIL.ImageFilter", "UnsharpMask"),
-    ("PIL.ImageOps", "autocontrast"),
-    ("PIL.ImageOps", "colorize"),
-    ("PIL.ImageOps", "contain"),
-    ("PIL.ImageOps", "cover"),
-    ("PIL.ImageOps", "crop"),
-    ("PIL.ImageOps", "equalize"),
-    ("PIL.ImageOps", "expand"),
-    ("PIL.ImageOps", "fit"),
-    ("PIL.ImageOps", "flip"),
-    ("PIL.ImageOps", "grayscale"),
-    ("PIL.ImageOps", "invert"),
-    ("PIL.ImageOps", "mirror"),
-    ("PIL.ImageOps", "pad"),
-    ("PIL.ImageOps", "posterize"),
-    ("PIL.ImageOps", "scale"),
-    ("PIL.ImageOps", "solarize"),
-}
-
-# ``PIL.ImageFilter`` entries above are public parameter constructors.  Their
+# ``PIL.ImageFilter`` entries are public parameter constructors. Their
 # ``__init__`` methods only validate/store filter arguments; the image's
-# ``filter`` call is what invokes the Rust pipeline.  Keep this derived set
-# explicit so a constructor that precedes a validation error cannot masquerade
-# as an earlier deferred image operation.
+# ``filter`` call is what invokes the Rust pipeline.
 _PIPELINE_FILTER_PARAMETER_OPS = {
     key for key in _PIPELINE_ALWAYS_OPS if key[0] == "PIL.ImageFilter"
-}
-
-# A successful call may be eager for a particular mode or argument.  If one
-# of these is the only possible pipeline operation, a no-receipt case is not
-# safe to call non-pipeline; classify it as indeterminate unless a scalar
-# storage mode proves the direct putpixel path.
-_PIPELINE_MAYBE_OPS = {
-    ("PIL.Image.Image", "apply_transparency"),
-    ("PIL.Image.Image", "convert"),
-    ("PIL.Image.Image", "paste"),
-    ("PIL.Image.Image", "putalpha"),
-    ("PIL.Image.Image", "putpixel"),
-    ("PIL.Image.Image", "remap_palette"),
-    ("PIL.Image.Image", "thumbnail"),
-    ("PIL.ImageOps", "exif_transpose"),
-}
-
-# Operations that return a value which can expose a pending image.  A
-# mutating operation such as putpixel/paste is not a terminal boundary by
-# itself; an observed tobytes/getdata/etc. step after it is.  Maybe-deferred
-# result operations stay in this set so a no-receipt convert/thumbnail path is
-# reported as an evidence gap rather than silently treated as non-pipeline.
-_PIPELINE_MUTATING_OPS = {
-    ("PIL.Image.Image", "apply_transparency"),
-    ("PIL.Image.Image", "paste"),
-    ("PIL.Image.Image", "putalpha"),
-    ("PIL.Image.Image", "putpixel"),
-    ("PIL.Image.Image", "remap_palette"),
-    ("PIL.Image.Image", "thumbnail"),
-}
-_PIPELINE_RESULT_OPS = _PIPELINE_ALWAYS_OPS | _PIPELINE_MAYBE_OPS
-_TERMINAL_OBSERVATION_OPS = {
-    "getbands",
-    "getbbox",
-    "getcolors",
-    "getdata",
-    "getextrema",
-    "get_flattened_data",
-    "getpixel",
-    "getprojection",
-    "histogram",
-    "load",
-    "save",
-    "tobitmap",
-    "tobytes",
-    "verify",
-    "entropy",
-    "extrema",
-    "count",
-    "sum",
-    "sum2",
-    "mean",
-    "median",
-    "rms",
-    "var",
-    "stddev",
 }
 
 
@@ -2475,6 +2351,19 @@ def classify_pipeline_case(
 
     def definitely_eager(step: dict[str, Any]) -> bool:
         key = (step.get("surface"), step.get("operation"))
+        if key == ("PIL.ImageDraw.ImageDraw", "line"):
+            # The public line wrapper accepts one flat coordinate pair and
+            # returns without queueing DrawLine when normalization yields
+            # fewer than two points. Keep this successful no-op out of the
+            # backend receipt denominator; non-degenerate line cases still
+            # require the selected backend at their observed output boundary.
+            points = _workflow_literal(step.get("arguments"), "xy")
+            if (
+                isinstance(points, (list, tuple))
+                and len(points) == 2
+                and all(isinstance(value, (int, float)) for value in points)
+            ):
+                return True
         if key in _PIPELINE_FILTER_PARAMETER_OPS:
             # Filter classes construct an eager descriptor.  Only applying the
             # descriptor to an image can create a deferred pipeline node.
@@ -2696,6 +2585,53 @@ def classify_pipeline_case(
     }
 
 
+def strict_backend_pipeline_proof_error(
+    side: str,
+    case: dict[str, Any],
+    receipts: list[dict[str, Any]],
+    result: dict[str, Any],
+) -> str | None:
+    """Reject a successful strict SIMD/GPU workflow without terminal proof."""
+
+    if (
+        side != "target"
+        or not STRICT_TARGET_BACKEND
+        or BENCHMARK_ADAPTER
+        or TARGET_BACKEND not in {"simd", "gpu"}
+        or result.get("status") != "completed"
+    ):
+        return None
+    gaps = workflow_pipeline_observation_gaps(case)
+    if gaps:
+        steps = ", ".join(step_id for step_id, _ in gaps[:5])
+        suffix = "…" if len(gaps) > 5 else ""
+        return (
+            f"strict {TARGET_BACKEND} parity has unobserved pipeline work "
+            f"at step(s): {steps}{suffix}"
+        )
+    classification = classify_pipeline_case(case, receipts, result=result)
+    if classification["status"] in {
+        "missing_receipt",
+        "partial_receipt",
+        "indeterminate",
+    }:
+        return (
+            f"strict {TARGET_BACKEND} parity has no terminal backend proof: "
+            f"{classification['reason']}"
+        )
+    return None
+
+
+def append_strict_execution_error(result: dict[str, Any], message: str) -> None:
+    """Turn a backend-proof gap into a case failure without changing pixels."""
+
+    result["status"] = "not_run"
+    errors = result.setdefault("execution_errors", [])
+    error = {"step_id": None, "error": public_error(RuntimeError(message))}
+    if error not in errors:
+        errors.append(error)
+
+
 def normalized_public_error(
     exc: BaseException, *, side: str, step: dict[str, Any], tempdir: Path
 ) -> dict[str, Any]:
@@ -2732,12 +2668,13 @@ def direct_cpu_execution_receipt(
     requested_backend: str,
     requested_profile: str = "",
 ) -> dict[str, Any] | None:
-    """Describe ImageDraw.text's direct CPU route in the untimed proof run."""
+    """Describe ImageDraw text's direct CPU route in the untimed proof run."""
 
+    operation = step.get("operation")
     if (
         side != "target"
         or step.get("surface") != "PIL.ImageDraw.ImageDraw"
-        or step.get("operation") != "text"
+        or operation not in {"text", "multiline_text"}
     ):
         return None
 
@@ -2746,12 +2683,12 @@ def direct_cpu_execution_receipt(
     fallback_reason = None
     if requested_profile == "parallel-cpu":
         fallback_reason = (
-            "PIL.ImageDraw.ImageDraw.text uses the serial direct CPU renderer; "
+            f"PIL.ImageDraw.ImageDraw.{operation} uses the serial direct CPU renderer; "
             "it does not execute the Parallel CPU strategy"
         )
     elif requested_backend != "cpu":
         fallback_reason = (
-            "PIL.ImageDraw.ImageDraw.text uses the direct CPU renderer while "
+            f"PIL.ImageDraw.ImageDraw.{operation} uses the direct CPU renderer while "
             f"{requested_backend} was requested"
         )
     return {
@@ -2786,10 +2723,18 @@ def strict_backend_fallback_error(
             f"{fallback_reason}"
         )
     if not isinstance(actual_backend, str):
+        if not receipt_has_pipeline_work(receipt):
+            # Public wrappers can leave Python-copy phase diagnostics without
+            # an executed pipeline operation. They are not backend receipts.
+            return None
         return (
             f"strict {TARGET_BACKEND} parity has no actual-backend receipt "
             "for this execution"
         )
+    # The runner verifies a singleton active backend in configure_target_backend.
+    # Pipeline telemetry's requested_backend is intentionally None when that
+    # backend was selected process-wide with enable_backend(); actual_backend
+    # and the no-fallback receipt are the execution proof for that route.
     if actual_backend.lower() != TARGET_BACKEND:
         return (
             f"strict {TARGET_BACKEND} parity expected native {TARGET_BACKEND} "
@@ -2922,10 +2867,7 @@ def run_case(
                         # an earlier deferred operation that was never
                         # observed at this workflow boundary.
                         terminal_receipt_index = None
-                elif not any(
-                    receipt_is_meaningful(record)
-                    for record in pipeline_execution_sink
-                ) and (direct_receipt := direct_cpu_execution_receipt(
+                elif (direct_receipt := direct_cpu_execution_receipt(
                     side,
                     step,
                     requested_backend=TARGET_BACKEND,
@@ -4734,6 +4676,20 @@ def run_resident_case(
             error["message"] = "ImageDraw." + error["message"][len("Draw.") :]
         return {"step_id": step["step_id"], "error": error}
 
+    def record_execution_receipt(
+        receipt: dict[str, Any], *, status: str, step_id: str
+    ) -> str | None:
+        receipt["status"] = status
+        receipt["step_id"] = step_id
+        if not receipt_has_pipeline_work(receipt):
+            receipt["pipeline_relevant"] = False
+        # Setup calls can enqueue work without executing it. The resident
+        # iteration marks receipts terminal only after its output boundary
+        # succeeds.
+        set_receipt_terminal_complete(receipt, False)
+        execution_sink.append(receipt)
+        return strict_backend_fallback_error(side, receipt)
+
     terminal_steps = [
         step
         for step in case["steps"]
@@ -4750,6 +4706,30 @@ def run_resident_case(
             bindings[step["step_id"]] = call_workflow_step(
                 side, step, opdef, bindings, assets
             )
+            if telemetry_api is not None:
+                receipt = telemetry_api.take_pipeline_telemetry()
+                if receipt is not None:
+                    strict_error = record_execution_receipt(
+                        receipt, status="completed", step_id=step["step_id"]
+                    )
+                elif (direct_receipt := direct_cpu_execution_receipt(
+                    side,
+                    step,
+                    requested_backend=TARGET_BACKEND,
+                    requested_profile=TARGET_PROFILE_OVERRIDE,
+                )) is not None:
+                    strict_error = record_execution_receipt(
+                        direct_receipt,
+                        status="completed",
+                        step_id=step["step_id"],
+                    )
+                else:
+                    strict_error = None
+                if strict_error is not None:
+                    setup_errors.append(
+                        normalized_error(step, RuntimeError(strict_error))
+                    )
+                    break
         except BaseException as exc:  # public setup failures are benchmark data
             setup_errors.append(normalized_error(step, exc))
             break
@@ -4758,12 +4738,11 @@ def run_resident_case(
         if telemetry_api is not None and setup_errors:
             receipt = telemetry_api.take_pipeline_telemetry()
             if receipt is not None:
-                receipt["status"] = "partial"
-                receipt["step_id"] = setup_errors[-1]["step_id"]
-                if not receipt_has_pipeline_work(receipt):
-                    receipt["pipeline_relevant"] = False
-                set_receipt_terminal_complete(receipt)
-                execution_sink.append(receipt)
+                record_execution_receipt(
+                    receipt,
+                    status="partial",
+                    step_id=setup_errors[-1]["step_id"],
+                )
         return {
             "case_id": case["case_id"],
             "status": "not_run",
@@ -4820,12 +4799,13 @@ def run_resident_case(
                 if telemetry_api is not None:
                     receipt = telemetry_api.take_pipeline_telemetry()
                     if receipt is not None:
-                        receipt["status"] = "partial"
-                        receipt["step_id"] = step["step_id"]
-                        if not receipt_has_pipeline_work(receipt):
-                            receipt["pipeline_relevant"] = False
-                        set_receipt_terminal_complete(receipt)
-                        execution_sink.append(receipt)
+                        strict_error = record_execution_receipt(
+                            receipt, status="partial", step_id=step["step_id"]
+                        )
+                        if strict_error is not None:
+                            execution_errors.append(
+                                normalized_error(step, RuntimeError(strict_error))
+                            )
                 continue
             elapsed_ns = time.perf_counter_ns() - started_ns
             timing_sink.append(elapsed_ns)
@@ -4844,20 +4824,42 @@ def run_resident_case(
             else:
                 receipt = telemetry_api.take_pipeline_telemetry()
                 if receipt is None:
-                    execution_sink.append(
-                        {
-                            "status": "cached" if observed_execution else "not_recorded",
-                            "terminal_complete": False,
-                        }
+                    direct_receipt = direct_cpu_execution_receipt(
+                        side,
+                        step,
+                        requested_backend=TARGET_BACKEND,
+                        requested_profile=TARGET_PROFILE_OVERRIDE,
                     )
+                    if direct_receipt is not None:
+                        strict_error = record_execution_receipt(
+                            direct_receipt,
+                            status="completed",
+                            step_id=step["step_id"],
+                        )
+                        if strict_error is not None:
+                            execution_errors.append(
+                                normalized_error(step, RuntimeError(strict_error))
+                            )
+                            iteration_failed = True
+                            break
+                    else:
+                        execution_sink.append(
+                            {
+                                "status": "cached" if observed_execution else "not_recorded",
+                                "terminal_complete": False,
+                            }
+                        )
                 else:
-                    receipt["status"] = "completed"
-                    receipt["step_id"] = step["step_id"]
-                    if not receipt_has_pipeline_work(receipt):
-                        receipt["pipeline_relevant"] = False
-                    set_receipt_terminal_complete(receipt)
-                    execution_sink.append(receipt)
+                    strict_error = record_execution_receipt(
+                        receipt, status="completed", step_id=step["step_id"]
+                    )
                     observed_execution = True
+                    if strict_error is not None:
+                        execution_errors.append(
+                            normalized_error(step, RuntimeError(strict_error))
+                        )
+                        iteration_failed = True
+                        break
         if not iteration_failed:
             for receipt in execution_sink[iteration_start:]:
                 if receipt.get("status") in {"completed", "cached"}:
@@ -4865,12 +4867,17 @@ def run_resident_case(
                         receipt, receipt_is_meaningful(receipt)
                     )
 
-    return {
+    result = {
         "case_id": case["case_id"],
         "status": "completed" if not execution_errors else "not_run",
         "observations": [],
         "execution_errors": execution_errors,
     }
+    if (proof_error := strict_backend_pipeline_proof_error(
+        side, case, execution_sink, result
+    )) is not None:
+        append_strict_execution_error(result, proof_error)
+    return result
 
 
 def run_side(args: argparse.Namespace) -> int:
@@ -4990,6 +4997,11 @@ def run_side(args: argparse.Namespace) -> int:
                                     not has_errors and receipt_is_meaningful(receipt),
                                 )
                                 execution_sink.append(receipt)
+                                strict_error = strict_backend_fallback_error(
+                                    args.side, receipt
+                                )
+                                if strict_error is not None:
+                                    append_strict_execution_error(result, strict_error)
                             elif not execution_sink:
                                 execution_sink.append(
                                     {
@@ -5005,6 +5017,10 @@ def run_side(args: argparse.Namespace) -> int:
                                 }
                             )
                 assert result is not None
+                if (proof_error := strict_backend_pipeline_proof_error(
+                    args.side, case, execution_sink, result
+                )) is not None:
+                    append_strict_execution_error(result, proof_error)
                 evidence_results[case["case_id"]] = result
                 public_result = dict(result)
                 public_result.pop("execution_errors", None)

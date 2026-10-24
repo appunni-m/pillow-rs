@@ -19,80 +19,48 @@ pub(super) fn try_convert_scalar_source(
     if !matches!(source_mode, "I" | "F") {
         return Ok(None);
     }
-    if target_mode == "L" {
-        let source = image.materialized_shared_for_ops()?;
-        let luma = if source_mode == "I" {
-            color::i_to_l(source.as_ref())
-        } else if !cfg!(feature = "parallel")
-            && crate::compute::Backend::pipeline_telemetry_enabled()
-            && matches!(
-                crate::compute::preferred_active_backend()?,
-                Some((crate::compute::Backend::Cpu, _))
-            )
-        {
-            crate::compute::execute_eager_cpu_image_operation(
-                "Convert",
-                source.as_ref(),
-                true,
-                || Ok(color::f_to_l(source.as_ref())),
-            )?
-        } else {
-            color::f_to_l(source.as_ref())
-        };
-        return Ok(Some(Image::from_dynamic(luma, None)));
-    }
-    if source_mode == "F" && target_mode == "I" {
-        let source = image.materialized_shared_for_ops()?;
-        let converted = eager_float_to_integer(source.as_ref())?;
-        return Ok(Some(Image::from_dynamic(
-            converted,
-            explicit_mode_for(target_mode),
-        )));
-    }
     if target_mode == "PA" {
         return Ok(None);
     }
-    let source = image.materialize()?;
-    let converted = match (source_mode, target_mode) {
-        ("I", "F") => color::i_to_f(&source),
-        ("I", "RGB") => color::i_to_rgb(&source),
-        ("F", "I") => color::f_to_i(&source),
-        ("F", "RGB") => color::f_to_rgb(&source),
-        _ => {
-            let luma = if source_mode == "I" {
-                color::i_to_l(&source)
-            } else {
-                color::f_to_l(&source)
+    with_eager_cpu_convert_receipt(
+        || {
+            if target_mode == "L" {
+                let source = image.materialized_shared_for_ops()?;
+                let luma = if source_mode == "I" {
+                    color::i_to_l(source.as_ref())
+                } else {
+                    color::f_to_l(source.as_ref())
+                };
+                return Ok(Some(Image::from_dynamic(luma, None)));
+            }
+            let source = image.materialize()?;
+            let converted = match (source_mode, target_mode) {
+                ("I", "F") => color::i_to_f(&source),
+                ("I", "RGB") => color::i_to_rgb(&source),
+                ("F", "I") => color::f_to_i(&source),
+                ("F", "RGB") => color::f_to_rgb(&source),
+                _ => {
+                    let luma = if source_mode == "I" {
+                        color::i_to_l(&source)
+                    } else {
+                        color::f_to_l(&source)
+                    };
+                    return Ok(Some(Image::from_dynamic(luma, None).convert(
+                        target_mode,
+                        matrix,
+                        dither,
+                        None,
+                        colors,
+                    )?));
+                }
             };
-            return Ok(Some(Image::from_dynamic(luma, None).convert(
-                target_mode,
-                matrix,
-                dither,
-                None,
-                colors,
-            )?));
-        }
-    };
-    Ok(Some(Image::from_dynamic(
-        converted,
-        explicit_mode_for(target_mode),
-    )))
-}
-
-fn eager_float_to_integer(source: &DynamicImage) -> Result<DynamicImage, PilError> {
-    if !cfg!(feature = "parallel")
-        && crate::compute::Backend::pipeline_telemetry_enabled()
-        && matches!(
-            crate::compute::preferred_active_backend()?,
-            Some((crate::compute::Backend::Cpu, _))
-        )
-    {
-        crate::compute::execute_eager_cpu_image_operation("Convert", source, true, || {
-            Ok(color::f_to_i(source))
-        })
-    } else {
-        Ok(color::f_to_i(source))
-    }
+            Ok(Some(Image::from_dynamic(
+                converted,
+                explicit_mode_for(target_mode),
+            )))
+        },
+        |result| result.as_ref().map_or(0, eager_convert_image_bytes),
+    )
 }
 
 pub(super) fn try_convert_between_nonstandard_modes(
@@ -141,7 +109,50 @@ pub(super) fn try_convert_to_palette_alpha(
         return Ok(None);
     }
     let dither = parse_dither(dither)?;
+    if matches!(source_mode, "I" | "F") {
+        return with_eager_cpu_convert_receipt(
+            || Ok(Some(convert_to_palette_alpha(image, source_mode, dither)?)),
+            |result| result.as_ref().map_or(0, eager_convert_image_bytes),
+        );
+    }
     Ok(Some(convert_to_palette_alpha(image, source_mode, dither)?))
+}
+
+/// Record scalar-mode conversions that execute directly on the host so a
+/// strict SIMD/GPU parity run cannot count an eager CPU path as backend work.
+/// The normal conversion path stays telemetry-free, and Parallel CPU keeps its
+/// own execution profile.
+fn with_eager_cpu_convert_receipt<T>(
+    execute: impl FnOnce() -> Result<T, PilError>,
+    output_bytes: impl FnOnce(&T) -> usize,
+) -> Result<T, PilError> {
+    if cfg!(feature = "parallel") || !crate::compute::Backend::pipeline_telemetry_enabled() {
+        return execute();
+    }
+    let requested_backend = crate::compute::preferred_active_backend()
+        .ok()
+        .flatten()
+        .map(|(backend, _)| backend);
+    let telemetry =
+        crate::compute::begin_eager_cpu_operation_telemetry("Convert", requested_backend);
+    match execute() {
+        Ok(result) => {
+            crate::compute::finish_eager_cpu_operation_telemetry(telemetry, output_bytes(&result));
+            Ok(result)
+        }
+        Err(error) => {
+            crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+            Err(error)
+        }
+    }
+}
+
+fn eager_convert_image_bytes(image: &Image) -> usize {
+    match image {
+        Image::Loaded(data) => data.image.as_bytes().len(),
+        Image::Paletted(data) => data.indices.as_raw().len(),
+        Image::Bytes { .. } | Image::Pipeline { .. } => 0,
+    }
 }
 
 pub(super) fn try_convert_luma16_to_cmyk(

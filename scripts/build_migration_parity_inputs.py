@@ -55,6 +55,15 @@ except ModuleNotFoundError:
     from scripts.migration_parity.quantize_inputs import quantize_boundary_parity_cases
 
 try:
+    from migration_parity.pipeline_contract import (
+        workflow_pipeline_observation_gaps,
+    )
+except ModuleNotFoundError:
+    from scripts.migration_parity.pipeline_contract import (
+        workflow_pipeline_observation_gaps,
+    )
+
+try:
     from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
 except ModuleNotFoundError:  # imported as ``scripts.build_migration_parity_inputs`` in tests
     from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
@@ -47918,90 +47927,59 @@ MAX_INPUT_JSON_BYTES = 90 * 1024 * 1024
 EXTERNAL_ASSET_MIN_BYTES = 64 * 1024
 
 
-def ensure_draw_bitmap_observes_destination(case: dict[str, Any]) -> None:
-    """Make bitmap parity compare the mutated destination image.
+def ensure_pipeline_execution_observations(case: dict[str, Any]) -> None:
+    """Observe mutated/result images so deferred work reaches a backend.
 
-    ``ImageDraw.bitmap`` returns ``None`` and queues work on the target. A case
-    that observes only that return value can pass without executing the draw
-    pipeline, so every bitmap case must also materialize the public image that
-    its Draw object mutates. The case remains backend-neutral; the runner
-    selects CPU, SIMD, or GPU for that same workflow.
+    Several public operations return ``None`` or metadata while queueing image
+    work. A parity case that observes only that return can pass without running
+    CPU, SIMD, or GPU work. Add backend-neutral ``tobytes`` observations for
+    each such image unless a later observed boundary depends on that image's
+    result through the workflow's binding graph.
     """
-
-    if (
-        case.get("surface") != "PIL.ImageDraw.ImageDraw"
-        or case.get("operation") != "bitmap"
-    ):
-        return
 
     steps = case.get("steps")
     if not isinstance(steps, list):
-        raise ValueError(f"{case.get('case_id')}: bitmap case has no workflow steps")
+        raise ValueError(f"{case.get('case_id')}: case has no workflow steps")
     step_by_id = {
         step.get("step_id"): step
         for step in steps
         if isinstance(step, dict) and isinstance(step.get("step_id"), str)
     }
-    bitmap_step = next(
-        (
-            step
-            for step in steps
-            if isinstance(step, dict)
-            and step.get("surface") == "PIL.ImageDraw.ImageDraw"
-            and step.get("operation") == "bitmap"
-        ),
-        None,
-    )
-    bitmap_step_index = steps.index(bitmap_step) if bitmap_step is not None else -1
-    draw_ref = bitmap_step.get("receiver") if isinstance(bitmap_step, dict) else None
-    draw_step = (
-        step_by_id.get(draw_ref.get("step_id"))
-        if isinstance(draw_ref, dict) and draw_ref.get("kind") == "binding"
-        else None
-    )
-    image_ref = (
-        draw_step.get("arguments", {}).get("im")
-        or draw_step.get("arguments", {}).get("image")
-        if isinstance(draw_step, dict)
-        else None
-    )
-    if (
-        not isinstance(image_ref, dict)
-        or image_ref.get("kind") != "binding"
-        or not isinstance(image_ref.get("step_id"), str)
-    ):
-        raise ValueError(
-            f"{case.get('case_id')}: cannot resolve the bitmap destination image"
-        )
 
-    image_id = image_ref["step_id"]
-    already_observed = any(
-        index > bitmap_step_index
-        and step.get("surface") == "PIL.Image.Image"
-        and step.get("operation") == "tobytes"
-        and step.get("receiver") == image_ref
-        for index, step in enumerate(steps)
-        if isinstance(step, dict)
-    )
-    if already_observed:
-        return
-
-    observation_id = "observe-bitmap-destination"
-    suffix = 2
-    while observation_id in step_by_id:
-        observation_id = f"observe-bitmap-destination-{suffix}"
-        suffix += 1
-    steps.append(
-        {
-            "step_id": observation_id,
-            "surface": "PIL.Image.Image",
-            "operation": "tobytes",
-            "receiver": binding(image_id),
-            "arguments": {},
-        }
-    )
     observations = case.setdefault("observations", [])
-    if observation_id not in observations:
+    if not isinstance(observations, list):
+        raise ValueError(f"{case.get('case_id')}: observations must be an array")
+    needed: dict[str, int] = {}
+    for operation_id, target_id in workflow_pipeline_observation_gaps(case):
+        if target_id is None:
+            raise ValueError(
+                f"{case.get('case_id')}: cannot resolve image mutated by "
+                f"workflow step {operation_id}"
+            )
+        operation_index = next(
+            index
+            for index, step in enumerate(steps)
+            if isinstance(step, dict) and step.get("step_id") == operation_id
+        )
+        needed[target_id] = max(operation_index, needed.get(target_id, -1))
+
+    existing_step_ids = set(step_by_id)
+    for target_id in sorted(needed, key=lambda item: needed[item]):
+        observation_id = f"observe-pipeline-output-{target_id}"
+        suffix = 2
+        while observation_id in existing_step_ids:
+            observation_id = f"observe-pipeline-output-{target_id}-{suffix}"
+            suffix += 1
+        steps.append(
+            {
+                "step_id": observation_id,
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding(target_id),
+                "arguments": {},
+            }
+        )
+        existing_step_ids.add(observation_id)
         observations.append(observation_id)
 
 
@@ -55322,7 +55300,7 @@ def build_inputs(
         counts["nuanced_parity_cases"] += added_nuanced_cases
 
         for case in parity_cases:
-            ensure_draw_bitmap_observes_destination(case)
+            ensure_pipeline_execution_observations(case)
 
         # Benchmark smoke aliases must share the same execution as an
         # existing parity workflow when their only difference is step labels.
