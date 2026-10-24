@@ -30,13 +30,12 @@ does not.
 ## Current operation/source and fixture snapshot — 2026-10-24
 
 The schema-10 crosswalk was regenerated at revision
-`d24971717e663b9bd01d39347e0dde1c85147760`. Its dirty marker reflects tracked
-in-progress changes and existing untracked workspace artifacts. It read 837
-source and fixture inputs with
-fingerprint
+`c18fee48be020689ed9da4ab61e9e6594b6dbbb1`. Its dirty marker reflects the
+in-progress audit and preserved untracked workspace artifacts. It read 837
+source and fixture inputs with fingerprint
 `7413a70a77005338df3eae9259284f26f938c53536513c16952ec3dddea1b2d4`. The
 ignored report `target/operation-source-crosswalk.json` has SHA-256
-`7c5d65fb17a72b4e23f75401167630d8da6067124d86c0ab7f1cc375491c5d9d`.
+`faa3c5fa5ab4ba68ee176c4fab47a3afb4a40e865d929a9bc0bdb9301a0b346f`.
 
 | Generated measure | Count |
 | --- | ---: |
@@ -109,11 +108,12 @@ are strict and reject fallback or missing terminal proof.
 `scripts/run_all_backend_tests.py::public_case_ids` also builds one shared
 ordinary-parity denominator and forwards an explicit case filter to CPU, SIMD,
 and the optional full GPU lane. Its separate GPU smoke gate always selects the
-fixed `PIL.ImageFilter.UnsharpMask.behavior.default` case, including when the
-full-lane filter omits it. The all-backend SIMD and full GPU lanes intentionally
-allow documented fallback and collect receipts; fallback or incomplete receipt
-coverage changes the result to `passed_with_backend_gaps` and returns a nonzero
-exit code. Setting `MIGRATION_GPU_FULL=0` runs only the smoke gate, reports the
+fixed `PIL.ImageFilter.GaussianBlur.nuanced.backend-noise-l-65x47-radius-2`
+case, including when the full-lane filter omits it. The all-backend SIMD and
+full GPU lanes intentionally allow documented fallback and collect receipts;
+fallback or incomplete receipt coverage changes the result to
+`passed_with_backend_gaps` and returns a nonzero exit code. Setting
+`MIGRATION_GPU_FULL=0` runs only the smoke gate, reports the
 full GPU lane as skipped, and returns nonzero. The JS/WASM runner separately
 excludes target-only fault contracts and
 native platform-viewer workflows at runner level; those exclusions do not alter
@@ -205,6 +205,24 @@ the integer and range validation. The generic input-only
 and contain no expected outputs. No fixture selection or expected result is
 special-cased by target or backend.
 
+The fixture-backed portions of the standalone font, getdata, and putdata
+parity routes were checked with one nine-case filter through
+`run_all_backend_tests.py`: `font_variant.behavior.default`,
+`getdata.nuanced.retained-view-mutation-and-thumbnail`, and seven packed or
+byte-oriented putdata cases spanning `1`, `L`, `LA`, `P`, `RGB`, and `RGBA`.
+CPU, strict SIMD, strict GPU, Node WASM, and browser WASM each passed 9/9 with
+case digest
+`bc7554d1e2e077ab8fe9f5a80fb4f23417bd2d73c8bb71ad6e5a061a6e32a24b`.
+Each native Python lane recorded eight terminal-complete pipeline receipts:
+CPU reported eight CPU executions, SIMD eight SIMD executions, and GPU eight
+GPU executions, all with no fallback reason. The font-variant case was
+classified not applicable because it has no deferred image pipeline. The GPU
+smoke case and filtered full GPU lane also passed. Artifacts are under
+`build/migration-parity/backend-bypass-audit-20261024/all-backends/`.
+These are shared-fixture cases only; the extra mutable font state, sequence
+callbacks, and custom sequence protocol probes in the standalone scripts
+remain outside the active fixture matrix and are not covered by this run.
+
 ## Standalone parity routes and bypass inventory — 2026-10-24
 
 The active fixture/runner path is `run_migration_parity.py`, with
@@ -219,7 +237,7 @@ fallback bug.
 | --- | --- | --- |
 | `scripts/test_chops_affine_parity.py` | **Repaired.** Selects active ImageChops fixture IDs and sends the identical case set to the standard Python runner for CPU, strict SIMD, and strict GPU, then Node and browser WASM runners. | Previously made direct `enable_backend()` calls and compared results without recording the actual backend. All five lanes now pass 22/22; SIMD/GPU receipts prove native execution for the eight pipeline-applicable cases. |
 | `scripts/run_all_backend_tests.py` | Multi-lane orchestrator launches CPU, SIMD, and GPU Python parity runs plus Node/browser WASM against one case filter. | It clears inherited profile/benchmark overrides. Case-filtered SIMD/GPU runs are strict; full-corpus runs record fallback gaps, and now return nonzero if backend proof is incomplete or full GPU parity is skipped. The nine-case Screen audit passed every lane with actual SIMD/GPU receipts. |
-| `scripts/test_grayscale_rgb_domain.py` | Custom exhaustive Pillow/target diagnostic enumerating all 16,777,216 RGB triples in 256 blocks. It uses `lock_target_image_pipeline`, strict backend settings, checks one native receipt per block, and compares exact output bytes. | Inputs and output comparisons bypass the active fixture matrix, though backend locking/receipts are strict. Keep it classified as supplemental exhaustive evidence, not fixture parity or benchmark evidence. It is manually invoked and was not rerun for this inventory. |
+| `scripts/test_grayscale_rgb_domain.py` | Custom exhaustive Pillow/target diagnostic enumerating all 16,777,216 RGB triples in 256 blocks. It uses `lock_target_image_pipeline`, strict backend settings, checks one native receipt per block, and compares exact output bytes. | Inputs and output comparisons bypass the active fixture matrix, though backend locking/receipts are strict. Keep it classified as supplemental exhaustive evidence, not fixture parity or benchmark evidence. On 2026-10-24, Pillow 12.2.0, CPU, SIMD, and GPU produced exact output; each target backend recorded 256 native receipts. SIMD reported 1,048,576 vector blocks with no scalar tails; GPU reported 256 dispatches. Artifacts are under `build/migration-parity/backend-bypass-audit-20261024/grayscale-rgb-domain/`. |
 | `scripts/test_font_variant_parity.py` | Isolated source and target subprocesses compare font creation, mutable source/path settings, variants, and rendered observations. | It uses a fixture font asset but owns the scenarios and result dictionary; it has no active parity case IDs, backend option, or execution receipts, so it proves only the default Python route. It is not wired to a Make target. |
 | `scripts/test_getdata_sequence_parity.py` | Inline Pillow/target probes compare indexes, slices, banded modes, palette snapshots, and errors. | It has no generated case IDs or backend option/receipt and proves only the default Python route. It is not wired to a Make target. |
 | `scripts/test_putdata_sequence_parity.py` | Inline live-Pillow probes exercise mutable callbacks, custom sequences, bytes subclasses, coercion order, and partial writes. | It has no generated case IDs or backend option/receipt and proves only the default Python route. Existing declarative sequence protocols cover ordinary values but cannot express the callback side effects exercised here. It is not wired to a Make target. |
