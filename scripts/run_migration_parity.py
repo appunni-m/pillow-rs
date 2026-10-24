@@ -173,10 +173,18 @@ def target_profile_for_backend(backend: str) -> str:
     return f"python-{backend}"
 
 
-def parity_attestation_context() -> dict[str, Any]:
-    """Return the untimed invocation context for a parity child."""
+def parity_attestation_context(
+    *, side: str, execution_output: str | None
+) -> dict[str, Any]:
+    """Return the context the parity child records for this invocation."""
 
-    return {"lifecycle": "warm", "boundary": None, "step_ids": [], "repeat": 1}
+    observes_execution = side == "target" and bool(execution_output)
+    return {
+        "lifecycle": "warm",
+        "boundary": "observed_steps" if observes_execution else None,
+        "step_ids": sorted(effective_timing_steps(None)) if observes_execution else [],
+        "repeat": 1,
+    }
 
 
 def parity_source_profile(implementation: str) -> str:
@@ -3435,6 +3443,11 @@ def _run_side_subprocess_batch(
     # caches out of that source tree so a later wheel build contains only
     # tracked package files.
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    overrides = dict(environment or {})
+    execution_output = overrides.get(
+        "MIGRATION_PARITY_EXECUTION_OUTPUT",
+        os.environ.get("MIGRATION_PARITY_EXECUTION_OUTPUT"),
+    )
     child_attestation_environment: dict[str, str] = {}
     if attestation is not None:
         profile = (
@@ -3447,11 +3460,12 @@ def _run_side_subprocess_batch(
             profile=profile,
             role="parity",
             cases=cases,
-            context=parity_attestation_context(),
+            context=parity_attestation_context(
+                side=side, execution_output=execution_output
+            ),
         )
     # The collector owns its unique receipt bindings; retain the existing
     # execution and shader overrides beside them.
-    overrides = dict(environment or {})
     overrides.update(child_attestation_environment)
     for key, value in overrides.items():
         if value is None:
