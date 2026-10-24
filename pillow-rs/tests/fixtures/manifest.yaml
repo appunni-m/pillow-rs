@@ -65,6 +65,14 @@ target_profiles:
   - pillow-rs/default
   - pillow-rs-py/parallel
   - pillow-rs/parallel
+- id: python-gpu-fault-contract
+  target_id: pillow-rs-python
+  backend: gpu
+  features:
+  - pillow-rs-py/default
+  - pillow-rs/default
+  - pillow-rs-py/test-api
+  - pillow-rs/test-api
 commands:
 - id: inventory
   argv:
@@ -171,7 +179,7 @@ commands:
 interfaces:
   parity:
     input_schema: migration-parity/parity-input@2
-    result_schema: migration-parity/parity-result@1
+    result_schema: migration-parity/parity-result@2
     command_id: parity
   coverage:
     input_schema: migration-parity/coverage-input@1
@@ -183,13 +191,15 @@ interfaces:
     command_id: benchmark
   aggregation:
     input_schemas:
-    - migration-parity/parity-result@1
+    - migration-parity/parity-result@2
     - migration-parity/coverage-result@1
     - migration-parity/benchmark-result@1
     result_schema: migration-parity/status-report@1
     command_id: aggregate
 input_index:
   parity:
+  - inputs/parity/pil.json
+  - inputs/parity/pil-gpubatchexecutor.json
   - inputs/parity/pil-image.json
   - inputs/parity/pil-image-image.json
   - inputs/parity/pil-imagechops.json
@@ -216,6 +226,8 @@ input_index:
   - inputs/parity/pil-imagestat.json
   - inputs/parity/pil-imagestat-stat.json
   coverage:
+  - inputs/coverage/pil.json
+  - inputs/coverage/pil-gpubatchexecutor.json
   - inputs/coverage/pil-image.json
   - inputs/coverage/pil-image-image.json
   - inputs/coverage/pil-imagechops.json
@@ -242,6 +254,8 @@ input_index:
   - inputs/coverage/pil-imagestat.json
   - inputs/coverage/pil-imagestat-stat.json
   benchmark:
+  - inputs/benchmark/pil.json
+  - inputs/benchmark/pil-gpubatchexecutor.json
   - inputs/benchmark/pil-image.json
   - inputs/benchmark/pil-image-image.json
   - inputs/benchmark/pil-imagechops.json
@@ -268,6 +282,16 @@ input_index:
   - inputs/benchmark/pil-imagestat.json
   - inputs/benchmark/pil-imagestat-stat.json
   - inputs/benchmark/pipeline-operations.json
+fault_points:
+- id: gpu_batch.admission.device_failure
+  target_profile: python-gpu-fault-contract
+  description: Make the next GPU batch admission observe a device failure.
+fault_contracts:
+- id: gpu_batch.admission.execution_error
+  operation: PIL.GpuBatchExecutor.submit
+  fault_point: gpu_batch.admission.device_failure
+  description: A device failure during batch admission raises the public Execution BatchError with its
+    stable admission metadata.
 coverage_components:
 - id: image-core
   target_profile: python-cpu
@@ -519,7 +543,208 @@ coverage_components:
     minimum_percent: 100
   - dimension: region
     minimum_percent: 100
+- id: gpu-batch
+  target_profile: python-cpu
+  paths:
+  - pillow-rs-py/python/PIL/__init__.py
+  - pillow-rs-py/python/pillow_rs/gpu_batch.py
+  - pillow-rs-py/src/gpu_batch.rs
+  - pillow-rs/src/compute/pool_gpu/stream.rs
+  dimensions:
+  - function
+  - line
+  - branch
+  - region
+  thresholds:
+  - dimension: function
+    minimum_percent: 100
+  - dimension: line
+    minimum_percent: 100
+  - dimension: branch
+    minimum_percent: 100
+  - dimension: region
+    minimum_percent: 100
 surfaces:
+- id: PIL
+  kind: namespace
+  source_path: PIL
+  storage_slug: pil
+  operations:
+  - id: GpuBatchExecutor
+    kind: type
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: null
+      path: PIL.GpuBatchExecutor
+      signature: GpuBatchExecutor(*, queue=True, gpu_bytes=536870912, host_bytes=268435456, max_jobs=64,
+        max_in_flight=4)
+      parameters:
+      - id: queue
+        style: keyword
+        value_types:
+        - any_json
+        - boolean
+        omission:
+          kind: literal
+          value: true
+      - id: gpu_bytes
+        style: keyword
+        value_types:
+        - any_json
+        - integer
+        omission:
+          kind: literal
+          value: 536870912
+      - id: host_bytes
+        style: keyword
+        value_types:
+        - any_json
+        - integer
+        omission:
+          kind: literal
+          value: 268435456
+      - id: max_jobs
+        style: keyword
+        value_types:
+        - any_json
+        - integer
+        omission:
+          kind: literal
+          value: 64
+      - id: max_in_flight
+        style: keyword
+        value_types:
+        - any_json
+        - integer
+        omission:
+          kind: literal
+          value: 4
+      result:
+        shape: handle
+        observations:
+        - path: value.type
+          value_types:
+          - string
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.gpu_batch.GpuBatchExecutor
+      signature: GpuBatchExecutor(*, queue=True, gpu_bytes=536870912, host_bytes=268435456, max_jobs=64,
+        max_in_flight=4)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.GpuBatchExecutor.behavior.default
+      dimension: success_path
+      description: Construct the public GPU batch executor on the GPU path.
+      lanes:
+      - fault_contract
+    parity:
+      applicability: not_applicable
+      reason: Pillow has no GPU batch executor equivalent.
+    coverage:
+      applicability: not_applicable
+      reason: This target-only API is verified by its generated fault contract.
+    benchmark:
+      applicability: not_applicable
+      reason: GPU batch admission fault injection is not a performance workload.
+    fault_contract:
+      applicability: required
+      target_profiles:
+      - python-gpu-fault-contract
+      contract_ids:
+      - gpu_batch.admission.execution_error
+- id: PIL.GpuBatchExecutor
+  kind: type
+  source_path: PIL.GpuBatchExecutor
+  storage_slug: pil-gpubatchexecutor
+  operations:
+  - id: submit
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: null
+      path: PIL.GpuBatchExecutor.submit
+      signature: submit(self, pipeline)
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      - id: pipeline
+        style: positional_or_keyword
+        value_types:
+        - image
+        omission:
+          kind: required
+      result:
+        shape: scalar
+        observations:
+        - path: value
+          value_types:
+          - integer
+          comparison:
+            kind: numeric
+            absolute_tolerance: 0
+            relative_tolerance: 0
+            nan_policy: forbidden
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: ignored
+            transforms: []
+            reason: Target-only fault contracts compare stable public fields, not message text.
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.gpu_batch.GpuBatchExecutor.submit
+      signature: submit(self, pipeline)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.GpuBatchExecutor.submit.error.device-failure-at-admission
+      dimension: error_path
+      description: Expose stable public GPU batch admission error metadata when the device fails during
+        submit.
+      lanes:
+      - fault_contract
+    parity:
+      applicability: not_applicable
+      reason: Pillow has no GPU batch executor equivalent.
+    coverage:
+      applicability: not_applicable
+      reason: This target-only API is verified by its generated fault contract.
+    benchmark:
+      applicability: not_applicable
+      reason: GPU batch admission fault injection is not a performance workload.
+    fault_contract:
+      applicability: required
+      target_profiles:
+      - python-gpu-fault-contract
+      contract_ids:
+      - gpu_batch.admission.execution_error
 - id: PIL.Image
   kind: namespace
   source_path: PIL.Image
@@ -621,6 +846,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -760,6 +988,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -911,6 +1142,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -1024,6 +1258,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -1128,6 +1365,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -1268,6 +1508,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -1385,6 +1628,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -1524,6 +1770,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -1710,6 +1959,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -1801,6 +2053,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -1929,6 +2184,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -2178,6 +2436,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -2440,6 +2701,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -2531,6 +2795,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -2674,6 +2941,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -2785,6 +3055,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -2896,6 +3169,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -3202,6 +3478,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -3317,6 +3596,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -3507,6 +3789,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -3649,6 +3934,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -3782,6 +4070,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -3932,6 +4223,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -4161,6 +4455,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -4232,6 +4529,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -4377,6 +4677,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -4468,6 +4771,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -4570,6 +4876,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -4681,6 +4990,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -4825,6 +5137,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -4978,6 +5293,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -5118,6 +5436,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -5243,6 +5564,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -5330,6 +5654,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -5447,6 +5774,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -5522,6 +5852,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -5631,6 +5964,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -5764,6 +6100,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -5875,6 +6214,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -5964,6 +6306,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -6033,6 +6378,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -6105,6 +6453,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -6258,6 +6609,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -6327,6 +6681,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -6439,6 +6796,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -6508,6 +6868,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -6727,6 +7090,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -6875,6 +7241,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -7006,6 +7375,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -7184,6 +7556,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -7300,6 +7675,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -7448,6 +7826,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -7623,6 +8004,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -7762,6 +8146,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -7881,6 +8268,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -8128,6 +8518,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -8382,6 +8775,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -8596,6 +8992,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -8725,6 +9124,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -8820,6 +9222,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -8889,6 +9294,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -8998,6 +9406,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -9118,6 +9529,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -9290,6 +9704,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -9390,6 +9807,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -9533,6 +9953,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -9606,6 +10029,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: not_applicable
       reason: Qt host integration requires an optional Qt binding and is outside the CPU/SIMD/GPU campaign.
@@ -9676,6 +10102,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: not_applicable
       reason: Qt host integration requires an optional Qt binding and is outside the CPU/SIMD/GPU campaign.
@@ -9878,6 +10307,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -10041,6 +10473,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -10140,6 +10575,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -10212,6 +10650,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -10361,6 +10802,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -10476,6 +10920,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -10592,6 +11039,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -10715,6 +11165,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -10824,6 +11277,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -10939,6 +11395,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -11054,6 +11513,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -11151,6 +11613,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -11266,6 +11731,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -11363,6 +11831,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -11478,6 +11949,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -11575,6 +12049,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -11672,6 +12149,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -11769,6 +12249,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -11884,6 +12367,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -12008,6 +12494,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -12111,6 +12600,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -12226,6 +12718,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -12343,6 +12838,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -12487,6 +12985,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -12602,6 +13103,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -12706,6 +13210,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -12781,6 +13288,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -12875,6 +13385,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -12938,6 +13451,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -13134,6 +13650,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -13295,6 +13814,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -13503,6 +14025,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -13700,6 +14225,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -13884,6 +14412,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -13959,6 +14490,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -14146,6 +14680,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -14470,6 +15007,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -14734,6 +15274,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -14942,6 +15485,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -15095,6 +15641,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -15279,6 +15828,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -15469,6 +16021,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -15669,6 +16224,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -15883,6 +16441,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -16005,6 +16566,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -16340,6 +16904,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -16603,6 +17170,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -16799,6 +17369,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -16909,6 +17482,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -17014,6 +17590,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -17119,6 +17698,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -17224,6 +17806,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -17314,6 +17899,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -17404,6 +17992,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -17494,6 +18085,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -17584,6 +18178,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -17688,6 +18285,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -17788,6 +18388,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -17875,6 +18478,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -18026,6 +18632,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -18113,6 +18722,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -18206,6 +18818,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -18293,6 +18908,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -18380,6 +18998,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -18467,6 +19088,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -18569,6 +19193,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -18711,6 +19338,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -18811,6 +19441,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -18911,6 +19544,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -19011,6 +19647,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -19111,6 +19750,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -19222,6 +19864,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -19339,6 +19984,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -19426,6 +20074,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -19513,6 +20164,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -19641,6 +20295,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -19715,6 +20372,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -19834,6 +20494,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -19960,6 +20623,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20096,6 +20762,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20159,6 +20828,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20219,6 +20891,9 @@ surfaces:
       - coverage
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20307,6 +20982,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20384,6 +21062,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20461,6 +21142,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20530,6 +21214,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20614,6 +21301,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20745,6 +21435,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20892,6 +21585,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -20961,6 +21657,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -21030,6 +21729,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -21199,6 +21901,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -21341,6 +22046,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -21539,6 +22247,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -21764,6 +22475,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -21833,6 +22547,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -21903,6 +22620,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -21985,6 +22705,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -22067,6 +22790,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -22181,6 +22907,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -22293,6 +23022,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -22415,6 +23147,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -22529,6 +23264,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -22640,6 +23378,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -22762,6 +23503,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -22930,6 +23674,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -23107,6 +23854,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -23239,6 +23989,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -23371,6 +24124,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -23487,6 +24243,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -23594,6 +24353,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -23711,6 +24473,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -23805,6 +24570,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -23938,6 +24706,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -24099,6 +24870,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -24202,6 +24976,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -24311,6 +25088,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -24416,6 +25196,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -24519,6 +25302,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -24686,6 +25472,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -24801,6 +25590,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -24932,6 +25724,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25053,6 +25848,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25151,6 +25949,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25243,6 +26044,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25361,6 +26165,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25448,6 +26255,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25549,6 +26359,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25636,6 +26449,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25729,6 +26545,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25803,6 +26622,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25876,6 +26698,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -25969,6 +26794,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26077,6 +26905,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26192,6 +27023,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26284,6 +27118,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26371,6 +27208,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26458,6 +27298,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26545,6 +27388,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26632,6 +27478,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26719,6 +27568,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26806,6 +27658,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26893,6 +27748,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:
@@ -26980,6 +27838,9 @@ surfaces:
       - benchmark
     parity:
       applicability: required
+    fault_contract:
+      applicability: not_applicable
+      reason: The operation has no deterministic target-only fault contract.
     coverage:
       applicability: required
       target_profiles:

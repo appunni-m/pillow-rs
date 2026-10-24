@@ -332,7 +332,10 @@ def merge_parity_attestations(
 
     if not backend_attestations:
         raise ValueError("no backend parity attestations to merge")
-    if result.get("schema") != "migration-parity/parity-result@1":
+    if result.get("schema") not in {
+        "migration-parity/parity-result@1",
+        "migration-parity/parity-result@2",
+    }:
         raise ValueError("merged execution attestation requires a parity report")
 
     manifest = result["identity"]["manifest"]
@@ -443,8 +446,12 @@ def validate_attestation(
     selection = document["selection"]
     if any(not isinstance(selection[key], list) for key in selection):
         raise ValueError("invalid selection list")
-    if result["schema"] == "migration-parity/parity-result@1":
-        expected = {(row["case_id"], row["target_profile"]) for row in result["comparisons"]}
+    if result["schema"] in {
+        "migration-parity/parity-result@1",
+        "migration-parity/parity-result@2",
+    }:
+        comparisons = result["comparisons"]
+        expected = {(row["case_id"], row["target_profile"]) for row in comparisons}
         if len(expected) != len(result["comparisons"]) or selection["workload_profiles"]:
             raise ValueError("invalid parity selection")
         selected = []
@@ -456,7 +463,17 @@ def validate_attestation(
         if len(selected) != len(set(selected)) or set(selected) != expected or not expected:
             raise ValueError("parity case/profile membership differs from report")
         required = {(case, "target", profile, "parity") for case, profile in expected}
-        source_cases = {case for case, _ in expected}
+        source_cases = {
+            row["case_id"]
+            for row in comparisons
+            if result["schema"].endswith("@1")
+            or row.get("verification") == "parity"
+        }
+        if result["schema"].endswith("@2") and any(
+            row.get("verification") not in {"parity", "fault_contract"}
+            for row in comparisons
+        ):
+            raise ValueError("invalid parity verification kind")
     elif result["schema"] == "migration-parity/benchmark-result@1":
         if selection["case_profiles"]:
             raise ValueError("invalid benchmark selection")
@@ -515,7 +532,10 @@ def validate_attestation(
                 observed.add(membership)
     if observed != required:
         raise ValueError("missing or extra case/profile child membership")
-    if source_cases and (
+    if result["schema"] in {
+        "migration-parity/parity-result@1",
+        "migration-parity/parity-result@2",
+    } and (
         set(source_observed) != source_cases
         or (
             not allow_duplicate_parity_sources

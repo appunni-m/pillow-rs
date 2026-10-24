@@ -16,7 +16,8 @@ enabled.
 | Build for application use | `make build` | Installs the replacement into the selected environment |
 | Build npm package | `make build-wasm-release` | Compiles the shared Node/browser WASM artifact |
 | One parity case | `make migration-parity-case CASE_ID=<id>` | Runs the selected input against source and target |
-| Same cases on CPU and SIMD | Set `MIGRATION_TARGET_BACKEND=cpu` or `simd` and run `make migration-parity-test` with the same `MIGRATION_PARITY_CASE_IDS` | The runner selects the backend; parity inputs and requirements are backend-neutral |
+| Same cases on CPU, SIMD, and GPU | Set `MIGRATION_TARGET_BACKEND=cpu`, `simd`, or `gpu` and run `make migration-parity-test` with the same `MIGRATION_PARITY_CASE_IDS` | The runner selects the backend; parity inputs and requirements are backend-neutral |
+| GPU batch admission fault contract | `make migration-parity-test-gpu-fault-contract` | Runs the generated target-only contract on GPU with the test-api build feature |
 | Aggregate backend parity | `MIGRATION_PARITY_OUTPUTS='build/migration-parity/cpu.json build/migration-parity/simd.json' make migration-parity-aggregate` | Joins each parity receipt to its recorded target profile; repeated result paths are supported |
 | Review repetitive cases | `make migration-parity-reduction MIGRATION_REDUCTION_ARGS='--candidates <pairs.json> --output-dir <directory>'` | Measures removal batches and binary restoration against separate CPU/SIMD/GPU baselines; see [coverage](COVERAGE.md#reduce-repetitive-parity-inputs) |
 | Complete runtime campaign | `make test` | Runs backend, Node/browser, and reverse Pillow coverage lanes |
@@ -61,6 +62,12 @@ IDs with `MIGRATION_TARGET_BACKEND=cpu`, `simd`, or another supported backend;
 the selected runner configuration is recorded in the result identity. The
 aggregator accepts repeated `--parity` artifacts through
 `MIGRATION_PARITY_OUTPUTS` and reports each result against the same case set.
+For strict GPU or SIMD parity, use the corresponding `migration-parity-test-*-strict`
+target with the same `MIGRATION_PARITY_CASE_IDS`; deferred workflows fail if the
+requested backend cannot be proven or a fallback is recorded. Set
+`MIGRATION_PARITY_EXECUTION_OUTPUT` to retain a sidecar with actual backend
+counts and fallback reasons. The GPU batch fault contract is a separate
+GPU-only API workflow and does not replace normal parity on GPU or SIMD.
 
 The root fontdone targets own a pinned checkout under `build/`. To contribute
 to fontdone itself, clone that repository separately and use its own Makefile.

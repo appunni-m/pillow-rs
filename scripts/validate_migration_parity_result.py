@@ -10,6 +10,11 @@ import re
 from pathlib import Path
 from typing import Any
 
+try:
+    from migration_parity.fault_contracts import FAULT_CONTRACTS
+except ModuleNotFoundError:
+    from scripts.migration_parity.fault_contracts import FAULT_CONTRACTS
+
 
 def exact(value: Any, keys: set[str], label: str) -> None:
     if not isinstance(value, dict) or set(value) != keys:
@@ -324,10 +329,21 @@ def execution_receipt(
 
 
 def workflow(value: dict[str, Any], label: str) -> None:
-    exact(value, {"case_id", "status", "observations"}, label)
+    required = {"case_id", "status", "observations"}
+    optional = {"reason", "fault_contract_observation"}
+    if not isinstance(value, dict) or not required <= set(value) or not set(value) <= required | optional:
+        raise ValueError(f"{label}: invalid workflow fields")
     string(value["case_id"], f"{label}.case_id")
-    if value["status"] not in {"completed", "not_run"}:
+    if value["status"] not in {"completed", "not_run", "not_applicable"}:
         raise ValueError(f"{label}.status: invalid workflow status")
+    if value["status"] == "not_applicable":
+        if "reason" not in value:
+            raise ValueError(f"{label}.reason: missing target-only reason")
+        string(value["reason"], f"{label}.reason")
+        if value["observations"]:
+            raise ValueError(f"{label}: not-applicable workflow cannot contain observations")
+    elif "reason" in value:
+        raise ValueError(f"{label}.reason: only not-applicable workflows carry a reason")
     if not isinstance(value["observations"], list):
         raise ValueError(f"{label}.observations: expected array")
     observation_ids: list[str] = []
@@ -349,6 +365,27 @@ def workflow(value: dict[str, Any], label: str) -> None:
         if observation["status"] == "not_run":
             string(observation["reason"], f"{prefix}.reason")
     unique(observation_ids, f"{label}.observations")
+    if "fault_contract_observation" in value:
+        observation = value["fault_contract_observation"]
+        if observation is None:
+            return
+        exact(
+            observation,
+            {"contract_id", "step_id", "observed"},
+            f"{label}.fault_contract_observation",
+        )
+        string(observation["contract_id"], f"{label}.fault_contract_observation.contract_id")
+        if observation["contract_id"] not in FAULT_CONTRACTS:
+            raise ValueError(f"{label}.fault_contract_observation: unknown contract")
+        string(observation["step_id"], f"{label}.fault_contract_observation.step_id")
+        contract = FAULT_CONTRACTS[observation["contract_id"]]
+        if observation["step_id"] != contract["step_id"]:
+            raise ValueError(f"{label}.fault_contract_observation.step_id: wrong public step")
+        exact(
+            observation["observed"],
+            set(contract["observed_fields"]),
+            f"{label}.fault_contract_observation.observed",
+        )
 
 
 def execution_evidence_summary(value: dict[str, Any], label: str) -> None:
@@ -443,40 +480,94 @@ def execution_evidence_summary(value: dict[str, Any], label: str) -> None:
 
 def parity(result: dict[str, Any]) -> None:
     exact(result, {"schema", "identity", "status", "summary", "comparisons", "infrastructure_errors"}, "parity")
-    if result["schema"] != "migration-parity/parity-result@1":
+    schema = result["schema"]
+    if schema not in {"migration-parity/parity-result@1", "migration-parity/parity-result@2"}:
         raise ValueError("parity.schema: unsupported schema")
     if result["status"] not in {"completed", "infrastructure_failed", "cancelled", "invalid"}:
         raise ValueError("parity.status: invalid artifact status")
     identity(result["identity"])
-    exact(result["summary"], {"selected", "executed", "passed", "failed", "not_run", "infrastructure_errors"}, "parity.summary")
-    for field in result["summary"]:
+    legacy_fields = {"selected", "executed", "passed", "failed", "not_run", "infrastructure_errors"}
+    v2_fields = legacy_fields | {"parity_cases", "fault_contracts"}
+    exact(result["summary"], legacy_fields if schema.endswith("@1") else v2_fields, "parity.summary")
+    for field in legacy_fields:
         non_negative_int(result["summary"][field], f"parity.summary.{field}")
+    if schema.endswith("@2"):
+        for label in ("parity_cases", "fault_contracts"):
+            counts = result["summary"][label]
+            exact(counts, {"selected", "executed", "passed", "failed", "not_run"}, f"parity.summary.{label}")
+            for field, value in counts.items():
+                non_negative_int(value, f"parity.summary.{label}.{field}")
+            if counts["passed"] + counts["failed"] + counts["not_run"] != counts["selected"]:
+                raise ValueError(f"parity.summary.{label}: selected cases are not partitioned")
+            if counts["executed"] > counts["selected"]:
+                raise ValueError(f"parity.summary.{label}: executed exceeds selected")
+        for field in ("selected", "executed", "passed", "failed", "not_run"):
+            if result["summary"][field] != sum(result["summary"][kind][field] for kind in ("parity_cases", "fault_contracts")):
+                raise ValueError(f"parity.summary.{field}: verification partitions disagree")
     if result["summary"]["executed"] != len(result["comparisons"]):
         raise ValueError("parity.summary.executed does not equal comparison count")
-    if result["status"] == "completed":
-        if result["summary"]["selected"] != result["summary"]["executed"]:
-            raise ValueError("completed parity must execute every selected case")
-        if result["summary"]["passed"] + result["summary"]["failed"] + result["summary"]["not_run"] != result["summary"]["executed"]:
-            raise ValueError("parity.summary: executed must equal passed plus failed plus not_run")
+    if schema.endswith("@1"):
+        if result["status"] == "completed":
+            if result["summary"]["selected"] != result["summary"]["executed"]:
+                raise ValueError("completed parity must execute every selected case")
+            if result["summary"]["passed"] + result["summary"]["failed"] + result["summary"]["not_run"] != result["summary"]["executed"]:
+                raise ValueError("parity.summary: executed must equal passed plus failed plus not_run")
+        else:
+            if result["summary"]["passed"] + result["summary"]["failed"] != result["summary"]["executed"]:
+                raise ValueError("incomplete parity must classify every executed comparison")
+            if result["summary"]["not_run"] != result["summary"]["selected"] - result["summary"]["executed"]:
+                raise ValueError("incomplete parity must classify every unexecuted case as not_run")
     else:
-        if result["summary"]["passed"] + result["summary"]["failed"] != result["summary"]["executed"]:
-            raise ValueError("incomplete parity must classify every executed comparison")
-        if result["summary"]["not_run"] != result["summary"]["selected"] - result["summary"]["executed"]:
-            raise ValueError("incomplete parity must classify every unexecuted case as not_run")
+        if result["summary"]["passed"] + result["summary"]["failed"] + result["summary"]["not_run"] != result["summary"]["selected"]:
+            raise ValueError("parity.summary: selected cases are not partitioned")
+        if result["status"] == "completed" and result["summary"]["selected"] != result["summary"]["executed"]:
+            raise ValueError("completed parity must execute every selected case")
     if result["summary"]["infrastructure_errors"] != len(result["infrastructure_errors"]):
         raise ValueError("parity.summary.infrastructure_errors does not equal error count")
     infrastructure_errors(result["infrastructure_errors"])
     comparison_ids: list[tuple[str, str]] = []
+    kind_counts = {"parity": 0, "fault_contract": 0}
+    kind_outcomes = {
+        kind: {"pass": 0, "fail": 0, "not_run": 0}
+        for kind in kind_counts
+    }
     for index, comparison in enumerate(result["comparisons"]):
         prefix = f"parity.comparisons[{index}]"
-        exact(comparison, {"case_id", "target_profile", "requirements", "source", "target", "outcome", "diffs"}, prefix)
+        base_fields = {"case_id", "target_profile", "requirements", "source", "target", "outcome", "diffs"}
+        if schema.endswith("@2"):
+            if not isinstance(comparison, dict) or comparison.get("verification") not in kind_counts:
+                raise ValueError(f"{prefix}.verification: invalid verification kind")
+            kind = comparison["verification"]
+            exact(
+                comparison,
+                base_fields | {"verification", "fault_contract_id"}
+                if kind == "fault_contract"
+                else base_fields | {"verification"},
+                prefix,
+            )
+            kind_counts[kind] += 1
+            if kind == "fault_contract":
+                string(comparison["fault_contract_id"], f"{prefix}.fault_contract_id")
+                if comparison["fault_contract_id"] not in FAULT_CONTRACTS:
+                    raise ValueError(f"{prefix}.fault_contract_id: unknown contract")
+        else:
+            exact(comparison, base_fields, prefix)
         string(comparison["case_id"], f"{prefix}.case_id")
         string(comparison["target_profile"], f"{prefix}.target_profile")
         requirements = id_array(comparison["requirements"], f"{prefix}.requirements")
         if comparison["outcome"] not in {"pass", "fail", "not_run"}:
             raise ValueError(f"{prefix}.outcome: invalid outcome")
+        if schema.endswith("@2"):
+            kind_outcomes[comparison["verification"]][comparison["outcome"]] += 1
         workflow(comparison["source"], f"{prefix}.source")
         workflow(comparison["target"], f"{prefix}.target")
+        if schema.endswith("@2") and comparison["verification"] == "fault_contract":
+            if comparison["source"]["status"] != "not_applicable":
+                raise ValueError(f"{prefix}: target-only fault contract must mark oracle N/A")
+            if "fault_contract_observation" not in comparison["target"]:
+                raise ValueError(f"{prefix}: missing runner-owned fault observation")
+        elif comparison["source"]["status"] == "not_applicable":
+            raise ValueError(f"{prefix}: parity case cannot mark its oracle N/A")
         if comparison["source"]["case_id"] != comparison["case_id"] or comparison["target"]["case_id"] != comparison["case_id"]:
             raise ValueError(f"{prefix}: workflow case IDs do not match comparison")
         comparison_ids.append((comparison["case_id"], comparison["target_profile"]))
@@ -487,6 +578,17 @@ def parity(result: dict[str, Any]) -> None:
             for field in ("step_id", "path", "kind", "message"):
                 string(diff[field], f"{prefix}.diffs[{diff_index}].{field}")
     unique(comparison_ids, "parity.comparisons")
+    if schema.endswith("@2"):
+        for label, kind in (("parity_cases", "parity"), ("fault_contracts", "fault_contract")):
+            counts = result["summary"][label]
+            if counts["executed"] != kind_counts[kind]:
+                raise ValueError(f"parity summary {label}.executed does not match rows")
+            for outcome in ("pass", "fail"):
+                if counts["passed" if outcome == "pass" else "failed"] != kind_outcomes[kind][outcome]:
+                    raise ValueError(f"parity summary {label} {outcome} count does not match rows")
+            expected_not_run = kind_outcomes[kind]["not_run"] + counts["selected"] - counts["executed"]
+            if counts["not_run"] != expected_not_run:
+                raise ValueError(f"parity summary {label}.not_run does not match rows and selection")
 
 
 def coverage_backend_executions(executions: Any, plans: list[dict[str, Any]], summary: dict[str, int]) -> None:

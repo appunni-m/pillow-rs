@@ -64,6 +64,11 @@ except ModuleNotFoundError:
     )
 
 try:
+    from migration_parity.gpu_batch_inputs import gpu_batch_fault_case
+except ModuleNotFoundError:
+    from scripts.migration_parity.gpu_batch_inputs import gpu_batch_fault_case
+
+try:
     from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
 except ModuleNotFoundError:  # imported as ``scripts.build_migration_parity_inputs`` in tests
     from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
@@ -55237,6 +55242,14 @@ def build_inputs(
                 existing_signatures.add(signature)
                 added_nuanced_cases += 1
 
+        if surface_id == "PIL.GpuBatchExecutor":
+            fault_case = gpu_batch_fault_case(operations)
+            parity_cases.append(fault_case)
+            for requirement_id in fault_case["covers"]:
+                if requirement_id in case_by_requirement:
+                    raise ValueError(f"requirement mapped twice: {requirement_id}")
+                case_by_requirement[requirement_id] = fault_case["case_id"]
+
         if surface_id == "PIL.Image.Image":
             # Keep the exact material RGBA GaussianBlur workflow in parity,
             # while leaving managed coverage selection unchanged.
@@ -55363,27 +55376,29 @@ def build_inputs(
         command_ids = []
         coverage_relative = f"inputs/coverage/{storage_slug}.json"
         coverage_path = output_root / coverage_relative
+        plans = (
+            [
+                {
+                    "plan_id": f"{storage_slug}.coverage-plan",
+                    "covers": coverage_requirements,
+                    "target_profile": TARGET_PROFILE,
+                    "selectors": {
+                        "parity_case_ids": selected_cases,
+                        "command_ids": command_ids,
+                    },
+                    "component_ids": component_ids,
+                    "command_id": "coverage",
+                }
+            ]
+            if coverage_requirements
+            else []
+        )
         write_json(
             coverage_path,
-            {
-                "schema": "migration-parity/coverage-input@1",
-                "plans": [
-                    {
-                        "plan_id": f"{storage_slug}.coverage-plan",
-                        "covers": coverage_requirements,
-                        "target_profile": TARGET_PROFILE,
-                        "selectors": {
-                            "parity_case_ids": selected_cases,
-                            "command_ids": command_ids,
-                        },
-                        "component_ids": component_ids,
-                        "command_id": "coverage",
-                    }
-                ],
-            },
+            {"schema": "migration-parity/coverage-input@1", "plans": plans},
         )
         generated["coverage"].add(coverage_relative)
-        counts["coverage_plans"] += 1
+        counts["coverage_plans"] += len(plans)
 
         workloads: list[dict[str, Any]] = []
         members: list[dict[str, Any]] = []

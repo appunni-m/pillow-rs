@@ -22,11 +22,15 @@ _PACKAGE_SUFFIXES = (".py", ".so", ".dylib", ".pyd", ".dll", ".bundle")
 _PARALLEL_FEATURES = frozenset(
     {"pillow-rs-py/parallel", "pillow-rs/parallel"}
 )
+_TEST_API_FEATURES = frozenset(
+    {"pillow-rs-py/test-api", "pillow-rs/test-api"}
+)
 _DEFAULT_FEATURES = frozenset({"pillow-rs-py/default", "pillow-rs/default"})
 _TARGET_PROFILE_BACKENDS = {
     "python-cpu": "cpu",
     "python-simd": "simd",
     "python-gpu": "gpu",
+    "python-gpu-fault-contract": "gpu",
     "python-parallel-cpu": "cpu",
 }
 _SOURCE_PROFILE_IMPLEMENTATIONS = {
@@ -34,7 +38,7 @@ _SOURCE_PROFILE_IMPLEMENTATIONS = {
     "pillow-simd": "Pillow-SIMD",
 }
 _BACKENDS = frozenset({"cpu", "simd", "gpu"})
-_TARGET_FEATURE_NAMES = _DEFAULT_FEATURES | _PARALLEL_FEATURES
+_TARGET_FEATURE_NAMES = _DEFAULT_FEATURES | _PARALLEL_FEATURES | _TEST_API_FEATURES
 
 
 class RuntimeIdentityError(RuntimeError):
@@ -596,6 +600,14 @@ def _target_backend_identity(
             raise RuntimeIdentityError("declared target features do not include both parallel features")
     elif declared_parallel:
         raise RuntimeIdentityError("serial runtime declares parallel target features")
+    test_api_profile = profile == "python-gpu-fault-contract"
+    declared_test_api = feature_set & _TEST_API_FEATURES
+    if (test_api_profile and declared_test_api != _TEST_API_FEATURES) or (
+        not test_api_profile and declared_test_api
+    ):
+        raise RuntimeIdentityError(
+            "declared test-api features do not match the GPU fault-contract profile"
+        )
 
     core_path = _module_file_path(core, core_name)
     if core_path is None:
@@ -934,6 +946,14 @@ def validate_runtime_identity(snapshot: dict[str, Any]) -> None:
             not parallel_enabled and declared_parallel
         ):
             raise RuntimeIdentityError("stable target features disagree with parallel state")
+        test_api_profile = profile == "python-gpu-fault-contract"
+        declared_test_api = set(features) & _TEST_API_FEATURES
+        if (test_api_profile and declared_test_api != _TEST_API_FEATURES) or (
+            not test_api_profile and declared_test_api
+        ):
+            raise RuntimeIdentityError(
+                "stable target test-api features disagree with profile"
+            )
         core = _exact_keys(
             target["selected_core"],
             {"module_name", "spec_name", "file", "mapping"},

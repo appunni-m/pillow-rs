@@ -155,7 +155,7 @@ class _JsonStreamReader:
                     return
 
     def comparison(self) -> dict[str, str]:
-        fields = {"case_id", "target_profile", "outcome"}
+        fields = {"case_id", "target_profile", "outcome", "verification"}
         row: dict[str, str] = {}
         self.expect("{")
         while True:
@@ -181,9 +181,12 @@ class _JsonStreamReader:
                 break
             else:
                 raise ValueError("invalid comparison object delimiter")
-        missing = fields - row.keys()
+        missing = (fields - {"verification"}) - row.keys()
         if missing:
             raise ValueError(f"comparison lacks required fields: {sorted(missing)}")
+        row.setdefault("verification", "parity")
+        if row["verification"] not in {"parity", "fault_contract"}:
+            raise ValueError("comparison has an invalid verification kind")
         return row
 
     def comparisons(self):
@@ -229,6 +232,8 @@ def read_parity_artifact(path: Path) -> tuple[str, dict[str, Any], dict[tuple[st
             elif key == "comparisons":
                 for row in reader.comparisons():
                     index = (row["case_id"], row["target_profile"])
+                    if row["verification"] == "fault_contract":
+                        continue
                     if index in outcomes:
                         raise ValueError(f"duplicate parity comparison: {index}")
                     outcomes[index] = row["outcome"]
@@ -401,10 +406,15 @@ def build_report(manifest_path: Path, result_path: Path | None, parity_path: Pat
     parity_identity = {}
     if parity_path:
         parity_schema, parity_identity, parity = read_parity_artifact(parity_path)
-        if parity_schema != "migration-parity/parity-result@1":
+        if parity_schema not in {
+            "migration-parity/parity-result@1",
+            "migration-parity/parity-result@2",
+        }:
             raise ValueError("unexpected parity schema")
         issues.extend(input_issues(parity_identity, manifest_path))
         for item in parity_identity.get("targets", []):
+            if item.get("target_profile") == "python-gpu-fault-contract":
+                continue
             if item != target_identities.get(item["target_profile"]):
                 issues.append(f"parity_target_identity_mismatch:{item['target_profile']}")
     recorded_inputs = {item["path"] for item in identity.get("inputs", [])}

@@ -3,7 +3,7 @@
 
 The manifest and input documents are specifications.  This module is the
 runtime boundary that turns those documents into independently executed
-source/target workflows and a strict ``migration-parity/parity-result@1``
+source/target workflows and a strict ``migration-parity/parity-result@2``
 artifact.  It deliberately does not read deprecated fixtures or expected
 outputs.
 
@@ -45,6 +45,7 @@ import yaml
 try:
     from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
     from validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
+    from migration_parity.fault_contracts import FAULT_CONTRACTS, FAULT_POINTS
     from migration_parity.display import (
         DISPLAY_PROTOCOLS,
         build_capture_viewer,
@@ -62,6 +63,7 @@ try:
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity`` in tests
     from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
     from scripts.validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
+    from scripts.migration_parity.fault_contracts import FAULT_CONTRACTS, FAULT_POINTS
     from scripts.migration_parity.display import (
         DISPLAY_PROTOCOLS,
         build_capture_viewer,
@@ -103,6 +105,8 @@ TARGET_PROFILE_OVERRIDE = os.environ.get("MIGRATION_TARGET_PROFILE", "").strip()
 TARGET_FEATURES = ["pillow-rs-py/default", "pillow-rs/default"]
 if TARGET_PROFILE_OVERRIDE == "parallel-cpu":
     TARGET_FEATURES.extend(["pillow-rs-py/parallel", "pillow-rs/parallel"])
+elif TARGET_PROFILE_OVERRIDE == "gpu-fault-contract":
+    TARGET_FEATURES.extend(["pillow-rs-py/test-api", "pillow-rs/test-api"])
 STRICT_TARGET_BACKEND = os.environ.get(
     "MIGRATION_STRICT_TARGET_BACKEND", "0"
 ).strip().lower() in {"1", "true", "yes"}
@@ -165,11 +169,14 @@ def target_profile_for_backend(backend: str) -> str:
     if backend not in {"cpu", "simd", "gpu"}:
         raise ValueError(f"unsupported target backend: {backend}")
     if TARGET_PROFILE_OVERRIDE:
-        if TARGET_PROFILE_OVERRIDE != "parallel-cpu" or backend != "cpu":
-            raise ValueError(
-                "MIGRATION_TARGET_PROFILE=parallel-cpu only supports the CPU backend"
-            )
-        return "python-parallel-cpu"
+        if TARGET_PROFILE_OVERRIDE == "parallel-cpu" and backend == "cpu":
+            return "python-parallel-cpu"
+        if TARGET_PROFILE_OVERRIDE == "gpu-fault-contract" and backend == "gpu":
+            return "python-gpu-fault-contract"
+        raise ValueError(
+            f"MIGRATION_TARGET_PROFILE={TARGET_PROFILE_OVERRIDE} "
+            f"does not support the {backend} backend"
+        )
     return f"python-{backend}"
 
 
@@ -678,6 +685,7 @@ class AssetStore:
 
 
 SOURCE_MODULES = {
+    "PIL": "PIL",
     "PIL.Image": "PIL.Image",
     "PIL.ImageChops": "PIL.ImageChops",
     "PIL.ImageColor": "PIL.ImageColor",
@@ -697,6 +705,7 @@ TARGET_MODULES = {
     # ``_run_side_subprocess_batch`` gives only the target process the
     # checkout's ``python/`` path, so these imports cannot resolve to the
     # target while the Pillow oracle is running.
+    "PIL": "PIL",
     "PIL.Image": "PIL.Image",
     "PIL.ImageChops": "PIL.ImageChops",
     "PIL.ImageColor": "PIL.ImageColor",
@@ -712,6 +721,7 @@ TARGET_MODULES = {
 }
 
 TARGET_TYPES = {
+    "PIL.GpuBatchExecutor": ("pillow_rs.gpu_batch", "GpuBatchExecutor"),
     "PIL.Image.Image": ("PIL.Image", "Image"),
     "PIL.ImageDraw.ImageDraw": ("PIL.ImageDraw", "Draw"),
     "PIL.ImageEnhance.Brightness": ("PIL.ImageEnhance", "Brightness"),
@@ -2606,6 +2616,7 @@ def strict_backend_pipeline_proof_error(
         or not STRICT_TARGET_BACKEND
         or BENCHMARK_ADAPTER
         or TARGET_BACKEND not in {"simd", "gpu"}
+        or case.get("verification") == "fault-contract"
         or result.get("status") != "completed"
     ):
         return None
@@ -2665,6 +2676,44 @@ def _isolate_display_workflow(function: Any) -> Any:
         case = args[1] if len(args) > 1 else kwargs["case"]
         with isolated_viewer_registry(side, case, import_surface):
             return function(*args, **kwargs)
+
+    return wrapped
+
+
+def _arm_fault_contract_workflow(function: Any) -> Any:
+    """Keep deterministic target faults in the same public workflow runner."""
+
+    @wraps(function)
+    def wrapped(side: str, case: dict[str, Any], *args: Any, **kwargs: Any) -> Any:
+        if case.get("verification", "parity") != "fault-contract":
+            return function(side, case, *args, **kwargs)
+        if side == "source":
+            return {
+                "case_id": case["case_id"],
+                "status": "not_applicable",
+                "observations": [],
+                "reason": "The fault contract is target-only; Pillow has no GPU batch API.",
+            }
+        fault_point = case["fault"]["point"]
+        profile = target_profile_for_backend(TARGET_BACKEND)
+        allowed = {
+            item["id"]: item["target_profile"] for item in FAULT_POINTS
+        }
+        if allowed.get(fault_point) != profile:
+            raise RuntimeError(
+                f"fault point {fault_point!r} requires profile "
+                f"{allowed.get(fault_point)!r}, selected {profile!r}"
+            )
+        test_api = importlib.import_module("pillow_rs._core")
+        arm = getattr(test_api, "_arm_migration_test_fault", None)
+        clear = getattr(test_api, "_clear_migration_test_fault", None)
+        if not callable(arm) or not callable(clear):
+            raise RuntimeError("target extension was built without the migration test-api")
+        arm(fault_point)
+        try:
+            return function(side, case, *args, **kwargs)
+        finally:
+            clear()
 
     return wrapped
 
@@ -2751,6 +2800,7 @@ def strict_backend_fallback_error(
     return None
 
 
+@_arm_fault_contract_workflow
 @_isolate_display_workflow
 def run_case(
     side: str,
@@ -2780,6 +2830,7 @@ def run_case(
     blocked_reason: str | None = None
     terminal_receipt_index: int | None = None
     direct_execution_receipt_index: int | None = None
+    fault_contract_observation: dict[str, Any] | None = None
 
     def append_execution_receipt(
         receipt: dict[str, Any], *, status: str, step_id: str
@@ -2966,6 +3017,21 @@ def run_case(
             error = normalized_public_error(
                 exc, side=side, step=step, tempdir=tempdir
             )
+            if (
+                side == "target"
+                and case.get("verification") == "fault-contract"
+                and step_id
+                == FAULT_CONTRACTS[case["fault"]["contract"]]["step_id"]
+            ):
+                contract = FAULT_CONTRACTS[case["fault"]["contract"]]
+                fault_contract_observation = {
+                    "contract_id": case["fault"]["contract"],
+                    "step_id": step_id,
+                    "observed": {
+                        field: json_safe(getattr(exc, field, None))
+                        for field in contract["observed_fields"]
+                    },
+                }
             step_results[step_id] = {
                 "step_id": step_id,
                 "status": "error",
@@ -3107,6 +3173,11 @@ def run_case(
             "observations": [],
             "execution_errors": execution_errors,
             "phase_totals_ns": phase_totals,
+            **(
+                {"fault_contract_observation": fault_contract_observation}
+                if case.get("verification") == "fault-contract"
+                else {}
+            ),
         }
 
     observations: list[dict[str, Any]] = []
@@ -3224,10 +3295,14 @@ def run_case(
         "case_id": case["case_id"],
         "status": "completed",
         "observations": observations,
-        # This field is consumed only by the target-side receipt evidence
-        # writer.  ``run_side`` strips it from the public parity envelope so
-        # the stable parity-result schema remains unchanged.
+        # This private diagnostic is consumed by the target-side receipt
+        # evidence writer; ``run_side`` strips it from public observations.
         "execution_errors": execution_errors,
+        **(
+            {"fault_contract_observation": fault_contract_observation}
+            if case.get("verification") == "fault-contract"
+            else {}
+        ),
     }
 
 
@@ -3320,6 +3395,41 @@ def build_operation_index(manifest: dict[str, Any]) -> dict[tuple[str, str], dic
     }
 
 
+def select_cases_for_profile(
+    cases: list[dict[str, Any]],
+    case_inputs: dict[str, str],
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+    *,
+    profile: str,
+    explicitly_selected: set[str],
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Route shared cases by operation applicability and runner profile."""
+
+    selected: list[dict[str, Any]] = []
+    for case in cases:
+        if case.get("verification", "parity") != "fault-contract":
+            if profile != "python-gpu-fault-contract":
+                selected.append(case)
+            elif case["case_id"] in explicitly_selected:
+                raise ValueError(
+                    f"{case['case_id']} is an ordinary parity case and cannot run "
+                    "under the GPU fault-contract profile"
+                )
+            continue
+        operation = operation_index[(case["surface"], case["operation"])]
+        supported_profiles = operation["fault_contract"]["target_profiles"]
+        if profile in supported_profiles:
+            selected.append(case)
+        elif case["case_id"] in explicitly_selected:
+            raise ValueError(
+                f"{case['case_id']} requires one of fault-contract profiles "
+                f"{supported_profiles}, selected {profile}"
+            )
+    return selected, {
+        case["case_id"]: case_inputs[case["case_id"]] for case in selected
+    }
+
+
 def configure_target_backend() -> dict[str, Any]:
     """Select one backend for a target-only parity or coverage process.
 
@@ -3332,12 +3442,27 @@ def configure_target_backend() -> dict[str, Any]:
     target = importlib.import_module("pillow_rs")
     parallel_enabled = bool(target.parallel_feature_enabled())
     wants_parallel_cpu = TARGET_PROFILE_OVERRIDE == "parallel-cpu"
+    wants_gpu_fault_contract = TARGET_PROFILE_OVERRIDE == "gpu-fault-contract"
     if parallel_enabled != wants_parallel_cpu:
         expected = "parallel-cpu" if parallel_enabled else "default serial CPU"
         raise RuntimeError(
             f"target feature profile mismatch: expected {expected}; "
             "build with the matching Make target and MIGRATION_TARGET_PROFILE"
         )
+    if wants_gpu_fault_contract:
+        if TARGET_BACKEND != "gpu":
+            raise RuntimeError("the GPU fault-contract profile requires the GPU backend")
+        test_api = importlib.import_module("pillow_rs._core")
+        if not all(
+            callable(getattr(test_api, name, None))
+            for name in (
+                "_arm_migration_test_fault",
+                "_clear_migration_test_fault",
+            )
+        ):
+            raise RuntimeError(
+                "GPU fault-contract profile requires a pillow-rs-py test-api build"
+            )
     available = {str(name).lower() for name in target.available_backends()}
     if TARGET_BACKEND not in available:
         raise RuntimeError(
@@ -3875,6 +4000,70 @@ def compare_case(
     target: dict[str, Any],
     operation_index: dict[tuple[str, str], dict[str, Any]],
 ) -> tuple[str, list[dict[str, Any]]]:
+    if case.get("verification") == "fault-contract":
+        contract_id = case["fault"]["contract"]
+        contract = FAULT_CONTRACTS[contract_id]
+        observations = {
+            item["step_id"]: item for item in target.get("observations", [])
+        }
+        diffs: list[dict[str, Any]] = []
+        for step_id in contract["required_steps"]:
+            observation = observations.get(step_id)
+            expected_status = "error" if step_id == contract["step_id"] else "ok"
+            actual_status = None if observation is None else observation["status"]
+            if actual_status != expected_status:
+                diffs.append(
+                    _diff(
+                        f"{step_id}.status",
+                        "fault_contract_step_mismatch",
+                        expected_status,
+                        actual_status,
+                        "target-only fault workflow did not reach the declared public step",
+                    )
+                )
+        actual_contract = target.get("fault_contract_observation")
+        if not isinstance(actual_contract, dict):
+            diffs.append(
+                _diff(
+                    "fault_contract_observation",
+                    "fault_contract_missing",
+                    contract_id,
+                    None,
+                    "runner did not observe the public fault contract",
+                )
+            )
+        elif (
+            actual_contract.get("contract_id") != contract_id
+            or actual_contract.get("step_id") != contract["step_id"]
+        ):
+            diffs.append(
+                _diff(
+                    "fault_contract_observation.identity",
+                    "fault_contract_identity_mismatch",
+                    {"contract_id": contract_id, "step_id": contract["step_id"]},
+                    {
+                        "contract_id": actual_contract.get("contract_id"),
+                        "step_id": actual_contract.get("step_id"),
+                    },
+                    "runner observed a different fault contract",
+                )
+            )
+        else:
+            observed_fields = actual_contract.get("observed", {})
+            for field in contract["observed_fields"]:
+                expected = contract["expected"][field]
+                actual = observed_fields.get(field)
+                if actual != expected:
+                    diffs.append(
+                        _diff(
+                            f"{contract['step_id']}.fault.{field}",
+                            "fault_contract_field_mismatch",
+                            expected,
+                            actual,
+                            "stable public fault metadata differs",
+                        )
+                    )
+        return ("pass" if not diffs else "fail"), diffs
     if source["status"] != target["status"]:
         return "fail", [_diff("status", "status_mismatch", source["status"], target["status"], "workflow status mismatch")]
     source_obs = {item["step_id"]: item for item in source["observations"]}
@@ -4004,6 +4193,75 @@ def git_dirty() -> bool:
     return True if status is None else bool(status)
 
 
+def verification_kind(case: dict[str, Any]) -> str:
+    return (
+        "fault_contract"
+        if case.get("verification", "parity") == "fault-contract"
+        else "parity"
+    )
+
+
+def not_applicable_source_result(case: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "case_id": case["case_id"],
+        "status": "not_applicable",
+        "observations": [],
+        "reason": "The fault contract is target-only; Pillow has no GPU batch API.",
+    }
+
+
+def parity_summary(
+    cases: list[dict[str, Any]],
+    outcomes: dict[str, str],
+    infrastructure_error_count: int,
+) -> dict[str, Any]:
+    per_kind: dict[str, dict[str, int]] = {}
+    for kind in ("parity", "fault_contract"):
+        members = [case for case in cases if verification_kind(case) == kind]
+        member_outcomes = [outcomes[case["case_id"]] for case in members if case["case_id"] in outcomes]
+        per_kind[kind] = {
+            "selected": len(members),
+            "executed": len(member_outcomes),
+            "passed": member_outcomes.count("pass"),
+            "failed": member_outcomes.count("fail"),
+            "not_run": member_outcomes.count("not_run")
+            + len(members)
+            - len(member_outcomes),
+        }
+    totals = {
+        field: sum(item[field] for item in per_kind.values())
+        for field in ("selected", "executed", "passed", "failed", "not_run")
+    }
+    return {
+        **totals,
+        "infrastructure_errors": infrastructure_error_count,
+        "parity_cases": per_kind["parity"],
+        "fault_contracts": per_kind["fault_contract"],
+    }
+
+
+def comparison_record(
+    case: dict[str, Any],
+    source: dict[str, Any],
+    target: dict[str, Any],
+    outcome: str,
+    diffs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    record = {
+        "case_id": case["case_id"],
+        "target_profile": target_profile_for_backend(TARGET_BACKEND),
+        "requirements": case.get("covers", []),
+        "verification": verification_kind(case),
+        "source": source,
+        "target": target,
+        "outcome": outcome,
+        "diffs": diffs,
+    }
+    if case.get("verification") == "fault-contract":
+        record["fault_contract_id"] = case["fault"]["contract"]
+    return record
+
+
 def run_orchestrator(args: argparse.Namespace) -> int:
     attestation_path = getattr(args, "attestation_output", None)
     producer_output = getattr(args, "producer_attestation_output", None)
@@ -4019,12 +4277,19 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     manifest = load_manifest(manifest_path)
     case_ids = set(args.case_id or [])
     cases, case_inputs = load_cases(manifest, case_ids=case_ids or None, surface=args.surface)
+    operation_index = build_operation_index(manifest)
+    cases, case_inputs = select_cases_for_profile(
+        cases,
+        case_inputs,
+        operation_index,
+        profile=target_profile_for_backend(TARGET_BACKEND),
+        explicitly_selected=case_ids,
+    )
     if args.limit is not None:
         cases = cases[: args.limit]
         case_inputs = {case["case_id"]: case_inputs[case["case_id"]] for case in cases}
     if not cases:
         raise ValueError("no active parity cases selected")
-    operation_index = build_operation_index(manifest)
     target_timeout = effective_adapter_timeout(args.timeout)
     batch_size = parity_batch_size(len(cases))
     sidecar_requested = bool(
@@ -4061,19 +4326,30 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         target_dirty=git_dirty(),
     )
     started = now_rfc3339()
+    source_cases = [
+        case for case in cases if verification_kind(case) == "parity"
+    ]
+    source_needed = bool(source_cases)
     try:
         # The adapters are already isolated processes with independent
         # temporary directories. Keep the historical concurrent path for
         # developer runs, but allow CI to serialize the two large envelopes so
         # their child and parent representations never peak simultaneously.
         if os.environ.get("MIGRATION_PARITY_SERIAL") == "1":
-            source_handshake, source_results = run_side_subprocess(
-                "source",
-                manifest_path,
-                cases,
-                args.timeout,
-                **({"attestation": attestation} if attestation is not None else {}),
-            )
+            if source_needed:
+                source_handshake, source_results = run_side_subprocess(
+                    "source",
+                    manifest_path,
+                    source_cases,
+                    args.timeout,
+                    **({"attestation": attestation} if attestation is not None else {}),
+                )
+            else:
+                source_handshake = None
+                source_results = {
+                    case["case_id"]: not_applicable_source_result(case)
+                    for case in cases
+                }
             target_handshake, target_results = run_side_subprocess(
                 "target",
                 manifest_path,
@@ -4083,13 +4359,17 @@ def run_orchestrator(args: argparse.Namespace) -> int:
             )
         else:
             with ThreadPoolExecutor(max_workers=2, thread_name_prefix="parity-side") as executor:
-                source_future = executor.submit(
-                    run_side_subprocess,
-                    "source",
-                    manifest_path,
-                    cases,
-                    args.timeout,
-                    **({"attestation": attestation} if attestation is not None else {}),
+                source_future = (
+                    executor.submit(
+                        run_side_subprocess,
+                        "source",
+                        manifest_path,
+                        source_cases,
+                        args.timeout,
+                        **({"attestation": attestation} if attestation is not None else {}),
+                    )
+                    if source_needed
+                    else None
                 )
                 target_future = executor.submit(
                     run_side_subprocess,
@@ -4099,14 +4379,22 @@ def run_orchestrator(args: argparse.Namespace) -> int:
                     target_timeout,
                     **({"attestation": attestation} if attestation is not None else {}),
                 )
-                source_handshake, source_results = source_future.result()
+                if source_future is not None:
+                    source_handshake, source_results = source_future.result()
+                else:
+                    source_handshake = None
+                    source_results = {
+                        case["case_id"]: not_applicable_source_result(case)
+                        for case in cases
+                    }
                 target_handshake, target_results = target_future.result()
     except RuntimeError as exc:
+        summary = parity_summary(cases, {}, 1)
         result = {
-            "schema": "migration-parity/parity-result@1",
+            "schema": "migration-parity/parity-result@2",
             "identity": identity,
             "status": "infrastructure_failed",
-            "summary": {"selected": len(cases), "executed": 0, "passed": 0, "failed": 0, "not_run": len(cases), "infrastructure_errors": 1},
+            "summary": summary,
             "comparisons": [],
             "infrastructure_errors": [{"scope": "runner", "id": None, "kind": "adapter_failure", "message": str(exc)}],
         }
@@ -4120,28 +4408,34 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         )
         print(json.dumps(result["summary"], sort_keys=True))
         return 2
-    if source_handshake.get("version") != ORACLE_VERSION:
+    for case in cases:
+        if verification_kind(case) == "fault_contract":
+            source_results[case["case_id"]] = not_applicable_source_result(case)
+    if source_handshake is not None and source_handshake.get("version") != ORACLE_VERSION:
         raise RuntimeError(
             f"oracle identity handshake did not pin {ORACLE_NAME} {ORACLE_VERSION}"
         )
     comparisons: list[dict[str, Any]] = []
-    passed = failed = not_run = 0
+    outcome_by_case: dict[str, str] = {}
     for case in cases:
         outcome, diffs = compare_case(case, source_results[case["case_id"]], target_results[case["case_id"]], operation_index)
-        if outcome == "pass":
-            passed += 1
-        elif outcome == "fail":
-            failed += 1
-        else:
-            not_run += 1
-        comparisons.append({"case_id": case["case_id"], "target_profile": target_profile_for_backend(TARGET_BACKEND), "requirements": case.get("covers", []), "source": source_results[case["case_id"]], "target": target_results[case["case_id"]], "outcome": outcome, "diffs": diffs})
+        outcome_by_case[case["case_id"]] = outcome
+        comparisons.append(
+            comparison_record(
+                case,
+                source_results[case["case_id"]],
+                target_results[case["case_id"]],
+                outcome,
+                diffs,
+            )
+        )
     identity["started_at"] = started
     identity["finished_at"] = now_rfc3339()
     result = {
-        "schema": "migration-parity/parity-result@1",
+        "schema": "migration-parity/parity-result@2",
         "identity": identity,
         "status": "completed",
-        "summary": {"selected": len(cases), "executed": len(cases), "passed": passed, "failed": failed, "not_run": not_run, "infrastructure_errors": 0},
+        "summary": parity_summary(cases, outcome_by_case, 0),
         "comparisons": comparisons,
         "infrastructure_errors": [],
     }
@@ -4154,7 +4448,8 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         comparison_rows=result["comparisons"],
     )
     print(json.dumps(result["summary"], sort_keys=True))
-    return 0 if failed == 0 and not_run == 0 else 1
+    summary = result["summary"]
+    return 0 if summary["failed"] == 0 and summary["not_run"] == 0 else 1
 
 
 def parity_batch_size(total: int) -> int:
@@ -4230,10 +4525,10 @@ def run_orchestrator_batched(
     )
     source_handshake: dict[str, Any] | None = None
     target_handshake: dict[str, Any] | None = None
+    target_handshake_initialized = False
+    source_handshake_initialized = False
     comparisons = 0
-    passed = 0
-    failed = 0
-    not_run = 0
+    outcome_by_case: dict[str, str] = {}
     infrastructure_errors: list[dict[str, Any]] = []
     comparison_selection: list[dict[str, str]] = []
     first_comparison = True
@@ -4244,14 +4539,25 @@ def run_orchestrator_batched(
         # timestamps and final status are accurate even when a later batch
         # fails. JSON object key order is intentionally irrelevant to the
         # versioned result validator.
-        temporary.write('{"schema":"migration-parity/parity-result@1","comparisons":[')
+        temporary.write('{"schema":"migration-parity/parity-result@2","comparisons":[')
         for start in range(0, len(cases), batch_size):
             batch = cases[start : start + batch_size]
+            source_cases = [
+                case for case in batch if verification_kind(case) == "parity"
+            ]
+            source_needed = bool(source_cases)
             try:
                 if os.environ.get("MIGRATION_PARITY_SERIAL") == "1":
-                    batch_source_handshake, source_results = run_side_subprocess(
-                        "source", manifest_path, batch, args.timeout, **attestation_kwargs
-                    )
+                    if source_needed:
+                        batch_source_handshake, source_results = run_side_subprocess(
+                            "source", manifest_path, source_cases, args.timeout, **attestation_kwargs
+                        )
+                    else:
+                        batch_source_handshake = None
+                        source_results = {
+                            case["case_id"]: not_applicable_source_result(case)
+                            for case in batch
+                        }
                     batch_target_handshake, target_results = run_side_subprocess(
                         "target", manifest_path, batch, target_timeout, **attestation_kwargs
                     )
@@ -4259,13 +4565,17 @@ def run_orchestrator_batched(
                     with ThreadPoolExecutor(
                         max_workers=2, thread_name_prefix="parity-side"
                     ) as executor:
-                        source_future = executor.submit(
-                            run_side_subprocess,
-                            "source",
-                            manifest_path,
-                            batch,
-                            args.timeout,
-                            **attestation_kwargs,
+                        source_future = (
+                            executor.submit(
+                                run_side_subprocess,
+                                "source",
+                                manifest_path,
+                                source_cases,
+                                args.timeout,
+                                **attestation_kwargs,
+                            )
+                            if source_needed
+                            else None
                         )
                         target_future = executor.submit(
                             run_side_subprocess,
@@ -4275,7 +4585,14 @@ def run_orchestrator_batched(
                             target_timeout,
                             **attestation_kwargs,
                         )
-                        batch_source_handshake, source_results = source_future.result()
+                        if source_future is not None:
+                            batch_source_handshake, source_results = source_future.result()
+                        else:
+                            batch_source_handshake = None
+                            source_results = {
+                                case["case_id"]: not_applicable_source_result(case)
+                                for case in batch
+                            }
                         batch_target_handshake, target_results = target_future.result()
             except RuntimeError as exc:
                 # One malformed or crashing input must not hide the remainder
@@ -4294,18 +4611,28 @@ def run_orchestrator_batched(
                     }
                 )
                 continue
-            if source_handshake is None:
-                source_handshake = batch_source_handshake
+            if batch_target_handshake is None:
+                raise RuntimeError("target adapter returned no identity handshake")
+            if not target_handshake_initialized:
                 target_handshake = batch_target_handshake
-                if source_handshake.get("version") != ORACLE_VERSION:
+                target_handshake_initialized = True
+            elif batch_target_handshake != target_handshake:
+                raise RuntimeError("adapter identity changed between parity batches")
+            if source_needed:
+                if batch_source_handshake is None:
+                    raise RuntimeError("source adapter returned no identity handshake")
+                if batch_source_handshake.get("version") != ORACLE_VERSION:
                     raise RuntimeError(
                         f"oracle identity handshake did not pin {ORACLE_NAME} {ORACLE_VERSION}"
                     )
-            elif (
-                batch_source_handshake != source_handshake
-                or batch_target_handshake != target_handshake
-            ):
-                raise RuntimeError("adapter identity changed between parity batches")
+                if not source_handshake_initialized:
+                    source_handshake = batch_source_handshake
+                    source_handshake_initialized = True
+                elif batch_source_handshake != source_handshake:
+                    raise RuntimeError("adapter identity changed between parity batches")
+            for case in batch:
+                if verification_kind(case) == "fault_contract":
+                    source_results[case["case_id"]] = not_applicable_source_result(case)
             for case in batch:
                 outcome, diffs = compare_case(
                     case,
@@ -4313,21 +4640,14 @@ def run_orchestrator_batched(
                     target_results[case["case_id"]],
                     operation_index,
                 )
-                if outcome == "pass":
-                    passed += 1
-                elif outcome == "fail":
-                    failed += 1
-                else:
-                    not_run += 1
-                comparison = {
-                    "case_id": case["case_id"],
-                    "target_profile": target_profile_for_backend(TARGET_BACKEND),
-                    "requirements": case.get("covers", []),
-                    "source": source_results[case["case_id"]],
-                    "target": target_results[case["case_id"]],
-                    "outcome": outcome,
-                    "diffs": diffs,
-                }
+                outcome_by_case[case["case_id"]] = outcome
+                comparison = comparison_record(
+                    case,
+                    source_results[case["case_id"]],
+                    target_results[case["case_id"]],
+                    outcome,
+                    diffs,
+                )
                 if not first_comparison:
                     temporary.write(",")
                 json.dump(comparison, temporary, separators=(",", ":"))
@@ -4337,6 +4657,7 @@ def run_orchestrator_batched(
                     {
                         "case_id": comparison["case_id"],
                         "target_profile": comparison["target_profile"],
+                        "verification": comparison["verification"],
                     }
                 )
             del source_results, target_results
@@ -4354,14 +4675,7 @@ def run_orchestrator_batched(
     finally:
         identity["started_at"] = started
         identity["finished_at"] = now_rfc3339()
-        summary = {
-            "selected": len(cases),
-            "executed": comparisons,
-            "passed": passed,
-            "failed": failed,
-            "not_run": not_run + len(cases) - comparisons,
-            "infrastructure_errors": len(infrastructure_errors),
-        }
+        summary = parity_summary(cases, outcome_by_case, len(infrastructure_errors))
         temporary.write("],\"identity\":")
         json.dump(identity, temporary, separators=(",", ":"))
         temporary.write(',"status":')
@@ -4378,7 +4692,7 @@ def run_orchestrator_batched(
         attestation,
         output,
         result={
-            "schema": "migration-parity/parity-result@1",
+            "schema": "migration-parity/parity-result@2",
             "identity": identity,
             "status": status,
             "comparisons": comparison_selection,
@@ -4388,7 +4702,7 @@ def run_orchestrator_batched(
     print(json.dumps(summary, sort_keys=True))
     if infrastructure_errors:
         return 2
-    return 0 if failed == 0 and not_run == 0 and comparisons == len(cases) else 1
+    return 0 if summary["failed"] == 0 and summary["not_run"] == 0 and comparisons == len(cases) else 1
 
 
 def write_result(path: Path, result: dict[str, Any]) -> None:

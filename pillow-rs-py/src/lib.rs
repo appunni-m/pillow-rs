@@ -87,6 +87,18 @@ fn filter_rank_from_python(rank: i64) -> PyResult<u32> {
         .map_err(|_| PyOverflowError::new_err("Python int too large to convert to C ssize_t"))
 }
 
+#[cfg(feature = "test-api")]
+#[pyo3::pyfunction]
+fn _arm_migration_test_fault(point: &str) -> PyResult<()> {
+    pillow_rs::test_api::arm_fault(point).map_err(PyValueError::new_err)
+}
+
+#[cfg(feature = "test-api")]
+#[pyo3::pyfunction]
+fn _clear_migration_test_fault() {
+    pillow_rs::test_api::clear_fault();
+}
+
 fn blur_radius_pair_from_python(
     radius: Option<&Bound<'_, PyAny>>,
     default: f64,
@@ -837,6 +849,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     backend::register(m)?;
     image_filter::register(m)?;
     image::register_utilities(m)?;
+    #[cfg(feature = "test-api")]
+    {
+        m.add_function(pyo3::wrap_pyfunction!(_arm_migration_test_fault, m)?)?;
+        m.add_function(pyo3::wrap_pyfunction!(_clear_migration_test_fault, m)?)?;
+    }
     Ok(())
 }
 

@@ -35,7 +35,10 @@ except ModuleNotFoundError:
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "pillow-rs" / "tests" / "fixtures"
 BENCHMARK_SCHEMA = "migration-parity/benchmark-result@1"
-PARITY_SCHEMA = "migration-parity/parity-result@1"
+PARITY_SCHEMAS = {
+    "migration-parity/parity-result@1",
+    "migration-parity/parity-result@2",
+}
 BENCHMARK_INPUT_SCHEMA = "migration-parity/benchmark-input@1"
 PARITY_INPUT_SCHEMA = "migration-parity/parity-input@2"
 MANIFEST_SCHEMA = "migration-parity/manifest@3"
@@ -533,9 +536,15 @@ def build_selected_run(
     parity = read_json(parity_report_path)
     if benchmark.get("schema") != BENCHMARK_SCHEMA or benchmark.get("status") != "completed":
         raise ValueError("benchmark report is incomplete or unsupported")
-    if parity.get("schema") != PARITY_SCHEMA or parity.get("status") != "completed":
+    if parity.get("schema") not in PARITY_SCHEMAS or parity.get("status") != "completed":
         raise ValueError("parity report is incomplete or unsupported")
-    if parity.get("summary", {}).get("failed") != 0 or parity.get("infrastructure_errors"):
+    parity_summary = parity.get("summary", {})
+    parity_failed = (
+        parity_summary.get("parity_cases", {}).get("failed")
+        if parity.get("schema") == "migration-parity/parity-result@2"
+        else parity_summary.get("failed")
+    )
+    if parity_failed != 0 or parity.get("infrastructure_errors"):
         raise ValueError("parity report contains failed or infrastructure comparisons")
 
     benchmark_identity = benchmark["identity"]
@@ -626,6 +635,7 @@ def build_selected_run(
         if isinstance(row, dict)
         and row.get("case_id") == case_id
         and row.get("target_profile") == target_profile
+        and row.get("verification", "parity") == "parity"
     ]
     if len(input_cases) != 1:
         raise ValueError("selected parity case must occur exactly once in its input")

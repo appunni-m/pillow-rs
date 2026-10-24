@@ -24,6 +24,19 @@ from typing import Any, Iterable
 
 import yaml
 
+try:
+    from migration_parity.fault_contracts import (
+        FAULT_CONTRACTS,
+        manifest_fault_contracts,
+        manifest_fault_points,
+    )
+except ModuleNotFoundError:
+    from scripts.migration_parity.fault_contracts import (
+        FAULT_CONTRACTS,
+        manifest_fault_contracts,
+        manifest_fault_points,
+    )
+
 from migration_parity_inventory import (
     AUTHORITY_PATH,
     EXPECTED_AUTHORITY_SHA256,
@@ -40,6 +53,7 @@ DEFAULT_OUTPUT = (
 )
 PYTHON_FACADE_ROOT = WORKSPACE_ROOT / "pillow-rs-py" / "python"
 TARGET_PROFILE = "python-cpu"
+GPU_FAULT_PROFILE = "python-gpu-fault-contract"
 BENCHMARK_BACKENDS = ("cpu", "simd", "gpu")
 DEFAULT_TARGET_FEATURES = ["pillow-rs-py/default", "pillow-rs/default"]
 TARGET_ID = "pillow-rs-python"
@@ -163,6 +177,12 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
     "image-sequence": (
         "pillow-rs-py/python/pillow_rs/imagesequence.py",
         "pillow-rs/src/image_sequence.rs",
+    ),
+    "gpu-batch": (
+        "pillow-rs-py/python/PIL/__init__.py",
+        "pillow-rs-py/python/pillow_rs/gpu_batch.py",
+        "pillow-rs-py/src/gpu_batch.rs",
+        "pillow-rs/src/compute/pool_gpu/stream.rs",
     ),
 }
 
@@ -453,6 +473,12 @@ def target_candidates(endpoint: Endpoint) -> list[str]:
     # imports.
     surface = endpoint.surface
     operation = endpoint.operation
+    if endpoint.authority == "target-only-contract":
+        if endpoint.kind == "type":
+            return ["pillow_rs.gpu_batch.GpuBatchExecutor"]
+        if endpoint.operation == "submit":
+            return ["pillow_rs.gpu_batch.GpuBatchExecutor.submit"]
+        raise ValueError(f"unsupported target-only operation {endpoint.id}")
     if surface == "PIL.ImageShow":
         return [f"pillow_rs.imageshow.{operation}"]
     if surface.startswith("PIL.ImageShow."):
@@ -925,6 +951,8 @@ def operation_requirements(
 
 def component_for(endpoint: Endpoint) -> str:
     surface = endpoint.surface
+    if endpoint.authority == "target-only-contract":
+        return "gpu-batch"
     if surface.startswith("PIL.ImageShow"):
         return "image-show"
     if surface.startswith("PIL.ImageDraw"):
@@ -953,6 +981,7 @@ def component_for(endpoint: Endpoint) -> str:
 def surface_kind(surface: str) -> str:
     type_surfaces = {
         "PIL.Image.Image",
+        "PIL.GpuBatchExecutor",
         "PIL.ImageDraw.ImageDraw",
         "PIL.ImageEnhance.Brightness",
         "PIL.ImageEnhance.Color",
@@ -972,6 +1001,101 @@ def operation_contract(
     endpoint: Endpoint,
     row_map: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
+    if endpoint.authority == "target-only-contract":
+        target_path, target = resolve_target(endpoint)
+        target_signature = callable_signature(endpoint, target)
+        parameters = parameters_from_signature(
+            target_signature, kind=endpoint.kind
+        )
+        if endpoint.operation == "submit":
+            pipeline = next(
+                (item for item in parameters if item["id"] == "pipeline"),
+                None,
+            )
+            if pipeline is None:
+                raise ValueError("GpuBatchExecutor.submit is missing pipeline")
+            pipeline["value_types"] = ["image"]
+            result = {
+                "shape": "scalar",
+                "observations": [
+                    {
+                        "path": "value",
+                        "value_types": ["integer"],
+                        "comparison": comparison_for("scalar", ["integer"]),
+                    }
+                ],
+                "error": {
+                    "fields": ["class", "kind", "message", "stage", "code"],
+                    "message": {
+                        "mode": "ignored",
+                        "transforms": [],
+                        "reason": (
+                            "Target-only fault contracts compare stable public "
+                            "fields, not message text."
+                        ),
+                    },
+                },
+            }
+            requirement_id = (
+                "PIL.GpuBatchExecutor.submit.error.device-failure-at-admission"
+            )
+            dimension = "error_path"
+            description = (
+                "Expose stable public GPU batch admission error metadata when "
+                "the device fails during submit."
+            )
+        else:
+            result = result_contract(endpoint, target_signature)
+            requirement_id = "PIL.GpuBatchExecutor.behavior.default"
+            dimension = "success_path"
+            description = "Construct the public GPU batch executor on the GPU path."
+        contract_id = next(iter(FAULT_CONTRACTS))
+        return {
+            "id": endpoint.operation,
+            "kind": endpoint.kind,
+            "classification": endpoint.classification,
+            "lifecycle": {"status": "current"},
+            "source": {
+                "oracle_id": None,
+                "path": endpoint.source_path,
+                "signature": signature_text(endpoint, target_signature),
+                "parameters": parameters,
+                "result": result,
+            },
+            "targets": [
+                {
+                    "target_id": TARGET_ID,
+                    "path": target_path,
+                    "signature": signature_text(endpoint, target_signature),
+                    "support": {"status": "supported"},
+                }
+            ],
+            "requirements": [
+                requirement(
+                    requirement_id,
+                    dimension,
+                    description,
+                    ["fault_contract"],
+                )
+            ],
+            "parity": {
+                "applicability": "not_applicable",
+                "reason": "Pillow has no GPU batch executor equivalent.",
+            },
+            "coverage": {
+                "applicability": "not_applicable",
+                "reason": "This target-only API is verified by its generated fault contract.",
+            },
+            "benchmark": {
+                "applicability": "not_applicable",
+                "reason": "GPU batch admission fault injection is not a performance workload.",
+            },
+            "fault_contract": {
+                "applicability": "required",
+                "target_profiles": [GPU_FAULT_PROFILE],
+                "contract_ids": [contract_id],
+            },
+        }
     source = source_object(endpoint)
     source_signature = callable_signature(endpoint, source)
     parameters = parameters_from_signature(
@@ -1153,6 +1277,10 @@ def operation_contract(
         ],
         "requirements": requirements,
         "parity": {"applicability": "required"},
+        "fault_contract": {
+            "applicability": "not_applicable",
+            "reason": "The operation has no deterministic target-only fault contract.",
+        },
         "coverage": (
             {
                 "applicability": "not_applicable",
@@ -1338,6 +1466,13 @@ def build_manifest() -> dict[str, Any]:
                 "backend": "cpu",
                 "features": DEFAULT_TARGET_FEATURES.copy()
                 + ["pillow-rs-py/parallel", "pillow-rs/parallel"],
+            },
+            {
+                "id": GPU_FAULT_PROFILE,
+                "target_id": TARGET_ID,
+                "backend": "gpu",
+                "features": DEFAULT_TARGET_FEATURES.copy()
+                + ["pillow-rs-py/test-api", "pillow-rs/test-api"],
             }
         ],
         "commands": [
@@ -1390,7 +1525,7 @@ def build_manifest() -> dict[str, Any]:
         "interfaces": {
             "parity": {
                 "input_schema": "migration-parity/parity-input@2",
-                "result_schema": "migration-parity/parity-result@1",
+                "result_schema": "migration-parity/parity-result@2",
                 "command_id": "parity",
             },
             "coverage": {
@@ -1405,7 +1540,7 @@ def build_manifest() -> dict[str, Any]:
             },
             "aggregation": {
                 "input_schemas": [
-                    "migration-parity/parity-result@1",
+                    "migration-parity/parity-result@2",
                     "migration-parity/coverage-result@1",
                     "migration-parity/benchmark-result@1",
                 ],
@@ -1414,6 +1549,8 @@ def build_manifest() -> dict[str, Any]:
             },
         },
         "input_index": input_index,
+        "fault_points": manifest_fault_points(),
+        "fault_contracts": manifest_fault_contracts(),
         "coverage_components": coverage_components(),
         "surfaces": surfaces,
         "documentation": {

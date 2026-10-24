@@ -16,6 +16,11 @@ import hashlib
 from pathlib import Path
 from typing import Any, Iterable
 
+try:
+    from migration_parity.fault_contracts import validate_fault_registries
+except ModuleNotFoundError:
+    from scripts.migration_parity.fault_contracts import validate_fault_registries
+
 
 SCHEMA_MANIFEST = "migration-parity/manifest@3"
 SCHEMA_BY_LANE = {
@@ -24,6 +29,7 @@ SCHEMA_BY_LANE = {
     "benchmark": "migration-parity/benchmark-input@1",
 }
 LANES = tuple(SCHEMA_BY_LANE)
+REQUIREMENT_LANES = {*LANES, "fault_contract"}
 SURFACE_KINDS = {"namespace", "type", "format", "abi", "cli", "protocol", "service"}
 OPERATION_KINDS = {
     "function",
@@ -267,7 +273,7 @@ def _requirement_applies_to_profile(
 
 def _validate_manifest_operation(operation: dict[str, Any], surface_id: str, requirement_ids: set[str], known_requirement_ids: set[str], command_ids: set[str], profile_ids: set[str], target_ids: set[str], component_ids: set[str]) -> None:
     path = f"surfaces[{surface_id}].operations[{operation.get('id', '?')}]"
-    _exact(operation, {"id", "kind", "classification", "lifecycle", "source", "targets", "requirements", "parity", "coverage", "benchmark"}, path)
+    _exact(operation, {"id", "kind", "classification", "lifecycle", "source", "targets", "requirements", "parity", "coverage", "benchmark", "fault_contract"}, path)
     operation_id = _string(operation["id"], f"{path}.id")
     if operation["kind"] not in OPERATION_KINDS:
         raise _error(f"{path}.kind", "unsupported operation kind")
@@ -277,7 +283,8 @@ def _validate_manifest_operation(operation: dict[str, Any], surface_id: str, req
     if lifecycle["status"] != "current":
         raise _error(f"{path}.lifecycle.status", "active manifest only accepts current operations")
     source = _exact(operation["source"], {"oracle_id", "path", "signature", "parameters", "result"}, f"{path}.source")
-    _string(source["oracle_id"], f"{path}.source.oracle_id")
+    if source["oracle_id"] is not None:
+        _string(source["oracle_id"], f"{path}.source.oracle_id")
     _string(source["path"], f"{path}.source.path")
     if not isinstance(source["signature"], str):
         raise _error(f"{path}.source.signature", "expected string or null")
@@ -381,7 +388,7 @@ def _validate_manifest_operation(operation: dict[str, Any], surface_id: str, req
             raise _error(f"{rpath}.dimension", "unsupported requirement dimension")
         _string(requirement["description"], f"{rpath}.description")
         lanes = _id_array(requirement["lanes"], f"{rpath}.lanes")
-        if any(lane not in LANES for lane in lanes):
+        if any(lane not in REQUIREMENT_LANES for lane in lanes):
             raise _error(f"{rpath}.lanes", "unsupported lane")
     for lane in LANES:
         policy = _mapping(operation[lane], f"{path}.{lane}")
@@ -412,6 +419,43 @@ def _validate_manifest_operation(operation: dict[str, Any], surface_id: str, req
                     raise _error(f"{path}.{lane}.metrics", "unsupported benchmark metric")
         else:
             raise _error(f"{path}.{lane}.applicability", "unsupported applicability")
+    fault_contract = _mapping(operation["fault_contract"], f"{path}.fault_contract")
+    fault_applicability = fault_contract.get("applicability")
+    if fault_applicability == "not_applicable":
+        _exact(fault_contract, {"applicability", "reason"}, f"{path}.fault_contract")
+        _string(fault_contract["reason"], f"{path}.fault_contract.reason")
+    elif fault_applicability in {"required", "optional"}:
+        _exact(
+            fault_contract,
+            {"applicability", "target_profiles", "contract_ids"},
+            f"{path}.fault_contract",
+        )
+        profiles = _id_array(
+            fault_contract["target_profiles"], f"{path}.fault_contract.target_profiles"
+        )
+        contracts = _id_array(
+            fault_contract["contract_ids"], f"{path}.fault_contract.contract_ids"
+        )
+        if not profiles or any(profile not in profile_ids for profile in profiles):
+            raise _error(f"{path}.fault_contract.target_profiles", "unknown or empty target profiles")
+        if not contracts:
+            raise _error(f"{path}.fault_contract.contract_ids", "at least one contract is required")
+        if any(lane == "fault_contract" for item in requirements for lane in item["lanes"]) and fault_applicability != "required":
+            raise _error(f"{path}.fault_contract", "fault-contract requirements need a required policy")
+        if fault_applicability == "required" and not any(
+            "fault_contract" in item["lanes"] for item in requirements
+        ):
+            raise _error(
+                f"{path}.fault_contract",
+                "required fault contracts need a fault-contract requirement",
+            )
+    else:
+        raise _error(f"{path}.fault_contract.applicability", "unsupported applicability")
+    if source["oracle_id"] is None and (
+        operation["parity"].get("applicability") != "not_applicable"
+        or fault_applicability != "required"
+    ):
+        raise _error(f"{path}.source.oracle_id", "null oracle is reserved for target-only fault contracts")
 
 
 def _validate_comparison(value: Any, path: str) -> None:
@@ -457,7 +501,7 @@ def validate_manifest(manifest: Any, *, manifest_path: Path | None = None) -> di
 
     manifest = _exact(
         manifest,
-        {"schema", "scope", "oracles", "targets", "target_profiles", "commands", "interfaces", "input_index", "coverage_components", "surfaces", "documentation"},
+        {"schema", "scope", "oracles", "targets", "target_profiles", "commands", "interfaces", "input_index", "fault_points", "fault_contracts", "coverage_components", "surfaces", "documentation"},
         "manifest",
     )
     if manifest["schema"] != SCHEMA_MANIFEST:
@@ -529,7 +573,7 @@ def validate_manifest(manifest: Any, *, manifest_path: Path | None = None) -> di
                 raise _error(f"manifest.{label}[{index}].identity_command_id", "unknown command")
     interfaces = _exact(manifest["interfaces"], {"parity", "coverage", "benchmark", "aggregation"}, "manifest.interfaces")
     expected_lanes = {
-        "parity": ("migration-parity/parity-input@2", "migration-parity/parity-result@1"),
+        "parity": ("migration-parity/parity-input@2", "migration-parity/parity-result@2"),
         "coverage": ("migration-parity/coverage-input@1", "migration-parity/coverage-result@1"),
         "benchmark": ("migration-parity/benchmark-input@1", "migration-parity/benchmark-result@1"),
     }
@@ -597,9 +641,22 @@ def validate_manifest(manifest: Any, *, manifest_path: Path | None = None) -> di
                 raise _error(f"{path}.operations", "duplicate operation ID")
             operation_ids.add(operation_id)
             _validate_manifest_operation(operation, surface_id, requirement_ids, known_requirement_ids, command_ids, profile_ids, target_ids, component_ids)
+    known_fault_contracts = {item["id"] for item in manifest["fault_contracts"]}
+    for surface in manifest["surfaces"]:
+        for operation in surface["operations"]:
+            contract_ids = operation["fault_contract"].get("contract_ids", [])
+            if any(contract_id not in known_fault_contracts for contract_id in contract_ids):
+                raise _error(
+                    f"manifest.surfaces[{surface['id']}].operations[{operation['id']}].fault_contract.contract_ids",
+                    "unknown fault contract",
+                )
     for index, operation in enumerate([operation for surface in manifest["surfaces"] for operation in surface["operations"]]):
-        if operation["source"]["oracle_id"] not in oracle_ids:
+        if operation["source"]["oracle_id"] is not None and operation["source"]["oracle_id"] not in oracle_ids:
             raise _error(f"manifest.operation[{index}].source.oracle_id", "unknown oracle")
+    try:
+        validate_fault_registries(manifest["fault_points"], manifest["fault_contracts"])
+    except ValueError as error:
+        raise _error("manifest.fault_contracts", str(error)) from error
     documentation = _exact(manifest["documentation"], {"command_id", "specification_outputs", "evidence_outputs"}, "manifest.documentation")
     if documentation["command_id"] not in command_ids:
         raise _error("manifest.documentation.command_id", "unknown command")
@@ -863,6 +920,10 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
     component_ids = {component["id"] for component in manifest["coverage_components"]}
     item_ids: set[str] = set()
     parity_case_ids: set[str] = set()
+    fault_points = {point["id"]: point for point in manifest["fault_points"]}
+    fault_contracts = {
+        contract["id"]: contract for contract in manifest["fault_contracts"]
+    }
     documents: dict[str, dict[str, Any]] = {}
     for current_lane in lanes:
         seen_paths: set[str] = set()
@@ -879,7 +940,16 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
                 raise _error(relative, f"invalid JSON: {exc}") from exc
             expected_schema = SCHEMA_BY_LANE[current_lane]
             if current_lane == "parity":
-                _validate_parity_document(document, relative, operation_index, requirement_index, fixture_root, item_ids)
+                _validate_parity_document(
+                    document,
+                    relative,
+                    operation_index,
+                    requirement_index,
+                    fixture_root,
+                    item_ids,
+                    fault_points,
+                    fault_contracts,
+                )
                 parity_case_ids.update(item_ids)
             elif current_lane == "coverage":
                 _validate_coverage_document(document, relative, operation_index, requirement_index, profile_ids, command_ids, component_ids, item_ids, parity_case_ids)
@@ -888,6 +958,34 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
             if document.get("schema") != expected_schema:
                 raise _error(relative, f"expected {expected_schema}")
             documents[relative] = document
+    if "parity" in lanes:
+        mapped_fault_requirements: dict[str, list[str]] = {}
+        for relative in manifest["input_index"]["parity"]:
+            document = documents[relative]
+            for case in document["cases"]:
+                if case.get("verification", "parity") != "fault-contract":
+                    continue
+                for requirement_id in case["covers"]:
+                    mapped_fault_requirements.setdefault(requirement_id, []).append(
+                        case["case_id"]
+                    )
+        required_fault_requirements = {
+            requirement["id"]
+            for surface in manifest["surfaces"]
+            for operation in surface["operations"]
+            if operation["fault_contract"]["applicability"] == "required"
+            for requirement in operation["requirements"]
+            if "fault_contract" in requirement["lanes"]
+        }
+        missing_fault_requirements = sorted(
+            required_fault_requirements - mapped_fault_requirements.keys()
+        )
+        if missing_fault_requirements:
+            raise _error(
+                "input_index.parity",
+                "required fault-contract requirements lack generated cases: "
+                + ", ".join(missing_fault_requirements),
+            )
     return documents
 
 
@@ -902,14 +1000,14 @@ def _reject_output_fields(value: Any, path: str) -> None:
             _reject_output_fields(child, f"{path}[{index}]")
 
 
-def _validate_parity_document(document: Any, relative: str, operation_index: dict[tuple[str, str], dict[str, Any]], requirement_index: dict[str, dict[str, Any]], fixture_root: Path, item_ids: set[str]) -> None:
+def _validate_parity_document(document: Any, relative: str, operation_index: dict[tuple[str, str], dict[str, Any]], requirement_index: dict[str, dict[str, Any]], fixture_root: Path, item_ids: set[str], fault_points: dict[str, dict[str, Any]], fault_contracts: dict[str, dict[str, Any]]) -> None:
     document = _exact(document, {"schema", "cases"}, relative)
     _reject_output_fields(document, relative)
     for index, case in enumerate(_list(document["cases"], f"{relative}.cases")):
         path = f"{relative}.cases[{index}]"
         case = _optional_exact(
             case,
-            {"case_id", "surface", "operation", "covers", "assets", "steps", "observations", "comparisons"},
+            {"case_id", "surface", "operation", "covers", "assets", "steps", "observations", "comparisons", "verification", "fault"},
             path,
         )
         required_case_keys = {"case_id", "surface", "operation", "covers", "assets", "steps", "observations"}
@@ -922,8 +1020,44 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
         item_ids.add(case_id)
         surface = _string(case["surface"], f"{path}.surface")
         operation = _string(case["operation"], f"{path}.operation")
-        if (surface, operation) not in operation_index:
+        primary_operation = operation_index.get((surface, operation))
+        if primary_operation is None:
             raise _error(path, "unknown primary operation")
+        verification = case.get("verification", "parity")
+        if verification not in {"parity", "fault-contract"}:
+            raise _error(f"{path}.verification", "unsupported verification kind")
+        fault = None
+        if verification == "fault-contract":
+            fault = _exact(case.get("fault"), {"point", "contract"}, f"{path}.fault")
+            point = fault_points.get(fault["point"])
+            if point is None:
+                raise _error(f"{path}.fault.point", "unknown fault point")
+            contract = fault_contracts.get(fault["contract"])
+            if contract is None:
+                raise _error(f"{path}.fault.contract", "unknown fault contract")
+            if contract["fault_point"] != fault["point"]:
+                raise _error(
+                    f"{path}.fault",
+                    "fault point does not belong to the selected public contract",
+                )
+            if contract["operation"] != primary_operation["source"]["path"]:
+                raise _error(
+                    f"{path}.fault.contract",
+                    "fault contract is declared for a different public operation",
+                )
+            policy = primary_operation["fault_contract"]
+            if (
+                policy.get("applicability") != "required"
+                or fault["contract"] not in policy.get("contract_ids", [])
+            ):
+                raise _error(f"{path}.fault.contract", "primary operation does not declare this fault contract")
+            if point["target_profile"] not in policy.get("target_profiles", []):
+                raise _error(
+                    f"{path}.fault.point",
+                    "fault point profile is not supported by the primary operation",
+                )
+        elif "fault" in case:
+            raise _error(f"{path}.fault", "parity cases cannot declare fault injection")
         covers = _id_array(case["covers"], f"{path}.covers")
         if not covers:
             raise _error(f"{path}.covers", "a parity case must cover at least one requirement")
@@ -931,8 +1065,19 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
             if requirement_id not in requirement_index:
                 raise _error(f"{path}.covers", f"unknown requirement {requirement_id!r}")
             requirement = requirement_index[requirement_id]
-            if "parity" not in requirement["lanes"]:
+            required_lane = "fault_contract" if verification == "fault-contract" else "parity"
+            if required_lane not in requirement["lanes"]:
                 raise _error(f"{path}.covers", f"requirement {requirement_id!r} is not applicable to this case")
+            if verification == "fault-contract":
+                matching = [
+                    operation_definition
+                    for operation_definition in operation_index.values()
+                    if requirement_id in {
+                        item["id"] for item in operation_definition["requirements"]
+                    }
+                ]
+                if len(matching) != 1 or fault["contract"] not in matching[0]["fault_contract"].get("contract_ids", []):
+                    raise _error(f"{path}.covers", f"fault contract does not cover requirement {requirement_id!r}")
         assets = _list(case["assets"], f"{path}.assets")
         asset_ids: set[str] = set()
         for asset_index, asset in enumerate(assets):

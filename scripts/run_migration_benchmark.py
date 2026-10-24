@@ -137,11 +137,24 @@ def target_profile_for_backend(backend: str) -> str:
 
 TARGET_PROFILES = tuple(target_profile_for_backend(backend) for backend in TARGET_BACKENDS)
 FROZEN_TARGET_PROFILES = ("python-cpu", "python-simd", "python-gpu")
+PARITY_RESULT_SCHEMAS = {
+    "migration-parity/parity-result@1",
+    "migration-parity/parity-result@2",
+}
+FAULT_CONTRACT_TARGET_PROFILE = "python-gpu-fault-contract"
+FAULT_CONTRACT_TARGET_FEATURES = [
+    "pillow-rs-py/default",
+    "pillow-rs/default",
+    "pillow-rs-py/test-api",
+    "pillow-rs/test-api",
+]
 
 
 def runtime_backend_for_profile(profile: str) -> str:
     """Return the executor name recorded by pipeline telemetry."""
 
+    if profile == FAULT_CONTRACT_TARGET_PROFILE:
+        return "gpu"
     return "cpu" if profile == "python-parallel-cpu" else profile.removeprefix("python-")
 
 
@@ -524,16 +537,23 @@ def merge_parity_results(results: list[dict[str, Any]], timeout: int) -> dict[st
         },
     }
     return {
-        "schema": "migration-parity/parity-result@1",
+        "schema": "migration-parity/parity-result@2",
         "identity": identity,
         "status": "completed",
         "summary": {
-            "selected": sum(result["summary"]["selected"] for result in results),
-            "executed": len(comparisons),
-            "passed": sum(result["summary"]["passed"] for result in results),
-            "failed": sum(result["summary"]["failed"] for result in results),
-            "not_run": sum(result["summary"]["not_run"] for result in results),
+            **{
+                field: sum(result["summary"][field] for result in results)
+                for field in ("selected", "executed", "passed", "failed", "not_run")
+            },
             "infrastructure_errors": len(infrastructure),
+            "parity_cases": {
+                field: sum(result["summary"][field] for result in results)
+                for field in ("selected", "executed", "passed", "failed", "not_run")
+            },
+            "fault_contracts": {
+                field: 0
+                for field in ("selected", "executed", "passed", "failed", "not_run")
+            },
         },
         "comparisons": comparisons,
         "infrastructure_errors": infrastructure,
@@ -583,23 +603,42 @@ def validate_reused_parity(
 
     summary = parity.get("summary", {})
     comparisons = parity.get("comparisons", [])
-    comparison_count = len(comparisons) if isinstance(comparisons, list) else -1
+    schema = parity.get("schema")
+    parity_rows = (
+        [
+            row
+            for row in comparisons
+            if isinstance(row, dict)
+            and row.get("verification", "parity") == "parity"
+        ]
+        if isinstance(comparisons, list)
+        else []
+    )
+    if schema == "migration-parity/parity-result@1":
+        parity_counts = summary
+    elif schema == "migration-parity/parity-result@2":
+        parity_counts = summary.get("parity_cases", {}) if isinstance(summary, dict) else {}
+    else:
+        parity_counts = {}
     if (
-        parity.get("schema") != "migration-parity/parity-result@1"
+        schema not in PARITY_RESULT_SCHEMAS
         or parity.get("status") != "completed"
         or not isinstance(summary, dict)
         or any(
-            type(summary.get(field)) is not int or summary[field] != expected
+            type(parity_counts.get(field)) is not int
+            or parity_counts[field] != expected
             for field, expected in (
-                ("selected", comparison_count),
-                ("executed", comparison_count),
-                ("passed", comparison_count),
+                ("selected", len(parity_rows)),
+                ("executed", len(parity_rows)),
+                ("passed", len(parity_rows)),
                 ("failed", 0),
                 ("not_run", 0),
-                ("infrastructure_errors", 0),
             )
         )
+        or type(summary.get("infrastructure_errors")) is not int
+        or summary["infrastructure_errors"] != 0
         or parity.get("infrastructure_errors")
+        or any(row.get("outcome") != "pass" for row in parity_rows)
     ):
         raise ValueError("reused parity receipt is not a complete passing run")
     identity = parity.get("identity", {})
@@ -663,19 +702,27 @@ def validate_reused_parity(
                 expected.add((case["case_id"], profile))
     expected_profiles = {profile for _case_id, profile in expected}
     targets = identity.get("targets", [])
-    if {item.get("target_profile") for item in targets} != expected_profiles:
+    target_profiles = {item.get("target_profile") for item in targets}
+    if not expected_profiles <= target_profiles or target_profiles - expected_profiles - {
+        FAULT_CONTRACT_TARGET_PROFILE
+    }:
         raise ValueError("reused parity receipt has different target profiles")
     for target in targets:
         profile = target.get("target_profile")
+        expected_features = (
+            FAULT_CONTRACT_TARGET_FEATURES
+            if profile == FAULT_CONTRACT_TARGET_PROFILE
+            else TARGET_FEATURES
+        )
         if (
             target.get("target_id") != TARGET_ID
             or target.get("revision") != git_revision()
             or target.get("dirty") is not git_dirty()
             or target.get("backend") != runtime_backend_for_profile(profile)
-            or target.get("features") != TARGET_FEATURES
+            or target.get("features") != expected_features
         ):
             raise ValueError("reused parity receipt has different target identity")
-    actual_rows = parity["comparisons"]
+    actual_rows = parity_rows
     actual = {
         (item.get("case_id"), item.get("target_profile"))
         for item in actual_rows
@@ -2170,7 +2217,7 @@ def run(args: argparse.Namespace) -> int:
             },
         }
         parity = {
-            "schema": "migration-parity/parity-result@1",
+            "schema": "migration-parity/parity-result@2",
             "identity": parity_identity,
             "status": "completed",
             "summary": {
@@ -2180,6 +2227,20 @@ def run(args: argparse.Namespace) -> int:
                 "failed": 0,
                 "not_run": 0,
                 "infrastructure_errors": 0,
+                "parity_cases": {
+                    "selected": 0,
+                    "executed": 0,
+                    "passed": 0,
+                    "failed": 0,
+                    "not_run": 0,
+                },
+                "fault_contracts": {
+                    "selected": 0,
+                    "executed": 0,
+                    "passed": 0,
+                    "failed": 0,
+                    "not_run": 0,
+                },
             },
             "comparisons": [],
             "infrastructure_errors": [],

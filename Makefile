@@ -50,6 +50,7 @@ MIGRATION_PARITY_CASE_ID_LIST = $(strip $(subst $(MIGRATION_COMMA),$(MIGRATION_S
 MIGRATION_PARITY_CASE_ARGS = $(foreach case_id,$(MIGRATION_PARITY_CASE_ID_LIST),--case-id '$(case_id)')
 MIGRATION_PARITY_CASE ?= $(CASE_ID)
 MIGRATION_PARITY_CASE_OUTPUT ?= build/migration-parity/parity-case-result.json
+MIGRATION_GPU_FAULT_PARITY_OUTPUT ?= build/migration-parity/gpu-fault-contract-result.json
 MIGRATION_COVERAGE_OUTPUT ?= build/migration-parity/coverage-result.json
 MIGRATION_RUST_COVERAGE_OUTPUT ?= build/migration-parity/coverage-result-rust.json
 MIGRATION_COVERAGE_REPORT ?= target/coverage/migration-parity-python.json
@@ -215,6 +216,7 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make test-all$(NC)       Run the all-backend public parity campaign\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
 	@printf "  $(CYAN)make migration-parity-test-parallel-cpu$(NC) Run parity with the opt-in Parallel CPU profile\n"
+	@printf "  $(CYAN)make migration-parity-test-gpu-fault-contract$(NC) Run the generated target-only GPU admission fault contract\n"
 	@printf "  $(CYAN)make migration-parity-test-gpu-strict$(NC) Audit GPU-only capability coverage (not the normal fallback lane)\n"
 	@printf "  $(CYAN)make migration-parity-test-simd-strict$(NC) Audit SIMD-only capability coverage (not the automatic CPU fallback lane)\n"
 	@printf "  $(CYAN)make migration-parity-case CASE_ID=...$(NC) Run one public parity case for fast iteration\n"
@@ -354,7 +356,7 @@ setup-ci: ## Install dev deps for CI
 	cd $(JS_SRC) && npm ci
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-.PHONY: build build-parity build-parity-parallel-cpu build-dev build-wasm build-wasm-core build-wasm-release build-all python-compat-check
+.PHONY: build build-parity build-parity-parallel-cpu build-parity-gpu-fault-contract build-dev build-wasm build-wasm-core build-wasm-release build-all python-compat-check
 
 build: ## Build Python package (release)
 	$(MATURIN) develop $(MATURIN_DEVELOP_FLAGS) --manifest-path $(PY_SRC)/Cargo.toml --release --locked
@@ -378,6 +380,9 @@ gpu-batch-benchmark: ## Print completed-work GPU batching throughput versus sequ
 
 build-parity-parallel-cpu: MATURIN_DEVELOP_FLAGS=--skip-install --features parallel
 build-parity-parallel-cpu: build ## Build with opt-in Rayon without replacing the Pillow oracle
+
+build-parity-gpu-fault-contract: MATURIN_DEVELOP_FLAGS=--skip-install --features test-api
+build-parity-gpu-fault-contract: build ## Build the target-only GPU fault-contract hook without replacing Pillow
 
 build-dev: ## Build Python package (debug, faster compile)
 	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --locked $(MATURIN_DEVELOP_FLAGS)
@@ -490,7 +495,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
-.PHONY: migration-parity-test migration-parity-test-parallel-cpu migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: migration-parity-test migration-parity-test-parallel-cpu migration-parity-test-gpu-fault-contract migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -516,6 +521,19 @@ migration-parity-test-parallel-cpu: build-parity-parallel-cpu ## Run live Pillow
 	MIGRATION_TARGET_BACKEND=cpu MIGRATION_TARGET_PROFILE=parallel-cpu \
 		$(MAKE) migration-parity-test \
 		MIGRATION_PARITY_OUTPUT="$(MIGRATION_PARALLEL_CPU_PARITY_OUTPUT)"
+
+migration-parity-test-gpu-fault-contract: build-parity-gpu-fault-contract ## Run the one generated target-only GPU admission fault contract
+	set +e; \
+	MIGRATION_TARGET_BACKEND=gpu MIGRATION_TARGET_PROFILE=gpu-fault-contract \
+	MIGRATION_STRICT_TARGET_BACKEND=1 \
+		$(PYTHON) scripts/run_migration_parity.py \
+		--output "$(MIGRATION_GPU_FAULT_PARITY_OUTPUT)" \
+		--case-id "PIL.GpuBatchExecutor.submit.fault-contract.device-failure-at-admission"; \
+	status=$$?; \
+	$(PYTHON) scripts/validate_migration_parity_result.py parity "$(MIGRATION_GPU_FAULT_PARITY_OUTPUT)"; \
+	validator=$$?; \
+	if [ $$status -ne 0 ]; then exit $$status; fi; \
+	exit $$validator
 
 migration-parity-test-gpu-strict: build-dev ## Audit GPU-only capability coverage without CPU fallback
 	$(MAKE) migration-parity-test \

@@ -254,6 +254,32 @@ CORRECTIONS: tuple[Endpoint, ...] = (
             "forwarding and the ImageShow result contract."
         ),
     ),
+    Endpoint(
+        surface="PIL",
+        operation="GpuBatchExecutor",
+        kind="type",
+        source_path="PIL.GpuBatchExecutor",
+        classification="endpoint",
+        authority="target-only-contract",
+        legacy_refs=(),
+        correction_reason=(
+            "The public pillow-rs GPU batch executor has no Pillow equivalent; "
+            "include its constructor in the target API denominator."
+        ),
+    ),
+    Endpoint(
+        surface="PIL.GpuBatchExecutor",
+        operation="submit",
+        kind="method",
+        source_path="PIL.GpuBatchExecutor.submit",
+        classification="endpoint",
+        authority="target-only-contract",
+        legacy_refs=(),
+        correction_reason=(
+            "The public pillow-rs GPU batch admission contract has no Pillow "
+            "equivalent and is exercised by a target-only fault case."
+        ),
+    ),
 )
 
 
@@ -610,7 +636,7 @@ def validate_inventory() -> dict[str, int]:
     ):
         raise ValueError("font endpoints are not on canonical public surfaces")
     payload = render_json(endpoints, legacy_rows)
-    if EXPECTED_AUTHORITY_SHA256 not in payload or '"endpoint_count": 212' not in payload:
+    if EXPECTED_AUTHORITY_SHA256 not in payload or '"endpoint_count": 214' not in payload:
         raise ValueError("diagnostic inventory does not record frozen authority metadata")
     return {
         "legacy_rows": legacy_rows,

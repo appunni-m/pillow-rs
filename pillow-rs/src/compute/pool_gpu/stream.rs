@@ -26,6 +26,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "test-api")]
+static INJECT_GPU_BATCH_ADMISSION_FAILURE: AtomicBool = AtomicBool::new(false);
+
+#[cfg(feature = "test-api")]
+pub(crate) fn arm_test_admission_failure() {
+    INJECT_GPU_BATCH_ADMISSION_FAILURE.store(true, Ordering::Release);
+}
+
+#[cfg(feature = "test-api")]
+pub(crate) fn clear_test_admission_failure() {
+    INJECT_GPU_BATCH_ADMISSION_FAILURE.store(false, Ordering::Release);
+}
+
 struct Job {
     id: u64,
     key: Option<BatchKey>,
@@ -87,6 +100,8 @@ pub struct GpuBatchExecutor {
     stats: GpuBatchStats,
     resident: bool,
     closed: bool,
+    #[cfg(feature = "test-api")]
+    injected_admission_failure: bool,
 }
 impl GpuBatchExecutor {
     /// Create an executor on pillow-rs's existing Device/Queue.
@@ -122,6 +137,9 @@ impl GpuBatchExecutor {
                 e.to_string(),
             )
         })?;
+        #[cfg(feature = "test-api")]
+        let injected_admission_failure =
+            INJECT_GPU_BATCH_ADMISSION_FAILURE.swap(false, Ordering::AcqRel);
         Ok(Self {
             gpu,
             config: config.clone(),
@@ -138,6 +156,8 @@ impl GpuBatchExecutor {
             stats: GpuBatchStats::default(),
             resident: false,
             closed: false,
+            #[cfg(feature = "test-api")]
+            injected_admission_failure,
         })
     }
 
@@ -197,6 +217,14 @@ impl GpuBatchExecutor {
         })?;
         self.next_id = id.checked_add(1);
         let fail = |kind, message: String| error(Some(id), key.clone(), "admission", kind, message);
+        #[cfg(feature = "test-api")]
+        if std::mem::take(&mut self.injected_admission_failure) {
+            return Err(fail(
+                BatchErrorKind::Execution,
+                "GPU device unavailable during GPU batch admission: injected test failure"
+                    .into(),
+            ));
+        }
         self.gpu
             .ensure_healthy("GPU batch admission")
             .map_err(|e| fail(BatchErrorKind::Execution, e.to_string()))?;

@@ -160,7 +160,10 @@ def merge_backend_attestations(
 
     if not backend_artifacts:
         raise ValueError("no backend producer attestations to merge")
-    if result.get("schema") != "migration-parity/parity-result@1":
+    if result.get("schema") not in {
+        "migration-parity/parity-result@1",
+        "migration-parity/parity-result@2",
+    }:
         raise ValueError("merged producer attestation requires a parity report")
 
     base = _base()

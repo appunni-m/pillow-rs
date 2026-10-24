@@ -134,6 +134,35 @@ mod par;
 mod pipeline;
 /// Pillow-owned materialized pixel storage and raster primitives.
 mod raster;
+
+/// Test-build-only controls for deterministic target fault contracts.
+#[cfg(feature = "test-api")]
+pub mod test_api {
+    /// Arm the allow-listed deterministic GPU batch fault for the next executor.
+    pub fn arm_fault(point: &str) -> Result<(), String> {
+        match point {
+            "gpu_batch.admission.device_failure" => {
+                #[cfg(feature = "gpu")]
+                {
+                    crate::compute::arm_gpu_batch_admission_failure();
+                    Ok(())
+                }
+                #[cfg(not(feature = "gpu"))]
+                {
+                    Err("GPU batch fault requires the gpu feature".into())
+                }
+            }
+            _ => Err(format!("unknown migration parity fault point: {point}")),
+        }
+    }
+
+    /// Clear an armed fault before the next fixture-driven workflow.
+    pub fn clear_fault() {
+        #[cfg(feature = "gpu")]
+        crate::compute::clear_gpu_batch_test_fault();
+    }
+}
+
 pub use crate::color::ColorValue;
 pub use crate::color::PaletteColorInput;
 pub use crate::color::color_has_explicit_alpha;

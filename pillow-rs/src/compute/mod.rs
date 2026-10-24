@@ -320,6 +320,16 @@ pub(crate) use pool_cpu::CpuPool;
 pub(crate) use pool_gpu::GpuPool;
 pub(crate) use pool_simd::SimdPool;
 
+#[cfg(all(feature = "gpu", feature = "test-api"))]
+pub(crate) fn arm_gpu_batch_admission_failure() {
+    pool_gpu::stream::arm_test_admission_failure();
+}
+
+#[cfg(all(feature = "gpu", feature = "test-api"))]
+pub(crate) fn clear_gpu_batch_test_fault() {
+    pool_gpu::stream::clear_test_admission_failure();
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
