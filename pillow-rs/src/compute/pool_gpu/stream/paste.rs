@@ -107,15 +107,7 @@ pub(super) fn encode_paste_stage(
     Ok(!current_a)
 }
 
-pub(super) fn encode_masked_paste_stage(
-    gpu: &GpuInner,
-    encoder: &mut wgpu::CommandEncoder,
-    buffers: &BufferPool,
-    stage: &Stage<'_>,
-    source: &EncodedGraph,
-    mask: &EncodedGraph,
-    current_a: bool,
-) -> Result<bool, PilError> {
+fn masked_paste_parameters(stage: &Stage<'_>) -> Result<(u32, [u32; 16]), PilError> {
     let PipelineOp::Paste {
         x,
         y,
@@ -182,6 +174,19 @@ pub(super) fn encode_masked_paste_stage(
         0,
         0,
     ];
+    Ok((destination_bytes, parameters))
+}
+
+pub(super) fn encode_masked_paste_stage(
+    gpu: &GpuInner,
+    encoder: &mut wgpu::CommandEncoder,
+    buffers: &BufferPool,
+    stage: &Stage<'_>,
+    source: &EncodedGraph,
+    mask: &EncodedGraph,
+    current_a: bool,
+) -> Result<bool, PilError> {
+    let (destination_bytes, parameters) = masked_paste_parameters(stage)?;
     let cached = gpu.resolve_pipeline(
         "__internal_stream_native_masked_paste",
         "paste_native_masked_bytes.wgsl",

@@ -299,11 +299,14 @@ def classify_path(
             "expected_shape": "scripts/source_crosswalk/test_<contract>.py",
             "reason": "The test imports a multi-file workflow package while living beside the CLI shim; confirm and co-locate it with that workflow's implementation.",
         }
-    if path == "scripts/rust_size_baseline.json":
+    if path in {
+        "scripts/rust_size_baseline.json",
+        "scripts/public_api_boundary_baseline.json",
+    }:
         return {
             "assessment": "supported_tool_configuration",
-            "rule": "rust_function_size_ratchet_baseline",
-            "reason": "Reviewed line-count ceilings for existing Rust files and functions are kept beside the quality checker that enforces them.",
+            "rule": "quality_tool_ratchet_baseline",
+            "reason": "Reviewed quality ratchets are kept beside the checker that enforces them.",
         }
     if path.startswith("scripts/") and len(parts) == 2 and path.endswith((".py", ".sh", ".mjs", ".cjs")):
         return {

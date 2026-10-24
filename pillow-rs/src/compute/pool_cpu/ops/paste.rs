@@ -22,8 +22,54 @@ use kernels::{
     paste_native_masked_two_channel_l_row, paste_native_rows, paste_rgb_into_rgba_rows,
 };
 use layout::{
-    PasteMaskPixels, paste_luma16_storage_byte_shift, paste_mask_pixels, paste_native_channels,
+    PasteMaskLayout, PasteMaskPixels, paste_luma16_storage_byte_shift, paste_mask_pixels,
+    paste_native_channels,
 };
+
+struct NativeMaskedRows<'a> {
+    mode: &'a str,
+    channels: usize,
+    mask_layout: PasteMaskLayout,
+    source_bytes: &'a [u8],
+    mask_bytes: &'a [u8],
+    source_stride: usize,
+    source_top: usize,
+    source_x: usize,
+    destination_top: usize,
+    destination_x: usize,
+    destination_x_end: usize,
+    copy_bytes: usize,
+    mask_stride: usize,
+    mask_x: usize,
+    mask_copy_bytes: usize,
+}
+
+impl NativeMaskedRows<'_> {
+    fn transform_row(&self, destination_y: usize, row: &mut [u8]) {
+        let source_y = self
+            .source_top
+            .saturating_add(destination_y.saturating_sub(self.destination_top));
+        let source_start = source_y
+            .saturating_mul(self.source_stride)
+            .saturating_add(self.source_x);
+        let mask_start = source_y
+            .saturating_mul(self.mask_stride)
+            .saturating_add(self.mask_x);
+        let source_row =
+            &self.source_bytes[source_start..source_start.saturating_add(self.copy_bytes)];
+        let destination_row = &mut row[self.destination_x..self.destination_x_end];
+        let mask_row =
+            &self.mask_bytes[mask_start..mask_start.saturating_add(self.mask_copy_bytes)];
+        paste_native_masked_apply_row(
+            self.mode,
+            self.channels,
+            self.mask_layout,
+            source_row,
+            destination_row,
+            mask_row,
+        );
+    }
+}
 
 /// Blend an exact same-mode byte layout directly. This covers common modes
 /// whose storage is already native; tagged, indexed, scalar, and cross-mode
@@ -38,7 +84,7 @@ fn paste_native_masked(
     mask_alpha: bool,
     mode: &str,
 ) -> Option<DynamicImage> {
-    if !matches!(mode, "L" | "LA" | "PA" | "RGB" | "HSV" | "RGBA" | "CMYK") {
+    if !native_masked_mode_supported(mode) {
         return None;
     }
     let channels = paste_native_channels(mode, destination)?;
@@ -79,6 +125,9 @@ fn paste_native_masked(
     }
 
     let mask_pixels = paste_mask_pixels(mask, mask_alpha).ok()??;
+    if matches!(mode, "1" | "P") && !mask_pixels.layout.binary {
+        return None;
+    }
     if (mask_pixels.width, mask_pixels.height) != (source_width as usize, source_height as usize) {
         return None;
     }
@@ -113,120 +162,22 @@ fn paste_native_masked(
     let output_bytes = output.as_bytes_mut()?;
     let source_top = usize::try_from(source_top).ok()?;
     let destination_top = usize::try_from(destination_top).ok()?;
-    let transform_row = |destination_y: usize, row: &mut [u8]| {
-        let source_y = source_top.saturating_add(destination_y.saturating_sub(destination_top));
-        let source_start = source_y
-            .saturating_mul(source_stride)
-            .saturating_add(source_x);
-        let mask_start = source_y.saturating_mul(mask_stride).saturating_add(mask_x);
-        let source_row = &source_bytes[source_start..source_start.saturating_add(copy_bytes)];
-        let destination_row = &mut row[destination_x..destination_x_end];
-        let mask_row = &mask_bytes[mask_start..mask_start.saturating_add(mask_copy_bytes)];
-        if mode == "LA"
-            && mask_channels == 1
-            && mask_pixels.layout.value_index == 0
-            && !mask_pixels.layout.premultiplied
-        {
-            paste_native_masked_two_channel_l_row(source_row, destination_row, mask_row);
-        } else if mode == "L"
-            && mask_channels == 1
-            && mask_pixels.layout.value_index == 0
-            && !mask_pixels.layout.premultiplied
-        {
-            paste_native_masked_l_row(source_row, destination_row, mask_row);
-        } else if mode == "RGB"
-            && mask_channels == 1
-            && mask_pixels.layout.value_index == 0
-            && !mask_pixels.layout.premultiplied
-        {
-            paste_native_masked_rgb_l_row(source_row, destination_row, mask_row);
-        } else if mode == "RGBA"
-            && mask_channels == 1
-            && mask_pixels.layout.value_index == 0
-            && !mask_pixels.layout.premultiplied
-        {
-            paste_native_masked_rgba_l_row(source_row, destination_row, mask_row);
-        } else if mode == "HSV"
-            && mask_channels == 1
-            && mask_pixels.layout.value_index == 0
-            && !mask_pixels.layout.premultiplied
-        {
-            paste_native_masked_hsv_l_row(source_row, destination_row, mask_row);
-        } else if mode == "PA"
-            && mask_channels == 1
-            && mask_pixels.layout.value_index == 0
-            && !mask_pixels.layout.premultiplied
-        {
-            paste_native_masked_two_channel_l_row(source_row, destination_row, mask_row);
-        } else if mode == "PA" {
-            paste_native_masked_pa_row(source_row, destination_row, mask_row, mask_pixels.layout);
-        } else if mode == "CMYK"
-            && mask_channels == 1
-            && mask_pixels.layout.value_index == 0
-            && !mask_pixels.layout.premultiplied
-        {
-            paste_native_masked_cmyk_row(source_row, destination_row, mask_row);
-        } else {
-            for ((source_pixel, destination_pixel), mask_pixel) in source_row
-                .chunks_exact(channels)
-                .zip(destination_row.chunks_exact_mut(channels))
-                .zip(mask_row.chunks_exact(mask_channels))
-            {
-                let mask_value = mask_pixel[mask_pixels.layout.value_index];
-                if mask_value == 0 && !mask_pixels.layout.premultiplied {
-                    continue;
-                }
-                if mask_value == 255 {
-                    destination_pixel.copy_from_slice(source_pixel);
-                    continue;
-                }
-
-                let mask = u16::from(mask_value);
-                #[expect(
-                    clippy::arithmetic_side_effects,
-                    reason = "mask is a byte, so subtracting it from 255 cannot underflow"
-                )]
-                let inverse = 255 - mask;
-                for (source_value, destination_value) in
-                    source_pixel.iter().zip(destination_pixel.iter_mut())
-                {
-                    *destination_value = if mask_pixels.layout.premultiplied {
-                        // Pillow's RGBa-mask path uses PREBLEND: add the incoming
-                        // premultiplied sample after scaling the destination.
-                        #[expect(
-                            clippy::arithmetic_side_effects,
-                            reason = "byte products and PREBLEND intermediates are bounded below u32::MAX"
-                        )]
-                        let scaled = u32::from(*destination_value) * u32::from(inverse) + 128;
-                        #[expect(
-                            clippy::arithmetic_side_effects,
-                            reason = "the proven PREBLEND intermediate is bounded below u32::MAX"
-                        )]
-                        let blended = (((scaled >> 8) + scaled) >> 8) + u32::from(*source_value);
-                        #[expect(
-                            clippy::cast_possible_truncation,
-                            reason = "Pillow stores PREBLEND's sum modulo 256 in the byte channel"
-                        )]
-                        let blended = blended as u8;
-                        blended
-                    } else {
-                        #[expect(
-                            clippy::arithmetic_side_effects,
-                            reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
-                        )]
-                        let weighted = u16::from(*source_value) * mask
-                            + u16::from(*destination_value) * inverse
-                            + 127;
-                        #[expect(
-                            clippy::cast_possible_truncation,
-                            reason = "DIV255 yields an 8-bit convex blend of byte channels"
-                        )]
-                        let blended = (weighted / 255) as u8;
-                        blended
-                    };
-                }
-            }
-        }
+    let transform_rows = NativeMaskedRows {
+        mode,
+        channels,
+        mask_layout: mask_pixels.layout,
+        source_bytes,
+        mask_bytes,
+        source_stride,
+        source_top,
+        source_x,
+        destination_top,
+        destination_x,
+        destination_x_end,
+        copy_bytes,
+        mask_stride,
+        mask_x,
+        mask_copy_bytes,
     };
 
     #[cfg(feature = "parallel")]
@@ -242,14 +193,14 @@ fn paste_native_masked(
             copy_height,
             |_row_start, _row_end, row_index, row| {
                 let destination_y = destination_top.saturating_add(row_index as usize);
-                transform_row(destination_y, row);
+                transform_rows.transform_row(destination_y, row);
             }
         );
     } else {
         for row_index in 0..copy_height {
             let destination_y = destination_top.saturating_add(row_index);
             let row_start = destination_y.saturating_mul(destination_stride);
-            transform_row(
+            transform_rows.transform_row(
                 destination_y,
                 &mut output_bytes[row_start..row_start.saturating_add(destination_stride)],
             );
@@ -259,7 +210,7 @@ fn paste_native_masked(
     for row_index in 0..copy_height {
         let destination_y = destination_top.saturating_add(row_index);
         let row_start = destination_y.saturating_mul(destination_stride);
-        transform_row(
+        transform_rows.transform_row(
             destination_y,
             &mut output_bytes[row_start..row_start.saturating_add(destination_stride)],
         );
@@ -267,17 +218,170 @@ fn paste_native_masked(
     Some(output)
 }
 
-pub fn op_paste(
-    img: &DynamicImage,
-    source: &Arc<Image>,
-    x: i64,
-    y: i64,
+fn paste_native_masked_apply_row(
+    mode: &str,
+    channels: usize,
+    mask_layout: PasteMaskLayout,
+    source_row: &[u8],
+    destination_row: &mut [u8],
+    mask_row: &[u8],
+) {
+    if !paste_native_masked_specialized_row(
+        mode,
+        channels,
+        mask_layout,
+        source_row,
+        destination_row,
+        mask_row,
+    ) {
+        paste_native_masked_blend_pixels(
+            channels,
+            mask_layout,
+            source_row,
+            destination_row,
+            mask_row,
+        );
+    }
+}
+
+fn paste_native_masked_specialized_row(
+    mode: &str,
+    channels: usize,
+    mask_layout: PasteMaskLayout,
+    source_row: &[u8],
+    destination_row: &mut [u8],
+    mask_row: &[u8],
+) -> bool {
+    if mask_layout.binary {
+        paste_native_masked_binary_row(
+            source_row,
+            destination_row,
+            mask_row,
+            channels,
+            mask_layout.channels,
+            mask_layout.value_index,
+        );
+        return true;
+    }
+
+    let plain_l_mask =
+        mask_layout.channels == 1 && mask_layout.value_index == 0 && !mask_layout.premultiplied;
+    match (mode, plain_l_mask) {
+        ("LA", true) | ("PA", true) => {
+            paste_native_masked_two_channel_l_row(source_row, destination_row, mask_row);
+        }
+        ("L", true) => paste_native_masked_l_row(source_row, destination_row, mask_row),
+        ("RGB", true) => paste_native_masked_rgb_l_row(source_row, destination_row, mask_row),
+        ("RGBA", true) => paste_native_masked_rgba_l_row(source_row, destination_row, mask_row),
+        ("HSV", true) => paste_native_masked_hsv_l_row(source_row, destination_row, mask_row),
+        ("CMYK", true) => paste_native_masked_cmyk_row(source_row, destination_row, mask_row),
+        ("PA", false) => {
+            paste_native_masked_pa_row(source_row, destination_row, mask_row, mask_layout)
+        }
+        _ => return false,
+    }
+    true
+}
+
+fn paste_native_masked_blend_pixels(
+    channels: usize,
+    mask_layout: PasteMaskLayout,
+    source_row: &[u8],
+    destination_row: &mut [u8],
+    mask_row: &[u8],
+) {
+    for ((source_pixel, destination_pixel), mask_pixel) in source_row
+        .chunks_exact(channels)
+        .zip(destination_row.chunks_exact_mut(channels))
+        .zip(mask_row.chunks_exact(mask_layout.channels))
+    {
+        let mask_value = mask_pixel[mask_layout.value_index];
+        if mask_value == 0 && !mask_layout.premultiplied {
+            continue;
+        }
+        if mask_value == 255 {
+            destination_pixel.copy_from_slice(source_pixel);
+            continue;
+        }
+
+        let mask = u16::from(mask_value);
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+        )]
+        let inverse = 255 - mask;
+        for (source_value, destination_value) in
+            source_pixel.iter().zip(destination_pixel.iter_mut())
+        {
+            *destination_value = if mask_layout.premultiplied {
+                // Pillow's RGBa-mask path uses PREBLEND: add the incoming
+                // premultiplied sample after scaling the destination.
+                #[expect(
+                    clippy::arithmetic_side_effects,
+                    reason = "byte products and PREBLEND intermediates are bounded below u32::MAX"
+                )]
+                let scaled = u32::from(*destination_value) * u32::from(inverse) + 128;
+                #[expect(
+                    clippy::arithmetic_side_effects,
+                    reason = "the proven PREBLEND intermediate is bounded below u32::MAX"
+                )]
+                let blended = (((scaled >> 8) + scaled) >> 8) + u32::from(*source_value);
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "Pillow stores PREBLEND's sum modulo 256 in the byte channel"
+                )]
+                let blended = blended as u8;
+                blended
+            } else {
+                #[expect(
+                    clippy::arithmetic_side_effects,
+                    reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+                )]
+                let weighted =
+                    u16::from(*source_value) * mask + u16::from(*destination_value) * inverse + 127;
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "DIV255 yields an 8-bit convex blend of byte channels"
+                )]
+                let blended = (weighted / 255) as u8;
+                blended
+            };
+        }
+    }
+}
+
+fn native_masked_mode_supported(mode: &str) -> bool {
+    matches!(
+        mode,
+        "1" | "L" | "P" | "LA" | "PA" | "RGB" | "HSV" | "RGBA" | "CMYK"
+    )
+}
+
+#[inline]
+fn paste_native_masked_binary_row(
+    source_row: &[u8],
+    destination_row: &mut [u8],
+    mask_row: &[u8],
+    channels: usize,
+    mask_channels: usize,
+    value_index: usize,
+) {
+    for ((source_pixel, destination_pixel), mask_pixel) in source_row
+        .chunks_exact(channels)
+        .zip(destination_row.chunks_exact_mut(channels))
+        .zip(mask_row.chunks_exact(mask_channels))
+    {
+        if mask_pixel[value_index] != 0 {
+            destination_pixel.copy_from_slice(source_pixel);
+        }
+    }
+}
+
+fn native_paste_source_mode<'a>(
+    source: &Image,
     mask: &Option<Arc<Image>>,
-    mask_alpha: bool,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let expanded_source = expand_compact_masked_source(source, mask, mask_alpha, mode)?;
-    let source = expanded_source.as_ref().unwrap_or(source);
+    mode: Option<&'a str>,
+) -> Result<Option<&'a str>, PilError> {
     let source_mode = if mask.is_none()
         && matches!(
             mode,
@@ -303,11 +407,25 @@ pub fn op_paste(
     } else {
         None
     };
-    let native_mode = match (mode, source_mode.as_deref()) {
+    Ok(match (mode, source_mode.as_deref()) {
         (Some(mode), Some(source_mode)) if mode == source_mode => Some(mode),
         (None, Some("RGB")) => Some("RGB"),
         _ => None,
-    };
+    })
+}
+
+pub fn op_paste(
+    img: &DynamicImage,
+    source: &Arc<Image>,
+    x: i64,
+    y: i64,
+    mask: &Option<Arc<Image>>,
+    mask_alpha: bool,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let expanded_source = expand_compact_masked_source(source, mask, mask_alpha, mode)?;
+    let source = expanded_source.as_ref().unwrap_or(source);
+    let native_mode = native_paste_source_mode(source, mask, mode)?;
     let native_source = if let Some(native_mode) = native_mode {
         if matches!(native_mode, "P" | "PA") {
             Some(Arc::new(source.materialize_indices()?))
@@ -553,11 +671,19 @@ fn expand_compact_masked_source(
     let source_mode = source.mode()?;
     let (source_width, source_height) = source.size()?;
     let (mask_width, mask_height) = mask.size()?;
+    let mask_mode = mask.mode()?;
+    let mode_supported = if mask_mode == "1" {
+        matches!(
+            source_mode.as_str(),
+            "1" | "P" | "L" | "LA" | "RGB" | "HSV" | "RGBA" | "CMYK"
+        )
+    } else {
+        mask_mode == "L" && matches!(source_mode.as_str(), "L" | "RGB" | "HSV" | "RGBA" | "CMYK")
+    };
     if mask_alpha
-        || mask.mode()?.as_str() != "L"
+        || !mode_supported
         || (source_width, source_height) != (1, 1)
         || (mask_width, mask_height) == (1, 1)
-        || !matches!(source_mode.as_str(), "L" | "RGB" | "HSV" | "RGBA" | "CMYK")
         || mode.is_some_and(|mode| mode != source_mode && !(mode == "RGBA" && source_mode == "RGB"))
     {
         return Ok(None);

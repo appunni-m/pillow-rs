@@ -5,6 +5,26 @@ use super::NativePasteApplyContext;
 use super::SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD;
 use super::native_paste_rgb_l_masked_row;
 
+#[inline]
+fn record_rgb_work(region_row_bytes: usize, region_height: usize, allow_short_masked_tail: bool) {
+    let vector_len16 = region_row_bytes / 16 * 16;
+    let vector_len8 = region_row_bytes / 8 * 8;
+    let vector_blocks_per_row = (vector_len16 / 16 + (vector_len8 - vector_len16) / 8)
+        + usize::from(allow_short_masked_tail && vector_len8 < region_row_bytes);
+    let vector_blocks = vector_blocks_per_row.saturating_mul(region_height) as u64;
+    let scalar_tail = if allow_short_masked_tail {
+        0
+    } else {
+        (region_row_bytes - vector_len8).saturating_mul(region_height) as u64
+    };
+    if vector_blocks != 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    }
+    if scalar_tail != 0 {
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    }
+}
+
 pub(super) fn apply(context: &mut NativePasteApplyContext<'_>) -> bool {
     let plan = context.plan;
     let region = plan.region;
@@ -90,22 +110,7 @@ pub(super) fn apply(context: &mut NativePasteApplyContext<'_>) -> bool {
         apply_rgb_row(row_index, destination_row);
     }
 
-    let vector_len16 = region_row_bytes / 16 * 16;
-    let vector_len8 = region_row_bytes / 8 * 8;
-    let vector_blocks_per_row = (vector_len16 / 16 + (vector_len8 - vector_len16) / 8)
-        + usize::from(allow_short_masked_tail && vector_len8 < region_row_bytes);
-    let vector_blocks = vector_blocks_per_row.saturating_mul(region.height) as u64;
-    let scalar_tail = if allow_short_masked_tail {
-        0
-    } else {
-        (region_row_bytes - vector_len8).saturating_mul(region.height) as u64
-    };
-    if vector_blocks != 0 {
-        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    }
-    if scalar_tail != 0 {
-        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    }
+    record_rgb_work(region_row_bytes, region.height, allow_short_masked_tail);
     crate::compute::record_pipeline_operation_path(if used_neon {
         "neon-rgb-l-blend"
     } else {

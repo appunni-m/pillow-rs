@@ -12,8 +12,8 @@ GPU is gated by one fixed, strict public parity case that must execute on the
 GPU, then the full GPU corpus is requested by default with a separate hard
 deadline.  Adapter absence is recorded as explicitly skipped/not proven.  A
 timeout, crash, parity mismatch, or other real GPU failure remains fatal.
-Explicit case-filtered SIMD/GPU lanes are strict backend audits, so a focused
-parity pass cannot be satisfied by CPU fallback.
+Every SIMD/GPU lane is a strict backend audit, so neither the full corpus nor a
+focused parity pass can count CPU fallback as SIMD/GPU execution.
 Every child lane starts in its own process group so a native driver wedge
 cannot outlive the lane deadline.
 """
@@ -972,20 +972,19 @@ def run_parity_lane(
             ),
             **(
                 {
-                    # Collect WGSL dispatch telemetry for every GPU lane. The
-                    # full corpus can exercise documented fallback behavior;
-                    # strict smoke and focused case-filtered lanes prove the
-                    # requested backend actually executed.
+                    # Collect WGSL dispatch telemetry for every GPU lane. This
+                    # names the shader variants alongside the strict per-case
+                    # execution receipts; it does not replace those receipts.
                     "MIGRATION_GPU_WGSL_COVERAGE_OUTPUT": str(shader_artifact),
                 }
                 if shader_artifact is not None
                 else {}
             ),
-            # Focused case-filtered SIMD/GPU lanes are strict backend audits;
-            # the full corpus may account for documented fallback. Setting
-            # both values prevents inherited shell state changing this policy.
+            # Every SIMD/GPU parity lane is a strict backend audit. The same
+            # selected case IDs run in each lane; unsupported backend routes
+            # fail visibly instead of being counted as parity passes via CPU.
             "MIGRATION_STRICT_TARGET_BACKEND": (
-                "1" if backend in {"simd", "gpu"} and (case_ids or smoke) else "0"
+                "1" if backend in {"simd", "gpu"} else "0"
             ),
             "MIGRATION_PARITY_EXECUTION_OUTPUT": str(execution_artifact),
             **({"MIGRATION_PARITY_CASE_IDS": ",".join(case_ids)} if case_ids and not smoke else {}),
@@ -1396,7 +1395,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="append",
         help=(
             "run the same explicit public parity case filter in every full lane; "
-            "focused SIMD/GPU lanes reject backend fallback"
+            "SIMD/GPU lanes reject backend fallback"
         ),
     )
     gpu_group = parser.add_mutually_exclusive_group()

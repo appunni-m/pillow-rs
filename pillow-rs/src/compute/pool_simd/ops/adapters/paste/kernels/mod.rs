@@ -7,10 +7,12 @@ mod luma16;
 mod rgb_cmyk;
 
 pub(in crate::compute::pool_simd::ops::adapters) use self::apply::native_paste_apply;
+pub(in crate::compute::pool_simd::ops::adapters) use self::apply::native_paste_apply_with_source_layout;
 use self::blend::{
-    native_paste_blend_vector8, native_paste_blend_vector16, native_paste_mask_block,
-    native_paste_mask_block_active, native_paste_preblend_vector8, native_paste_preblend_vector16,
-    native_paste_rgb_l_mask_block8, native_paste_rgb_l_mask_block16,
+    native_paste_binary_copy_vector16, native_paste_blend_vector8, native_paste_blend_vector16,
+    native_paste_mask_block, native_paste_mask_block_active, native_paste_preblend_vector8,
+    native_paste_preblend_vector16, native_paste_rgb_l_mask_block8,
+    native_paste_rgb_l_mask_block16,
 };
 pub(in crate::compute::pool_simd::ops::adapters) use self::luma::native_paste_la_masked_row;
 use self::luma::{native_paste_l_masked_row, native_paste_rgba_l_masked_row};

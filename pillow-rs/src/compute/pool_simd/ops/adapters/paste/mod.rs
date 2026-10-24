@@ -18,6 +18,7 @@ use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, RgbImage};
 use std::sync::Arc;
 
 pub(super) use self::kernels::native_paste_apply;
+use self::kernels::native_paste_apply_with_source_layout;
 use self::kernels::native_paste_luma16_apply;
 #[cfg(test)]
 pub(super) use self::kernels::{
@@ -25,9 +26,10 @@ pub(super) use self::kernels::{
 };
 pub(super) use self::plan::NativePasteLayout;
 pub(super) use self::plan::{
-    NativePasteMaskLayout, NativePastePlan, NativePasteRegion, native_composite_plan_for_image,
-    native_composite_plan_for_shape, native_paste_actual_layout, native_paste_actual_mask_layout,
-    native_paste_layout, native_paste_plan_for_image, native_paste_plan_for_shape,
+    NativePasteMaskLayout, NativePastePlan, NativePasteRegion, NativePasteSourceLayout,
+    native_composite_plan_for_image, native_composite_plan_for_shape, native_paste_actual_layout,
+    native_paste_actual_mask_layout, native_paste_layout, native_paste_plan_for_image,
+    native_paste_plan_for_image_with_source_layout, native_paste_plan_for_shape,
     native_paste_region, native_paste_rgb_to_rgba_supported,
     native_paste_rgb_to_rgba_supported_for_shape, native_paste_rgba_to_rgb_supported,
     native_paste_rgba_to_rgb_supported_for_shape, native_paste_shape_layout,
@@ -226,7 +228,7 @@ pub fn simd_paste(
         let source_image = source.materialized_shared()?;
         return simd_paste_rgb_to_rgba(img, source_image.as_ref(), *x, *y, *w, *h);
     }
-    let plan = native_paste_plan_for_image(
+    let (plan, source_layout) = native_paste_plan_for_image_with_source_layout(
         img,
         source,
         *x,
@@ -279,13 +281,14 @@ pub fn simd_paste(
         return Ok(preserve_mode(img, DynamicImage::ImageLuma16(result)));
     }
     let mut output = img.as_bytes().to_vec();
-    if !native_paste_apply(
+    if !native_paste_apply_with_source_layout(
         &mut output,
         source_image.as_bytes(),
         mask_image.as_ref().map(|image| image.as_bytes()),
         img.width() as usize,
         img.height() as usize,
         plan,
+        source_layout,
         true,
     ) {
         return Err(simd_unsupported("Paste"));
@@ -310,9 +313,10 @@ pub(super) fn native_paste_in_place(
     mask_alpha: bool,
     mode: Option<&str>,
 ) -> Result<bool, PilError> {
-    let plan =
-        native_paste_plan_for_image(img, source, x, y, width, height, mask, mask_alpha, mode);
-    let Some(plan) = plan else {
+    let plan = native_paste_plan_for_image_with_source_layout(
+        img, source, x, y, width, height, mask, mask_alpha, mode,
+    );
+    let Some((plan, source_layout)) = plan else {
         return Ok(false);
     };
     let source_image = source.materialized_shared()?;
@@ -355,13 +359,14 @@ pub(super) fn native_paste_in_place(
     let Some(output) = img.as_bytes_mut() else {
         return Ok(false);
     };
-    Ok(native_paste_apply(
+    Ok(native_paste_apply_with_source_layout(
         output,
         source_image.as_bytes(),
         mask_image.as_ref().map(|image| image.as_bytes()),
         destination_width,
         destination_height,
         plan,
+        source_layout,
         true,
     ))
 }

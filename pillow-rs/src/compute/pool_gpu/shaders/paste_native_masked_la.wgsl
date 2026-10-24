@@ -11,8 +11,8 @@ struct Params {
     paste_x: i32,
     paste_y: i32,
     mask_word_offset: u32,
-    padding_1: u32,
-    padding_2: u32,
+    binary_mask: u32,
+    source_is_broadcast: u32,
     padding_3: u32,
 }
 
@@ -33,7 +33,11 @@ fn read_source(byte_index: u32) -> u32 {
 
 fn read_mask(pixel_index: u32) -> u32 {
     let word = input_source_mask[params.mask_word_offset + pixel_index / 4u];
-    return (word >> ((pixel_index & 3u) * 8u)) & 0xffu;
+    let mask = (word >> ((pixel_index & 3u) * 8u)) & 0xffu;
+    if params.binary_mask != 0u {
+        return select(0u, 255u, mask != 0u);
+    }
+    return mask;
 }
 
 @compute @workgroup_size(64)
@@ -98,7 +102,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 && source_y < params.source_height
             {
                 let source_pixel_index = source_y * params.source_width + source_x;
-                let source = read_source(source_pixel_index * 2u + channel);
+                let source_index = select(source_pixel_index, 0u, params.source_is_broadcast != 0u);
+                let source = read_source(source_index * 2u + channel);
                 let mask = read_mask(source_pixel_index);
                 // Pillow applies the same rounded byte blend to both LA bands.
                 value = (source * mask + destination * (255u - mask) + 127u) / 255u;

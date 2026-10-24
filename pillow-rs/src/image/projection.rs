@@ -6,6 +6,28 @@ use crate::raster::DynamicImage;
 
 use super::Image;
 
+fn projection_terminal_backend(
+    backend: Option<crate::compute::Backend>,
+) -> Result<Option<crate::compute::Backend>, PilError> {
+    let selected = match backend {
+        Some(crate::compute::Backend::Cpu) => Some(crate::compute::Backend::Cpu),
+        Some(crate::compute::Backend::Simd) => Some(crate::compute::Backend::Simd),
+        #[cfg(feature = "gpu")]
+        Some(crate::compute::Backend::Gpu) => Some(crate::compute::Backend::Gpu),
+        #[cfg(not(feature = "gpu"))]
+        Some(crate::compute::Backend::Gpu) => None,
+        // A single-backend profile already gives unlocked lazy graphs an
+        // unambiguous route. Preserve terminal fusion in those profiles
+        // without requiring benchmark adapters to mutate each image handle
+        // just to prove which backend executed.
+        None => match crate::compute::preferred_active_backend()? {
+            Some((backend, true)) => Some(backend),
+            _ => None,
+        },
+    };
+    Ok(selected)
+}
+
 impl Image {
     fn cmyk_projection(image: &crate::raster::RgbaImage) -> (Vec<u32>, Vec<u32>) {
         Self::cmyk_projection_with_blocks(image, 16, |samples| {
@@ -290,22 +312,8 @@ impl Image {
         if ops.is_empty() {
             return Ok(None);
         }
-        let terminal_backend = match backend {
-            Some(crate::compute::Backend::Cpu) => Some(crate::compute::Backend::Cpu),
-            Some(crate::compute::Backend::Simd) => Some(crate::compute::Backend::Simd),
-            #[cfg(feature = "gpu")]
-            Some(crate::compute::Backend::Gpu) => Some(crate::compute::Backend::Gpu),
-            #[cfg(not(feature = "gpu"))]
-            Some(crate::compute::Backend::Gpu) => None,
-            // A single-backend profile already gives unlocked lazy graphs an
-            // unambiguous route. Preserve terminal fusion in those profiles
-            // without requiring benchmark adapters to mutate each image
-            // handle just to prove which backend executed.
-            None => match crate::compute::preferred_active_backend()? {
-                Some((backend, true)) => Some(backend),
-                _ => None,
-            },
-        };
+        let _origin_scope = ops.telemetry_origin_scope();
+        let terminal_backend = projection_terminal_backend(*backend)?;
         let Some(terminal_backend) = terminal_backend else {
             return Ok(None);
         };

@@ -8,12 +8,13 @@ mod pa;
 mod rgb;
 mod rgba;
 
-use super::super::{NativePasteMaskLayout, NativePastePlan};
+use super::super::{NativePasteMaskLayout, NativePastePlan, NativePasteSourceLayout};
 use super::{
-    native_paste_blend_vector8, native_paste_blend_vector16, native_paste_cmyk_l_masked_row,
-    native_paste_l_masked_row, native_paste_la_masked_row, native_paste_mask_block,
-    native_paste_mask_block_active, native_paste_pa_masked_row, native_paste_preblend_vector8,
-    native_paste_preblend_vector16, native_paste_rgb_l_masked_row, native_paste_rgba_l_masked_row,
+    native_paste_binary_copy_vector16, native_paste_blend_vector8, native_paste_blend_vector16,
+    native_paste_cmyk_l_masked_row, native_paste_l_masked_row, native_paste_la_masked_row,
+    native_paste_mask_block, native_paste_mask_block_active, native_paste_pa_masked_row,
+    native_paste_preblend_vector8, native_paste_preblend_vector16, native_paste_rgb_l_masked_row,
+    native_paste_rgba_l_masked_row,
 };
 #[cfg(feature = "parallel")]
 const SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
@@ -59,6 +60,28 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_apply(
     plan: NativePastePlan,
     allow_short_masked_tail: bool,
 ) -> bool {
+    native_paste_apply_with_source_layout(
+        destination,
+        source,
+        mask,
+        destination_width,
+        destination_height,
+        plan,
+        NativePasteSourceLayout::Full,
+        allow_short_masked_tail,
+    )
+}
+
+pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_apply_with_source_layout(
+    destination: &mut [u8],
+    source: &[u8],
+    mask: Option<&[u8]>,
+    destination_width: usize,
+    destination_height: usize,
+    plan: NativePastePlan,
+    source_layout: NativePasteSourceLayout,
+    allow_short_masked_tail: bool,
+) -> bool {
     let Some(destination_row_stride) = destination_width.checked_mul(plan.layout.channels) else {
         return false;
     };
@@ -71,7 +94,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_apply(
     let Some(source_bytes) = source_row_stride.checked_mul(plan.source_height) else {
         return false;
     };
-    let expected_source_bytes = if plan.source_is_broadcast {
+    let expected_source_bytes = if matches!(source_layout, NativePasteSourceLayout::Broadcast) {
         plan.layout.channels
     } else {
         source_bytes
@@ -82,18 +105,20 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_apply(
 
     // Bitmap passes one solid source pixel with a full-size L mask. Expand it
     // only to a single scanline, then reuse that row for every destination row.
-    let broadcast_row =
-        if plan.source_is_broadcast && plan.region.width != 0 && plan.region.height != 0 {
-            let Some(row) = broadcast_source_row(source, source_row_stride, plan.layout.channels)
-            else {
-                return false;
-            };
-            Some(row)
-        } else {
-            None
+    let broadcast_row = if matches!(source_layout, NativePasteSourceLayout::Broadcast)
+        && plan.region.width != 0
+        && plan.region.height != 0
+    {
+        let Some(row) = broadcast_source_row(source, source_row_stride, plan.layout.channels)
+        else {
+            return false;
         };
+        Some(row)
+    } else {
+        None
+    };
     let source = broadcast_row.as_deref().unwrap_or(source);
-    let source_row_stride = if plan.source_is_broadcast {
+    let source_row_stride = if matches!(source_layout, NativePasteSourceLayout::Broadcast) {
         0
     } else {
         source_row_stride

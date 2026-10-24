@@ -199,6 +199,23 @@ pub(super) fn gpu_palette_first_rgb_merge_is_supported(
 /// GPU dispatch. Operations with intentionally different canvases (Paste and
 /// CompositeModule) are checked against the dimensions encoded in their
 /// parameter contract instead of being forced to match the destination.
+fn gpu_paste_compact_solid_source_supported(
+    source: &crate::image::Image,
+    mask: Option<&crate::image::Image>,
+    mask_alpha: bool,
+) -> bool {
+    if mask_alpha {
+        return false;
+    }
+    let source_mode = source.mode().ok();
+    let mask_mode = mask.and_then(|image| image.mode().ok());
+    match (source_mode.as_deref(), mask_mode.as_deref()) {
+        (Some("1" | "P" | "L" | "LA" | "PA" | "RGB" | "HSV" | "RGBA" | "CMYK"), Some("1")) => true,
+        (Some("L" | "RGB" | "HSV" | "RGBA" | "CMYK"), Some("L")) => true,
+        _ => false,
+    }
+}
+
 pub(super) fn gpu_auxiliary_shapes_are_safe(
     op: &PipelineOp,
     auxiliary: &AuxiliaryImages,
@@ -261,17 +278,10 @@ pub(super) fn gpu_auxiliary_shapes_are_safe(
             let region = (*w as u32, *h as u32);
             let source_dimensions = source.size().ok();
             // ImageDraw.bitmap's internal solid-mask route stores one source
-            // pixel and keeps the full region in the L mask. Native masked
+            // pixel and keeps the full region in its L or binary mask. Native masked
             // Paste broadcasts that sample; CPU fallback expands it first.
             let compact_solid_source = source_dimensions == Some((1, 1))
-                && !*mask_alpha
-                && matches!(
-                    source.mode().ok().as_deref(),
-                    Some("L" | "RGB" | "HSV" | "RGBA" | "CMYK")
-                )
-                && mask
-                    .as_deref()
-                    .is_some_and(|mask| mask.mode().ok().as_deref() == Some("L"));
+                && gpu_paste_compact_solid_source_supported(source, mask.as_deref(), *mask_alpha);
             let source_matches_region = source_dimensions == Some(region);
             let source_matches_compact = compact_solid_source && region != (1, 1) && mask.is_some();
             second == source_dimensions

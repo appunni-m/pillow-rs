@@ -32,7 +32,55 @@ SIMD_POSITIVE_VECTOR_PATHS = frozenset(
 )
 
 
-def simd_vector_evidence(row: dict[str, Any] | None) -> str:
+def workflow_step_owners(
+    steps: Any,
+) -> dict[str, tuple[str, str]]:
+    """Map workflow step IDs to their declared public API owners."""
+    if not isinstance(steps, list) or not steps:
+        return {}
+    owners: dict[str, tuple[str, str]] = {}
+    for step in steps:
+        if not isinstance(step, dict):
+            return {}
+        step_id = step.get("step_id")
+        surface = step.get("surface")
+        operation = step.get("operation")
+        if (
+            not isinstance(step_id, str)
+            or not step_id
+            or not isinstance(surface, str)
+            or not surface
+            or not isinstance(operation, str)
+            or not operation
+            or step_id in owners
+        ):
+            return {}
+        owners[step_id] = (surface, operation)
+    return owners
+
+
+def mapped_operation_owners(
+    covers: Any,
+    requirement_owner: dict[str, str],
+) -> set[tuple[str, str]]:
+    """Resolve the manifest operation owners selected by workload coverage."""
+    if not isinstance(covers, list) or not covers:
+        return set()
+    owners = set()
+    for requirement in covers:
+        owner = requirement_owner.get(str(requirement))
+        if owner is None or "." not in owner:
+            continue
+        surface, operation = owner.rsplit(".", 1)
+        owners.add((surface, operation))
+    return owners
+
+
+def simd_vector_evidence(
+    row: dict[str, Any] | None,
+    expected_sources: dict[str, tuple[str, str]] | None = None,
+    mapped_owners: set[tuple[str, str]] | None = None,
+) -> str:
     """Distinguish SIMD routing from observed architecture-specific work."""
     if row is None or row.get("subject") != "python-simd":
         return "not_applicable"
@@ -67,6 +115,30 @@ def simd_vector_evidence(row: dict[str, Any] | None) -> str:
                 "handoff_count",
             )
         ]
+        source_owner: tuple[str, str] | None = None
+        if expected_sources is not None:
+            source = operation.get("source")
+            if not isinstance(source, dict) or set(source) != {
+                "step_id",
+                "surface",
+                "operation",
+            }:
+                return "invalid"
+            source_step_id = source.get("step_id")
+            source_surface = source.get("surface")
+            source_operation = source.get("operation")
+            if (
+                not isinstance(source_step_id, str)
+                or not source_step_id
+                or not isinstance(source_surface, str)
+                or not source_surface
+                or not isinstance(source_operation, str)
+                or not source_operation
+                or expected_sources.get(source_step_id)
+                != (source_surface, source_operation)
+            ):
+                return "invalid"
+            source_owner = (source_surface, source_operation)
         if (
             any(type(value) is not int or value < 0 for value in counters)
             or not isinstance(path, str)
@@ -79,6 +151,10 @@ def simd_vector_evidence(row: dict[str, Any] | None) -> str:
             return "invalid"
         if count > 0:
             if path not in SIMD_POSITIVE_VECTOR_PATHS:
+                return "invalid"
+            if expected_sources is not None and (
+                mapped_owners is None or source_owner not in mapped_owners
+            ):
                 return "invalid"
             vector_work = True
     return "positive_vector_work" if vector_work else "no_vector_work"

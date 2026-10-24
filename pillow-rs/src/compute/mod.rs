@@ -43,6 +43,8 @@ mod thumbnail_fusion;
 #[path = "transpose_tests.rs"]
 mod transpose_tests;
 
+#[doc(hidden)]
+pub use telemetry::PipelineTelemetryOrigin;
 pub use telemetry::{
     GpuShaderDispatchTelemetry, PipelineAllocationTelemetry, PipelineOperationTelemetry,
     PipelineResourceTelemetry,
@@ -55,8 +57,9 @@ use telemetry::{
     take_pipeline_telemetry,
 };
 pub(crate) use telemetry::{
-    account_host_buffer_boundary, begin_eager_cpu_operation_telemetry,
-    begin_pipeline_operation_telemetry, cancel_eager_cpu_operation_telemetry,
+    RestorePipelineOperationOrigins, account_host_buffer_boundary,
+    begin_eager_cpu_operation_telemetry, begin_pipeline_operation_telemetry,
+    cancel_eager_cpu_operation_telemetry, capture_active_origin, enter_operation_origins,
     execute_eager_simd_bytes, finish_eager_cpu_operation_telemetry,
     finish_pipeline_operation_telemetry, host_resource_telemetry,
     record_eager_cpu_operation_receipt, record_pipeline_allocation,
@@ -178,6 +181,17 @@ impl Backend {
     /// Returns whether pipeline execution telemetry is enabled.
     pub fn pipeline_telemetry_enabled() -> bool {
         pipeline_telemetry_enabled()
+    }
+
+    /// Set the public workflow call used to label subsequent telemetry.
+    ///
+    /// Bindings and migration runners use this diagnostic context to keep
+    /// lazy operation receipts attached to the call that created each op.
+    #[doc(hidden)]
+    pub fn set_pipeline_telemetry_origin(
+        origin: Option<PipelineTelemetryOrigin>,
+    ) -> Option<PipelineTelemetryOrigin> {
+        telemetry::replace_active_origin(origin)
     }
 
     /// Clears the safe allocation counters used by the managed release

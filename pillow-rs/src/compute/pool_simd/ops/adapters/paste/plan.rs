@@ -30,13 +30,18 @@ pub(in crate::compute::pool_simd::ops::adapters) struct NativePasteRegion {
 }
 
 #[derive(Clone, Copy)]
+pub(in crate::compute::pool_simd::ops::adapters) enum NativePasteSourceLayout {
+    Full,
+    Broadcast,
+}
+
+#[derive(Clone, Copy)]
 pub(in crate::compute::pool_simd::ops::adapters) struct NativePastePlan {
     pub(in crate::compute::pool_simd::ops::adapters) layout: NativePasteLayout,
     pub(in crate::compute::pool_simd::ops::adapters) mask: Option<NativePasteMaskLayout>,
     pub(in crate::compute::pool_simd::ops::adapters) region: NativePasteRegion,
     pub(in crate::compute::pool_simd::ops::adapters) source_width: usize,
     pub(in crate::compute::pool_simd::ops::adapters) source_height: usize,
-    pub(in crate::compute::pool_simd::ops::adapters) source_is_broadcast: bool,
     pub(in crate::compute::pool_simd::ops::adapters) luma16_mask_byte_shift: u32,
 }
 
@@ -315,17 +320,20 @@ fn native_paste_plan_from_layout(
     mask: Option<&Arc<Image>>,
     mask_alpha: bool,
     mode: Option<&str>,
-) -> Option<NativePastePlan> {
+) -> Option<(NativePastePlan, NativePasteSourceLayout)> {
     let source_width = u32::try_from(width).ok()?;
     let source_height = u32::try_from(height).ok()?;
     let source_mode = source.mode().ok()?;
     let source_size = source.size().ok()?;
+    let compact_mask_mode = mask.and_then(|image| image.mode().ok());
+    let compact_binary_source = compact_mask_mode.as_deref() == Some("1");
+    let compact_l_source = compact_mask_mode.as_deref() == Some("L")
+        && matches!(layout.mode, "L" | "RGB" | "HSV" | "CMYK");
     let compact_solid_source = source_size == (1, 1)
         && (source_width, source_height) != (1, 1)
         && mask.is_some()
         && !mask_alpha
-        && matches!(layout.mode, "L" | "RGB" | "HSV" | "CMYK")
-        && mask.and_then(|image| image.mode().ok()).as_deref() == Some("L");
+        && (compact_l_source || compact_binary_source);
     if !native_paste_mode_matches(&source_mode, layout.mode)
         || (source_size != (source_width, source_height) && !compact_solid_source)
     {
@@ -333,18 +341,19 @@ fn native_paste_plan_from_layout(
     }
     let mask_layout = match mask {
         Some(mask) => {
-            // These modes can be copied byte-for-byte, but their masked
-            // Pillow contracts are not the same as L/LA/RGB/RGBA blending.
-            // Reject them before execution rather than silently applying an
-            // RGBA-shaped alpha formula to indexed, typed, or tagged data.
-            if !matches!(
-                layout.mode,
-                "L" | "LA" | "PA" | "RGB" | "HSV" | "RGBA" | "CMYK" | "I;16"
-            ) {
-                return None;
-            }
             let mask_mode = mask.mode().ok()?;
             let mask_layout = native_paste_mask_layout(&mask_mode, mask_alpha)?;
+            // A mode-1 mask selects whole stored pixels, so byte-copying is
+            // exact for any same-mode native layout. Fractional masks retain
+            // the narrower mode list with a proven blend contract.
+            if !mask_layout.binary
+                && !matches!(
+                    layout.mode,
+                    "L" | "LA" | "PA" | "RGB" | "HSV" | "RGBA" | "CMYK" | "I;16"
+                )
+            {
+                return None;
+            }
             if mask.size().ok()? != (source_width, source_height) {
                 return None;
             }
@@ -372,15 +381,21 @@ fn native_paste_plan_from_layout(
         width: 0,
         height: 0,
     });
-    Some(NativePastePlan {
-        layout,
-        mask: mask_layout,
-        region,
-        source_width: source_width as usize,
-        source_height: source_height as usize,
-        source_is_broadcast: compact_solid_source,
-        luma16_mask_byte_shift: native_paste_luma16_mask_byte_shift(mode),
-    })
+    Some((
+        NativePastePlan {
+            layout,
+            mask: mask_layout,
+            region,
+            source_width: source_width as usize,
+            source_height: source_height as usize,
+            luma16_mask_byte_shift: native_paste_luma16_mask_byte_shift(mode),
+        },
+        if compact_solid_source {
+            NativePasteSourceLayout::Broadcast
+        } else {
+            NativePasteSourceLayout::Full
+        },
+    ))
 }
 
 pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_plan_for_image(
@@ -394,6 +409,23 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_plan_for_image(
     mask_alpha: bool,
     mode: Option<&str>,
 ) -> Option<NativePastePlan> {
+    native_paste_plan_for_image_with_source_layout(
+        img, source, x, y, width, height, mask, mask_alpha, mode,
+    )
+    .map(|(plan, _)| plan)
+}
+
+pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_plan_for_image_with_source_layout(
+    img: &DynamicImage,
+    source: &Arc<Image>,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    mask: Option<&Arc<Image>>,
+    mask_alpha: bool,
+    mode: Option<&str>,
+) -> Option<(NativePastePlan, NativePasteSourceLayout)> {
     let layout =
         native_paste_luma16_layout(img, mode).or_else(|| native_paste_layout(img, mode))?;
     native_paste_plan_from_layout(
@@ -437,6 +469,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_plan_for_shape(
         mask_alpha,
         mode,
     )
+    .map(|(plan, _)| plan)
 }
 
 /// RGB destinations intentionally accept an RGBA source in Pillow's Paste.c
@@ -580,7 +613,6 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_composite_plan_for_im
         region,
         source_width: img.width() as usize,
         source_height: img.height() as usize,
-        source_is_broadcast: false,
         luma16_mask_byte_shift: 0,
     })
 }
@@ -624,7 +656,6 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_composite_plan_for_sh
         region,
         source_width: shape.width as usize,
         source_height: shape.height as usize,
-        source_is_broadcast: false,
         luma16_mask_byte_shift: 0,
     })
 }

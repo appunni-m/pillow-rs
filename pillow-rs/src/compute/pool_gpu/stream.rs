@@ -85,6 +85,13 @@ struct Ready {
     offset: u64,
 }
 
+fn batch_key_host_bytes(key: Option<&BatchKey>) -> u64 {
+    match key {
+        Some(BatchKey::Text(text)) => text.len() as u64,
+        _ => 8,
+    }
+}
+
 /// Caller-driven, bounded scheduler for existing lazy Image graphs.
 ///
 /// No CPU image-operation fallback, Rayon scheduling, or intermediate readback
@@ -221,17 +228,13 @@ impl GpuBatchExecutor {
         if std::mem::take(&mut self.injected_admission_failure) {
             return Err(fail(
                 BatchErrorKind::Execution,
-                "GPU device unavailable during GPU batch admission: injected test failure"
-                    .into(),
+                "GPU device unavailable during GPU batch admission: injected test failure".into(),
             ));
         }
         self.gpu
             .ensure_healthy("GPU batch admission")
             .map_err(|e| fail(BatchErrorKind::Execution, e.to_string()))?;
-        let key_bytes = match &key {
-            Some(BatchKey::Text(text)) => text.len(),
-            _ => 8,
-        } as u64;
+        let key_bytes = batch_key_host_bytes(key.as_ref());
         if key_bytes > self.config.host_bytes {
             return Err(fail(
                 BatchErrorKind::Limit,

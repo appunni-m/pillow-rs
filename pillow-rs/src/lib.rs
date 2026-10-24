@@ -196,6 +196,8 @@ pub use crate::compute::GpuBatchStats;
 pub use crate::compute::GpuImage;
 pub use crate::compute::PipelineOperationTelemetry;
 pub use crate::compute::PipelineResourceTelemetry;
+#[doc(hidden)]
+pub use crate::compute::PipelineTelemetryOrigin;
 pub use crate::compute::active_backends;
 pub use crate::compute::available_backends;
 pub use crate::compute::backend_enabled;

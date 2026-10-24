@@ -37,7 +37,11 @@ try:
     )
     from migration_producer_attestation import merge_backend_attestations
     from migration_benchmark_samples import RawSampleCollector
-    from simd_evidence import simd_vector_evidence
+    from simd_evidence import (
+        mapped_operation_owners,
+        simd_vector_evidence,
+        workflow_step_owners,
+    )
     from migration_benchmark_adapter import (
         benchmark_adapter_environment,
         benchmark_adapter_python,
@@ -64,7 +68,11 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` i
     )
     from scripts.migration_producer_attestation import merge_backend_attestations
     from scripts.migration_benchmark_samples import RawSampleCollector
-    from scripts.simd_evidence import simd_vector_evidence
+    from scripts.simd_evidence import (
+        mapped_operation_owners,
+        simd_vector_evidence,
+        workflow_step_owners,
+    )
     from scripts.migration_benchmark_adapter import (
         benchmark_adapter_environment,
         benchmark_adapter_python,
@@ -195,7 +203,12 @@ def active_target_profiles() -> tuple[str, ...]:
 
 
 def suite_subject_is_comparable(
-    subject: dict[str, Any], subject_id: str, *, execution_scope: str = "compute_backend"
+    subject: dict[str, Any],
+    subject_id: str,
+    *,
+    execution_scope: str = "compute_backend",
+    expected_sources: dict[str, tuple[str, str]] | None = None,
+    mapped_owners: set[tuple[str, str]] | None = None,
 ) -> bool:
     """Return whether a subject can contribute to a paired suite ratio.
 
@@ -273,7 +286,9 @@ def suite_subject_is_comparable(
             "subject": subject_id,
             "operation_telemetry": execution.get("operation_telemetry"),
             "selected_step_ids": execution.get("selected_step_ids"),
-        }
+        },
+        expected_sources,
+        mapped_owners,
     ) != "positive_vector_work":
         return False
     # A representative untimed receipt proves the route for the workload;
@@ -482,6 +497,43 @@ def load_benchmarks(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any]]
             inputs[workload["workload_id"]] = relative
         suites.extend(payload.get("suites", []))
     return workloads, suites, inputs
+
+
+def benchmark_simd_source_contracts(
+    manifest: dict[str, Any],
+    workloads: list[dict[str, Any]],
+    parity_cases: dict[str, dict[str, Any]],
+) -> dict[str, tuple[dict[str, tuple[str, str]], set[tuple[str, str]]]]:
+    """Bind vector evidence to workload workflow steps and covered owners."""
+    requirement_owner: dict[str, str] = {}
+    for surface in manifest.get("surfaces", []):
+        if not isinstance(surface, dict) or not isinstance(surface.get("id"), str):
+            continue
+        for operation in surface.get("operations", []):
+            if not isinstance(operation, dict) or not isinstance(operation.get("id"), str):
+                continue
+            owner = f"{surface['id']}.{operation['id']}"
+            for requirement in operation.get("requirements", []):
+                if isinstance(requirement, dict) and isinstance(requirement.get("id"), str):
+                    requirement_owner[requirement["id"]] = owner
+
+    contracts: dict[
+        str, tuple[dict[str, tuple[str, str]], set[tuple[str, str]]]
+    ] = {}
+    for workload in workloads:
+        input_spec = workload.get("input", {})
+        if input_spec.get("kind") == "workflow":
+            steps = input_spec.get("steps")
+        elif input_spec.get("kind") == "parity_case":
+            case = parity_cases.get(input_spec.get("case_id"))
+            steps = case.get("steps") if isinstance(case, dict) else None
+        else:
+            steps = None
+        contracts[workload["workload_id"]] = (
+            workflow_step_owners(steps),
+            mapped_operation_owners(workload.get("covers"), requirement_owner),
+        )
+    return contracts
 
 
 def merge_parity_results(results: list[dict[str, Any]], timeout: int) -> dict[str, Any]:
@@ -2086,6 +2138,9 @@ def run(args: argparse.Namespace) -> int:
     original_subjects = frozen_workload_subjects(selected_workloads)
     selected_workloads = apply_profile_to_workloads(selected_workloads)
     validate_selected_workloads(selected_workloads, original_subjects)
+    simd_source_contracts = benchmark_simd_source_contracts(
+        manifest_data, selected_workloads, cases_by_id
+    )
 
     workload_cases: dict[str, dict[str, Any]] = {}
     parity_case_ids: list[str] = []
@@ -2753,6 +2808,12 @@ def run(args: argparse.Namespace) -> int:
                     execution_scope=workload["measurement_policy"].get(
                         "execution_scope", "compute_backend"
                     ),
+                    expected_sources=simd_source_contracts.get(
+                        member["workload_id"], ({}, set())
+                    )[0],
+                    mapped_owners=simd_source_contracts.get(
+                        member["workload_id"], ({}, set())
+                    )[1],
                 ):
                     common_members.append(member)
                 else:

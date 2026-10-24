@@ -11,6 +11,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
+#[path = "telemetry/origins.rs"]
+mod origins;
+pub use origins::PipelineTelemetryOrigin;
+pub(crate) use origins::{
+    RestorePipelineOperationOrigins, capture_active_origin, enter_operation_origins,
+    origin_for_event, replace_active_origin,
+};
+
 /// One embedded WGSL shader variant observed at least once by a GPU dispatch.
 ///
 /// `shader_file` is the checked-in WGSL asset name. `variant_name` identifies
@@ -86,7 +94,7 @@ pub struct PipelineResourceTelemetry {
 /// SIMD-capable operation (geometry, validation, or a tail); `cpu` means the
 /// CPU backend produced the operation; and `unsupported` means strict SIMD
 /// rejected it during contextual preflight.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct PipelineOperationTelemetry {
     /// Registry key for the public pipeline operation.
     pub operation: &'static str,
@@ -100,9 +108,12 @@ pub struct PipelineOperationTelemetry {
     pub mode_conversion_count: u64,
     /// Number of CPU↔SIMD handoffs attributable to this operation.
     pub handoff_count: u64,
+    /// Public workflow call that created this operation, when captured.
+    #[doc(hidden)]
+    pub source: Option<PipelineTelemetryOrigin>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct PipelineOperationSample {
     operation: &'static str,
     path: &'static str,
@@ -110,6 +121,7 @@ struct PipelineOperationSample {
     scalar_tail_count: u64,
     mode_conversion_count: u64,
     handoff_count: u64,
+    source: Option<PipelineTelemetryOrigin>,
 }
 
 /// Safe, thread-local allocation counters for checked host pixel buffers.
@@ -383,6 +395,7 @@ pub fn take_pipeline_operation_telemetry() -> Vec<PipelineOperationTelemetry> {
                 scalar_tail_count: sample.scalar_tail_count,
                 mode_conversion_count: sample.mode_conversion_count,
                 handoff_count: sample.handoff_count,
+                source: sample.source.clone(),
             })
             .collect()
     })
@@ -404,6 +417,7 @@ pub(crate) fn begin_pipeline_operation_telemetry(operation: &'static str) {
             mode_conversion_count: 0,
             handoff_count: PENDING_PIPELINE_HANDOFFS
                 .with(|pending| std::mem::take(&mut *pending.borrow_mut())),
+            source: origin_for_event(operation),
         });
     });
 }
@@ -529,6 +543,7 @@ pub(crate) fn record_pipeline_operation_unsupported(operation: &'static str) {
             scalar_tail_count: 0,
             mode_conversion_count: 0,
             handoff_count: 0,
+            source: origin_for_event(operation),
         });
     });
 }

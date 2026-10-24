@@ -24,6 +24,7 @@ struct Layout {
     arena_bytes: u64,
 }
 
+#[derive(Default)]
 struct PlannedAuxiliaries<'a> {
     secondary: Option<Box<Plan<'a>>>,
     tertiary: Option<Box<Plan<'a>>>,
@@ -133,7 +134,6 @@ fn plan_auxiliaries<'a>(
     gpu: &GpuInner,
     bounds: &mut GraphBounds,
 ) -> Result<PlannedAuxiliaries<'a>, PilError> {
-    let (width, height) = dimensions;
     match op {
         PipelineOp::Paste {
             source,
@@ -141,22 +141,7 @@ fn plan_auxiliaries<'a>(
             h,
             mask: None,
             ..
-        } => {
-            let child = plan_graph_inner(source, gpu, depth + 1, bounds)?;
-            if child.mode != mode
-                || u32::try_from(*w).ok() != Some(child.width)
-                || u32::try_from(*h).ok() != Some(child.height)
-            {
-                return Err(PilError::ValueError(
-                    "GPU paste requires matching native modes and source region".into(),
-                ));
-            }
-            Ok(PlannedAuxiliaries {
-                secondary: Some(Box::new(child)),
-                tertiary: None,
-                composed_byte: false,
-            })
-        }
+        } => plan_unmasked_paste_auxiliary(source, *w, *h, mode, depth, gpu, bounds),
         PipelineOp::Paste {
             source,
             w,
@@ -164,33 +149,7 @@ fn plan_auxiliaries<'a>(
             mask: Some(mask),
             mask_alpha: false,
             ..
-        } => {
-            let source_child = plan_graph_inner(source, gpu, depth + 1, bounds)?;
-            let mask_child = plan_graph_inner(mask, gpu, depth + 1, bounds)?;
-            let region = (u32::try_from(*w).ok(), u32::try_from(*h).ok());
-            let compact_broadcast =
-                (source_child.width, source_child.height) == (1, 1) && region != (Some(1), Some(1));
-            if !matches!(mode, "L" | "RGB" | "HSV" | "CMYK")
-                || source_child.mode != mode
-                || mask_child.mode != "L"
-                || *w <= 0
-                || *h <= 0
-                || region != (Some(mask_child.width), Some(mask_child.height))
-                || (!compact_broadcast
-                    && (source_child.width, source_child.height)
-                        != (mask_child.width, mask_child.height))
-            {
-                return Err(PilError::ValueError(
-                    "GPU masked Paste requires a native L mask and matching L/RGB/HSV/CMYK inputs"
-                        .into(),
-                ));
-            }
-            Ok(PlannedAuxiliaries {
-                secondary: Some(Box::new(source_child)),
-                tertiary: Some(Box::new(mask_child)),
-                composed_byte: false,
-            })
-        }
+        } => plan_masked_paste_auxiliary(source, mask, *w, *h, mode, depth, gpu, bounds),
         PipelineOp::Paste { mask: Some(_), .. } => Err(PilError::ValueError(
             "GPU batch masked Paste requires a non-alpha native L mask".into(),
         )),
@@ -199,20 +158,7 @@ fn plan_auxiliaries<'a>(
             dest: (0, 0),
             src: (0, 0),
         } if mode == "RGBA" && followed_by_mirror => {
-            let child = plan_graph_inner(source, gpu, depth + 1, bounds)?;
-            if child.mode != "RGBA"
-                || (child.width, child.height) != dimensions
-                || source.size().ok() != Some((width, height))
-            {
-                return Err(PilError::ValueError(
-                    "GPU alpha-composite mirror requires matching full-frame RGBA inputs".into(),
-                ));
-            }
-            Ok(PlannedAuxiliaries {
-                secondary: Some(Box::new(child)),
-                tertiary: None,
-                composed_byte: false,
-            })
+            plan_alpha_composite_auxiliary(source, dimensions, depth, gpu, bounds)
         }
         PipelineOp::Multiply { other }
         | PipelineOp::Screen { other }
@@ -225,24 +171,112 @@ fn plan_auxiliaries<'a>(
         | PipelineOp::AddModulo { other }
         | PipelineOp::SubtractModulo { other }
         | PipelineOp::BlendModule { other, .. } => {
-            let child = plan_graph_inner(other, gpu, depth + 1, bounds)?;
-            if child.mode != mode || (child.width, child.height) != dimensions {
-                return Err(PilError::ValueError(
-                    "GPU byte composition requires identical native modes and dimensions".into(),
-                ));
-            }
-            Ok(PlannedAuxiliaries {
-                secondary: Some(Box::new(child)),
-                tertiary: None,
-                composed_byte: true,
-            })
+            plan_byte_composition_auxiliary(other, mode, dimensions, depth, gpu, bounds)
         }
-        _ => Ok(PlannedAuxiliaries {
-            secondary: None,
-            tertiary: None,
-            composed_byte: false,
-        }),
+        _ => Ok(PlannedAuxiliaries::default()),
     }
+}
+
+fn plan_unmasked_paste_auxiliary<'a>(
+    source: &'a crate::Image,
+    width: i32,
+    height: i32,
+    mode: &str,
+    depth: usize,
+    gpu: &GpuInner,
+    bounds: &mut GraphBounds,
+) -> Result<PlannedAuxiliaries<'a>, PilError> {
+    let child = plan_graph_inner(source, gpu, depth + 1, bounds)?;
+    if child.mode != mode
+        || u32::try_from(width).ok() != Some(child.width)
+        || u32::try_from(height).ok() != Some(child.height)
+    {
+        return Err(PilError::ValueError(
+            "GPU paste requires matching native modes and source region".into(),
+        ));
+    }
+    Ok(PlannedAuxiliaries {
+        secondary: Some(Box::new(child)),
+        ..PlannedAuxiliaries::default()
+    })
+}
+
+fn plan_masked_paste_auxiliary<'a>(
+    source: &'a crate::Image,
+    mask: &'a crate::Image,
+    width: i32,
+    height: i32,
+    mode: &str,
+    depth: usize,
+    gpu: &GpuInner,
+    bounds: &mut GraphBounds,
+) -> Result<PlannedAuxiliaries<'a>, PilError> {
+    let source_child = plan_graph_inner(source, gpu, depth + 1, bounds)?;
+    let mask_child = plan_graph_inner(mask, gpu, depth + 1, bounds)?;
+    let region = (u32::try_from(width).ok(), u32::try_from(height).ok());
+    let compact_broadcast =
+        (source_child.width, source_child.height) == (1, 1) && region != (Some(1), Some(1));
+    if !matches!(mode, "L" | "RGB" | "HSV" | "CMYK")
+        || source_child.mode != mode
+        || mask_child.mode != "L"
+        || width <= 0
+        || height <= 0
+        || region != (Some(mask_child.width), Some(mask_child.height))
+        || (!compact_broadcast
+            && (source_child.width, source_child.height) != (mask_child.width, mask_child.height))
+    {
+        return Err(PilError::ValueError(
+            "GPU masked Paste requires a native L mask and matching L/RGB/HSV/CMYK inputs".into(),
+        ));
+    }
+    Ok(PlannedAuxiliaries {
+        secondary: Some(Box::new(source_child)),
+        tertiary: Some(Box::new(mask_child)),
+        ..PlannedAuxiliaries::default()
+    })
+}
+
+fn plan_alpha_composite_auxiliary<'a>(
+    source: &'a crate::Image,
+    dimensions: (u32, u32),
+    depth: usize,
+    gpu: &GpuInner,
+    bounds: &mut GraphBounds,
+) -> Result<PlannedAuxiliaries<'a>, PilError> {
+    let child = plan_graph_inner(source, gpu, depth + 1, bounds)?;
+    if child.mode != "RGBA"
+        || (child.width, child.height) != dimensions
+        || source.size().ok() != Some(dimensions)
+    {
+        return Err(PilError::ValueError(
+            "GPU alpha-composite mirror requires matching full-frame RGBA inputs".into(),
+        ));
+    }
+    Ok(PlannedAuxiliaries {
+        secondary: Some(Box::new(child)),
+        ..PlannedAuxiliaries::default()
+    })
+}
+
+fn plan_byte_composition_auxiliary<'a>(
+    other: &'a crate::Image,
+    mode: &str,
+    dimensions: (u32, u32),
+    depth: usize,
+    gpu: &GpuInner,
+    bounds: &mut GraphBounds,
+) -> Result<PlannedAuxiliaries<'a>, PilError> {
+    let child = plan_graph_inner(other, gpu, depth + 1, bounds)?;
+    if child.mode != mode || (child.width, child.height) != dimensions {
+        return Err(PilError::ValueError(
+            "GPU byte composition requires identical native modes and dimensions".into(),
+        ));
+    }
+    Ok(PlannedAuxiliaries {
+        secondary: Some(Box::new(child)),
+        composed_byte: true,
+        ..PlannedAuxiliaries::default()
+    })
 }
 
 fn select_layout(

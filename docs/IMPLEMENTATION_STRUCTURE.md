@@ -128,6 +128,10 @@ At repository root, preserve package and workflow ownership boundaries:
 | `docs/evidence/` | Immutable results grouped by family and experiment identity; never replace older evidence. |
 | `.github/workflows/` | One workflow per lifecycle purpose (CI, docs, benchmarks, release); shared behavior belongs in maintained scripts or composite actions rather than copied workflow bodies. |
 
+Reviewed quality-tool ratchet baselines stay beside their enforcing checkers,
+for example `scripts/rust_size_baseline.json` and
+`scripts/public_api_boundary_baseline.json`.
+
 Cargo examples stay as named targets in `pillow-rs/examples/`. Embedded assets
 stay with their owning domain (`src/font/`, `src/data/`) or operation family
 (`src/ops/lut_<family>.*`); do not create a generic asset bucket. Package

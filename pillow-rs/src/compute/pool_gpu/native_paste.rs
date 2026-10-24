@@ -40,6 +40,7 @@ pub(super) struct NativeMaskedBytePasteDispatch {
     pub(super) destination_pixels: u32,
     pub(super) source_pixels: u32,
     pub(super) source_is_broadcast: bool,
+    pub(super) binary_mask: bool,
     pub(super) bytes_per_pixel: u8,
     pub(super) word_count: u32,
     pub(super) workgroups: u32,
@@ -57,7 +58,7 @@ pub(super) fn gpu_native_masked_byte_paste_shader(
     bytes_per_pixel: u8,
 ) -> Option<(&'static str, &'static str, &'static str)> {
     match (logical_mode, bytes_per_pixel) {
-        ("L", 1) => Some((
+        ("1" | "L" | "P", 1) => Some((
             "__internal_paste_native_masked_l",
             "paste_native_masked_l.wgsl",
             include_str!("shaders/paste_native_masked_l.wgsl"),
@@ -315,6 +316,7 @@ pub(super) fn plan_gpu_native_masked_byte_paste(
         destination_pixels,
         source_pixels,
         source_is_broadcast,
+        binary_mask: false,
         bytes_per_pixel,
         word_count,
         workgroups,
@@ -557,7 +559,7 @@ pub(super) fn gpu_native_rgb_to_rgba_paste_layout(
 }
 
 /// Admit exact same-mode L, LA, PA, RGB, HSV, RGBA, or CMYK Paste with a
-/// native L mask. Other logical modes and mask semantics retain the generic
+/// native one-byte mask. Other logical modes and mask semantics retain the generic
 /// path.
 pub(super) fn gpu_native_masked_byte_paste_layout(
     op: &PipelineOp,
@@ -580,62 +582,12 @@ pub(super) fn gpu_native_masked_byte_paste_layout(
         return None;
     };
     let source_mode = source_image.mode().ok()?;
-    if mask_image.mode().ok()?.as_str() != "L" {
+    let mask_mode = mask_image.mode().ok()?;
+    if !matches!(mask_mode.as_str(), "1" | "L") {
         return None;
     }
     let (bytes_per_pixel, logical_mode) =
-        match (mode, source_mode.as_str(), destination, source, mask) {
-            (
-                Some("L"),
-                "L",
-                DynamicImage::ImageLuma8(_),
-                DynamicImage::ImageLuma8(_),
-                DynamicImage::ImageLuma8(_),
-            ) => (1, "L"),
-            (
-                Some("LA"),
-                "LA",
-                DynamicImage::ImageLumaA8(_),
-                DynamicImage::ImageLumaA8(_),
-                DynamicImage::ImageLuma8(_),
-            ) => (2, "LA"),
-            (
-                Some("PA"),
-                "PA",
-                DynamicImage::ImageLumaA8(_),
-                DynamicImage::ImageLumaA8(_),
-                DynamicImage::ImageLuma8(_),
-            ) => (2, "PA"),
-            (
-                Some("RGB"),
-                "RGB",
-                DynamicImage::ImageRgb8(_),
-                DynamicImage::ImageRgb8(_),
-                DynamicImage::ImageLuma8(_),
-            ) => (3, "RGB"),
-            (
-                Some("HSV"),
-                "HSV",
-                DynamicImage::ImageRgb8(_),
-                DynamicImage::ImageRgb8(_),
-                DynamicImage::ImageLuma8(_),
-            ) => (3, "HSV"),
-            (
-                Some("RGBA"),
-                "RGBA",
-                DynamicImage::ImageRgba8(_),
-                DynamicImage::ImageRgba8(_),
-                DynamicImage::ImageLuma8(_),
-            ) => (4, "RGBA"),
-            (
-                Some("CMYK"),
-                "CMYK",
-                DynamicImage::ImageRgba8(_),
-                DynamicImage::ImageRgba8(_),
-                DynamicImage::ImageLuma8(_),
-            ) => (4, "CMYK"),
-            _ => return None,
-        };
+        gpu_native_masked_byte_paste_mode(mode, source_mode.as_str(), destination, source, mask)?;
     let (source_width, source_height) = source.dimensions();
     let (mask_width, mask_height) = mask.dimensions();
     let source_is_broadcast =
@@ -644,7 +596,11 @@ pub(super) fn gpu_native_masked_byte_paste_layout(
         || *h <= 0
         || (u32::try_from(*w).ok()?, u32::try_from(*h).ok()?) != (mask_width, mask_height)
         || (!source_is_broadcast && (source_width, source_height) != (mask_width, mask_height))
-        || (source_is_broadcast && !matches!(logical_mode, "L" | "RGB" | "HSV" | "RGBA" | "CMYK"))
+        || (source_is_broadcast
+            && !matches!(
+                logical_mode,
+                "1" | "L" | "P" | "LA" | "PA" | "RGB" | "HSV" | "RGBA" | "CMYK"
+            ))
     {
         return None;
     }
@@ -659,4 +615,110 @@ pub(super) fn gpu_native_masked_byte_paste_layout(
         return None;
     }
     Some(((*x, *y), bytes_per_pixel, logical_mode))
+}
+
+fn gpu_native_masked_byte_paste_mode(
+    mode: Option<&str>,
+    source_mode: &str,
+    destination: &DynamicImage,
+    source: &DynamicImage,
+    mask: &DynamicImage,
+) -> Option<(u8, &'static str)> {
+    Some(match (mode, source_mode, destination, source, mask) {
+        (
+            Some("1"),
+            "1",
+            DynamicImage::ImageLuma8(_),
+            DynamicImage::ImageLuma8(_),
+            DynamicImage::ImageLuma8(_),
+        ) => (1, "1"),
+        (
+            Some("L"),
+            "L",
+            DynamicImage::ImageLuma8(_),
+            DynamicImage::ImageLuma8(_),
+            DynamicImage::ImageLuma8(_),
+        ) => (1, "L"),
+        (
+            Some("P"),
+            "P",
+            DynamicImage::ImageLuma8(_),
+            DynamicImage::ImageLuma8(_),
+            DynamicImage::ImageLuma8(_),
+        ) => (1, "P"),
+        (
+            Some("LA"),
+            "LA",
+            DynamicImage::ImageLumaA8(_),
+            DynamicImage::ImageLumaA8(_),
+            DynamicImage::ImageLuma8(_),
+        ) => (2, "LA"),
+        (
+            Some("PA"),
+            "PA",
+            DynamicImage::ImageLumaA8(_),
+            DynamicImage::ImageLumaA8(_),
+            DynamicImage::ImageLuma8(_),
+        ) => (2, "PA"),
+        (
+            Some("RGB"),
+            "RGB",
+            DynamicImage::ImageRgb8(_),
+            DynamicImage::ImageRgb8(_),
+            DynamicImage::ImageLuma8(_),
+        ) => (3, "RGB"),
+        (
+            Some("HSV"),
+            "HSV",
+            DynamicImage::ImageRgb8(_),
+            DynamicImage::ImageRgb8(_),
+            DynamicImage::ImageLuma8(_),
+        ) => (3, "HSV"),
+        (
+            Some("RGBA"),
+            "RGBA",
+            DynamicImage::ImageRgba8(_),
+            DynamicImage::ImageRgba8(_),
+            DynamicImage::ImageLuma8(_),
+        ) => (4, "RGBA"),
+        (
+            Some("CMYK"),
+            "CMYK",
+            DynamicImage::ImageRgba8(_),
+            DynamicImage::ImageRgba8(_),
+            DynamicImage::ImageLuma8(_),
+        ) => (4, "CMYK"),
+        _ => return None,
+    })
+}
+
+pub(super) fn plan_gpu_native_masked_byte_paste_for_op(
+    op: &PipelineOp,
+    destination: &DynamicImage,
+    source: &DynamicImage,
+    mask: &DynamicImage,
+    mode: Option<&str>,
+    limits: &wgpu::Limits,
+) -> Option<((i32, i32), &'static str, NativeMaskedBytePasteDispatch)> {
+    let (offset, bytes_per_pixel, logical_mode) =
+        gpu_native_masked_byte_paste_layout(op, destination, source, mask, mode)?;
+    let mut dispatch = plan_gpu_native_masked_byte_paste(
+        destination.width(),
+        destination.height(),
+        source.width(),
+        source.height(),
+        mask.width(),
+        mask.height(),
+        bytes_per_pixel,
+        limits.max_compute_workgroups_per_dimension,
+        limits.max_storage_buffer_binding_size,
+        limits.max_buffer_size,
+    )?;
+    dispatch.binary_mask = matches!(
+        op,
+        PipelineOp::Paste {
+            mask: Some(mask), ..
+        } if mask.mode().ok().as_deref() == Some("1")
+    );
+    Some((offset, logical_mode, dispatch))
 }

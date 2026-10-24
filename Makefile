@@ -289,7 +289,7 @@ help-all: ## Show all specialized commands
 	@printf "\n$(BOLD)Lint$(NC)\n"
 	@printf "  $(CYAN)make quality$(NC)       Run Rust, repository, and source-policy quality gates\n"
 	@printf "  $(CYAN)make checkstyle$(NC)     Check Rust file/function size limits and baseline growth\n"
-	@printf "  $(CYAN)make checkstyle-update-baseline$(NC) Re-record current legacy size baselines\n"
+	@printf "  $(CYAN)make checkstyle-update-baseline$(NC) Record reviewed size and API-boundary reductions\n"
 	@printf "  $(CYAN)make fmt$(NC)            Check Rust formatting\n"
 	@printf "  $(CYAN)make fmt-fix$(NC)        Fix Rust formatting\n"
 	@printf "  $(CYAN)make clippy$(NC)         Run clippy (all targets, all features)\n"
@@ -1084,6 +1084,7 @@ checkstyle: clippy ## Check Rust file/function limits and growth against legacy 
 checkstyle-update-baseline: ## Re-record existing over-limit files/functions; review the baseline diff
 	$(PYTHON) scripts/run_clippy_quality.py --update-baseline
 	$(PYTHON) scripts/check_rust_file_sizes.py --update-baseline
+	$(PYTHON) scripts/check_public_api_boundary.py --update-wildcard-baseline
 
 quality: repo-map-check docs-lint fmt checkstyle ## Run consolidated static quality checks
 	PYTHON="$(PYTHON)" CARGO="$(CARGO)" bash scripts/lint.sh --supplemental

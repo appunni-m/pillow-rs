@@ -82,6 +82,18 @@ pub(super) fn native_paste_blend_vector16(
 }
 
 #[inline]
+pub(super) fn native_paste_binary_copy_vector16(
+    source: [u8; 16],
+    destination: [u8; 16],
+    mask: [u8; 16],
+) -> [u8; 16] {
+    u8x16::new(mask)
+        .simd_eq(u8x16::splat(0))
+        .bitselect(u8x16::new(destination), u8x16::new(source))
+        .to_array()
+}
+
+#[inline]
 pub(super) fn native_paste_blend_vector8(
     source: [u8; 8],
     destination: [u8; 8],

@@ -294,19 +294,13 @@ impl GpuPool {
             else {
                 return None;
             };
-            let (offset, bytes_per_pixel, logical_mode) =
-                gpu_native_masked_byte_paste_layout(op, img, source_pixels, mask_pixels, mode)?;
-            let dispatch = plan_gpu_native_masked_byte_paste(
-                img.width(),
-                img.height(),
-                source_pixels.width(),
-                source_pixels.height(),
-                mask_pixels.width(),
-                mask_pixels.height(),
-                bytes_per_pixel,
-                limits.max_compute_workgroups_per_dimension,
-                limits.max_storage_buffer_binding_size,
-                limits.max_buffer_size,
+            let (offset, logical_mode, dispatch) = plan_gpu_native_masked_byte_paste_for_op(
+                op,
+                img,
+                source_pixels,
+                mask_pixels,
+                mode,
+                &limits,
             )?;
             Some((source_pixels, mask_pixels, offset, logical_mode, dispatch))
         })();

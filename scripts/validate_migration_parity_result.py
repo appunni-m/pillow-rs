@@ -275,15 +275,35 @@ def execution_receipt(
                 "mode_conversion_count",
                 "handoff_count",
             }
+            has_source = isinstance(item, dict) and "source" in item
             if selected_step_ids is None:
-                exact(item, telemetry_keys, telemetry_label)
+                exact(
+                    item,
+                    telemetry_keys | ({"source"} if has_source else set()),
+                    telemetry_label,
+                )
             else:
-                exact(item, telemetry_keys | {"step_id"}, telemetry_label)
+                exact(
+                    item,
+                    telemetry_keys
+                    | {"step_id"}
+                    | ({"source"} if has_source else set()),
+                    telemetry_label,
+                )
                 string(item["step_id"], f"{telemetry_label}.step_id")
                 if item["step_id"] not in selected_step_ids:
                     raise ValueError(
                         f"{telemetry_label}.step_id: not in selected_step_ids"
                     )
+            if has_source and item["source"] is not None:
+                source_label = f"{telemetry_label}.source"
+                exact(
+                    item["source"],
+                    {"step_id", "surface", "operation"},
+                    source_label,
+                )
+                for field in ("step_id", "surface", "operation"):
+                    string(item["source"][field], f"{source_label}.{field}")
             string(item["operation"], f"{telemetry_label}.operation")
             string(item["path"], f"{telemetry_label}.path")
             for field in (

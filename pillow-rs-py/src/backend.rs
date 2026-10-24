@@ -67,6 +67,34 @@ fn set_pipeline_telemetry(enabled: bool) -> bool {
     pillow_rs::Backend::set_pipeline_telemetry_enabled(enabled)
 }
 
+/// Set the public workflow origin attached to subsequent telemetry.
+#[pyfunction]
+fn set_pipeline_telemetry_origin(
+    step_id: Option<&str>,
+    surface: Option<&str>,
+    operation: Option<&str>,
+) -> PyResult<Option<(String, String, String)>> {
+    let origin = match (step_id, surface, operation) {
+        (Some(step_id), Some(surface), Some(operation))
+            if !step_id.is_empty() && !surface.is_empty() && !operation.is_empty() =>
+        {
+            Some(pillow_rs::PipelineTelemetryOrigin {
+                step_id: step_id.to_owned(),
+                surface: surface.to_owned(),
+                operation: operation.to_owned(),
+            })
+        }
+        (None, None, None) => None,
+        _ => {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "workflow telemetry origin requires three non-empty strings or three nulls",
+            ));
+        }
+    };
+    let previous = pillow_rs::Backend::set_pipeline_telemetry_origin(origin);
+    Ok(previous.map(|origin| (origin.step_id, origin.surface, origin.operation)))
+}
+
 /// Take the most recent completed image-pipeline telemetry sample for this
 /// thread, or return ``None`` when no sample is available.
 fn pipeline_operation_telemetry_to_py(
@@ -82,6 +110,15 @@ fn pipeline_operation_telemetry_to_py(
         value.set_item("scalar_tail_count", sample.scalar_tail_count)?;
         value.set_item("mode_conversion_count", sample.mode_conversion_count)?;
         value.set_item("handoff_count", sample.handoff_count)?;
+        if let Some(source) = sample.source {
+            let source_dict = PyDict::new(py);
+            source_dict.set_item("step_id", source.step_id)?;
+            source_dict.set_item("surface", source.surface)?;
+            source_dict.set_item("operation", source.operation)?;
+            value.set_item("source", source_dict)?;
+        } else {
+            value.set_item("source", py.None())?;
+        }
         values.append(value)?;
     }
     Ok(values.into())
@@ -194,6 +231,7 @@ pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(active_backends, m)?)?;
     m.add_function(wrap_pyfunction!(backend_enabled, m)?)?;
     m.add_function(wrap_pyfunction!(set_pipeline_telemetry, m)?)?;
+    m.add_function(wrap_pyfunction!(set_pipeline_telemetry_origin, m)?)?;
     m.add_function(wrap_pyfunction!(take_pipeline_telemetry, m)?)?;
     m.add_function(wrap_pyfunction!(set_gpu_shader_coverage, m)?)?;
     m.add_function(wrap_pyfunction!(take_gpu_shader_coverage, m)?)?;

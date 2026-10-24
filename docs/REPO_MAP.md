@@ -363,6 +363,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- pad_luma_packed.wgsl
 |   |   |   |   |   |-- paste.wgsl
 |   |   |   |   |   |-- paste_native_bytes.wgsl
+|   |   |   |   |   |-- paste_native_masked_bytes.wgsl
 |   |   |   |   |   |-- paste_native_masked_l.wgsl
 |   |   |   |   |   |-- paste_native_masked_la.wgsl
 |   |   |   |   |   |-- paste_native_masked_pa.wgsl
@@ -423,6 +424,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- layout.rs
 |   |   |   |   |   |   `-- resources.rs
 |   |   |   |   |   |-- graph.rs
+|   |   |   |   |   |-- paste.rs
 |   |   |   |   |   `-- types.rs
 |   |   |   |   |-- stream.rs
 |   |   |   |   |-- tests/
@@ -730,6 +732,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- simd.rs
 |   |   |   |       `-- transform.rs
 |   |   |   |-- registry.rs
+|   |   |   |-- telemetry/
+|   |   |   |   `-- origins.rs
 |   |   |   |-- telemetry.rs
 |   |   |   |-- thumbnail_fusion.rs
 |   |   |   `-- transpose_tests.rs
@@ -1041,12 +1045,16 @@ It is a navigation aid, not an API-support or coverage claim.
     |   |-- channel_inputs.py
     |   |-- display.py
     |   |-- display_inputs.py
+    |   |-- fault_contracts.py
+    |   |-- gpu_batch_inputs.py
+    |   |-- pipeline_contract.py
     |   `-- quantize_inputs.py
     |-- migration_parity_inventory.py
     |-- migration_producer_attestation.py
     |-- migration_producer_identity.py
     |-- prepare_pypi_release.py
     |-- profile_migration_benchmark.py
+    |-- public_api_boundary_baseline.json
     |-- reduce_migration_parity_cases.py
     |-- release_versions.py
     |-- report_migration_changed_line_coverage.py

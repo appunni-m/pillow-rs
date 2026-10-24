@@ -9,8 +9,11 @@ public module delegations. Binding crates must call exact root names from
 
 from __future__ import annotations
 
+import argparse
+import json
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 
@@ -26,6 +29,8 @@ RUST_GLOBS = [
     "pillow-rs-js/src/**/*.rs",
 ]
 FONTDONE_ADAPTER = ROOT / "pillow-rs" / "src" / "font" / "imagingft.rs"
+FONTDONE_ADAPTER_DIR = FONTDONE_ADAPTER.with_suffix("")
+WILDCARD_BASELINE_PATH = ROOT / "scripts" / "public_api_boundary_baseline.json"
 
 DEEP_MODULES = {
     "checked_dims",
@@ -72,8 +77,60 @@ def collect_rust_files() -> list[Path]:
     return sorted(set(files))
 
 
+def is_fontdone_adapter_source(path: Path) -> bool:
+    """Treat the adapter root and its private implementation modules as one boundary."""
+    return path == FONTDONE_ADAPTER or FONTDONE_ADAPTER_DIR in path.parents
+
+
+def code_before_line_comment(line: str) -> str:
+    """Exclude line-comment text from source-boundary checks."""
+    return line.split("//", 1)[0]
+
+
+def load_wildcard_baseline() -> tuple[dict[str, object], Counter[str]]:
+    """Load the reviewed per-file ceilings for existing wildcard imports."""
+    data = json.loads(WILDCARD_BASELINE_PATH.read_text(encoding="utf-8"))
+    if data.get("format_version") != 1:
+        raise ValueError(f"unsupported wildcard baseline: {WILDCARD_BASELINE_PATH}")
+    for field in ("owner", "reduction_task", "reason"):
+        if not isinstance(data.get(field), str) or not data[field].strip():
+            raise ValueError(f"wildcard baseline is missing {field!r}")
+    raw_counts = data.get("wildcard_use_counts")
+    if not isinstance(raw_counts, dict):
+        raise ValueError("wildcard baseline is missing wildcard_use_counts")
+    counts: Counter[str] = Counter()
+    for path, count in raw_counts.items():
+        if (
+            not isinstance(path, str)
+            or not path.endswith(".rs")
+            or not isinstance(count, int)
+            or count <= 0
+        ):
+            raise ValueError(f"invalid wildcard baseline entry: {path!r}={count!r}")
+        counts[path] = count
+    return data, counts
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--update-wildcard-baseline",
+        action="store_true",
+        help="record reviewed reductions without permitting per-file growth",
+    )
+    args = parser.parse_args()
+
     errors: list[str] = []
+    wildcard_counts: Counter[str] = Counter()
+    wildcard_examples: dict[str, list[tuple[int, str]]] = {}
+    try:
+        baseline_metadata, baseline = load_wildcard_baseline()
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        print(
+            f"could not read public API wildcard baseline: {error}",
+            file=sys.stderr,
+        )
+        return 2
 
     lib_text = LIB_RS.read_text()
 
@@ -110,16 +167,21 @@ def main() -> int:
                     "non-root modules must be private or pub(crate), not pub mod"
                 )
         for match in WILDCARD_USE_RE.finditer(text):
-            errors.append(
-                f"{rel(path)}:{line_number(text, match.start())}: "
-                "wildcard use/export is forbidden"
+            relative_path = rel(path)
+            wildcard_counts[relative_path] += 1
+            wildcard_examples.setdefault(relative_path, []).append(
+                (line_number(text, match.start()), match.group(0).strip())
             )
-        if path != FONTDONE_ADAPTER:
-            for match in FONTDONE_USE_RE.finditer(text):
-                errors.append(
-                    f"{rel(path)}:{line_number(text, match.start())}: "
-                    "fontdone access must stay isolated to pillow-rs/src/font/imagingft.rs"
-                )
+        if not is_fontdone_adapter_source(path):
+            line_offset = 0
+            for line in text.splitlines(keepends=True):
+                code = code_before_line_comment(line)
+                if FONTDONE_USE_RE.search(code):
+                    errors.append(
+                        f"{rel(path)}:{line_number(text, line_offset)}: "
+                        "fontdone access must stay isolated to the imagingft adapter"
+                    )
+                line_offset += len(line)
 
     for match in ROOT_FT_EXPORT_RE.finditer(lib_text):
         errors.append(
@@ -134,6 +196,40 @@ def main() -> int:
                 f"{rel(path)}:{line_number(text, match.start())}: "
                 f"binding crate must use explicit root API, not pillow_rs::{match.group(1)}"
             )
+
+    wildcard_growth: list[str] = []
+    for path, current_count in sorted(wildcard_counts.items()):
+        baseline_count = baseline[path]
+        if current_count <= baseline_count:
+            continue
+        wildcard_growth.append(
+            f"{path}: wildcard use/export grew from {baseline_count} to {current_count} "
+            "relative to the reviewed baseline"
+        )
+        for line, statement in wildcard_examples[path][baseline_count : baseline_count + 3]:
+            wildcard_growth.append(f"{path}:{line}: new wildcard use/export: {statement}")
+
+    print(
+        "wildcard use/export ratchet: "
+        f"{sum(wildcard_counts.values())} current / {sum(baseline.values())} baseline "
+        f"across {len(wildcard_counts)} files"
+    )
+
+    if args.update_wildcard_baseline:
+        if errors or wildcard_growth:
+            print("baseline update refused; resolve boundary errors and growth first:", file=sys.stderr)
+            for error in errors + wildcard_growth:
+                print(f"  {error}", file=sys.stderr)
+            return 1
+        baseline_metadata["wildcard_use_counts"] = dict(sorted(wildcard_counts.items()))
+        WILDCARD_BASELINE_PATH.write_text(
+            json.dumps(baseline_metadata, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"updated reviewed wildcard baseline: {WILDCARD_BASELINE_PATH}")
+        return 0
+
+    errors.extend(wildcard_growth)
 
     if errors:
         print("public API boundary violations:")

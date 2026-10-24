@@ -26,9 +26,11 @@ pub struct PipelineOps {
 struct PipelineOpChain {
     parent: Option<Arc<PipelineOpChain>>,
     op: Option<PipelineOp>,
+    origin: Option<crate::PipelineTelemetryOrigin>,
     len: usize,
     mode_preserving: bool,
     flattened: OnceLock<Arc<[PipelineOp]>>,
+    flattened_origins: OnceLock<Arc<[Option<crate::PipelineTelemetryOrigin>]>>,
 }
 
 impl PipelineOps {
@@ -37,44 +39,70 @@ impl PipelineOps {
             chain: Arc::new(PipelineOpChain {
                 parent: None,
                 op: None,
+                origin: None,
                 len: 0,
                 mode_preserving: true,
                 flattened: OnceLock::new(),
+                flattened_origins: OnceLock::new(),
             }),
             prefix_cache: None,
         }
     }
 
     pub(crate) fn one(op: PipelineOp) -> Self {
+        let origin = Self::capture_origin();
+        Self::one_with_origin(op, origin)
+    }
+
+    fn one_with_origin(op: PipelineOp, origin: Option<crate::PipelineTelemetryOrigin>) -> Self {
         let mode_preserving = op_preserves_mode(&op);
         Self {
             chain: Arc::new(PipelineOpChain {
                 parent: None,
                 op: Some(op),
+                origin,
                 len: 1,
                 mode_preserving,
                 flattened: OnceLock::new(),
+                flattened_origins: OnceLock::new(),
             }),
             prefix_cache: None,
         }
     }
 
     pub(crate) fn append(&self, op: PipelineOp) -> Self {
+        let origin = Self::capture_origin();
+        self.append_with_origin(op, origin)
+    }
+
+    fn append_with_origin(
+        &self,
+        op: PipelineOp,
+        origin: Option<crate::PipelineTelemetryOrigin>,
+    ) -> Self {
         Self {
             chain: Arc::new(PipelineOpChain {
                 parent: Some(Arc::clone(&self.chain)),
+                origin,
                 mode_preserving: self.chain.mode_preserving && op_preserves_mode(&op),
                 op: Some(op),
                 len: self.chain.len + 1,
                 flattened: OnceLock::new(),
+                flattened_origins: OnceLock::new(),
             }),
             prefix_cache: self.prefix_cache.clone(),
         }
     }
 
-    pub(crate) fn from_vec(ops: Vec<PipelineOp>) -> Self {
+    pub(crate) fn from_vec_with_origins(
+        ops: Vec<PipelineOp>,
+        origins: Vec<Option<crate::PipelineTelemetryOrigin>>,
+    ) -> Self {
         ops.into_iter()
-            .fold(Self::empty(), |pipeline, op| pipeline.append(op))
+            .zip(origins.into_iter().chain(std::iter::repeat(None)))
+            .fold(Self::empty(), |pipeline, (op, origin)| {
+                pipeline.append_with_origin(op, origin)
+            })
     }
 
     pub(crate) fn as_slice(&self) -> &[PipelineOp] {
@@ -93,6 +121,55 @@ impl PipelineOps {
                 Arc::<[PipelineOp]>::from(reversed)
             })
             .as_ref()
+    }
+
+    pub(crate) fn operation_origins(&self) -> &[Option<crate::PipelineTelemetryOrigin>] {
+        self.chain
+            .flattened_origins
+            .get_or_init(|| {
+                let mut reversed = Vec::with_capacity(self.chain.len);
+                let mut cursor = Some(Arc::clone(&self.chain));
+                while let Some(node) = cursor {
+                    if node.op.is_some() {
+                        reversed.push(node.origin.clone());
+                    }
+                    cursor = node.parent.as_ref().map(Arc::clone);
+                }
+                reversed.reverse();
+                Arc::<[Option<crate::PipelineTelemetryOrigin>]>::from(reversed)
+            })
+            .as_ref()
+    }
+
+    pub(crate) fn has_operation_origins(&self) -> bool {
+        let mut cursor = Some(Arc::clone(&self.chain));
+        while let Some(node) = cursor {
+            if node.origin.is_some() {
+                return true;
+            }
+            cursor = node.parent.as_ref().map(Arc::clone);
+        }
+        false
+    }
+
+    pub(crate) fn telemetry_origin_scope(
+        &self,
+    ) -> Option<crate::compute::RestorePipelineOperationOrigins> {
+        if !crate::compute::Backend::pipeline_telemetry_enabled() {
+            return None;
+        }
+        Some(crate::compute::enter_operation_origins(
+            self.as_slice()
+                .iter()
+                .zip(self.operation_origins())
+                .map(|(op, origin)| (crate::compute::registry::variant_key(op), origin.clone())),
+        ))
+    }
+
+    fn capture_origin() -> Option<crate::PipelineTelemetryOrigin> {
+        crate::compute::Backend::pipeline_telemetry_enabled()
+            .then(crate::compute::capture_active_origin)
+            .flatten()
     }
 
     pub(crate) fn to_vec(&self) -> Vec<PipelineOp> {

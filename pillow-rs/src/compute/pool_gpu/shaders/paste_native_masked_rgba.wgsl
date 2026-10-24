@@ -13,7 +13,7 @@ struct Params {
     mask_word_offset: u32,
     workgroups_x: u32,
     source_is_broadcast: u32,
-    padding_3: u32,
+    binary_mask: u32,
 }
 
 @group(0) @binding(0) var<storage, read> input_destination: array<u32>;
@@ -23,7 +23,11 @@ struct Params {
 
 fn read_mask(pixel_index: u32) -> u32 {
     let word = input_source_mask[params.mask_word_offset + pixel_index / 4u];
-    return (word >> ((pixel_index & 3u) * 8u)) & 0xffu;
+    let mask = (word >> ((pixel_index & 3u) * 8u)) & 0xffu;
+    if params.binary_mask != 0u {
+        return select(0u, 255u, mask != 0u);
+    }
+    return mask;
 }
 
 fn blend(source: u32, destination: u32, mask: u32) -> u32 {

@@ -26,10 +26,13 @@ PUBLIC_PALETTE_STRING_PATHS = {
 # This fault hook is compiled only by the opt-in test-api feature and is
 # exercised by fixture-driven fault-contract runners, not production builds.
 TEST_API_STRING_APIS = {("pillow-rs/src/lib.rs", "arm_fault")}
+EXAMPLE_LIMIT = 3
 TEST_MODULE = re.compile(r"^\s*#\[cfg\(test\)\]")
 FUNCTION_DECLARATION = re.compile(
     r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\b"
 )
+STRING_ERROR_RESULT = re.compile(r"Result<[^,]*,\s*String\s*>")
+STRING_ERROR_RETURN = re.compile(r"\)\s*->\s*Result<[^,]*,\s*String\s*>")
 CONTRACTS = {
     "raw_image_construction": re.compile(
         r"ImageLuma8.*from_raw|ImageRgb8.*from_raw|ImageRgba8.*from_raw|ImageLumaA8.*from_raw"
@@ -37,7 +40,7 @@ CONTRACTS = {
     "encoded_mode_flags": re.compile(
         r"has_gb\s*=\s*mode\s*[>=]|has_a\s*=\s*mode\s*[=!|]"
     ),
-    "string_error_types": re.compile(r"Result<[^,]*,\s*String\s*>"),
+    "string_error_types": STRING_ERROR_RESULT,
 }
 
 
@@ -78,15 +81,25 @@ def scan_source(path: str, text: str) -> list[Finding]:
                 contract == "string_error_types"
                 and path in PUBLIC_PALETTE_STRING_PATHS
                 and function_name in PUBLIC_PALETTE_STRING_APIS
+                and string_result_is_signature_line(line, function_name)
             ):
                 continue
             if (
                 contract == "string_error_types"
                 and (path, function_name) in TEST_API_STRING_APIS
+                and string_result_is_signature_line(line, function_name)
             ):
                 continue
             findings.append(Finding(path, line_number, contract, line.strip()))
     return findings
+
+
+def string_result_is_signature_line(line: str, function_name: str | None) -> bool:
+    """Limit compatibility exceptions to the declared function return type."""
+    declaration = FUNCTION_DECLARATION.match(line)
+    if declaration is not None and declaration.group(1) == function_name:
+        return STRING_ERROR_RESULT.search(line) is not None
+    return STRING_ERROR_RETURN.match(line) is not None
 
 
 def current_findings(root: Path = ROOT) -> list[Finding]:
@@ -166,6 +179,9 @@ def main(argv: list[str] | None = None) -> int:
             f"  {contract}: {current_counts[contract]} current / "
             f"{baseline_counts[contract]} baseline"
         )
+        examples = [finding for finding in current if finding.contract == contract]
+        for finding in examples[:EXAMPLE_LIMIT]:
+            print(f"    example: {finding.path}:{finding.line}: {finding.text}")
 
     violations = growth(baseline, current)
     if violations:

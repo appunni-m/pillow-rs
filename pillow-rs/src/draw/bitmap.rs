@@ -58,18 +58,18 @@ impl Draw {
             && requested_backend.is_some_and(|backend| backend != Backend::Cpu)
             && Self::bitmap_masked_paste_matches(&mode, self.orig_mode.as_deref(), &bmp_mode)
         {
-            // A constant-color bitmap with an L mask has the same byte blend
-            // contract as masked Paste for these native modes. Reuse the
+            // A constant-color bitmap with a compatible mask has the same
+            // byte operation contract as masked Paste for these native modes. Reuse the
             // existing selected-backend kernels instead of running this
             // destination loop on the host under a SIMD or GPU profile.
             // The 16x16 L benchmark remains about 2 us slower end-to-end on
             // SIMD than CPU because fixed pipeline and terminal-observation
             // costs dominate such a small blend. Keep the requested backend
             // route instead of disguising that case as CPU execution.
-            let source = if matches!(mode.as_str(), "1" | "L") {
-                PasteSource::Scalar(color.0)
-            } else {
-                PasteSource::Rgba(color.0, color.1, color.2, color.3)
+            let source = match mode.as_str() {
+                "1" | "L" | "P" => PasteSource::Scalar(color.0),
+                "LA" => PasteSource::LumaAlpha(color.0, color.3),
+                _ => PasteSource::Rgba(color.0, color.1, color.2, color.3),
             };
             self.image
                 .paste_bitmap_solid_masked_at(source, (x, y), bitmap)?;
@@ -100,12 +100,18 @@ impl Draw {
         original_mode: Option<&str>,
         mask_mode: &str,
     ) -> bool {
-        // Admit only modes whose bitmap blend contract and native masked-Paste
-        // kernels both match. Mode 1 uses binary destination writes and YCbCr
-        // has no native masked-Paste kernel; both stay on bitmap_cpu and are
-        // reported as CPU fallbacks when SIMD or GPU was requested. Palette
-        // indices and alpha-bearing masks or destinations also have
-        // draw-specific rules, so they stay on the format-specific CPU path.
+        // A binary bitmap mask selects complete stored pixels, so it can use
+        // a same-mode native Paste kernel for these byte layouts. Keep
+        // fractional L masks on their draw-specific paths where indexed and
+        // alpha-bearing modes have different blend rules.
+        if mask_mode == "1" {
+            return match mode {
+                "1" | "P" | "L" | "LA" | "RGB" | "RGBA" | "CMYK" | "HSV" => {
+                    original_mode == Some(mode) || (mode == "RGBA" && original_mode == Some("RGB"))
+                }
+                _ => false,
+            };
+        }
         if mask_mode != "L" {
             return false;
         }

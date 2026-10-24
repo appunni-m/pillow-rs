@@ -35,10 +35,14 @@ impl Image {
 
         Arc::make_mut(source).lock_backend_recursive(b);
         let mut flattened_ops = ops.to_vec();
+        let operation_origins = ops
+            .has_operation_origins()
+            .then(|| ops.operation_origins().to_vec())
+            .unwrap_or_default();
         for op in &mut flattened_ops {
             Self::lock_op_backend_recursive(op, b);
         }
-        *ops = PipelineOps::from_vec(flattened_ops);
+        *ops = PipelineOps::from_vec_with_origins(flattened_ops, operation_origins);
         *backend = Some(b);
         // A previously inspected/materialized pipeline must execute again
         // under the newly forced backend, including nested pipeline nodes.

@@ -89,7 +89,11 @@ sections from current measurements, preserves metadata for active paths, and
 removes owner entries for retired paths. It fails if an active path has no
 owner, reason, or qualified reduction task; add that metadata before recording
 a new exception. Review the function signatures, file ceilings, legacy_owners,
-and this document together after each baseline change. Do not add
+and this document together after each baseline change. The same target lowers
+the per-file wildcard-use ceilings in
+[the public API boundary baseline](../scripts/public_api_boundary_baseline.json)
+only when the current counts have shrunk; it refuses to record growth. Root
+exports, binding paths, and fontdone adapter checks remain strict. Do not add
 #[allow(clippy::too_many_lines)] or raise thresholds to make a failing change
 pass.
 

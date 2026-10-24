@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 import datetime as _dt
 from functools import wraps
@@ -107,9 +108,13 @@ if TARGET_PROFILE_OVERRIDE == "parallel-cpu":
     TARGET_FEATURES.extend(["pillow-rs-py/parallel", "pillow-rs/parallel"])
 elif TARGET_PROFILE_OVERRIDE == "gpu-fault-contract":
     TARGET_FEATURES.extend(["pillow-rs-py/test-api", "pillow-rs/test-api"])
-STRICT_TARGET_BACKEND = os.environ.get(
-    "MIGRATION_STRICT_TARGET_BACKEND", "0"
-).strip().lower() in {"1", "true", "yes"}
+STRICT_TARGET_BACKEND = (
+    os.environ.get("MIGRATION_STRICT_TARGET_BACKEND", "0")
+    .strip()
+    .lower()
+    in {"1", "true", "yes"}
+    or TARGET_BACKEND in {"simd", "gpu"}
+)
 
 
 def timed_source_identity() -> tuple[str, str]:
@@ -967,6 +972,7 @@ def call_workflow_step(
     assets: AssetStore,
     *,
     lock_backend: bool = True,
+    pipeline_telemetry_api: Any | None = None,
 ) -> Any:
     receiver_desc = step.get("receiver")
     receiver = (
@@ -990,6 +996,42 @@ def call_workflow_step(
             lock_target_workflow_value(value)
         for value in keywords.values():
             lock_target_workflow_value(value)
+    with pipeline_telemetry_origin(pipeline_telemetry_api, side, step):
+        return _invoke_workflow_step(
+            side, step, opdef, receiver, positional, keywords
+        )
+
+
+@contextmanager
+def pipeline_telemetry_origin(
+    telemetry_api: Any | None, side: str, step: dict[str, Any]
+) -> Iterable[None]:
+    """Attach the exact public workflow owner while the target call runs."""
+
+    setter = (
+        getattr(telemetry_api, "set_pipeline_telemetry_origin", None)
+        if side == "target" and telemetry_api is not None
+        else None
+    )
+    if not callable(setter):
+        yield
+        return
+    previous = setter(step["step_id"], step["surface"], step["operation"])
+    try:
+        yield
+    finally:
+        setter(*(previous or (None, None, None)))
+
+
+def _invoke_workflow_step(
+    side: str,
+    step: dict[str, Any],
+    opdef: dict[str, Any],
+    receiver: Any,
+    positional: list[Any],
+    keywords: dict[str, Any],
+) -> Any:
+    operation = step["operation"]
     if opdef["kind"] == "property_get":
         if receiver is None:
             raise TypeError(f"property {operation} requires a receiver")
@@ -2390,8 +2432,53 @@ def classify_pipeline_case(
             return False
         return _opened_exif_is_known_noop(source, assets_by_id, asset_cache)
 
+    def bitmap_unpaletted_tuple_fill_is_noop(step: dict[str, Any]) -> bool:
+        """Return whether P-mode bitmap ink resolution leaves the image untouched."""
+
+        if (step.get("surface"), step.get("operation")) != (
+            "PIL.ImageDraw.ImageDraw",
+            "bitmap",
+        ):
+            return False
+        fill = _workflow_literal(step.get("arguments"), "fill")
+        if not isinstance(fill, (list, tuple)) or len(fill) <= 1:
+            return False
+
+        draw = steps_by_id.get(receiver_binding(step))
+        if draw is None or (draw.get("surface"), draw.get("operation")) != (
+            "PIL.ImageDraw",
+            "Draw",
+        ):
+            return False
+        image = argument_binding(draw, "im")
+        if image is None or (image.get("surface"), image.get("operation")) != (
+            "PIL.Image",
+            "new",
+        ):
+            return False
+        if _workflow_literal(image.get("arguments"), "mode") != "P":
+            return False
+
+        # Image.new("P", ...) starts without an attached palette. Pillow's
+        # multi-component bitmap fill resolver then returns no ink. A prior
+        # palette mutation makes that conclusion unsafe, so keep such cases
+        # in the ordinary backend-proof path.
+        image_id = image.get("step_id")
+        step_index = next(
+            (index for index, candidate in enumerate(steps) if candidate is step),
+            len(steps),
+        )
+        return not any(
+            candidate.get("surface") == "PIL.Image.Image"
+            and "palette" in str(candidate.get("operation", "")).lower()
+            and receiver_binding(candidate) == image_id
+            for candidate in steps[:step_index]
+        )
+
     def definitely_eager(step: dict[str, Any]) -> bool:
         key = (step.get("surface"), step.get("operation"))
+        if key == ("PIL.ImageDraw.ImageDraw", "bitmap"):
+            return bitmap_unpaletted_tuple_fill_is_noop(step)
         if key == ("PIL.ImageDraw.ImageDraw", "line"):
             # The public line wrapper accepts one flat coordinate pair and
             # returns without queueing DrawLine when normalization yields
@@ -2914,7 +3001,12 @@ def run_case(
             ):
                 group_started_ns = time.perf_counter_ns()
             value = call_workflow_step(
-                side, step, opdef, bindings, assets
+                side,
+                step,
+                opdef,
+                bindings,
+                assets,
+                pipeline_telemetry_api=pipeline_execution_api,
             )
             if (
                 timing_sink is not None
@@ -5055,7 +5147,12 @@ def run_resident_case(
                 operation_index, step["surface"], step["operation"]
             )
             bindings[step["step_id"]] = call_workflow_step(
-                side, step, opdef, bindings, assets
+                side,
+                step,
+                opdef,
+                bindings,
+                assets,
+                pipeline_telemetry_api=telemetry_api,
             )
             if telemetry_api is not None:
                 receipt = telemetry_api.take_pipeline_telemetry()
@@ -5143,6 +5240,7 @@ def run_resident_case(
                     bindings,
                     assets,
                     lock_backend=False,
+                    pipeline_telemetry_api=telemetry_api,
                 )
             except BaseException as exc:  # public terminal failures are benchmark data
                 execution_errors.append(normalized_error(step, exc))

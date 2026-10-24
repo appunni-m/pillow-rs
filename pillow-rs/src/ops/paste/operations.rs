@@ -296,7 +296,7 @@ impl Image {
         position: (i32, i32),
         mask: &Image,
     ) -> Result<(), PilError> {
-        if mask.mode()?.as_str() != "L" {
+        if !matches!(mask.mode()?.as_str(), "1" | "L") {
             return Err(PilError::ValueError("bad transparency mask".to_owned()));
         }
         self.paste_impl(

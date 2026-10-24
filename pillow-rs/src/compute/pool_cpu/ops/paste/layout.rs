@@ -23,6 +23,7 @@ pub(super) struct PasteMaskLayout {
     pub(super) channels: usize,
     pub(super) value_index: usize,
     pub(super) premultiplied: bool,
+    pub(super) binary: bool,
 }
 
 pub(super) struct PasteMaskPixels {
@@ -45,25 +46,35 @@ impl PasteMaskPixels {
 
 pub(super) fn paste_mask_layout(mode: &str, mask_alpha: bool) -> Option<PasteMaskLayout> {
     match (mode, mask_alpha) {
-        ("1" | "L", false) => Some(PasteMaskLayout {
+        ("1", false) => Some(PasteMaskLayout {
             channels: 1,
             value_index: 0,
             premultiplied: false,
+            binary: true,
+        }),
+        ("L", false) => Some(PasteMaskLayout {
+            channels: 1,
+            value_index: 0,
+            premultiplied: false,
+            binary: false,
         }),
         ("LA", true) => Some(PasteMaskLayout {
             channels: 2,
             value_index: 1,
             premultiplied: false,
+            binary: false,
         }),
         ("RGBA", true) => Some(PasteMaskLayout {
             channels: 4,
             value_index: 3,
             premultiplied: false,
+            binary: false,
         }),
         ("RGBa", true) => Some(PasteMaskLayout {
             channels: 4,
             value_index: 3,
             premultiplied: true,
+            binary: false,
         }),
         _ => None,
     }

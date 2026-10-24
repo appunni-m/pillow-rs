@@ -235,6 +235,12 @@ def main() -> int:
         print(f"Clippy quality check failed: {error}", file=sys.stderr)
         return 2
 
+    # A failed Cargo/Clippy run may emit partial diagnostics. Do not compare
+    # that incomplete function inventory with the checked-in baseline or write
+    # it back as a reviewed update.
+    if clippy_status != 0:
+        return clippy_status
+
     over_limit = [metric for metric in metrics if int(metric["lines"]) > FUNCTION_HARD_LIMIT]
     if args.update_baseline:
         file_baseline = baseline.get("file_lines", {})

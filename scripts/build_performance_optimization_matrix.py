@@ -22,12 +22,19 @@ from typing import Any
 import yaml
 
 try:
-    from simd_evidence import SIMD_POSITIVE_VECTOR_PATHS, simd_vector_evidence
+    from simd_evidence import (
+        SIMD_POSITIVE_VECTOR_PATHS,
+        mapped_operation_owners,
+        simd_vector_evidence,
+        workflow_step_owners,
+    )
     from aggregate_migration_parity import load_indexed_documents
 except ModuleNotFoundError:  # imported as ``scripts.build_performance_optimization_matrix``
     from scripts.simd_evidence import (
         SIMD_POSITIVE_VECTOR_PATHS,
+        mapped_operation_owners,
         simd_vector_evidence,
+        workflow_step_owners,
     )
     from scripts.aggregate_migration_parity import load_indexed_documents
 
@@ -237,7 +244,12 @@ def read_operation_catalog(
     return operations, requirement_owner
 
 
-def classify(row: dict[str, Any], source_clean: bool) -> str:
+def classify(
+    row: dict[str, Any],
+    source_clean: bool,
+    expected_sources: dict[str, tuple[str, str]] | None = None,
+    mapped_owners: set[tuple[str, str]] | None = None,
+) -> str:
     if row is None:
         return "not_compared"
     if row.get("status") != "completed" or row.get("median_us") is None:
@@ -271,7 +283,9 @@ def classify(row: dict[str, Any], source_clean: bool) -> str:
         return "wrong_or_unconfirmed_backend"
     if not row.get("terminal_complete"):
         return "terminal_not_complete"
-    if row.get("subject") == "python-simd" and simd_vector_evidence(row) != "positive_vector_work":
+    if row.get("subject") == "python-simd" and simd_vector_evidence(
+        row, expected_sources, mapped_owners
+    ) != "positive_vector_work":
         return "simd_vector_not_proven"
     return "parity_backend_verified"
 
@@ -399,11 +413,31 @@ def matrix_rows(
         snapshot = source_by_name[source]
         source_clean = snapshot.get("clean") is True
         spec = specs.get(workload_id, {})
+        input_spec = spec.get("input", {})
+        source_contract_required = snapshot.get("schema") in {
+            "public-docs/benchmark-snapshot@1",
+            "public-docs/benchmark-snapshot@2",
+        }
+        expected_sources = (
+            workflow_step_owners(input_spec.get("steps"))
+            if source_contract_required
+            else None
+        )
+        mapped_owners = (
+            mapped_operation_owners(spec.get("covers"), requirement_owner)
+            if source_contract_required
+            else None
+        )
         pillow = subjects.get("pillow")
         pillow_simd = subjects.get("pillow-simd")
         simd = subjects.get("python-simd")
         for profile, row in sorted(subjects.items()):
-            evidence = classify(row, source_clean)
+            evidence = classify(
+                row,
+                source_clean,
+                expected_sources,
+                mapped_owners,
+            )
             observed_pillow = ratio(pillow, row) if profile != "pillow" else None
             verified_pillow = (
                 observed_pillow
@@ -430,7 +464,12 @@ def matrix_rows(
             verified_gpu = (
                 observed_gpu
                 if evidence == "parity_backend_verified"
-                and classify(simd, source_clean) == "parity_backend_verified"
+                and classify(
+                    simd,
+                    source_clean,
+                    expected_sources,
+                    mapped_owners,
+                ) == "parity_backend_verified"
                 else None
             )
             context = row.get("context", {})
@@ -485,14 +524,25 @@ def matrix_rows(
                 "requested_backend": str(row.get("requested_backend") or ""),
                 "terminal_complete": str(row.get("terminal_complete", False)).lower(),
                 "fallback_reasons": json.dumps(row.get("fallback_reasons", {}), sort_keys=True, separators=(",", ":")),
-                "simd_vector_evidence": simd_vector_evidence(row),
-                "simd_baseline_vector_evidence": simd_vector_evidence(simd) if profile == "python-gpu" else "not_applicable",
+                "simd_vector_evidence": simd_vector_evidence(
+                    row, expected_sources, mapped_owners
+                ),
+                "simd_baseline_vector_evidence": (
+                    simd_vector_evidence(simd, expected_sources, mapped_owners)
+                    if profile == "python-gpu"
+                    else "not_applicable"
+                ),
                 "evidence_status": evidence,
                 "cpu_goal_status": goal_status(verified_pillow, evidence, 1.0) if profile == "python-cpu" else "",
                 "simd_2x_goal_status": goal_status(verified_pillow, evidence, 2.0) if profile == "python-simd" else "",
                 "simd_5x_goal_status": goal_status(verified_pillow, evidence, 5.0) if profile == "python-simd" else "",
                 "gpu_latency_goal_status": (
-                    "simd_vector_not_proven" if classify(simd, source_clean) == "simd_vector_not_proven"
+                    "simd_vector_not_proven" if classify(
+                        simd,
+                        source_clean,
+                        expected_sources,
+                        mapped_owners,
+                    ) == "simd_vector_not_proven"
                     else goal_status(verified_gpu, evidence, 1.0)
                 ) if profile == "python-gpu" else "",
                 "gpu_sustained_throughput_status": "not_measured" if profile == "python-gpu" else "",

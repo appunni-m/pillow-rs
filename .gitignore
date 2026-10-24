@@ -42,3 +42,9 @@ tests/fixtures/outputs/
 pillow-rs/tests/fixtures/imagingft_matrix.json
 pillow-rs/tests/fixtures/outputs/imagingft/
 .kata.local.toml
+
+# Generated evidence receipts stay out of future changes unless reviewed.
+# Already tracked reports remain tracked; force-add a new report when a
+# documentation page links to it.
+docs/evidence/**/*.json*
+docs/evidence/**/*.ndjson

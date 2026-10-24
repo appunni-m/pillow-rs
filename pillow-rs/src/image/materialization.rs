@@ -436,6 +436,7 @@ impl Image {
                 ..
             } => materialized
                 .get_or_init(|| {
+                    let _origin_scope = ops.telemetry_origin_scope();
                     Self::evaluate_pipeline(
                         source,
                         ops.as_slice(),
@@ -691,15 +692,18 @@ impl Image {
                 palette,
                 palette_alpha,
                 ..
-            } => Self::evaluate_pipeline_uncached(
-                source,
-                ops,
-                explicit_mode,
-                *backend,
-                palette,
-                palette_alpha,
-            )
-            .map(|image| image.as_ref().clone()),
+            } => {
+                let _origin_scope = ops.telemetry_origin_scope();
+                Self::evaluate_pipeline_uncached(
+                    source,
+                    ops,
+                    explicit_mode,
+                    *backend,
+                    palette,
+                    palette_alpha,
+                )
+                .map(|image| image.as_ref().clone())
+            }
         }
     }
 
@@ -846,6 +850,7 @@ impl Image {
                 palette_alpha,
                 ..
             } => {
+                let _origin_scope = ops.telemetry_origin_scope();
                 Self::evaluate_pipeline_uncached(
                     source,
                     ops,

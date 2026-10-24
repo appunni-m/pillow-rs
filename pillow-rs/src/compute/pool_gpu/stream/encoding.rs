@@ -226,150 +226,17 @@ fn encode_graph(
             current_a =
                 encode_byte_stage(gpu, encoder, &buffers, stage, secondary.as_ref(), current_a)?;
         } else {
-            // A fresh arena per stage prevents queue.write_buffer from changing
-            // uniforms used by earlier commands before this graph is submitted.
-            buffers.params_arena = ReusableGpuBuffer::new(
-                &gpu.device,
-                "gpu_stream_params",
-                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                4,
-                4,
-            );
-            buffers.img2_arena = ReusableGpuBuffer::new(
-                &gpu.device,
-                "gpu_stream_aux",
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                4,
-                4,
-            );
-            buffers.img3_arena = ReusableGpuBuffer::new(
-                &gpu.device,
-                "gpu_stream_mask",
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                4,
-                4,
-            );
-            buffers.lut_arena = ReusableGpuBuffer::new(
-                &gpu.device,
-                "gpu_stream_lut",
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                1024,
-                4,
-            );
-            let flags = stage.flags;
-            // Grayscale on native L/LA selects its luma sample directly.
-            // Keep the canonical graph; only the internal kernel is lowered.
-            let encoded_op = if flags.extract && matches!(stage.op, PipelineOp::Grayscale) {
-                &LUMA_BAND
-            } else {
-                stage.op
-            };
-            let estimated = gpu.estimate_resource_bytes(
-                encoded_op,
-                &auxiliary[0],
-                &buffers,
-                gpu.device.limits().min_uniform_buffer_offset_alignment as usize,
-                gpu.device.limits().min_storage_buffer_offset_alignment as usize,
-                (stage.width, stage.height),
-                match stage.mode.as_str() {
-                    "L" => 0,
-                    "LA" => 1,
-                    "RGB" => 2,
-                    "F" => 8,
-                    _ => 3,
-                },
-                false,
-                Some(&stage.mode),
-                false,
-                stage.ordered_f_resize,
-            )?;
-            if estimated as u64 > stage.arena_bytes {
-                return Err(PilError::ValueError(
-                    "GPU stage arenas exceed their bounded admission reservation".into(),
-                ));
-            }
-            let cache = GpuAuxiliaryCache::from_batch(
-                std::slice::from_ref(encoded_op),
-                &auxiliary,
-                match stage.mode.as_str() {
-                    "L" => 0,
-                    "LA" => 1,
-                    "RGB" => 2,
-                    "F" => 8,
-                    _ => 3,
-                },
-                plan.capacity,
-                gpu.device.limits().min_storage_buffer_offset_alignment as usize,
-            )?;
-            let prepared = gpu.prepare_batch(
-                std::slice::from_ref(encoded_op),
-                &auxiliary,
-                stage.width,
-                stage.height,
-                match stage.mode.as_str() {
-                    "L" => 0,
-                    "LA" => 1,
-                    "RGB" => 2,
-                    "CMYK" => 4,
-                    "F" => 8,
-                    "RGBX" => 6,
-                    _ => 3,
-                },
-                Some(&stage.mode),
-                None,
-                None,
-                false,
-                false,
-                false,
-                false,
-                false,
-                stage.ordered_f_resize,
-                flags.luma_colorize,
-                flags.luma_convert,
-                false,
-                false,
-                flags.rgb,
-                flags.rgb && !matches!(stage.op, PipelineOp::Convert { .. }),
-                false,
-                flags.luma_point,
-                false,
-                flags.luma_order,
-                flags.byte_filter,
-                false,
-                flags.extract,
-                flags.grayscale_rgb,
-                false,
-                false,
-                false,
-                false,
-                None,
-                None,
-                None,
-                &mut buffers,
-                &cache,
-            )?;
-            current_a = gpu.encode_batch(
+            let (next_current_a, stage_retained) = encode_generic_stage(
+                gpu,
                 encoder,
-                std::slice::from_ref(encoded_op),
-                &prepared,
+                &mut buffers,
+                stage,
+                plan.capacity,
+                &auxiliary,
                 current_a,
-                Some(&stage.mode),
-                flags.luma_point,
-                false,
-                flags.luma_order,
-                flags.byte_filter,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
             )?;
-            drop(prepared);
-            retained += buffers.params_arena.capacity_bytes
-                + buffers.img2_arena.capacity_bytes
-                + buffers.img3_arena.capacity_bytes
-                + buffers.lut_arena.capacity_bytes;
+            current_a = next_current_a;
+            retained += stage_retained;
         }
         dispatches += if matches!(stage.op, PipelineOp::BoxBlur { radius: 1 })
             && matches!(stage.mode.as_str(), "L" | "RGB")
@@ -395,6 +262,199 @@ fn encode_graph(
         upload: uploaded_bytes,
         retained,
     })
+}
+
+fn encode_generic_stage(
+    gpu: &GpuInner,
+    encoder: &mut wgpu::CommandEncoder,
+    buffers: &mut BufferPool,
+    stage: &Stage<'_>,
+    capacity: u32,
+    auxiliary: &[AuxiliaryImages],
+    current_a: bool,
+) -> Result<(bool, u64), PilError> {
+    reset_generic_stage_arenas(gpu, buffers);
+    let encoded_op = generic_stage_operation(stage);
+    validate_generic_stage_reservation(gpu, buffers, stage, auxiliary, encoded_op)?;
+    let current_a = encode_generic_stage_batch(
+        gpu, encoder, buffers, stage, capacity, auxiliary, encoded_op, current_a,
+    )?;
+    let retained = buffers.params_arena.capacity_bytes
+        + buffers.img2_arena.capacity_bytes
+        + buffers.img3_arena.capacity_bytes
+        + buffers.lut_arena.capacity_bytes;
+    Ok((current_a, retained))
+}
+
+fn reset_generic_stage_arenas(gpu: &GpuInner, buffers: &mut BufferPool) {
+    // A fresh arena per stage prevents queue.write_buffer from changing
+    // uniforms used by earlier commands before this graph is submitted.
+    buffers.params_arena = ReusableGpuBuffer::new(
+        &gpu.device,
+        "gpu_stream_params",
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        4,
+        4,
+    );
+    buffers.img2_arena = ReusableGpuBuffer::new(
+        &gpu.device,
+        "gpu_stream_aux",
+        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        4,
+        4,
+    );
+    buffers.img3_arena = ReusableGpuBuffer::new(
+        &gpu.device,
+        "gpu_stream_mask",
+        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        4,
+        4,
+    );
+    buffers.lut_arena = ReusableGpuBuffer::new(
+        &gpu.device,
+        "gpu_stream_lut",
+        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        1024,
+        4,
+    );
+}
+
+fn generic_stage_operation<'a>(stage: &Stage<'a>) -> &'a PipelineOp {
+    // Grayscale on native L/LA selects its luma sample directly.
+    // Keep the canonical graph; only the internal kernel is lowered.
+    if stage.flags.extract && matches!(stage.op, PipelineOp::Grayscale) {
+        &LUMA_BAND
+    } else {
+        stage.op
+    }
+}
+
+fn estimate_stage_mode(mode: &str) -> u32 {
+    match mode {
+        "L" => 0,
+        "LA" => 1,
+        "RGB" => 2,
+        "F" => 8,
+        _ => 3,
+    }
+}
+
+fn prepare_stage_mode(mode: &str) -> u32 {
+    match mode {
+        "L" => 0,
+        "LA" => 1,
+        "RGB" => 2,
+        "CMYK" => 4,
+        "F" => 8,
+        "RGBX" => 6,
+        _ => 3,
+    }
+}
+
+fn validate_generic_stage_reservation(
+    gpu: &GpuInner,
+    buffers: &BufferPool,
+    stage: &Stage<'_>,
+    auxiliary: &[AuxiliaryImages],
+    encoded_op: &PipelineOp,
+) -> Result<(), PilError> {
+    let estimated = gpu.estimate_resource_bytes(
+        encoded_op,
+        &auxiliary[0],
+        buffers,
+        gpu.device.limits().min_uniform_buffer_offset_alignment as usize,
+        gpu.device.limits().min_storage_buffer_offset_alignment as usize,
+        (stage.width, stage.height),
+        estimate_stage_mode(&stage.mode),
+        false,
+        Some(&stage.mode),
+        false,
+        stage.ordered_f_resize,
+    )?;
+    if estimated as u64 > stage.arena_bytes {
+        return Err(PilError::ValueError(
+            "GPU stage arenas exceed their bounded admission reservation".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn encode_generic_stage_batch(
+    gpu: &GpuInner,
+    encoder: &mut wgpu::CommandEncoder,
+    buffers: &mut BufferPool,
+    stage: &Stage<'_>,
+    capacity: u32,
+    auxiliary: &[AuxiliaryImages],
+    encoded_op: &PipelineOp,
+    current_a: bool,
+) -> Result<bool, PilError> {
+    let flags = stage.flags;
+    let cache = GpuAuxiliaryCache::from_batch(
+        std::slice::from_ref(encoded_op),
+        auxiliary,
+        estimate_stage_mode(&stage.mode),
+        capacity,
+        gpu.device.limits().min_storage_buffer_offset_alignment as usize,
+    )?;
+    let prepared = gpu.prepare_batch(
+        std::slice::from_ref(encoded_op),
+        auxiliary,
+        stage.width,
+        stage.height,
+        prepare_stage_mode(&stage.mode),
+        Some(&stage.mode),
+        None,
+        None,
+        false,
+        false,
+        false,
+        false,
+        false,
+        stage.ordered_f_resize,
+        flags.luma_colorize,
+        flags.luma_convert,
+        false,
+        false,
+        flags.rgb,
+        flags.rgb && !matches!(stage.op, PipelineOp::Convert { .. }),
+        false,
+        flags.luma_point,
+        false,
+        flags.luma_order,
+        flags.byte_filter,
+        false,
+        flags.extract,
+        flags.grayscale_rgb,
+        false,
+        false,
+        false,
+        false,
+        None,
+        None,
+        None,
+        buffers,
+        &cache,
+    )?;
+    let current_a = gpu.encode_batch(
+        encoder,
+        std::slice::from_ref(encoded_op),
+        &prepared,
+        current_a,
+        Some(&stage.mode),
+        flags.luma_point,
+        false,
+        flags.luma_order,
+        flags.byte_filter,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+    )?;
+    drop(prepared);
+    Ok(current_a)
 }
 
 fn can_fuse_batch_alpha_composite_mirror(first: &Stage<'_>, second: &Stage<'_>) -> bool {

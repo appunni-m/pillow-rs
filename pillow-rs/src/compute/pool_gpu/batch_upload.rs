@@ -1,5 +1,14 @@
 use super::*;
 
+#[cfg(target_endian = "little")]
+#[inline]
+fn padded_mapped_input_bytes(bytes: &[u8]) -> Option<u64> {
+    u64::try_from(bytes.len())
+        .ok()?
+        .checked_add(3)
+        .map(|length| length & !3)
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct GpuBatchUploadOptions<'a> {
     pub(super) mode: Option<&'a str>,
@@ -589,15 +598,9 @@ impl GpuInner {
                 "GPU mapped masked Paste input requires shared Metal storage".into(),
             ));
         }
-        let padded_len = |bytes: &[u8]| {
-            u64::try_from(bytes.len())
-                .ok()?
-                .checked_add(3)
-                .map(|length| length & !3)
-        };
-        if padded_len(destination) != Some(destination_transfer_bytes)
-            || padded_len(source) != Some(source_transfer_bytes)
-            || padded_len(mask) != Some(mask_transfer_bytes)
+        if padded_mapped_input_bytes(destination) != Some(destination_transfer_bytes)
+            || padded_mapped_input_bytes(source) != Some(source_transfer_bytes)
+            || padded_mapped_input_bytes(mask) != Some(mask_transfer_bytes)
         {
             return Err(PilError::InternalError(
                 "GPU mapped masked Paste inputs do not match their checked layout".into(),

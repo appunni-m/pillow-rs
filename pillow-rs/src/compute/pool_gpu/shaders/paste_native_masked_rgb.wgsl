@@ -12,7 +12,7 @@ struct Params {
     paste_x: i32,
     paste_y: i32,
     mask_word_offset: u32,
-    padding_1: u32,
+    binary_mask: u32,
     source_is_broadcast: u32,
     full_frame: u32,
 }
@@ -34,7 +34,11 @@ fn read_source(byte_index: u32) -> u32 {
 
 fn read_mask(pixel_index: u32) -> u32 {
     let word = input_source_mask[params.mask_word_offset + pixel_index / 4u];
-    return (word >> ((pixel_index & 3u) * 8u)) & 0xffu;
+    let mask = (word >> ((pixel_index & 3u) * 8u)) & 0xffu;
+    if params.binary_mask != 0u {
+        return select(0u, 255u, mask != 0u);
+    }
+    return mask;
 }
 
 fn blend(source: u32, destination: u32, mask: u32) -> u32 {
