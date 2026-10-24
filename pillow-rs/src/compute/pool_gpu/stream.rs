@@ -7,6 +7,7 @@
 mod dispatch;
 mod encoding;
 mod graph;
+mod paste;
 mod types;
 
 use self::encoding::compile_graph;

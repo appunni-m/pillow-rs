@@ -19,7 +19,9 @@ The Merge lane measures three materialized L bands composed into RGB. Its
 direct GPU lane includes per-image synchronization and materialization; the
 current GpuBatchExecutor admission contract rejects this graph. Use
 ``--operation median-only`` to measure MedianFilter(3) without the separate
-invert operation.
+invert operation. The bitmap lane measures ImageDraw.bitmap over deterministic
+destination and L-mask inputs. Its GPU subjects cover both eager dispatch and
+the explicit queued stream's native masked-Paste shader.
 """
 from __future__ import annotations
 import argparse
@@ -51,6 +53,8 @@ def default_batch_modes(operation):
         return ("RGB",)
     if operation == "screen":
         return ("RGB",)
+    if operation == "bitmap":
+        return ("L", "RGB", "CMYK")
     return ("L", "RGB")
 
 
@@ -78,16 +82,20 @@ def validate_queued_capacity(subjects, images, max_jobs, max_in_flight):
         )
 
 
-def batch_workload_id(operation, mode, size, height, alpha_input_pattern):
+def batch_workload_id(operation, mode, size, height, alpha_input_pattern, draw_context="native"):
     workload_id = f"pipeline-batch.{operation}.{mode.lower()}-{size}x{height}"
     if operation == "alpha-composite-mirror":
         workload_id += f".{alpha_input_pattern}"
+    if operation == "bitmap" and draw_context == "rgba":
+        workload_id += ".rgba-context"
     return workload_id
 
 
-def expected_workload_ids(operation, modes, sizes, height, alpha_input_pattern):
+def expected_workload_ids(operation, modes, sizes, height, alpha_input_pattern, draw_context="native"):
     return {
-        batch_workload_id(operation, mode, size, height or size, alpha_input_pattern)
+        batch_workload_id(
+            operation, mode, size, height or size, alpha_input_pattern, draw_context
+        )
         for mode in modes
         for size in sizes
     }
@@ -101,10 +109,10 @@ def extension_identity(module):
     }
 
 
-def child(subject, size, height, mode, images, samples, operation="median", max_jobs=16, max_in_flight=4, alpha_input_pattern="uniform", capture_output_path=None):
+def child(subject, size, height, mode, images, samples, operation="median", max_jobs=16, max_in_flight=4, alpha_input_pattern="uniform", capture_output_path=None, draw_context="native"):
     from importlib.metadata import version as distribution_version
     import PIL
-    from PIL import Image, ImageOps, ImageFilter, ImageChops
+    from PIL import Image, ImageOps, ImageFilter, ImageChops, ImageDraw
     loaded_core_identity = None
     if subject != "Pillow":
         import pillow_rs
@@ -149,6 +157,14 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
             )
             for index in range(images)
         ]
+    elif operation == "bitmap":
+        sources = [
+            (
+                random.Random(index + size * 31 + height * 17 + channels).randbytes(length),
+                random.Random(index + size * 31 + height * 17 + channels + 1).randbytes(size * height),
+            )
+            for index in range(images)
+        ]
     else:
         sources = [
             random.Random(index + size * 31 + height * 17 + channels).randbytes(length)
@@ -175,6 +191,19 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
             left = Image.frombytes(mode, (size, height), sources[index][0])
             right = Image.frombytes(mode, (size, height), sources[index][1])
             result = ImageChops.screen(left, right)
+        elif operation == "bitmap":
+            result = Image.frombytes(mode, (size, height), sources[index][0])
+            mask = Image.frombytes("L", (size, height), sources[index][1])
+            draw = ImageDraw.Draw(result, "RGBA" if draw_context == "rgba" else None)
+            if draw_context == "rgba":
+                fill = (211, 37, 89, 96)
+            elif mode == "L":
+                fill = 211
+            elif mode == "CMYK":
+                fill = (21, 37, 89, 173)
+            else:
+                fill = (211, 37, 89)
+            draw.bitmap((0, 0), mask, fill=fill)
         else:
             result = Image.frombytes(mode, (size, height), sources[index])
         if operation == "boxblur":
@@ -193,7 +222,9 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
             result = result.filter(
                 ImageFilter.Kernel((3, 3), FILTER_3X3_BINOMIAL, scale=16, offset=0)
             )
-        if subject in ("CPU", "SIMD") or (operation == "merge" and subject == "GPU eager"):
+        if subject in ("CPU", "SIMD") or (
+            operation == "bitmap" and subject.startswith("GPU")
+        ) or (operation == "merge" and subject == "GPU eager"):
             # A single active backend plus a per-image lock makes unsupported
             # contexts fail instead of silently entering CPU fallback.
             rust = __import__("pillow_rs")
@@ -201,16 +232,26 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
         return result
 
     core = None
-    if subject in ("CPU", "SIMD") or (operation == "merge" and subject == "GPU eager"):
+    gpu_core = None
+    bitmap_gpu_batch = operation == "bitmap" and subject == "GPU queued"
+    if subject in ("CPU", "SIMD") or (
+        operation == "bitmap" and subject == "GPU eager"
+    ) or (operation == "merge" and subject == "GPU eager") or bitmap_gpu_batch:
         import pillow_rs
-        core = pillow_rs._core
+        if bitmap_gpu_batch:
+            gpu_core = pillow_rs._core
+        else:
+            core = pillow_rs._core
         for backend in ("cpu", "simd", "gpu"):
             pillow_rs.disable_backend(backend)
-        active_backend = "gpu" if subject == "GPU eager" else subject.lower()
+        active_backend = "gpu" if subject.startswith("GPU") else subject.lower()
         pillow_rs.enable_backend(active_backend)
 
     executor = None
-    if subject.startswith("GPU") and not (operation == "merge" and subject == "GPU eager"):
+    direct_gpu_bitmap = operation == "bitmap" and subject == "GPU eager"
+    if subject.startswith("GPU") and not direct_gpu_bitmap and not (
+        operation == "merge" and subject == "GPU eager"
+    ):
         from PIL import GpuBatchExecutor
         executor = GpuBatchExecutor(queue=subject == "GPU queued", max_jobs=max_jobs, max_in_flight=max_in_flight)
 
@@ -223,20 +264,65 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
         return [output[i] for i in range(images)]
     times, digest, reference_output = [], None, None
     receipt = None
+    gpu_shader_receipt = None
     try:
         if core is not None:
             core.take_pipeline_telemetry()
+            if operation == "bitmap" and subject == "GPU eager":
+                core.take_gpu_shader_coverage()
+                core.set_gpu_shader_coverage(True)
             core.set_pipeline_telemetry(True)
             proof = graph(0).tobytes()
             receipt = core.take_pipeline_telemetry()
             core.set_pipeline_telemetry(False)
+            if operation == "bitmap" and subject == "GPU eager":
+                gpu_shader_receipt = core.take_gpu_shader_coverage()
+                core.set_gpu_shader_coverage(False)
             expected_backend = "gpu" if subject == "GPU eager" else subject.lower()
             assert receipt and receipt["actual_backend"] == expected_backend, receipt
             assert receipt["requested_backend"] == expected_backend, receipt
             assert receipt["fallback_reason"] is None, receipt
             assert proof, "backend proof materialized no bytes"
+            if operation == "bitmap" and subject == "GPU eager":
+                assert receipt["dispatch_count"] == 1, receipt
+                resource = receipt.get("resource")
+                assert resource and resource["upload_bytes"] > 0, receipt
+                assert resource["readback_bytes"] == size * height * channels, receipt
+                expected_shader = {
+                    "L": "paste_native_masked_l.wgsl",
+                    "RGB": "paste_native_masked_rgb.wgsl",
+                    "CMYK": "paste_native_masked_rgba.wgsl",
+                }[mode]
+                assert len(gpu_shader_receipt) == 1, gpu_shader_receipt
+                assert gpu_shader_receipt[0]["shader_file"] == expected_shader, gpu_shader_receipt
+                assert gpu_shader_receipt[0]["dispatches"] == 1, gpu_shader_receipt
+            if operation == "bitmap" and subject == "SIMD":
+                paste_paths = [
+                    item for item in receipt.get("operation_telemetry", [])
+                    if item.get("operation") == "Paste"
+                    and item.get("path") in (
+                        "vector",
+                        "neon-blend",
+                        "neon-rgb-l-blend",
+                        "neon-cmyk-l-blend",
+                    )
+                ]
+                assert paste_paths, receipt
 
-        for _ in range(2): window()
+        for warmup_index in range(2):
+            if bitmap_gpu_batch and warmup_index == 0:
+                gpu_core.take_gpu_shader_coverage()
+                gpu_core.set_gpu_shader_coverage(True)
+            warm_output = window()
+            if bitmap_gpu_batch and warmup_index == 0:
+                gpu_shader_receipt = gpu_core.take_gpu_shader_coverage()
+                gpu_core.set_gpu_shader_coverage(False)
+                assert len(warm_output) == images and all(warm_output), "GPU bitmap warmup did not materialize every image"
+                assert all(
+                    item["shader_file"] == "paste_native_masked_bytes.wgsl"
+                    for item in gpu_shader_receipt
+                ), gpu_shader_receipt
+                assert sum(item["dispatches"] for item in gpu_shader_receipt) == images, gpu_shader_receipt
         for _ in range(samples):
             started = time.perf_counter_ns()
             output = window()
@@ -258,10 +344,13 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
         if stats:
             assert stats["gpu_bytes"] == stats["host_bytes"] == stats["live_jobs"] == 0, stats
             assert stats["submitted_jobs"] == (samples + 2) * images, stats
-            dispatches_per_job = 1 if operation in ("median-only", "screen", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "filter", "merge") else 2
+            dispatches_per_job = 1 if operation in ("median-only", "screen", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "filter", "merge", "bitmap") else 2
             assert stats["dispatches"] == dispatches_per_job * stats["submitted_jobs"], stats
             inputs_per_job = 3 if operation == "merge" else 2 if operation in ("alpha-composite-mirror", "screen") else 1
-            upload_bytes_per_job = length * inputs_per_job
+            upload_bytes_per_job = (
+                length + channels + size * height
+                if operation == "bitmap" else length * inputs_per_job
+            )
             expected_bytes = stats["submitted_jobs"] * upload_bytes_per_job
             assert stats["upload_bytes"] == expected_bytes, stats
             output_channels = 1 if operation in ("grayscale", "getchannel") else channels
@@ -280,6 +369,7 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
         return {"seconds": statistics.median(times), "sample_seconds": times,
                 "digests": digest, "stats": stats,
                 "backend_receipt": receipt,
+                "gpu_shader_receipt": gpu_shader_receipt,
                 "pillow_version": PIL.__version__, "pillow_module": PIL.__file__,
                 "pillow_distribution_version": distribution_version("Pillow"),
                 "loaded_core_identity": loaded_core_identity,
@@ -288,6 +378,18 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
                              "parameters": (
                                  {"output_mode": "RGB", "band_mode": "L", "bands": 3}
                                  if operation == "merge" else
+                                 {
+                                     "mask_mode": "L",
+                                     "fill": (
+                                         [211, 37, 89, 96]
+                                         if draw_context == "rgba" else
+                                         211 if mode == "L" else
+                                         [21, 37, 89, 173] if mode == "CMYK" else
+                                         [211, 37, 89]
+                                     ),
+                                     "input_pattern": "deterministic native destination bytes and L-mask bytes",
+                                 }
+                                 if operation == "bitmap" else
                                  {"filter": "BICUBIC",
                                   "destination_size": [max(1, size // 2), max(1, height // 2)],
                                   "input_pattern": "deterministic finite f32 noise"}
@@ -310,17 +412,20 @@ def child(subject, size, height, mode, images, samples, operation="median", max_
                              "alpha_input_pattern": (
                                  alpha_input_pattern if operation == "alpha-composite-mirror" else None
                              ),
+                             "draw_context": (
+                                 draw_context if operation == "bitmap" else None
+                             ),
                              "subject": subject}}
     finally:
         if executor: executor.close()
 
 
-def isolated(subject, size, height, mode, images, samples, operation, max_jobs=16, max_in_flight=4, alpha_input_pattern="uniform", capture_output_path=None):
+def isolated(subject, size, height, mode, images, samples, operation, max_jobs=16, max_in_flight=4, alpha_input_pattern="uniform", capture_output_path=None, draw_context="native"):
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
     if subject != "Pillow": env["PYTHONPATH"] = str(ROOT / "pillow-rs-py/python")
     command = [sys.executable, str(Path(__file__).resolve()), "--subject", subject,
-        "--operation", operation, "--size", str(size), "--height", str(height), "--mode", mode, "--images", str(images), "--samples", str(samples), "--max-jobs", str(max_jobs), "--max-in-flight", str(max_in_flight), "--alpha-input-pattern", alpha_input_pattern]
+        "--operation", operation, "--size", str(size), "--height", str(height), "--mode", mode, "--images", str(images), "--samples", str(samples), "--max-jobs", str(max_jobs), "--max-in-flight", str(max_in_flight), "--alpha-input-pattern", alpha_input_pattern, "--draw-context", draw_context]
     if capture_output_path is not None:
         command.extend(("--capture-output", str(capture_output_path)))
     process = subprocess.run(command, env=env, capture_output=True, text=True)
@@ -379,7 +484,7 @@ def main():
     parser.add_argument("--subject", choices=SUBJECTS)
     parser.add_argument(
         "--operation",
-        choices=("median", "median-only", "screen", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "resize", "filter", "merge"),
+        choices=("median", "median-only", "screen", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "resize", "filter", "merge", "bitmap"),
         default="median",
     )
     parser.add_argument("--size", type=int,
@@ -394,6 +499,12 @@ def main():
                         help="select multiple sizes; conflicts with --size")
     parser.add_argument("--max-jobs", type=int, default=16)
     parser.add_argument("--max-in-flight", type=int, default=4)
+    parser.add_argument(
+        "--draw-context",
+        choices=("native", "rgba"),
+        default="native",
+        help="ImageDraw context for bitmap (native or RGBA over an RGB image)",
+    )
     parser.add_argument("--capture-output", type=Path,
                         help=argparse.SUPPRESS)
     parser.add_argument(
@@ -420,13 +531,19 @@ def main():
         parser.error("RGBA is reserved for --operation alpha-composite-mirror")
     if args.operation == "resize" and selected_modes != ("F",):
         parser.error("F resize batching currently measures mode F only")
+    if args.operation == "bitmap" and any(mode not in ("L", "RGB", "CMYK") for mode in selected_modes):
+        parser.error("bitmap benchmarking supports native L/RGB/CMYK destinations")
+    if args.operation == "bitmap" and args.draw_context == "rgba" and selected_modes != ("RGB",):
+        parser.error("RGBA draw context is supported only over an RGB bitmap destination")
+    if args.operation != "bitmap" and args.draw_context != "native":
+        parser.error("--draw-context applies only to --operation bitmap")
     if args.operation == "filter" and any(mode not in ("L", "LA") for mode in selected_modes):
         parser.error("Kernel filter batching currently supports native L/LA inputs")
     if args.operation != "filter" and "LA" in selected_modes:
         parser.error("LA is currently supported only by Kernel filter batching")
     if "F" in selected_modes and args.operation != "resize":
         parser.error("mode F is currently supported only by --operation resize")
-    if args.operation not in ("grayscale", "getchannel") and "CMYK" in selected_modes:
+    if args.operation not in ("grayscale", "getchannel", "bitmap") and "CMYK" in selected_modes:
         parser.error("CMYK batching is currently supported only for grayscale")
     if args.operation == "getchannel" and any(mode not in ("L", "RGB") for mode in selected_modes):
         parser.error("GetChannel batching currently supports L/RGB inputs")
@@ -441,7 +558,11 @@ def main():
             parser.error(str(error))
         mode = selected_modes[0]
         size = selected_sizes[0]
-        print(json.dumps(child(args.subject, size, args.height or size, mode, args.images, args.samples, args.operation, args.max_jobs, args.max_in_flight, args.alpha_input_pattern, args.capture_output)))
+        print(json.dumps(child(
+            args.subject, size, args.height or size, mode, args.images, args.samples,
+            args.operation, args.max_jobs, args.max_in_flight,
+            args.alpha_input_pattern, args.capture_output, args.draw_context,
+        )))
         return
     subjects = (
         ("Pillow", "GPU eager", "GPU queued")
@@ -450,6 +571,8 @@ def main():
         if args.operation == "median-only"
         else ("Pillow", "CPU", "SIMD", "GPU eager")
         if args.operation == "merge"
+        else ("Pillow", "CPU", "SIMD", "GPU eager", "GPU queued")
+        if args.operation == "bitmap"
         else SUBJECTS
     )
     try:
@@ -495,12 +618,16 @@ def main():
                 "boundary": (
                     "completed_direct_gpu_window"
                     if args.operation == "merge"
+                    else "completed_work_window"
+                    if args.operation == "bitmap"
                     else "completed_batch_window"
                 ),
                 "parity_method": "length-prefixed output bytes compared exactly across subjects and all measured windows",
                 "steps": (
                     ["construct-image-and-graph", "execute", "synchronize", "materialize", "export-bytes"]
                     if args.operation == "merge"
+                    else ["construct-image-and-graph", "submit-or-dispatch", "execute", "synchronize", "materialize", "export-bytes"]
+                    if args.operation == "bitmap"
                     else ["construct-image-and-graph", "submit", "execute", "materialize", "export-bytes"]
                 ),
                 "warmup_windows": 2,
@@ -519,6 +646,17 @@ def main():
                     if args.operation == "merge"
                     else None
                 ),
+                "bitmap_gpu_execution_modes": (
+                    {
+                        "GPU eager": "direct per-image GPU dispatch and readback",
+                        "GPU queued": "GpuBatchExecutor submission with one native masked-Paste dispatch per image",
+                    }
+                    if args.operation == "bitmap"
+                    else None
+                ),
+                "bitmap_draw_context": (
+                    args.draw_context if args.operation == "bitmap" else None
+                ),
                 "alpha_composite_mirror_input": (
                     f"two {args.alpha_input_pattern} native RGBA images"
                     if args.operation == "alpha-composite-mirror"
@@ -531,7 +669,10 @@ def main():
         print(f"Warm completed-work diagnostic: {args.operation}; two warmup windows; "
               f"{args.samples} median samples; no host threads. GPU batch submission is not proof of concurrent kernels.")
     if not args.json:
-        if args.operation in ("screen", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "filter"):
+        if args.operation == "bitmap":
+            print("| Mode/size | Pillow img/s | CPU img/s | SIMD img/s | Eager GPU img/s | Queued GPU img/s | Queued / SIMD |")
+            print("| --- | ---: | ---: | ---: | ---: | ---: | ---: |")
+        elif args.operation in ("screen", "boxblur", "grayscale", "getchannel", "alpha-composite-mirror", "filter"):
             print("| Mode/size | Pillow img/s | CPU img/s | SIMD img/s | Eager GPU img/s | Queued GPU img/s | Queued / SIMD | Queued / Pillow | Jobs/submission | Dispatches/job |")
             print("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
         elif args.operation == "merge":
@@ -546,13 +687,18 @@ def main():
         for size in selected_sizes:
             height = args.height or size
             workload_id = batch_workload_id(
-                args.operation, mode, size, height, args.alpha_input_pattern
+                args.operation, mode, size, height, args.alpha_input_pattern,
+                args.draw_context,
             )
             capture_paths = {
                 subject: capture_root / f"{mode}-{size}-{subject.replace(' ', '-')}.bin"
                 for subject in subjects
             }
-            runs = [isolated(subject, size, height, mode, args.images, args.samples, args.operation, args.max_jobs, args.max_in_flight, args.alpha_input_pattern, capture_paths[subject]) for subject in subjects]
+            runs = [isolated(
+                subject, size, height, mode, args.images, args.samples,
+                args.operation, args.max_jobs, args.max_in_flight,
+                args.alpha_input_pattern, capture_paths[subject], args.draw_context,
+            ) for subject in subjects]
             for run in runs:
                 identity = identities[run["workload"]["subject"]]
                 assert run["pillow_version"] == identity["module_version"], identity
@@ -592,6 +738,23 @@ def main():
                     "parameters": (
                         {"output_mode": "RGB", "band_mode": "L", "bands": 3}
                         if args.operation == "merge" else
+                        {
+                            "mask_mode": "L",
+                            "fill": (
+                                [211, 37, 89, 96]
+                                if args.draw_context == "rgba" else
+                                211 if mode == "L" else
+                                [21, 37, 89, 173] if mode == "CMYK" else
+                                [211, 37, 89]
+                            ),
+                            "draw_context": args.draw_context,
+                            "input_pattern": "deterministic native destination bytes and L-mask bytes",
+                            "GPU_execution_modes": {
+                                "GPU eager": "direct per-image dispatch",
+                                "GPU queued": "GpuBatchExecutor, one masked-Paste dispatch per image",
+                            },
+                        }
+                        if args.operation == "bitmap" else
                         {"filter": "BICUBIC",
                          "destination_size": [max(1, size // 2), max(1, height // 2)],
                          "input_pattern": "deterministic finite f32 noise"}
@@ -659,22 +822,20 @@ def main():
                             "dispatch_count": (
                                 run["stats"]["dispatches"]
                                 if run["stats"] else None
-                                if not (args.operation == "merge" and run["workload"]["subject"] == "GPU eager")
-                                else operation_count
+                                if run["backend_receipt"] is None
+                                else (
+                                    run["backend_receipt"]["dispatch_count"] * operation_count
+                                    if run["backend_receipt"]["dispatch_count"] is not None
+                                    else None
+                                )
                             ),
                             "upload_bytes": (
                                 run["stats"]["upload_bytes"]
-                                if run["stats"] else
-                                operation_count * size * height * 3
-                                if args.operation == "merge" and run["workload"]["subject"] == "GPU eager"
-                                else None
+                                if run["stats"] else total_receipt_resource(run, "upload_bytes")
                             ),
                             "readback_bytes": (
                                 run["stats"]["readback_bytes"]
-                                if run["stats"] else
-                                operation_count * size * height * 3
-                                if args.operation == "merge" and run["workload"]["subject"] == "GPU eager"
-                                else None
+                                if run["stats"] else total_receipt_resource(run, "readback_bytes")
                             ),
                             "parameter_bytes": total_receipt_resource(run, "parameter_bytes"),
                             "host_allocation_count": total_receipt_resource(run, "host_allocation_count"),
@@ -687,11 +848,16 @@ def main():
                             "fused_operation_count": total_receipt_resource(run, "fused_operation_count"),
                             "output_sha256": run["digests"],
                             "backend_receipt": run["backend_receipt"],
+                            "gpu_shader_receipt": run["gpu_shader_receipt"],
                             "batch_stats": run["stats"],
                         }
                         for index, run in enumerate(runs)
                     ],
                 })
+                continue
+            if args.operation == "bitmap":
+                suffix = " RGBA context" if args.draw_context == "rgba" else ""
+                print(f"| {mode}{suffix} {size}×{height} | {rates[0]:.1f} | {rates[1]:.1f} | {rates[2]:.1f} | {rates[3]:.1f} | {rates[4]:.1f} | {rates[4]/rates[2]:.2f}× |", flush=True)
                 continue
             if args.operation == "merge":
                 print(f"| {mode} {size}×{height} | {rates[0]:.1f} | {rates[1]:.1f} | {rates[2]:.1f} | {rates[3]:.1f} | "
@@ -709,7 +875,8 @@ def main():
     if args.json:
         actual_workload_ids = {item["workload_id"] for item in report["workloads"]}
         wanted_workload_ids = expected_workload_ids(
-            args.operation, selected_modes, selected_sizes, args.height, args.alpha_input_pattern
+            args.operation, selected_modes, selected_sizes, args.height,
+            args.alpha_input_pattern, args.draw_context,
         )
         if actual_workload_ids != wanted_workload_ids:
             raise AssertionError(

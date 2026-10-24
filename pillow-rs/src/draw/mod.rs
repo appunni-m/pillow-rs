@@ -476,6 +476,19 @@ impl Draw {
         if matches!(input, DrawColorInput::None) {
             return self.bitmap(x, y, bitmap, None);
         }
+        if mode == "P"
+            && matches!(&input, DrawColorInput::Components(values) if values.len() > 1)
+            && self
+                .image
+                .palette()
+                .is_none_or(|palette| palette.is_empty())
+        {
+            // Without a palette, Pillow's P-mode bitmap ink resolver does
+            // not turn an RGB(A) tuple into an index. It returns no ink and
+            // leaves the destination unchanged; using the first component
+            // here would incorrectly paint that byte as a palette index.
+            return Ok(());
+        }
         if let DrawColorInput::Components(values) = &input {
             if mode.len() == 1 && mode != "P" && values.len() != 1 {
                 if mode == "F" {

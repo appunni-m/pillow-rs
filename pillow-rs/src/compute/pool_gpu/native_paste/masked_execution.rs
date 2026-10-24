@@ -15,6 +15,7 @@ impl GpuInner {
     ) -> Result<DynamicImage, PilError> {
         let (width, height) = destination.dimensions();
         let (source_width, source_height) = source.dimensions();
+        let (region_width, region_height) = mask.dimensions();
         let storage_matches = match (logical_mode, dispatch.bytes_per_pixel) {
             ("L", 1) => matches!(
                 (destination, source, mask),
@@ -78,8 +79,12 @@ impl GpuInner {
         let mask_bytes = mask.as_bytes();
         let destination_dims = CheckedDims::new(width, height, dispatch.bytes_per_pixel)?;
         let source_dims = CheckedDims::new(source_width, source_height, dispatch.bytes_per_pixel)?;
-        let mask_dims = CheckedDims::new(source_width, source_height, 1)?;
-        if mask.dimensions() != (source_width, source_height)
+        let mask_dims = CheckedDims::new(region_width, region_height, 1)?;
+        let source_is_broadcast =
+            (source_width, source_height) == (1, 1) && (region_width, region_height) != (1, 1);
+        if dispatch.source_is_broadcast != source_is_broadcast
+            || (!source_is_broadcast
+                && (region_width, region_height) != (source_width, source_height))
             || destination_bytes.len() != dispatch.destination_bytes
             || source_bytes.len() != dispatch.source_bytes
             || mask_bytes.len() != dispatch.mask_bytes
@@ -111,13 +116,6 @@ impl GpuInner {
             ));
         }
 
-        buffers.img2_arena.ensure_capacity(
-            &self.device,
-            "gpu_paste_native_masked_source_mask",
-            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            dispatch.input_transfer_bytes as usize,
-            4,
-        );
         buffers.params_arena.ensure_capacity(
             &self.device,
             "gpu_paste_native_masked_l_params",
@@ -148,50 +146,98 @@ impl GpuInner {
             mapped[bytes.len()..].fill(0);
             Ok::<(), PilError>(())
         };
-        write_padded(
-            &buffers.buf_a,
-            destination_bytes,
-            dispatch.destination_transfer_bytes,
-        )?;
-        let input_upload_size =
-            NonZeroU64::new(dispatch.input_transfer_bytes).ok_or_else(|| {
-                PilError::InternalError("GPU native masked Paste upload is empty".into())
+        let auxiliary_offset = if self.direct_primary_readback {
+            self.upload_masked_paste_inputs_mapped(
+                destination_bytes,
+                dispatch.destination_transfer_bytes,
+                source_bytes,
+                dispatch.source_transfer_bytes,
+                mask_bytes,
+                dispatch.mask_transfer_bytes,
+                buffers,
+            )?
+        } else {
+            write_padded(
+                &buffers.buf_a,
+                destination_bytes,
+                dispatch.destination_transfer_bytes,
+            )?;
+            buffers.img2_arena.ensure_capacity(
+                &self.device,
+                "gpu_paste_native_masked_source_mask",
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                dispatch.input_transfer_bytes as usize,
+                4,
+            );
+            let input_upload_size =
+                NonZeroU64::new(dispatch.input_transfer_bytes).ok_or_else(|| {
+                    PilError::InternalError("GPU native masked Paste upload is empty".into())
+                })?;
+            let mut input_upload = self
+                .queue
+                .write_buffer_with(&buffers.img2_arena.buffer, 0, input_upload_size)
+                .ok_or_else(|| {
+                    PilError::InternalError(
+                        "GPU native masked Paste staging allocation failed".into(),
+                    )
+                })?;
+            let input_mapped = input_upload.as_mut();
+            let source_transfer = dispatch.source_transfer_bytes as usize;
+            let mask_transfer = dispatch.mask_transfer_bytes as usize;
+            let mask_start = source_transfer;
+            let mask_end = mask_start.checked_add(mask_transfer).ok_or_else(|| {
+                PilError::InternalError("GPU native masked Paste input length overflow".into())
             })?;
-        let mut input_upload = self
-            .queue
-            .write_buffer_with(&buffers.img2_arena.buffer, 0, input_upload_size)
-            .ok_or_else(|| {
-                PilError::InternalError("GPU native masked Paste staging allocation failed".into())
-            })?;
-        let input_mapped = input_upload.as_mut();
-        let source_transfer = dispatch.source_transfer_bytes as usize;
-        let mask_transfer = dispatch.mask_transfer_bytes as usize;
-        let mask_start = source_transfer;
-        let mask_end = mask_start.checked_add(mask_transfer).ok_or_else(|| {
-            PilError::InternalError("GPU native masked Paste input length overflow".into())
-        })?;
-        if input_mapped.len() != dispatch.input_transfer_bytes as usize
-            || source_bytes.len() > source_transfer
-            || mask_bytes.len() > mask_transfer
-            || mask_end != input_mapped.len()
-        {
-            return Err(PilError::InternalError(
-                "GPU native masked Paste upload length mismatch".into(),
-            ));
-        }
-        input_mapped[..source_bytes.len()].copy_from_slice(source_bytes);
-        input_mapped[source_bytes.len()..mask_start].fill(0);
-        input_mapped[mask_start..mask_start + mask_bytes.len()].copy_from_slice(mask_bytes);
-        input_mapped[mask_start + mask_bytes.len()..mask_end].fill(0);
-        // QueueWriteBufferView enqueues the transfer when dropped; make sure
-        // it precedes the compute submission below.
-        drop(input_upload);
+            if input_mapped.len() != dispatch.input_transfer_bytes as usize
+                || source_bytes.len() > source_transfer
+                || mask_bytes.len() > mask_transfer
+                || mask_end != input_mapped.len()
+            {
+                return Err(PilError::InternalError(
+                    "GPU native masked Paste upload length mismatch".into(),
+                ));
+            }
+            input_mapped[..source_bytes.len()].copy_from_slice(source_bytes);
+            input_mapped[source_bytes.len()..mask_start].fill(0);
+            input_mapped[mask_start..mask_start + mask_bytes.len()].copy_from_slice(mask_bytes);
+            input_mapped[mask_start + mask_bytes.len()..mask_end].fill(0);
+            // QueueWriteBufferView submits the upload when dropped, before the
+            // compute command buffer below.
+            drop(input_upload);
+            0
+        };
+        let destination_input = if self.direct_primary_readback {
+            &buffers
+                .mapped_native_input
+                .as_ref()
+                .ok_or_else(|| {
+                    PilError::InternalError(
+                        "GPU native masked Paste mapped input was not retained".into(),
+                    )
+                })?
+                .buffer
+        } else {
+            &buffers.buf_a
+        };
+        let auxiliary_input = if self.direct_primary_readback {
+            &buffers
+                .mapped_native_input
+                .as_ref()
+                .ok_or_else(|| {
+                    PilError::InternalError(
+                        "GPU native masked Paste mapped input was not retained".into(),
+                    )
+                })?
+                .buffer
+        } else {
+            &buffers.img2_arena.buffer
+        };
 
         let parameters = [
             width,
             height,
-            source_width,
-            source_height,
+            region_width,
+            region_height,
             dispatch.destination_pixels,
             dispatch.word_count,
             offset.0 as u32,
@@ -200,8 +246,13 @@ impl GpuInner {
                 PilError::ValueError("GPU native masked Paste mask offset is too large".into())
             })?,
             dispatch.workgroups_x,
-            0,
-            0,
+            if dispatch.source_is_broadcast { 1 } else { 0 },
+            u32::from(
+                matches!(logical_mode, "RGB" | "HSV")
+                    && offset == (0, 0)
+                    && region_width == width
+                    && region_height == height,
+            ),
         ];
         self.queue.write_buffer(
             &buffers.params_arena.buffer,
@@ -232,7 +283,7 @@ impl GpuInner {
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: ranged_binding(
-                        &buffers.buf_a,
+                        destination_input,
                         Some(BufferRange {
                             offset: 0,
                             size: dispatch.destination_transfer_bytes,
@@ -242,9 +293,9 @@ impl GpuInner {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: ranged_binding(
-                        &buffers.img2_arena.buffer,
+                        auxiliary_input,
                         Some(BufferRange {
-                            offset: 0,
+                            offset: auxiliary_offset,
                             size: dispatch.input_transfer_bytes,
                         }),
                     )?,
@@ -327,7 +378,9 @@ impl GpuInner {
             readback_bytes: dispatch.destination_transfer_bytes,
             parameter_bytes: 48,
             retained_cache_bytes: buffers.retained_bytes(),
-            full_frame_copy_count: 3 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
+            full_frame_copy_count: 1
+                + 2 * u64::from(!self.direct_primary_readback)
+                + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
             mode_conversion_count: 0,
             ..PipelineResourceTelemetry::default()
         });

@@ -247,14 +247,37 @@ pub(super) fn gpu_auxiliary_shapes_are_safe(
                         .ok()
                         .map(|width| (width, 1))
         }
-        PipelineOp::Paste { w, h, mask, .. } => {
+        PipelineOp::Paste {
+            source,
+            w,
+            h,
+            mask,
+            mask_alpha,
+            ..
+        } => {
             if *w <= 0 || *h <= 0 {
                 return false;
             }
-            let source = (*w as u32, *h as u32);
-            second == Some(source)
+            let region = (*w as u32, *h as u32);
+            let source_dimensions = source.size().ok();
+            // ImageDraw.bitmap's internal solid-mask route stores one source
+            // pixel and keeps the full region in the L mask. Native masked
+            // Paste broadcasts that sample; CPU fallback expands it first.
+            let compact_solid_source = source_dimensions == Some((1, 1))
+                && !*mask_alpha
+                && matches!(
+                    source.mode().ok().as_deref(),
+                    Some("L" | "RGB" | "HSV" | "RGBA" | "CMYK")
+                )
+                && mask
+                    .as_deref()
+                    .is_some_and(|mask| mask.mode().ok().as_deref() == Some("L"));
+            let source_matches_region = source_dimensions == Some(region);
+            let source_matches_compact = compact_solid_source && region != (1, 1) && mask.is_some();
+            second == source_dimensions
+                && (source_matches_region || source_matches_compact)
                 && match mask {
-                    Some(_) => third == Some(source),
+                    Some(_) => third == Some(region),
                     None => third.is_none(),
                 }
         }

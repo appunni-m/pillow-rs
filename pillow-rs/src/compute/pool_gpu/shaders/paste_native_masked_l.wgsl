@@ -12,7 +12,7 @@ struct Params {
     paste_y: i32,
     mask_word_offset: u32,
     padding_1: u32,
-    padding_2: u32,
+    source_is_broadcast: u32,
     padding_3: u32,
 }
 
@@ -95,7 +95,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             && source_y < params.source_height
         {
             let source_pixel_index = source_y * params.source_width + source_x;
-            let source = read_source(source_pixel_index);
+            let source_index = select(source_pixel_index, 0u, params.source_is_broadcast != 0u);
+            let source = read_source(source_index);
             let mask = read_mask(source_pixel_index);
             // Pillow's ordinary byte BLEND rounds the weighted sum to nearest.
             value = (source * mask + destination * (255u - mask) + 127u) / 255u;

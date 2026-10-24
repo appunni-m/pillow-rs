@@ -399,6 +399,25 @@ and largest submission size.
 This measures batched throughput. It does not replace single-request latency
 rows or assert simultaneous GPU kernels.
 
+Use `--operation bitmap` for native L, RGB, or CMYK `ImageDraw.bitmap` windows.
+The subjects are live Pillow, serial CPU, SIMD, direct eager GPU, and queued
+GPU through `GpuBatchExecutor`. The benchmark requires matching
+actual-backend receipts, a vectorized SIMD Paste receipt, the eager masked-
+Paste shader receipt, and the queued masked-Paste stream shader receipt. It
+checks output bytes against Pillow and between subjects. The queued lane also
+checks GPU dispatches, submitted jobs, transfers, readbacks, and multi-job
+submissions. These receipts prove GPU execution; they do not imply concurrent
+GPU kernels. Use `--draw-context rgba` with `--mode RGB` to measure an RGBA
+drawing context over an RGB destination. See the [bitmap backend-routing
+evidence](evidence/draw/bitmap-cpu-simd-gpu-arm64-20261024/README.md) for the
+frozen workloads and current eager/queued throughput results.
+
+```sh
+.venv/bin/python scripts/benchmark_gpu_batch.py \
+  --operation bitmap --mode RGB --size 1024 --height 768 \
+  --images 32 --samples 9 --json
+```
+
 ```sh
 .venv/bin/python scripts/run_transpose_throughput.py \
   --operation getchannel --mode RGB --size 1024 768 \

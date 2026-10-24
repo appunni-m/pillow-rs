@@ -13,8 +13,8 @@ struct Params {
     paste_y: i32,
     mask_word_offset: u32,
     padding_1: u32,
-    padding_2: u32,
-    padding_3: u32,
+    source_is_broadcast: u32,
+    full_frame: u32,
 }
 
 @group(0) @binding(0) var<storage, read> input_destination: array<u32>;
@@ -45,6 +45,52 @@ fn blend(source: u32, destination: u32, mask: u32) -> u32 {
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let first_pixel = gid.x * 4u;
     if first_pixel >= params.destination_pixels {
+        return;
+    }
+
+    // A full-frame bitmap has no clipping work: pixel order in the RGB image,
+    // L mask, and non-broadcast source is already identical. Avoid per-pixel
+    // coordinate division and bounds checks on this common exact-layout path.
+    if params.full_frame != 0u {
+        var packed_0 = 0u;
+        var packed_1 = 0u;
+        var packed_2 = 0u;
+        for (var pixel_lane = 0u; pixel_lane < 4u; pixel_lane += 1u) {
+            let pixel_index = first_pixel + pixel_lane;
+            if pixel_index >= params.destination_pixels {
+                continue;
+            }
+            let mask = read_mask(pixel_index);
+            let source_index = select(pixel_index, 0u, params.source_is_broadcast != 0u);
+            for (var channel = 0u; channel < 3u; channel += 1u) {
+                let destination_byte_index = pixel_index * 3u + channel;
+                let value = blend(
+                    read_source(source_index * 3u + channel),
+                    read_destination(destination_byte_index),
+                    mask,
+                );
+                let local_byte_index = pixel_lane * 3u + channel;
+                let shift = (local_byte_index & 3u) * 8u;
+                if local_byte_index < 4u {
+                    packed_0 |= value << shift;
+                } else if local_byte_index < 8u {
+                    packed_1 |= value << shift;
+                } else {
+                    packed_2 |= value << shift;
+                }
+            }
+        }
+
+        let first_output_word = gid.x * 3u;
+        if first_output_word < params.word_count {
+            output[first_output_word] = packed_0;
+        }
+        if first_output_word + 1u < params.word_count {
+            output[first_output_word + 1u] = packed_1;
+        }
+        if first_output_word + 2u < params.word_count {
+            output[first_output_word + 2u] = packed_2;
+        }
         return;
     }
 
@@ -111,7 +157,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             let destination_byte_index = destination_pixel_index * 3u + channel;
             var value = read_destination(destination_byte_index);
             if has_source {
-                let source_byte_index = source_pixel_index * 3u + channel;
+                let source_index = select(source_pixel_index, 0u, params.source_is_broadcast != 0u);
+                let source_byte_index = source_index * 3u + channel;
                 value = blend(read_source(source_byte_index), value, mask);
             }
 

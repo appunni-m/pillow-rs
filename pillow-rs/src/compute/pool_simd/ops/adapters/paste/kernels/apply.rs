@@ -39,6 +39,17 @@ fn record_vector_and_scalar_work(vector_blocks: u64, scalar_tail: u64) {
     }
 }
 
+fn broadcast_source_row(source: &[u8], row_bytes: usize, pixel_bytes: usize) -> Option<Vec<u8>> {
+    if pixel_bytes == 0 || source.len() != pixel_bytes || row_bytes % pixel_bytes != 0 {
+        return None;
+    }
+    let mut row = vec![0; row_bytes];
+    for pixel in row.chunks_exact_mut(pixel_bytes) {
+        pixel.copy_from_slice(source);
+    }
+    Some(row)
+}
+
 pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_apply(
     destination: &mut [u8],
     source: &[u8],
@@ -60,9 +71,33 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_apply(
     let Some(source_bytes) = source_row_stride.checked_mul(plan.source_height) else {
         return false;
     };
-    if destination.len() != destination_bytes || source.len() != source_bytes {
+    let expected_source_bytes = if plan.source_is_broadcast {
+        plan.layout.channels
+    } else {
+        source_bytes
+    };
+    if destination.len() != destination_bytes || source.len() != expected_source_bytes {
         return false;
     }
+
+    // Bitmap passes one solid source pixel with a full-size L mask. Expand it
+    // only to a single scanline, then reuse that row for every destination row.
+    let broadcast_row =
+        if plan.source_is_broadcast && plan.region.width != 0 && plan.region.height != 0 {
+            let Some(row) = broadcast_source_row(source, source_row_stride, plan.layout.channels)
+            else {
+                return false;
+            };
+            Some(row)
+        } else {
+            None
+        };
+    let source = broadcast_row.as_deref().unwrap_or(source);
+    let source_row_stride = if plan.source_is_broadcast {
+        0
+    } else {
+        source_row_stride
+    };
 
     let mask_layout = match (plan.mask, mask) {
         (Some(layout), Some(mask)) => {

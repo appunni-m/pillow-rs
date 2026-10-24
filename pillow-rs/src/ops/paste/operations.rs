@@ -265,7 +265,7 @@ impl Image {
         let placement = box_coords.map_or(PastePlacement::Position(0, 0), |coords| {
             PastePlacement::Region(coords.0, coords.1, coords.2, coords.3)
         });
-        self.paste_impl(source, placement, mask)
+        self.paste_impl(source, placement, mask, false)
     }
 
     /// Queues a paste using Pillow's two-coordinate upper-left form.
@@ -284,7 +284,27 @@ impl Image {
         mask: Option<&Image>,
     ) -> Result<(), PilError> {
         let (x, y) = position.unwrap_or((0, 0));
-        self.paste_impl(source, PastePlacement::Position(x, y), mask)
+        self.paste_impl(source, PastePlacement::Position(x, y), mask, false)
+    }
+
+    /// Queues a bitmap solid-color source as one pixel for native masked-Paste
+    /// backends. The mask defines the full region; CPU fallback expands the
+    /// sample before applying the ordinary Paste semantics.
+    pub(crate) fn paste_bitmap_solid_masked_at(
+        &mut self,
+        source: PasteSource,
+        position: (i32, i32),
+        mask: &Image,
+    ) -> Result<(), PilError> {
+        if mask.mode()?.as_str() != "L" {
+            return Err(PilError::ValueError("bad transparency mask".to_owned()));
+        }
+        self.paste_impl(
+            source,
+            PastePlacement::Position(position.0, position.1),
+            Some(mask),
+            true,
+        )
     }
 
     fn paste_impl(
@@ -292,6 +312,7 @@ impl Image {
         source: PasteSource,
         placement: PastePlacement,
         mask: Option<&Image>,
+        compact_solid_source: bool,
     ) -> Result<(), PilError> {
         let destination_mode = self.mode()?;
         let source_size = match &source {
@@ -312,8 +333,18 @@ impl Image {
             return Err(PilError::ValueError("images do not match".to_owned()));
         }
         let mask_alpha = paste_mask_uses_alpha(mask)?;
-        let source_image =
-            resolve_paste_source(source, &destination_mode, width, height, mask.is_some())?;
+        let (source_width, source_height) = if compact_solid_source {
+            (1, 1)
+        } else {
+            (width, height)
+        };
+        let source_image = resolve_paste_source(
+            source,
+            &destination_mode,
+            source_width,
+            source_height,
+            mask.is_some(),
+        )?;
 
         let w = i32::try_from(width)
             .map_err(|_| PilError::ValueError("images do not match".to_owned()))?;

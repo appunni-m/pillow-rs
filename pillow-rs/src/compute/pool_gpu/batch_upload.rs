@@ -574,6 +574,122 @@ impl GpuInner {
     }
 
     #[cfg(target_endian = "little")]
+    pub(super) fn upload_masked_paste_inputs_mapped(
+        &self,
+        destination: &[u8],
+        destination_transfer_bytes: u64,
+        source: &[u8],
+        source_transfer_bytes: u64,
+        mask: &[u8],
+        mask_transfer_bytes: u64,
+        buffers: &mut BufferPool,
+    ) -> Result<u64, PilError> {
+        if !self.direct_primary_readback {
+            return Err(PilError::InternalError(
+                "GPU mapped masked Paste input requires shared Metal storage".into(),
+            ));
+        }
+        let padded_len = |bytes: &[u8]| {
+            u64::try_from(bytes.len())
+                .ok()?
+                .checked_add(3)
+                .map(|length| length & !3)
+        };
+        if padded_len(destination) != Some(destination_transfer_bytes)
+            || padded_len(source) != Some(source_transfer_bytes)
+            || padded_len(mask) != Some(mask_transfer_bytes)
+        {
+            return Err(PilError::InternalError(
+                "GPU mapped masked Paste inputs do not match their checked layout".into(),
+            ));
+        }
+        let auxiliary_transfer_bytes = source_transfer_bytes
+            .checked_add(mask_transfer_bytes)
+            .ok_or_else(|| {
+                PilError::ValueError("GPU mapped masked Paste input size overflow".into())
+            })?;
+        let limits = self.device.limits();
+        let binding_alignment = u64::from(limits.min_storage_buffer_offset_alignment.max(4));
+        let remainder = destination_transfer_bytes % binding_alignment;
+        let alignment_padding = if remainder == 0 {
+            0
+        } else {
+            binding_alignment - remainder
+        };
+        let auxiliary_offset = destination_transfer_bytes
+            .checked_add(alignment_padding)
+            .ok_or_else(|| {
+                PilError::ValueError("GPU mapped masked Paste offset overflow".into())
+            })?;
+        let total_transfer_bytes = auxiliary_offset
+            .checked_add(auxiliary_transfer_bytes)
+            .ok_or_else(|| {
+                PilError::ValueError("GPU mapped masked Paste input size overflow".into())
+            })?;
+        if auxiliary_transfer_bytes == 0
+            || destination_transfer_bytes > u64::from(limits.max_storage_buffer_binding_size)
+            || auxiliary_transfer_bytes > u64::from(limits.max_storage_buffer_binding_size)
+            || total_transfer_bytes > limits.max_buffer_size
+        {
+            return Err(PilError::InternalError(
+                "GPU mapped masked Paste inputs exceed adapter limits".into(),
+            ));
+        }
+        let size = usize::try_from(total_transfer_bytes).map_err(|_| {
+            PilError::InternalError("GPU mapped masked Paste input size overflow".into())
+        })?;
+        let usage = wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::STORAGE;
+        let input = buffers.mapped_native_input.get_or_insert_with(|| {
+            ReusableGpuBuffer::new(
+                &self.device,
+                "gpu_mapped_native_masked_paste_inputs",
+                usage,
+                size,
+                4,
+            )
+        });
+        input.ensure_capacity(
+            &self.device,
+            "gpu_mapped_native_masked_paste_inputs",
+            usage,
+            size,
+            4,
+        );
+        let buffer = &input.buffer;
+        self.wait_for_buffer_mapping(
+            total_transfer_bytes,
+            buffer,
+            wgpu::MapMode::Write,
+            "GPU mapped masked Paste inputs",
+        )?;
+        let result = {
+            let mut view = buffer.slice(..total_transfer_bytes).get_mapped_range_mut();
+            let mapped = view.as_mut();
+            if mapped.len() != size {
+                Err(PilError::InternalError(
+                    "GPU mapped masked Paste inputs have an unexpected size".into(),
+                ))
+            } else {
+                let destination_end = destination_transfer_bytes as usize;
+                let auxiliary_start = auxiliary_offset as usize;
+                let source_end = auxiliary_start + source_transfer_bytes as usize;
+                mapped[..destination.len()].copy_from_slice(destination);
+                mapped[destination.len()..destination_end].fill(0);
+                mapped[destination_end..auxiliary_start].fill(0);
+                mapped[auxiliary_start..auxiliary_start + source.len()].copy_from_slice(source);
+                mapped[auxiliary_start + source.len()..source_end].fill(0);
+                let mask_start = source_end;
+                let mask_data_end = mask_start + mask.len();
+                mapped[mask_start..mask_data_end].copy_from_slice(mask);
+                mapped[mask_data_end..].fill(0);
+                Ok(())
+            }
+        };
+        buffer.unmap();
+        result.map(|()| auxiliary_offset)
+    }
+
+    #[cfg(target_endian = "little")]
     pub(super) fn upload_bytes_to_mapped_buffer(
         &self,
         buffer: &wgpu::Buffer,

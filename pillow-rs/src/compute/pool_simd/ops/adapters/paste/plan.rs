@@ -36,6 +36,7 @@ pub(in crate::compute::pool_simd::ops::adapters) struct NativePastePlan {
     pub(in crate::compute::pool_simd::ops::adapters) region: NativePasteRegion,
     pub(in crate::compute::pool_simd::ops::adapters) source_width: usize,
     pub(in crate::compute::pool_simd::ops::adapters) source_height: usize,
+    pub(in crate::compute::pool_simd::ops::adapters) source_is_broadcast: bool,
     pub(in crate::compute::pool_simd::ops::adapters) luma16_mask_byte_shift: u32,
 }
 
@@ -317,8 +318,16 @@ fn native_paste_plan_from_layout(
 ) -> Option<NativePastePlan> {
     let source_width = u32::try_from(width).ok()?;
     let source_height = u32::try_from(height).ok()?;
-    if !native_paste_mode_matches(&source.mode().ok()?, layout.mode)
-        || source.size().ok()? != (source_width, source_height)
+    let source_mode = source.mode().ok()?;
+    let source_size = source.size().ok()?;
+    let compact_solid_source = source_size == (1, 1)
+        && (source_width, source_height) != (1, 1)
+        && mask.is_some()
+        && !mask_alpha
+        && matches!(layout.mode, "L" | "RGB" | "HSV" | "CMYK")
+        && mask.and_then(|image| image.mode().ok()).as_deref() == Some("L");
+    if !native_paste_mode_matches(&source_mode, layout.mode)
+        || (source_size != (source_width, source_height) && !compact_solid_source)
     {
         return None;
     }
@@ -369,6 +378,7 @@ fn native_paste_plan_from_layout(
         region,
         source_width: source_width as usize,
         source_height: source_height as usize,
+        source_is_broadcast: compact_solid_source,
         luma16_mask_byte_shift: native_paste_luma16_mask_byte_shift(mode),
     })
 }
@@ -570,6 +580,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_composite_plan_for_im
         region,
         source_width: img.width() as usize,
         source_height: img.height() as usize,
+        source_is_broadcast: false,
         luma16_mask_byte_shift: 0,
     })
 }
@@ -613,6 +624,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_composite_plan_for_sh
         region,
         source_width: shape.width as usize,
         source_height: shape.height as usize,
+        source_is_broadcast: false,
         luma16_mask_byte_shift: 0,
     })
 }

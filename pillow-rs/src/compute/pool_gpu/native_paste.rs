@@ -39,6 +39,7 @@ pub(super) struct NativeMaskedBytePasteDispatch {
     pub(super) input_transfer_bytes: u64,
     pub(super) destination_pixels: u32,
     pub(super) source_pixels: u32,
+    pub(super) source_is_broadcast: bool,
     pub(super) bytes_per_pixel: u8,
     pub(super) word_count: u32,
     pub(super) workgroups: u32,
@@ -231,11 +232,13 @@ pub(super) fn plan_gpu_native_masked_byte_paste(
         CheckedDims::new(destination_width, destination_height, bytes_per_pixel).ok()?;
     let source = CheckedDims::new(source_width, source_height, bytes_per_pixel).ok()?;
     let mask = CheckedDims::new(mask_width, mask_height, 1).ok()?;
+    let source_is_broadcast =
+        (source_width, source_height) == (1, 1) && (mask_width, mask_height) != (1, 1);
     if destination_width == 0
         || destination_height == 0
         || source_width == 0
         || source_height == 0
-        || (mask_width, mask_height) != (source_width, source_height)
+        || (!source_is_broadcast && (mask_width, mask_height) != (source_width, source_height))
         || destination.total_pixels() > GPU_BUFFER_CAPACITY as usize
         || source.total_pixels() > GPU_BUFFER_CAPACITY as usize
         || mask.total_pixels() > GPU_BUFFER_CAPACITY as usize
@@ -311,6 +314,7 @@ pub(super) fn plan_gpu_native_masked_byte_paste(
         input_transfer_bytes,
         destination_pixels,
         source_pixels,
+        source_is_broadcast,
         bytes_per_pixel,
         word_count,
         workgroups,
@@ -633,17 +637,21 @@ pub(super) fn gpu_native_masked_byte_paste_layout(
             _ => return None,
         };
     let (source_width, source_height) = source.dimensions();
+    let (mask_width, mask_height) = mask.dimensions();
+    let source_is_broadcast =
+        (source_width, source_height) == (1, 1) && (mask_width, mask_height) != (1, 1);
     if *w <= 0
         || *h <= 0
-        || (u32::try_from(*w).ok()?, u32::try_from(*h).ok()?) != (source_width, source_height)
-        || (source_width, source_height) != mask.dimensions()
+        || (u32::try_from(*w).ok()?, u32::try_from(*h).ok()?) != (mask_width, mask_height)
+        || (!source_is_broadcast && (source_width, source_height) != (mask_width, mask_height))
+        || (source_is_broadcast && !matches!(logical_mode, "L" | "RGB" | "HSV" | "RGBA" | "CMYK"))
     {
         return None;
     }
     let destination_dims =
         CheckedDims::new(destination.width(), destination.height(), bytes_per_pixel).ok()?;
     let source_dims = CheckedDims::new(source_width, source_height, bytes_per_pixel).ok()?;
-    let mask_dims = CheckedDims::new(source_width, source_height, 1).ok()?;
+    let mask_dims = CheckedDims::new(mask_width, mask_height, 1).ok()?;
     if destination_dims.total_bytes() != destination.as_bytes().len()
         || source_dims.total_bytes() != source.as_bytes().len()
         || mask_dims.total_bytes() != mask.as_bytes().len()

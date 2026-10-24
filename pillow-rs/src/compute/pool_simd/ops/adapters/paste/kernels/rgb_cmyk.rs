@@ -87,19 +87,122 @@ pub(super) fn native_paste_pa_masked_row(
 /// Blend an interleaved RGB row with an L mask without rebuilding mask
 /// addresses in the generic channel adapter. Each mask sample covers three
 /// adjacent byte lanes, including vector blocks that begin mid-pixel.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
+#[inline]
+fn native_paste_rgb_l_masked_neon_block(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    start: usize,
+) {
+    use core::arch::aarch64 as neon;
+
+    macro_rules! blend_channel {
+        ($source:expr, $destination:expr, $mask:expr, $inverse:expr) => {{
+            let source = $source;
+            let destination = $destination;
+            let mask = $mask;
+            let inverse = $inverse;
+            let weighted_low = neon::vmlal_u8(
+                neon::vmull_u8(neon::vget_low_u8(source), neon::vget_low_u8(mask)),
+                neon::vget_low_u8(destination),
+                neon::vget_low_u8(inverse),
+            );
+            let weighted_high = neon::vmlal_u8(
+                neon::vmull_u8(neon::vget_high_u8(source), neon::vget_high_u8(mask)),
+                neon::vget_high_u8(destination),
+                neon::vget_high_u8(inverse),
+            );
+            let rounded_low = neon::vaddq_u16(weighted_low, neon::vdupq_n_u16(128));
+            let rounded_high = neon::vaddq_u16(weighted_high, neon::vdupq_n_u16(128));
+            let blended_low = neon::vshrq_n_u16(
+                neon::vaddq_u16(rounded_low, neon::vshrq_n_u16(rounded_low, 8)),
+                8,
+            );
+            let blended_high = neon::vshrq_n_u16(
+                neon::vaddq_u16(rounded_high, neon::vshrq_n_u16(rounded_high, 8)),
+                8,
+            );
+            neon::vcombine_u8(neon::vmovn_u16(blended_low), neon::vmovn_u16(blended_high))
+        }};
+    }
+
+    // SAFETY: the caller enables this block only for equal RGB source and
+    // destination rows whose lengths are divisible by 48, with exactly one
+    // L-mask byte per pixel. `start` advances by 48 within that validated
+    // prefix, so each load reads 48 RGB bytes or 16 mask bytes and the store
+    // writes the same 48-byte destination range. The safe slice borrows keep
+    // source, destination, and mask access disjoint for this call.
+    unsafe {
+        let source_pixels = neon::vld3q_u8(source.as_ptr().add(start));
+        let destination_ptr = destination.as_mut_ptr().add(start);
+        let destination_pixels = neon::vld3q_u8(destination_ptr);
+        let mask_vector = neon::vld1q_u8(mask.as_ptr().add(start / 3));
+        let inverse_mask = neon::vsubq_u8(neon::vdupq_n_u8(255), mask_vector);
+        let output = neon::uint8x16x3_t(
+            blend_channel!(
+                source_pixels.0,
+                destination_pixels.0,
+                mask_vector,
+                inverse_mask
+            ),
+            blend_channel!(
+                source_pixels.1,
+                destination_pixels.1,
+                mask_vector,
+                inverse_mask
+            ),
+            blend_channel!(
+                source_pixels.2,
+                destination_pixels.2,
+                mask_vector,
+                inverse_mask
+            ),
+        );
+        neon::vst3q_u8(destination_ptr, output);
+    }
+}
+
 #[inline]
 pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_rgb_l_masked_row(
     source: &[u8],
     destination: &mut [u8],
     mask: &[u8],
     allow_short_masked_tail: bool,
-) {
+) -> bool {
     debug_assert_eq!(source.len(), destination.len());
     debug_assert_eq!(source.len() % 3, 0);
     debug_assert_eq!(source.len() / 3, mask.len());
 
     let vector_len16 = source.len() / 16 * 16;
-    for start in (0..vector_len16).step_by(16) {
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    let neon_prefix = if source.len() == destination.len()
+        && source.len() % 3 == 0
+        && source.len() / 3 == mask.len()
+    {
+        source.len() / 48 * 48
+    } else {
+        0
+    };
+    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+    let neon_prefix = 0usize;
+    let used_neon = neon_prefix != 0;
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    {
+        let unrolled_len = neon_prefix / 192 * 192;
+        for start in (0..unrolled_len).step_by(192) {
+            native_paste_rgb_l_masked_neon_block(source, destination, mask, start);
+            native_paste_rgb_l_masked_neon_block(source, destination, mask, start + 48);
+            native_paste_rgb_l_masked_neon_block(source, destination, mask, start + 96);
+            native_paste_rgb_l_masked_neon_block(source, destination, mask, start + 144);
+        }
+        for start in (unrolled_len..neon_prefix).step_by(48) {
+            native_paste_rgb_l_masked_neon_block(source, destination, mask, start);
+        }
+    }
+
+    for start in (neon_prefix..vector_len16).step_by(16) {
         let source_block = <[u8; 16]>::try_from(&source[start..start + 16])
             .expect("validated RGB Paste row has a complete 16-byte block");
         let destination_block = <[u8; 16]>::try_from(&destination[start..start + 16])
@@ -110,7 +213,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_rgb_l_masked_ro
     }
 
     let vector_len8 = source.len() / 8 * 8;
-    for start in (vector_len16..vector_len8).step_by(8) {
+    for start in (vector_len16.max(neon_prefix)..vector_len8).step_by(8) {
         let source_block = <[u8; 8]>::try_from(&source[start..start + 8])
             .expect("validated RGB Paste row has a complete 8-byte block");
         let destination_block = <[u8; 8]>::try_from(&destination[start..start + 8])
@@ -122,7 +225,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_rgb_l_masked_ro
 
     let tail = source.len() - vector_len8;
     if tail == 0 {
-        return;
+        return used_neon;
     }
     if allow_short_masked_tail {
         let mut source_block = [0u8; 8];
@@ -161,6 +264,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_rgb_l_masked_ro
             destination[index] = blended;
         }
     }
+    used_neon
 }
 
 /// Blend native CMYK pixels with one L-mask byte per pixel. The fourth source

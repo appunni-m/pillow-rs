@@ -24,6 +24,12 @@ struct Layout {
     arena_bytes: u64,
 }
 
+struct PlannedAuxiliaries<'a> {
+    secondary: Option<Box<Plan<'a>>>,
+    tertiary: Option<Box<Plan<'a>>>,
+    composed_byte: bool,
+}
+
 impl Default for Layout {
     fn default() -> Self {
         Self {
@@ -50,14 +56,15 @@ pub(super) fn plan_stage<'a>(
     validate_operation(op, dimensions)?;
     let channels = super::super::native_channels(mode)
         .ok_or_else(|| PilError::ValueError("unproven mode transition".into()))?;
-    let (secondary, composed_byte) =
-        plan_secondary(op, mode, dimensions, followed_by_mirror, depth, gpu, bounds)?;
-    let mut layout = if secondary.is_some() {
+    let auxiliaries =
+        plan_auxiliaries(op, mode, dimensions, followed_by_mirror, depth, gpu, bounds)?;
+    let has_auxiliaries = auxiliaries.secondary.is_some() || auxiliaries.tertiary.is_some();
+    let mut layout = if has_auxiliaries {
         Layout::default()
     } else {
         select_layout(op, mode, channels, dimensions, limits)?
     };
-    layout.byte |= composed_byte;
+    layout.byte |= auxiliaries.composed_byte;
     let output = output_dimensions(op, dimensions)?;
     let pixels = stage_capacity_pixels(op, dimensions, output)?;
     let capacity =
@@ -66,7 +73,7 @@ pub(super) fn plan_stage<'a>(
     let work = gpu_shader_work_items(op, dimensions, output, Some(mode))
         .ok_or_else(|| PilError::ValueError("GPU work arithmetic overflow".into()))?;
     bounds.add(work)?;
-    let next_mode = if secondary.is_some() {
+    let next_mode = if has_auxiliaries {
         mode.to_owned()
     } else {
         crate::image::known_pipeline_op_mode(op, mode).ok_or_else(|| {
@@ -78,7 +85,8 @@ pub(super) fn plan_stage<'a>(
     Ok(PlannedStage {
         stage: Stage {
             op,
-            secondary,
+            secondary: auxiliaries.secondary,
+            tertiary: auxiliaries.tertiary,
             width,
             height,
             mode: mode.to_owned(),
@@ -116,7 +124,7 @@ fn validate_operation(op: &PipelineOp, dimensions: (u32, u32)) -> Result<(), Pil
     Ok(())
 }
 
-fn plan_secondary<'a>(
+fn plan_auxiliaries<'a>(
     op: &'a PipelineOp,
     mode: &str,
     dimensions: (u32, u32),
@@ -124,7 +132,7 @@ fn plan_secondary<'a>(
     depth: usize,
     gpu: &GpuInner,
     bounds: &mut GraphBounds,
-) -> Result<(Option<Box<Plan<'a>>>, bool), PilError> {
+) -> Result<PlannedAuxiliaries<'a>, PilError> {
     let (width, height) = dimensions;
     match op {
         PipelineOp::Paste {
@@ -143,8 +151,49 @@ fn plan_secondary<'a>(
                     "GPU paste requires matching native modes and source region".into(),
                 ));
             }
-            Ok((Some(Box::new(child)), false))
+            Ok(PlannedAuxiliaries {
+                secondary: Some(Box::new(child)),
+                tertiary: None,
+                composed_byte: false,
+            })
         }
+        PipelineOp::Paste {
+            source,
+            w,
+            h,
+            mask: Some(mask),
+            mask_alpha: false,
+            ..
+        } => {
+            let source_child = plan_graph_inner(source, gpu, depth + 1, bounds)?;
+            let mask_child = plan_graph_inner(mask, gpu, depth + 1, bounds)?;
+            let region = (u32::try_from(*w).ok(), u32::try_from(*h).ok());
+            let compact_broadcast =
+                (source_child.width, source_child.height) == (1, 1) && region != (Some(1), Some(1));
+            if !matches!(mode, "L" | "RGB" | "HSV" | "CMYK")
+                || source_child.mode != mode
+                || mask_child.mode != "L"
+                || *w <= 0
+                || *h <= 0
+                || region != (Some(mask_child.width), Some(mask_child.height))
+                || (!compact_broadcast
+                    && (source_child.width, source_child.height)
+                        != (mask_child.width, mask_child.height))
+            {
+                return Err(PilError::ValueError(
+                    "GPU masked Paste requires a native L mask and matching L/RGB/HSV/CMYK inputs"
+                        .into(),
+                ));
+            }
+            Ok(PlannedAuxiliaries {
+                secondary: Some(Box::new(source_child)),
+                tertiary: Some(Box::new(mask_child)),
+                composed_byte: false,
+            })
+        }
+        PipelineOp::Paste { mask: Some(_), .. } => Err(PilError::ValueError(
+            "GPU batch masked Paste requires a non-alpha native L mask".into(),
+        )),
         PipelineOp::AlphaComposite {
             source,
             dest: (0, 0),
@@ -159,7 +208,11 @@ fn plan_secondary<'a>(
                     "GPU alpha-composite mirror requires matching full-frame RGBA inputs".into(),
                 ));
             }
-            Ok((Some(Box::new(child)), false))
+            Ok(PlannedAuxiliaries {
+                secondary: Some(Box::new(child)),
+                tertiary: None,
+                composed_byte: false,
+            })
         }
         PipelineOp::Multiply { other }
         | PipelineOp::Screen { other }
@@ -178,9 +231,17 @@ fn plan_secondary<'a>(
                     "GPU byte composition requires identical native modes and dimensions".into(),
                 ));
             }
-            Ok((Some(Box::new(child)), true))
+            Ok(PlannedAuxiliaries {
+                secondary: Some(Box::new(child)),
+                tertiary: None,
+                composed_byte: true,
+            })
         }
-        _ => Ok((None, false)),
+        _ => Ok(PlannedAuxiliaries {
+            secondary: None,
+            tertiary: None,
+            composed_byte: false,
+        }),
     }
 }
 

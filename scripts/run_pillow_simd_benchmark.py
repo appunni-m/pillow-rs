@@ -35,7 +35,6 @@ try:
         load_benchmarks,
         load_manifest,
         load_parity_cases,
-        profile_applies_to_case,
         target_profile_for_backend,
     )
     from run_migration_parity import build_operation_index, compare_case
@@ -46,7 +45,6 @@ except ModuleNotFoundError:  # imported as ``scripts.run_pillow_simd_benchmark``
         load_benchmarks,
         load_manifest,
         load_parity_cases,
-        profile_applies_to_case,
         target_profile_for_backend,
     )
     from scripts.run_migration_parity import build_operation_index, compare_case
@@ -514,7 +512,6 @@ def run_source_compatibility(
             cases[case_id]
             for case_id in selected_case_ids
             if profile in selected_profiles_by_case[case_id]
-            and profile_applies_to_case(profile, cases[case_id])
         ]
         if not backend_cases:
             continue

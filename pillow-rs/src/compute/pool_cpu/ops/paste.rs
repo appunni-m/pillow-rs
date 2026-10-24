@@ -3,6 +3,8 @@ use crate::image::{Image, preserve_mode};
 use crate::raster::{DynamicImage, GenericImageView};
 use std::sync::Arc;
 
+use crate::checked_dims::CheckedDims;
+
 #[cfg(feature = "parallel")]
 use super::effects::EFFECT_PARALLEL_PIXEL_THRESHOLD;
 
@@ -274,6 +276,8 @@ pub fn op_paste(
     mask_alpha: bool,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let expanded_source = expand_compact_masked_source(source, mask, mask_alpha, mode)?;
+    let source = expanded_source.as_ref().unwrap_or(source);
     let source_mode = if mask.is_none()
         && matches!(
             mode,
@@ -533,4 +537,47 @@ pub fn op_paste(
     }
 
     Ok(preserve_mode(img, DynamicImage::ImageRgba8(destination)))
+}
+
+fn expand_compact_masked_source(
+    source: &Arc<Image>,
+    mask: &Option<Arc<Image>>,
+    mask_alpha: bool,
+    mode: Option<&str>,
+) -> Result<Option<Arc<Image>>, PilError> {
+    // If GPU admission or device limits select the ordinary CPU Paste path,
+    // restore the one-pixel bitmap fill to the region size before blending.
+    let Some(mask) = mask else {
+        return Ok(None);
+    };
+    let source_mode = source.mode()?;
+    let (source_width, source_height) = source.size()?;
+    let (mask_width, mask_height) = mask.size()?;
+    if mask_alpha
+        || mask.mode()?.as_str() != "L"
+        || (source_width, source_height) != (1, 1)
+        || (mask_width, mask_height) == (1, 1)
+        || !matches!(source_mode.as_str(), "L" | "RGB" | "HSV" | "RGBA" | "CMYK")
+        || mode.is_some_and(|mode| mode != source_mode && !(mode == "RGBA" && source_mode == "RGB"))
+    {
+        return Ok(None);
+    }
+
+    let source_pixels = source.materialized_shared()?;
+    let sample = source_pixels.as_bytes();
+    let channels = u8::try_from(sample.len())
+        .map_err(|_| PilError::ValueError("invalid compact Paste source".into()))?;
+    if channels == 0 {
+        return Err(PilError::ValueError("invalid compact Paste source".into()));
+    }
+    let dimensions = CheckedDims::new(mask_width, mask_height, channels)?;
+    let mut bytes = dimensions.alloc_buffer();
+    for destination_sample in bytes.chunks_exact_mut(sample.len()) {
+        destination_sample.copy_from_slice(sample);
+    }
+    Ok(Some(Arc::new(Image::frombytes(
+        &source_mode,
+        (mask_width, mask_height),
+        &bytes,
+    )?)))
 }

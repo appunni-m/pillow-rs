@@ -37,8 +37,8 @@ impl Drop for CompileCredit {
         }
     }
 }
-struct EncodedGraph {
-    buffer: wgpu::Buffer,
+pub(super) struct EncodedGraph {
+    pub(super) buffer: wgpu::Buffer,
     dispatches: u64,
     upload: u64,
     retained: u64,
@@ -160,7 +160,17 @@ fn encode_graph(
             .as_deref()
             .map(|child| encode_graph(child, gpu, encoder))
             .transpose()?;
+        let tertiary = stage
+            .tertiary
+            .as_deref()
+            .map(|child| encode_graph(child, gpu, encoder))
+            .transpose()?;
         if let Some(child) = &secondary {
+            retained += child.retained;
+            uploaded_bytes += child.upload;
+            dispatches += child.dispatches;
+        }
+        if let Some(child) = &tertiary {
             retained += child.retained;
             uploaded_bytes += child.upload;
             dispatches += child.dispatches;
@@ -184,16 +194,32 @@ fn encode_graph(
         } else if stage.flags.rgb_blur {
             current_a = encode_rgb_blur_stage(gpu, encoder, &buffers, stage, current_a)?;
         } else if matches!(stage.op, PipelineOp::Paste { .. }) {
-            current_a = encode_paste_stage(
-                gpu,
-                encoder,
-                &buffers,
-                stage,
-                secondary.as_ref().ok_or_else(|| {
-                    PilError::InternalError("GPU Paste source was not encoded".into())
-                })?,
-                current_a,
-            )?;
+            if matches!(stage.op, PipelineOp::Paste { mask: Some(_), .. }) {
+                current_a = super::paste::encode_masked_paste_stage(
+                    gpu,
+                    encoder,
+                    &buffers,
+                    stage,
+                    secondary.as_ref().ok_or_else(|| {
+                        PilError::InternalError("GPU Paste source was not encoded".into())
+                    })?,
+                    tertiary.as_ref().ok_or_else(|| {
+                        PilError::InternalError("GPU Paste mask was not encoded".into())
+                    })?,
+                    current_a,
+                )?;
+            } else {
+                current_a = super::paste::encode_paste_stage(
+                    gpu,
+                    encoder,
+                    &buffers,
+                    stage,
+                    secondary.as_ref().ok_or_else(|| {
+                        PilError::InternalError("GPU Paste source was not encoded".into())
+                    })?,
+                    current_a,
+                )?;
+            }
         } else if stage.relocation {
             current_a = encode_relocation_stage(gpu, encoder, &buffers, stage, current_a)?;
         } else if stage.byte {
@@ -749,99 +775,6 @@ fn encode_relocation_stage(
     )?;
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: Some("gpu_stream_relocation"),
-        timestamp_writes: None,
-    });
-    pass.set_pipeline(&cached.pipeline);
-    pass.set_bind_group(0, &bind, &[]);
-    pass.dispatch_workgroups(groups.0, groups.1, 1);
-    crate::compute::record_gpu_shader_dispatch(
-        cached.variant_name,
-        cached.shader_file,
-        u64::from(groups.0) * u64::from(groups.1),
-    );
-    Ok(!current_a)
-}
-
-fn encode_paste_stage(
-    gpu: &GpuInner,
-    encoder: &mut wgpu::CommandEncoder,
-    buffers: &BufferPool,
-    stage: &Stage<'_>,
-    secondary: &EncodedGraph,
-    current_a: bool,
-) -> Result<bool, PilError> {
-    let PipelineOp::Paste { x, y, .. } = stage.op else {
-        unreachable!()
-    };
-    let child = stage.secondary.as_deref().ok_or_else(|| {
-        PilError::InternalError("GPU Paste source is missing from its plan".into())
-    })?;
-    let channels = planned_channels(&stage.mode)?;
-    let dims = CheckedDims::new(stage.width, stage.height, channels)?;
-    let words = u32::try_from(dims.total_bytes().div_ceil(4))
-        .map_err(|_| PilError::ValueError("GPU paste byte indexing overflow".into()))?;
-    let parameters = [
-        stage.width,
-        stage.height,
-        child.width,
-        child.height,
-        dims.total_pixels() as u32,
-        words,
-        u32::from(channels),
-        0,
-        *x as u32,
-        *y as u32,
-        0,
-        0,
-    ];
-    let cached = gpu.resolve_pipeline(
-        "__internal_stream_native_paste",
-        "paste_native_bytes.wgsl",
-        include_str!("../shaders/paste_native_bytes.wgsl"),
-    )?;
-    let uniform = create_sized_buffer(
-        &gpu.device,
-        "gpu_stream_paste_params",
-        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        48,
-        4,
-    );
-    gpu.queue
-        .write_buffer(&uniform, 0, bytemuck::cast_slice(&parameters));
-    let (input, output) = if current_a {
-        (&buffers.buf_a, &buffers.buf_b)
-    } else {
-        (&buffers.buf_b, &buffers.buf_a)
-    };
-    let bind = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("gpu_stream_paste_bind"),
-        layout: &cached.bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: input.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: secondary.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: output.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: uniform.as_entire_binding(),
-            },
-        ],
-    });
-    let groups = plan_extract_band_dispatch(
-        dims.total_bytes() as u32,
-        1,
-        gpu.device.limits().max_compute_workgroups_per_dimension,
-    )?;
-    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-        label: Some("gpu_stream_paste"),
         timestamp_writes: None,
     });
     pass.set_pipeline(&cached.pipeline);

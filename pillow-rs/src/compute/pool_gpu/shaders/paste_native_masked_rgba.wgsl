@@ -12,7 +12,7 @@ struct Params {
     paste_y: i32,
     mask_word_offset: u32,
     workgroups_x: u32,
-    padding_2: u32,
+    source_is_broadcast: u32,
     padding_3: u32,
 }
 
@@ -84,7 +84,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     if has_source {
         let source_pixel_index = source_y * params.source_width + source_x;
-        let source_word = input_source_mask[source_pixel_index];
+        let source_index = select(source_pixel_index, 0u, params.source_is_broadcast != 0u);
+        let source_word = input_source_mask[source_index];
         let mask = read_mask(source_pixel_index);
         var packed = 0u;
         for (var channel = 0u; channel < 4u; channel += 1u) {

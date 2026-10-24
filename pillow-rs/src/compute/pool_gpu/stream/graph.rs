@@ -37,6 +37,7 @@ pub(super) struct Flags {
 pub(super) struct Stage<'a> {
     pub(super) op: &'a PipelineOp,
     pub(super) secondary: Option<Box<Plan<'a>>>,
+    pub(super) tertiary: Option<Box<Plan<'a>>>,
     pub(super) width: u32,
     pub(super) height: u32,
     pub(super) mode: String,

@@ -235,12 +235,16 @@ def main() -> None:
         if replacement not in selected or replacement in ids:
             raise ValueError('replacement must remain in every trial')
         before, after = by_id[candidate['case_id']], by_id[replacement]
-        if before['target_profiles'] != after['target_profiles']:
-            raise ValueError(f'replacement must preserve target profiles: {candidate["case_id"]}')
-    required = {(r, p) for cid in selected for r in by_id[cid]['covers'] for p in by_id[cid]['target_profiles']}
-    retained = {(r, p) for cid in selected - set(ids) for r in by_id[cid]['covers'] for p in by_id[cid]['target_profiles']}
+        if before['covers'] != after['covers']:
+            raise ValueError(f'replacement must preserve requirements: {candidate["case_id"]}')
+    required = {requirement for cid in selected for requirement in by_id[cid]['covers']}
+    retained = {
+        requirement
+        for cid in selected - set(ids)
+        for requirement in by_id[cid]['covers']
+    }
     if required != retained:
-        raise ValueError('candidate removals would drop a requirement/profile mapping from the retained corpus')
+        raise ValueError('candidate removals would drop a requirement from the retained corpus')
     output = args.output_dir.resolve()
     request = {'candidates_sha256': digest(args.candidates), 'batch_size': args.batch_size, 'backends': ['cpu', 'simd', 'gpu']}
     request_path = output / 'request.json'

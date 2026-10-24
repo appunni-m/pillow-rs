@@ -46,13 +46,14 @@ pub(super) fn apply(context: &mut NativePasteApplyContext<'_>) -> bool {
     else {
         return false;
     };
-    let apply_rgb_row = |row_index: usize, destination_row: &mut [u8]| {
+    let mut used_neon = false;
+    let mut apply_rgb_row = |row_index: usize, destination_row: &mut [u8]| {
         let source_y = region.source_top + row_index;
         let source_row_start = source_y * source_row_stride + region.source_left * 3;
         let source_row = &source[source_row_start..source_row_start + region_row_bytes];
         let mask_row_start = source_y * mask_row_stride + region.source_left;
         let mask_row = &mask[mask_row_start..mask_row_start + region.width];
-        native_paste_rgb_l_masked_row(
+        used_neon |= native_paste_rgb_l_masked_row(
             source_row,
             &mut destination_row[destination_left..destination_right],
             mask_row,
@@ -105,6 +106,10 @@ pub(super) fn apply(context: &mut NativePasteApplyContext<'_>) -> bool {
     if scalar_tail != 0 {
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     }
-    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_path(if used_neon {
+        "neon-rgb-l-blend"
+    } else {
+        "vector"
+    });
     return true;
 }

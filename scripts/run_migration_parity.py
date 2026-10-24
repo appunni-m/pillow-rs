@@ -2766,6 +2766,38 @@ def direct_cpu_execution_receipt(
     }
 
 
+def strict_backend_fallback_error(
+    side: str, receipt: dict[str, Any]
+) -> str | None:
+    """Explain why a strict SIMD/GPU run cannot accept this execution receipt."""
+
+    if (
+        side != "target"
+        or not STRICT_TARGET_BACKEND
+        or BENCHMARK_ADAPTER
+        or TARGET_BACKEND not in {"simd", "gpu"}
+    ):
+        return None
+    actual_backend = receipt.get("actual_backend")
+    fallback_reason = receipt.get("fallback_reason")
+    if fallback_reason:
+        return (
+            f"strict {TARGET_BACKEND} parity rejected CPU/backend fallback: "
+            f"{fallback_reason}"
+        )
+    if not isinstance(actual_backend, str):
+        return (
+            f"strict {TARGET_BACKEND} parity has no actual-backend receipt "
+            "for this execution"
+        )
+    if actual_backend.lower() != TARGET_BACKEND:
+        return (
+            f"strict {TARGET_BACKEND} parity expected native {TARGET_BACKEND} "
+            f"execution, but the receipt reports {actual_backend}"
+        )
+    return None
+
+
 @_isolate_display_workflow
 def run_case(
     side: str,
@@ -2817,6 +2849,9 @@ def run_case(
         # earlier completed backend identity.
         if status in {"completed", "cached"} and receipt_is_meaningful(receipt):
             terminal_receipt_index = len(pipeline_execution_sink) - 1
+        strict_error = strict_backend_fallback_error(side, receipt)
+        if strict_error is not None:
+            raise RuntimeError(strict_error)
 
     selected_indices = [
         index
@@ -2899,6 +2934,11 @@ def run_case(
                     direct_receipt["step_id"] = step_id
                     pipeline_execution_sink.append(direct_receipt)
                     direct_execution_receipt_index = len(pipeline_execution_sink) - 1
+                    strict_error = strict_backend_fallback_error(
+                        side, direct_receipt
+                    )
+                    if strict_error is not None:
+                        raise RuntimeError(strict_error)
                 elif (
                     step_index == len(case["steps"]) - 1
                     and step_id not in case.get("observations", [])
@@ -3358,10 +3398,15 @@ def configure_target_backend() -> dict[str, Any]:
         target.disable_backend(name)
     if not target.enable_backend(TARGET_BACKEND):
         raise RuntimeError(f"failed to activate target backend {TARGET_BACKEND!r}")
+    active = [str(name).lower() for name in target.active_backends()]
+    if active != [TARGET_BACKEND]:
+        raise RuntimeError(
+            f"requested target backend {TARGET_BACKEND!r}, but active backend state is {active!r}"
+        )
     return {
         "requested": TARGET_BACKEND,
         "available": sorted(available),
-        "active": list(target.active_backends()),
+        "active": active,
     }
 
 
@@ -4845,10 +4890,19 @@ def run_side(args: argparse.Namespace) -> int:
         if args.side == "target"
         else None
     )
+    strict_backend_audit = (
+        args.side == "target"
+        and STRICT_TARGET_BACKEND
+        and not BENCHMARK_ADAPTER
+        and TARGET_BACKEND in {"simd", "gpu"}
+    )
     # Backend receipts are collected in a separate untimed adapter run.  When
     # timing only, leave pipeline telemetry disabled so its bookkeeping does
     # not become target-only work inside the measured public call.
-    if execution_output and args.side == "target":
+    # Strict SIMD/GPU parity also needs receipts when no sidecar was requested:
+    # eager operations can bypass lazy-image locking, so their actual backend
+    # must be checked at the point where telemetry is taken.
+    if execution_output or strict_backend_audit:
         telemetry_api = importlib.import_module("pillow_rs._core")
         telemetry_api.set_pipeline_telemetry(True)
     shader_coverage_output = os.environ.get("MIGRATION_GPU_WGSL_COVERAGE_OUTPUT")
@@ -4909,10 +4963,14 @@ def run_side(args: argparse.Namespace) -> int:
                                 )
                             ),
                             pipeline_execution_api=(
-                                telemetry_api if execution_output else None
+                                telemetry_api
+                                if execution_output or strict_backend_audit
+                                else None
                             ),
                             pipeline_execution_sink=(
-                                execution_sink if execution_output else None
+                                execution_sink
+                                if execution_output or strict_backend_audit
+                                else None
                             ),
                         )
                         if telemetry_api is not None:

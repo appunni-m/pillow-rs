@@ -62,12 +62,17 @@ impl Draw {
             // contract as masked Paste for these native modes. Reuse the
             // existing selected-backend kernels instead of running this
             // destination loop on the host under a SIMD or GPU profile.
+            // The 16x16 L benchmark remains about 2 us slower end-to-end on
+            // SIMD than CPU because fixed pipeline and terminal-observation
+            // costs dominate such a small blend. Keep the requested backend
+            // route instead of disguising that case as CPU execution.
             let source = if matches!(mode.as_str(), "1" | "L") {
                 PasteSource::Scalar(color.0)
             } else {
                 PasteSource::Rgba(color.0, color.1, color.2, color.3)
             };
-            self.image.paste_at(source, Some((x, y)), Some(bitmap))?;
+            self.image
+                .paste_bitmap_solid_masked_at(source, (x, y), bitmap)?;
             return Ok(());
         }
 
@@ -95,16 +100,17 @@ impl Draw {
         original_mode: Option<&str>,
         mask_mode: &str,
     ) -> bool {
-        // Admit only modes whose bitmap blend contract is implemented by the
-        // selected masked-Paste kernels. Palette indices and alpha-bearing
-        // masks or destinations have draw-specific rules; forcing those
-        // through Paste would change pixels, so they stay on bitmap_cpu and
-        // are reported as CPU fallbacks when SIMD or GPU was requested.
+        // Admit only modes whose bitmap blend contract and native masked-Paste
+        // kernels both match. Mode 1 uses binary destination writes and YCbCr
+        // has no native masked-Paste kernel; both stay on bitmap_cpu and are
+        // reported as CPU fallbacks when SIMD or GPU was requested. Palette
+        // indices and alpha-bearing masks or destinations also have
+        // draw-specific rules, so they stay on the format-specific CPU path.
         if mask_mode != "L" {
             return false;
         }
         match mode {
-            "1" | "L" | "RGB" | "CMYK" | "YCbCr" | "HSV" => original_mode == Some(mode),
+            "L" | "RGB" | "CMYK" | "HSV" => original_mode == Some(mode),
             // Pillow's RGBA drawing context over an RGB destination ignores
             // the fill alpha and blends the three native RGB samples by mask.
             "RGBA" => original_mode == Some("RGB"),

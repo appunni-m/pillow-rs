@@ -85,6 +85,7 @@ class SimdVectorEvidenceTests(unittest.TestCase):
             "neon-f64-resize",
             "neon-interleave",
             "neon-la-l-blend",
+            "neon-rgb-l-blend",
             "neon-rgba-l-blend",
             "avx2-transpose",
             "rgba-l-mask-vector",

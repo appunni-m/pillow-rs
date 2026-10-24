@@ -38,7 +38,11 @@ pub(super) fn account(
         + resource_bytes
         + metadata_bytes
         + stages.len() as u64 * std::mem::size_of::<Stage<'_>>() as u64;
-    for child in stages.iter().filter_map(|stage| stage.secondary.as_deref()) {
+    for child in stages.iter().flat_map(|stage| {
+        [stage.secondary.as_deref(), stage.tertiary.as_deref()]
+            .into_iter()
+            .flatten()
+    }) {
         gpu_bytes = gpu_bytes
             .checked_add(child.gpu_bytes)
             .ok_or_else(|| PilError::ValueError("GPU graph byte count overflow".into()))?;
