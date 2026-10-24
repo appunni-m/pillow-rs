@@ -100,10 +100,11 @@ proof for backend-relevant deferred pipelines.
 backend to execute; normal parity permits the documented CPU fallback. Use
 the strict target or inspect the execution sidecar before crediting a backend.
 `scripts/run_all_backend_tests.py` records receipts for its full SIMD and GPU
-lanes, but those lanes are not strict. If parity passes with incomplete backend
-receipts, the artifact is `passed_with_backend_gaps`; the script currently
-returns exit code zero for that status. A CI job that checks only the exit code
-can therefore miss an execution gap.
+lanes. Its full-corpus lanes permit fallback so the parity result remains
+available while unsupported routes are inventoried. The artifact distinguishes
+`passed_with_backend_gaps`, and the all-backends command now exits nonzero for
+that status or when full GPU parity is skipped. Case-filtered SIMD/GPU lanes
+are strict and reject fallback or missing terminal proof.
 
 `scripts/run_all_backend_tests.py::public_case_ids` also builds one shared
 ordinary-parity denominator and forwards an explicit case filter to CPU, SIMD,
@@ -111,11 +112,10 @@ and the optional full GPU lane. Its separate GPU smoke gate always selects the
 fixed `PIL.ImageFilter.UnsharpMask.behavior.default` case, including when the
 full-lane filter omits it. The all-backend SIMD and full GPU lanes intentionally
 allow documented fallback and collect receipts; fallback or incomplete receipt
-coverage changes the result to `passed_with_backend_gaps`. That status currently
-returns process exit code zero, so automation that needs an execution guarantee
-must inspect `backend_coverage.status` or use the strict backend targets. Setting
-`MIGRATION_GPU_FULL=0` runs only the smoke gate and reports the full GPU lane as
-skipped. The JS/WASM runner separately excludes target-only fault contracts and
+coverage changes the result to `passed_with_backend_gaps` and returns a nonzero
+exit code. Setting `MIGRATION_GPU_FULL=0` runs only the smoke gate, reports the
+full GPU lane as skipped, and returns nonzero. The JS/WASM runner separately
+excludes target-only fault contracts and
 native platform-viewer workflows at runner level; those exclusions do not alter
 the CPU/SIMD/GPU fixture set.
 
@@ -149,19 +149,25 @@ must use the active manifest and one shared fixture set.
 
 The same nine active `PIL.ImageChops.screen` case IDs were run through the
 strict SIMD and strict GPU targets at the current revision. Both parity results
-passed 9/9. Each execution sidecar reports nine pipeline-applicable cases, nine
-terminal-complete receipts, the requested backend for all nine cases, zero
-fallback reasons, and zero missing or partial receipts. The SIMD run ID is
-`migration-parity-b83147deacc64a53b612edebacfa1be7`; the GPU run ID is
-`migration-parity-c68f646308034280b965efc951f6ec31`. Both sidecars have the
-same selected-case digest,
+passed 9/9. They were re-run through `run_all_backend_tests.py` with the same
+explicit filter across CPU, strict SIMD, strict GPU, Node WASM, and browser
+WASM. Every lane passed 9/9 with the same selected-case digest,
 `80c08204b4a49847b0843c9e3763246afd48721243ce3e66a01160771642d4eb`.
+The CPU, SIMD, and GPU parity run IDs are
+`migration-parity-0a2f6f904af742eaa909f82a23f303ec`,
+`migration-parity-62115dd8b75f45efa9c879628e5514d4`, and
+`migration-parity-00bfd8664b344922995faa4825dca582`. Each execution sidecar
+reports nine pipeline-applicable cases, nine terminal-complete receipts, the
+requested backend for all nine cases, zero fallback reasons, and zero missing
+or partial receipts.
 The selected cases are the L/LA/RGB/RGBA 5×5 tails, the L/LA/RGB/RGBA
 large-wide workloads, and the materialized RGB-noise 1024×768 workload.
-The GPU WGSL sidecar records 13 dispatches across those cases: nine
-`Screen` dispatches from `screen.wgsl` and four input `PutPixel` dispatches.
-The parity results, execution sidecars, and WGSL receipt are in
-`build/migration-parity/backend-bypass-audit-{simd-strict,gpu-strict}*`.
+SIMD reports 314,204 vector blocks and zero scalar tails. The GPU WGSL sidecar
+records 13 dispatches across those cases (nine `Screen` and four input
+`PutPixel` dispatches) over 11,022 workgroups. Node and browser WASM report CPU
+execution; neither is credited as GPU execution. The current parity outputs,
+execution sidecars, and WGSL receipt are in
+`build/migration-parity/backend-bypass-audit-20261024/all-backends/`.
 This proves the selected cases use both backends; it is not a claim that every
 ordinary operation has a SIMD or GPU implementation.
 
@@ -212,7 +218,7 @@ fallback bug.
 | Script | Current route | Bypass and disposition |
 | --- | --- | --- |
 | `scripts/test_chops_affine_parity.py` | **Repaired.** Selects active ImageChops fixture IDs and sends the identical case set to the standard Python runner for CPU, strict SIMD, and strict GPU, then Node and browser WASM runners. | Previously made direct `enable_backend()` calls and compared results without recording the actual backend. All five lanes now pass 22/22; SIMD/GPU receipts prove native execution for the eight pipeline-applicable cases. |
-| `scripts/run_all_backend_tests.py` | Multi-lane orchestrator launches a separate Python parity process per backend and separate Node/browser WASM lanes. | It now clears inherited target-profile and benchmark-adapter overrides and explicitly sets strict fallback policy per Python lane, preventing caller shell state from relabeling or changing the selected backend. |
+| `scripts/run_all_backend_tests.py` | Multi-lane orchestrator launches CPU, SIMD, and GPU Python parity runs plus Node/browser WASM against one case filter. | It clears inherited profile/benchmark overrides. Case-filtered SIMD/GPU runs are strict; full-corpus runs record fallback gaps, and now return nonzero if backend proof is incomplete or full GPU parity is skipped. The nine-case Screen audit passed every lane with actual SIMD/GPU receipts. |
 | `scripts/test_grayscale_rgb_domain.py` | Custom exhaustive Pillow/target diagnostic enumerating all 16,777,216 RGB triples in 256 blocks. It uses `lock_target_image_pipeline`, strict backend settings, checks one native receipt per block, and compares exact output bytes. | Inputs and output comparisons bypass the active fixture matrix, though backend locking/receipts are strict. Keep it classified as supplemental exhaustive evidence, not fixture parity or benchmark evidence. It is manually invoked and was not rerun for this inventory. |
 | `scripts/test_font_variant_parity.py` | Isolated source and target subprocesses compare font creation, mutable source/path settings, variants, and rendered observations. | It uses a fixture font asset but owns the scenarios and result dictionary; it has no active parity case IDs, backend option, or execution receipts, so it proves only the default Python route. It is not wired to a Make target. |
 | `scripts/test_getdata_sequence_parity.py` | Inline Pillow/target probes compare indexes, slices, banded modes, palette snapshots, and errors. | It has no generated case IDs or backend option/receipt and proves only the default Python route. It is not wired to a Make target. |
@@ -227,6 +233,16 @@ and are outside this inventory. The standalone parity scripts above should be
 migrated only when their input behavior can be represented by generated
 fixtures without losing callbacks, state lifetime, or the specialized
 exhaustive/batch contract. No such migration is performed by this audit.
+
+The active manifest already contains ordinary `font_variant`, `getdata`, and
+`putdata` cases, and those shared IDs are selected by every Python backend
+profile. The standalone font and sequence scripts add mutable object state,
+sequence indexing, and callback side effects that their current fixture
+protocol cannot express; those extra scenarios remain outside the matrix.
+These API calls do not enqueue compute `PipelineOp`s, so their SIMD/GPU profile
+runs are parity checks with backend execution classified not applicable. The
+strict backend claim applies to actual deferred image work, not to forcing a
+GPU dispatch for a host-side sequence or font operation.
 
 ## Historical operation-to-family and fixture snapshot — 2026-10-21
 

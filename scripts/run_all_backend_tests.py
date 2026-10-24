@@ -1379,11 +1379,12 @@ def run_campaign(args: argparse.Namespace) -> int:
     }
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0 if status in {
-        "passed",
-        "passed_with_gpu_skipped",
-        "passed_with_backend_gaps",
-    } else 1
+    # This command is the all-backends gate. A parity-only pass is useful
+    # evidence, but it must not look successful to automation when the full
+    # GPU lane was skipped or SIMD/GPU receipts show fallback or missing
+    # execution. The structured artifact preserves the precise status and
+    # lane diagnostics for review.
+    return 0 if status == "passed" else 1
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
