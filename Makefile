@@ -535,19 +535,19 @@ migration-parity-test-gpu-fault-contract: build-parity-gpu-fault-contract ## Run
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
 
-migration-parity-test-gpu-strict: build-dev ## Audit GPU-only capability coverage without CPU fallback
+migration-parity-test-gpu-strict: build-parity ## Audit GPU-only capability coverage without CPU fallback
 	$(MAKE) migration-parity-test \
 		MIGRATION_TARGET_BACKEND=gpu \
 		MIGRATION_STRICT_TARGET_BACKEND=1 \
 		MIGRATION_PARITY_OUTPUT="$(MIGRATION_GPU_STRICT_OUTPUT)"
 
-migration-parity-test-simd-strict: build-dev ## Audit SIMD-only capability coverage without CPU fallback
+migration-parity-test-simd-strict: build-parity ## Audit SIMD-only capability coverage without CPU fallback
 	$(MAKE) migration-parity-test \
 		MIGRATION_TARGET_BACKEND=simd \
 		MIGRATION_STRICT_TARGET_BACKEND=1 \
 		MIGRATION_PARITY_OUTPUT="$(MIGRATION_SIMD_STRICT_OUTPUT)"
 
-migration-parity-test-all-backends: build-dev ## Build once, then run CPU, SIMD, bounded full GPU, Python, Node WASM, and browser WASM together
+migration-parity-test-all-backends: build-parity ## Build without replacing Pillow, then run CPU, SIMD, bounded GPU, and WASM parity lanes
 	set +e; \
 	$(PYTHON) scripts/run_all_backend_tests.py \
 		--output "$(MIGRATION_ALL_BACKENDS_OUTPUT)" \

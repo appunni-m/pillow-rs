@@ -12,6 +12,8 @@ GPU is gated by one fixed, strict public parity case that must execute on the
 GPU, then the full GPU corpus is requested by default with a separate hard
 deadline.  Adapter absence is recorded as explicitly skipped/not proven.  A
 timeout, crash, parity mismatch, or other real GPU failure remains fatal.
+Explicit case-filtered SIMD/GPU lanes are strict backend audits, so a focused
+parity pass cannot be satisfied by CPU fallback.
 Every child lane starts in its own process group so a native driver wedge
 cannot outlive the lane deadline.
 """
@@ -40,7 +42,7 @@ GPU_SMOKE_TIMEOUT_SECONDS = 180
 GPU_FULL_TIMEOUT_SECONDS = 300
 PROCESS_REAP_TIMEOUT_SECONDS = 10
 GIT_COMMAND_TIMEOUT_SECONDS = 10
-GPU_SMOKE_CASE = "PIL.ImageFilter.UnsharpMask.behavior.default"
+GPU_SMOKE_CASE = "PIL.ImageFilter.GaussianBlur.nuanced.backend-noise-l-65x47-radius-2"
 GPU_FULL_DISABLED_REASON = (
     "full GPU parity was disabled explicitly; the bounded smoke gate passed, "
     "but the full GPU corpus remains not proven"
@@ -968,7 +970,8 @@ def run_parity_lane(
                 {
                     # Collect WGSL dispatch telemetry for every GPU lane. The
                     # full corpus can exercise documented fallback behavior;
-                    # the strict smoke gate separately proves native GPU use.
+                    # strict smoke and focused case-filtered lanes prove the
+                    # requested backend actually executed.
                     "MIGRATION_GPU_WGSL_COVERAGE_OUTPUT": str(shader_artifact),
                 }
                 if shader_artifact is not None
@@ -976,12 +979,15 @@ def run_parity_lane(
             ),
             **(
                 {
-                    # The bounded smoke case is the GPU adapter gate.  Require
-                    # native GPU execution here so a CPU fallback cannot open
-                    # the full GPU lane.
+                    # Focused case-filtered SIMD/GPU lanes are backend audits:
+                    # reject fallback so parity cannot pass on CPU execution.
+                    # The full corpus retains fallback accounting for valid
+                    # operations that are outside a backend's capabilities.
+                    # The bounded GPU smoke gate is always strict so CPU
+                    # fallback cannot open the full GPU lane.
                     "MIGRATION_STRICT_TARGET_BACKEND": "1",
                 }
-                if smoke and backend == "gpu"
+                if backend in {"simd", "gpu"} and (case_ids or smoke)
                 else {}
             ),
             "MIGRATION_PARITY_EXECUTION_OUTPUT": str(execution_artifact),
@@ -1390,7 +1396,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--case-id",
         action="append",
-        help="run the same explicit public parity case filter in every full lane",
+        help=(
+            "run the same explicit public parity case filter in every full lane; "
+            "focused SIMD/GPU lanes reject backend fallback"
+        ),
     )
     gpu_group = parser.add_mutually_exclusive_group()
     gpu_group.add_argument(
