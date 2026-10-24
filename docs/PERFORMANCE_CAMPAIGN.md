@@ -84,7 +84,7 @@ The full JSON was measured `2026-10-21T11:26:29.269699Z`, SHA-256
 `2026-10-21T10:19:29.477450Z`, SHA-256
 `dff3e7cea2bf85285741ccd4e5c35710b12c2c20155c06a94f755c1e81f6b4bc`, with 147
 rows across 37 workloads. The flattened matrix has 9,376 rows. The current
-manifest selects 212 operations and 996 benchmark workloads. Its operation
+manifest selects 212 operations and 1032 benchmark workloads. Its operation
 matrix has 848 rows, four backend profiles per operation. The API census has
 408 paths: 212 selected, 209 with workload mappings, and 196 outside the
 selected manifest. Matrix checksums are `8a2595d4aed6bc00b688116f9e4fd8a8a2f76982ccf527f3dd0248260db6a74d`

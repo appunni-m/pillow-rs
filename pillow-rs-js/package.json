@@ -1,0 +1,56 @@
+{
+  "name": "pillow-rs",
+  "version": "12.2.3",
+  "description": "Selected Pillow-compatible image processing for Node.js and browsers, powered by Rust/WASM",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appunni-m/pillow-rs.git"
+  },
+  "homepage": "https://github.com/appunni-m/pillow-rs#readme",
+  "main": "./node.js",
+  "module": "./pkg/core/pillow_rs_js.js",
+  "browser": "./pkg/core/pillow_rs_js.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "node": "./node.js",
+      "browser": "./pkg/core/pillow_rs_js.js",
+      "import": "./pkg/core/pillow_rs_js.js",
+      "default": "./pkg/core/pillow_rs_js.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "pkg/",
+    "node.js",
+    "index.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:core",
+    "build:core": "node scripts/build_wasm.mjs core dev",
+    "build:release": "npm run build:core:release",
+    "build:core:release": "node scripts/build_wasm.mjs core release",
+    "test:package": "node scripts/check_package.mjs",
+    "size": "node scripts/measure_wasm_sizes.mjs"
+  },
+  "keywords": [
+    "image",
+    "pillow",
+    "wasm",
+    "rust"
+  ],
+  "license": "MIT-CMU",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "puppeteer": "22.15.0"
+  }
+}

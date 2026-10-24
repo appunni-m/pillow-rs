@@ -555,7 +555,7 @@ revision `5db7197532eb08b37d748a78fb789545ab8aa577`. The full JSON was measured
 `ea7ecf063a8fbc4c42fa94f18e49678da4b0aad6eb87d5fbbae788f01d32aac8`); the
 Pillow-SIMD JSON was measured `2026-10-21T10:19:29.477450Z` (SHA-256
 `dff3e7cea2bf85285741ccd4e5c35710b12c2c20155c06a94f755c1e81f6b4bc`). The
-current manifest selects 212 operations and 996 benchmark workloads. The
+current manifest selects 212 operations and 1032 benchmark workloads. The
 operation matrix has 848 rows, four backend profiles per operation. The API
 census has 408 paths: 212 selected paths, of which 209 map to a workload, and
 196 paths outside the selected manifest. The workload and operation matrix
