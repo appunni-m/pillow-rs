@@ -1,6 +1,8 @@
 use super::{Draw, pil_blend};
+use crate::compute::Backend;
 use crate::error::PilError;
 use crate::image::Image;
+use crate::ops::paste::PasteSource;
 use crate::raster::DynamicImage;
 
 struct BitmapMask<'a> {
@@ -47,28 +49,102 @@ impl Draw {
         }
         let (bmp_w, bmp_h) = bitmap.size()?;
         let mode = self.effective_mode();
-        if self.try_native_rgb_bitmap(x, y, bitmap, &bmp_mode, bmp_w, bmp_h, color, &mode)? {
+        let requested_backend = match self.image.backend() {
+            Some(backend) => Some(backend),
+            None => crate::compute::preferred_active_backend()?.map(|(backend, _)| backend),
+        };
+        if bmp_w != 0
+            && bmp_h != 0
+            && requested_backend.is_some_and(|backend| backend != Backend::Cpu)
+            && Self::bitmap_masked_paste_matches(&mode, self.orig_mode.as_deref(), &bmp_mode)
+        {
+            // A constant-color bitmap with an L mask has the same byte blend
+            // contract as masked Paste for these native modes. Reuse the
+            // existing selected-backend kernels instead of running this
+            // destination loop on the host under a SIMD or GPU profile.
+            let source = if matches!(mode.as_str(), "1" | "L") {
+                PasteSource::Scalar(color.0)
+            } else {
+                PasteSource::Rgba(color.0, color.1, color.2, color.3)
+            };
+            self.image.paste_at(source, Some((x, y)), Some(bitmap))?;
             return Ok(());
         }
-        if self.try_native_cmyk_l_bitmap(x, y, bitmap, &bmp_mode, bmp_w, bmp_h, color, &mode)? {
+
+        let telemetry =
+            crate::compute::begin_eager_cpu_operation_telemetry("DrawBitmap", requested_backend);
+        let result = self.bitmap_cpu(x, y, bitmap, &bmp_mode, bmp_w, bmp_h, color, &mode);
+        match result {
+            Ok(()) => {
+                let output_bytes = self
+                    .image
+                    .materialized_shared()
+                    .map_or(0, |image| image.as_bytes().len());
+                crate::compute::finish_eager_cpu_operation_telemetry(telemetry, output_bytes);
+                Ok(())
+            }
+            Err(error) => {
+                crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+                Err(error)
+            }
+        }
+    }
+
+    fn bitmap_masked_paste_matches(
+        mode: &str,
+        original_mode: Option<&str>,
+        mask_mode: &str,
+    ) -> bool {
+        // Admit only modes whose bitmap blend contract is implemented by the
+        // selected masked-Paste kernels. Palette indices and alpha-bearing
+        // masks or destinations have draw-specific rules; forcing those
+        // through Paste would change pixels, so they stay on bitmap_cpu and
+        // are reported as CPU fallbacks when SIMD or GPU was requested.
+        if mask_mode != "L" {
+            return false;
+        }
+        match mode {
+            "1" | "L" | "RGB" | "CMYK" | "YCbCr" | "HSV" => original_mode == Some(mode),
+            // Pillow's RGBA drawing context over an RGB destination ignores
+            // the fill alpha and blends the three native RGB samples by mask.
+            "RGBA" => original_mode == Some("RGB"),
+            _ => false,
+        }
+    }
+
+    fn bitmap_cpu(
+        &mut self,
+        x: i32,
+        y: i32,
+        bitmap: &Image,
+        bmp_mode: &str,
+        bmp_w: u32,
+        bmp_h: u32,
+        color: (u8, u8, u8, u8),
+        mode: &str,
+    ) -> Result<(), PilError> {
+        if self.try_native_rgb_bitmap(x, y, bitmap, bmp_mode, bmp_w, bmp_h, color, mode)? {
+            return Ok(());
+        }
+        if self.try_native_cmyk_l_bitmap(x, y, bitmap, bmp_mode, bmp_w, bmp_h, color, mode)? {
             return Ok(());
         }
 
         let raw_data = bitmap.getdata(None)?;
         let mask = BitmapMask {
-            mode: &bmp_mode,
+            mode: bmp_mode,
             width: bmp_w,
             data: &raw_data,
         };
-        match mode.as_str() {
+        match mode {
             "RGB" | "RGBA" => self.bitmap_mode_rgba(x, y, bmp_w, bmp_h, &mask, color),
             "1" => self.bitmap_mode_1(x, y, bmp_w, bmp_h, &mask, color),
             "L" => self.bitmap_mode_l(x, y, bmp_w, bmp_h, &mask, color),
             "LA" => self.bitmap_mode_la(x, y, bmp_w, bmp_h, &mask, color),
             "CMYK" => self.bitmap_mode_cmyk(x, y, bmp_w, bmp_h, &mask, color),
             "P" => self.bitmap_mode_p(x, y, bmp_w, bmp_h, &mask, color),
-            "I" | "F" => self.bitmap_mode_numeric(x, y, bmp_w, bmp_h, &mask, &mode, color),
-            _ => self.bitmap_mode_fallback(x, y, bmp_w, bmp_h, &mask, &mode, color),
+            "I" | "F" => self.bitmap_mode_numeric(x, y, bmp_w, bmp_h, &mask, mode, color),
+            _ => self.bitmap_mode_fallback(x, y, bmp_w, bmp_h, &mask, mode, color),
         }
     }
     fn try_native_rgb_bitmap(

@@ -1,7 +1,7 @@
 use super::*;
 
 impl GpuInner {
-    /// Execute exact masked L/LA/PA/RGB/HSV/RGBA Paste with compact native buffers.
+    /// Execute exact masked L/LA/PA/RGB/HSV/RGBA/CMYK Paste with compact buffers.
     #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_masked_byte_paste(
         &self,
@@ -49,6 +49,16 @@ impl GpuInner {
                 )
             ),
             ("RGBA", 4) => matches!(
+                (destination, source, mask),
+                (
+                    DynamicImage::ImageRgba8(_),
+                    DynamicImage::ImageRgba8(_),
+                    DynamicImage::ImageLuma8(_)
+                )
+            ),
+            // The carrier is ImageRgba8, but CMYK's fourth byte is K and all
+            // four channels must be blended as ordinary stored bytes.
+            ("CMYK", 4) => matches!(
                 (destination, source, mask),
                 (
                     DynamicImage::ImageRgba8(_),
@@ -212,6 +222,7 @@ impl GpuInner {
             "PA" => "gpu_native_masked_pa_paste",
             "RGB" | "HSV" => "gpu_native_masked_rgb_paste",
             "RGBA" => "gpu_native_masked_rgba_paste",
+            "CMYK" => "gpu_native_masked_cmyk_paste",
             _ => unreachable!("storage variant validated above"),
         };
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {

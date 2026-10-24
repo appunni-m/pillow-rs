@@ -81,6 +81,14 @@ pub(super) fn gpu_native_masked_byte_paste_shader(
             "paste_native_masked_rgba.wgsl",
             include_str!("shaders/paste_native_masked_rgba.wgsl"),
         )),
+        // CMYK's four stored bytes are C/M/Y/K, not RGBA with an alpha
+        // channel. The shader blends all four bytes independently, so it is
+        // exact for CMYK while keeping a distinct logical pipeline identity.
+        ("CMYK", 4) => Some((
+            "__internal_paste_native_masked_cmyk",
+            "paste_native_masked_rgba.wgsl",
+            include_str!("shaders/paste_native_masked_rgba.wgsl"),
+        )),
         _ => None,
     }
 }
@@ -544,8 +552,9 @@ pub(super) fn gpu_native_rgb_to_rgba_paste_layout(
     Some((*x, *y))
 }
 
-/// Admit exact same-mode L, LA, PA, RGB, or HSV Paste with a native L mask.
-/// Other logical modes and mask semantics retain the established generic path.
+/// Admit exact same-mode L, LA, PA, RGB, HSV, RGBA, or CMYK Paste with a
+/// native L mask. Other logical modes and mask semantics retain the generic
+/// path.
 pub(super) fn gpu_native_masked_byte_paste_layout(
     op: &PipelineOp,
     destination: &DynamicImage,
@@ -614,6 +623,13 @@ pub(super) fn gpu_native_masked_byte_paste_layout(
                 DynamicImage::ImageRgba8(_),
                 DynamicImage::ImageLuma8(_),
             ) => (4, "RGBA"),
+            (
+                Some("CMYK"),
+                "CMYK",
+                DynamicImage::ImageRgba8(_),
+                DynamicImage::ImageRgba8(_),
+                DynamicImage::ImageLuma8(_),
+            ) => (4, "CMYK"),
             _ => return None,
         };
     let (source_width, source_height) = source.dimensions();

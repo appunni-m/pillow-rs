@@ -747,8 +747,8 @@ pub(super) fn elapsed_ns(start: Option<Instant>) -> u64 {
         .unwrap_or(0)
 }
 
-/// Timer and requested backend for a terminal byte read that executes on the
-/// host rather than through an image pipeline.
+/// Timer and requested backend for an eager operation executed on the host
+/// rather than through a deferred image pipeline.
 pub(crate) struct EagerCpuOperationTelemetry {
     timed: bool,
     backend_start: Option<Instant>,
@@ -756,7 +756,7 @@ pub(crate) struct EagerCpuOperationTelemetry {
     fallback_reason: Option<String>,
 }
 
-/// Begin an execution receipt for a terminal operation whose data path is
+/// Begin an execution receipt for an eager operation whose data path is
 /// implemented on the host. The caller supplies the backend requested by the
 /// active image or process so a host path selected under SIMD/GPU is recorded
 /// as a fallback instead of being credited as accelerated execution.
@@ -789,9 +789,7 @@ pub(crate) fn begin_eager_cpu_operation_telemetry(
         fallback_reason: requested_backend
             .filter(|backend| *backend != Backend::Cpu)
             .map(|backend| {
-                format!(
-                    "{operation} terminal read used the host CPU while {backend:?} was requested"
-                )
+                format!("{operation} ran on the host CPU while {backend:?} was requested")
             }),
     }
 }
