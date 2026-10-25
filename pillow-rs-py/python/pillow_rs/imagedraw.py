@@ -73,7 +73,7 @@ class Draw:
             self._draw.multiline_text(
                 xy, text, fill, font._rust_font, spacing, direction,
                 features, language, float(stroke_width), anchor, embedded_color,
-                kwargs.get("font_size"),
+                kwargs.get("font_size"), align, stroke_fill,
             )
         elif hasattr(font, "getmask"):
             return self.text(
@@ -86,7 +86,7 @@ class Draw:
             self._draw.multiline_text(
                 xy, text, fill, font, spacing, direction, features,
                 language, float(stroke_width), anchor, embedded_color,
-                kwargs.get("font_size"),
+                kwargs.get("font_size"), align, stroke_fill,
             )
         self._sync()
         self._font = font
@@ -168,6 +168,7 @@ class Draw:
                 float(stroke_width),
                 anchor,
                 embedded_color,
+                stroke_fill,
             )
         elif hasattr(font, 'getmask'):
             mask = font.getmask(text, mode="1" if self._orig_mode == "1" else "L")
@@ -176,7 +177,7 @@ class Draw:
             self._draw.text(
                 (float(xy[0]), float(xy[1])), text, fill, font,
                 direction, features, language, float(stroke_width), anchor,
-                embedded_color,
+                embedded_color, stroke_fill,
             )
         self._sync()
         self._font = font

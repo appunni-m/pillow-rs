@@ -452,7 +452,7 @@ impl PyDraw {
             .map_err(map_error)
     }
 
-    #[pyo3(signature = (xy, text, fill=None, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false))]
+    #[pyo3(signature = (xy, text, fill=None, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, stroke_fill=None))]
     fn text(
         &mut self,
         xy: (f64, f64),
@@ -465,8 +465,12 @@ impl PyDraw {
         stroke_width: f32,
         anchor: Option<String>,
         embedded_color: bool,
+        stroke_fill: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let color = self.text_color(fill)?;
+        let (color, text_fill_is_integer) = self.text_color_and_kind(fill)?;
+        let stroke_fill = stroke_fill
+            .map(|value| self.text_color_and_kind(Some(value)))
+            .transpose()?;
         let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             direction,
@@ -475,6 +479,9 @@ impl PyDraw {
             features_invalid,
             language,
             stroke_width,
+            stroke_fill: stroke_fill.map(|(color, _)| color),
+            text_fill_is_integer,
+            stroke_fill_is_integer: stroke_fill.is_some_and(|(_, is_integer)| is_integer),
             anchor,
             anchor_invalid_length_error: true,
             ..pillow_rs::ImageFontTextOptions::default()
@@ -493,7 +500,7 @@ impl PyDraw {
             .map_err(map_error)
     }
 
-    #[pyo3(signature = (xy, text, fill=None, font=None, spacing=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, font_size=None))]
+    #[pyo3(signature = (xy, text, fill=None, font=None, spacing=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, font_size=None, align=None, stroke_fill=None))]
     fn multiline_text(
         &mut self,
         xy: (f64, f64),
@@ -508,8 +515,13 @@ impl PyDraw {
         anchor: Option<String>,
         embedded_color: bool,
         font_size: Option<f32>,
+        align: Option<String>,
+        stroke_fill: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let color = self.text_color(fill)?;
+        let (color, text_fill_is_integer) = self.text_color_and_kind(fill)?;
+        let stroke_fill = stroke_fill
+            .map(|value| self.text_color_and_kind(Some(value)))
+            .transpose()?;
         let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             direction,
@@ -518,7 +530,11 @@ impl PyDraw {
             features_invalid,
             language,
             stroke_width,
+            stroke_fill: stroke_fill.map(|(color, _)| color),
+            text_fill_is_integer,
+            stroke_fill_is_integer: stroke_fill.is_some_and(|(_, is_integer)| is_integer),
             anchor,
+            align: Some(align.unwrap_or_else(|| "left".into())),
             anchor_invalid_length_error: true,
             ..pillow_rs::ImageFontTextOptions::default()
         };
@@ -680,10 +696,16 @@ impl PyDraw {
             .map_err(map_error)
     }
 
-    /// Parse an ImageDraw text ink, including Pillow's mode-specific default.
-    fn text_color(&self, val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)> {
+    /// Parse an ImageDraw text ink while retaining integer-versus-component origin.
+    fn text_color_and_kind(
+        &self,
+        val: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<((u8, u8, u8, u8), bool)> {
+        let input = draw_color_input_from_python(val)?;
+        let is_integer = matches!(&input, pillow_rs::DrawColorInput::Integer(_));
         self.draw
-            .text_color_with_input(draw_color_input_from_python(val)?)
+            .text_color_with_input(input)
+            .map(|color| (color, is_integer))
             .map_err(map_error)
     }
 }

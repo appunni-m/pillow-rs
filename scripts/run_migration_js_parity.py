@@ -303,6 +303,25 @@ def typed_imagechops_offset_cases(
     return prepared
 
 
+def typed_image_transform_fill_cases(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Preserve Python integer/float identity for Image.transform fill colors."""
+
+    prepared = copy.deepcopy(cases)
+    for case in prepared:
+        for step in case.get("steps", []):
+            if (
+                step.get("surface") != "PIL.Image.Image"
+                or step.get("operation") != "transform"
+            ):
+                continue
+            descriptor = step.get("arguments", {}).get("fillcolor")
+            if isinstance(descriptor, dict) and descriptor.get("kind") == "literal":
+                descriptor["value"] = python_numeric_js_value(
+                    descriptor.get("value")
+                )
+    return prepared
+
+
 def decode_js_result(value: Any) -> Any:
     """Restore float values whose decimal JSON form would otherwise parse as int."""
 
@@ -312,6 +331,25 @@ def decode_js_result(value: Any) -> Any:
         return {key: decode_js_result(item) for key, item in value.items()}
     if isinstance(value, list):
         return [decode_js_result(item) for item in value]
+    return value
+
+
+def normalize_js_observable(value: Any) -> Any:
+    """Compare Python float NaNs as the single NaN value exposed by JS Number."""
+
+    if isinstance(value, dict):
+        if set(value) == {"$float64_bits"}:
+            try:
+                bits = int(value["$float64_bits"], 16)
+            except (TypeError, ValueError):
+                return value
+            exponent = bits & 0x7FF0000000000000
+            mantissa = bits & 0x000FFFFFFFFFFFFF
+            if exponent == 0x7FF0000000000000 and mantissa:
+                return "NaN"
+        return {key: normalize_js_observable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [normalize_js_observable(item) for item in value]
     return value
 
 
@@ -602,7 +640,8 @@ def compatible_case(
                 and argument_name == "viewer"
                 and descriptor["kind"] == "literal"
                 and isinstance(descriptor.get("value"), dict)
-                and descriptor["value"].get("protocol") == "capture-viewer"
+                and descriptor["value"].get("protocol")
+                in {"capture-viewer", "capture-platform-viewer"}
             ):
                 # This bounded host protocol is validated in parity inputs and
                 # resolved by the WASM workflow adapter; it is not an arbitrary
@@ -693,32 +732,6 @@ def select_oracle_parity_cases(
     ]
 
 
-def _contains_platform_viewer_protocol(value: Any) -> bool:
-    if isinstance(value, dict):
-        if value.get("protocol") == "capture-platform-viewer":
-            return True
-        return any(_contains_platform_viewer_protocol(item) for item in value.values())
-    if isinstance(value, list):
-        return any(_contains_platform_viewer_protocol(item) for item in value)
-    return False
-
-
-def _native_platform_viewer_case(case: dict[str, Any]) -> bool:
-    """Whether a workflow requires a native OS viewer process boundary."""
-    return any(
-        _contains_platform_viewer_protocol(step)
-        for step in case.get("steps", [])
-    )
-
-
-def _exclude_native_platform_viewer_cases(
-    cases: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], int]:
-    """Keep native OS process contracts out of the WASM execution lane."""
-    excluded = sum(1 for case in cases if _native_platform_viewer_case(case))
-    return [case for case in cases if not _native_platform_viewer_case(case)], excluded
-
-
 def operation_payload(
     cases: list[dict[str, Any]],
     operation_index: dict[tuple[str, str], dict[str, Any]],
@@ -747,8 +760,8 @@ def _host_payload(
     return json.dumps(
         js_json_value(
             {
-                "cases": typed_imagechops_offset_cases(
-                    typed_putpixel_cases(cases)
+                "cases": typed_image_transform_fill_cases(
+                    typed_imagechops_offset_cases(typed_putpixel_cases(cases))
                 ),
                 "operations": operation_payload(cases, operation_index),
                 "assets": assets,
@@ -1327,22 +1340,12 @@ def run_streaming(args: argparse.Namespace, output: Path) -> int:
     cases = select_oracle_parity_cases(cases, explicitly_selected=requested)
     if args.limit is not None:
         cases = cases[: args.limit]
-    cases, native_viewer_excluded = _exclude_native_platform_viewer_cases(cases)
     if not cases:
-        if native_viewer_excluded:
-            raise ValueError(
-                "selected cases require a native OS viewer process and are not "
-                "applicable to WASM"
-            )
         raise ValueError("no active parity cases selected")
     if args.chunk_size <= 0:
         raise ValueError("JS/WASM chunk size must be positive")
     operation_index = build_operation_index(manifest)
     diagnostic_hints: collections.Counter[str] = collections.Counter()
-    if native_viewer_excluded:
-        diagnostic_hints["native-platform-viewer-process-not-applicable-to-wasm"] += (
-            native_viewer_excluded
-        )
     for case in cases:
         reason = compatible_case(case, operation_index)
         if reason is not None:
@@ -1463,8 +1466,8 @@ def run_streaming(args: argparse.Namespace, output: Path) -> int:
             }
             outcome, diffs = compare_case(
                 case,
-                source_results[case_id],
-                public_target,
+                normalize_js_observable(source_results[case_id]),
+                normalize_js_observable(public_target),
                 operation_index,
             )
             stream.write_comparison(
@@ -1646,22 +1649,12 @@ def run(args: argparse.Namespace) -> int:
     cases = select_oracle_parity_cases(cases, explicitly_selected=requested)
     if args.limit is not None:
         cases = cases[: args.limit]
-    cases, native_viewer_excluded = _exclude_native_platform_viewer_cases(cases)
     if not cases:
-        if native_viewer_excluded:
-            raise ValueError(
-                "selected cases require a native OS viewer process and are not "
-                "applicable to WASM"
-            )
         raise ValueError("no active parity cases selected")
     if args.chunk_size <= 0:
         raise ValueError("JS/WASM chunk size must be positive")
     operation_index = build_operation_index(manifest)
     diagnostic_hints: collections.Counter[str] = collections.Counter()
-    if native_viewer_excluded:
-        diagnostic_hints["native-platform-viewer-process-not-applicable-to-wasm"] += (
-            native_viewer_excluded
-        )
     for case in cases:
         reason = compatible_case(case, operation_index)
         if reason is not None:
@@ -1760,8 +1753,8 @@ def run(args: argparse.Namespace) -> int:
             }
             outcome, diffs = compare_case(
                 case,
-                source_results[case["case_id"]],
-                public_target,
+                normalize_js_observable(source_results[case["case_id"]]),
+                normalize_js_observable(public_target),
                 operation_index,
             )
             comparisons.append(

@@ -4,6 +4,8 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
+#[cfg(target_arch = "x86_64")]
+use crate::ops::pil_resize::X86FmaToken;
 #[cfg(not(feature = "parallel"))]
 use crate::ops::pil_resize::{F64MulAdd, PortableFma, precompute_coeffs_f64};
 use crate::ops::pil_resize::{i32_samples_from_le_bytes, pil_resize, pil_resize_boxed, round_up};

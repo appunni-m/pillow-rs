@@ -2,6 +2,8 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
+#[cfg(target_arch = "x86_64")]
+use crate::ops::pil_resize::X86FmaToken;
 use crate::ops::pil_resize::{
     F64MulAdd, FilterCoeffsF64, PortableFma, f_resize_coefficients_allow_finite_fma,
     f_resize_samples_allow_finite_fma, f32_samples_from_le_bytes, precompute_coeffs_f64,

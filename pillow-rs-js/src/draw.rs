@@ -6,6 +6,17 @@ use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 // ── ImageDraw ────────────────────────────────────────────────────
 use pillow_rs::Draw;
 
+fn js_text_color_and_kind(
+    draw: &Draw,
+    value: &JsValue,
+) -> Result<((u8, u8, u8, u8), bool), JsValue> {
+    let input = js_draw_color_input(value);
+    let is_integer = matches!(&input, pillow_rs::DrawColorInput::Integer(_));
+    draw.text_color_with_input(input)
+        .map(|color| (color, is_integer))
+        .map_err(err)
+}
+
 #[wasm_bindgen]
 pub struct ImageDraw {
     draw: Draw,
@@ -547,8 +558,9 @@ impl ImageDraw {
         anchor: Option<String>,
         embedded_color: bool,
         font_size: Option<f64>,
+        stroke_fill: JsValue,
     ) -> Result<(), JsValue> {
-        let options = js_font_options(
+        let mut options = js_font_options(
             None,
             direction,
             &features,
@@ -563,10 +575,13 @@ impl ImageDraw {
             false,
             true,
         );
-        let color = self
-            .draw
-            .text_color_with_input(js_draw_color_input(&fill))
-            .map_err(err)?;
+        let (color, text_fill_is_integer) = js_text_color_and_kind(&self.draw, &fill)?;
+        options.text_fill_is_integer = text_fill_is_integer;
+        if !stroke_fill.is_null() && !stroke_fill.is_undefined() {
+            let (color, is_integer) = js_text_color_and_kind(&self.draw, &stroke_fill)?;
+            options.stroke_fill = Some(color);
+            options.stroke_fill_is_integer = is_integer;
+        }
         self.draw
             .text_with_optional_font_input(
                 x as i32,
@@ -596,8 +611,9 @@ impl ImageDraw {
         anchor: Option<String>,
         embedded_color: bool,
         font_size: Option<f64>,
+        stroke_fill: JsValue,
     ) -> Result<(), JsValue> {
-        let options = js_font_options(
+        let mut options = js_font_options(
             None,
             direction,
             &features,
@@ -612,10 +628,13 @@ impl ImageDraw {
             false,
             true,
         );
-        let color = self
-            .draw
-            .text_color_with_input(js_draw_color_input(&fill))
-            .map_err(err)?;
+        let (color, text_fill_is_integer) = js_text_color_and_kind(&self.draw, &fill)?;
+        options.text_fill_is_integer = text_fill_is_integer;
+        if !stroke_fill.is_null() && !stroke_fill.is_undefined() {
+            let (color, is_integer) = js_text_color_and_kind(&self.draw, &stroke_fill)?;
+            options.stroke_fill = Some(color);
+            options.stroke_fill_is_integer = is_integer;
+        }
         self.draw
             .multiline_text_with_optional_font_input(
                 x,

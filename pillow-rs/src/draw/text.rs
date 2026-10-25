@@ -117,29 +117,104 @@ impl Draw {
         spacing: f64,
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
-        let mut line_y = y;
-        let can_reuse_default_line_height = options.uses_default_mask()
-            && !matches!(self.effective_mode().as_str(), "1" | "P" | "I" | "F");
-        for line in text.split('\n') {
-            if line.is_empty() {
-                line_y += spacing + 10.0;
-                continue;
-            }
-            let (_, rendered_height) =
-                self.text_with_options_inner(x as i32, line_y as i32, line, font, fill, options)?;
-            let height = if can_reuse_default_line_height {
-                // The default mask's measured height is the same bbox height
-                // used for line stepping; reuse it instead of laying out each
-                // glyph a second time through `font.text_bbox`.
-                rendered_height
-            } else {
-                // Stroke, anchors, and other mask options can change rendered
-                // bounds while Pillow's multiline line step still uses the
-                // plain font bbox.
-                font.text_bbox(line)?.1
-            };
-            line_y += height as f64 + spacing;
+        let lines = text.split('\n').collect::<Vec<_>>();
+        let anchor = options.anchor.as_deref().unwrap_or("la");
+        if anchor.chars().count() != 2 {
+            return Err(PilError::ValueError(
+                if options.anchor_invalid_length_error {
+                    "anchor must be a 2 character string".into()
+                } else {
+                    format!("bad anchor specified: {anchor}")
+                },
+            ));
         }
+        if matches!(anchor.as_bytes()[1], b't' | b'b')
+            && options.direction.as_deref() != Some("ttb")
+        {
+            return Err(PilError::ValueError(
+                "anchor not supported for multiline text".into(),
+            ));
+        }
+
+        let mut line_bbox_options = options.clone();
+        line_bbox_options.anchor = Some("la".into());
+        let line_spacing = f64::from(font.getbbox_with_options("A", &line_bbox_options)?.3)
+            + f64::from(options.stroke_width)
+            + spacing;
+        let mut line_y = match anchor.as_bytes()[1] {
+            b'm' => y - (lines.len().saturating_sub(1) as f64 * line_spacing / 2.0),
+            b'd' => y - (lines.len().saturating_sub(1) as f64 * line_spacing),
+            _ => y,
+        };
+        let widths = lines
+            .iter()
+            .map(|line| font.getlength_with_options(line, options))
+            .collect::<Result<Vec<_>, _>>()?;
+        let max_width = widths.iter().copied().fold(0.0_f32, f32::max) as f64;
+        // Pillow applies special positioning only to its known alignment names;
+        // an unknown name follows the ordinary left-aligned path.
+        let align = options.align.as_deref().unwrap_or("left");
+
+        for (index, line) in lines.iter().enumerate() {
+            let width_difference = max_width - f64::from(widths[index]);
+            let mut line_x = match align {
+                "center" => x + width_difference / 2.0,
+                "right" => x + width_difference,
+                _ => x,
+            };
+            if align == "justify" && width_difference != 0.0 && index + 1 != lines.len() {
+                let words = line.split(' ').collect::<Vec<_>>();
+                if words.len() > 1 {
+                    if anchor.as_bytes()[0] == b'm' {
+                        line_x -= max_width / 2.0;
+                    } else if anchor.as_bytes()[0] == b'r' {
+                        line_x -= max_width;
+                    }
+                    let word_widths = words
+                        .iter()
+                        .map(|word| font.getlength_with_options(word, options))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let extra = (max_width
+                        - word_widths
+                            .iter()
+                            .map(|width| f64::from(*width))
+                            .sum::<f64>())
+                        / (words.len() - 1) as f64;
+                    let mut word_options = options.clone();
+                    word_options.anchor = Some(format!("l{}", anchor.as_bytes()[1] as char));
+                    for (word, width) in words.iter().zip(word_widths) {
+                        self.draw_text_at(line_x, line_y, word, font, fill, &word_options)?;
+                        line_x += f64::from(width) + extra;
+                    }
+                    line_y += line_spacing;
+                    continue;
+                }
+            }
+            if anchor.as_bytes()[0] == b'm' {
+                line_x -= width_difference / 2.0;
+            } else if anchor.as_bytes()[0] == b'r' {
+                line_x -= width_difference;
+            }
+            let mut line_options = options.clone();
+            line_options.anchor = Some(anchor.to_owned());
+            self.draw_text_at(line_x, line_y, line, font, fill, &line_options)?;
+            line_y += line_spacing;
+        }
+        Ok(())
+    }
+
+    fn draw_text_at(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: &str,
+        font: &crate::font::FreeTypeFont,
+        fill: (u8, u8, u8, u8),
+        options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(), PilError> {
+        let mut options = options.clone();
+        options.start = Some((x.fract(), y.fract()));
+        self.text_with_options_inner(x as i32, y as i32, text, font, fill, &options)?;
         Ok(())
     }
 
@@ -188,6 +263,62 @@ impl Draw {
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(u32, u32), PilError> {
+        if options.stroke_width != 0.0
+            && let Some(stroke_fill) = options.stroke_fill
+            && stroke_fill != fill
+        {
+            let mut stroke_options = options.clone();
+            stroke_options.ink = Some(Self::pack_text_ink(stroke_fill));
+            self.text_render_and_compose(
+                x,
+                y,
+                text,
+                font,
+                stroke_fill,
+                options.stroke_fill_is_integer,
+                &stroke_options,
+                false,
+            )?;
+
+            let mut fill_options = options.clone();
+            fill_options.stroke_width = 0.0;
+            fill_options.stroke_filled = false;
+            fill_options.stroke_fill = None;
+            fill_options.ink = Some(Self::pack_text_ink(fill));
+            return self.text_render_and_compose(
+                x,
+                y,
+                text,
+                font,
+                fill,
+                options.text_fill_is_integer,
+                &fill_options,
+                true,
+            );
+        }
+        self.text_render_and_compose(
+            x,
+            y,
+            text,
+            font,
+            fill,
+            options.text_fill_is_integer,
+            options,
+            false,
+        )
+    }
+
+    fn text_render_and_compose(
+        &mut self,
+        x: i32,
+        y: i32,
+        text: &str,
+        font: &crate::font::FreeTypeFont,
+        fill: (u8, u8, u8, u8),
+        fill_is_integer: bool,
+        options: &crate::font::ImageFontTextOptions,
+        blend_rgba_overlay: bool,
     ) -> Result<(u32, u32), PilError> {
         let mode = self.effective_mode();
         self.validate_text_options(options)?;
@@ -251,8 +382,18 @@ impl Draw {
                 fill,
                 self.alpha_blend_rgb(),
                 color_mask,
+                blend_rgba_overlay,
             ),
-            _ => self.text_compose_direct(draw_x, draw_y, w, h, &pixels, &mode, fill),
+            _ => self.text_compose_direct(
+                draw_x,
+                draw_y,
+                w,
+                h,
+                &pixels,
+                &mode,
+                fill,
+                fill_is_integer,
+            ),
         }?;
         Ok((w, h))
     }
@@ -355,6 +496,7 @@ impl Draw {
         // destination rather than preserving an RGBA destination.
         rgba_blend_rgb: bool,
         color_mask: bool,
+        blend_rgba_overlay: bool,
     ) -> Result<(), PilError> {
         let img = self.image.materialize()?;
         let mut canvas = img.to_rgba8();
@@ -407,17 +549,18 @@ impl Draw {
                 } else {
                     (fill.0, fill.1, fill.2)
                 };
-                let (r, g, b) = if mode == "RGBA" && !rgba_blend_rgb && !color_mask {
-                    // Pillow's RGBA text writes the fill RGB directly and
-                    // blends only the alpha channel with glyph coverage.
-                    (fill.0, fill.1, fill.2)
-                } else {
-                    (
-                        blend_u8(source_rgb.0, dp[0], channel_alpha, inv),
-                        blend_u8(source_rgb.1, dp[1], channel_alpha, inv),
-                        blend_u8(source_rgb.2, dp[2], channel_alpha, inv),
-                    )
-                };
+                let (r, g, b) =
+                    if mode == "RGBA" && !rgba_blend_rgb && !color_mask && !blend_rgba_overlay {
+                        // Pillow's RGBA text writes the fill RGB directly and
+                        // blends only the alpha channel with glyph coverage.
+                        (fill.0, fill.1, fill.2)
+                    } else {
+                        (
+                            blend_u8(source_rgb.0, dp[0], channel_alpha, inv),
+                            blend_u8(source_rgb.1, dp[1], channel_alpha, inv),
+                            blend_u8(source_rgb.2, dp[2], channel_alpha, inv),
+                        )
+                    };
                 canvas.put_pixel(dx, dy, Rgba([r, g, b, alpha]));
             }
         }
@@ -450,16 +593,17 @@ impl Draw {
         pixels: &[u8],
         mode: &str,
         fill: (u8, u8, u8, u8),
+        fill_is_integer: bool,
     ) -> Result<(), PilError> {
         let img = self.image.materialize()?;
         match mode {
             "1" => self.text_compose_mode_1(img, x, y, w, h, pixels, fill),
             "L" => self.text_compose_mode_l(img, x, y, w, h, pixels, fill),
             "LA" => self.text_compose_mode_la(img, x, y, w, h, pixels, fill),
-            "CMYK" => self.text_compose_mode_cmyk(img, x, y, w, h, pixels, fill),
+            "CMYK" => self.text_compose_mode_cmyk(img, x, y, w, h, pixels, fill, fill_is_integer),
             "P" => self.text_compose_mode_p(img, x, y, w, h, pixels, fill),
             "I" | "F" => self.text_compose_mode_numeric(img, x, y, w, h, pixels, mode, fill),
-            _ => self.text_compose_rgba(x, y, w, h, pixels, fill, false, false),
+            _ => self.text_compose_rgba(x, y, w, h, pixels, fill, false, false, false),
         }
     }
 
@@ -582,9 +726,9 @@ impl Draw {
         h: u32,
         pixels: &[u8],
         fill: (u8, u8, u8, u8),
+        fill_is_integer: bool,
     ) -> Result<(), PilError> {
-        let is_int_fill = fill.0 == fill.1 && fill.0 == fill.2 && fill.3 == 255;
-        let ink = if is_int_fill {
+        let ink = if fill_is_integer {
             [fill.0, 0u8, 0u8, 0u8]
         } else {
             [fill.0, fill.1, fill.2, fill.3]

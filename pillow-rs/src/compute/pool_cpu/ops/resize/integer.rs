@@ -3,6 +3,8 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 #[cfg(not(feature = "parallel"))]
 use crate::ops::pil_resize::FilterCoeffsF64;
+#[cfg(target_arch = "x86_64")]
+use crate::ops::pil_resize::X86FmaToken;
 use crate::ops::pil_resize::{
     F64MulAdd, PortableFma, i32_samples_from_le_bytes, precompute_coeffs_f64,
     precompute_coeffs_f64_boxed, round_up,

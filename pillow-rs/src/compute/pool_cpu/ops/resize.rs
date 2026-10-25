@@ -2,8 +2,6 @@
 
 use crate::error::PilError;
 use crate::image::preserve_mode;
-#[cfg(target_arch = "x86_64")]
-use crate::ops::pil_resize::X86FmaToken;
 use crate::ops::pil_resize::{
     pil_resize, pil_resize_boxed, premultiply_alpha, unpremultiply_alpha,
 };

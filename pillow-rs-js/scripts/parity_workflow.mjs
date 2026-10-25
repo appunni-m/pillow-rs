@@ -1393,6 +1393,7 @@ function drawMethod(receiver, operation, args, wasm) {
             args.anchor ?? null,
             Boolean(args.embedded_color ?? false),
             args.font_size == null ? null : Number(args.font_size),
+            args.stroke_fill ?? null,
         );
     }
     if (operation === 'multiline_text') {
@@ -1411,6 +1412,7 @@ function drawMethod(receiver, operation, args, wasm) {
             args.anchor ?? null,
             Boolean(args.embedded_color ?? false),
             args.font_size == null ? null : Number(args.font_size),
+            args.stroke_fill ?? null,
         );
     }
     if (operation === 'textbbox') {
@@ -1685,10 +1687,63 @@ function pngZlibFlevel(encoded) {
     return null;
 }
 
+function platformViewerProcessCalls(viewer, options) {
+    const path = '<display-file>';
+    const title = options.title;
+    const calls = [];
+    const record = (kind, args, kwargs = {}) => {
+        calls.push({ kind, args, kwargs });
+    };
+    switch (viewer.viewer_class) {
+        case 'WindowsViewer':
+            record(
+                'Popen',
+                `start "Pillow" /WAIT "${path}" && ping -n 4 127.0.0.1 >NUL && del /f "${path}"`,
+                { shell: true, creationflags: 0 },
+            );
+            break;
+        case 'MacViewer':
+            record('call', ['open', '-a', 'Preview.app', path]);
+            record('Popen', [
+                '<python>',
+                '-c',
+                'import os, sys, time; time.sleep(20); os.remove(sys.argv[1])',
+                path,
+            ]);
+            break;
+        case 'XDGViewer':
+            record('Popen', ['xdg-open', path]);
+            break;
+        case 'DisplayViewer': {
+            const args = ['display'];
+            if (title) args.push('-title', title);
+            args.push(path);
+            record('Popen', args);
+            break;
+        }
+        case 'GmDisplayViewer':
+            record('Popen', ['gm', 'display', path]);
+            break;
+        case 'EogViewer':
+            record('Popen', ['eog', '-n', path]);
+            break;
+        case 'XVViewer': {
+            const args = ['xv'];
+            if (title) args.push('-name', title);
+            args.push(path);
+            record('Popen', args);
+            break;
+        }
+        default:
+            throw namedError('ValueError', 'capture-platform-viewer viewer_class is unsupported');
+    }
+    return calls;
+}
+
 function imageShowMethod(wasm, operation, args, viewers) {
     if (operation === 'register') {
         const viewer = args.viewer;
-        if (viewer?.protocol !== 'capture-viewer') {
+        if (!['capture-viewer', 'capture-platform-viewer'].includes(viewer?.protocol)) {
             throw unsupportedError('PIL.ImageShow viewer is not supported by this WASM workflow');
         }
         // Pillow instantiates a Viewer subclass during registration. The
@@ -1711,19 +1766,22 @@ function imageShowMethod(wasm, operation, args, viewers) {
         let shownImage = image;
         let convertedImage = null;
         try {
-            const saveOptions = viewer.format === 'PNG'
+            const platformViewer = viewer.protocol === 'capture-platform-viewer';
+            const format = platformViewer ? 'PNG' : viewer.format;
+            const hook = platformViewer ? 'show_file' : viewer.hook;
+            const saveOptions = format === 'PNG'
                 ? { compress_level: 1, save_all: true }
                 : {};
             // Overrides of show_image and show_file pass through Pillow's
             // base Viewer.show mode conversion. PPM files then apply the
             // additional L/RGB conversion performed by ImageShow._dump_image.
-            if (viewer.hook !== 'show') {
+            if (hook !== 'show') {
                 const mode = image.mode;
                 const preserveMode = mode === '1' || mode === 'RGBA'
-                    || (viewer.format === 'PNG' && (mode === 'I;16' || mode === 'LA'));
+                    || (format === 'PNG' && (mode === 'I;16' || mode === 'LA'));
                 const baseMode = imageShowBaseMode(mode);
                 let outputMode = preserveMode ? mode : baseMode;
-                if (viewer.hook === 'show_file' && viewer.format !== 'PNG') {
+                if (hook === 'show_file' && format !== 'PNG') {
                     if (outputMode === '1') outputMode = 'L';
                     else if (outputMode !== 'L' && outputMode !== 'RGB') outputMode = 'RGB';
                 }
@@ -1735,16 +1793,30 @@ function imageShowMethod(wasm, operation, args, viewers) {
 
             const callback = {
                 viewer_id: viewer.viewer_id,
-                title: callbackOptions.title ?? null,
+                ...(!platformViewer ? { title: callbackOptions.title ?? null } : {}),
                 mode: String(shownImage.mode),
                 size: Array.from(shownImage.size()),
                 pixels: bytesRecord(shownImage.toBytes()),
                 options: callbackOptions,
                 save_options: saveOptions,
             };
-            if (viewer.hook === 'show_file') {
-                callback.file_format = viewer.format ?? 'PPM';
-                if (viewer.format === 'PNG') {
+            if (platformViewer) {
+                const encoded = shownImage.saveWithOptions('PNG', ['compress_level', '1']);
+                const flevel = pngZlibFlevel(encoded);
+                const processCalls = platformViewerProcessCalls(viewer, callbackOptions);
+                if (viewer.launch_failure === 'file-not-found') {
+                    throw namedError('FileNotFoundError', 'injected viewer executable is unavailable');
+                }
+                callback.viewer_class = viewer.viewer_class;
+                callback.options = callbackOptions;
+                callback.process_calls = processCalls;
+                callback.result = 1;
+                callback.error = null;
+                callback.file_format = 'PNG';
+                if (flevel !== null) callback.png_zlib_flevel = flevel;
+            } else if (hook === 'show_file') {
+                callback.file_format = format ?? 'PPM';
+                if (format === 'PNG') {
                     const encoded = shownImage.saveWithOptions('PNG', ['compress_level', '1']);
                     const flevel = pngZlibFlevel(encoded);
                     if (flevel !== null) callback.png_zlib_flevel = flevel;
@@ -1760,7 +1832,7 @@ function imageShowMethod(wasm, operation, args, viewers) {
         } finally {
             if (convertedImage) convertedImage.free();
         }
-        if (Boolean(viewer.accept)) return true;
+        if (viewer.protocol === 'capture-platform-viewer' || Boolean(viewer.accept)) return true;
     }
     return false;
 }

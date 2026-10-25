@@ -334,6 +334,7 @@ impl PyFont {
             start_invalid,
             has_args,
             has_kwargs,
+            ..pillow_rs::ImageFontTextOptions::default()
         };
         let (width, height, pixels, offset) = pillow_rs::imagefont_getmask2_input_with_options(
             &self.inner,
@@ -387,6 +388,7 @@ impl PyFont {
             start_invalid,
             has_args: false,
             has_kwargs: false,
+            ..pillow_rs::ImageFontTextOptions::default()
         };
         let (width, height, pixels, offset) = pillow_rs::imagefont_native_render_input(
             &self.inner,

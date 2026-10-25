@@ -186,6 +186,18 @@ pub struct ImageFontTextOptions {
     pub language: Option<String>,
     /// Pillow text stroke width in pixels.
     pub stroke_width: f32,
+    /// ImageDraw ink used for the outline pass, when it differs from the fill.
+    pub stroke_fill: Option<(u8, u8, u8, u8)>,
+    /// Whether the resolved fill originated as an integer ink.
+    ///
+    /// CMYK drawing treats integer inks as a single-channel value. Keep this
+    /// input distinction because a white component tuple resolves to the same
+    /// bytes as Pillow's default color but must paint all four channels.
+    pub text_fill_is_integer: bool,
+    /// Whether the resolved stroke ink originated as an integer ink.
+    pub stroke_fill_is_integer: bool,
+    /// Pillow's multiline text alignment mode.
+    pub align: Option<String>,
     /// Pillow `getmask2(..., stroke_filled=True)` keyword.
     ///
     /// Pillow routes this through `FT_Glyph_StrokeBorder`; the Rust adapter
@@ -300,20 +312,16 @@ pub enum ImageFontVariationAxesInput {
 /// Run a text operation with Pillow's effective drawing font.
 ///
 /// `ImageDraw` resolves an omitted font to the embedded default font and
-/// applies `font_size` by creating a variant. Keeping that policy here lets
-/// every binding pass only an optional Rust font handle and the requested
-/// size; neither binding needs to duplicate the default/variant rules.
+/// applies `font_size` only when no font was supplied. Keeping that policy
+/// here lets every binding pass only an optional Rust font handle and the
+/// requested size; neither binding needs to duplicate the default-font rule.
 pub(crate) fn with_text_font<T>(
     font: Option<&FreeTypeFont>,
     size: Option<f32>,
     operation: impl FnOnce(&FreeTypeFont) -> Result<T, PilError>,
 ) -> Result<T, PilError> {
     match (font, size) {
-        (Some(font), None) => operation(font),
-        (Some(font), Some(size)) => {
-            let variant = font.font_variant(Some(size))?;
-            operation(&variant)
-        }
+        (Some(font), _) => operation(font),
         (None, size) => {
             let default = FreeTypeFont::load_default(size.unwrap_or(10.0))?;
             operation(&default)

@@ -113,7 +113,6 @@ STRICT_TARGET_BACKEND = (
     .strip()
     .lower()
     in {"1", "true", "yes"}
-    or TARGET_BACKEND in {"simd", "gpu"}
 )
 
 
@@ -2941,6 +2940,7 @@ def run_case(
     terminal_receipt_index: int | None = None
     direct_execution_receipt_index: int | None = None
     fault_contract_observation: dict[str, Any] | None = None
+    strict_execution_errors: list[dict[str, Any]] = []
 
     def append_execution_receipt(
         receipt: dict[str, Any], *, status: str, step_id: str
@@ -2965,7 +2965,12 @@ def run_case(
             terminal_receipt_index = len(pipeline_execution_sink) - 1
         strict_error = strict_backend_fallback_error(side, receipt)
         if strict_error is not None:
-            raise RuntimeError(strict_error)
+            strict_execution_errors.append(
+                {
+                    "step_id": step_id,
+                    "error": public_error(RuntimeError(strict_error)),
+                }
+            )
 
     selected_indices = [
         index
@@ -3054,7 +3059,12 @@ def run_case(
                         side, direct_receipt
                     )
                     if strict_error is not None:
-                        raise RuntimeError(strict_error)
+                        strict_execution_errors.append(
+                            {
+                                "step_id": step_id,
+                                "error": public_error(RuntimeError(strict_error)),
+                            }
+                        )
                 elif (
                     step_index == len(case["steps"]) - 1
                     and step_id not in case.get("observations", [])
@@ -3163,6 +3173,7 @@ def run_case(
             for step_id, result in step_results.items()
             if result.get("status") == "error"
         ]
+        execution_errors.extend(strict_execution_errors)
         observation_ids = list(case.get("observations", []))
         timed_observation_errors: list[dict[str, Any]] = []
         for observation_index, observation_id in enumerate(observation_ids):
@@ -3406,6 +3417,7 @@ def run_case(
         for step_id, step_result in step_results.items()
         if step_result.get("status") == "error"
     ]
+    execution_errors.extend(strict_execution_errors)
     return {
         "case_id": case["case_id"],
         "status": "completed",

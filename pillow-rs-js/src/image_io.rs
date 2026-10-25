@@ -316,6 +316,8 @@ impl Image {
                 ))
             })?,
         );
+        let mode = self.inner.mode().map_err(err)?;
+        let fillcolor = js_transform_fill(&fillcolor, &mode)?;
         self.inner
             .transform_public(
                 size,
@@ -323,7 +325,7 @@ impl Image {
                 js_transform_data(&data)?,
                 resample,
                 fill,
-                js_transform_fill(&fillcolor),
+                fillcolor,
             )
             .map(|i| Image { inner: i })
             .map_err(err)
