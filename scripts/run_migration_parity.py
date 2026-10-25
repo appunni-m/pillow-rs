@@ -3484,7 +3484,23 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return validate_fixed_manifest(manifest, manifest_path=path)
 
 
+def ensure_generated_parity_inputs(manifest: dict[str, Any]) -> None:
+    """Materialize generated parity inputs when a clean checkout lacks them."""
+
+    if all(
+        (FIXTURE_ROOT / relative).is_file()
+        for relative in manifest["input_index"]["parity"]
+    ):
+        return
+    try:
+        from build_migration_parity_inputs import build_inputs
+    except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity``
+        from scripts.build_migration_parity_inputs import build_inputs
+    build_inputs(manifest, FIXTURE_ROOT, FIXTURE_ROOT / "assets")
+
+
 def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: str | None) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    ensure_generated_parity_inputs(manifest)
     validate_fixed_inputs(manifest, FIXTURE_ROOT, lane="parity")
     cases: list[dict[str, Any]] = []
     case_inputs: dict[str, str] = {}

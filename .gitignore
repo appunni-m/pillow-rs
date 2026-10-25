@@ -41,6 +41,9 @@ pillow-rs-freetype/freetype/
 tests/fixtures/outputs/
 pillow-rs/tests/fixtures/imagingft_matrix.json
 pillow-rs/tests/fixtures/outputs/imagingft/
+# Rebuilt from the fixed manifest by the parity input generator.
+/pillow-rs/tests/fixtures/inputs/parity/*.json
+/pillow-rs/tests/fixtures/assets/generated/*.bin
 .kata.local.toml
 
 # Raw experiment receipts are generated locally and stay ignored. The two
@@ -49,3 +52,9 @@ docs/evidence/**/*.json*
 docs/evidence/**/*.ndjson
 !docs/evidence/benchmark.json
 !docs/evidence/pillow-simd-benchmark.json
+docs/evidence/**/*.gz
+docs/evidence/**/*.log
+docs/evidence/**/*.md
+docs/evidence/**/SHA256SUMS*
+docs/evidence/**/*.sha256
+docs/evidence/**/*checksum*

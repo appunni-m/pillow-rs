@@ -53,6 +53,7 @@ try:
         TARGET_ID,
         TARGET_FEATURES,
         TIMED_SOURCE_FLAG,
+        ensure_generated_parity_inputs,
         git_dirty,
         git_revision,
         process_group_options,
@@ -84,6 +85,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` i
         TARGET_ID,
         TARGET_FEATURES,
         TIMED_SOURCE_FLAG,
+        ensure_generated_parity_inputs,
         git_dirty,
         git_revision,
         process_group_options,
@@ -461,12 +463,15 @@ def load_manifest(path: Path) -> dict[str, Any]:
     from validate_migration_parity_contract import validate_manifest
 
     manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if path.resolve() == DEFAULT_MANIFEST.resolve():
+        ensure_generated_parity_inputs(manifest)
     return validate_manifest(manifest, manifest_path=path)
 
 
 def load_parity_cases(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
     from validate_migration_parity_contract import validate_inputs
 
+    ensure_generated_parity_inputs(manifest)
     validate_inputs(manifest, FIXTURE_ROOT)
     cases: dict[str, dict[str, Any]] = {}
     inputs: dict[str, str] = {}

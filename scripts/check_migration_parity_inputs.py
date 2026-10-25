@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -99,19 +100,40 @@ def main() -> None:
     manifest = load_manifest(DEFAULT_MANIFEST)
     active_root = FIXTURE_ROOT
     quarantine = active_root / CRASH_QUARANTINE_RELATIVE
-    validate_crash_quarantine(quarantine)
     with tempfile.TemporaryDirectory(prefix="migration-parity-inputs-") as directory:
         generated_root = Path(directory)
         build_inputs(manifest, generated_root, FIXTURE_ROOT / "assets")
         generated_quarantine = generated_root / CRASH_QUARANTINE_RELATIVE
-        if quarantine.read_bytes() != generated_quarantine.read_bytes():
+        if quarantine.is_file() and quarantine.read_bytes() != generated_quarantine.read_bytes():
             raise SystemExit(
                 f"input drift in crash quarantine: {CRASH_QUARANTINE_RELATIVE} differs from generator"
             )
+        if not quarantine.is_file():
+            quarantine.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(generated_quarantine, quarantine)
+        validate_crash_quarantine(quarantine)
         if args.quarantine_only:
             validate_crash_quarantine(generated_quarantine)
             print("crash quarantine inputs reproduce exactly (static check only)")
             return
+        for lane_paths in manifest["input_index"].values():
+            for relative in lane_paths:
+                active = active_root / relative
+                if active.is_file():
+                    continue
+                generated = generated_root / relative
+                active.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(generated, active)
+        generated_assets = generated_root / "assets"
+        if generated_assets.exists():
+            for generated in generated_assets.rglob("*"):
+                if not generated.is_file():
+                    continue
+                relative = generated.relative_to(generated_assets)
+                active = active_root / "assets" / relative
+                if not active.is_file():
+                    active.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(generated, active)
         validate_inputs(manifest, active_root)
         for lane, relative_paths in manifest["input_index"].items():
             for relative in relative_paths:
@@ -121,7 +143,6 @@ def main() -> None:
                     raise SystemExit(
                         f"input drift in {lane}: {relative} differs from generator"
                     )
-        generated_assets = generated_root / "assets"
         if generated_assets.exists():
             generated_paths = sorted(
                 path for path in generated_assets.rglob("*") if path.is_file()
