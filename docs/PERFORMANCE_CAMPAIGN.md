@@ -19,6 +19,12 @@ boundary, and a receipt naming the backend that actually ran. Pipeline
 latency, materialized-operation latency, and changing-input throughput are
 separate measures. A pass at one boundary does not substitute for another.
 
+Raw JSON, JSONL, and NDJSON experiment receipts (reports, parity payloads,
+samples, and attestations) are no longer stored in Git. This campaign and the
+retained CSV ledgers and matrices preserve the selected measurements and
+conclusions. Historical file names identify original run outputs; the two
+public benchmark snapshots remain as maintained inputs.
+
 Priority sequencing is stricter than the final CPU floor: first bring each
 verified CPU workload currently slower than Pillow to at least 2× Pillow. Once
 that set reaches the 2× gate, promote workloads slower than Pillow-SIMD using
@@ -26815,10 +26821,7 @@ local source to the control version. This is one workload on one x86 CPU and
 does not establish Resize performance across other modes, filters, or sizes;
 the complete published per-operation matrix remains unchanged.
 
-The four compact reports are [A1](evidence/f32-resize-finite-track-A1-control-20261014.json),
-[B1](evidence/f32-resize-finite-track-B1-candidate-20261014.json),
-[B2](evidence/f32-resize-finite-track-B2-candidate-20261014.json), and
-[A2](evidence/f32-resize-finite-track-A2-control-20261014.json). Their run IDs
+The four compact reports are A1, B1, B2, and A2. Their run IDs
 are `migration-benchmark-3c2e39bc984f43f3b8ea20a9c482148e`,
 `migration-benchmark-84117e63ba9c48ff922aa07948b96209`,
 `migration-benchmark-b356f17e7a9544b397c399f11f633d12`, and
@@ -27184,7 +27187,7 @@ Run IDs, parity receipts, report SHA-256 values:
 | B2 | `migration-benchmark-948af8f0a1114da095480d274a5b2a88` | `migration-parity-benchmark-gate-16807fa2984c493abd0b40f8d007ae49` | 2/2 | `1285306d2a4ca91b6313718981918dd6c1db024e86fe09333ba79d909aae0e6a` |
 | A2 | `migration-benchmark-0e94e9c97ece4225be585374c87e46a2` | `migration-parity-benchmark-gate-d878079c93f1417da693aa687e8dfa6c` | 2/2 | `799f7987d65c506554b6befb1e41464ee168f84ac09c2d86eb92073ae8ceb0f2` |
 
-The four benchmark reports are [A1](evidence/getdata-helper-abba-cpusimd-A1-20261013.json), [B1](evidence/getdata-helper-abba-cpusimd-B1-20261013.json), [B2](evidence/getdata-helper-abba-cpusimd-B2-20261013.json), and [A2](evidence/getdata-helper-abba-cpusimd-A2-20261013.json). Their 12 Pillow/CPU/SIMD rows are appended to `docs/evidence/performance-optimization-local-runs.csv`. Parity sidecars were not copied. No coverage ran, and this does not count toward the 33-item commit/push batch.
+The four benchmark reports are A1, B1, B2, and A2. Their 12 Pillow/CPU/SIMD rows are appended to `docs/evidence/performance-optimization-local-runs.csv`. Parity sidecars were not copied. No coverage ran, and this does not count toward the 33-item commit/push batch.
 
 
 ### GetChannel mixed RGB/LA candidate — same-worktree CPU/SIMD A-B-B-A — rejected — 2026-10-13
@@ -27302,10 +27305,7 @@ must not be read as proof that the call allocates nothing.
 | B2 | `migration-benchmark-1d5e5903817a4c9599c4d67b8dec91d7` | `migration-parity-benchmark-gate-87a79b6a4ca445d494bb236b10d4f04f` (9/9) | `f71a2bbe2227f8c74e31ebcf45dfadd799fc5f88401ea78d50f4c67ded71bf11` | `2ff0bc560cd4fab0987a01c56112d02a84eb52a7e3bd331fb8fd76af7ee56ff9` |
 | A2 | `migration-benchmark-4ae08903926b443998febe00769e0333` | `migration-parity-benchmark-gate-03cc92620f49471292136ec205945e14` (9/9) | `497a007361e1d700bd8a1bb81e5231544a6c0a07f23190aeccd1014448ceb55e` | `5b50b36eb35b0a9b29abc2e241deede407a0c7c660ca5963a241c4203e5450e4` |
 
-The compact reports are [A1](evidence/getchannel-refactor-A1-20261013.json),
-[B1](evidence/getchannel-refactor-B1-20261013.json),
-[B2](evidence/getchannel-refactor-B2-20261013.json), and
-[A2](evidence/getchannel-refactor-A2-20261013.json). Their 48 Pillow/CPU/SIMD/GPU
+The compact reports are A1, B1, B2, and A2. Their 48 Pillow/CPU/SIMD/GPU
 measurements are in `docs/evidence/performance-optimization-local-runs.csv`.
 The large parity sidecars stayed on the runner; only the compact benchmark
 reports were copied locally. The experiment is diagnostic and adds zero
@@ -27355,10 +27355,7 @@ existing CPU kernel. This is a rejected experiment, not a completed item.
 | B2 | `migration-benchmark-24a66d30349948f99bd1ec8927f385b1` | `migration-parity-benchmark-gate-5141e612fda140ac8bb3a0176edbb054` | `fe670851ff550468da598aaa48005502beebea50df4c6be1f0046fe3e7bba7c9` | `c145d05ed7b4f121c96efd9df36afe786313ba83f3f2592eb32b168dc4a54c76` |
 | A2 | `migration-benchmark-59af213ba3b048129b729b00016a7183` | `migration-parity-benchmark-gate-6fac08e9da4541b286dec10d011f032f` | `270f7636aed20794c435e14626bcc296a4eaf1d2d74041072db9be6a73785aec` | `cc80735f3bd08e2062c54de1ed832b64eabd909316037a5612d68aae7232fb8a` |
 
-The four compact reports are [A1](evidence/getchannel-constant-band-control-A1-cpusimd-20261013.json),
-[B1](evidence/getchannel-constant-band-candidate-B1-cpusimd-20261013.json),
-[B2](evidence/getchannel-constant-band-candidate-B2-cpusimd-20261013.json), and
-[A2](evidence/getchannel-constant-band-control-A2-cpusimd-20261013.json). Their
+The four compact reports are A1, B1, B2, and A2. Their
 48 Pillow/CPU/SIMD rows are recorded in
 `docs/evidence/performance-optimization-local-runs.csv` (7,154 data rows).
 Parity sidecars remain in the local `build/migration-parity/` directory; only
@@ -27407,10 +27404,7 @@ row, which remains an outstanding cross-host gap. No GPU timing was collected.
 | B2 | `migration-benchmark-7544f390fac349e09c563c8961cd8185` | `migration-parity-benchmark-gate-03560c0e4d74488692c044414001568a` | `daee81081335df0510afae0942951371eaca1926a47034b4d593c481fc988e87` | `0daedc70b006c389b9b64748c5a7341ca1b7f7143004909af2570fd2e2c4770f` |
 | A2 | `migration-benchmark-891f6eb82a1a4689819682a620d3dead` | `migration-parity-benchmark-gate-c12c8bee3a834e62b0cda088ed26e478` | `362d9daaadb54b98b822a4cc21583a141a2fa90ef62f8c88993c702e915e04e8` | `635e34e314629f8b7638b5167ee9192efdf2b5ddaec7f7fcf9fd29db08002226` |
 
-The compact reports are [A1](evidence/getdata-band-chunks-A1-cpusimd-20261013.json),
-[B1](evidence/getdata-band-chunks-B1-cpusimd-20261013.json),
-[B2](evidence/getdata-band-chunks-B2-cpusimd-20261013.json), and
-[A2](evidence/getdata-band-chunks-A2-cpusimd-20261013.json). Their 12
+The compact reports are A1, B1, B2, and A2. Their 12
 Pillow/CPU/SIMD rows are recorded in
 `docs/evidence/performance-optimization-local-runs.csv` (7,166 data rows).
 Parity sidecars remain in `build/migration-parity/`; their IDs and checksums
@@ -27455,7 +27449,7 @@ parity sidecar SHA-256 is
 `fb109d1883d6d3bac000b1594b268961cb4d639dd0e507146163a8412dbab78a`; and the
 instrumented `color.rs` SHA-256 is
 `4b30e1c49db6723d5bd2877e26780f24a3f149063e383904cd45bdd87a0d3206`. The
-compact result is [getchannel-allocation-telemetry-20261013.json](evidence/getchannel-allocation-telemetry-20261013.json);
+compact result is getchannel-allocation-telemetry-20261013.json;
 the parity sidecar remains under ignored `build/migration-parity/`. The nine
 Pillow/CPU/SIMD subject rows are in the local-run ledger. This accounting fix
 adds zero optimization items to the 33-item commit/push batch. No coverage ran.
@@ -27474,7 +27468,7 @@ Medians are microseconds, ordered Pillow / CPU / SIMD:
 | LA | 187.250 / 85.938 / 56.249 | 2.179x | 3.329x |
 | RGBA | 182.667 / 84.688 / 72.812 | 2.157x | 2.509x |
 
-This dirty-tree ARM64 control is diagnostic only. The local CPU RGB call is faster than Pillow but only 1.361x; SIMD L is 1.682x and remains below the 2x goal. It does not address the published x86 CPU misses (GetChannel RGB/LA/RGBA), does not qualify an optimization item, and leaves the published matrix unchanged. The complete report is [getchannel-current-arm-control-20261013.json](evidence/getchannel-current-arm-control-20261013.json) (SHA-256 `9d8cb0a6b46e05ff904e52d1332ccd49c22b60877d97903c9b3747b13c0b95e7`). The parity sidecar remains under ignored `build/migration-parity/` (run `migration-parity-benchmark-gate-637578043f0742d69ae9a7536ac423d7`, SHA-256 `3b4dcc243dc1124dc790af65ae8194baef8edc1c890bdd617174ce7cbc9c36ce`). The 12 Pillow/CPU/SIMD subject rows are in `docs/evidence/performance-optimization-local-runs.csv` (7187 data rows after this addition); current `color.rs` SHA-256 is `f1e0e2ee9cca94d926b40b4991c5c6cf27ab737bab5a6b7173196e7f57dbf01f`. No GPU measurement or coverage was collected. This adds zero items to the 33-item commit/push batch.
+This dirty-tree ARM64 control is diagnostic only. The local CPU RGB call is faster than Pillow but only 1.361x; SIMD L is 1.682x and remains below the 2x goal. It does not address the published x86 CPU misses (GetChannel RGB/LA/RGBA), does not qualify an optimization item, and leaves the published matrix unchanged. The complete report is getchannel-current-arm-control-20261013.json (SHA-256 `9d8cb0a6b46e05ff904e52d1332ccd49c22b60877d97903c9b3747b13c0b95e7`). The parity sidecar remains under ignored `build/migration-parity/` (run `migration-parity-benchmark-gate-637578043f0742d69ae9a7536ac423d7`, SHA-256 `3b4dcc243dc1124dc790af65ae8194baef8edc1c890bdd617174ce7cbc9c36ce`). The 12 Pillow/CPU/SIMD subject rows are in `docs/evidence/performance-optimization-local-runs.csv` (7187 data rows after this addition); current `color.rs` SHA-256 is `f1e0e2ee9cca94d926b40b4991c5c6cf27ab737bab5a6b7173196e7f57dbf01f`. No GPU measurement or coverage was collected. This adds zero items to the 33-item commit/push batch.
 
 
 ### GetChannel RGB grouped-loop native x86 A-B-B-A — retained candidate in progress — 2026-10-13
@@ -27519,10 +27513,7 @@ the single-worker samples do not measure sustained GPU throughput. These
 remain open gaps, and this RGB experiment does not count as a completed
 operation item in the 33-item commit/push batch. No coverage ran.
 
-The four benchmark reports are [A1](evidence/getchannel-rgb-grouped-abba-A1-20261013.json),
-[B1](evidence/getchannel-rgb-grouped-abba-B1-20261013.json),
-[B2](evidence/getchannel-rgb-grouped-abba-B2-20261013.json), and
-[A2](evidence/getchannel-rgb-grouped-abba-A2-20261013.json). Their 48
+The four benchmark reports are A1, B1, B2, and A2. Their 48
 Pillow/CPU/SIMD/GPU rows are in the local-run ledger (7,235 data rows). Each
 report passed schema validation. The runner-side parity sidecars and their
 checksums are recorded in the same ledger; the report and source hashes are
@@ -27564,10 +27555,7 @@ signal from changing the shared function, but the runs do not identify its
 cause. The direct-fill candidate is rejected operation-wide; keep unchanged
 modes visible when evaluating edits inside a shared hot function.
 
-The four validated reports are [A1](evidence/getchannel-la-rgba-direct-abba-A1-20261013.json),
-[B1](evidence/getchannel-la-rgba-direct-abba-B1-20261013.json),
-[B2](evidence/getchannel-la-rgba-direct-abba-B2-20261013.json), and
-[A2](evidence/getchannel-la-rgba-direct-abba-A2-20261013.json). Their 48
+The four validated reports are A1, B1, B2, and A2. Their 48
 Pillow/CPU/SIMD/GPU rows are in the local-run ledger (7,283 data rows). The
 37.8 MB parity sidecars remain on the native runner; their gate IDs and SHA-256
 checksums are recorded in the ledger. The source hashes were control
@@ -27617,10 +27605,7 @@ about 2–3× Pillow in these modes, below the project 5× target. GPU latency w
 roughly 6–8× SIMD, and sustained GPU throughput was not measured. This trial
 adds zero completed operations to the 33-item commit/push batch.
 
-The validated reports are [A1](evidence/getchannel-raw-slice-abba-A1-20261013.json),
-[B1](evidence/getchannel-raw-slice-abba-B1-20261013.json),
-[B2](evidence/getchannel-raw-slice-abba-B2-20261013.json), and
-[A2](evidence/getchannel-raw-slice-abba-A2-20261013.json). Their 48
+The validated reports are A1, B1, B2, and A2. Their 48
 Pillow/CPU/SIMD/GPU rows bring the local-run ledger to 7,331 data rows. The
 37.8 MB parity sidecars remain on the runner; their gate IDs and SHA-256
 checksums are recorded in the ledger. The published benchmark snapshots and
@@ -27676,14 +27661,11 @@ and `rgb-small.webp`, 66 B); these were supplied to the isolated candidate
 worktree, after which the test compiled and passed. This was fixture
 provisioning, not a parity assertion defect. No coverage ran.
 
-The compact benchmark reports are [A1](evidence/getchannel-direct-output-simd-A1-20261014.json),
-[B1](evidence/getchannel-direct-output-simd-B1-20261014.json),
-[B2](evidence/getchannel-direct-output-simd-B2-20261014.json), and
-[A2](evidence/getchannel-direct-output-simd-A2-20261014.json). Their 48
+The compact benchmark reports are A1, B1, B2, and A2. Their 48
 subject rows bring the local-run ledger to 7,379 data rows. The 37.8 MB full
 parity receipts remain on the runner; their sizes, SHA-256 hashes, run IDs, and
 per-case outcomes are indexed in
-[getchannel-direct-output-simd-parity-summary-20261014.json](evidence/getchannel-direct-output-simd-parity-summary-20261014.json).
+getchannel-direct-output-simd-parity-summary-20261014.json.
 Only the four compact benchmark reports and the 10.7 KB parity index were
 copied into this checkout; no target artifacts or full parity sidecars were
 copied.
@@ -27747,12 +27729,12 @@ sustained GPU throughput. The published operation matrix remains tied to its
 existing snapshot; this rejected trial earns zero completed items in the
 33-operation commit/push batch.
 
-The primary reports are [A1](evidence/getchannel-bmi2-control-A1-20261014.json),
-[clean B1](evidence/getchannel-bmi2-candidate-clean-B1-20261014.json),
-[clean B2](evidence/getchannel-bmi2-candidate-clean-B2-20261014.json), and
-[A2](evidence/getchannel-bmi2-control-A2-20261014.json). The two preliminary
-telemetry-instrumented candidate reports are [B1](evidence/getchannel-bmi2-candidate-B1-20261014.json)
-and [B2](evidence/getchannel-bmi2-candidate-B2-20261014.json). The control
+The primary reports are A1,
+clean B1,
+clean B2, and
+A2. The two preliminary
+telemetry-instrumented candidate reports are B1
+and B2. The control
 `pool_cpu/ops/color.rs` SHA-256 was
 `f1e0e2ee9cca94d926b40b4991c5c6cf27ab737bab5a6b7173196e7f57dbf01f`; clean
 candidate hashes were `5f5cfa66bff1f10fa0cc25b1d5821799de2f0978450a5b5c3e0875eb620bd0d7`
@@ -27801,10 +27783,7 @@ effect on other modes, sizes, or hosts. This local result does not rebaseline
 the published matrix. SIMD and GPU were not measured; any GetData request that
 falls back to CPU earns no SIMD acceleration credit.
 
-Reports: [A1](evidence/getdata-l32-mode-length-A1-control-20261014.json),
-[B1](evidence/getdata-l32-mode-length-B1-candidate-20261014.json),
-[B2](evidence/getdata-l32-mode-length-B2-candidate-20261014.json), and
-[A2](evidence/getdata-l32-mode-length-A2-control-20261014.json). The four
+Reports: A1, B1, B2, and A2. The four
 cohorts add eight Pillow/CPU rows to the local-run ledger, now at 7,471 data
 rows. They add no completed operation to the 33-item commit/push batch. No
 coverage ran.
@@ -27841,10 +27820,7 @@ throughput still need measurements. The published operation matrix remains
 pinned to its existing snapshot; these dirty-source local runs are in the local
 ledger pending a later clean publication.
 
-Reports: [A1](evidence/getchannel-la-rgba-grouped-A1-control-20261014.json),
-[B1](evidence/getchannel-la-rgba-grouped-B1-candidate-20261014.json),
-[B2](evidence/getchannel-la-rgba-grouped-B2-candidate-20261014.json), and
-[A2](evidence/getchannel-la-rgba-grouped-A2-control-20261014.json). Their 24
+Reports: A1, B1, B2, and A2. Their 24
 Pillow/CPU subject rows bring `docs/evidence/performance-optimization-local-runs.csv`
 to 7,495 data rows. The standalone `pillow-perfdb` bundle also retains the
 reports and provides per-workload history. Exact parity sidecars are about
@@ -27867,7 +27843,7 @@ The candidate also passed 12 focused exact Pillow parity cases on the current
 ARM64 build. Eight LA/RGBA direct calls exercised pixel-count remainders 1, 2,
 and 3 at dimensions 5×5 through 7×7; four composed pipelines used 9×7 LA/RGBA
 images. The compact result is
-[getchannel-la-rgba-grouped-edge-parity-20261014.json](evidence/getchannel-la-rgba-grouped-edge-parity-20261014.json),
+getchannel-la-rgba-grouped-edge-parity-20261014.json,
 SHA-256 `19affd7a5beba0ed8c638327d1148a4134d35feb01964a3f806b5e0f5dbe2537`:
 12 selected, 12 executed, 12 passed, zero failures. This verifies selected odd
 pixel tails and composition on ARM64, but provides no ARM latency evidence and
@@ -29494,7 +29470,7 @@ candidate cohorts, so it is faster than Pillow on this workload but below the
 measured. This is one retained local candidate, not Resize completion or a
 published-matrix update. The native source revision was dirty.
 
-The four exact benchmark reports are [A1](evidence/f32-resize-vertical-seed-A1-20261015.json), [B1](evidence/f32-resize-vertical-seed-B1-20261015.json), [B2](evidence/f32-resize-vertical-seed-B2-20261015.json), and [A2](evidence/f32-resize-vertical-seed-A2-20261015.json); their 16 subject rows are in `docs/evidence/performance-optimization-local-runs.csv` (7,583 data rows). Control gate: `migration-parity-benchmark-gate-9bbdd3525c1240139f90495557093e7d`; candidate gate: `migration-parity-benchmark-gate-4d224d5ff33e4103adbe955e4e87ae05`. The full operation remains open in Kata `gm7b`/`b9n6`. No coverage, commit, or push ran.
+The four exact benchmark reports are A1, B1, B2, and A2; their 16 subject rows are in `docs/evidence/performance-optimization-local-runs.csv` (7,583 data rows). Control gate: `migration-parity-benchmark-gate-9bbdd3525c1240139f90495557093e7d`; candidate gate: `migration-parity-benchmark-gate-4d224d5ff33e4103adbe955e4e87ae05`. The full operation remains open in Kata `gm7b`/`b9n6`. No coverage, commit, or push ran.
 
 ### Reject F32 Thumbnail direct final-output bytes on Apple ARM64 — 2026-10-15
 
@@ -31684,13 +31660,13 @@ than the prior witness-bound CPU median, but the runs were not interleaved and
 no code changed, so do not attribute that difference to implementation.
 
 The benchmark report is
-[`reports/runner-id-bound-final-20261019/benchmark-result.json`](evidence/getcolors/current-source-i-high-cardinality-cpu-arm64-20261019/reports/runner-id-bound-final-20261019/benchmark-result.json), run
+`reports/runner-id-bound-final-20261019/benchmark-result.json`, run
 `migration-benchmark-ba2964a454aa499abed91871bd101ffc`, SHA-256
 `e178edf9d0fd8aa3702ecd04e5cdac9814e4b8182d65f02f76ccb6cd13ec7cdd`. Its exact
 parity run is `migration-parity-eaa564da5eb8439cab0b026be1dea2b3` (report SHA-256
 `b011a740e5e21d632870f4a5782b1e3f2a70251cbbee51d7c3ecddbeba5b47b7`). The
 strict direct-operation link
-[`direct-operation-link-runner-id-v2.json`](evidence/getcolors/current-source-i-high-cardinality-cpu-arm64-20261019/direct-operation-link-runner-id-v2.json)
+`direct-operation-link-runner-id-v2.json`
 passed PerfDB checks for parity, runtime and producer equivalence, source-build
 binding, backend execution, and performance admission. The measured extension
 matches the existing build-witness artifact at

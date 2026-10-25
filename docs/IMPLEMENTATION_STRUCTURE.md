@@ -125,7 +125,7 @@ At repository root, preserve package and workflow ownership boundaries:
 | `.claude/` | Repository-local agents and skills stay grouped by workflow or domain, with examples and references beneath the owning skill. |
 | `site-assets/` | Documentation-site assets stay grouped by site concern when a concern has multiple maintained files; small shared assets may remain at this owner level. |
 | `pillow-rs/tests/fixtures/` | Public fixture manifest and input payloads grouped by contract/domain with stable IDs; generated outputs remain under ignored build directories. |
-| `docs/evidence/` | Immutable results grouped by family and experiment identity; never replace older evidence. |
+| `docs/evidence/` | Concise experiment summaries and reviewed CSV ledgers grouped by family and experiment; keep raw receipts in ignored build output. |
 | `.github/workflows/` | One workflow per lifecycle purpose (CI, docs, benchmarks, release); shared behavior belongs in maintained scripts or composite actions rather than copied workflow bodies. |
 
 Reviewed quality-tool ratchet baselines stay beside their enforcing checkers,
@@ -139,8 +139,11 @@ manifests and lifecycle metadata stay at their package roots.
 
 Root manifests and project-wide configuration remain at the root because they
 govern multiple owners. Ignored `build/`, `target/`, and cache products are not
-maintained source; if a generated result is retained as evidence, group it by
-its owning family and experiment without changing its stable identity.
+maintained source. Keep raw JSON reports, parity payloads, samples, and
+attestations in ignored build output. Record selected findings in concise
+Markdown and CSV under `docs/evidence/`. The public benchmark inputs
+`docs/evidence/benchmark.json` and
+`docs/evidence/pillow-simd-benchmark.json` are the explicit JSON exceptions.
 
 Existing flat evidence bundles such as `docs/evidence/<family>-<experiment>-.../`
 retain their immutable paths because campaign notes and local ledgers refer to
@@ -163,7 +166,7 @@ for operations or a parallel hand-maintained list of families.
 | GPU execution | Keep family admission/dispatch with the GPU operation path and shaders under `pool_gpu/shaders/<family>/`. Keep pipeline selection and receipts explicit. |
 | Python and JavaScript | Keep conversion and delegation in their package owners. Use the same family name for a dedicated wrapper/module; existing multi-family user-facing modules and crate-root registration remain valid when they are the natural boundary. |
 | Parity and benchmark inputs | Keep the existing migration manifest as the operation/workload authority. Add cases and workloads through its established input tree and preserve stable IDs; do not create parallel per-layer operation lists. |
-| Tests and evidence | Keep unit tests beside the implementation they prove; put substantial contract tests in a focused family test module. Keep public parity in the migration workflow and immutable measured artifacts under `docs/evidence/<family>/<experiment>-<backend>-<arch>-<date>/`. |
+| Tests and evidence | Keep unit tests beside the implementation they prove; put substantial contract tests in a focused family test module. Keep public parity in the migration workflow and concise measured findings under `docs/evidence/<family>/<experiment>-<backend>-<arch>-<date>/`; keep raw JSON receipts in ignored build output. |
 | Generators and inventory | Keep tools in their owning `scripts/` or `tools/` area, grouped by concern when a workflow has multiple files. Generate operation/source mappings from authoritative manifests and registration code. |
 
 Shared low-level code belongs in the nearest existing owner whose callers use

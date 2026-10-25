@@ -43,8 +43,9 @@ pillow-rs/tests/fixtures/imagingft_matrix.json
 pillow-rs/tests/fixtures/outputs/imagingft/
 .kata.local.toml
 
-# Generated evidence receipts stay out of future changes unless reviewed.
-# Already tracked reports remain tracked; force-add a new report when a
-# documentation page links to it.
+# Raw experiment receipts are generated locally and stay ignored. The two
+# maintained public benchmark snapshots are explicit exceptions.
 docs/evidence/**/*.json*
 docs/evidence/**/*.ndjson
+!docs/evidence/benchmark.json
+!docs/evidence/pillow-simd-benchmark.json
