@@ -1,4 +1,3 @@
-
 use super::op_pad;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
