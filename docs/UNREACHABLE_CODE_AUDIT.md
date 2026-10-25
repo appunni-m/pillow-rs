@@ -124,8 +124,10 @@ contain 23 case-level profile-tagged records: `getbbox-i-rowor-20261018.json`,
 `getbbox-f-filled-1024x768.json`, `convolution-uniform-color-trial-20261014.json`,
 `convert-cmyk-trial.json`, and `getdata-hsv-band2-x86-20261014.json`. Their 27
 profile assignments are historical input metadata, not cases selected by the
-active manifest. Four standalone slice manifests and one evidence manifest
-still index these files:
+active manifest. Four standalone slice manifests in the fixture tree still
+index these files. The GetBBox F row-scan evidence snapshot was moved out of the
+tracked tree and purged from repository history; its historical profile scope
+is listed below:
 
 | Historical manifest | Legacy parity profile scope |
 | --- | --- |
@@ -133,7 +135,7 @@ still index these files:
 | `pillow-rs/tests/fixtures/manifest-getbbox-i-rowor-20261018.yaml` | 4 operation policies and all 10 cases select CPU. |
 | `pillow-rs/tests/fixtures/manifest.convert-cmyk-trial.yaml` | 212 operation policies select CPU, with Convert also tagged SIMD/GPU; its one case selects CPU, SIMD, and GPU. |
 | `pillow-rs/tests/fixtures/manifest.getdata-x86-run.yaml` | 2 operation policies select CPU; its one case selects CPU, SIMD, and GPU. |
-| `docs/evidence/getbbox-f-row-scan-20261016/manifest.yaml` | 2 operation policies and its one case select CPU. |
+| GetBBox F row-scan historical evidence manifest (pruned from tracked history) | 2 operation policies and its one case select CPU. |
 
 The evidence YAML search found 26 snapshots with operation-level parity
 profile tags; five of those also index profile-tagged cases. These snapshots

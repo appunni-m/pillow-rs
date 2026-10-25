@@ -139,9 +139,11 @@ manifests and lifecycle metadata stay at their package roots.
 
 Root manifests and project-wide configuration remain at the root because they
 govern multiple owners. Ignored `build/`, `target/`, and cache products are not
-maintained source. Keep raw JSON reports, parity payloads, samples, and
-attestations in ignored build output. Record selected findings in concise
-Markdown and CSV under `docs/evidence/`. The public benchmark inputs
+maintained source. Keep raw reports, manifests, parity payloads, samples,
+profiler output, and intermediate receipts in ignored
+`target/evidence/raw/`, preserving paths relative to `docs/evidence/`. Record
+selected findings in concise Markdown and reviewed CSV ledgers under
+`docs/evidence/`. The public benchmark inputs
 `docs/evidence/benchmark.json` and
 `docs/evidence/pillow-simd-benchmark.json` are the explicit JSON exceptions.
 
