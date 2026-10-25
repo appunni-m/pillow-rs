@@ -95,9 +95,9 @@ pillow-rs-py/src/lib.rs                               # native binding entry
 pillow-rs-py/python/pillow_rs/<family>.py              # Python wrapper, if split
 pillow-rs-js/src/lib.rs                               # JavaScript/WASM entry
 pillow-rs-js/src/<family>.rs                          # binding module, if split
-pillow-rs/tests/fixtures/inputs/<domain>/              # maintained parity/benchmark inputs
+pillow-rs/tests/fixtures/inputs/<domain>/              # maintained specs and selected inputs
 build/migration-parity/                               # ignored run products; outside this contract
-docs/evidence/<family>/<experiment>-<backend>-<arch>-<date>/
+target/evidence/raw/<family>/<experiment>-<backend>-<arch>-<date>/ # ignored receipts
 ```
 
 ## Applying the shared standard across repository owners
@@ -117,44 +117,37 @@ At repository root, preserve package and workflow ownership boundaries:
 
 | Owner | Contents and internal rhythm |
 | --- | --- |
-| `pillow-rs/` | Image semantics in `src/ops/<family>.rs`; data/model domains such as `raster/`, `draw/`, and `font/`; backend implementations below `src/compute/pool_<profile>/`; tests beside internal code or in `tests/<suite>/`. |
+| `pillow-rs/` | Image semantics in `src/ops/<family>.rs`; data/model domains such as `raster/`, `draw/`, and `font/`; backend implementations below `src/compute/pool_<profile>/`; Rust benchmark targets in `benches/`; tests beside internal code or in `tests/<suite>/`. |
 | `pillow-rs-py/`, `pillow-rs-js/` | Host conversion and delegation by family where a module boundary exists; keep crate-root registration together until family-specific work warrants a module. |
 | `pillow-rs-parallel/` | Companion-wheel packaging and release metadata for the optional Parallel CPU binding; it owns no image algorithms. |
 | `scripts/` | Small standalone commands can remain one file; multi-stage workflows live in `scripts/<workflow>/` with an entry point and focused stage modules. Keep test modules beside the workflow they exercise. |
 | `tools/` | Standalone maintained tools stay under a tool-specific owner and concern; ignored build products do not define source layout. |
+| `.githooks/` | Keep tracked Git hooks small; they enforce repository checks by invoking maintained scripts, and are enabled through an explicit setup target. |
 | `.claude/` | Repository-local agents and skills stay grouped by workflow or domain, with examples and references beneath the owning skill. |
 | `site-assets/` | Documentation-site assets stay grouped by site concern when a concern has multiple maintained files; small shared assets may remain at this owner level. |
-| `pillow-rs/tests/fixtures/` | Public fixture manifest and input payloads grouped by contract/domain with stable IDs; generated outputs remain under ignored build directories. |
-| `docs/evidence/` | Concise experiment summaries and reviewed CSV ledgers grouped by family and experiment; keep raw receipts in ignored build output. |
+| `pillow-rs/tests/fixtures/` | Keep the public fixture manifest and input index authoritative; deterministic parity inputs and generated binary assets are rebuilt by the fixture generator and ignored. |
+| `target/evidence/raw/` | Ignored local reports, samples, matrices, and receipts; publish successful benchmark artifacts through the docs workflow. |
 | `.github/workflows/` | One workflow per lifecycle purpose (CI, docs, benchmarks, release); shared behavior belongs in maintained scripts or composite actions rather than copied workflow bodies. |
 
 Reviewed quality-tool ratchet baselines stay beside their enforcing checkers,
 for example `scripts/rust_size_baseline.json` and
 `scripts/public_api_boundary_baseline.json`.
 
-Cargo examples stay as named targets in `pillow-rs/examples/`. Embedded assets
-stay with their owning domain (`src/font/`, `src/data/`) or operation family
+Cargo examples stay as named targets in `pillow-rs/examples/`, and Rust benchmark
+targets stay in `pillow-rs/benches/`. Embedded assets stay with their owning domain (`src/font/`, `src/data/`) or operation family
 (`src/ops/lut_<family>.*`); do not create a generic asset bucket. Package
 manifests and lifecycle metadata stay at their package roots.
 
 Root manifests and project-wide configuration remain at the root because they
 govern multiple owners. Ignored `build/`, `target/`, and cache products are not
-maintained source. Keep raw reports, manifests, parity payloads, samples,
-profiler output, and intermediate receipts in ignored
-`target/evidence/raw/`, preserving paths relative to `docs/evidence/`. Record
-selected findings in concise Markdown and reviewed CSV ledgers under
-`docs/evidence/`. The public benchmark inputs
-`docs/evidence/benchmark.json` and
-`docs/evidence/pillow-simd-benchmark.json` are the explicit JSON exceptions.
-
-Existing flat evidence bundles such as `docs/evidence/<family>-<experiment>-.../`
-retain their immutable paths because campaign notes and local ledgers refer to
-them. They are migration debt, not a second convention. Put all new evidence
-under `docs/evidence/<family>/<experiment>-<backend>-<arch>-<date>/`; move an
-old bundle only when its references are updated together.
-The cross-family campaign ledger
-`docs/evidence/performance-optimization-local-runs.csv` stays at the evidence
-root as a shared index; it is not an experiment bundle.
+maintained source. Keep raw reports, manifests, samples, profiler output, and
+intermediate receipts under ignored `target/evidence/raw/`, grouped by family,
+experiment, backend, architecture, and date. Benchmark snapshots are generated
+by Actions and passed to the documentation build as artifacts. If no eligible
+artifact is available, the site shows that results are unavailable; it does
+not commit or substitute a historical snapshot. Historical campaign notes may
+identify run outputs that are absent from a fresh checkout. Record reviewed
+conclusions in maintained documentation.
 
 The root ownership map remains the one in `docs/REPO_MAP.md`; this document
 defines the internal path rhythm. Do not introduce a second top-level bucket
@@ -168,7 +161,7 @@ for operations or a parallel hand-maintained list of families.
 | GPU execution | Keep family admission/dispatch with the GPU operation path and shaders under `pool_gpu/shaders/<family>/`. Keep pipeline selection and receipts explicit. |
 | Python and JavaScript | Keep conversion and delegation in their package owners. Use the same family name for a dedicated wrapper/module; existing multi-family user-facing modules and crate-root registration remain valid when they are the natural boundary. |
 | Parity and benchmark inputs | Keep the existing migration manifest as the operation/workload authority. Add cases and workloads through its established input tree and preserve stable IDs; do not create parallel per-layer operation lists. |
-| Tests and evidence | Keep unit tests beside the implementation they prove; put substantial contract tests in a focused family test module. Keep public parity in the migration workflow and concise measured findings under `docs/evidence/<family>/<experiment>-<backend>-<arch>-<date>/`; keep raw JSON receipts in ignored build output. |
+| Tests and evidence | Keep tests beside the implementation they prove; put substantial contract cases in a focused family test module. Keep public parity in the migration workflow, concise measured findings in maintained docs, and raw reports and receipts under ignored `target/evidence/raw/`. |
 | Generators and inventory | Keep tools in their owning `scripts/` or `tools/` area, grouped by concern when a workflow has multiple files. Generate operation/source mappings from authoritative manifests and registration code. |
 
 Shared low-level code belongs in the nearest existing owner whose callers use

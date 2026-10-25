@@ -47,6 +47,8 @@ for the separate Parallel CPU execution profile; it does not enable SIMD or GPU.
 
 The [compatibility guide](COMPATIBILITY.md) explains the supported scope.
 GPU availability and acceleration depend on the operation and host.
+For a side-by-side Rust API and feature comparison with image-rs, see
+[pillow-rs and image-rs](RUST_COMPARISON.md).
 
 ## Ownership and I/O
 

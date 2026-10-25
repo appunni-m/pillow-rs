@@ -251,6 +251,12 @@ def classify_path(
             "rule": "package_benchmark_tool",
             "reason": "Binding-specific benchmark tools are grouped under their package bench concern.",
         }
+    if path.startswith("pillow-rs/benches/") and path.endswith(".rs"):
+        return {
+            "assessment": "matches_benchmark_concern_shape",
+            "rule": "package_benchmark_tool",
+            "reason": "Rust core benchmark targets are grouped under the owning crate's benches directory.",
+        }
     if path.startswith("pillow-rs/examples/") and path.endswith(".rs"):
         return {
             "assessment": "matches_example_entrypoint_shape",
@@ -406,25 +412,20 @@ def classify_path(
             "reason": "The public compatibility namespace keeps its user-facing modules together.",
         }
 
-    if path == "docs/evidence/performance-optimization-local-runs.csv":
-        return {
-            "assessment": "supported_root_role",
-            "rule": "shared_evidence_ledger",
-            "reason": "A cross-family campaign ledger is a repository-level evidence index, not an experiment bundle.",
-        }
     if path.startswith("docs/evidence/"):
         relative = parts[2:]
         if len(relative) >= 3:
             return {
-                "assessment": "matches_family_experiment_shape",
-                "rule": "family_experiment_evidence",
-                "reason": "Evidence is nested below its owning family and experiment.",
+                "assessment": "review_candidate",
+                "rule": "generated_evidence_should_not_be_committed",
+                "expected_shape": "target/evidence/raw/<family>/<experiment>/<artifact>",
+                "reason": "Raw benchmark and parity evidence is workflow or local output; committed results belong in concise, maintained documentation.",
             }
         return {
-            "assessment": "documented_migration_debt" if exhaustive else "review_candidate",
-            "rule": "flat_evidence_bundle",
-            "expected_shape": "docs/evidence/<family>/<experiment>/<artifact>",
-            "reason": "This historical path does not expose both a family and experiment directory; preserve it until its references can be moved together.",
+            "assessment": "review_candidate",
+            "rule": "generated_evidence_should_not_be_committed",
+            "expected_shape": "target/evidence/raw/<artifact>",
+            "reason": "Generated benchmark and parity evidence belongs in ignored target output; retain only reviewed conclusions in tracked documentation.",
         }
 
     simd_adapter_prefix = "pillow-rs/src/compute/pool_simd/ops/adapters/"

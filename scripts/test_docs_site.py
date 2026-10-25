@@ -252,12 +252,12 @@ class BenchmarkTests(unittest.TestCase):
                 config = read_config(root)
             self.assertEqual(config["pillow_simd_benchmark"]["snapshot"], "snapshot.json")
 
-    def test_committed_pillow_simd_snapshot_is_used_without_download(self) -> None:
+    def test_pillow_simd_snapshot_is_unavailable_without_download(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "documentation.json").write_text(json.dumps({
                 "repository": "owner/repo",
-                "pillow_simd_benchmark": {"snapshot": "docs/evidence/pillow-simd-benchmark.json"},
+                "pillow_simd_benchmark": {"snapshot": None},
             }))
             env = {
                 "DOCS_BENCHMARK_SNAPSHOT": "",
@@ -267,10 +267,7 @@ class BenchmarkTests(unittest.TestCase):
             }
             with patch.dict("os.environ", env):
                 config = read_config(root)
-            self.assertEqual(
-                config["pillow_simd_benchmark"]["snapshot"],
-                "docs/evidence/pillow-simd-benchmark.json",
-            )
+            self.assertIsNone(config["pillow_simd_benchmark"]["snapshot"])
 
     def test_missing_and_invalid_measurements_never_become_zero(self) -> None:
         self.assertIsNone(number(None))

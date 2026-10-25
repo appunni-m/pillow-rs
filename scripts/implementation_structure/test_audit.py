@@ -19,19 +19,15 @@ from scripts.implementation_structure.audit import (
 
 
 class PathClassificationTests(unittest.TestCase):
-    def test_nested_evidence_has_family_and_experiment(self) -> None:
+    def test_nested_generated_evidence_is_not_supported_as_tracked_content(self) -> None:
         result = classify_path("docs/evidence/filter/rgb-blur-simd-x86-20261019/README.md")
-        self.assertEqual(result["assessment"], "matches_family_experiment_shape")
+        self.assertEqual(result["assessment"], "review_candidate")
+        self.assertEqual(result["rule"], "generated_evidence_should_not_be_committed")
 
     def test_flat_evidence_is_review_only(self) -> None:
         result = classify_path("docs/evidence/filter-rgb-blur-simd-x86-20261019/README.md")
         self.assertEqual(result["assessment"], "review_candidate")
-        self.assertEqual(result["rule"], "flat_evidence_bundle")
-        whole_tree = classify_path(
-            "docs/evidence/filter-rgb-blur-simd-x86-20261019/README.md",
-            exhaustive=True,
-        )
-        self.assertEqual(whole_tree["assessment"], "documented_migration_debt")
+        self.assertEqual(result["rule"], "generated_evidence_should_not_be_committed")
 
     def test_fixture_payload_requires_a_domain(self) -> None:
         self.assertEqual(
@@ -68,9 +64,10 @@ class PathClassificationTests(unittest.TestCase):
         self.assertEqual(result["rule"], "flat_gpu_shader")
         self.assertEqual(result["assessment"], "review_candidate")
 
-    def test_shared_perf_ledger_is_a_supported_root_role(self) -> None:
+    def test_generated_evidence_path_is_a_review_candidate(self) -> None:
         result = classify_path("docs/evidence/performance-optimization-local-runs.csv")
-        self.assertEqual(result["rule"], "shared_evidence_ledger")
+        self.assertEqual(result["rule"], "generated_evidence_should_not_be_committed")
+        self.assertEqual(result["expected_shape"], "target/evidence/raw/<artifact>")
 
     def test_rust_size_baseline_is_quality_tool_configuration(self) -> None:
         result = classify_path("scripts/rust_size_baseline.json")

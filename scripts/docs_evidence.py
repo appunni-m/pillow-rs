@@ -538,16 +538,23 @@ def contract_code(path: str, signature: str) -> str:
 
 
 def render_benchmarks(root: Path, config: dict, output: Path) -> str:
-    source = root / config["benchmark"]["source"]
-    if not source.exists():
-        (output / "benchmark-details.md").write_text(
-            "# Benchmark measurement details\n\nNo measurement is available. "
-            "See the [contributor benchmark guide](contributing.md#performance-work).\n"
+    source_name = config.get("benchmark", {}).get("source")
+    source = root / source_name if source_name else None
+    if source is None or not source.is_file():
+        unavailable = (
+            "No benchmark snapshot is available for this documentation build. "
+            "No older measurement is substituted, and unavailable does not mean zero. "
+            "A successful trusted benchmark workflow publishes the artifact used by a later build."
         )
-        return ("# Benchmark results\n\nNo benchmark snapshot has been published for this project yet. "
-                "This is **unmeasured**, not a zero-duration result or a performance claim.\n\n"
+        (output / "benchmark-details.md").write_text(
+            "# Benchmark measurement details\n\n"
+            + unavailable
+            + " See the [contributor benchmark guide](contributing.md#performance-work).\n"
+        )
+        return ("# Benchmark results\n\n**Not available for this build.** "
+                + unavailable + "\n\n"
                 "See the [contributor benchmark guide](contributing.md#performance-work) "
-                "for the maintained command and CI artifact.\n")
+                "for the maintained benchmark workflow.\n")
     snapshot = json.loads(source.read_text())
     snapshot = normalize_parallel_cpu_snapshot(snapshot)
     simd_source = config.get("pillow_simd_benchmark", {}).get("snapshot")
@@ -704,14 +711,28 @@ def render_support(root: Path, config: dict, output: Path) -> str:
     if config["support"]["kind"] == "pillow":
         counts: Counter[tuple[str, str]] = Counter()
         paths = {}
+        missing_inputs = []
         for relative in document["input_index"]["parity"]:
-            for case in json.loads((source.parent / relative).read_text())["cases"]:
+            input_path = source.parent / relative
+            if not input_path.is_file():
+                missing_inputs.append(relative)
+                continue
+            for case in json.loads(input_path.read_text())["cases"]:
                 key = (case["surface"], case["operation"])
                 counts[key] += 1
                 paths[key] = f"https://github.com/{config['repository']}/blob/main/{source.parent.relative_to(root)}/{relative}"
-        lines = ["# API support inventory", "", "Generated from the public manifest and indexed input files. "
+        lines = ["# API support inventory", "", "Generated from the public manifest. "
                  "A declared status and an input count do not prove all argument combinations. "
-                 "[Maturity and release evidence](compatibility.md) identify the executed scope.", "",
+                 "[Maturity and release evidence](compatibility.md) identify the executed scope.", ""]
+        if missing_inputs:
+            lines += [
+                "**Input case counts are unavailable for this build.** Generated parity inputs "
+                "are absent; regenerate them with `make migration-parity-inputs` to show counts.",
+                "",
+            ]
+        else:
+            lines += ["Input case counts below come from the indexed parity inputs.", ""]
+        lines += [
                  f"Manifest SHA-256: `{hashlib.sha256(source.read_bytes()).hexdigest()}`.", ""]
         for surface in document["surfaces"]:
             lines += ["", f"## {surface['id']}", "", "| Public path | Declared support | Input cases | Contract |", "| --- | --- | ---: | --- |"]
@@ -719,7 +740,10 @@ def render_support(root: Path, config: dict, output: Path) -> str:
                 key = (surface["id"], operation["id"])
                 path = operation["source"]["path"]
                 status = ", ".join(t["support"]["status"] for t in operation["targets"])
-                witness = f"[{counts[key]}]({paths[key]})" if key in paths else "0 — unmeasured"
+                if missing_inputs:
+                    witness = "Unavailable"
+                else:
+                    witness = f"[{counts[key]}]({paths[key]})" if key in paths else "0 — unmeasured"
                 signature = contract_code(path, operation["source"]["signature"])
                 lines.append(f"| `{path}` | {status} | {witness} | {signature} |")
         return "\n".join(lines) + "\n"

@@ -25,8 +25,8 @@ FIXTURE_ROOT = ROOT / "pillow-rs" / "tests" / "fixtures"
 DEFAULT_REPORT = ROOT / "target" / "coverage" / "migration-parity-pillow.json"
 DEFAULT_RECEIPT = ROOT / "build" / "migration-parity" / "pillow-oracle-coverage-result.json"
 DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
-DEFAULT_OUTPUT = ROOT / "docs" / "coverage-pillow-missing-feature-manifest.json"
-DEFAULT_MARKDOWN = ROOT / "docs" / "coverage-pillow-missing-feature-manifest.md"
+DEFAULT_OUTPUT = ROOT / "target" / "evidence" / "raw" / "coverage-pillow-missing-feature-manifest.json"
+DEFAULT_MARKDOWN = ROOT / "target" / "evidence" / "raw" / "coverage-pillow-missing-feature-manifest.md"
 
 
 def sha256_file(path: Path) -> str:

@@ -357,7 +357,7 @@ GPU counts from executor counters, and establishes completion from exported
 outputs plus zero live jobs. This was a genuine diagnostic reporting defect;
 it did not indicate a parity or backend execution failure. Per-run data is
 recorded in
-[`performance-optimization-local-runs.csv`](evidence/performance-optimization-local-runs.csv).
+`target/evidence/raw/performance-optimization-local-runs.csv`.
 No coverage was run.
 
 ### Grayscale 256-thread workgroup follow-up, 2026-10-09

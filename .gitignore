@@ -20,6 +20,13 @@ coverage/report.json
 .report.json
 .python-version
 
+# Generated local exports and release/evidence helpers.
+/SHA256SUMS
+/kata-export-*.jsonl
+/outputs/
+/docs/coverage-pillow-missing-feature-manifest.json
+/docs/coverage-pillow-missing-feature-manifest.md
+
 # Codex-local worktree settings and probes are generated outside the source
 # package and must not make a release checkout appear dirty.
 /.cargo/
@@ -29,6 +36,7 @@ coverage/report.json
 .codex-subagents/
 .worktrees/
 /worktree/
+/.claude/settings.json
 venv/
 .venv/
 .venv-docs/
@@ -46,12 +54,12 @@ pillow-rs/tests/fixtures/outputs/imagingft/
 /pillow-rs/tests/fixtures/assets/generated/*.bin
 .kata.local.toml
 
-# Raw experiment receipts are generated locally and stay ignored. The two
-# maintained public benchmark snapshots are explicit exceptions.
+# Raw experiment receipts and benchmark snapshots are generated outputs. The
+# docs site consumes trusted Actions artifacts and shows no data when none is
+# available; snapshots are not checked into this repository.
 docs/evidence/**/*.json*
 docs/evidence/**/*.ndjson
-!docs/evidence/benchmark.json
-!docs/evidence/pillow-simd-benchmark.json
+docs/evidence/**/*.csv
 docs/evidence/**/*.gz
 docs/evidence/**/*.log
 docs/evidence/**/*.md

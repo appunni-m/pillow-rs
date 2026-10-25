@@ -30,7 +30,7 @@ except ModuleNotFoundError:  # imported as ``scripts.build_public_api_inventory`
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON_SOURCE = ROOT / "pillow-rs-py/python"
-DEFAULT_OUTPUT = ROOT / "docs/evidence/performance-optimization-public-api.csv"
+DEFAULT_OUTPUT = ROOT / "target/evidence/raw/performance-optimization-public-api.csv"
 EXPECTED_PIL = ROOT / "pillow-rs-py/python/PIL/__init__.py"
 
 FIELDS = (

@@ -59,6 +59,7 @@ nav:
       - GPU batching: image-batching.md
       - JavaScript and browsers: javascript.md
       - Rust: rust.md
+      - Rust comparison: rust-comparison.md
       - Supported APIs and limitations: compatibility.md
       - Operation inventory: api-support.md
   - Performance:

@@ -67,6 +67,16 @@ wide = "1.6.1"
 # SIMD work or involve Rayon in SIMD adapters or GPU dispatch.
 rayon = { version = "1", optional = true }
 
+[dev-dependencies]
+# Keep the Rust-to-Rust comparison serial and codec-independent. The bench
+# uses image's pixel operations only; its default Rayon and format features are
+# deliberately excluded.
+image = { version = "=0.25.10", default-features = false }
+
+[[bench]]
+name = "image_rs_comparison"
+harness = false
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3"
 

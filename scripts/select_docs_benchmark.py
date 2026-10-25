@@ -131,7 +131,7 @@ def main() -> None:
     if selected:
         message = f"Using benchmark run {selected['run_id']} at {selected['head_sha']}"
     else:
-        message = "Using the committed benchmark snapshot: no eligible hosted artifact for this event"
+        message = "No eligible hosted benchmark artifact; benchmark pages will show data as unavailable"
     output_path = os.environ.get("GITHUB_OUTPUT")
     if output_path and selected:
         with open(output_path, "a", encoding="utf-8") as output:

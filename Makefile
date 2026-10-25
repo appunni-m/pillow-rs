@@ -172,6 +172,7 @@ help: ## Show common contributor commands
 	  "  make build          Install the replacement for application use" \
 	  "  make test           Full backend and Node/browser campaign" \
 	  "  make quality        Run consolidated static quality gates" \
+	  "  make install-hooks  Enable the local large-file pre-commit guard" \
 	  "  make fmt / clippy   Check Rust formatting / lint individually" \
 	  "  make bench          Run the declared benchmark cohort" \
 	  "  make docs-setup     Install hash-locked site tools" \
@@ -288,6 +289,8 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-inputs$(NC) Build parity, coverage, and benchmark inputs\n"
 	@printf "\n$(BOLD)Lint$(NC)\n"
 	@printf "  $(CYAN)make quality$(NC)       Run Rust, repository, and source-policy quality gates\n"
+	@printf "  $(CYAN)make large-files-check$(NC) Reject unapproved files at or above 1 MiB in the latest diff\n"
+	@printf "  $(CYAN)make install-hooks$(NC)  Enable the local large-file pre-commit guard\n"
 	@printf "  $(CYAN)make checkstyle$(NC)     Check Rust file/function size limits and baseline growth\n"
 	@printf "  $(CYAN)make checkstyle-update-baseline$(NC) Record reviewed size and API-boundary reductions\n"
 	@printf "  $(CYAN)make fmt$(NC)            Check Rust formatting\n"
@@ -1063,7 +1066,7 @@ migration-parity-changed-line-coverage: ## Attribute changed Rust lines to sourc
 
 
 # ── Lint ──────────────────────────────────────────────────────────────────────
-.PHONY: fmt fmt-fix clippy clippy-core checkstyle checkstyle-update-baseline quality lint
+.PHONY: fmt fmt-fix clippy clippy-core checkstyle checkstyle-update-baseline large-files-check install-hooks quality lint
 
 fmt: pillow-rs-public-api-boundary ## Check Rust formatting
 	$(CARGO) fmt --check
@@ -1086,7 +1089,17 @@ checkstyle-update-baseline: ## Re-record existing over-limit files/functions; re
 	$(PYTHON) scripts/check_rust_file_sizes.py --update-baseline
 	$(PYTHON) scripts/check_public_api_boundary.py --update-wildcard-baseline
 
-quality: repo-map-check docs-lint fmt checkstyle ## Run consolidated static quality checks
+LARGE_FILES_REVISION ?= HEAD^1..HEAD
+
+large-files-check: ## Reject unapproved files at or above 1 MiB in a Git diff
+	$(PYTHON) scripts/check_large_files.py --staged
+	$(PYTHON) scripts/check_large_files.py --revision "$(LARGE_FILES_REVISION)"
+
+install-hooks: ## Enable the repository's local pre-commit guard
+	git config --local core.hooksPath .githooks
+	@echo "Installed .githooks as this checkout's Git hooks directory."
+
+quality: large-files-check repo-map-check docs-lint fmt checkstyle ## Run consolidated static quality checks
 	PYTHON="$(PYTHON)" CARGO="$(CARGO)" bash scripts/lint.sh --supplemental
 
 lint: quality ## Compatibility alias for the consolidated quality gate

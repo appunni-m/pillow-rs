@@ -7,7 +7,7 @@ DOCS_PORT ?= 8000
 DOCS_BENCHMARK_KIND ?= pillow
 DOCS_BENCHMARK_SOURCE ?= build/migration-parity/benchmark-result.json
 DOCS_BENCHMARK_PARALLEL_SOURCE ?=
-DOCS_BENCHMARK_OUTPUT ?= docs/evidence/benchmark.json
+DOCS_BENCHMARK_OUTPUT ?= target/evidence/raw/benchmark.json
 DOCS_REPOSITORY ?= appunni-m/pillow-rs
 
 .PHONY: docs docs-setup docs-build docs-prepare docs-serve docs-test docs-lint docs-lock docs-benchmark docs-examples

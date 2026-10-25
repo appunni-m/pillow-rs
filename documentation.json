@@ -36,6 +36,11 @@
       "audience": "user"
     },
     {
+      "source": "docs/RUST_COMPARISON.md",
+      "output": "rust-comparison.md",
+      "audience": "user"
+    },
+    {
       "source": "docs/COMPATIBILITY.md",
       "output": "compatibility.md",
       "audience": "user"
@@ -82,10 +87,10 @@
   },
   "benchmark": {
     "kind": "pillow",
-    "source": "docs/evidence/benchmark.json"
+    "source": null
   },
   "pillow_simd_benchmark": {
-    "snapshot": "docs/evidence/pillow-simd-benchmark.json"
+    "snapshot": null
   },
   "rust_example": {
     "source": "docs/RUST.md",

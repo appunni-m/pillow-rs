@@ -532,17 +532,21 @@ correctness gates, and requested/actual backends. It retains failed subjects and
 missing measurements. It does not aggregate unrelated operations into a headline
 speedup. Hosted runners are useful observations, not controlled laboratory hosts.
 
-### Complete published optimization matrix
+### Historical optimization matrix and local reports
 
-The [published full benchmark JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json)
-and the separate [Pillow-SIMD JSON](https://appunni-m.github.io/pillow-rs/assets/pillow-simd-benchmark.json)
-can be flattened into the complete per-workload record at
-[`docs/evidence/performance-optimization-matrix.csv`](evidence/performance-optimization-matrix.csv).
-The companion [public API census](evidence/performance-optimization-public-api.csv)
+The docs site uses the latest eligible benchmark workflow artifacts when they
+are available. If no artifact is selected, its benchmark pages show that data
+is unavailable and do not substitute a committed or older snapshot. Historical
+matrix counts below describe the dated run recorded in the campaign notes;
+they are not a current benchmark claim.
+
+The full per-workload matrix, public API census, and per-operation matrix are
+generated locally under ignored `target/evidence/raw/`; they are not committed.
+The API census
 enumerates the loaded `PIL` facade, the native extension, each module's explicit
 `__all__` exports or locally defined public functions and classes, public class
 methods and properties, and the selected manifest mapping. Imported aliases
-aren't repeated as new API paths in every module. The [per-operation matrix](evidence/performance-optimization-operation-matrix.csv)
+aren't repeated as new API paths in every module. The per-operation matrix at `target/evidence/raw/performance-optimization-operation-matrix.csv`
 has four profile rows for each of the 212 operations selected by the generated
 manifest, for 848 rows total. The census separately records 196 public paths
 outside the selected manifest; they are outside the matrix denominator and do
@@ -554,7 +558,8 @@ eligible speed ratios, and separate CPU, SIMD, GPU-latency, and GPU-throughput
 goal fields. A GPU throughput status of `not_measured` is deliberate: the
 published one-request latency cannot establish sustained throughput.
 
-Rebuild it from the raw published assets with:
+When both published benchmark assets are available, regenerate the local reports
+with:
 
 ```sh
 curl --compressed -fsSL https://appunni-m.github.io/pillow-rs/assets/benchmark.json -o /tmp/pillow-rs-benchmark.json
@@ -563,10 +568,11 @@ PYTHONPATH=pillow-rs-py/python .venv/bin/python scripts/build_public_api_invento
 python3 scripts/build_performance_optimization_matrix.py \
   --benchmark-snapshot /tmp/pillow-rs-benchmark.json \
   --pillow-simd-snapshot /tmp/pillow-rs-pillow-simd.json \
-  --public-api-inventory docs/evidence/performance-optimization-public-api.csv
+  --public-api-inventory target/evidence/raw/performance-optimization-public-api.csv
 ```
 
-The current published workload matrix has 9,376 rows: 9,229 records from the
+The last complete published workload matrix (refreshed 2026-10-23 from the
+2026-10-21 snapshots) had 9,376 rows: 9,229 records from the
 clean full snapshot across 707 workloads and 147 records from the separate
 Pillow-SIMD snapshot across 37 workloads. Both snapshots identify clean
 revision `5db7197532eb08b37d748a78fb789545ab8aa577`. The full JSON was measured
@@ -1449,7 +1455,7 @@ Pillow medians stayed near 0.41 ms. A SIMD byte-stream scan raised SIMD
 latency from 205.958 to 262.438 µs with adjacent Pillow medians of 406.584 and
 413.042 µs. Keep the ordinary projection scans. The per-run results, including
 the route-missing intermediate diagnostic, are preserved in
-[`performance-optimization-local-runs.csv`](evidence/performance-optimization-local-runs.csv)
+`target/evidence/raw/performance-optimization-local-runs.csv`
 and the ignored `build/performance-optimization/getprojection-*.json`
 artifacts. The local arm64 runs do not validate the published x86 SIMD gap or
 the separate Pillow-SIMD comparison.
@@ -1599,7 +1605,7 @@ and 18.9% below the single pre-change CPU run at 376.708 µs. SIMD stayed near
 Pillow at 645.291 and 616.500 µs, while GPU was 10.6–16.8% slower than SIMD;
 sustained GPU throughput is unmeasured. The per-run receipts and resource
 counts are preserved separately in
-[`performance-optimization-local-runs.csv`](evidence/performance-optimization-local-runs.csv);
+`target/evidence/raw/performance-optimization-local-runs.csv`;
 the hosted ranking matrix is unchanged. Keep grayscale open: this one CMYK
 workload does not clear the hosted x86 YCbCr gap or the SIMD and GPU targets.
 A candidate replacing `saturating_sub` for byte K with ordinary subtraction
@@ -1642,7 +1648,7 @@ The CPU candidate was 56–60% slower than the direct formula on both A/B/A
 candidate runs. It was reverted; the test-only helper remains available for
 exhaustive checks. The three parity gates, route proofs, and resource receipts
 are in
-[performance-optimization-local-runs.csv](evidence/performance-optimization-local-runs.csv).
+`target/evidence/raw/performance-optimization-local-runs.csv`.
 This Mac ARM RGB result does not replace the hosted x86 YCbCr ranking row or
 complete grayscale across modes and backends. No coverage was run.
 
@@ -1865,7 +1871,7 @@ separate queued-window diagnostic also remains below SIMD sustained throughput.
 Keep this AArch64 CPU candidate, but leave grayscale open across remaining
 modes, sizes, x86 CPU/Pillow-SIMD comparison, the 5× SIMD target, and GPU
 latency/throughput. Full reports and per-profile receipts are recorded in
-[`performance-optimization-local-runs.csv`](evidence/performance-optimization-local-runs.csv)
+`target/evidence/raw/performance-optimization-local-runs.csv`
 and ignored `build/performance-optimization/` artifacts. No commit, push, or
 coverage run was made.
 
@@ -1999,7 +2005,7 @@ issue open because SIMD, GPU-vs-SIMD, other modes/sizes, the hosted x86 CPU
 row, Parallel CPU, and throughput targets remain. This local dirty-worktree
 result does not alter the canonical full-runner matrix. The four reports and
 parity sidecars are under ignored `build/migration-parity/`; their 16 profile
-rows bring `docs/evidence/performance-optimization-local-runs.csv` to 1,738
+rows bring `target/evidence/raw/performance-optimization-local-runs.csv` to 1,738
 data rows. No coverage was run.
 
 ### Grayscale completed-work queue throughput
@@ -2169,7 +2175,7 @@ was not measured. Keep getprojection open, especially for the published
 x86_64 sparse-CMYK SIMD gap. No genuine test defect was found and no coverage
 was run. The 24 profile rows and parity evidence for candidate and control
 cohorts are recorded in
-`docs/evidence/performance-optimization-local-runs.csv`.
+`target/evidence/raw/performance-optimization-local-runs.csv`.
 
 ### Rejected tiny-RGB getprojection axis masks
 
@@ -2185,7 +2191,7 @@ mask specialization. The 15×3 GPU request actually ran CPU and is excluded;
 the 17×4 GPU runs were real but much slower than SIMD. Keep getprojection
 open. No genuine test defect was found and no coverage was run. All 36
 candidate profile rows are retained in
-`docs/evidence/performance-optimization-local-runs.csv`.
+`target/evidence/raw/performance-optimization-local-runs.csv`.
 
 ### Retained exact-tuple RGB Image.new conversion
 
@@ -2205,7 +2211,7 @@ slower than SIMD, while the 15×3 GPU request fell back to CPU and is excluded.
 Sustained GPU throughput is unmeasured. Keep this input conversion fast path,
 but do not count the getprojection operation complete. No genuine test defect
 was found and no coverage was run. The 36 profile rows are in
-`docs/evidence/performance-optimization-local-runs.csv`; the direct
+`target/evidence/raw/performance-optimization-local-runs.csv`; the direct
 `Image.new` parity gate is `migration-parity-08df3ceebc4c43cd986aef2330753f92`.
 
 ### Rejected exact-integer RGB Image.new conversion
@@ -2221,7 +2227,7 @@ candidate did not show a repeatable end-to-end gain. Revert the integer branch
 and retain only the exact-tuple fast path. The dense tuple workloads did not
 exercise the integer branch. The three 36-row run groups, including
 actual-backend and fallback receipts, are in
-`docs/evidence/performance-optimization-local-runs.csv`. No genuine test defect
+`target/evidence/raw/performance-optimization-local-runs.csv`. No genuine test defect
 was found and no coverage was run.
 
 ### Rejected narrow RGB row-local CPU scan
@@ -2236,7 +2242,7 @@ the row scan was reverted. These tiny end-to-end workflows remain noisy and
 include setup and result materialization. GPU executed on 17×4; the 15×3 GPU
 request fell back to CPU and is excluded from GPU comparisons. The six run
 groups (72 profile rows) are in
-`docs/evidence/performance-optimization-local-runs.csv`. No genuine test defect
+`target/evidence/raw/performance-optimization-local-runs.csv`. No genuine test defect
 was found and no coverage was run.
 
 ### RGB getprojection terminal backend-attribution repair
@@ -3171,7 +3177,7 @@ host output. Its isolated-call latency remained 4.0–9.1× slower than SIMD, an
 these single-operation concurrency-one runs did not measure sustained
 throughput. Keep `PIL.Image.merge` open until the x86 SIMD gap and GPU latency
 and throughput targets are addressed. Full receipts are in
-`docs/evidence/performance-optimization-local-runs.csv`; the hosted matrix is
+`target/evidence/raw/performance-optimization-local-runs.csv`; the hosted matrix is
 unchanged. No genuine test defect was found and no coverage was run.
 
 ### Native `L` GaussianBlur weighted SIMD row kernel — 2026-10-10
@@ -3610,7 +3616,7 @@ implementation. This closes the bounded trial, not Rotate across all modes,
 sizes, SIMD, Parallel CPU, or GPU. The report and source/build identities are
 in [the Rotate row-span evidence](evidence/rotate-rowspan-abba-arm64-20261016/README.md),
 and the 16 Pillow/CPU rows are in
-[`performance-optimization-local-runs.csv`](evidence/performance-optimization-local-runs.csv).
+`target/evidence/raw/performance-optimization-local-runs.csv`.
 No coverage, commit, or push was run; this does not advance the 33-item batch.
 
 ### RGB 5×5 BLUR ring source-matched CPU A–B–B–A — 2026-10-16

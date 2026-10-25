@@ -25,7 +25,7 @@ before replacing Pillow.
 | --- | --- | --- |
 | Python | `pip install pillow-rs`; import `PIL` | [Installation](https://appunni-m.github.io/pillow-rs/installation/) |
 | Node.js or browser | `npm install pillow-rs` | [JavaScript quickstart](https://appunni-m.github.io/pillow-rs/javascript/) |
-| Rust | Cargo dependency `pillow-rs`; import `pillow_rs` | [Rust quickstart](https://appunni-m.github.io/pillow-rs/rust/) |
+| Rust | Cargo dependency `pillow-rs`; import `pillow_rs` | [Rust quickstart](https://appunni-m.github.io/pillow-rs/rust/) · [image-rs comparison](https://appunni-m.github.io/pillow-rs/rust-comparison/) |
 
 For Python, use a fresh environment. Pillow and pillow-rs both provide the
 `PIL` namespace, so install them in separate environments.

@@ -22,7 +22,9 @@ enabled.
 | Review repetitive cases | `make migration-parity-reduction MIGRATION_REDUCTION_ARGS='--candidates <pairs.json> --output-dir <directory>'` | Measures removal batches and binary restoration against separate CPU/SIMD/GPU baselines; see [coverage](COVERAGE.md#reduce-repetitive-parity-inputs) |
 | Complete runtime campaign | `make test` | Runs backend, Node/browser, and reverse Pillow coverage lanes |
 | Format check / fix | `make fmt` / `make fmt-fix` | Checks / changes Rust formatting |
-| Consolidated quality gate | `make quality` | Runs rustfmt, Clippy, Rust file/function size ratchets, API-boundary and architecture checks, repository-map and documentation checks, and source/binding/spec policies |
+| Consolidated quality gate | `make quality` | Runs the large-file diff guard, rustfmt, Clippy, Rust file/function size ratchets, API-boundary and architecture checks, repository-map and documentation checks, and source/binding/spec policies |
+| Local large-file commit guard | `make install-hooks` | Installs a pre-commit hook that rejects newly staged files at or above 1 MiB unless their exact path has a reviewed size ceiling and reason in `scripts/check_large_files.py` |
+| Large-file diff guard | `make large-files-check` | Checks the latest commit diff for files at or above 1 MiB that lack an exact-path approval |
 | Compatibility lint command | `make lint` | Alias for `make quality` |
 | Rust checkstyle | `make checkstyle` | Reports files from 800 lines and functions over 60 lines; fails on new code over 1,000/100 lines or growth beyond a legacy baseline |
 | Checkstyle baseline maintenance | `make checkstyle-update-baseline` | Records reviewed file/function reductions and lowers the per-file wildcard-use baseline; inspect all baseline diffs |
