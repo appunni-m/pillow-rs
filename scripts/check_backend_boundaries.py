@@ -35,6 +35,10 @@ TOP_LEVEL_FUNCTION = re.compile(
     r"(?m)^(?:(?:pub(?:\([^)]*\))?|async|unsafe|const|extern(?:[ \t]+\"[^\"]+\")?)[ \t]+)*"
     r"fn[ \t]+([A-Za-z_][A-Za-z0-9_]*)\b"
 )
+SIMD_FACADE_SUPPORT_REEXPORT = re.compile(
+    r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+(?:self::)?support::"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*;"
+)
 RAYON_CODE = re.compile(
     r"\brayon\s*::|\buse\s+rayon\b|\.(?:into_)?par_iter(?:_mut)?\s*\(|"
     r"\bpar_chunks(?:_mut)?\s*\("
@@ -133,12 +137,18 @@ def parallel_module_gate_violations(root: Path = ROOT) -> list[str]:
 def simd_facade_violations(source: str) -> list[str]:
     """Keep operation admission and implementation in focused family modules."""
     defined = set(TOP_LEVEL_FUNCTION.findall(source))
+    reexported = set(SIMD_FACADE_SUPPORT_REEXPORT.findall(source))
     unexpected = sorted(defined - SIMD_FACADE_FUNCTIONS)
-    missing = sorted(SIMD_FACADE_FUNCTIONS - defined)
+    unexpected_reexports = sorted(reexported - SIMD_FACADE_FUNCTIONS)
+    missing = sorted(SIMD_FACADE_FUNCTIONS - defined - reexported)
     findings = [
         f"{SIMD_ADAPTER_FACADE}: {name} belongs in adapters/<family>.rs, not the dispatch facade"
         for name in unexpected
     ]
+    findings.extend(
+        f"{SIMD_ADAPTER_FACADE}: {name} is not an allowed support re-export"
+        for name in unexpected_reexports
+    )
     findings.extend(
         f"{SIMD_ADAPTER_FACADE}: expected dispatch function is missing: {name}"
         for name in missing

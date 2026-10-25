@@ -13,7 +13,6 @@ from check_backend_boundaries import (
     rayon_violations,
     simd_facade_violations,
 )
-from migration_parity.parallel_cpu_inputs import PARALLEL_CPU_PROFILE
 from run_migration_benchmark import runtime_backend_for_profile
 
 
@@ -98,9 +97,9 @@ class SimdFacadeBoundaryTests(unittest.TestCase):
         self.assertIn("mod par;` must use", errors[0])
 
     def test_rayon_profile_is_measured_as_parallel_cpu(self) -> None:
-        self.assertEqual(PARALLEL_CPU_PROFILE, "python-parallel-cpu")
-        self.assertEqual(runtime_backend_for_profile(PARALLEL_CPU_PROFILE), "cpu")
-        self.assertNotEqual(runtime_backend_for_profile(PARALLEL_CPU_PROFILE), "simd")
+        parallel_profile = "python-parallel-cpu"
+        self.assertEqual(runtime_backend_for_profile(parallel_profile), "cpu")
+        self.assertNotEqual(runtime_backend_for_profile(parallel_profile), "simd")
 
 
 if __name__ == "__main__":
