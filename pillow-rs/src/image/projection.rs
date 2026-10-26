@@ -9,6 +9,7 @@ use std::sync::Arc;
 use super::Image;
 
 type ProjectionAxes = (Vec<u32>, Vec<u32>);
+mod cmyk;
 
 struct PreparedPutPixelProjection<'a> {
     mode: &'static str,
@@ -43,104 +44,6 @@ fn projection_terminal_backend(
 }
 
 impl Image {
-    fn cmyk_projection(image: &crate::raster::RgbaImage) -> (Vec<u32>, Vec<u32>) {
-        Self::cmyk_projection_with_blocks(image, 16, |samples| {
-            let mut packed = [0; 16];
-            packed.copy_from_slice(samples);
-            u128::from_ne_bytes(packed) != 0
-        })
-        .0
-    }
-
-    fn rgb_projection(image: &crate::raster::RgbImage) -> (Vec<u32>, Vec<u32>) {
-        let (width, height) = (image.width() as usize, image.height() as usize);
-        let mut horizontal = vec![0u32; width];
-        let mut vertical = vec![0u32; height];
-        for (y, row) in image.rows().enumerate() {
-            let mut row_nonzero = false;
-            for (x, pixel) in row.enumerate() {
-                if pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0 {
-                    horizontal[x] = 1;
-                    row_nonzero = true;
-                }
-            }
-            vertical[y] = u32::from(row_nonzero);
-        }
-        (horizontal, vertical)
-    }
-
-    /// Scan CMYK storage in fixed-size groups while leaving block detection to
-    /// the selected execution profile. Every group is a whole number of
-    /// four-byte pixels; the final partial group is handled pixel by pixel.
-    pub(crate) fn cmyk_projection_with_blocks(
-        image: &crate::raster::RgbaImage,
-        block_bytes: usize,
-        mut block_has_nonzero: impl FnMut(&[u8]) -> bool,
-    ) -> ((Vec<u32>, Vec<u32>), u64) {
-        let (w, h) = (image.width() as usize, image.height() as usize);
-        let mut h_proj = vec![0u32; w];
-        let mut v_proj = vec![0u32; h];
-        let mut covered_columns = 0usize;
-        let mut all_columns_covered = w == 0;
-        let row_bytes = w * 4;
-        let bytes = image.as_raw();
-        debug_assert!(block_bytes >= 4 && block_bytes.is_multiple_of(4));
-        let nonzero_4 = |samples: &[u8]| {
-            let mut packed = [0; 4];
-            packed.copy_from_slice(samples);
-            u32::from_ne_bytes(packed) != 0
-        };
-        let pixels_per_block = block_bytes / 4;
-        let mut scalar_tail_pixels = 0u64;
-        for y in 0..h {
-            let row = &bytes[y * row_bytes..(y + 1) * row_bytes];
-            let blocks = row.chunks_exact(block_bytes);
-            scalar_tail_pixels =
-                scalar_tail_pixels.saturating_add((blocks.remainder().len() / 4) as u64);
-            let row_nonzero = if all_columns_covered {
-                blocks.clone().any(&mut block_has_nonzero)
-                    || blocks.remainder().chunks_exact(4).any(nonzero_4)
-            } else {
-                let mut any = false;
-                for (block_index, block) in blocks.clone().enumerate() {
-                    if !block_has_nonzero(block) {
-                        continue;
-                    }
-                    for (lane, pixel) in block.chunks_exact(4).enumerate() {
-                        if !nonzero_4(pixel) {
-                            continue;
-                        }
-                        let x = block_index * pixels_per_block + lane;
-                        if h_proj[x] == 0 {
-                            h_proj[x] = 1;
-                            covered_columns += 1;
-                            all_columns_covered = covered_columns == w;
-                        }
-                        any = true;
-                    }
-                }
-                let tail_start = blocks.len() * block_bytes;
-                for (tail_index, pixel) in row[tail_start..].chunks_exact(4).enumerate() {
-                    if !nonzero_4(pixel) {
-                        continue;
-                    }
-                    let x = tail_start / 4 + tail_index;
-                    if h_proj[x] == 0 {
-                        h_proj[x] = 1;
-                        covered_columns += 1;
-                        all_columns_covered = covered_columns == w;
-                    }
-                    any = true;
-                }
-                any
-            };
-            if row_nonzero {
-                v_proj[y] = 1;
-            }
-        }
-        ((h_proj, v_proj), scalar_tail_pixels)
-    }
-
     fn cmyk_projection_with_putpixel_ops(
         image: &crate::raster::RgbaImage,
         ops: &[PipelineOp],
