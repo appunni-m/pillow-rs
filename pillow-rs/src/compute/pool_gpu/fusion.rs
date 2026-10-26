@@ -195,61 +195,66 @@ pub(super) fn gpu_dispatch_count(
             continue;
         }
         let next = op_output_dims(&ops[index], cur_w, cur_h).unwrap_or((cur_w, cur_h));
-        count += if ops.len() == 1
-            && gpu_f_resize_compact_box_vertical_only_geometry(
-                &ops[index],
-                (cur_w, cur_h),
-                next,
-                logical_mode,
-            ) {
-            // The unchanged horizontal axis is an identity copy.  The
-            // vertical compact reducer can consume the original source
-            // directly, so this proof emits one native dispatch.
-            1
-        } else if matches!(
+        count += gpu_single_op_dispatch_count(
             &ops[index],
-            PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
-        ) {
-            // Equalize uses a command-buffer clear followed by gather, LUT
-            // derivation, and remap compute dispatches.
-            3
-        } else if matches!(&ops[index], PipelineOp::Autocontrast { .. }) {
-            // Autocontrast still clears its histogram with a compute dispatch.
-            4
-        } else if matches!(
-            &ops[index],
-            PipelineOp::Fit { .. } | PipelineOp::ResizeBoxed { .. }
-        ) || matches!(&ops[index], PipelineOp::Resize { filter, .. }
-            if !matches!(filter, ResampleFilter::Nearest)
-                || gpu_resize_nearest_uses_coefficients(logical_mode))
-        {
-            2
-        } else if matches!(&ops[index], PipelineOp::Pad { .. }) {
-            // Omit identity resize axes and the placement pass when the
-            // contain result already fills the canvas. RGBX can fuse the
-            // vertical resize and placement into one pass.
-            match gpu_pad_geometry(&ops[index], cur_w, cur_h) {
-                Some((_, _))
-                    if gpu_pad_rgbx_fused_vertical_geometry(
-                        &ops[index],
-                        (cur_w, cur_h),
-                        logical_mode,
-                    )
-                    .is_some() =>
-                {
-                    2
-                }
-                Some((resize_dims, _)) => {
-                    u64::from(resize_dims != (cur_w, cur_h)) * 2 + u64::from(resize_dims != next)
-                }
-                None => 3,
-            }
-        } else {
-            GpuInner::blur_pass_count(&ops[index]).map_or(1usize, |passes| passes.saturating_mul(2))
-                as u64
-        };
+            ops.len(),
+            (cur_w, cur_h),
+            next,
+            logical_mode,
+        );
         (cur_w, cur_h) = next;
         index += 1;
     }
     count
+}
+
+fn gpu_single_op_dispatch_count(
+    op: &PipelineOp,
+    op_count: usize,
+    current_dimensions: (u32, u32),
+    next_dimensions: (u32, u32),
+    logical_mode: Option<&str>,
+) -> u64 {
+    if op_count == 1
+        && gpu_f_resize_compact_box_vertical_only_geometry(
+            op,
+            current_dimensions,
+            next_dimensions,
+            logical_mode,
+        )
+    {
+        // The unchanged horizontal axis is an identity copy. The vertical
+        // compact reducer can consume the source directly: one dispatch.
+        1
+    } else if matches!(op, PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }) {
+        // Clear, gather, LUT derivation, and remap use three dispatches.
+        3
+    } else if matches!(op, PipelineOp::Autocontrast { .. }) {
+        // Autocontrast clears its histogram before compute.
+        4
+    } else if matches!(op, PipelineOp::Fit { .. } | PipelineOp::ResizeBoxed { .. })
+        || matches!(op, PipelineOp::Resize { filter, .. }
+            if !matches!(filter, ResampleFilter::Nearest)
+                || gpu_resize_nearest_uses_coefficients(logical_mode))
+    {
+        2
+    } else if matches!(op, PipelineOp::Pad { .. }) {
+        // Omit identity resize axes and placement when contain fills the
+        // canvas. RGBX can fuse vertical resize and placement.
+        match gpu_pad_geometry(op, current_dimensions.0, current_dimensions.1) {
+            Some((_, _))
+                if gpu_pad_rgbx_fused_vertical_geometry(op, current_dimensions, logical_mode)
+                    .is_some() =>
+            {
+                2
+            }
+            Some((resize_dims, _)) => {
+                u64::from(resize_dims != current_dimensions) * 2
+                    + u64::from(resize_dims != next_dimensions)
+            }
+            None => 3,
+        }
+    } else {
+        GpuInner::blur_pass_count(op).map_or(1usize, |passes| passes.saturating_mul(2)) as u64
+    }
 }
