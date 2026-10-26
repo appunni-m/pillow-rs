@@ -616,22 +616,30 @@ fn projective_bilinear_matches_pillow_center_and_edge_sampling() {
 
 #[test]
 fn projective_filtered_alpha_roundtrip_matches_pillow() {
-    // Pillow's Image.transform converts LA/RGBA to La/RGBa before a
-    // filtered projective operation, then converts back.  The coordinate
-    // expression also follows Geometry.c's fused grouping: at the
-    // bottom edge of this map, the unfused numerator lands one ULP lower
-    // and changes the final unpremultiplied luma/R channel.
     let data = [0.8, 0.15, -0.4, -0.12, 1.1, 0.2, 0.0, 0.0];
     let la_raw = (0..40)
         .map(|index| ((index * 53 + 17) % 256) as u8)
         .collect::<Vec<_>>();
     let la = DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(5, 4, la_raw).expect("LA source"));
+    let rgba_raw = (0..80)
+        .map(|index| ((index * 53 + 17) % 256) as u8)
+        .collect::<Vec<_>>();
+    let rgba = DynamicImage::ImageRgba8(RgbaImage::from_raw(5, 4, rgba_raw).expect("RGBA source"));
+    assert_la_perspective_alpha_roundtrip(&la, &data);
+    assert_rgba_perspective_alpha_roundtrip(&rgba, &data);
+    assert_rgbx_affine_filtered_storage(&rgba, &data);
+    assert_rgba_quad_alpha_roundtrip(&rgba, &data);
+}
+
+fn assert_la_perspective_alpha_roundtrip(la: &DynamicImage, data: &[f64; 8]) {
+    // Pillow converts LA to La before filtered projective sampling and
+    // converts back after the operation.
     let perspective = op_transform(
-        &la,
+        la,
         6,
         5,
         &TransformMethod::Perspective,
-        &data,
+        data,
         &ResampleFilter::Bilinear,
         Some((0, 0, 0, 255)),
         false,
@@ -640,17 +648,17 @@ fn projective_filtered_alpha_roundtrip_matches_pillow() {
     .expect("LA perspective transform");
     assert_eq!(&perspective.as_bytes()[..2], &[20, 73]);
     assert_eq!(&perspective.as_bytes()[40..42], &[120, 136]);
+}
 
-    let rgba_raw = (0..80)
-        .map(|index| ((index * 53 + 17) % 256) as u8)
-        .collect::<Vec<_>>();
-    let rgba = DynamicImage::ImageRgba8(RgbaImage::from_raw(5, 4, rgba_raw).expect("RGBA source"));
+fn assert_rgba_perspective_alpha_roundtrip(rgba: &DynamicImage, data: &[f64; 8]) {
+    // The fused coordinate grouping matches Geometry.c. At the bottom
+    // edge, unfused arithmetic lands one ULP lower and changes red.
     let perspective = op_transform(
-        &rgba,
+        rgba,
         6,
         5,
         &TransformMethod::Perspective,
-        &data,
+        data,
         &ResampleFilter::Bilinear,
         Some((0, 0, 0, 255)),
         false,
@@ -659,9 +667,13 @@ fn projective_filtered_alpha_roundtrip_matches_pillow() {
     .expect("RGBA perspective transform");
     assert_eq!(&perspective.as_bytes()[..4], &[25, 77, 130, 182]);
     assert_eq!(&perspective.as_bytes()[80..84], &[54, 108, 161, 212]);
+}
 
+fn assert_rgbx_affine_filtered_storage(rgba: &DynamicImage, data: &[f64; 8]) {
+    // RGBX's fourth byte is padding, not alpha, so all four stored bytes
+    // use the direct filtered path.
     let affine_rgba = op_transform(
-        &rgba,
+        rgba,
         6,
         5,
         &TransformMethod::Affine,
@@ -675,10 +687,8 @@ fn projective_filtered_alpha_roundtrip_matches_pillow() {
     assert_eq!(&affine_rgba.as_bytes()[..4], &[25, 77, 130, 182]);
     assert_eq!(&affine_rgba.as_bytes()[80..84], &[54, 108, 161, 212]);
 
-    // RGBX's fourth byte is padding, not alpha. Pillow therefore filters
-    // all four stored bytes directly instead of applying an alpha cycle.
     let affine = op_transform(
-        &rgba,
+        rgba,
         6,
         5,
         &TransformMethod::Affine,
@@ -693,7 +703,7 @@ fn projective_filtered_alpha_roundtrip_matches_pillow() {
     assert_eq!(&affine.as_bytes()[40..44], &[173, 210, 68, 76]);
 
     let affine_bicubic = op_transform(
-        &rgba,
+        rgba,
         6,
         5,
         &TransformMethod::Affine,
@@ -706,13 +716,15 @@ fn projective_filtered_alpha_roundtrip_matches_pillow() {
     .expect("RGBX affine bicubic transform");
     assert_eq!(&affine_bicubic.as_bytes()[..4], &[0, 81, 134, 187]);
     assert_eq!(&affine_bicubic.as_bytes()[40..44], &[175, 240, 51, 74]);
+}
 
+fn assert_rgba_quad_alpha_roundtrip(rgba: &DynamicImage, data: &[f64; 8]) {
     let quad = op_transform(
-        &rgba,
+        rgba,
         6,
         5,
         &TransformMethod::Quad,
-        &data,
+        data,
         &ResampleFilter::Bilinear,
         Some((0, 0, 0, 255)),
         false,
