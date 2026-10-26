@@ -161,15 +161,7 @@ impl GpuPool {
             gpu_log!(
                 "[GPU] dispatch preflight routed packed-L Pad to CPU: adapter workgroup limit"
             );
-            return self
-                .preflight_failure(
-                    ops,
-                    image,
-                    mode,
-                    allow_cpu_fallback,
-                    "adapter workgroup limit",
-                )
-                .map(BatchPackedDispatchPreflight::Return);
+            return self.packed_dispatch_preflight_failure(ops, image, mode, allow_cpu_fallback);
         }
         plan.packed_la_pad = plan.packed_la_pad_requested
             && matches!(ops, [op @ PipelineOp::Pad { .. }]
@@ -182,45 +174,38 @@ impl GpuPool {
             gpu_log!(
                 "[GPU] dispatch preflight routed packed-LA Pad to CPU: adapter workgroup limit"
             );
-            return self
-                .preflight_failure(
-                    ops,
-                    image,
-                    mode,
-                    allow_cpu_fallback,
-                    "adapter workgroup limit",
-                )
-                .map(BatchPackedDispatchPreflight::Return);
+            return self.packed_dispatch_preflight_failure(ops, image, mode, allow_cpu_fallback);
         }
         if plan.packed_luma_order_statistic_requested && !plan.packed_luma_order_statistic {
             gpu_log!(
                 "[GPU] dispatch preflight routed packed L order statistic to CPU: adapter workgroup limit"
             );
-            return self
-                .preflight_failure(
-                    ops,
-                    image,
-                    mode,
-                    allow_cpu_fallback,
-                    "adapter workgroup limit",
-                )
-                .map(BatchPackedDispatchPreflight::Return);
+            return self.packed_dispatch_preflight_failure(ops, image, mode, allow_cpu_fallback);
         }
         if plan.packed_native_byte_filter_requested && !plan.packed_native_byte_filter {
             gpu_log!(
                 "[GPU] dispatch preflight routed packed native blur to CPU: adapter workgroup limit"
             );
-            return self
-                .preflight_failure(
-                    ops,
-                    image,
-                    mode,
-                    allow_cpu_fallback,
-                    "adapter workgroup limit",
-                )
-                .map(BatchPackedDispatchPreflight::Return);
+            return self.packed_dispatch_preflight_failure(ops, image, mode, allow_cpu_fallback);
         }
         Ok(BatchPackedDispatchPreflight::Continue(plan))
+    }
+
+    fn packed_dispatch_preflight_failure(
+        &self,
+        ops: &[PipelineOp],
+        image: &DynamicImage,
+        mode: Option<&str>,
+        allow_cpu_fallback: bool,
+    ) -> Result<BatchPackedDispatchPreflight, PilError> {
+        self.preflight_failure(
+            ops,
+            image,
+            mode,
+            allow_cpu_fallback,
+            "adapter workgroup limit",
+        )
+        .map(BatchPackedDispatchPreflight::Return)
     }
 
     pub(super) fn preflight_resolved_batch_inputs(
