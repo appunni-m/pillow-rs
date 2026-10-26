@@ -3,6 +3,7 @@ use crate::values::*;
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
 #[wasm_bindgen(js_name = "effectMandelbrot")]
+/// Generates a Mandelbrot image for the specified size, extent, and iteration quality.
 pub fn effect_mandelbrot(
     w: u32,
     h: u32,
@@ -23,6 +24,7 @@ pub fn effect_mandelbrot(
 }
 
 #[wasm_bindgen(js_name = "effectMandelbrotWithExtent")]
+/// Generates a Mandelbrot image from JavaScript size and extent inputs.
 pub fn effect_mandelbrot_with_extent(
     size: JsValue,
     extent: JsValue,
@@ -51,6 +53,7 @@ pub fn effect_mandelbrot_with_extent(
 }
 
 #[wasm_bindgen(js_name = "effectNoiseFn")]
+/// Generates a noise image with the requested dimensions and standard deviation.
 pub fn effect_noise(width: u32, height: u32, sigma: f64) -> Result<Image, JsValue> {
     pillow_rs::image_effect_noise_from_size((width, height), sigma)
         .map(|i| Image { inner: i })
@@ -58,6 +61,7 @@ pub fn effect_noise(width: u32, height: u32, sigma: f64) -> Result<Image, JsValu
 }
 
 #[wasm_bindgen(js_name = "effectSpreadFn")]
+/// Applies the spread effect to an image using the specified pixel distance.
 pub fn effect_spread(img: &Image, distance: u32) -> Result<Image, JsValue> {
     pillow_rs::image_effect_spread(&img.inner, distance)
         .map(|i| Image { inner: i })
@@ -65,6 +69,7 @@ pub fn effect_spread(img: &Image, distance: u32) -> Result<Image, JsValue> {
 }
 
 #[wasm_bindgen(js_name = "evalFn")]
+/// Applies a byte lookup table to an image.
 pub fn eval_fn(img: &Image, lut: Vec<u8>, _n_bands: usize) -> Result<Image, JsValue> {
     pillow_rs::image_eval_replicated_for_image(&img.inner, &lut)
         .map(|i| Image { inner: i })
@@ -72,6 +77,7 @@ pub fn eval_fn(img: &Image, lut: Vec<u8>, _n_bands: usize) -> Result<Image, JsVa
 }
 
 #[wasm_bindgen(js_name = "linearGradientFn")]
+/// Creates a linear gradient image in the requested mode.
 pub fn linear_gradient(mode: &str) -> Result<Image, JsValue> {
     pillow_rs::image_linear_gradient(mode)
         .map(|i| Image { inner: i })
@@ -79,6 +85,7 @@ pub fn linear_gradient(mode: &str) -> Result<Image, JsValue> {
 }
 
 #[wasm_bindgen(js_name = "radialGradientFn")]
+/// Creates a radial gradient image in the requested mode.
 pub fn radial_gradient(mode: &str) -> Result<Image, JsValue> {
     pillow_rs::image_radial_gradient(mode)
         .map(|i| Image { inner: i })
@@ -86,6 +93,7 @@ pub fn radial_gradient(mode: &str) -> Result<Image, JsValue> {
 }
 
 #[wasm_bindgen(js_name = "mergeFn")]
+/// Merges the supplied band images into a new image in the requested mode.
 pub fn merge_fn(mode: &str, bands: Vec<Image>) -> Result<Image, JsValue> {
     let inner_bands: Vec<pillow_rs::Image> = bands.iter().map(|b| b.inner.clone()).collect();
     pillow_rs::image_merge(mode, &inner_bands)

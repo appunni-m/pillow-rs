@@ -2,6 +2,7 @@ use crate::values::*;
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
 #[wasm_bindgen]
+/// Activates a compiled backend for subsequent automatic image routing.
 pub fn enable_backend(name: &str) -> Result<bool, JsValue> {
     let backend = pillow_rs::Backend::parse(name).ok_or_else(|| {
         err(pillow_rs::PilError::ValueError(format!(

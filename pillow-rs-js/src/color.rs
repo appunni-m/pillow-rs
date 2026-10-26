@@ -1,6 +1,7 @@
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
 #[wasm_bindgen(js_name = "resolveNewColor")]
+/// Resolves the supplied color representation into RGBA components for `mode`.
 pub fn resolve_new_color(
     mode: &str,
     hex: Option<String>,

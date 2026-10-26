@@ -50,12 +50,14 @@ fn image_palette_color_input(value: &JsValue) -> pillow_rs::PaletteColorInput {
 }
 
 #[wasm_bindgen]
+/// Palette data and mode for indexed-color images.
 pub struct ImagePalette {
     mode: String,
     data: Vec<u8>,
 }
 #[wasm_bindgen]
 impl ImagePalette {
+    /// Creates an empty palette in the requested mode.
     #[wasm_bindgen(constructor)]
     pub fn new(mode: &str) -> ImagePalette {
         ImagePalette {
@@ -73,11 +75,13 @@ impl ImagePalette {
     }
 
     #[wasm_bindgen(getter)]
+    /// Returns the palette mode.
     pub fn mode(&self) -> String {
         self.mode.clone()
     }
 
     #[wasm_bindgen(js_name = "copy")]
+    /// Returns a copy of this palette.
     pub fn copy(&self) -> ImagePalette {
         ImagePalette {
             mode: self.mode.clone(),
@@ -85,17 +89,21 @@ impl ImagePalette {
         }
     }
     #[wasm_bindgen(js_name = "tobytes")]
+    /// Returns the palette's raw byte data.
     pub fn tobytes(&self) -> Vec<u8> {
         self.data.clone()
     }
     #[wasm_bindgen(js_name = "getdata")]
+    /// Returns the palette data in the byte representation used by this binding.
     pub fn getdata(&self) -> Vec<u8> {
         self.data.clone()
     }
     #[wasm_bindgen(js_name = "save")]
+    /// Does nothing; palette serialization to a file handle is unavailable in WASM.
     pub fn save(&self, _fp: JsValue) {}
 
     #[wasm_bindgen(js_name = "getcolor")]
+    /// Finds or appends `color` and returns its palette index.
     pub fn getcolor(&mut self, color: JsValue, _image: JsValue) -> Result<usize, JsValue> {
         let input = image_palette_color_input(&color);
         pillow_rs::palette_getcolor_validate_input(&mut self.data, input, &self.mode)
@@ -105,6 +113,7 @@ impl ImagePalette {
 
 // ── ImageStat ────────────────────────────────────────────────────
 #[wasm_bindgen(js_name = "getColor")]
+/// Parses a color string and converts it to the requested image mode.
 pub fn getcolor(color: &str, mode: &str) -> Result<JsValue, JsValue> {
     let (r, g, b, a) = pillow_rs::parse_color_str_unclamped(color).map_err(err)?;
     let value = pillow_rs::getcolor(r, g, b, a, mode).map_err(err)?;
@@ -142,6 +151,7 @@ pub fn getcolor(color: &str, mode: &str) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen(js_name = "getRgb")]
+/// Parses a color string and returns its RGB components, including alpha when explicit.
 pub fn getrgb(color: &str) -> Result<JsValue, JsValue> {
     let (red, green, blue, alpha) = pillow_rs::parse_color_str_unclamped(color).map_err(err)?;
     let arr = js_sys::Array::new();
@@ -159,11 +169,13 @@ pub fn getrgb(color: &str) -> Result<JsValue, JsValue> {
 // ══════════════════════════════════════════════════════════════════════════════
 
 #[wasm_bindgen(js_name = "paletteGetColor")]
+/// Finds an RGB color in a palette and returns its index when present.
 pub fn palette_getcolor(palette: Vec<u8>, r: u8, g: u8, b: u8) -> Option<usize> {
     pillow_rs::palette_getcolor(&palette, r, g, b)
 }
 
 #[wasm_bindgen(js_name = "paletteGetColorAppend")]
+/// Finds an RGBA color in a palette or appends it and returns its index.
 pub fn palette_getcolor_append(
     palette: Vec<u8>,
     r: u8,
@@ -178,6 +190,7 @@ pub fn palette_getcolor_append(
 }
 
 #[wasm_bindgen(js_name = "paletteGetColorValidate")]
+/// Validates the color against the palette mode and returns its palette index.
 pub fn palette_getcolor_validate(
     palette: Vec<u8>,
     color: Vec<u8>,
@@ -188,6 +201,7 @@ pub fn palette_getcolor_validate(
 }
 
 #[wasm_bindgen(js_name = "paletteToText")]
+/// Formats palette bytes as text for the requested palette mode.
 pub fn palette_to_text(palette: Vec<u8>, mode: &str) -> String {
     pillow_rs::palette_to_text(&palette, mode)
 }

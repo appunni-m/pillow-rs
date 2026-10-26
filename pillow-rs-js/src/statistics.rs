@@ -3,11 +3,13 @@ use crate::values::*;
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
 #[wasm_bindgen]
+/// Statistical summaries computed from an image, optionally using a mask.
 pub struct ImageStat {
     inner: pillow_rs::StatResult,
 }
 #[wasm_bindgen]
 impl ImageStat {
+    /// Computes image statistics, optionally restricting the sample to `mask`.
     #[wasm_bindgen(constructor)]
     pub fn new(img: &Image, mask: Option<Image>) -> Result<ImageStat, JsValue> {
         let s = img
@@ -56,6 +58,7 @@ impl ImageStat {
             }
         }
     }
+    /// Returns the statistics as a JavaScript object with Pillow-style field names.
     pub fn toObject(&self) -> js_sys::Object {
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(&obj, &"count".into(), &self.val_to_js(&self.inner.count)).ok();
@@ -78,6 +81,7 @@ impl ImageStat {
 
 // ── ImageSequence ────────────────────────────────────────────────
 #[wasm_bindgen(js_name = "statFromList")]
+/// Computes count, sum, mean, minimum, and maximum for a numeric list.
 pub fn stat_from_list(data: Vec<f64>) -> Result<JsValue, JsValue> {
     let (count, sum, mean, min, max) = pillow_rs::stat_from_list(&data);
     let obj = js_sys::Object::new();
@@ -90,6 +94,7 @@ pub fn stat_from_list(data: Vec<f64>) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen(js_name = "statFromHistogram")]
+/// Computes image statistics from histogram bin counts.
 pub fn stat_from_histogram(data: Vec<f64>) -> ImageStat {
     ImageStat {
         inner: pillow_rs::stat_from_histogram(&data),

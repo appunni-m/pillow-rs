@@ -17,12 +17,14 @@ fn js_text_color_and_kind(draw: &Draw, value: &JsValue) -> Result<DrawTextColorA
 }
 
 #[wasm_bindgen]
+/// Mutable drawing context for painting shapes and text into an image.
 pub struct ImageDraw {
     draw: Draw,
 }
 
 #[wasm_bindgen]
 impl ImageDraw {
+    /// Creates a drawing context for `img`, optionally selecting a drawing mode.
     #[wasm_bindgen(constructor)]
     pub fn new(img: &Image, mode: Option<String>) -> Result<ImageDraw, JsValue> {
         let draw = Draw::new(img.inner.clone(), mode);
@@ -31,6 +33,7 @@ impl ImageDraw {
     }
 
     #[wasm_bindgen(js_name = "line")]
+    /// Draws a line segment between two points using the supplied RGBA color.
     pub fn line(
         &mut self,
         x0: i32,
@@ -48,6 +51,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "lineWithInput")]
+    /// Draws connected points from a flat or nested JavaScript sequence.
     pub fn line_with_input(
         &mut self,
         points: JsValue,
@@ -94,6 +98,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "lineWithColorInput")]
+    /// Draws connected points using a mode-aware JavaScript color value.
     pub fn line_with_color_input(
         &mut self,
         points: JsValue,
@@ -115,6 +120,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "rectangleWithInput")]
+    /// Draws a rectangle from a JavaScript box with optional fill and outline colors.
     pub fn rectangle_with_input(
         &mut self,
         xy: JsValue,
@@ -130,6 +136,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "ellipseWithInput")]
+    /// Draws an ellipse inside a JavaScript box with optional fill and outline colors.
     pub fn ellipse_with_input(
         &mut self,
         xy: JsValue,
@@ -145,6 +152,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "arcWithInput")]
+    /// Draws an arc inside a JavaScript box from `start` to `end` degrees.
     pub fn arc_with_input(
         &mut self,
         xy: JsValue,
@@ -163,6 +171,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "chordWithInput")]
+    /// Draws a filled chord bounded by an ellipse and angular endpoints.
     pub fn chord_with_input(
         &mut self,
         xy: JsValue,
@@ -190,6 +199,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "piesliceWithInput")]
+    /// Draws a pie slice bounded by an ellipse and angular endpoints.
     pub fn pieslice_with_input(
         &mut self,
         xy: JsValue,
@@ -217,6 +227,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "circleWithInput")]
+    /// Draws a circle from a JavaScript center value and radius.
     pub fn circle_with_input(
         &mut self,
         xy: JsValue,
@@ -233,6 +244,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "roundedRectangleWithInput")]
+    /// Draws a rounded rectangle from a JavaScript box and corner radius.
     pub fn rounded_rectangle_with_input(
         &mut self,
         xy: JsValue,
@@ -249,6 +261,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "polygonWithInput")]
+    /// Draws a polygon from JavaScript point input with optional fill and outline.
     pub fn polygon_with_input(
         &mut self,
         points: JsValue,
@@ -268,6 +281,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "pointWithInput")]
+    /// Draws points from a JavaScript coordinate sequence using a mode-aware color.
     pub fn point_with_input(&mut self, points: JsValue, fill: JsValue) -> Result<(), JsValue> {
         let fill = self
             .draw
@@ -278,6 +292,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "shapeWithInput")]
+    /// Draws a sequence of points as a shape with optional fill and outline colors.
     pub fn shape_with_input(
         &mut self,
         points: JsValue,
@@ -291,6 +306,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "regularPolygonWithInput")]
+    /// Draws a regular polygon inside a bounding circle.
     pub fn regular_polygon_with_input(
         &mut self,
         bounding_circle: JsValue,
@@ -334,6 +350,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "rectangle")]
+    /// Draws a rectangle from integer coordinates and optional RGBA fill and outline.
     pub fn rect(
         &mut self,
         x0: i32,
@@ -357,6 +374,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "ellipse")]
+    /// Draws an ellipse from integer bounds and optional RGBA fill and outline.
     pub fn ellipse(
         &mut self,
         x0: i32,
@@ -380,6 +398,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "polygon")]
+    /// Draws a polygon from flattened integer coordinates and optional colors.
     pub fn polygon(
         &mut self,
         points: Vec<i32>,
@@ -405,12 +424,14 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "point")]
+    /// Draws points from flattened integer coordinates using an RGBA color.
     pub fn point(&mut self, pts: Vec<i32>, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> {
         self.draw
             .point_with_input(pillow_rs::DrawPointsInput::Flat(pts), (r, g, b, a))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "arc")]
+    /// Draws an arc inside integer bounds from `start` to `end` degrees.
     pub fn arc(
         &mut self,
         x0: i32,
@@ -430,6 +451,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "chord")]
+    /// Draws a chord inside integer bounds with optional RGBA fill and outline colors.
     pub fn chord(
         &mut self,
         x0: i32,
@@ -455,6 +477,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "pieslice")]
+    /// Draws a pie slice inside integer bounds with optional RGBA fill and outline colors.
     pub fn pieslice(
         &mut self,
         x0: i32,
@@ -480,6 +503,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "circle")]
+    /// Draws a circle from its center, radius, and optional RGBA colors.
     pub fn circle(
         &mut self,
         cx: f64,
@@ -502,6 +526,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "roundedRectangle")]
+    /// Draws a rounded rectangle from integer bounds and a corner radius.
     pub fn rounded_rect(
         &mut self,
         x0: i32,
@@ -526,6 +551,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "text")]
+    /// Draws text at `(x, y)` using a loaded font and RGBA fill color.
     pub fn text(
         &mut self,
         x: f64,
@@ -542,6 +568,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "textWithInput")]
+    /// Draws text using JavaScript text, font, fill, shaping, and stroke inputs.
     #[allow(clippy::too_many_arguments)]
     pub fn text_with_input(
         &mut self,
@@ -594,6 +621,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "multilineTextWithInput")]
+    /// Draws multiline text with explicit spacing and shaping options.
     #[allow(clippy::too_many_arguments)]
     pub fn multiline_text_with_input(
         &mut self,
@@ -648,6 +676,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "textbboxWithInput")]
+    /// Returns the text bounding box at `(x, y)` using the supplied font options.
     #[allow(clippy::too_many_arguments)]
     pub fn textbbox_with_input(
         &mut self,
@@ -690,6 +719,7 @@ impl ImageDraw {
         Ok(vec![bbox.0, bbox.1, bbox.2, bbox.3])
     }
     #[wasm_bindgen(js_name = "textlengthWithInput")]
+    /// Measures text advance using the supplied font and shaping options.
     #[allow(clippy::too_many_arguments)]
     pub fn textlength_with_input(
         &mut self,
@@ -727,6 +757,7 @@ impl ImageDraw {
         .map_err(err)
     }
     #[wasm_bindgen(js_name = "multilineTextbboxWithInput")]
+    /// Returns the bounding box of multiline text with the supplied layout options.
     #[allow(clippy::too_many_arguments)]
     pub fn multiline_textbbox_with_input(
         &mut self,
@@ -773,6 +804,7 @@ impl ImageDraw {
         Ok(vec![bbox.0, bbox.1, bbox.2, bbox.3])
     }
     #[wasm_bindgen(js_name = "bitmap")]
+    /// Draws a bitmap image at `(x, y)` with an optional RGBA foreground color.
     pub fn bitmap(
         &mut self,
         x: i32,
@@ -787,6 +819,7 @@ impl ImageDraw {
         self.draw.bitmap(x, y, &bitmap.inner, fill).map_err(err)
     }
     #[wasm_bindgen(js_name = "bitmapWithInput")]
+    /// Draws a bitmap image at `(x, y)` using a JavaScript color value.
     pub fn bitmap_with_input(
         &mut self,
         x: i32,
@@ -799,6 +832,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(getter)]
+    /// Returns a clone of the image containing the current drawing operations.
     pub fn image(&self) -> Result<Image, JsValue> {
         // Core image_clone() already handles mode preservation
         // (RGB→RGB, RGBA→RGBA, L→L, etc.)
@@ -811,6 +845,7 @@ impl ImageDraw {
 // ── ImageFont ────────────────────────────────────────────────────
 
 #[wasm_bindgen(js_name = "outlineCurve")]
+/// Samples a curve from flattened coordinate pairs using the requested step count.
 pub fn outline_curve(points: Vec<f64>, steps: i32) -> Result<Vec<i32>, JsValue> {
     let steps = u32::try_from(steps)
         .map_err(|_| JsValue::from_str("steps must be greater than or equal to 0"))?;
