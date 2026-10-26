@@ -177,26 +177,6 @@ fn gpu_native_grayscale_inputs_require_singleton_exact_storage() {
     let rgb = DynamicImage::ImageRgb8(
         RgbImage::from_raw(3, 1, vec![12, 34, 56, 78, 90, 123, 234, 210, 98]).unwrap(),
     );
-    assert!(super::gpu_native_grayscale_rgb_input(
-        std::slice::from_ref(&grayscale),
-        &rgb,
-        None
-    ));
-    assert!(super::gpu_native_grayscale_rgb_input(
-        std::slice::from_ref(&grayscale),
-        &rgb,
-        Some("RGB")
-    ));
-    assert!(super::gpu_native_grayscale_rgb_input(
-        std::slice::from_ref(&grayscale),
-        &rgb,
-        Some("YCbCr")
-    ));
-    assert!(!super::gpu_native_grayscale_rgb_input(
-        std::slice::from_ref(&grayscale),
-        &rgb,
-        Some("HSV")
-    ));
     let rgba = DynamicImage::ImageRgba8(
         RgbaImage::from_raw(
             3,
@@ -205,35 +185,74 @@ fn gpu_native_grayscale_inputs_require_singleton_exact_storage() {
         )
         .unwrap(),
     );
+    assert_gpu_native_grayscale_rgb_input_modes(&grayscale, &rgb);
+    assert_gpu_native_grayscale_rgba_input_modes(&grayscale, &rgba);
+    assert_gpu_native_grayscale_rejected_inputs(&grayscale, &rgb, &rgba);
+}
+
+#[cfg(target_endian = "little")]
+fn assert_gpu_native_grayscale_rgb_input_modes(grayscale: &PipelineOp, rgb: &DynamicImage) {
+    assert!(super::gpu_native_grayscale_rgb_input(
+        std::slice::from_ref(grayscale),
+        rgb,
+        None
+    ));
+    assert!(super::gpu_native_grayscale_rgb_input(
+        std::slice::from_ref(grayscale),
+        rgb,
+        Some("RGB")
+    ));
+    assert!(super::gpu_native_grayscale_rgb_input(
+        std::slice::from_ref(grayscale),
+        rgb,
+        Some("YCbCr")
+    ));
     assert!(!super::gpu_native_grayscale_rgb_input(
-        std::slice::from_ref(&grayscale),
-        &rgba,
+        std::slice::from_ref(grayscale),
+        rgb,
+        Some("HSV")
+    ));
+}
+
+#[cfg(target_endian = "little")]
+fn assert_gpu_native_grayscale_rgba_input_modes(grayscale: &PipelineOp, rgba: &DynamicImage) {
+    assert!(!super::gpu_native_grayscale_rgb_input(
+        std::slice::from_ref(grayscale),
+        rgba,
         Some("RGB")
     ));
     assert!(super::gpu_native_grayscale_cmyk_input(
-        std::slice::from_ref(&grayscale),
-        &rgba,
+        std::slice::from_ref(grayscale),
+        rgba,
         Some("CMYK")
     ));
     assert!(!super::gpu_native_grayscale_cmyk_input(
-        std::slice::from_ref(&grayscale),
-        &rgba,
+        std::slice::from_ref(grayscale),
+        rgba,
         None
     ));
     assert!(!super::gpu_native_grayscale_cmyk_input(
-        std::slice::from_ref(&grayscale),
-        &rgba,
+        std::slice::from_ref(grayscale),
+        rgba,
         Some("RGB")
     ));
-    let multiple = [grayscale, PipelineOp::Duplicate];
+}
+
+#[cfg(target_endian = "little")]
+fn assert_gpu_native_grayscale_rejected_inputs(
+    grayscale: &PipelineOp,
+    rgb: &DynamicImage,
+    rgba: &DynamicImage,
+) {
+    let multiple = [grayscale.clone(), PipelineOp::Duplicate];
     assert!(!super::gpu_native_grayscale_rgb_input(
         &multiple,
-        &rgb,
+        rgb,
         Some("RGB")
     ));
     assert!(!super::gpu_native_grayscale_cmyk_input(
         &multiple,
-        &rgba,
+        rgba,
         Some("CMYK")
     ));
     let empty = DynamicImage::ImageRgb8(RgbImage::new(0, 1));
