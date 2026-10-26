@@ -71,76 +71,7 @@ pub(crate) fn web_palette_quantize(
     }
 
     if dither {
-        // PIL-identical Floyd-Steinberg dither with WEB palette.
-        // Uses PIL's 3x/5x/7x accumulator pattern (single division by 16 at read time)
-        // instead of dividing each propagated fraction separately.
-        let wu = w as usize;
-        // Error array: one row + 1 column, 3 channels interleaved
-        let mut errors = vec![0i32; (wu + 1) * 3];
-
-        #[inline]
-        fn clip8(v: i32) -> u8 {
-            if v < 0 {
-                0
-            } else if v > 255 {
-                255
-            } else {
-                v as u8
-            }
-        }
-
-        for y in 0..h as usize {
-            // Per-channel accumulators (carry 7x, delayed 5x, delayed 1x)
-            let mut l = [0i32; 3];
-            let mut l0 = [0i32; 3];
-            let mut l1 = [0i32; 3];
-
-            for x in 0..wu {
-                let src_i = (y * wu + x) * 3;
-                let e_ptr = x * 3; // base of errors for this column
-
-                // Read pixel + accumulated error (divided by 16 once)
-                for ch in 0..3 {
-                    let val = pixels[src_i + ch] as i32;
-                    let acc = l[ch] + errors[e_ptr + 3 + ch]; // errors[x+1] = next col
-                    l[ch] = clip8(val + acc / 16) as i32;
-                }
-                let r = l[0] as u8;
-                let g = l[1] as u8;
-                let b = l[2] as u8;
-
-                let (best_idx, pr, pg, pb) = find_nearest_web(r, g, b);
-                out[y * wu + x] = best_idx;
-
-                // Compute error = corrected_input - palette_output
-                for ch in 0..3 {
-                    l[ch] -= [pr as i32, pg as i32, pb as i32][ch];
-                }
-
-                // PIL's 3x/5x/7x accumulation pattern
-                for ch in 0..3 {
-                    let err = l[ch];
-                    let r2 = err;
-                    let d2 = err + err;
-                    l[ch] = err + d2; // 3x
-                    errors[e_ptr + ch] = l[ch] + l0[ch]; // store 3x + l0
-                    l[ch] += d2; // 5x
-                    l0[ch] = l[ch] + l1[ch]; // 5x + l1
-                    l1[ch] = r2; // 1x (delayed)
-                    l[ch] += d2; // 7x (carry to next pixel)
-                }
-            }
-
-            // Post-loop: PIL's topalette writes ONLY B-channel accumulators
-            // at errors[w*3 + 0..2] — b0, b1, b2 (NOT per-channel l0 values).
-            // This effectively loses R and G error at the right edge, but we
-            // must match PIL's exact behavior for pixel-level parity.
-            // b0 = 5*e_B_last + e_B_second_last, b1 = b2 = e_B_last
-            let e_end = wu * 3;
-            errors[e_end] = l0[2]; // b0: B channel's 5x delay
-            errors[e_end + 1] = l1[2]; // b1: B channel's 1x delay (original error)
-            errors[e_end + 2] = l1[2]; // b2: B channel's original error (same as b1)
-        }
+        web_palette_dither(pixels, &mut out, w, h);
     } else {
         // No dither: nearest-neighbor mapping
         for (pi, out_pixel) in out.iter_mut().enumerate() {
@@ -152,6 +83,80 @@ pub(crate) fn web_palette_quantize(
     }
 
     Ok((out, WEB_PALETTE.to_vec()))
+}
+
+#[inline(always)]
+fn web_palette_dither(pixels: &[u8], out: &mut [u8], w: u32, h: u32) {
+    // PIL-identical Floyd-Steinberg dither with WEB palette.
+    // Uses PIL's 3x/5x/7x accumulator pattern (single division by 16 at read time)
+    // instead of dividing each propagated fraction separately.
+    let wu = w as usize;
+    // Error array: one row + 1 column, 3 channels interleaved
+    let mut errors = vec![0i32; (wu + 1) * 3];
+
+    #[inline]
+    fn clip8(v: i32) -> u8 {
+        if v < 0 {
+            0
+        } else if v > 255 {
+            255
+        } else {
+            v as u8
+        }
+    }
+
+    for y in 0..h as usize {
+        // Per-channel accumulators (carry 7x, delayed 5x, delayed 1x)
+        let mut l = [0i32; 3];
+        let mut l0 = [0i32; 3];
+        let mut l1 = [0i32; 3];
+
+        for x in 0..wu {
+            let src_i = (y * wu + x) * 3;
+            let e_ptr = x * 3; // base of errors for this column
+
+            // Read pixel + accumulated error (divided by 16 once)
+            for ch in 0..3 {
+                let val = pixels[src_i + ch] as i32;
+                let acc = l[ch] + errors[e_ptr + 3 + ch]; // errors[x+1] = next col
+                l[ch] = clip8(val + acc / 16) as i32;
+            }
+            let r = l[0] as u8;
+            let g = l[1] as u8;
+            let b = l[2] as u8;
+
+            let (best_idx, pr, pg, pb) = find_nearest_web(r, g, b);
+            out[y * wu + x] = best_idx;
+
+            // Compute error = corrected_input - palette_output
+            for ch in 0..3 {
+                l[ch] -= [pr as i32, pg as i32, pb as i32][ch];
+            }
+
+            // PIL's 3x/5x/7x accumulation pattern
+            for ch in 0..3 {
+                let err = l[ch];
+                let r2 = err;
+                let d2 = err + err;
+                l[ch] = err + d2; // 3x
+                errors[e_ptr + ch] = l[ch] + l0[ch]; // store 3x + l0
+                l[ch] += d2; // 5x
+                l0[ch] = l[ch] + l1[ch]; // 5x + l1
+                l1[ch] = r2; // 1x (delayed)
+                l[ch] += d2; // 7x (carry to next pixel)
+            }
+        }
+
+        // Post-loop: PIL's topalette writes ONLY B-channel accumulators
+        // at errors[w*3 + 0..2] — b0, b1, b2 (NOT per-channel l0 values).
+        // This effectively loses R and G error at the right edge, but we
+        // must match PIL's exact behavior for pixel-level parity.
+        // b0 = 5*e_B_last + e_B_second_last, b1 = b2 = e_B_last
+        let e_end = wu * 3;
+        errors[e_end] = l0[2]; // b0: B channel's 5x delay
+        errors[e_end + 1] = l1[2]; // b1: B channel's 1x delay (original error)
+        errors[e_end + 2] = l1[2]; // b2: B channel's original error (same as b1)
+    }
 }
 
 /// Number of colors in the WEB palette (11 reserved + 215 web-safe cube).
