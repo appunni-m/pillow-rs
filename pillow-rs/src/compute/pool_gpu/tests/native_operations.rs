@@ -30,23 +30,16 @@ fn extract_band_native_gpu_handles_4096_square_la_alpha() {
     // Discard this thread's CPU reference receipt before requesting GPU.
     let _ = Backend::take_pipeline_telemetry();
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let actual = match source
-        .getchannel(1)
-        .expect("LA alpha channel")
-        .use_backend(Backend::Gpu)
-        .tobytes()
-    {
-        Ok(actual) => actual,
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            Backend::set_pipeline_telemetry_enabled(previous);
-            return;
-        }
-        Err(error) => panic!("4096-square GPU LA alpha extraction failed: {error}"),
+    let Some(actual) = native_gpu_result_or_skip(
+        source
+            .getchannel(1)
+            .expect("LA alpha channel")
+            .use_backend(Backend::Gpu)
+            .tobytes(),
+        "4096-square GPU LA alpha extraction failed",
+    ) else {
+        Backend::set_pipeline_telemetry_enabled(previous);
+        return;
     };
     assert_eq!(actual, expected, "4096-square LA alpha extraction parity");
     let telemetry = Backend::take_pipeline_telemetry()
@@ -107,22 +100,15 @@ fn effect_spread_native_gpu_preserves_raw_byte_modes() {
             .use_backend(Backend::Cpu)
             .tobytes()
             .expect("CPU effect_spread");
-        let actual = match crate::image_effect_spread(&source, 0)
-            .expect("effect_spread operation")
-            .use_backend(Backend::Gpu)
-            .tobytes()
-        {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU {mode} effect_spread failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            crate::image_effect_spread(&source, 0)
+                .expect("effect_spread operation")
+                .use_backend(Backend::Gpu)
+                .tobytes(),
+            format_args!("native GPU {mode} effect_spread failed"),
+        ) else {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
         };
         assert_eq!(actual, expected, "{mode} effect_spread parity");
         let telemetry = Backend::take_pipeline_telemetry()
@@ -170,23 +156,16 @@ fn contrast_after_putpixel_native_gpu_uses_current_image_midpoint() {
             .use_backend(Backend::Cpu)
             .tobytes()
             .unwrap_or_else(|error| panic!("{mode} CPU Contrast: {error}"));
-        let actual = match source
-            .enhance_contrast(0.5)
-            .expect("Contrast operation")
-            .use_backend(Backend::Gpu)
-            .tobytes()
-        {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU {mode} Contrast failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            source
+                .enhance_contrast(0.5)
+                .expect("Contrast operation")
+                .use_backend(Backend::Gpu)
+                .tobytes(),
+            format_args!("native GPU {mode} Contrast failed"),
+        ) else {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
         };
         assert_eq!(actual, expected, "{mode} Contrast parity");
         let telemetry =
@@ -262,18 +241,12 @@ fn cmyk_putalpha_native_gpu_promotes_exactly() {
         .use_backend(Backend::Cpu)
         .tobytes()
         .expect("CPU CMYK scalar PutAlpha");
-    let actual = match scalar.use_backend(Backend::Gpu).tobytes() {
-        Ok(actual) => actual,
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            Backend::set_pipeline_telemetry_enabled(previous);
-            return;
-        }
-        Err(error) => panic!("native GPU CMYK scalar PutAlpha failed: {error}"),
+    let Some(actual) = native_gpu_result_or_skip(
+        scalar.use_backend(Backend::Gpu).tobytes(),
+        "native GPU CMYK scalar PutAlpha failed",
+    ) else {
+        Backend::set_pipeline_telemetry_enabled(previous);
+        return;
     };
     assert_eq!(actual, expected, "CMYK scalar PutAlpha parity");
     let telemetry = Backend::take_pipeline_telemetry()
@@ -291,18 +264,12 @@ fn cmyk_putalpha_native_gpu_promotes_exactly() {
         .use_backend(Backend::Cpu)
         .tobytes()
         .expect("CPU CMYK image PutAlpha");
-    let actual = match masked.use_backend(Backend::Gpu).tobytes() {
-        Ok(actual) => actual,
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            Backend::set_pipeline_telemetry_enabled(previous);
-            return;
-        }
-        Err(error) => panic!("native GPU CMYK image PutAlpha failed: {error}"),
+    let Some(actual) = native_gpu_result_or_skip(
+        masked.use_backend(Backend::Gpu).tobytes(),
+        "native GPU CMYK image PutAlpha failed",
+    ) else {
+        Backend::set_pipeline_telemetry_enabled(previous);
+        return;
     };
     assert_eq!(actual, expected, "CMYK image PutAlpha parity");
     let telemetry = Backend::take_pipeline_telemetry()
@@ -363,21 +330,14 @@ fn draw_point_native_gpu_preserves_raw_byte_modes() {
             .use_backend(Backend::Cpu)
             .tobytes()
             .expect("CPU draw point");
-        let actual = match Image::push_op(&source, op)
-            .use_backend(Backend::Gpu)
-            .tobytes()
-        {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU {mode} draw point failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            Image::push_op(&source, op)
+                .use_backend(Backend::Gpu)
+                .tobytes(),
+            format_args!("native GPU {mode} draw point failed"),
+        ) else {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
         };
         assert_eq!(actual, expected, "{mode} draw point parity");
         let telemetry = Backend::take_pipeline_telemetry()
