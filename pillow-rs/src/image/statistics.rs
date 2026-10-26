@@ -76,132 +76,8 @@ impl Image {
         let is_i = explicit_mode == Some("I");
 
         if is_f || is_i {
-            // F mode: float32, I mode: int32. Both are single-band values
-            // stored as 4 RGBA bytes per pixel. PIL's Stat uses a 256-bin
-            // histogram with linear scaling from [min, max] to [0, 255]:
-            //   bin = (int)((value - min) * 255 / (max - min))
-            // Stats are computed from bin indices, not original values.
             let img = self.materialized_shared()?;
-            let rgba = img.as_bytes();
-            let n_pixels = rgba.len() / 4;
-            if n_pixels == 0 {
-                // Pillow's I/F histogram path requires a finite min/max and
-                // rejects an empty image before constructing ImageStat.Stat.
-                return Err(PilError::ValueError("min/max not given".into()));
-            }
-            // The histogram pass only needs the extrema and then a second
-            // read of each packed sample. Avoid retaining both a pixel-sized
-            // value vector and its sorted clone; this path is commonly used
-            // as a terminal read on large F/I images.
-            let decode = |bytes: &[u8]| {
-                let bytes: [u8; 4] = [bytes[0], bytes[1], bytes[2], bytes[3]];
-                if is_f {
-                    f32::from_le_bytes(bytes) as f64
-                } else {
-                    i32::from_le_bytes(bytes) as f64
-                }
-            };
-            let mut samples = rgba.chunks_exact(4);
-            let first = decode(samples.next().expect("n_pixels guarantees one sample"));
-            let mut min_val = first;
-            let mut max_val = first;
-            for bytes in samples {
-                let value = decode(bytes);
-                if value.partial_cmp(&min_val) == Some(std::cmp::Ordering::Less) {
-                    min_val = value;
-                }
-                if value.partial_cmp(&max_val) == Some(std::cmp::Ordering::Greater) {
-                    max_val = value;
-                }
-            }
-            if (max_val - min_val).abs() < f64::EPSILON {
-                // Pillow's I/F histogram is empty when every value is equal
-                // (max == min), so its Stat min/max fall back to the histogram
-                // defaults of 255 and 0 for every band. The empty histogram
-                // also reports count zero and leaves the median at its
-                // initialized value of 255.
-                return Ok(vec![vec![
-                    0.0, 0.0, 0.0, 0.0, 255.0, 0.0, 0.0, 0.0, 255.0, 0.0,
-                ]]);
-            }
-            let mut hist = [0i64; 256];
-            if is_f {
-                // Pillow's F-mode histogram keeps the sample, range, and
-                // reciprocal in float32. Widening those values before the
-                // multiply can move an endpoint from bin 254 to 255, so keep
-                // this operation order in the source sample type. In
-                // particular, Pillow does not force the maximum into bin 255
-                // after the multiply; its reciprocal rounding is observable.
-                let min_f = min_val as f32;
-                let max_f = max_val as f32;
-                let scale = 255.0_f32 / (max_f - min_f);
-                for bytes in rgba.chunks_exact(4) {
-                    let value = f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                    let bin = ((value - min_f) * scale).clamp(0.0, 255.0) as usize;
-                    hist[bin] += 1;
-                }
-            } else {
-                let scale = 255.0 / (max_val - min_val);
-                for bytes in rgba.chunks_exact(4) {
-                    let value = decode(bytes);
-                    // Integer samples have an exact endpoint. Preserve the
-                    // existing Pillow-compatible rule that their maximum is
-                    // represented by bin 255; only F-mode observes source
-                    // float reciprocal rounding above.
-                    let bin = if value == max_val {
-                        255
-                    } else {
-                        ((value - min_val) * scale).clamp(0.0, 255.0) as usize
-                    };
-                    hist[bin] += 1;
-                }
-            }
-            let count = n_pixels as f64;
-            let sum: f64 = hist
-                .iter()
-                .enumerate()
-                .map(|(i, &c)| i as f64 * c as f64)
-                .sum();
-            let sum2: f64 = hist
-                .iter()
-                .enumerate()
-                .map(|(i, &c)| (i as f64) * (i as f64) * c as f64)
-                .sum();
-            let mean = sum / count;
-            let rms = (sum2 / count).sqrt();
-            let var = (sum2 - sum * sum / count) / count;
-            let var = if var < 0.0 { 0.0 } else { var };
-            let stddev = var.sqrt();
-            let mut cum = 0i64;
-            let half = (count / 2.0) as i64;
-            let mut median = 0.0;
-            for (i, &c) in hist.iter().enumerate() {
-                cum += c;
-                if cum > half {
-                    median = i as f64;
-                    break;
-                }
-            }
-            let mut min_bin = 255usize;
-            let mut max_bin = 0usize;
-            for (i, &c) in hist.iter().enumerate() {
-                if c > 0 {
-                    min_bin = min_bin.min(i);
-                    max_bin = max_bin.max(i);
-                }
-            }
-            return Ok(vec![vec![
-                count,
-                sum,
-                sum2,
-                mean,
-                median,
-                rms,
-                var,
-                stddev,
-                min_bin as f64,
-                max_bin as f64,
-            ]]);
+            return Ok(vec![Self::stat_scalar_materialized(img.as_ref(), is_f)?]);
         }
 
         let img = self.materialized_shared()?;
@@ -223,70 +99,200 @@ impl Image {
             // per band and the pixel-sized sort that the old path used for
             // every read.
             let histogram = self.histogram()?;
-            let mut results = Vec::with_capacity(histogram.len() / 256);
-            for band in histogram.chunks_exact(256) {
-                let count_u64: u64 = band.iter().map(|&value| u64::from(value)).sum();
-                let count = count_u64 as f64;
-                if count == 0.0 {
-                    results.push(vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 255.0, 0.0]);
-                    continue;
-                }
-                let sum: f64 = band
-                    .iter()
-                    .enumerate()
-                    .map(|(value, &frequency)| value as f64 * frequency as f64)
-                    .sum();
-                let sum2: f64 = band
-                    .iter()
-                    .enumerate()
-                    .map(|(value, &frequency)| {
-                        let value = value as f64;
-                        value * value * frequency as f64
-                    })
-                    .sum();
-                let mean = sum / count;
-                let rms = (sum2 / count).sqrt();
-                let var = (sum2 - sum * sum / count) / count;
-                let stddev = var.sqrt();
-                let half = count_u64 / 2;
-                let mut cumulative = 0u64;
-                let mut median = None;
-                let mut min: f64 = 255.0;
-                let mut max: f64 = 0.0;
-                for (value, &frequency) in band.iter().enumerate() {
-                    if frequency > 0 {
-                        min = min.min(value as f64);
-                        max = max.max(value as f64);
-                    }
-                    cumulative += u64::from(frequency);
-                    if median.is_none() && cumulative > half {
-                        median = Some(value as f64);
-                    }
-                }
-                results.push(vec![
-                    count,
-                    sum,
-                    sum2,
-                    mean,
-                    median.unwrap_or(255.0),
-                    rms,
-                    var,
-                    stddev,
-                    min,
-                    max,
-                ]);
-            }
-            return Ok(results);
+            return Ok(Self::stat_from_byte_histogram(&histogram));
         }
 
         let n_bands = img.color().channel_count() as usize;
+        // Preserve public mode conversion semantics while keeping histogram
+        // storage independent of image dimensions.
+        let histograms = Self::stat_fallback_histograms(img.as_ref(), n_bands);
+        Ok(Self::stat_from_u64_histograms(&histograms))
+    }
 
-        // The fallback conversions below preserve the existing public mode
-        // semantics, but the reduction itself only needs fixed 8-bit
-        // histograms. Keep memory independent of pixel count and avoid
-        // sorting a full value vector for every converted band.
+    fn stat_scalar_materialized(img: &DynamicImage, is_f: bool) -> Result<Vec<f64>, PilError> {
+        // F mode: float32, I mode: int32. Both are single-band values stored
+        // as 4 RGBA bytes per pixel. Pillow's Stat scales a 256-bin histogram
+        // linearly from [min, max] to [0, 255] and computes stats from bins.
+        let rgba = img.as_bytes();
+        let n_pixels = rgba.len() / 4;
+        if n_pixels == 0 {
+            // Pillow's I/F histogram path requires a finite min/max and rejects
+            // an empty image before constructing ImageStat.Stat.
+            return Err(PilError::ValueError("min/max not given".into()));
+        }
+        // Avoid retaining a pixel-sized value vector and its sorted clone.
+        let decode = |bytes: &[u8]| {
+            let bytes: [u8; 4] = [bytes[0], bytes[1], bytes[2], bytes[3]];
+            if is_f {
+                f32::from_le_bytes(bytes) as f64
+            } else {
+                i32::from_le_bytes(bytes) as f64
+            }
+        };
+        let mut samples = rgba.chunks_exact(4);
+        let first = decode(samples.next().expect("n_pixels guarantees one sample"));
+        let mut min_val = first;
+        let mut max_val = first;
+        for bytes in samples {
+            let value = decode(bytes);
+            if value.partial_cmp(&min_val) == Some(std::cmp::Ordering::Less) {
+                min_val = value;
+            }
+            if value.partial_cmp(&max_val) == Some(std::cmp::Ordering::Greater) {
+                max_val = value;
+            }
+        }
+        if (max_val - min_val).abs() < f64::EPSILON {
+            // Pillow's I/F histogram is empty for a constant image. Its Stat
+            // defaults count and aggregate values to zero, median/min to 255,
+            // and max to zero.
+            return Ok(vec![0.0, 0.0, 0.0, 0.0, 255.0, 0.0, 0.0, 0.0, 255.0, 0.0]);
+        }
+        let histogram = Self::stat_scalar_histogram(rgba, is_f, min_val, max_val);
+        Ok(Self::stat_from_scalar_histogram(&histogram, n_pixels))
+    }
+
+    fn stat_scalar_histogram(rgba: &[u8], is_f: bool, min_val: f64, max_val: f64) -> [i64; 256] {
+        let mut hist = [0i64; 256];
+        if is_f {
+            // Keep samples, range, and reciprocal in float32. Widening before
+            // multiply can move an endpoint from bin 254 to 255. Pillow does
+            // not force the maximum to bin 255 after reciprocal rounding.
+            let min_f = min_val as f32;
+            let max_f = max_val as f32;
+            let scale = 255.0_f32 / (max_f - min_f);
+            for bytes in rgba.chunks_exact(4) {
+                let value = f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                let bin = ((value - min_f) * scale).clamp(0.0, 255.0) as usize;
+                hist[bin] += 1;
+            }
+        } else {
+            let scale = 255.0 / (max_val - min_val);
+            let decode =
+                |bytes: &[u8]| i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as f64;
+            for bytes in rgba.chunks_exact(4) {
+                let value = decode(bytes);
+                // Integer samples have an exact endpoint; only F mode
+                // observes source float reciprocal rounding above.
+                let bin = if value == max_val {
+                    255
+                } else {
+                    ((value - min_val) * scale).clamp(0.0, 255.0) as usize
+                };
+                hist[bin] += 1;
+            }
+        }
+        hist
+    }
+
+    fn stat_from_scalar_histogram(hist: &[i64; 256], n_pixels: usize) -> Vec<f64> {
+        let count = n_pixels as f64;
+        let sum: f64 = hist
+            .iter()
+            .enumerate()
+            .map(|(i, &c)| i as f64 * c as f64)
+            .sum();
+        let sum2: f64 = hist
+            .iter()
+            .enumerate()
+            .map(|(i, &c)| (i as f64) * (i as f64) * c as f64)
+            .sum();
+        let mean = sum / count;
+        let rms = (sum2 / count).sqrt();
+        let var = (sum2 - sum * sum / count) / count;
+        let var = if var < 0.0 { 0.0 } else { var };
+        let stddev = var.sqrt();
+        let mut cumulative = 0i64;
+        let half = (count / 2.0) as i64;
+        let mut median = 0.0;
+        for (i, &frequency) in hist.iter().enumerate() {
+            cumulative += frequency;
+            if cumulative > half {
+                median = i as f64;
+                break;
+            }
+        }
+        let mut min_bin = 255usize;
+        let mut max_bin = 0usize;
+        for (i, &frequency) in hist.iter().enumerate() {
+            if frequency > 0 {
+                min_bin = min_bin.min(i);
+                max_bin = max_bin.max(i);
+            }
+        }
+        vec![
+            count,
+            sum,
+            sum2,
+            mean,
+            median,
+            rms,
+            var,
+            stddev,
+            min_bin as f64,
+            max_bin as f64,
+        ]
+    }
+
+    fn stat_from_byte_histogram(histogram: &[u32]) -> Vec<Vec<f64>> {
+        let mut results = Vec::with_capacity(histogram.len() / 256);
+        for band in histogram.chunks_exact(256) {
+            let count_u64: u64 = band.iter().map(|&value| u64::from(value)).sum();
+            let count = count_u64 as f64;
+            if count == 0.0 {
+                results.push(vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 255.0, 0.0]);
+                continue;
+            }
+            let sum: f64 = band
+                .iter()
+                .enumerate()
+                .map(|(value, &frequency)| value as f64 * frequency as f64)
+                .sum();
+            let sum2: f64 = band
+                .iter()
+                .enumerate()
+                .map(|(value, &frequency)| {
+                    let value = value as f64;
+                    value * value * frequency as f64
+                })
+                .sum();
+            let mean = sum / count;
+            let rms = (sum2 / count).sqrt();
+            let var = (sum2 - sum * sum / count) / count;
+            let stddev = var.sqrt();
+            let half = count_u64 / 2;
+            let mut cumulative = 0u64;
+            let mut median = None;
+            let mut min: f64 = 255.0;
+            let mut max: f64 = 0.0;
+            for (value, &frequency) in band.iter().enumerate() {
+                if frequency > 0 {
+                    min = min.min(value as f64);
+                    max = max.max(value as f64);
+                }
+                cumulative += u64::from(frequency);
+                if median.is_none() && cumulative > half {
+                    median = Some(value as f64);
+                }
+            }
+            results.push(vec![
+                count,
+                sum,
+                sum2,
+                mean,
+                median.unwrap_or(255.0),
+                rms,
+                var,
+                stddev,
+                min,
+                max,
+            ]);
+        }
+        results
+    }
+
+    fn stat_fallback_histograms(img: &DynamicImage, n_bands: usize) -> Vec<[u64; 256]> {
         let mut histograms = vec![[0u64; 256]; n_bands];
-
         match n_bands {
             1 => {
                 let gray = img.to_luma8();
@@ -313,15 +319,18 @@ impl Image {
             _ => {
                 let rgba = img.to_rgba8();
                 for px in rgba.pixels() {
-                    for b in 0..4 {
-                        histograms[b][px[b] as usize] += 1;
+                    for band in 0..4 {
+                        histograms[band][px[band] as usize] += 1;
                     }
                 }
             }
         }
+        histograms
+    }
 
-        let mut results = Vec::with_capacity(n_bands);
-        for histogram in &histograms {
+    fn stat_from_u64_histograms(histograms: &[[u64; 256]]) -> Vec<Vec<f64>> {
+        let mut results = Vec::with_capacity(histograms.len());
+        for histogram in histograms {
             let count_u64: u64 = histogram.iter().sum();
             let count = count_u64 as f64;
             if count_u64 == 0 {
@@ -384,7 +393,7 @@ impl Image {
                 max,
             ]);
         }
-        Ok(results)
+        results
     }
 
     /// Returns unique colors and their counts.

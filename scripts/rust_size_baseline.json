@@ -496,12 +496,6 @@
       "signature": "fn try_getprojection_putpixel_pipeline(&self) -> Result<Option<ProjectionAxes>, PilError> {"
     },
     {
-      "lines": 265,
-      "occurrence": 1,
-      "path": "pillow-rs/src/image/statistics.rs",
-      "signature": "pub fn stat(&self) -> Result<Vec<Vec<f64>>, PilError> {"
-    },
-    {
       "lines": 238,
       "occurrence": 1,
       "path": "pillow-rs/src/ops/pil_resize/boxed.rs",
@@ -811,11 +805,6 @@
     "pillow-rs/src/image/projection.rs": {
       "owner": "lazytrot",
       "reason": "Moved the existing long getprojection methods from image.rs; continue reducing under pillow-rs#knsf.",
-      "reduction_task": "pillow-rs#knsf"
-    },
-    "pillow-rs/src/image/statistics.rs": {
-      "owner": "lazytrot",
-      "reason": "Image statistics module contains the existing 265-line stat method and moved 122/127-line getcolors methods; continue reducing under pillow-rs#knsf.",
       "reduction_task": "pillow-rs#knsf"
     },
     "pillow-rs/src/ops/pil_resize/boxed.rs": {
