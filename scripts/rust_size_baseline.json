@@ -10,12 +10,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn execute_batch_with_policy( &self, ops: &[PipelineOp], img: &DynamicImage, mode: Option<&str>, allow_cpu_fallback: bool, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 628,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/batch_pipeline.rs",
-      "signature": "pub(super) fn resolve_batch_pipelines( &self, ops: &[PipelineOp], logical_mode: Option<&str>, input_dims: &[(u32, u32)], packed_luma_point: bool, packed_luma_putdata: bool, packed_luma_order_statistic: bool, packed_native_byte_filter: bool, packed_luma_pad: bool, packed_la_pad: bool, native_sharpness_l_input: bool, native_sharpness_la_input: bool, native_sharpness_rgb_input: bool, native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>, native_luma_transform_output: bool, native_rgb_packed_output: bool, native_la_transform_output: bool, ) -> Result<Vec<ResolvedPipeline>, PilError> {"
-    },
-    {
       "lines": 408,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs",
@@ -26,11 +20,6 @@
     "pillow-rs/src/compute/pool_gpu/batch_execution/routing.rs": {
       "owner": "lazytrot",
       "reason": "Moved GPU preflight, fallback, and batch routing under the batch execution concern; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/batch_pipeline.rs": {
-      "owner": "lazytrot",
-      "reason": "Separated GPU pipeline resolution from the batch coordinator; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs": {
