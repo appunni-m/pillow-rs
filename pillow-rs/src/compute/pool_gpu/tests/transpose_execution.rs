@@ -102,10 +102,8 @@ fn gpu_mapped_rgba_transpose_admission_preserves_other_modes() {
 #[cfg(target_endian = "little")]
 fn gpu_rgba_transpose_native_methods_and_transport_receipts() {
     use crate::pipeline::TransposeMethod as Method;
-    let gpu = match super::GpuPool::ensure_init() {
-        Ok(gpu) => gpu,
-        Err(error) if error.to_string().contains("GPU adapter not available") => return,
-        Err(error) => panic!("native RGBA GPU initialization failed: {error}"),
+    let Some(gpu) = native_rgba_transpose_test_gpu() else {
+        return;
     };
     struct RestoreTelemetry(bool);
     impl Drop for RestoreTelemetry {
@@ -148,34 +146,68 @@ fn gpu_rgba_transpose_native_methods_and_transport_receipts() {
                     if mapped_input && !gpu.direct_primary_readback {
                         continue;
                     }
-                    let _ = crate::compute::take_pipeline_dispatch_count();
-                    let _ = crate::compute::take_pipeline_resource_telemetry();
-                    let _ = Backend::take_pipeline_allocation_telemetry();
-                    let actual = gpu
-                        .execute_rgba_transpose_with_upload(&op, &rgba, &mut buffers, mapped_input)
-                        .unwrap();
-                    assert_eq!(actual.dimensions(), expected.dimensions());
-                    assert_eq!(actual.color(), crate::raster::ColorType::Rgba8);
-                    assert_eq!(actual.as_bytes(), expected.as_raw());
-                    assert_eq!(crate::compute::take_pipeline_dispatch_count(), Some(1));
-                    let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
-                    let bytes = u64::from(width) * u64::from(height) * 4;
-                    assert_eq!(resources.upload_bytes, bytes);
-                    assert_eq!(resources.readback_bytes, bytes);
-                    assert_eq!(resources.parameter_bytes, 32);
-                    assert_eq!(resources.mode_conversion_count, 0);
-                    assert_eq!(
-                        resources.full_frame_copy_count,
-                        u64::from(!mapped_input) + u64::from(!direct)
+                    assert_rgba_transpose_gpu_case(
+                        gpu,
+                        &rgba,
+                        &mut buffers,
+                        &op,
+                        &expected,
+                        width,
+                        height,
+                        direct,
+                        mapped_input,
                     );
-                    assert_eq!(resources.retained_cache_bytes, buffers.retained_bytes());
-                    let allocation = Backend::take_pipeline_allocation_telemetry();
-                    assert_eq!(allocation.allocation_count, 1);
-                    assert_eq!(allocation.allocated_bytes, bytes);
                 }
             }
         }
     }
+}
+
+#[cfg(target_endian = "little")]
+fn native_rgba_transpose_test_gpu() -> Option<&'static super::GpuInner> {
+    match super::GpuPool::ensure_init() {
+        Ok(gpu) => Some(gpu),
+        Err(error) if error.to_string().contains("GPU adapter not available") => None,
+        Err(error) => panic!("native RGBA GPU initialization failed: {error}"),
+    }
+}
+
+#[cfg(target_endian = "little")]
+fn assert_rgba_transpose_gpu_case(
+    gpu: &super::GpuInner,
+    rgba: &RgbaImage,
+    buffers: &mut super::BufferPool,
+    op: &PipelineOp,
+    expected: &RgbaImage,
+    width: u32,
+    height: u32,
+    direct: bool,
+    mapped_input: bool,
+) {
+    let _ = crate::compute::take_pipeline_dispatch_count();
+    let _ = crate::compute::take_pipeline_resource_telemetry();
+    let _ = Backend::take_pipeline_allocation_telemetry();
+    let actual = gpu
+        .execute_rgba_transpose_with_upload(op, rgba, buffers, mapped_input)
+        .unwrap();
+    assert_eq!(actual.dimensions(), expected.dimensions());
+    assert_eq!(actual.color(), crate::raster::ColorType::Rgba8);
+    assert_eq!(actual.as_bytes(), expected.as_raw());
+    assert_eq!(crate::compute::take_pipeline_dispatch_count(), Some(1));
+    let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
+    let bytes = u64::from(width) * u64::from(height) * 4;
+    assert_eq!(resources.upload_bytes, bytes);
+    assert_eq!(resources.readback_bytes, bytes);
+    assert_eq!(resources.parameter_bytes, 32);
+    assert_eq!(resources.mode_conversion_count, 0);
+    assert_eq!(
+        resources.full_frame_copy_count,
+        u64::from(!mapped_input) + u64::from(!direct)
+    );
+    assert_eq!(resources.retained_cache_bytes, buffers.retained_bytes());
+    let allocation = Backend::take_pipeline_allocation_telemetry();
+    assert_eq!(allocation.allocation_count, 1);
+    assert_eq!(allocation.allocated_bytes, bytes);
 }
 
 #[test]
