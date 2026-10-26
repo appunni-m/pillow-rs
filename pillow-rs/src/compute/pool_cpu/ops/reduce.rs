@@ -10,6 +10,190 @@ use super::thumbnail::{reduce_f_thumbnail, reduce_i_thumbnail};
 type SparseRgbReduction = (DynamicImage, Option<Vec<bool>>);
 type SparseRgbReductionResult = Result<Option<SparseRgbReduction>, PilError>;
 
+#[derive(Clone, Copy)]
+struct ReduceRounding {
+    multiplier: u64,
+    amend: u32,
+}
+
+struct ReduceRowContext<'a> {
+    raw: &'a [u8],
+    width: u32,
+    output_width: u32,
+    x_factor: u32,
+    y_factor: u32,
+    channels: usize,
+    main_width: u32,
+    main_height: u32,
+    right_width: u32,
+    bottom_height: u32,
+    full: ReduceRounding,
+    right: ReduceRounding,
+    bottom: ReduceRounding,
+    corner: ReduceRounding,
+    premultiplied_alpha: bool,
+    native_rgba_reduce: bool,
+}
+
+#[inline(always)]
+fn process_reduce_row(context: &ReduceRowContext<'_>, y: u32, row: &mut [u8]) {
+    let full_y = y < context.main_height;
+    let y_count = if full_y {
+        context.y_factor
+    } else {
+        context.bottom_height
+    };
+    let source_y = if full_y {
+        y * context.y_factor
+    } else {
+        context.main_height * context.y_factor
+    };
+    if context.native_rgba_reduce {
+        process_reduce_rgba_row(context, full_y, y_count, source_y, row);
+    } else {
+        process_reduce_interleaved_row(context, full_y, y_count, source_y, row);
+    }
+}
+
+#[inline(always)]
+fn reduce_rounding_for_block(
+    context: &ReduceRowContext<'_>,
+    full_x: bool,
+    full_y: bool,
+) -> ReduceRounding {
+    match (full_x, full_y) {
+        (true, true) => context.full,
+        (false, true) => context.right,
+        (true, false) => context.bottom,
+        (false, false) => context.corner,
+    }
+}
+
+#[inline(always)]
+fn process_reduce_rgba_row(
+    context: &ReduceRowContext<'_>,
+    full_y: bool,
+    y_count: u32,
+    source_y: u32,
+    row: &mut [u8],
+) {
+    for x in 0..context.output_width {
+        let full_x = x < context.main_width;
+        let x_count = if full_x {
+            context.x_factor
+        } else {
+            context.right_width
+        };
+        let source_x = if full_x {
+            x * context.x_factor
+        } else {
+            context.main_width * context.x_factor
+        };
+        let rounding = reduce_rounding_for_block(context, full_x, full_y);
+        let dst_idx = x as usize * context.channels;
+        let sums = reduce_rgba_premultiplied_block_sums(
+            context.raw,
+            context.width as usize,
+            source_x as usize,
+            source_y as usize,
+            x_count as usize,
+            y_count as usize,
+        );
+        let average =
+            |sum: u64| (((sum + u64::from(rounding.amend)) * rounding.multiplier) >> 24) as u8;
+        let alpha = average(sums[3]);
+        let mut red = average(sums[0]);
+        let mut green = average(sums[1]);
+        let mut blue = average(sums[2]);
+        if alpha != 0 {
+            red = (u16::from(red) * 255 / u16::from(alpha)) as u8;
+            green = (u16::from(green) * 255 / u16::from(alpha)) as u8;
+            blue = (u16::from(blue) * 255 / u16::from(alpha)) as u8;
+        }
+        row[dst_idx] = red;
+        row[dst_idx + 1] = green;
+        row[dst_idx + 2] = blue;
+        row[dst_idx + 3] = alpha;
+    }
+}
+
+#[inline(always)]
+fn process_reduce_interleaved_row(
+    context: &ReduceRowContext<'_>,
+    full_y: bool,
+    y_count: u32,
+    source_y: u32,
+    row: &mut [u8],
+) {
+    for x in 0..context.output_width {
+        let full_x = x < context.main_width;
+        let x_count = if full_x {
+            context.x_factor
+        } else {
+            context.right_width
+        };
+        let source_x = if full_x {
+            x * context.x_factor
+        } else {
+            context.main_width * context.x_factor
+        };
+        let rounding = reduce_rounding_for_block(context, full_x, full_y);
+        let dst_idx = x as usize * context.channels;
+        let mut sums = [0u64; 4];
+        for dy in 0..y_count {
+            for dx in 0..x_count {
+                let src_idx =
+                    ((source_y + dy) * context.width + source_x + dx) as usize * context.channels;
+                for c in 0..context.channels {
+                    let sample = if context.premultiplied_alpha && c + 1 < context.channels {
+                        ((u16::from(context.raw[src_idx + c])
+                            * u16::from(context.raw[src_idx + context.channels - 1])
+                            + 127)
+                            / 255) as u8
+                    } else {
+                        context.raw[src_idx + c]
+                    };
+                    sums[c] += u64::from(sample);
+                }
+            }
+        }
+        for c in 0..context.channels {
+            let mut value =
+                (((sums[c] + u64::from(rounding.amend)) * rounding.multiplier) >> 24) as u8;
+            if context.premultiplied_alpha && c + 1 < context.channels {
+                let alpha = (((sums[context.channels - 1] + u64::from(rounding.amend))
+                    * rounding.multiplier)
+                    >> 24) as u8;
+                if alpha != 0 {
+                    value = (u16::from(value) * 255 / u16::from(alpha)) as u8;
+                }
+            }
+            row[dst_idx + c] = value;
+        }
+    }
+}
+
+#[inline(always)]
+fn reduce_alpha_layout(img: &DynamicImage, explicit_mode: Option<&str>) -> (bool, bool) {
+    let premultiplied_alpha = matches!(
+        img.color(),
+        crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+    ) && !matches!(
+        explicit_mode,
+        Some("CMYK" | "RGBa" | "La" | "PA" | "RGBX" | "F" | "I")
+    );
+    let native_rgba_reduce = premultiplied_alpha
+        && explicit_mode == Some("RGBA")
+        && matches!(img, DynamicImage::ImageRgba8(_));
+    (premultiplied_alpha, native_rgba_reduce)
+}
+
+#[inline(always)]
+fn reduce_division_multiplier(divider: u32) -> u64 {
+    // division_UINT32(divider, 8): 2^32 / (256 * divider), truncated.
+    ((1u128 << 32) / (u128::from(divider) * 256)) as u64
+}
+
 /// Reduce native RGB blocks without the generic per-channel mode checks.
 ///
 /// Keep Pillow's 24-bit reciprocal-and-amend rounding unchanged. Interior,
@@ -470,115 +654,57 @@ pub(crate) fn execute_reduce(
     let new_w = w.div_ceil(fx);
     let new_h = h.div_ceil(fy);
     let raw = img.as_bytes();
-    let premultiplied_alpha = matches!(
-        img.color(),
-        crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
-    ) && !matches!(
-        explicit_mode,
-        Some("CMYK" | "RGBa" | "La" | "PA" | "RGBX" | "F" | "I")
-    );
-    let native_rgba_reduce = premultiplied_alpha
-        && explicit_mode == Some("RGBA")
-        && matches!(img, DynamicImage::ImageRgba8(_));
+    let (premultiplied_alpha, native_rgba_reduce) = reduce_alpha_layout(img, explicit_mode);
     let mut out = CheckedDims::new(new_w, new_h, channels as u8)?.alloc_buffer();
     if new_w == 0 || new_h == 0 {
         return raw_bytes_to_image(new_w, new_h, out, channels);
     }
 
-    let division_multiplier = |divider: u32| -> u64 {
-        // division_UINT32(divider, 8): 2^32 / (256 * divider), truncated.
-        ((1u128 << 32) / (u128::from(divider) * 256)) as u64
-    };
-
     // Every reduced output row reads immutable source pixels and owns a
     // disjoint destination slice. Keep the partial right/bottom blocks in the
-    // same row function as the full blocks so the parallel and serial lanes
-    // share one exact rounding order.
+    // same inlined row function as the full blocks so both CPU lanes share one
+    // exact rounding order.
     let main_w = w / fx;
     let main_h = h / fy;
     let right_width = w % fx;
     let bottom_height = h % fy;
     let full_divider = fx * fy;
-    let full_multiplier = division_multiplier(full_divider);
-    let full_amend = full_divider / 2;
+    let full = ReduceRounding {
+        multiplier: reduce_division_multiplier(full_divider),
+        amend: full_divider / 2,
+    };
     let right_divider = right_width * fy;
-    let right_multiplier = division_multiplier(right_divider.max(1));
-    let right_amend = right_divider / 2;
+    let right = ReduceRounding {
+        multiplier: reduce_division_multiplier(right_divider.max(1)),
+        amend: right_divider / 2,
+    };
     let bottom_divider = fx * bottom_height;
-    let bottom_multiplier = division_multiplier(bottom_divider.max(1));
-    let bottom_amend = bottom_divider / 2;
+    let bottom = ReduceRounding {
+        multiplier: reduce_division_multiplier(bottom_divider.max(1)),
+        amend: bottom_divider / 2,
+    };
     let corner_divider = right_width * bottom_height;
-    let corner_multiplier = division_multiplier(corner_divider.max(1));
-    let corner_amend = corner_divider / 2;
-    let process_row = |y: u32, row: &mut [u8]| {
-        let full_y = y < main_h;
-        let y_count = if full_y { fy } else { bottom_height };
-        let source_y = if y < main_h { y * fy } else { main_h * fy };
-        for x in 0..new_w {
-            let full_x = x < main_w;
-            let x_count = if full_x { fx } else { right_width };
-            let source_x = if x < main_w { x * fx } else { main_w * fx };
-            let (multiplier, amend) = match (full_x, full_y) {
-                (true, true) => (full_multiplier, full_amend),
-                (false, true) => (right_multiplier, right_amend),
-                (true, false) => (bottom_multiplier, bottom_amend),
-                (false, false) => (corner_multiplier, corner_amend),
-            };
-            let dst_idx = x as usize * channels;
-            if native_rgba_reduce {
-                let sums = reduce_rgba_premultiplied_block_sums(
-                    raw,
-                    w as usize,
-                    source_x as usize,
-                    source_y as usize,
-                    x_count as usize,
-                    y_count as usize,
-                );
-                let average = |sum: u64| (((sum + u64::from(amend)) * multiplier) >> 24) as u8;
-                let alpha = average(sums[3]);
-                let mut red = average(sums[0]);
-                let mut green = average(sums[1]);
-                let mut blue = average(sums[2]);
-                if alpha != 0 {
-                    red = (u16::from(red) * 255 / u16::from(alpha)) as u8;
-                    green = (u16::from(green) * 255 / u16::from(alpha)) as u8;
-                    blue = (u16::from(blue) * 255 / u16::from(alpha)) as u8;
-                }
-                row[dst_idx] = red;
-                row[dst_idx + 1] = green;
-                row[dst_idx + 2] = blue;
-                row[dst_idx + 3] = alpha;
-            } else {
-                let mut sums = [0u64; 4];
-                for dy in 0..y_count {
-                    for dx in 0..x_count {
-                        let src_idx = ((source_y + dy) * w + source_x + dx) as usize * channels;
-                        for c in 0..channels {
-                            let sample = if premultiplied_alpha && c + 1 < channels {
-                                ((u16::from(raw[src_idx + c])
-                                    * u16::from(raw[src_idx + channels - 1])
-                                    + 127)
-                                    / 255) as u8
-                            } else {
-                                raw[src_idx + c]
-                            };
-                            sums[c] += u64::from(sample);
-                        }
-                    }
-                }
-                for c in 0..channels {
-                    let mut value = (((sums[c] + u64::from(amend)) * multiplier) >> 24) as u8;
-                    if premultiplied_alpha && c + 1 < channels {
-                        let alpha =
-                            (((sums[channels - 1] + u64::from(amend)) * multiplier) >> 24) as u8;
-                        if alpha != 0 {
-                            value = (u16::from(value) * 255 / u16::from(alpha)) as u8;
-                        }
-                    }
-                    row[dst_idx + c] = value;
-                }
-            }
-        }
+    let corner = ReduceRounding {
+        multiplier: reduce_division_multiplier(corner_divider.max(1)),
+        amend: corner_divider / 2,
+    };
+    let row_context = ReduceRowContext {
+        raw,
+        width: w,
+        output_width: new_w,
+        x_factor: fx,
+        y_factor: fy,
+        channels,
+        main_width: main_w,
+        main_height: main_h,
+        right_width,
+        bottom_height,
+        full,
+        right,
+        bottom,
+        corner,
+        premultiplied_alpha,
+        native_rgba_reduce,
     };
 
     let output_stride = new_w as usize * channels;
@@ -598,13 +724,13 @@ pub(crate) fn execute_reduce(
                 output_stride,
                 new_h as usize,
                 |_row_start, _row_end, y, row| {
-                    process_row(y, row);
+                    process_reduce_row(&row_context, y, row);
                 }
             );
         } else {
             for y in 0..new_h {
                 let start = y as usize * output_stride;
-                process_row(y, &mut out[start..start + output_stride]);
+                process_reduce_row(&row_context, y, &mut out[start..start + output_stride]);
             }
         }
     }
@@ -612,7 +738,7 @@ pub(crate) fn execute_reduce(
     #[cfg(not(feature = "parallel"))]
     for y in 0..new_h {
         let start = y as usize * output_stride;
-        process_row(y, &mut out[start..start + output_stride]);
+        process_reduce_row(&row_context, y, &mut out[start..start + output_stride]);
     }
 
     let result = raw_bytes_to_image(new_w, new_h, out, channels)?;

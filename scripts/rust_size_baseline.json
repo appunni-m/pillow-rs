@@ -16,12 +16,6 @@
       "signature": "pub fn op_paste( img: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &Option<Arc<Image>>, mask_alpha: bool, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 150,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/reduce.rs",
-      "signature": "pub(crate) fn execute_reduce( img: &DynamicImage, x_factor: u32, y_factor: u32, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 230,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/reduce.rs",
