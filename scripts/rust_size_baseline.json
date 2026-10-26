@@ -88,12 +88,6 @@
       "signature": "fn execute_projection_terminal( &self, image: &DynamicImage, ops: &[PipelineOp], channels: u8, source_is_known_zero: bool, ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {"
     },
     {
-      "lines": 150,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn gpu_f_resize_relocate_words( bytes: &[u8], dimensions: (u32, u32), op: &PipelineOp, ) -> Option<(Vec<u8>, (u32, u32))> {"
-    },
-    {
       "lines": 194,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/resize/tiled.rs",
@@ -374,11 +368,6 @@
     "pillow-rs/src/compute/pool_gpu/projection.rs": {
       "owner": "lazytrot",
       "reason": "Moved GPU getprojection admission, sparse override dispatch, and readback out of the oversized coordinator; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated F-mode exact resize admission proofs with existing long functions; continue reducing under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/resize/tiled.rs": {

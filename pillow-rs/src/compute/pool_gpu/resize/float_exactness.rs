@@ -54,6 +54,186 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_f64_pass_bits(
 /// interpret the scalar as color or perform arithmetic.  Marker 9 uses this
 /// between filtered resize stages so the next f64 reducer sees the exact
 /// words Pillow materialized at the preceding geometry boundary.
+#[inline(always)]
+fn copy_f_resize_word(
+    bytes: &[u8],
+    output: &mut [u8],
+    destination: usize,
+    source: usize,
+) -> Option<()> {
+    let source_offset = source.checked_mul(4)?;
+    let destination_offset = destination.checked_mul(4)?;
+    let source_word = bytes.get(source_offset..source_offset.checked_add(4)?)?;
+    output
+        .get_mut(destination_offset..destination_offset.checked_add(4)?)?
+        .copy_from_slice(source_word);
+    Some(())
+}
+
+#[inline(always)]
+fn gpu_f_resize_mirror_or_flip_words(
+    bytes: &[u8],
+    dimensions: (u32, u32),
+    expected: usize,
+    flip_horizontal: bool,
+    flip_vertical: bool,
+) -> Option<(Vec<u8>, (u32, u32))> {
+    let (width, height) = dimensions;
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let mut output = vec![0u8; expected];
+    for y in 0..height as usize {
+        for x in 0..width as usize {
+            let source_x = if flip_horizontal {
+                width as usize - 1 - x
+            } else {
+                x
+            };
+            let source_y = if flip_vertical {
+                height as usize - 1 - y
+            } else {
+                y
+            };
+            let destination = y.checked_mul(width as usize)?.checked_add(x)?;
+            let source = source_y
+                .checked_mul(width as usize)?
+                .checked_add(source_x)?;
+            copy_f_resize_word(bytes, &mut output, destination, source)?;
+        }
+    }
+    Some((output, dimensions))
+}
+
+#[inline(always)]
+fn gpu_f_resize_transpose_words(
+    bytes: &[u8],
+    dimensions: (u32, u32),
+    method: &crate::pipeline::TransposeMethod,
+) -> Option<(Vec<u8>, (u32, u32))> {
+    let (width, height) = dimensions;
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let output_dimensions = transpose_output_dimensions(method, width, height);
+    let output_bytes = CheckedDims::new(output_dimensions.0, output_dimensions.1, 4)
+        .ok()?
+        .total_bytes();
+    let mut output = vec![0u8; output_bytes];
+    for y in 0..height as usize {
+        for x in 0..width as usize {
+            let (output_x, output_y) = transpose_forward(method, width, height, x as u32, y as u32);
+            let destination = usize::try_from(output_y)
+                .ok()?
+                .checked_mul(usize::try_from(output_dimensions.0).ok()?)?
+                .checked_add(usize::try_from(output_x).ok()?)?;
+            let source = y.checked_mul(width as usize)?.checked_add(x)?;
+            copy_f_resize_word(bytes, &mut output, destination, source)?;
+        }
+    }
+    Some((output, output_dimensions))
+}
+
+#[inline(always)]
+fn gpu_f_resize_crop_words(
+    bytes: &[u8],
+    dimensions: (u32, u32),
+    left: u32,
+    top: u32,
+    right: u32,
+    bottom: u32,
+) -> Option<(Vec<u8>, (u32, u32))> {
+    let (width, height) = dimensions;
+    if width == 0
+        || height == 0
+        || left >= right
+        || top >= bottom
+        || right > width
+        || bottom > height
+    {
+        return None;
+    }
+    let output_dimensions = (right - left, bottom - top);
+    let output_bytes = CheckedDims::new(output_dimensions.0, output_dimensions.1, 4)
+        .ok()?
+        .total_bytes();
+    let mut output = vec![0u8; output_bytes];
+    for y in 0..output_dimensions.1 as usize {
+        for x in 0..output_dimensions.0 as usize {
+            let source = usize::try_from(top)
+                .ok()?
+                .checked_add(y)?
+                .checked_mul(width as usize)?
+                .checked_add(usize::try_from(left).ok()?.checked_add(x)?)?;
+            let destination = y
+                .checked_mul(output_dimensions.0 as usize)?
+                .checked_add(x)?;
+            copy_f_resize_word(bytes, &mut output, destination, source)?;
+        }
+    }
+    Some((output, output_dimensions))
+}
+
+#[inline(always)]
+fn gpu_f_resize_crop_border_words(
+    bytes: &[u8],
+    dimensions: (u32, u32),
+    border: u32,
+) -> Option<(Vec<u8>, (u32, u32))> {
+    let (width, height) = dimensions;
+    let border = border.checked_mul(2)?;
+    if width == 0 || height == 0 || border >= width || border >= height {
+        return None;
+    }
+    let output_dimensions = (width - border, height - border);
+    let output_bytes = CheckedDims::new(output_dimensions.0, output_dimensions.1, 4)
+        .ok()?
+        .total_bytes();
+    let mut output = vec![0u8; output_bytes];
+    let border = usize::try_from(border).ok()?;
+    for y in 0..output_dimensions.1 as usize {
+        for x in 0..output_dimensions.0 as usize {
+            let source = (y + border)
+                .checked_mul(width as usize)?
+                .checked_add(x + border)?;
+            let destination = y
+                .checked_mul(output_dimensions.0 as usize)?
+                .checked_add(x)?;
+            copy_f_resize_word(bytes, &mut output, destination, source)?;
+        }
+    }
+    Some((output, output_dimensions))
+}
+
+#[inline(always)]
+fn gpu_f_resize_offset_words(
+    bytes: &[u8],
+    dimensions: (u32, u32),
+    x: i32,
+    y: i32,
+    expected: usize,
+) -> Option<(Vec<u8>, (u32, u32))> {
+    let (width, height) = dimensions;
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let source_x = (-(i64::from(x))).rem_euclid(i64::from(width)) as usize;
+    let source_y = (-(i64::from(y))).rem_euclid(i64::from(height)) as usize;
+    let mut output = vec![0u8; expected];
+    for destination_y in 0..height as usize {
+        for destination_x in 0..width as usize {
+            let source = ((destination_y + source_y) % height as usize)
+                .checked_mul(width as usize)?
+                .checked_add((destination_x + source_x) % width as usize)?;
+            let destination = destination_y
+                .checked_mul(width as usize)?
+                .checked_add(destination_x)?;
+            copy_f_resize_word(bytes, &mut output, destination, source)?;
+        }
+    }
+    Some((output, dimensions))
+}
+
 pub(in crate::compute::pool_gpu) fn gpu_f_resize_relocate_words(
     bytes: &[u8],
     dimensions: (u32, u32),
@@ -68,145 +248,27 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_relocate_words(
     if bytes.len() != expected {
         return None;
     }
-    let copy_word = |output: &mut [u8], destination: usize, source: usize| -> Option<()> {
-        let source_offset = source.checked_mul(4)?;
-        let destination_offset = destination.checked_mul(4)?;
-        let source_word = bytes.get(source_offset..source_offset.checked_add(4)?)?;
-        output
-            .get_mut(destination_offset..destination_offset.checked_add(4)?)?
-            .copy_from_slice(source_word);
-        Some(())
-    };
 
     match op {
         PipelineOp::Duplicate => Some((bytes.to_vec(), dimensions)),
-        PipelineOp::Mirror | PipelineOp::Flip => {
-            if width == 0 || height == 0 {
-                return None;
-            }
-            let mut output = vec![0u8; expected];
-            for y in 0..height as usize {
-                for x in 0..width as usize {
-                    let source_x = if matches!(op, PipelineOp::Mirror) {
-                        width as usize - 1 - x
-                    } else {
-                        x
-                    };
-                    let source_y = if matches!(op, PipelineOp::Flip) {
-                        height as usize - 1 - y
-                    } else {
-                        y
-                    };
-                    let destination = y.checked_mul(width as usize)?.checked_add(x)?;
-                    let source = source_y
-                        .checked_mul(width as usize)?
-                        .checked_add(source_x)?;
-                    copy_word(&mut output, destination, source)?;
-                }
-            }
-            Some((output, dimensions))
+        PipelineOp::Mirror => {
+            gpu_f_resize_mirror_or_flip_words(bytes, dimensions, expected, true, false)
         }
-        PipelineOp::Transpose { method } => {
-            if width == 0 || height == 0 {
-                return None;
-            }
-            let output_dimensions = transpose_output_dimensions(method, width, height);
-            let output_bytes = CheckedDims::new(output_dimensions.0, output_dimensions.1, 4)
-                .ok()?
-                .total_bytes();
-            let mut output = vec![0u8; output_bytes];
-            for y in 0..height as usize {
-                for x in 0..width as usize {
-                    let (output_x, output_y) =
-                        transpose_forward(method, width, height, x as u32, y as u32);
-                    let destination = usize::try_from(output_y)
-                        .ok()?
-                        .checked_mul(usize::try_from(output_dimensions.0).ok()?)?
-                        .checked_add(usize::try_from(output_x).ok()?)?;
-                    let source = y.checked_mul(width as usize)?.checked_add(x)?;
-                    copy_word(&mut output, destination, source)?;
-                }
-            }
-            Some((output, output_dimensions))
+        PipelineOp::Flip => {
+            gpu_f_resize_mirror_or_flip_words(bytes, dimensions, expected, false, true)
         }
+        PipelineOp::Transpose { method } => gpu_f_resize_transpose_words(bytes, dimensions, method),
         PipelineOp::Crop {
             left,
             top,
             right,
             bottom,
-        } => {
-            if width == 0
-                || height == 0
-                || *left >= *right
-                || *top >= *bottom
-                || *right > width
-                || *bottom > height
-            {
-                return None;
-            }
-            let output_dimensions = (right - left, bottom - top);
-            let output_bytes = CheckedDims::new(output_dimensions.0, output_dimensions.1, 4)
-                .ok()?
-                .total_bytes();
-            let mut output = vec![0u8; output_bytes];
-            for y in 0..output_dimensions.1 as usize {
-                for x in 0..output_dimensions.0 as usize {
-                    let source = usize::try_from(*top)
-                        .ok()?
-                        .checked_add(y)?
-                        .checked_mul(width as usize)?
-                        .checked_add(usize::try_from(*left).ok()?.checked_add(x)?)?;
-                    let destination = y
-                        .checked_mul(output_dimensions.0 as usize)?
-                        .checked_add(x)?;
-                    copy_word(&mut output, destination, source)?;
-                }
-            }
-            Some((output, output_dimensions))
-        }
+        } => gpu_f_resize_crop_words(bytes, dimensions, *left, *top, *right, *bottom),
         PipelineOp::CropBorder { border } => {
-            let border = border.checked_mul(2)?;
-            if width == 0 || height == 0 || border >= width || border >= height {
-                return None;
-            }
-            let output_dimensions = (width - border, height - border);
-            let output_bytes = CheckedDims::new(output_dimensions.0, output_dimensions.1, 4)
-                .ok()?
-                .total_bytes();
-            let mut output = vec![0u8; output_bytes];
-            let border = usize::try_from(border).ok()?;
-            for y in 0..output_dimensions.1 as usize {
-                for x in 0..output_dimensions.0 as usize {
-                    let source = (y + border)
-                        .checked_mul(width as usize)?
-                        .checked_add(x + border)?;
-                    let destination = y
-                        .checked_mul(output_dimensions.0 as usize)?
-                        .checked_add(x)?;
-                    copy_word(&mut output, destination, source)?;
-                }
-            }
-            Some((output, output_dimensions))
+            gpu_f_resize_crop_border_words(bytes, dimensions, *border)
         }
         PipelineOp::Offset { x, y } => {
-            if width == 0 || height == 0 {
-                return None;
-            }
-            let source_x = (-(i64::from(*x))).rem_euclid(i64::from(width)) as usize;
-            let source_y = (-(i64::from(*y))).rem_euclid(i64::from(height)) as usize;
-            let mut output = vec![0u8; expected];
-            for destination_y in 0..height as usize {
-                for destination_x in 0..width as usize {
-                    let source = ((destination_y + source_y) % height as usize)
-                        .checked_mul(width as usize)?
-                        .checked_add((destination_x + source_x) % width as usize)?;
-                    let destination = destination_y
-                        .checked_mul(width as usize)?
-                        .checked_add(destination_x)?;
-                    copy_word(&mut output, destination, source)?;
-                }
-            }
-            Some((output, dimensions))
+            gpu_f_resize_offset_words(bytes, dimensions, *x, *y, expected)
         }
         _ => None,
     }
