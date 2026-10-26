@@ -360,11 +360,11 @@ pub fn transform(
     let fill_b = (fill_rgba >> 16) & 0xFF;
     let fill_a = (fill_rgba >> 24) & 0xFF;
     let unpremultiply = |value: u32, alpha: u32| {
-        if alpha == 0 {
-            0
-        } else {
-            (value.saturating_mul(255) / alpha).min(255)
-        }
+        value
+            .saturating_mul(255)
+            .checked_div(alpha)
+            .unwrap_or(0)
+            .min(255)
     };
     let fill_out_r = if has_a && !nearest {
         unpremultiply(fill_r, fill_a)
@@ -613,9 +613,9 @@ fn transform_bilinear_channels(pixels: [u32; 4], fx: f64, fy: f64, plan: Transfo
 
 #[inline(always)]
 fn unpremultiply_transform_channel(value: u32, alpha: u32) -> u32 {
-    if alpha == 0 {
-        0
-    } else {
-        (value.saturating_mul(255) / alpha).min(255)
-    }
+    value
+        .saturating_mul(255)
+        .checked_div(alpha)
+        .unwrap_or(0)
+        .min(255)
 }

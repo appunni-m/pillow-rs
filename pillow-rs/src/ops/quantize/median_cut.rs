@@ -626,7 +626,8 @@ fn compute_palette(boxes: &[VBox], entries: &[HistEntry]) -> Vec<[u8; 3]> {
             }
         }
 
-        if count > 0 {
+        if let Some(count) = std::num::NonZeroU64::new(count) {
+            let count = count.get();
             // PIL: (int)(.5 + (double)avg / (double)count)
             palette.push([
                 ((sum_r + count / 2) / count) as u8,
