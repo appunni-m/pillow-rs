@@ -124,6 +124,25 @@ fn pipeline_operation_telemetry_to_py(
     Ok(values.into())
 }
 
+fn pipeline_telemetry_without_summary(
+    py: Python<'_>,
+    operation_telemetry: Vec<pillow_rs::PipelineOperationTelemetry>,
+    phase_timings: (Option<u64>, Option<u64>, Option<u64>),
+) -> PyResult<Option<Py<PyAny>>> {
+    if operation_telemetry.is_empty() && phase_timings == (None, None, None) {
+        return Ok(None);
+    }
+    let result = PyDict::new(py);
+    if !operation_telemetry.is_empty() {
+        result.set_item(
+            "operation_telemetry",
+            pipeline_operation_telemetry_to_py(py, operation_telemetry)?,
+        )?;
+    }
+    telemetry::set_pipeline_phase_diagnostics(&result, phase_timings)?;
+    Ok(Some(result.into()))
+}
+
 #[pyfunction]
 fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
     let operation_telemetry = pillow_rs::Backend::take_pipeline_operation_telemetry();
@@ -142,18 +161,7 @@ fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         resize_coeff_cache_misses,
     )) = pillow_rs::Backend::take_pipeline_telemetry()
     else {
-        if operation_telemetry.is_empty() && phase_timings == (None, None, None) {
-            return Ok(None);
-        }
-        let result = PyDict::new(py);
-        if !operation_telemetry.is_empty() {
-            result.set_item(
-                "operation_telemetry",
-                pipeline_operation_telemetry_to_py(py, operation_telemetry)?,
-            )?;
-        }
-        telemetry::set_pipeline_phase_diagnostics(&result, phase_timings)?;
-        return Ok(Some(result.into()));
+        return pipeline_telemetry_without_summary(py, operation_telemetry, phase_timings);
     };
 
     let result = PyDict::new(py);
