@@ -42,41 +42,62 @@ fn byte_projective_filtered_relocations_native_gpu_preserve_pixels() {
                         fill.clone(),
                     )
                     .expect("filtered projective relocation");
-                let expected = transformed
-                    .clone()
-                    .use_backend(Backend::Cpu)
-                    .tobytes()
-                    .expect("CPU filtered projective relocation");
-                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
-                    Ok(actual) => actual,
-                    Err(error)
-                        if error.to_string().contains("GPU adapter not available")
-                            || error
-                                .to_string()
-                                .contains("GPU device initialization failed") =>
-                    {
-                        Backend::set_pipeline_telemetry_enabled(previous);
-                        return;
-                    }
-                    Err(error) => {
-                        panic!("native GPU filtered projective relocation failed: {error}")
-                    }
-                };
-                assert_eq!(actual, expected, "native {mode} filtered relocation");
-                let telemetry = Backend::take_pipeline_telemetry()
-                    .expect("filtered relocation must publish a receipt");
-                assert_eq!(
-                    telemetry.0,
-                    Some(Backend::Gpu),
-                    "telemetry={telemetry:?} mode={mode} matrix={matrix:?} filter={filter:?}"
-                );
-                assert_eq!(telemetry.1, Backend::Gpu);
-                assert_eq!(telemetry.6, Some(1));
-                assert_eq!(telemetry.7, None);
+                let parity_context = format!("native {mode} filtered relocation");
+                let telemetry_context = format!("mode={mode} matrix={matrix:?} filter={filter:?}");
+                if !assert_projective_gpu_parity_case(
+                    transformed,
+                    previous,
+                    &parity_context,
+                    "CPU filtered projective relocation",
+                    "filtered projective relocation",
+                    &telemetry_context,
+                ) {
+                    return;
+                }
             }
         }
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_projective_gpu_parity_case(
+    transformed: Image,
+    previous: bool,
+    parity_context: &str,
+    cpu_context: &str,
+    operation_context: &str,
+    telemetry_context: &str,
+) -> bool {
+    let expected = transformed
+        .clone()
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .unwrap_or_else(|error| panic!("{cpu_context}: {error}"));
+    let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return false;
+        }
+        Err(error) => panic!("native GPU {operation_context} failed: {error}"),
+    };
+    assert_eq!(actual, expected, "{parity_context}");
+    let telemetry =
+        Backend::take_pipeline_telemetry().expect("projective relocation must publish a receipt");
+    assert_eq!(
+        telemetry.0,
+        Some(Backend::Gpu),
+        "telemetry={telemetry:?} {telemetry_context}"
+    );
+    assert_eq!(telemetry.1, Backend::Gpu);
+    assert_eq!(telemetry.6, Some(1));
+    assert_eq!(telemetry.7, None);
+    true
 }
 
 #[test]
@@ -115,40 +136,21 @@ fn byte_quad_mesh_filtered_relocations_native_gpu_preserve_pixels() {
                         fill.clone(),
                     )
                     .expect("filtered Quad/Mesh relocation");
-                let expected = transformed
-                    .clone()
-                    .use_backend(Backend::Cpu)
-                    .tobytes()
-                    .expect("CPU filtered Quad/Mesh relocation");
-                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
-                    Ok(actual) => actual,
-                    Err(error)
-                        if error.to_string().contains("GPU adapter not available")
-                            || error
-                                .to_string()
-                                .contains("GPU device initialization failed") =>
-                    {
-                        Backend::set_pipeline_telemetry_enabled(previous);
-                        return;
-                    }
-                    Err(error) => {
-                        panic!("native GPU filtered Quad/Mesh relocation failed: {error}")
-                    }
-                };
-                assert_eq!(
-                    actual, expected,
+                let parity_context = format!(
                     "native {mode} filtered method {method} data={data:?} filter={filter:?}"
                 );
-                let telemetry = Backend::take_pipeline_telemetry()
-                    .expect("filtered Quad/Mesh relocation must publish a receipt");
-                assert_eq!(telemetry.0, Some(Backend::Gpu));
-                assert_eq!(
-                    telemetry.1,
-                    Backend::Gpu,
-                    "telemetry={telemetry:?} mode={mode} method={method} data={data:?} filter={filter:?}"
-                );
-                assert_eq!(telemetry.6, Some(1));
-                assert_eq!(telemetry.7, None);
+                let telemetry_context =
+                    format!("mode={mode} method={method} data={data:?} filter={filter:?}");
+                if !assert_projective_gpu_parity_case(
+                    transformed,
+                    previous,
+                    &parity_context,
+                    "CPU filtered Quad/Mesh relocation",
+                    "filtered Quad/Mesh relocation",
+                    &telemetry_context,
+                ) {
+                    return;
+                }
             }
         }
     }
@@ -393,36 +395,20 @@ fn palette_projective_partial_mesh_relocations_native_gpu_preserve_pairs() {
                     .unwrap_or_else(|error| {
                         panic!("{mode} partial Mesh transform bbox={bbox:?} quad={quad:?}: {error}")
                     });
-                let expected = transformed
-                    .clone()
-                    .use_backend(Backend::Cpu)
-                    .tobytes()
-                    .expect("CPU partial palette Mesh transform");
-                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
-                    Ok(actual) => actual,
-                    Err(error)
-                        if error.to_string().contains("GPU adapter not available")
-                            || error
-                                .to_string()
-                                .contains("GPU device initialization failed") =>
-                    {
-                        Backend::set_pipeline_telemetry_enabled(previous);
-                        return;
-                    }
-                    Err(error) => {
-                        panic!("native GPU {mode} partial Mesh transform failed: {error}")
-                    }
-                };
-                assert_eq!(
-                    actual, expected,
-                    "native {mode} partial Mesh filter={filter:?}"
-                );
-                let telemetry = Backend::take_pipeline_telemetry()
-                    .expect("partial palette Mesh transform must publish telemetry");
-                assert_eq!(telemetry.0, Some(Backend::Gpu));
-                assert_eq!(telemetry.1, Backend::Gpu);
-                assert_eq!(telemetry.6, Some(1));
-                assert_eq!(telemetry.7, None);
+                let parity_context = format!("native {mode} partial Mesh filter={filter:?}");
+                let telemetry_context =
+                    format!("mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}");
+                let operation_context = format!("{mode} partial Mesh transform");
+                if !assert_projective_gpu_parity_case(
+                    transformed,
+                    previous,
+                    &parity_context,
+                    "CPU partial palette Mesh transform",
+                    &operation_context,
+                    &telemetry_context,
+                ) {
+                    return;
+                }
             }
         }
     }
