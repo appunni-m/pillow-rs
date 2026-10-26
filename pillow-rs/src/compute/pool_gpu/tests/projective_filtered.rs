@@ -660,27 +660,7 @@ fn assert_integer_constant_projective_mode(
     output_size: (u32, u32),
     maps: &[(i32, TransformData); 3],
 ) -> bool {
-    let bytes = (0..channels.saturating_mul(256))
-        .map(|index| index.wrapping_mul(53).wrapping_add(17) as u8)
-        .collect::<Vec<_>>();
-    let mut source = Image::frombytes(if mode == "PA" { "LA" } else { mode }, source_size, &bytes)
-        .expect("integer-constant projective source");
-    if mode == "PA" {
-        let palette = (0usize..768)
-            .map(|index| index.wrapping_mul(19).wrapping_add(7) as u8)
-            .collect::<Vec<_>>();
-        source
-            .putpalette(&palette, "RGB")
-            .expect("integer-constant PA palette");
-    }
-    let fill = match mode {
-        "L" => TransformFill::Scalar(199),
-        "RGB" => TransformFill::Components(vec![199, 71, 17]),
-        "PA" => TransformFill::Components(vec![199, 71]),
-        "CMYK" | "RGBX" | "RGBa" => TransformFill::Components(vec![199, 71, 17, 233]),
-        "HSV" | "YCbCr" => TransformFill::Components(vec![199, 71, 17]),
-        _ => unreachable!(),
-    };
+    let (source, fill) = integer_constant_projective_source_and_fill(mode, channels, source_size);
     for filter in [ResampleFilter::Bilinear, ResampleFilter::Bicubic] {
         for (method, data) in maps {
             let transformed = source
@@ -729,4 +709,33 @@ fn assert_integer_constant_projective_mode(
         }
     }
     true
+}
+
+fn integer_constant_projective_source_and_fill(
+    mode: &str,
+    channels: usize,
+    source_size: (u32, u32),
+) -> (Image, TransformFill) {
+    let bytes = (0..channels.saturating_mul(256))
+        .map(|index| index.wrapping_mul(53).wrapping_add(17) as u8)
+        .collect::<Vec<_>>();
+    let mut source = Image::frombytes(if mode == "PA" { "LA" } else { mode }, source_size, &bytes)
+        .expect("integer-constant projective source");
+    if mode == "PA" {
+        let palette = (0usize..768)
+            .map(|index| index.wrapping_mul(19).wrapping_add(7) as u8)
+            .collect::<Vec<_>>();
+        source
+            .putpalette(&palette, "RGB")
+            .expect("integer-constant PA palette");
+    }
+    let fill = match mode {
+        "L" => TransformFill::Scalar(199),
+        "RGB" => TransformFill::Components(vec![199, 71, 17]),
+        "PA" => TransformFill::Components(vec![199, 71]),
+        "CMYK" | "RGBX" | "RGBa" => TransformFill::Components(vec![199, 71, 17, 233]),
+        "HSV" | "YCbCr" => TransformFill::Components(vec![199, 71, 17]),
+        _ => unreachable!(),
+    };
+    (source, fill)
 }
