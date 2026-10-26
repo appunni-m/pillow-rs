@@ -452,17 +452,7 @@ impl GpuBatchExecutionRoute<'_> {
             )? {
                 NativeGeometryDispatchOutcome::NotApplicable => {}
                 NativeGeometryDispatchOutcome::ExceedsLimits(reason) => {
-                    return self
-                        .prepared
-                        .pool
-                        .preflight_failure(
-                            self.ops(),
-                            self.img(),
-                            self.mode(),
-                            self.prepared.allow_cpu_fallback,
-                            reason,
-                        )
-                        .map(Some);
+                    return self.native_geometry_preflight_failure(reason);
                 }
                 NativeGeometryDispatchOutcome::Executed(result) => return Ok(Some(result)),
             }
@@ -475,17 +465,7 @@ impl GpuBatchExecutionRoute<'_> {
             )? {
                 NativeGeometryDispatchOutcome::NotApplicable => {}
                 NativeGeometryDispatchOutcome::ExceedsLimits(reason) => {
-                    return self
-                        .prepared
-                        .pool
-                        .preflight_failure(
-                            self.ops(),
-                            self.img(),
-                            self.mode(),
-                            self.prepared.allow_cpu_fallback,
-                            reason,
-                        )
-                        .map(Some);
+                    return self.native_geometry_preflight_failure(reason);
                 }
                 NativeGeometryDispatchOutcome::Executed(result) => return Ok(Some(result)),
             }
@@ -493,6 +473,22 @@ impl GpuBatchExecutionRoute<'_> {
         #[cfg(not(target_endian = "little"))]
         let _ = (limits, capacity);
         Ok(None)
+    }
+
+    fn native_geometry_preflight_failure(
+        &self,
+        reason: &'static str,
+    ) -> Result<Option<DynamicImage>, PilError> {
+        self.prepared
+            .pool
+            .preflight_failure(
+                self.ops(),
+                self.img(),
+                self.mode(),
+                self.prepared.allow_cpu_fallback,
+                reason,
+            )
+            .map(Some)
     }
 }
 
