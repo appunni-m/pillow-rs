@@ -31,6 +31,174 @@ pub(crate) fn pil_preserve_mode(original: &DynamicImage, result: DynamicImage) -
     }
 }
 
+#[inline(always)]
+fn pil_resize_nearest(
+    img: &DynamicImage,
+    orig_img: &DynamicImage,
+    sw: u32,
+    sh: u32,
+    dw: u32,
+    dh: u32,
+    channels: usize,
+) -> DynamicImage {
+    // PIL's NEAREST resize uses ImagingScaleAffine with cumulative f64 stepping.
+    // From _imaging.c for NEAREST filter:
+    //   a[0] = (double)(box[2] - box[0]) / xsize   (= sw / dw)
+    //   a[2] = box[0]                                (= 0)
+    // Then: xo = a[2] + a[0] * 0.5
+    //       for each x: xin = (int)(xo); xo += a[0]
+    let scale_x = sw as f64 / dw as f64;
+    let scale_y = sh as f64 / dh as f64;
+    let n = (dw * dh) as usize;
+    let mut out_bytes: Vec<u8> = Vec::with_capacity(n * channels);
+    // Precompute x-mapping table matching PIL's xintab approach
+    let mut xintab: Vec<u32> = Vec::with_capacity(dw as usize);
+    let mut xo = scale_x * 0.5;
+    for _dx in 0..dw {
+        let xi = xo as u32;
+        xintab.push(if xi >= sw { sw - 1 } else { xi });
+        xo += scale_x;
+    }
+
+    // Native byte images already have the exact sample layout required by
+    // Pillow's affine nearest path. Copy complete source pixels directly
+    // instead of expanding each one through `pixel_at`'s four-channel
+    // f64 representation and then pushing bytes individually. This keeps
+    // the coordinate calculation identical while making the common
+    // byte-image path bandwidth-bound.
+    if matches!(
+        img,
+        DynamicImage::ImageLuma8(_)
+            | DynamicImage::ImageLumaA8(_)
+            | DynamicImage::ImageRgb8(_)
+            | DynamicImage::ImageRgba8(_)
+    ) {
+        let source = img.as_bytes();
+        let mut out_bytes = vec![0u8; n * channels];
+        let source_stride = sw as usize * channels;
+        let destination_stride = dw as usize * channels;
+        let mut yo = scale_y * 0.5;
+        for dy in 0..dh as usize {
+            let sy = if yo >= sh as f64 { sh - 1 } else { yo as u32 } as usize;
+            let source_row = sy * source_stride;
+            let destination_row = dy * destination_stride;
+            if channels == 1 {
+                let destination =
+                    &mut out_bytes[destination_row..destination_row + destination_stride];
+                for (destination_pixel, &sx) in destination.iter_mut().zip(&xintab) {
+                    *destination_pixel = source[source_row + sx as usize];
+                }
+            } else {
+                for (dx, &sx) in xintab.iter().enumerate() {
+                    let source_start = source_row + sx as usize * channels;
+                    let destination_start = destination_row + dx * channels;
+                    out_bytes[destination_start..destination_start + channels]
+                        .copy_from_slice(&source[source_start..source_start + channels]);
+                }
+            }
+            yo += scale_y;
+        }
+        let result = raw_to_dynamic_owned(out_bytes, dw, dh, channels);
+        return pil_preserve_mode(orig_img, result);
+    }
+    // PIL also uses cumulative stepping for y: yo = a[4] * 0.5
+    let mut yo = scale_y * 0.5;
+    for _dy in 0..dh {
+        let sy = if yo >= sh as f64 { sh - 1 } else { yo as u32 };
+        for dx in 0..dw {
+            let sx = xintab[dx as usize];
+            let p = pixel_at(img, sx, sy);
+            for c in 0..channels {
+                // `pixel_at` exposes grayscale-alpha pixels as RGBA
+                // (`[luma, luma, luma, alpha]`), while the resize buffer
+                // keeps their native two-byte `[luma, alpha]` layout.
+                // Select the alpha lane explicitly so PA/LA nearest
+                // resize does not copy luma into the alpha sample.
+                let rgba_channel = if channels == 2 && c == 1 { 3 } else { c };
+                out_bytes.push(pil_round(p[rgba_channel]));
+            }
+        }
+        yo += scale_y;
+    }
+    let result = raw_to_dynamic_owned(out_bytes, dw, dh, channels);
+    pil_preserve_mode(orig_img, result)
+}
+
+#[inline(always)]
+fn pil_resize_convolution(
+    img: &DynamicImage,
+    orig_img: &DynamicImage,
+    sw: u32,
+    sh: u32,
+    dw: u32,
+    dh: u32,
+    channels: usize,
+    needs_alpha: bool,
+    h_coeffs: &super::coefficients::FilterCoeffs,
+    v_coeffs: &super::coefficients::FilterCoeffs,
+) -> DynamicImage {
+    // Allocate intermediate image (sh rows × dw columns × channels)
+    let mut intermediate = vec![0u8; (sh * dw) as usize * channels];
+
+    // Horizontal pass: each source row is independent and can be written into
+    // its own intermediate row.
+    if needs_alpha {
+        horizontal_pass_rows_alpha(
+            img.as_bytes(),
+            sw,
+            sh,
+            channels,
+            h_coeffs,
+            dw,
+            &mut intermediate,
+        );
+    } else {
+        horizontal_pass_rows(
+            img.as_bytes(),
+            sw,
+            sh,
+            channels,
+            h_coeffs,
+            dw,
+            &mut intermediate,
+        );
+    }
+
+    // Allocate output image
+    let mut out_bytes = vec![0u8; (dw * dh) as usize * channels];
+
+    // Vertical output rows are also independent once the intermediate image
+    // exists, so they use the same disjoint-row write helper.
+    if needs_alpha {
+        vertical_pass_rows_alpha(
+            &intermediate,
+            sh,
+            dw,
+            dh,
+            channels,
+            v_coeffs,
+            &mut out_bytes,
+            0,
+        );
+    } else {
+        vertical_pass_rows(
+            &intermediate,
+            sh,
+            dw,
+            dh,
+            channels,
+            v_coeffs,
+            &mut out_bytes,
+            0,
+        );
+    }
+
+    // Build DynamicImage from bytes
+    let result = raw_to_dynamic_owned(out_bytes, dw, dh, channels);
+
+    pil_preserve_mode(orig_img, result)
+}
+
 /// PIL-compatible resize using two-pass separable interpolation.
 ///
 /// PIL's approach:
@@ -134,87 +302,7 @@ pub fn pil_resize(
     // using float then double promotion, causing exact-integer boundaries to
     // nudge down by ~1e-15.
     if matches!(filter, ResampleFilter::Nearest) {
-        // PIL's NEAREST resize uses ImagingScaleAffine with cumulative f64 stepping.
-        // From _imaging.c for NEAREST filter:
-        //   a[0] = (double)(box[2] - box[0]) / xsize   (= sw / dw)
-        //   a[2] = box[0]                                (= 0)
-        // Then: xo = a[2] + a[0] * 0.5
-        //       for each x: xin = (int)(xo); xo += a[0]
-        let scale_x = sw as f64 / dw as f64;
-        let scale_y = sh as f64 / dh as f64;
-        let n = (dw * dh) as usize;
-        let mut out_bytes: Vec<u8> = Vec::with_capacity(n * channels);
-        // Precompute x-mapping table matching PIL's xintab approach
-        let mut xintab: Vec<u32> = Vec::with_capacity(dw as usize);
-        let mut xo = scale_x * 0.5;
-        for _dx in 0..dw {
-            let xi = xo as u32;
-            xintab.push(if xi >= sw { sw - 1 } else { xi });
-            xo += scale_x;
-        }
-
-        // Native byte images already have the exact sample layout required by
-        // Pillow's affine nearest path. Copy complete source pixels directly
-        // instead of expanding each one through `pixel_at`'s four-channel
-        // f64 representation and then pushing bytes individually. This keeps
-        // the coordinate calculation identical while making the common
-        // byte-image path bandwidth-bound.
-        if matches!(
-            img,
-            DynamicImage::ImageLuma8(_)
-                | DynamicImage::ImageLumaA8(_)
-                | DynamicImage::ImageRgb8(_)
-                | DynamicImage::ImageRgba8(_)
-        ) {
-            let source = img.as_bytes();
-            let mut out_bytes = vec![0u8; n * channels];
-            let source_stride = sw as usize * channels;
-            let destination_stride = dw as usize * channels;
-            let mut yo = scale_y * 0.5;
-            for dy in 0..dh as usize {
-                let sy = if yo >= sh as f64 { sh - 1 } else { yo as u32 } as usize;
-                let source_row = sy * source_stride;
-                let destination_row = dy * destination_stride;
-                if channels == 1 {
-                    let destination =
-                        &mut out_bytes[destination_row..destination_row + destination_stride];
-                    for (destination_pixel, &sx) in destination.iter_mut().zip(&xintab) {
-                        *destination_pixel = source[source_row + sx as usize];
-                    }
-                } else {
-                    for (dx, &sx) in xintab.iter().enumerate() {
-                        let source_start = source_row + sx as usize * channels;
-                        let destination_start = destination_row + dx * channels;
-                        out_bytes[destination_start..destination_start + channels]
-                            .copy_from_slice(&source[source_start..source_start + channels]);
-                    }
-                }
-                yo += scale_y;
-            }
-            let result = raw_to_dynamic_owned(out_bytes, dw, dh, channels);
-            return pil_preserve_mode(orig_img, result);
-        }
-        // PIL also uses cumulative stepping for y: yo = a[4] * 0.5
-        let mut yo = scale_y * 0.5;
-        for _dy in 0..dh {
-            let sy = if yo >= sh as f64 { sh - 1 } else { yo as u32 };
-            for dx in 0..dw {
-                let sx = xintab[dx as usize];
-                let p = pixel_at(img, sx, sy);
-                for c in 0..channels {
-                    // `pixel_at` exposes grayscale-alpha pixels as RGBA
-                    // (`[luma, luma, luma, alpha]`), while the resize buffer
-                    // keeps their native two-byte `[luma, alpha]` layout.
-                    // Select the alpha lane explicitly so PA/LA nearest
-                    // resize does not copy luma into the alpha sample.
-                    let rgba_channel = if channels == 2 && c == 1 { 3 } else { c };
-                    out_bytes.push(pil_round(p[rgba_channel]));
-                }
-            }
-            yo += scale_y;
-        }
-        let result = raw_to_dynamic_owned(out_bytes, dw, dh, channels);
-        return pil_preserve_mode(orig_img, result);
+        return pil_resize_nearest(img, orig_img, sw, sh, dw, dh, channels);
     }
 
     // Precompute horizontal and vertical coefficients for two-pass pipeline
@@ -261,66 +349,18 @@ pub fn pil_resize(
         }
     }
 
-    // Allocate intermediate image (sh rows × dw columns × channels)
-    let mut intermediate = vec![0u8; (sh * dw) as usize * channels];
-
-    // Horizontal pass: each source row is independent and can be written into
-    // its own intermediate row.
-    if needs_alpha {
-        horizontal_pass_rows_alpha(
-            img.as_bytes(),
-            sw,
-            sh,
-            channels,
-            &h_coeffs,
-            dw,
-            &mut intermediate,
-        );
-    } else {
-        horizontal_pass_rows(
-            img.as_bytes(),
-            sw,
-            sh,
-            channels,
-            &h_coeffs,
-            dw,
-            &mut intermediate,
-        );
-    }
-
-    // Allocate output image
-    let mut out_bytes = vec![0u8; (dw * dh) as usize * channels];
-
-    // Vertical output rows are also independent once the intermediate image
-    // exists, so they use the same disjoint-row write helper.
-    if needs_alpha {
-        vertical_pass_rows_alpha(
-            &intermediate,
-            sh,
-            dw,
-            dh,
-            channels,
-            &v_coeffs,
-            &mut out_bytes,
-            0,
-        );
-    } else {
-        vertical_pass_rows(
-            &intermediate,
-            sh,
-            dw,
-            dh,
-            channels,
-            &v_coeffs,
-            &mut out_bytes,
-            0,
-        );
-    }
-
-    // Build DynamicImage from bytes
-    let result = raw_to_dynamic_owned(out_bytes, dw, dh, channels);
-
-    pil_preserve_mode(orig_img, result)
+    pil_resize_convolution(
+        img,
+        orig_img,
+        sw,
+        sh,
+        dw,
+        dh,
+        channels,
+        needs_alpha,
+        &h_coeffs,
+        &v_coeffs,
+    )
 }
 
 /// Resize RGBX bytes into an existing, full-width output window.
