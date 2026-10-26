@@ -1,17 +1,17 @@
 use super::*;
 
+fn f32_words_to_bytes(words: &[u32]) -> Vec<u8> {
+    words.iter().flat_map(|word| word.to_le_bytes()).collect()
+}
+
 #[test]
 fn f_resize_compact_box_proof_covers_horizontal_over_binding_row() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     let height = 8_388_608usize;
     let pattern = [0.125f32, -17.25, 1.0, -2.5, 3.75, -0.0, 100.0, -99.0];
     let words: Vec<u32> = (0..height)
         .map(|index| pattern[index % pattern.len()].to_bits())
         .collect();
-    let source = Image::frombytes("F", (height as u32, 1), &bytes(&words))
+    let source = Image::frombytes("F", (height as u32, 1), &f32_words_to_bytes(&words))
         .expect("horizontal compact Box source");
     let source_dynamic = source
         .materialize()
@@ -71,10 +71,6 @@ fn f_resize_compact_box_proof_covers_horizontal_over_binding_row() {
 
 #[test]
 fn f_resize_compact_box_proof_covers_multiple_output_rows() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     // Two output columns each consume an integer 8,388,608-tap Box row.
     // The complete per-tap table would exceed the binding limit, while
     // Pillow's Resample.c geometry gives both rows the same 1/ratio
@@ -85,7 +81,7 @@ fn f_resize_compact_box_proof_covers_multiple_output_rows() {
     let words: Vec<u32> = (0..width)
         .map(|index| pattern[index % pattern.len()].to_bits())
         .collect();
-    let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+    let source = Image::frombytes("F", (width as u32, 1), &f32_words_to_bytes(&words))
         .expect("multi-output compact Box source");
     let source_dynamic = source
         .materialize()
@@ -152,16 +148,12 @@ fn f_resize_compact_box_proof_covers_multiple_output_rows() {
 
 #[test]
 fn f_resize_compact_box_proof_covers_vertical_over_binding_row() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     let height = 8_388_608usize;
     let pattern = [0.125f32, -17.25, 1.0, -2.5, 3.75, -0.0, 100.0, -99.0];
     let words: Vec<u32> = (0..height)
         .map(|index| pattern[index % pattern.len()].to_bits())
         .collect();
-    let source = Image::frombytes("F", (1, height as u32), &bytes(&words))
+    let source = Image::frombytes("F", (1, height as u32), &f32_words_to_bytes(&words))
         .expect("vertical compact Box source");
     let source_dynamic = source
         .materialize()
@@ -199,10 +191,6 @@ fn f_resize_compact_box_proof_covers_vertical_over_binding_row() {
 
 #[test]
 fn f_resize_compact_box_proof_covers_changed_second_axis() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     // The horizontal compact row is followed by a two-tap ordinary Box
     // row.  This exercises the pass ordering that was previously rejected
     // solely because the non-compact axis changed.
@@ -211,7 +199,7 @@ fn f_resize_compact_box_proof_covers_changed_second_axis() {
     let words: Vec<u32> = (0..width * 2)
         .map(|index| pattern[index % pattern.len()].to_bits())
         .collect();
-    let source = Image::frombytes("F", (width as u32, 2), &bytes(&words))
+    let source = Image::frombytes("F", (width as u32, 2), &f32_words_to_bytes(&words))
         .expect("compact chained Box source");
     let source_dynamic = source
         .materialize()
@@ -234,10 +222,11 @@ fn f_resize_compact_box_proof_covers_changed_second_axis() {
     ));
     let mut special_words = words.clone();
     special_words[width / 2] = 0x7fc1_2345;
-    let special_source = Image::frombytes("F", (width as u32, 2), &bytes(&special_words))
-        .expect("compact chained special Box source")
-        .materialize()
-        .expect("materialize compact chained special Box source");
+    let special_source =
+        Image::frombytes("F", (width as u32, 2), &f32_words_to_bytes(&special_words))
+            .expect("compact chained special Box source")
+            .materialize()
+            .expect("materialize compact chained special Box source");
     assert!(!gpu_f_resize_compact_box_is_exact(
         std::slice::from_ref(&op),
         &special_source,
@@ -268,10 +257,6 @@ fn f_resize_compact_box_proof_covers_changed_second_axis() {
 
 #[test]
 fn f_resize_compact_box_special_over_binding_native_matches_cpu() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     // Marker 13 repeats a nonzero 1/source-axis coefficient, so its
     // compact special scan can preserve the same first-NaN payload and
     // signed-infinity cancellation as marker 9 without a full table.
@@ -309,7 +294,7 @@ fn f_resize_compact_box_special_over_binding_native_matches_cpu() {
         for (index, value) in specials {
             words[index] = value;
         }
-        let source = Image::frombytes("F", (source_w, source_h), &bytes(&words))
+        let source = Image::frombytes("F", (source_w, source_h), &f32_words_to_bytes(&words))
             .expect("compact special F source");
         let source_dynamic = source
             .materialize()
