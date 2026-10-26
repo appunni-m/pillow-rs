@@ -311,15 +311,16 @@ fn i_thumbnail_odd_2x2_edges_keep_partial_double_accumulation() {
 #[test]
 fn rgb_putpixel_thumbnail_fusion_matches_materialized_putpixel_and_thumbnail() {
     let (source_width, source_height) = (1024, 768);
-    let (output_width, output_height) = (256, 192);
-    let filters = [
-        ResampleFilter::Bilinear,
-        ResampleFilter::Bicubic,
-        ResampleFilter::Lanczos,
-        ResampleFilter::Box,
-        ResampleFilter::Hamming,
-    ];
-    let putpixel_ops = vec![
+    let putpixel_ops = rgb_putpixel_thumbnail_ops(source_width, source_height);
+
+    for dense in [false, true] {
+        let source = rgb_putpixel_thumbnail_source(dense, source_width, source_height);
+        assert_rgb_putpixel_thumbnail_supported_cases(dense, &source, &putpixel_ops);
+    }
+}
+
+fn rgb_putpixel_thumbnail_ops(source_width: u32, source_height: u32) -> Vec<PipelineOp> {
+    vec![
         PipelineOp::PutPixel {
             x: 2,
             y: 3,
@@ -338,66 +339,76 @@ fn rgb_putpixel_thumbnail_fusion_matches_materialized_putpixel_and_thumbnail() {
             color: (7, 129, 251, 255),
             palette_index: false,
         },
-    ];
+    ]
+}
 
-    for dense in [false, true] {
-        let bytes = if dense {
-            (0..source_width as usize * source_height as usize * 3)
-                .map(|index| (index.wrapping_mul(73).wrapping_add(index / 17 * 29)) as u8)
-                .collect()
-        } else {
-            vec![0; source_width as usize * source_height as usize * 3]
-        };
-        let source = DynamicImage::ImageRgb8(
-            RgbImage::from_raw(source_width, source_height, bytes)
-                .expect("test RGB source dimensions must match its bytes"),
-        );
-        let nearest_thumbnail = PipelineOp::Thumbnail {
+fn rgb_putpixel_thumbnail_source(dense: bool, width: u32, height: u32) -> DynamicImage {
+    let bytes = if dense {
+        (0..width as usize * height as usize * 3)
+            .map(|index| (index.wrapping_mul(73).wrapping_add(index / 17 * 29)) as u8)
+            .collect()
+    } else {
+        vec![0; width as usize * height as usize * 3]
+    };
+    DynamicImage::ImageRgb8(
+        RgbImage::from_raw(width, height, bytes)
+            .expect("test RGB source dimensions must match its bytes"),
+    )
+}
+
+fn assert_rgb_putpixel_thumbnail_supported_cases(
+    dense: bool,
+    source: &DynamicImage,
+    putpixel_ops: &[PipelineOp],
+) {
+    let (output_width, output_height) = (256, 192);
+    let nearest_thumbnail = PipelineOp::Thumbnail {
+        w: output_width,
+        h: output_height,
+        filter: ResampleFilter::Nearest,
+    };
+    assert!(!rgb_putpixel_thumbnail_fusion_supported(
+        source,
+        putpixel_ops,
+        &nearest_thumbnail,
+        Some("RGB"),
+    ));
+    let materialized_source =
+        crate::compute::pool_cpu::ops::effects::op_put_pixel_batch(source, putpixel_ops)
+            .expect("validated RGB pixel writes must succeed");
+    for filter in [
+        ResampleFilter::Bilinear,
+        ResampleFilter::Bicubic,
+        ResampleFilter::Lanczos,
+        ResampleFilter::Box,
+        ResampleFilter::Hamming,
+    ] {
+        let thumbnail = PipelineOp::Thumbnail {
             w: output_width,
             h: output_height,
-            filter: ResampleFilter::Nearest,
+            filter,
         };
-        assert!(!rgb_putpixel_thumbnail_fusion_supported(
-            &source,
-            &putpixel_ops,
-            &nearest_thumbnail,
+        assert!(rgb_putpixel_thumbnail_fusion_supported(
+            source,
+            putpixel_ops,
+            &thumbnail,
             Some("RGB"),
         ));
-        let materialized_source =
-            crate::compute::pool_cpu::ops::effects::op_put_pixel_batch(&source, &putpixel_ops)
-                .expect("validated RGB pixel writes must succeed");
-        for filter in filters {
-            let thumbnail = PipelineOp::Thumbnail {
-                w: output_width,
-                h: output_height,
-                filter,
-            };
-            assert!(rgb_putpixel_thumbnail_fusion_supported(
-                &source,
-                &putpixel_ops,
-                &thumbnail,
-                Some("RGB"),
-            ));
-            let expected = execute_thumbnail(
-                &materialized_source,
-                output_width,
-                output_height,
-                &filter,
-                Some("RGB"),
-            )
-            .expect("reference RGB thumbnail must succeed");
-            let actual = execute_rgb_putpixel_thumbnail_fusion(
-                &source,
-                &putpixel_ops,
-                &thumbnail,
-                Some("RGB"),
-            )
-            .expect("fused RGB thumbnail must succeed");
-            assert_eq!(
-                actual.as_bytes(),
-                expected.as_bytes(),
-                "dense={dense} filter={filter:?}"
-            );
-        }
+        let expected = execute_thumbnail(
+            &materialized_source,
+            output_width,
+            output_height,
+            &filter,
+            Some("RGB"),
+        )
+        .expect("reference RGB thumbnail must succeed");
+        let actual =
+            execute_rgb_putpixel_thumbnail_fusion(source, putpixel_ops, &thumbnail, Some("RGB"))
+                .expect("fused RGB thumbnail must succeed");
+        assert_eq!(
+            actual.as_bytes(),
+            expected.as_bytes(),
+            "dense={dense} filter={filter:?}"
+        );
     }
 }
