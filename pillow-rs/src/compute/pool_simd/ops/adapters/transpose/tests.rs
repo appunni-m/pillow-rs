@@ -322,81 +322,101 @@ fn transpose_native_collect_counts_split_cache_work_and_allocations() {
 #[cfg(feature = "parallel")]
 #[test]
 fn transpose_native_collect_cache_handles_arbitrary_block_access() {
+    check_native_collect_cache_access::<3, 12>();
+    check_native_collect_cache_access::<4, 16>();
+}
+
+#[cfg(feature = "parallel")]
+fn check_native_collect_cache_access<const CHANNELS: usize, const BLOCK_BYTES: usize>() {
     use crate::checked_dims::CheckedDims;
+
+    let (width, height) = (16usize, 20usize);
+    let source: Vec<u8> = (0..width * height * CHANNELS)
+        .map(|index| ((index * 73 + index / 17 * 11 + 29) % 256) as u8)
+        .collect();
+    let output_dims = CheckedDims::new(height as u32, width as u32, CHANNELS as u8).unwrap();
+    let scratch_dims = CheckedDims::new(height as u32, 4, CHANNELS as u8).unwrap();
+    for method in [
+        TransposeMethod::Transpose,
+        TransposeMethod::Rotate90,
+        TransposeMethod::Rotate270,
+        TransposeMethod::Transverse,
+    ] {
+        assert_native_collect_cache_method::<CHANNELS, BLOCK_BYTES>(
+            &source,
+            width,
+            height,
+            &output_dims,
+            &scratch_dims,
+            method,
+        );
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn assert_native_collect_cache_method<const CHANNELS: usize, const BLOCK_BYTES: usize>(
+    source: &[u8],
+    width: usize,
+    height: usize,
+    output_dims: &crate::checked_dims::CheckedDims,
+    scratch_dims: &crate::checked_dims::CheckedDims,
+    method: TransposeMethod,
+) {
     use std::sync::atomic::Ordering;
 
-    fn check<const CHANNELS: usize, const BLOCK_BYTES: usize>() {
-        let (width, height) = (16usize, 20usize);
-        let source: Vec<u8> = (0..width * height * CHANNELS)
-            .map(|index| ((index * 73 + index / 17 * 11 + 29) % 256) as u8)
-            .collect();
-        let output_dims = CheckedDims::new(height as u32, width as u32, CHANNELS as u8).unwrap();
-        let scratch_dims = CheckedDims::new(height as u32, 4, CHANNELS as u8).unwrap();
-        for method in [
-            TransposeMethod::Transpose,
-            TransposeMethod::Rotate90,
-            TransposeMethod::Rotate270,
-            TransposeMethod::Transverse,
-        ] {
-            let mut expected = vec![0; output_dims.total_bytes()];
-            for y in 0..height {
-                for x in 0..width {
-                    let (target_x, target_y) = match method {
-                        TransposeMethod::Transpose => (y, x),
-                        TransposeMethod::Rotate90 => (y, width - 1 - x),
-                        TransposeMethod::Rotate270 => (height - 1 - y, x),
-                        TransposeMethod::Transverse => (height - 1 - y, width - 1 - x),
-                        _ => unreachable!(),
-                    };
-                    let from = (y * width + x) * CHANNELS;
-                    let to = (target_y * height + target_x) * CHANNELS;
-                    expected[to..to + CHANNELS].copy_from_slice(&source[from..from + CHANNELS]);
-                }
-            }
-            let reverse_x = matches!(
-                method,
-                TransposeMethod::Rotate90 | TransposeMethod::Transverse
-            );
-            let reverse_y = matches!(
-                method,
-                TransposeMethod::Rotate270 | TransposeMethod::Transverse
-            );
-            let counters = TransposeNativeCollectCounters::default();
-            {
-                let mut cache = TransposeNativeRowCache::new(&scratch_dims, &counters);
-                // Start within a group, visit both edges, jump forward,
-                // then revisit earlier groups. Group sequence is
-                // 0,0,0,1,1,1,3,0,3,0: exactly six complete rebuilds.
-                for index in [
-                    height / 2,
-                    0,
-                    height - 1,
-                    height,
-                    height + 1,
-                    2 * height - 1,
-                    3 * height + 2,
-                    height / 2,
-                    4 * height - 1,
-                    0,
-                ] {
-                    let actual = cache.block::<CHANNELS, BLOCK_BYTES>(
-                        &source, width, height, index, reverse_x, reverse_y,
-                    );
-                    let start = index * BLOCK_BYTES;
-                    assert_eq!(
-                        actual.as_slice(),
-                        &expected[start..start + BLOCK_BYTES],
-                        "{method:?}, {CHANNELS} channels, block {index}"
-                    );
-                }
-            }
-            assert_eq!(counters.scratch_allocations.load(Ordering::Relaxed), 1);
-            assert_eq!(counters.cache_rebuilds.load(Ordering::Relaxed), 6);
+    let mut expected = vec![0; output_dims.total_bytes()];
+    for y in 0..height {
+        for x in 0..width {
+            let (target_x, target_y) = match method {
+                TransposeMethod::Transpose => (y, x),
+                TransposeMethod::Rotate90 => (y, width - 1 - x),
+                TransposeMethod::Rotate270 => (height - 1 - y, x),
+                TransposeMethod::Transverse => (height - 1 - y, width - 1 - x),
+                _ => unreachable!(),
+            };
+            let from = (y * width + x) * CHANNELS;
+            let to = (target_y * height + target_x) * CHANNELS;
+            expected[to..to + CHANNELS].copy_from_slice(&source[from..from + CHANNELS]);
         }
     }
-
-    check::<3, 12>();
-    check::<4, 16>();
+    let reverse_x = matches!(
+        method,
+        TransposeMethod::Rotate90 | TransposeMethod::Transverse
+    );
+    let reverse_y = matches!(
+        method,
+        TransposeMethod::Rotate270 | TransposeMethod::Transverse
+    );
+    let counters = TransposeNativeCollectCounters::default();
+    {
+        let mut cache = TransposeNativeRowCache::new(scratch_dims, &counters);
+        // Start within a group, visit both edges, jump forward,
+        // then revisit earlier groups. Group sequence is
+        // 0,0,0,1,1,1,3,0,3,0: exactly six complete rebuilds.
+        for index in [
+            height / 2,
+            0,
+            height - 1,
+            height,
+            height + 1,
+            2 * height - 1,
+            3 * height + 2,
+            height / 2,
+            4 * height - 1,
+            0,
+        ] {
+            let actual = cache
+                .block::<CHANNELS, BLOCK_BYTES>(source, width, height, index, reverse_x, reverse_y);
+            let start = index * BLOCK_BYTES;
+            assert_eq!(
+                actual.as_slice(),
+                &expected[start..start + BLOCK_BYTES],
+                "{method:?}, {CHANNELS} channels, block {index}"
+            );
+        }
+    }
+    assert_eq!(counters.scratch_allocations.load(Ordering::Relaxed), 1);
+    assert_eq!(counters.cache_rebuilds.load(Ordering::Relaxed), 6);
 }
 
 #[cfg(feature = "parallel")]
