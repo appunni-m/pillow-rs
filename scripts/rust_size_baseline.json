@@ -22,12 +22,6 @@
       "signature": "pub(super) fn encode_dispatch( &self, cpass: &mut wgpu::ComputePass<'_>, cached: &CachedPipeline, index: usize, current_is_a: bool, resources: &GpuBatchResources, input_dims: (u32, u32), output_dims: (u32, u32), ) -> Result<bool, PilError> {"
     },
     {
-      "lines": 238,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/batch_estimates.rs",
-      "signature": "pub(super) fn estimate_resource_bytes( &self, op: &PipelineOp, auxiliary: &AuxiliaryImages, buffers: &BufferPool, uniform_alignment: usize, storage_alignment: usize, source_dimensions: (u32, u32), mode: u32, packed_luma_putdata: bool, logical_mode: Option<&str>, f_resize_f64_is_exact: bool, f_resize_f64_ordered_is_exact: bool, ) -> Result<usize, PilError> {"
-    },
-    {
       "lines": 267,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/batch_execution.rs",
@@ -91,11 +85,6 @@
     "pillow-rs/src/compute/pool_gpu/batch_encoding/dispatch.rs": {
       "owner": "lazytrot",
       "reason": "Separated GPU bind-group construction and per-pipeline dispatch from batch encoding; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/batch_estimates.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved GPU per-operation resource sizing into the batch estimator; continue reducing under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/batch_execution.rs": {
