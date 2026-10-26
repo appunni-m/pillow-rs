@@ -65,6 +65,49 @@ pub(super) fn supports_for_shape(
     }
 }
 
+#[inline(always)]
+fn copy_native_crop_rows(
+    source: &[u8],
+    output: &mut Vec<u8>,
+    left: u32,
+    top: u32,
+    right: u32,
+    image_width: u32,
+    channels: usize,
+    crop_height: u32,
+    source_stride: usize,
+    output_stride: usize,
+    output_len: usize,
+) -> Result<(), PilError> {
+    if left == 0 && right == image_width {
+        let source_start = (top as usize)
+            .checked_mul(source_stride)
+            .ok_or_else(|| PilError::ValueError("SIMD crop source offset overflow".into()))?;
+        let source_end = source_start
+            .checked_add(output_len)
+            .ok_or_else(|| PilError::ValueError("SIMD crop source range overflow".into()))?;
+        let source_span = source
+            .get(source_start..source_end)
+            .ok_or_else(|| PilError::InternalError("SIMD crop buffer shape mismatch".into()))?;
+        output.extend_from_slice(source_span);
+    } else {
+        for y in 0..crop_height as usize {
+            let source_start = (top as usize + y)
+                .checked_mul(source_stride)
+                .and_then(|offset| offset.checked_add(left as usize * channels))
+                .ok_or_else(|| PilError::ValueError("SIMD crop source offset overflow".into()))?;
+            let source_end = source_start
+                .checked_add(output_stride)
+                .ok_or_else(|| PilError::ValueError("SIMD crop source range overflow".into()))?;
+            let source_row = source
+                .get(source_start..source_end)
+                .ok_or_else(|| PilError::InternalError("SIMD crop buffer shape mismatch".into()))?;
+            output.extend_from_slice(source_row);
+        }
+    }
+    Ok(())
+}
+
 /// Copy a validated crop directly in the source's native byte layout.
 ///
 /// This is intentionally a `native-copy` kernel rather than arithmetic SIMD:
@@ -114,32 +157,19 @@ fn native_crop_bytes(
     // zero-filling a buffer that the row copies immediately replace.
     let mut output = Vec::with_capacity(output_len);
     let source = img.as_bytes();
-    if left == 0 && right == image_width {
-        let source_start = (top as usize)
-            .checked_mul(source_stride)
-            .ok_or_else(|| PilError::ValueError("SIMD crop source offset overflow".into()))?;
-        let source_end = source_start
-            .checked_add(output_len)
-            .ok_or_else(|| PilError::ValueError("SIMD crop source range overflow".into()))?;
-        let source_span = source
-            .get(source_start..source_end)
-            .ok_or_else(|| PilError::InternalError("SIMD crop buffer shape mismatch".into()))?;
-        output.extend_from_slice(source_span);
-    } else {
-        for y in 0..height as usize {
-            let source_start = (top as usize + y)
-                .checked_mul(source_stride)
-                .and_then(|offset| offset.checked_add(left as usize * channels))
-                .ok_or_else(|| PilError::ValueError("SIMD crop source offset overflow".into()))?;
-            let source_end = source_start
-                .checked_add(output_stride)
-                .ok_or_else(|| PilError::ValueError("SIMD crop source range overflow".into()))?;
-            let source_row = source
-                .get(source_start..source_end)
-                .ok_or_else(|| PilError::InternalError("SIMD crop buffer shape mismatch".into()))?;
-            output.extend_from_slice(source_row);
-        }
-    }
+    copy_native_crop_rows(
+        source,
+        &mut output,
+        left,
+        top,
+        right,
+        image_width,
+        channels,
+        height,
+        source_stride,
+        output_stride,
+        output_len,
+    )?;
     crate::compute::record_pipeline_operation_path("native-copy");
     crate::image_utils::raw_bytes_to_image(width, height, output, channels).map(Some)
 }
