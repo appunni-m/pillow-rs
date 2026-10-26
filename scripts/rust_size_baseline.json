@@ -472,12 +472,6 @@
       "signature": "pub(super) fn horizontal_pass_boxed_rows( work_bytes: &[u8], source_width: u32, first_source_row: u32, source_row_count: u32, channels: usize, coeffs: &FilterCoeffs, output_width: u32, intermediate: &mut [u8], premultiplied_alpha: bool, parallel_pixel_threshold: usize, sparse_rgb_nonzero_rows: Option<&[bool]>, ) {"
     },
     {
-      "lines": 125,
-      "occurrence": 1,
-      "path": "pillow-rs/src/ops/pil_resize/horizontal_passes.rs",
-      "signature": "pub(super) fn horizontal_pass_row( src_row: &[u8], _src_w: u32, channels: usize, coeffs: &FilterCoeffs, out_w: u32, intermediate_row: &mut [u8], ) {"
-    },
-    {
       "lines": 194,
       "occurrence": 1,
       "path": "pillow-rs/src/ops/pil_resize/resize.rs",
