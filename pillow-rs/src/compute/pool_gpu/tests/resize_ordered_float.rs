@@ -612,10 +612,6 @@ fn assert_native_gpu_special_value_f_resize_case(
 
 #[test]
 fn f_resize_f64_wide_special_value_outputs_native() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     // Marker 12 deliberately stops at 8388607 taps. Marker 9's special
     // prepass is independent of the arm64 vector product/add split, so a
     // 257-tap row can still be native when the host proof agrees on the
@@ -636,62 +632,91 @@ fn f_resize_f64_wide_special_value_outputs_native() {
     ];
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (filter, special, source_w, source_h, special_index) in cases {
-        let mut words = vec![0x3f80_0000; (source_w * source_h) as usize];
-        words[special_index] = special;
-        let source = Image::frombytes("F", (source_w, source_h), &bytes(&words))
-            .expect("wide special F source");
-        let source_dynamic = source
-            .materialize()
-            .expect("materialize wide special F source");
-        let op = PipelineOp::Resize { w: 1, h: 1, filter };
-        assert!(gpu_f_resize_f64_is_exact(
-            std::slice::from_ref(&op),
-            &source_dynamic,
-            Some("F")
-        ));
-        let filter_name = match filter {
-            ResampleFilter::Bilinear => "BILINEAR",
-            ResampleFilter::Bicubic => "BICUBIC",
-            ResampleFilter::Lanczos => "LANCZOS",
-            ResampleFilter::Hamming => "HAMMING",
-            ResampleFilter::Box => "BOX",
-            _ => unreachable!(),
-        };
-        let expected = source
-            .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
-            .expect("CPU wide special F resize")
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU wide special F bytes");
-        let actual = match source
-            .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
-            .expect("GPU wide special F resize")
-            .use_backend(Backend::Gpu)
-            .tobytes()
-        {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU wide special F resize failed: {error}"),
-        };
-        assert_eq!(actual, expected, "wide special {filter_name} F resize");
-        let telemetry = Backend::take_pipeline_telemetry()
-            .expect("wide special F resize must publish telemetry");
-        assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(
-            telemetry.1,
-            Backend::Gpu,
-            "{filter_name}; fallback reason: {:?}",
-            telemetry.7
-        );
-        assert_eq!(telemetry.7, None);
+        if !assert_f_resize_wide_special_case(
+            filter,
+            special,
+            source_w,
+            source_h,
+            special_index,
+            previous,
+        ) {
+            return;
+        }
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_f_resize_wide_special_case(
+    filter: ResampleFilter,
+    special: u32,
+    source_w: u32,
+    source_h: u32,
+    special_index: usize,
+    previous: bool,
+) -> bool {
+    let mut words = vec![0x3f80_0000; (source_w * source_h) as usize];
+    words[special_index] = special;
+    let source = Image::frombytes(
+        "F",
+        (source_w, source_h),
+        &f_resize_u32_words_to_bytes(&words),
+    )
+    .expect("wide special F source");
+    let source_dynamic = source
+        .materialize()
+        .expect("materialize wide special F source");
+    let op = PipelineOp::Resize { w: 1, h: 1, filter };
+    assert!(gpu_f_resize_f64_is_exact(
+        std::slice::from_ref(&op),
+        &source_dynamic,
+        Some("F")
+    ));
+    let filter_name = f_resize_filter_name(filter);
+    let expected = source
+        .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+        .expect("CPU wide special F resize")
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU wide special F bytes");
+    let actual = match source
+        .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+        .expect("GPU wide special F resize")
+        .use_backend(Backend::Gpu)
+        .tobytes()
+    {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return false;
+        }
+        Err(error) => panic!("native GPU wide special F resize failed: {error}"),
+    };
+    assert_eq!(actual, expected, "wide special {filter_name} F resize");
+    let telemetry =
+        Backend::take_pipeline_telemetry().expect("wide special F resize must publish telemetry");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(
+        telemetry.1,
+        Backend::Gpu,
+        "{filter_name}; fallback reason: {:?}",
+        telemetry.7
+    );
+    assert_eq!(telemetry.7, None);
+    true
+}
+
+fn f_resize_filter_name(filter: ResampleFilter) -> &'static str {
+    match filter {
+        ResampleFilter::Bilinear => "BILINEAR",
+        ResampleFilter::Bicubic => "BICUBIC",
+        ResampleFilter::Lanczos => "LANCZOS",
+        ResampleFilter::Hamming => "HAMMING",
+        ResampleFilter::Box => "BOX",
+        _ => unreachable!(),
+    }
 }
