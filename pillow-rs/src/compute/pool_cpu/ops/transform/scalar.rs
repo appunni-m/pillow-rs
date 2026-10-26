@@ -692,6 +692,97 @@ pub(super) fn transform_projective_scalar32<const IS_FLOAT: bool>(
 }
 
 /// Apply Pillow's typed 32-bit filters to a piecewise quadrilateral mesh.
+#[inline]
+fn transform_mesh_scalar32_record<const IS_FLOAT: bool>(
+    source: &[u8],
+    source_width: u32,
+    source_height: u32,
+    source_width_f64: f64,
+    source_height_f64: f64,
+    destination_width: u32,
+    destination_height: u32,
+    mesh: &[f64],
+    output: &mut [u8],
+    fill_is_none: bool,
+    filter: &ResampleFilter,
+) {
+    let x0_d = mesh[0] as i64;
+    let y0_d = mesh[1] as i64;
+    let x1_d = mesh[2] as i64;
+    let y1_d = mesh[3] as i64;
+    let width = x1_d.saturating_sub(x0_d);
+    let height = y1_d.saturating_sub(y0_d);
+    if width <= 0 || height <= 0 {
+        return;
+    }
+    let inverse_width = 1.0 / width as f64;
+    let inverse_height = 1.0 / height as f64;
+    let x0_s = mesh[4];
+    let y0_s = mesh[5];
+    let x1_s = mesh[6];
+    let y1_s = mesh[7];
+    let x2_s = mesh[8];
+    let y2_s = mesh[9];
+    let x3_s = mesh[10];
+    let y3_s = mesh[11];
+    let coefficients = [
+        x0_s,
+        (x3_s - x0_s) * inverse_width,
+        (x1_s - x0_s) * inverse_height,
+        (x2_s - x1_s - x3_s + x0_s) * inverse_width * inverse_height,
+        y0_s,
+        (y3_s - y0_s) * inverse_width,
+        (y1_s - y0_s) * inverse_height,
+        (y2_s - y1_s - y3_s + y0_s) * inverse_width * inverse_height,
+    ];
+    let x0 = x0_d.max(0).min(i64::from(destination_width));
+    let y0 = y0_d.max(0).min(i64::from(destination_height));
+    let x1 = x1_d.max(0).min(i64::from(destination_width));
+    let y1 = y1_d.max(0).min(i64::from(destination_height));
+    if x0 >= x1 || y0 >= y1 {
+        return;
+    }
+    for destination_y in y0..y1 {
+        let local_y = (destination_y - y0) as f64 + 0.5;
+        for destination_x in x0..x1 {
+            let local_x = (destination_x - x0) as f64 + 0.5;
+            let sx_linear =
+                coefficients[2].mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0]));
+            let sx = (coefficients[3] * local_x).mul_add(local_y, sx_linear);
+            let sy_linear =
+                coefficients[6].mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4]));
+            let sy = (coefficients[7] * local_x).mul_add(local_y, sy_linear);
+            let output_index =
+                destination_y as usize * destination_width as usize + destination_x as usize;
+            if !sx.is_finite()
+                || !sy.is_finite()
+                || sx < 0.0
+                || sx >= source_width_f64
+                || sy < 0.0
+                || sy >= source_height_f64
+            {
+                // ImagingGenericTransform clears a failed sample when
+                // fillcolor is omitted; with an explicit fill the output was
+                // initialized to that word and must retain a prior sample.
+                if fill_is_none {
+                    output[output_index * 4..output_index * 4 + 4].fill(0);
+                }
+                continue;
+            }
+            output[output_index * 4..output_index * 4 + 4].copy_from_slice(
+                &sample_transform_scalar32::<IS_FLOAT>(
+                    source,
+                    source_width,
+                    source_height,
+                    sx,
+                    sy,
+                    filter,
+                ),
+            );
+        }
+    }
+}
+
 pub(super) fn transform_mesh_scalar32<const IS_FLOAT: bool>(
     img: &DynamicImage,
     dst_w: u32,
@@ -740,76 +831,19 @@ pub(super) fn transform_mesh_scalar32<const IS_FLOAT: bool>(
     let sh_f = f64::from(src_h);
 
     for mesh in mesh_data.chunks_exact(12) {
-        let x0_d = mesh[0] as i64;
-        let y0_d = mesh[1] as i64;
-        let x1_d = mesh[2] as i64;
-        let y1_d = mesh[3] as i64;
-        let width = x1_d.saturating_sub(x0_d);
-        let height = y1_d.saturating_sub(y0_d);
-        if width <= 0 || height <= 0 {
-            continue;
-        }
-        let width_f = width as f64;
-        let height_f = height as f64;
-        let inverse_width = 1.0 / width_f;
-        let inverse_height = 1.0 / height_f;
-        let x0_s = mesh[4];
-        let y0_s = mesh[5];
-        let x1_s = mesh[6];
-        let y1_s = mesh[7];
-        let x2_s = mesh[8];
-        let y2_s = mesh[9];
-        let x3_s = mesh[10];
-        let y3_s = mesh[11];
-        let coefficients = [
-            x0_s,
-            (x3_s - x0_s) * inverse_width,
-            (x1_s - x0_s) * inverse_height,
-            (x2_s - x1_s - x3_s + x0_s) * inverse_width * inverse_height,
-            y0_s,
-            (y3_s - y0_s) * inverse_width,
-            (y1_s - y0_s) * inverse_height,
-            (y2_s - y1_s - y3_s + y0_s) * inverse_width * inverse_height,
-        ];
-        let bx0 = x0_d.max(0).min(i64::from(dst_w));
-        let by0 = y0_d.max(0).min(i64::from(dst_h));
-        let bx1 = x1_d.max(0).min(i64::from(dst_w));
-        let by1 = y1_d.max(0).min(i64::from(dst_h));
-        if bx0 >= bx1 || by0 >= by1 {
-            continue;
-        }
-        for destination_y in by0..by1 {
-            let local_y = (destination_y - by0) as f64 + 0.5;
-            for destination_x in bx0..bx1 {
-                let local_x = (destination_x - bx0) as f64 + 0.5;
-                let sx_linear = coefficients[2]
-                    .mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0]));
-                let sx = (coefficients[3] * local_x).mul_add(local_y, sx_linear);
-                let sy_linear = coefficients[6]
-                    .mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4]));
-                let sy = (coefficients[7] * local_x).mul_add(local_y, sy_linear);
-                let output_index = destination_y as usize * dst_w as usize + destination_x as usize;
-                if !sx.is_finite()
-                    || !sy.is_finite()
-                    || sx < 0.0
-                    || sx >= sw_f
-                    || sy < 0.0
-                    || sy >= sh_f
-                {
-                    // ImagingGenericTransform clears a failed sample when
-                    // fillcolor is omitted; with an explicit fill the output
-                    // was already initialized to that word and must retain a
-                    // valid sample written by an earlier overlapping record.
-                    if fill_is_none {
-                        output[output_index * 4..output_index * 4 + 4].fill(0);
-                    }
-                    continue;
-                }
-                output[output_index * 4..output_index * 4 + 4].copy_from_slice(
-                    &sample_transform_scalar32::<IS_FLOAT>(source, src_w, src_h, sx, sy, filter),
-                );
-            }
-        }
+        transform_mesh_scalar32_record::<IS_FLOAT>(
+            source,
+            src_w,
+            src_h,
+            sw_f,
+            sh_f,
+            dst_w,
+            dst_h,
+            mesh,
+            &mut output,
+            fill_is_none,
+            filter,
+        );
     }
 
     let out = RgbaImage::from_raw(dst_w, dst_h, output)

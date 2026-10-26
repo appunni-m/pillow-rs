@@ -112,12 +112,6 @@
       "signature": "pub(super) fn transform_affine_f32( img: &DynamicImage, dst_w: u32, dst_h: u32, data: &[f64], filter: &ResampleFilter, fill: Option<(u8, u8, u8, u8)>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 108,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/transform/scalar.rs",
-      "signature": "pub(super) fn transform_mesh_scalar32<const IS_FLOAT: bool>( img: &DynamicImage, dst_w: u32, dst_h: u32, mesh_data: &[f64], fill: Option<(u8, u8, u8, u8)>, fill_is_none: bool, filter: &ResampleFilter, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 105,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs",
