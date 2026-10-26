@@ -544,10 +544,16 @@ pub(in crate::compute::pool_simd::ops::adapters) fn simd_resize_i32_boxed(
     box_bottom: f64,
     filter: ResampleFilter,
 ) -> Result<DynamicImage, PilError> {
-    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Resize"))?;
-    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Resize"))?;
-    let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Resize"))?;
-    let output_height = usize::try_from(output_height).map_err(|_| simd_unsupported("Resize"))?;
+    let source_width_u32 = img.width();
+    let source_height_u32 = img.height();
+    let output_width_u32 = output_width;
+    let output_height_u32 = output_height;
+    let source_width = usize::try_from(source_width_u32).map_err(|_| simd_unsupported("Resize"))?;
+    let source_height =
+        usize::try_from(source_height_u32).map_err(|_| simd_unsupported("Resize"))?;
+    let output_width = usize::try_from(output_width_u32).map_err(|_| simd_unsupported("Resize"))?;
+    let output_height =
+        usize::try_from(output_height_u32).map_err(|_| simd_unsupported("Resize"))?;
     let source_pixels = source_width
         .checked_mul(source_height)
         .ok_or_else(|| simd_unsupported("Resize"))?;
@@ -560,7 +566,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn simd_resize_i32_boxed(
         ));
     }
     if source_width == 0 || source_height == 0 {
-        return simd_resize_zero_source(img, output_width as u32, output_height as u32, 4);
+        return simd_resize_zero_source(img, output_width_u32, output_height_u32, 4);
     }
     let output_len = output_width
         .checked_mul(output_height)
@@ -568,15 +574,15 @@ pub(in crate::compute::pool_simd::ops::adapters) fn simd_resize_i32_boxed(
         .ok_or_else(|| simd_unsupported("Resize"))?;
     let source = i32_samples_from_le_bytes(img.as_bytes(), source_pixels);
     let horizontal = precompute_coeffs_f64_boxed(
-        output_width as u32,
-        source_width as u32,
+        output_width_u32,
+        source_width_u32,
         box_left,
         box_right,
         filter,
     );
     let vertical = precompute_coeffs_f64_boxed(
-        output_height as u32,
-        source_height as u32,
+        output_height_u32,
+        source_height_u32,
         box_top,
         box_bottom,
         filter,
@@ -620,11 +626,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn simd_resize_i32_boxed(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(0);
-    let result = crate::image_utils::raw_bytes_to_image(
-        output_width as u32,
-        output_height as u32,
-        bytes,
-        4,
-    )?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(output_width_u32, output_height_u32, bytes, 4)?;
     Ok(preserve_mode(img, result))
 }
