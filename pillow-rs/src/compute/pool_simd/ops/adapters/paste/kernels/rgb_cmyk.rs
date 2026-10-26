@@ -41,6 +41,23 @@ pub(super) fn native_paste_pa_masked_row(
         destination[start..start + 8].copy_from_slice(&blended);
     }
 
+    native_paste_pa_masked_tail(
+        source,
+        destination,
+        mask,
+        vector_len8,
+        allow_short_masked_tail,
+    );
+}
+
+#[inline(always)]
+fn native_paste_pa_masked_tail(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    vector_len8: usize,
+    allow_short_masked_tail: bool,
+) {
     let tail = source.len() - vector_len8;
     if tail == 0 {
         return;
