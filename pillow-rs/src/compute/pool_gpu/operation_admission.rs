@@ -411,42 +411,10 @@ pub(super) fn gpu_auxiliary_modes_are_safe_for_color(
     if let PipelineOp::Paste { mask_alpha, .. } = op
         && current_color == crate::raster::ColorType::L16
     {
-        let source_is_luma16 = auxiliary
-            .second
-            .as_deref()
-            .is_some_and(|source| matches!(source, DynamicImage::ImageLuma16(_)));
-        let mask_is_supported = matches!(
-            (*mask_alpha, auxiliary.third.as_deref()),
-            (false, None)
-                | (false, Some(DynamicImage::ImageLuma8(_)))
-                | (true, Some(DynamicImage::ImageRgba8(_)))
-        );
-        return source_is_luma16 && mask_is_supported;
+        return gpu_luma16_paste_auxiliary_modes_are_safe(*mask_alpha, auxiliary);
     }
     if let PipelineOp::CompositeModule { mask_alpha, .. } = op {
-        let Some(destination) = auxiliary.second.as_ref() else {
-            return false;
-        };
-        let Some(mask) = auxiliary.third.as_ref() else {
-            return false;
-        };
-        // Image.composite converts image1 to image2's mode before the
-        // operation is queued. The shader can therefore use one mode word
-        // only when both packed sources have the same native layout.
-        if destination.color() != current_color {
-            return false;
-        }
-        // Pillow's mask contract selects byte 0 for 1/L and byte 3 for
-        // LA/RGBA/RGBa. Reject RGB luma masks here: their CPU path computes
-        // weighted luma while the packed shader would read only R.
-        return if *mask_alpha {
-            matches!(
-                mask.as_ref(),
-                DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
-            )
-        } else {
-            matches!(mask.as_ref(), DynamicImage::ImageLuma8(_))
-        };
+        return gpu_composite_auxiliary_modes_are_safe(*mask_alpha, current_color, auxiliary);
     }
     let requires_matching_source = matches!(
         op,
@@ -500,6 +468,53 @@ pub(super) fn gpu_auxiliary_modes_are_safe_for_color(
         });
     }
     true
+}
+
+#[inline]
+fn gpu_luma16_paste_auxiliary_modes_are_safe(
+    mask_alpha: bool,
+    auxiliary: &AuxiliaryImages,
+) -> bool {
+    let source_is_luma16 = auxiliary
+        .second
+        .as_deref()
+        .is_some_and(|source| matches!(source, DynamicImage::ImageLuma16(_)));
+    let mask_is_supported = matches!(
+        (mask_alpha, auxiliary.third.as_deref()),
+        (false, None)
+            | (false, Some(DynamicImage::ImageLuma8(_)))
+            | (true, Some(DynamicImage::ImageRgba8(_)))
+    );
+    source_is_luma16 && mask_is_supported
+}
+
+#[inline]
+fn gpu_composite_auxiliary_modes_are_safe(
+    mask_alpha: bool,
+    current_color: crate::raster::ColorType,
+    auxiliary: &AuxiliaryImages,
+) -> bool {
+    let Some(destination) = auxiliary.second.as_ref() else {
+        return false;
+    };
+    let Some(mask) = auxiliary.third.as_ref() else {
+        return false;
+    };
+    // Image.composite converts image1 to image2's mode before the operation
+    // is queued. The shader therefore needs both sources in one native layout.
+    if destination.color() != current_color {
+        return false;
+    }
+    // Pillow selects byte 0 for 1/L and byte 3 for LA/RGBA/RGBa. Reject RGB
+    // luma masks: CPU computes weighted luma while the packed shader reads R.
+    if mask_alpha {
+        matches!(
+            mask.as_ref(),
+            DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+        )
+    } else {
+        matches!(mask.as_ref(), DynamicImage::ImageLuma8(_))
+    }
 }
 
 /// Return the largest packed RGBA image that a batch needs. Image storage is
