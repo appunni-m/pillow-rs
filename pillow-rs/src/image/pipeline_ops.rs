@@ -633,6 +633,82 @@ pub(crate) fn pipeline_mode_cache() -> PipelineModeCache {
     Arc::new(OnceLock::new())
 }
 
+fn pipeline_output_mode(
+    source: &Image,
+    op: &PipelineOp,
+    source_is_paletted: bool,
+    palette_safe: bool,
+    putalpha_mode: Option<PixelMode>,
+) -> Option<String> {
+    let explicit_mode = if matches!(
+        op,
+        PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
+    ) {
+        None
+    } else if source_is_paletted {
+        if source.explicit_mode() == Some("PA") && matches!(op, PipelineOp::PutPixel { .. }) {
+            // PA writes keep the raw index/alpha sample layout even when no
+            // RGB palette is attached, so later conversion still sees PA.
+            Some("PA".to_owned())
+        } else {
+            palette_safe.then(|| {
+                if source.explicit_mode() == Some("PA") {
+                    "PA".to_owned()
+                } else {
+                    "P".to_owned()
+                }
+            })
+        }
+    } else {
+        match op {
+            // Pillow's constant constructor always allocates L, even when the
+            // source has an explicit CMYK, YCbCr, HSV, I, F, or 1 mode tag.
+            PipelineOp::Grayscale
+            | PipelineOp::Constant { .. }
+            | PipelineOp::Convert { .. }
+            | PipelineOp::ConvertLab { .. }
+            | PipelineOp::ExtractBand { .. } => None,
+            _ => source.explicit_mode().map(str::to_owned),
+        }
+    };
+
+    // Keep putalpha's output-mode promotion here so P becomes PA without
+    // expanding its indices, while CMYK becomes ordinary RGBA without a tag.
+    match putalpha_mode {
+        Some(PixelMode::P | PixelMode::PA) => Some("PA".to_owned()),
+        Some(PixelMode::CMYK) => None,
+        _ => explicit_mode,
+    }
+}
+
+fn pipeline_output_palette(
+    source: &Image,
+    op: &PipelineOp,
+    palette_safe: bool,
+    indexed_chops_result_without_palette: bool,
+) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
+    let preserve_palette = palette_safe
+        && !matches!(
+            op,
+            PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
+        );
+    let palette = if indexed_chops_result_without_palette {
+        Some(Vec::new())
+    } else if preserve_palette {
+        source.extract_palette()
+    } else {
+        None
+    };
+    let palette_alpha = if indexed_chops_result_without_palette {
+        None
+    } else if preserve_palette {
+        source.palette_alpha()
+    } else {
+        None
+    };
+    (palette, palette_alpha)
+}
+
 impl Image {
     // ── Pipeline ops ──
 
@@ -664,70 +740,14 @@ impl Image {
                     ..
                 }
             );
-        let explicit_mode = if matches!(
+        let explicit_mode =
+            pipeline_output_mode(source, &op, source_is_paletted, palette_safe, putalpha_mode);
+        let (source_palette, source_palette_alpha) = pipeline_output_palette(
+            source,
             &op,
-            PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
-        ) {
-            None
-        } else if source_is_paletted {
-            if source.explicit_mode() == Some("PA") && matches!(&op, PipelineOp::PutPixel { .. }) {
-                // PA writes keep the raw index/alpha sample layout even when
-                // no RGB palette is attached, so later conversion still sees
-                // the source as PA rather than generic LA.
-                Some("PA".to_owned())
-            } else {
-                palette_safe.then(|| {
-                    if source.explicit_mode() == Some("PA") {
-                        "PA".to_owned()
-                    } else {
-                        "P".to_owned()
-                    }
-                })
-            }
-        } else {
-            match &op {
-                // Pillow's libImaging/Chops.c constant constructor always
-                // allocates an L image, even when the source has an explicit
-                // CMYK, YCbCr, HSV, I, F, or 1 mode tag. Do not carry that
-                // source tag across the mode-changing operation.
-                PipelineOp::Grayscale
-                | PipelineOp::Constant { .. }
-                | PipelineOp::Convert { .. }
-                | PipelineOp::ConvertLab { .. }
-                | PipelineOp::ExtractBand { .. } => None,
-                _ => source.explicit_mode().map(str::to_owned),
-            }
-        };
-        // `push_op` always constructs an Image::Pipeline. Keep putalpha's
-        // output-mode promotion here so P becomes PA without expanding its
-        // indices, while CMYK becomes ordinary RGBA without a CMYK tag;
-        // callers do not need an impossible fallback match after queuing it.
-        let explicit_mode = match putalpha_mode {
-            Some(crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA) => {
-                Some("PA".to_owned())
-            }
-            Some(crate::pipeline::PixelMode::CMYK) => None,
-            _ => explicit_mode,
-        };
-        let preserve_palette = palette_safe
-            && !matches!(
-                &op,
-                PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
-            );
-        let source_palette = if indexed_chops_result_without_palette {
-            Some(Vec::new())
-        } else if preserve_palette {
-            source.extract_palette()
-        } else {
-            None
-        };
-        let source_palette_alpha = if indexed_chops_result_without_palette {
-            None
-        } else if preserve_palette {
-            source.palette_alpha()
-        } else {
-            None
-        };
+            palette_safe,
+            indexed_chops_result_without_palette,
+        );
         match source {
             // Keep a concrete sample-layout boundary around palette expansion
             // and P↔PA transitions. A flattened batch has only one external

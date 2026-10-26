@@ -544,12 +544,6 @@
       "signature": "fn frombytes_with_data( mode: &str, size: (u32, u32), data: Cow<'_, [u8]>, ) -> Result<Self, PilError> {"
     },
     {
-      "lines": 144,
-      "occurrence": 1,
-      "path": "pillow-rs/src/image/pipeline_ops.rs",
-      "signature": "pub fn push_op(source: &Image, op: PipelineOp) -> Image {"
-    },
-    {
       "lines": 170,
       "occurrence": 1,
       "path": "pillow-rs/src/image/projection.rs",
@@ -897,11 +891,6 @@
     "pillow-rs/src/image/construction.rs": {
       "owner": "lazytrot",
       "reason": "Moved existing Image constructor methods from image.rs without increasing their 117/156-line sizes; continue reducing under pillow-rs#knsf.",
-      "reduction_task": "pillow-rs#knsf"
-    },
-    "pillow-rs/src/image/pipeline_ops.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved the existing Image::push_op pipeline builder from image.rs under pillow-rs#knsf.",
       "reduction_task": "pillow-rs#knsf"
     },
     "pillow-rs/src/image/projection.rs": {
