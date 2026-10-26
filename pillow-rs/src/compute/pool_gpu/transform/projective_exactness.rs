@@ -47,383 +47,274 @@ pub(in crate::compute::pool_gpu) fn gpu_projective_uniform_is_exact(
     mode: Option<&str>,
     source_dimensions: (u32, u32),
 ) -> bool {
-    let PipelineOp::Transform {
-        w,
-        h,
-        method,
-        data,
-        filter,
-        fill_is_none,
-        ..
-    } = op
-    else {
-        return false;
-    };
-    let ordinary_byte_mode = matches!(
-        mode,
-        Some("L" | "LA" | "RGB" | "RGBA" | "RGBX" | "RGBa" | "CMYK" | "HSV" | "YCbCr")
-    );
-    let filtered_constant = gpu_projective_filtered_constant_is_admitted(
-        method.clone(),
-        data,
-        *filter,
-        mode,
-        source_dimensions,
-        (*w, *h),
-    );
-    let filtered_relocation = filtered_constant
-        || gpu_projective_filtered_relocation_is_admitted(
-            method.clone(),
-            data,
-            *filter,
-            mode,
-            (*w, *h),
-        );
-    let palette_alpha_relocation = mode == Some("PA")
-        && (gpu_palette_alpha_projective_relocation_is_admitted(
-            method.clone(),
-            data,
-            *filter,
-            (*w, *h),
-        ) || filtered_relocation);
-    // Perspective, Quad, and Mesh maps use the shader's raw-gid f32
-    // arithmetic, while the exhaustive source-selection proof below compares
-    // it with Pillow's centered f64/COORD result for every output pixel.
-    // Finite-intermediate guards in the proof keep generic Quad/Mesh
-    // bilinear overflow from bypassing the shader sampler's bounds checks.
-    // Filtered transforms intentionally remain limited to zero-weight
-    // relocations, constant half-pixel maps, and the interior integer
-    // Bilinear/Bicubic envelopes proven above.
-    let ordinary_projective_geometry_is_admitted = match method {
-        TransformMethod::Perspective => true,
-        TransformMethod::Quad | TransformMethod::Mesh => true,
-        TransformMethod::Affine => false,
-    };
-    if !matches!(
-        mode,
-        Some(
-            "P" | "1"
-                | "L"
-                | "LA"
-                | "PA"
-                | "RGB"
-                | "HSV"
-                | "YCbCr"
-                | "RGBA"
-                | "RGBX"
-                | "RGBa"
-                | "CMYK"
-        )
-    ) || (ordinary_byte_mode && !ordinary_projective_geometry_is_admitted)
-        || (mode == Some("PA") && !palette_alpha_relocation)
-        || !matches!(
+    ProjectiveUniformProof::new(op, mode, source_dimensions)
+        .is_some_and(|proof| proof.proves_exact())
+}
+
+struct ProjectiveUniformProof<'a> {
+    mode: Option<&'a str>,
+    method: &'a TransformMethod,
+    data: &'a [f64],
+    filter: ResampleFilter,
+    fill_is_none: bool,
+    output_dimensions: (u32, u32),
+    source_dimensions: (u32, u32),
+    ordinary_byte_mode: bool,
+    mode_is_supported: bool,
+    mode_is_palette_alpha: bool,
+    nearest_is_supported: bool,
+}
+
+impl<'a> ProjectiveUniformProof<'a> {
+    fn new(
+        op: &'a PipelineOp,
+        mode: Option<&'a str>,
+        source_dimensions: (u32, u32),
+    ) -> Option<Self> {
+        let PipelineOp::Transform {
+            w,
+            h,
             method,
-            TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Mesh
+            data,
+            filter,
+            fill_is_none,
+            ..
+        } = op
+        else {
+            return None;
+        };
+        Some(Self {
+            mode,
+            method,
+            data,
+            filter: *filter,
+            fill_is_none: *fill_is_none,
+            output_dimensions: (*w, *h),
+            source_dimensions,
+            ordinary_byte_mode: matches!(
+                mode,
+                Some("L" | "LA" | "RGB" | "RGBA" | "RGBX" | "RGBa" | "CMYK" | "HSV" | "YCbCr")
+            ),
+            mode_is_supported: matches!(
+                mode,
+                Some(
+                    "P" | "1"
+                        | "L"
+                        | "LA"
+                        | "PA"
+                        | "RGB"
+                        | "HSV"
+                        | "YCbCr"
+                        | "RGBA"
+                        | "RGBX"
+                        | "RGBa"
+                        | "CMYK"
+                )
+            ),
+            mode_is_palette_alpha: mode == Some("PA"),
+            nearest_is_supported: gpu_transform_uses_nearest(mode, *filter),
+        })
+    }
+
+    fn proves_exact(&self) -> bool {
+        let filtered_constant = self.filtered_constant_is_admitted();
+        let filtered_relocation = filtered_constant || self.filtered_relocation_is_admitted();
+        if !self.is_admitted(filtered_relocation) {
+            return false;
+        }
+        if filtered_constant {
+            return true;
+        }
+        self.all_source_pixels_match()
+    }
+
+    fn filtered_constant_is_admitted(&self) -> bool {
+        gpu_projective_filtered_constant_is_admitted(
+            self.method.clone(),
+            self.data,
+            self.filter,
+            self.mode,
+            self.source_dimensions,
+            self.output_dimensions,
         )
-        || (!gpu_transform_uses_nearest(mode, *filter) && !filtered_relocation)
-        || source_dimensions.0 == 0
-        || source_dimensions.1 == 0
-        || *w == 0
-        || *h == 0
-        || source_dimensions.0 > (1 << 24)
-        || source_dimensions.1 > (1 << 24)
-        || *w > (1 << 24)
-        || *h > (1 << 24)
-        || u64::from(*w).saturating_mul(u64::from(*h)) > 1_048_576
-    {
-        return false;
     }
 
-    let required_data = match method {
-        TransformMethod::Perspective | TransformMethod::Quad => 8,
-        TransformMethod::Mesh => 12,
-        TransformMethod::Affine => return false,
-    };
-    if data.len() < required_data || (matches!(method, TransformMethod::Mesh) && data.len() != 12) {
-        return false;
-    }
-    // The transform uniform stores all coefficients as f32 bit patterns. Do
-    // not admit a value that changes when it crosses that ABI boundary.
-    let f32_exact = |value: f64| {
-        let narrowed = value as f32;
-        narrowed.is_finite() && f64::from(narrowed) == value
-    };
-    if data[..required_data]
-        .iter()
-        .copied()
-        .any(|value| !f32_exact(value))
-    {
-        return false;
+    fn filtered_relocation_is_admitted(&self) -> bool {
+        gpu_projective_filtered_relocation_is_admitted(
+            self.method.clone(),
+            self.data,
+            self.filter,
+            self.mode,
+            self.output_dimensions,
+        )
     }
 
-    // The shader carries one Mesh record and can only represent a partial
-    // record's outside-bbox result with an explicit fill word.  Its direct
-    // and axis-swapped unit relocation lowering is exact for an in-output
-    // integer bbox; keep fractional/scaled/partially clipped records and
-    // no-fill records on the host path rather than letting the generic
-    // shader's clipping or default fill semantics stand in for Geometry.c.
-    let mesh_is_full_output = !matches!(method, TransformMethod::Mesh)
-        || data[..4] == [0.0, 0.0, f64::from(*w), f64::from(*h)];
-    let mesh_is_partial_relocation = matches!(method, TransformMethod::Mesh)
-        && gpu_mesh_unit_relocation_is_admitted(data, *w, *h);
-    if matches!(method, TransformMethod::Mesh)
-        && !mesh_is_full_output
-        && !mesh_is_partial_relocation
-    {
-        return false;
-    }
-    if matches!(method, TransformMethod::Mesh) && !mesh_is_full_output && *fill_is_none {
-        return false;
-    }
-    // The constant filtered proof already checks the complete source window
-    // and exact dyadic arithmetic independently of destination coordinates.
-    // Reusing it avoids an image-sized scan when selecting the uniform path.
-    if filtered_constant {
-        return true;
+    fn is_admitted(&self, filtered_relocation: bool) -> bool {
+        let palette_alpha_relocation = self.mode_is_palette_alpha
+            && (gpu_palette_alpha_projective_relocation_is_admitted(
+                self.method.clone(),
+                self.data,
+                self.filter,
+                self.output_dimensions,
+            ) || filtered_relocation);
+        // Perspective, Quad, and Mesh maps use the shader's raw-gid f32
+        // arithmetic, while the exhaustive source-selection proof below compares
+        // it with Pillow's centered f64/COORD result for every output pixel.
+        // Finite-intermediate guards in the proof keep generic Quad/Mesh
+        // bilinear overflow from bypassing the shader sampler's bounds checks.
+        // Filtered transforms intentionally remain limited to zero-weight
+        // relocations, constant half-pixel maps, and the interior integer
+        // Bilinear/Bicubic envelopes proven above.
+        let ordinary_projective_geometry_is_admitted = matches!(
+            self.method,
+            TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Mesh
+        );
+        self.mode_is_supported
+            && (!self.mode_is_palette_alpha || palette_alpha_relocation)
+            && ordinary_projective_geometry_is_admitted
+            && (self.nearest_is_supported || filtered_relocation)
+            && self.source_dimensions.0 != 0
+            && self.source_dimensions.1 != 0
+            && self.output_dimensions.0 != 0
+            && self.output_dimensions.1 != 0
+            && self.source_dimensions.0 <= (1 << 24)
+            && self.source_dimensions.1 <= (1 << 24)
+            && self.output_dimensions.0 <= (1 << 24)
+            && self.output_dimensions.1 <= (1 << 24)
+            && u64::from(self.output_dimensions.0)
+                .saturating_mul(u64::from(self.output_dimensions.1))
+                <= 1_048_576
+            && self.coefficients_are_exact()
+            && self.mesh_record_is_admitted()
     }
 
-    let source_at = |dx: f64, dy: f64| -> Option<(f64, f64)> {
-        match method {
-            TransformMethod::Perspective => {
-                let dx = dx + 0.5;
-                let dy = dy + 0.5;
-                let denominator = data[6] * dx + data[7] * dy + 1.0;
-                if denominator == 0.0 || !denominator.is_finite() {
-                    return None;
-                }
-                let sx = (data[0] * dx + data[1] * dy + data[2]) / denominator;
-                let sy = (data[3] * dx + data[4] * dy + data[5]) / denominator;
-                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
-            }
-            TransformMethod::Quad => {
-                if gpu_quad_constant_map_is_admitted(data) {
-                    return Some((data[0], data[1]));
-                }
-                let dx = dx + 0.5;
-                let dy = dy + 0.5;
-                let sw = f64::from(*w);
-                let sh = f64::from(*h);
-                let u = dx / sw;
-                let v = dy / sh;
-                let x0 = data[0];
-                let y0 = data[1];
-                let sx = x0
-                    + (data[6] - x0) * u
-                    + (data[2] - x0) * v
-                    + (data[4] - data[2] - data[6] + x0) * u * v;
-                let sy = y0
-                    + (data[7] - y0) * u
-                    + (data[3] - y0) * v
-                    + (data[5] - data[3] - data[7] + y0) * u * v;
-                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
-            }
-            TransformMethod::Mesh => {
-                // The shader emits the fill word outside a record's bbox.
-                // Compare source selection only for pixels inside the
-                // record, just as Geometry.c's clipped destination loop
-                // does; a full-output record naturally passes this check.
-                if dx < data[0] || dx >= data[2] || dy < data[1] || dy >= data[3] {
-                    return None;
-                }
-                if gpu_mesh_constant_map_is_admitted(data, *w, *h) {
-                    return Some((data[4], data[5]));
-                }
-                if ordinary_byte_mode && gpu_mesh_unit_relocation_is_admitted(data, *w, *h) {
-                    // For the admitted unit relocations, mirror the CPU
-                    // quad_transform FMA order directly.  Reconstructing the
-                    // same affine map from four bilinear weights would add a
-                    // second rounding shape to the proof at large integer
-                    // translations, even though Pillow's coefficients have
-                    // already reduced to a unit step.
-                    let local_x = dx + 0.5 - data[0];
-                    let local_y = dy + 0.5 - data[1];
-                    let box_width = data[2] - data[0];
-                    // Mesh source corners are NW/SW/SE/NE.  The direct
-                    // relocation therefore has its NE corner one width to
-                    // the right of TL and at the same Y; checking the
-                    // opposite diagonal admits a scaled/axis map instead.
-                    let direct = data[10] == data[4] + box_width && data[11] == data[5];
-                    let (sx, sy) = if direct {
-                        (data[4] + local_x, data[5] + local_y)
-                    } else {
-                        (data[4] + local_y, data[5] + local_x)
-                    };
-                    return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
-                }
-                let bbox_width = data[2] - data[0];
-                let bbox_height = data[3] - data[1];
-                if bbox_width <= 0.0 || bbox_height <= 0.0 {
-                    return None;
-                }
-                let u = (dx + 0.5 - data[0]) / bbox_width;
-                let v = (dy + 0.5 - data[1]) / bbox_height;
-                let x0 = data[4];
-                let y0 = data[5];
-                let sx = (1.0 - u) * (1.0 - v) * x0
-                    + u * (1.0 - v) * data[10]
-                    + u * v * data[8]
-                    + (1.0 - u) * v * data[6];
-                let sy = (1.0 - u) * (1.0 - v) * y0
-                    + u * (1.0 - v) * data[11]
-                    + u * v * data[9]
-                    + (1.0 - u) * v * data[7];
-                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
-            }
-            TransformMethod::Affine => None,
+    fn coefficients_are_exact(&self) -> bool {
+        let required_data = match self.method {
+            TransformMethod::Perspective | TransformMethod::Quad => 8,
+            TransformMethod::Mesh => 12,
+            TransformMethod::Affine => return false,
+        };
+        if self.data.len() < required_data
+            || (matches!(self.method, TransformMethod::Mesh) && self.data.len() != 12)
+        {
+            return false;
         }
-    };
-    let shader_source_at = |dx: f32, dy: f32| -> Option<(f32, f32)> {
-        let f = |index: usize| data[index] as f32;
-        match method {
-            TransformMethod::Perspective => {
-                if matches!(filter, ResampleFilter::Bilinear | ResampleFilter::Bicubic)
-                    && f(6) == 0.0
-                    && f(7) == 0.0
-                    && f(0) == 0.0
-                    && f(1) == 0.0
-                    && f(3) == 0.0
-                    && f(4) == 0.0
-                {
-                    return Some((f(2) - 0.5, f(5) - 0.5));
-                }
-                if gpu_perspective_signed_unit_relocation_is_admitted(data) {
-                    let a = f(0);
-                    let b = f(1);
-                    let d = f(3);
-                    let e = f(4);
-                    let sx = if a == 1.0 {
-                        f(2) + dx
-                    } else if a == -1.0 {
-                        f(2) - dx - 1.0
-                    } else if b == 1.0 {
-                        f(2) + dy
-                    } else {
-                        f(2) - dy - 1.0
-                    };
-                    let sy = if d == 1.0 {
-                        f(5) + if b.abs() == 1.0 { dx } else { dy }
-                    } else if d == -1.0 {
-                        f(5) - if b.abs() == 1.0 { dx } else { dy } - 1.0
-                    } else if e == 1.0 {
-                        f(5) + dy
-                    } else {
-                        f(5) - dy - 1.0
-                    };
-                    return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
-                }
-                if f(6) == 0.0 && f(7) == 0.0 && matches!(filter, ResampleFilter::Nearest) {
-                    let center_x = dx + 0.5;
-                    let center_y = dy + 0.5;
-                    let sx = (f(0) * center_x + f(1) * center_y + f(2)).floor();
-                    let sy = (f(3) * center_x + f(4) * center_y + f(5)).floor();
-                    return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
-                }
-                let denominator = f(6) * dx + f(7) * dy + 1.0;
-                if denominator == 0.0 || !denominator.is_finite() {
-                    return None;
-                }
-                let sx = (f(0) * dx + f(1) * dy + f(2)) / denominator;
-                let sy = (f(3) * dx + f(4) * dy + f(5)) / denominator;
-                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
-            }
-            TransformMethod::Quad => {
-                let x0 = f(0);
-                let y0 = f(1);
-                if x0 == f(2) && x0 == f(4) && x0 == f(6) && y0 == f(3) && y0 == f(5) && y0 == f(7)
-                {
-                    // Geometry.c filters after subtracting 0.5 from the
-                    // mapped source coordinate.  A constant half-pixel map
-                    // therefore lands exactly on one source pixel, while
-                    // the projective shader's bilinear sampler expects the
-                    // already-shifted coordinate.
-                    if !matches!(filter, ResampleFilter::Nearest) {
-                        return Some((x0 - 0.5, y0 - 0.5));
-                    }
-                    return Some((x0, y0));
-                }
-                let width = *w as f32;
-                let height = *h as f32;
-                let u = dx / width;
-                let v = dy / height;
-                let sx = x0 + (f(6) - x0) * u + (f(2) - x0) * v + (f(4) - f(2) - f(6) + x0) * u * v;
-                let sy = y0 + (f(7) - y0) * u + (f(3) - y0) * v + (f(5) - f(3) - f(7) + y0) * u * v;
-                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
-            }
-            TransformMethod::Mesh => {
-                let bx0 = f(0);
-                let by0 = f(1);
-                let bx1 = f(2);
-                let by1 = f(3);
-                if dx < bx0 || dx >= bx1 || dy < by0 || dy >= by1 {
-                    return None;
-                }
-                let width = *w as f32;
-                let height = *h as f32;
-                let x0 = f(4);
-                let y0 = f(5);
-                if x0 == f(6)
-                    && x0 == f(8)
-                    && x0 == f(10)
-                    && y0 == f(7)
-                    && y0 == f(9)
-                    && y0 == f(11)
-                {
-                    if !matches!(filter, ResampleFilter::Nearest) {
-                        return Some((x0 - 0.5, y0 - 0.5));
-                    }
-                    return Some((x0, y0));
-                }
-                let direct_relocation = bx0 == 0.0
-                    && by0 == 0.0
-                    && bx1 == width
-                    && by1 == height
-                    && f(6) == x0
-                    && f(7) == y0 + height
-                    && f(8) == x0 + width
-                    && f(9) == y0 + height
-                    && f(10) == x0 + width
-                    && f(11) == y0;
-                let swapped_relocation = bx0 == 0.0
-                    && by0 == 0.0
-                    && bx1 == width
-                    && by1 == height
-                    && f(6) == x0 + height
-                    && f(7) == y0
-                    && f(8) == x0 + height
-                    && f(9) == y0 + width
-                    && f(10) == x0
-                    && f(11) == y0 + width;
-                if direct_relocation {
-                    return Some((x0 + dx, y0 + dy));
-                }
-                if swapped_relocation {
-                    return Some((x0 + dy, y0 + dx));
-                }
-                let bw = (bx1 - bx0).max(1.0);
-                let bh = (by1 - by0).max(1.0);
-                let u = (dx - bx0) / bw;
-                let v = (dy - by0) / bh;
-                let sx = (1.0 - u) * (1.0 - v) * x0
-                    + u * (1.0 - v) * f(10)
-                    + u * v * f(8)
-                    + (1.0 - u) * v * f(6);
-                let sy = (1.0 - u) * (1.0 - v) * y0
-                    + u * (1.0 - v) * f(11)
-                    + u * v * f(9)
-                    + (1.0 - u) * v * f(7);
-                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
-            }
-            TransformMethod::Affine => None,
-        }
-    };
+        // The transform uniform stores all coefficients as f32 bit patterns.
+        // Do not admit a value that changes when it crosses that ABI boundary.
+        self.data[..required_data].iter().copied().all(|value| {
+            let narrowed = value as f32;
+            narrowed.is_finite() && f64::from(narrowed) == value
+        })
+    }
 
-    let host_coordinate = |value: f64| -> Option<i64> {
+    fn mesh_record_is_admitted(&self) -> bool {
+        let mesh_is_full_output = !matches!(self.method, TransformMethod::Mesh)
+            || self.data[..4]
+                == [
+                    0.0,
+                    0.0,
+                    f64::from(self.output_dimensions.0),
+                    f64::from(self.output_dimensions.1),
+                ];
+        let mesh_is_partial_relocation = matches!(self.method, TransformMethod::Mesh)
+            && gpu_mesh_unit_relocation_is_admitted(
+                self.data,
+                self.output_dimensions.0,
+                self.output_dimensions.1,
+            );
+        match self.method {
+            TransformMethod::Mesh => {
+                mesh_is_full_output || (mesh_is_partial_relocation && !self.fill_is_none)
+            }
+            TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Affine => true,
+        }
+    }
+
+    #[inline]
+    fn all_source_pixels_match(&self) -> bool {
+        for dy in 0..self.output_dimensions.1 {
+            for dx in 0..self.output_dimensions.0 {
+                if !self.shader_arithmetic_is_finite(dx, dy)
+                    || !self.source_selection_matches(dx, dy)
+                {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    #[inline]
+    fn shader_arithmetic_is_finite(&self, dx: u32, dy: u32) -> bool {
+        let (w, h) = self.output_dimensions;
+        if matches!(self.method, TransformMethod::Perspective)
+            && (self.data[6] != 0.0 || self.data[7] != 0.0)
+        {
+            let f = |index: usize| self.data[index] as f32;
+            let dx = dx as f32;
+            let dy = dy as f32;
+            let denominator = f(6) * dx + f(7) * dy + 1.0;
+            if denominator != 0.0
+                && (!denominator.is_finite()
+                    || !(f(0) * dx + f(1) * dy + f(2)).is_finite()
+                    || !(f(3) * dx + f(4) * dy + f(5)).is_finite())
+            {
+                return false;
+            }
+        }
+        if matches!(self.method, TransformMethod::Quad)
+            && !gpu_quad_constant_map_is_admitted(self.data)
+            && !gpu_quad_shader_arithmetic_is_finite(self.data, w, h, dx as f32, dy as f32)
+        {
+            return false;
+        }
+        !matches!(self.method, TransformMethod::Mesh)
+            || gpu_mesh_constant_map_is_admitted(self.data, w, h)
+            || gpu_mesh_unit_relocation_is_admitted(self.data, w, h)
+            || gpu_mesh_shader_arithmetic_is_finite(self.data, w, h, dx as f32, dy as f32)
+    }
+
+    #[inline]
+    fn source_selection_matches(&self, dx: u32, dy: u32) -> bool {
+        let host = self.host_source_at(f64::from(dx), f64::from(dy));
+        let device = self.shader_source_at(dx as f32, dy as f32);
+        if matches!(self.method, TransformMethod::Quad | TransformMethod::Mesh)
+            && device.is_some_and(|(x, y)| {
+                !gpu_projective_shader_coordinate_is_safe(x)
+                    || !gpu_projective_shader_coordinate_is_safe(y)
+            })
+        {
+            return false;
+        }
+        let host_sample = host.and_then(|(x, y)| {
+            let x = self.host_coordinate(x)?;
+            let y = self.host_coordinate(y)?;
+            (x >= 0
+                && x < i64::from(self.source_dimensions.0)
+                && y >= 0
+                && y < i64::from(self.source_dimensions.1))
+            .then_some((x, y))
+        });
+        let device_sample = device.and_then(|(x, y)| {
+            let x = Self::device_coordinate(x)?;
+            let y = Self::device_coordinate(y)?;
+            (x >= 0
+                && x < i64::from(self.source_dimensions.0)
+                && y >= 0
+                && y < i64::from(self.source_dimensions.1))
+            .then_some((x, y))
+        });
+        host_sample == device_sample
+    }
+
+    #[inline]
+    fn host_coordinate(&self, value: f64) -> Option<i64> {
         if !value.is_finite() {
             return None;
         }
         Some(
             if matches!(
-                method,
+                self.method,
                 TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Mesh
             ) {
                 if value < 0.0 { -1 } else { value as i64 }
@@ -431,78 +322,256 @@ pub(in crate::compute::pool_gpu) fn gpu_projective_uniform_is_exact(
                 (value + 0.5).floor() as i64
             },
         )
-    };
-    let device_coordinate =
-        |value: f32| -> Option<i64> { value.is_finite().then(|| (value + 0.5).floor() as i64) };
+    }
 
-    for dy in 0..*h {
-        for dx in 0..*w {
-            // The generic projective shader checks only a zero denominator
-            // before dividing.  Reject any non-finite f32 intermediate here:
-            // a NaN source coordinate would bypass the sampler's bounds
-            // checks, whereas Pillow's f64 path still resolves a fill or a
-            // source pixel.  Constant-denominator maps use a different
-            // centered shader branch; this guard is for the nonconstant
-            // arithmetic admitted by the proof above.
-            if matches!(method, TransformMethod::Perspective) && (data[6] != 0.0 || data[7] != 0.0)
-            {
-                let f = |index: usize| data[index] as f32;
-                let dx = dx as f32;
-                let dy = dy as f32;
-                let denominator = f(6) * dx + f(7) * dy + 1.0;
-                if denominator != 0.0
-                    && (!denominator.is_finite()
-                        || !(f(0) * dx + f(1) * dy + f(2)).is_finite()
-                        || !(f(3) * dx + f(4) * dy + f(5)).is_finite())
-                {
-                    return false;
-                }
-            }
-            if matches!(method, TransformMethod::Quad)
-                && !gpu_quad_constant_map_is_admitted(data)
-                && !gpu_quad_shader_arithmetic_is_finite(data, *w, *h, dx as f32, dy as f32)
-            {
-                return false;
-            }
-            if matches!(method, TransformMethod::Mesh)
-                && !gpu_mesh_constant_map_is_admitted(data, *w, *h)
-                && !gpu_mesh_unit_relocation_is_admitted(data, *w, *h)
-                && !gpu_mesh_shader_arithmetic_is_finite(data, *w, *h, dx as f32, dy as f32)
-            {
-                return false;
-            }
-            let host = source_at(f64::from(dx), f64::from(dy));
-            let device = shader_source_at(dx as f32, dy as f32);
-            if matches!(method, TransformMethod::Quad | TransformMethod::Mesh)
-                && device.is_some_and(|(x, y)| {
-                    !gpu_projective_shader_coordinate_is_safe(x)
-                        || !gpu_projective_shader_coordinate_is_safe(y)
-                })
-            {
-                return false;
-            }
-            let host_sample = host.and_then(|(x, y)| {
-                let x = host_coordinate(x)?;
-                let y = host_coordinate(y)?;
-                (x >= 0
-                    && x < i64::from(source_dimensions.0)
-                    && y >= 0
-                    && y < i64::from(source_dimensions.1))
-                .then_some((x, y))
-            });
-            let device_sample = device.and_then(|(x, y)| {
-                let x = device_coordinate(x)?;
-                let y = device_coordinate(y)?;
-                (x >= 0
-                    && x < i64::from(source_dimensions.0)
-                    && y >= 0
-                    && y < i64::from(source_dimensions.1))
-                .then_some((x, y))
-            });
-            if host_sample != device_sample {
-                return false;
-            }
+    #[inline]
+    fn device_coordinate(value: f32) -> Option<i64> {
+        value.is_finite().then(|| (value + 0.5).floor() as i64)
+    }
+
+    #[inline]
+    fn host_source_at(&self, dx: f64, dy: f64) -> Option<(f64, f64)> {
+        match self.method {
+            TransformMethod::Perspective => self.host_perspective_source(dx, dy),
+            TransformMethod::Quad => self.host_quad_source(dx, dy),
+            TransformMethod::Mesh => self.host_mesh_source(dx, dy),
+            TransformMethod::Affine => None,
         }
     }
-    true
+
+    #[inline]
+    fn host_perspective_source(&self, dx: f64, dy: f64) -> Option<(f64, f64)> {
+        let dx = dx + 0.5;
+        let dy = dy + 0.5;
+        let denominator = self.data[6] * dx + self.data[7] * dy + 1.0;
+        if denominator == 0.0 || !denominator.is_finite() {
+            return None;
+        }
+        let sx = (self.data[0] * dx + self.data[1] * dy + self.data[2]) / denominator;
+        let sy = (self.data[3] * dx + self.data[4] * dy + self.data[5]) / denominator;
+        (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
+    }
+
+    #[inline]
+    fn host_quad_source(&self, dx: f64, dy: f64) -> Option<(f64, f64)> {
+        if gpu_quad_constant_map_is_admitted(self.data) {
+            return Some((self.data[0], self.data[1]));
+        }
+        let dx = dx + 0.5;
+        let dy = dy + 0.5;
+        let sw = f64::from(self.output_dimensions.0);
+        let sh = f64::from(self.output_dimensions.1);
+        let u = dx / sw;
+        let v = dy / sh;
+        let x0 = self.data[0];
+        let y0 = self.data[1];
+        let sx = x0
+            + (self.data[6] - x0) * u
+            + (self.data[2] - x0) * v
+            + (self.data[4] - self.data[2] - self.data[6] + x0) * u * v;
+        let sy = y0
+            + (self.data[7] - y0) * u
+            + (self.data[3] - y0) * v
+            + (self.data[5] - self.data[3] - self.data[7] + y0) * u * v;
+        (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
+    }
+
+    #[inline]
+    fn host_mesh_source(&self, dx: f64, dy: f64) -> Option<(f64, f64)> {
+        // The shader emits the fill word outside a record's bbox. Compare
+        // source selection only inside the record, like Geometry.c's clip.
+        if dx < self.data[0] || dx >= self.data[2] || dy < self.data[1] || dy >= self.data[3] {
+            return None;
+        }
+        let (w, h) = self.output_dimensions;
+        if gpu_mesh_constant_map_is_admitted(self.data, w, h) {
+            return Some((self.data[4], self.data[5]));
+        }
+        if self.ordinary_byte_mode && gpu_mesh_unit_relocation_is_admitted(self.data, w, h) {
+            // Mirror CPU quad_transform FMA order for admitted relocations;
+            // a four-weight reconstruction has a different rounding shape.
+            let local_x = dx + 0.5 - self.data[0];
+            let local_y = dy + 0.5 - self.data[1];
+            let box_width = self.data[2] - self.data[0];
+            let direct = self.data[10] == self.data[4] + box_width && self.data[11] == self.data[5];
+            let (sx, sy) = if direct {
+                (self.data[4] + local_x, self.data[5] + local_y)
+            } else {
+                (self.data[4] + local_y, self.data[5] + local_x)
+            };
+            return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
+        }
+        let bbox_width = self.data[2] - self.data[0];
+        let bbox_height = self.data[3] - self.data[1];
+        if bbox_width <= 0.0 || bbox_height <= 0.0 {
+            return None;
+        }
+        let u = (dx + 0.5 - self.data[0]) / bbox_width;
+        let v = (dy + 0.5 - self.data[1]) / bbox_height;
+        let x0 = self.data[4];
+        let y0 = self.data[5];
+        let sx = (1.0 - u) * (1.0 - v) * x0
+            + u * (1.0 - v) * self.data[10]
+            + u * v * self.data[8]
+            + (1.0 - u) * v * self.data[6];
+        let sy = (1.0 - u) * (1.0 - v) * y0
+            + u * (1.0 - v) * self.data[11]
+            + u * v * self.data[9]
+            + (1.0 - u) * v * self.data[7];
+        (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
+    }
+
+    #[inline]
+    fn shader_source_at(&self, dx: f32, dy: f32) -> Option<(f32, f32)> {
+        match self.method {
+            TransformMethod::Perspective => self.shader_perspective_source(dx, dy),
+            TransformMethod::Quad => self.shader_quad_source(dx, dy),
+            TransformMethod::Mesh => self.shader_mesh_source(dx, dy),
+            TransformMethod::Affine => None,
+        }
+    }
+
+    #[inline]
+    fn shader_coefficient(&self, index: usize) -> f32 {
+        self.data[index] as f32
+    }
+
+    #[inline]
+    fn shader_perspective_source(&self, dx: f32, dy: f32) -> Option<(f32, f32)> {
+        let f = |index: usize| self.shader_coefficient(index);
+        if matches!(
+            self.filter,
+            ResampleFilter::Bilinear | ResampleFilter::Bicubic
+        ) && f(6) == 0.0
+            && f(7) == 0.0
+            && f(0) == 0.0
+            && f(1) == 0.0
+            && f(3) == 0.0
+            && f(4) == 0.0
+        {
+            return Some((f(2) - 0.5, f(5) - 0.5));
+        }
+        if gpu_perspective_signed_unit_relocation_is_admitted(self.data) {
+            let a = f(0);
+            let b = f(1);
+            let d = f(3);
+            let e = f(4);
+            let sx = if a == 1.0 {
+                f(2) + dx
+            } else if a == -1.0 {
+                f(2) - dx - 1.0
+            } else if b == 1.0 {
+                f(2) + dy
+            } else {
+                f(2) - dy - 1.0
+            };
+            let sy = if d == 1.0 {
+                f(5) + if b.abs() == 1.0 { dx } else { dy }
+            } else if d == -1.0 {
+                f(5) - if b.abs() == 1.0 { dx } else { dy } - 1.0
+            } else if e == 1.0 {
+                f(5) + dy
+            } else {
+                f(5) - dy - 1.0
+            };
+            return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
+        }
+        if f(6) == 0.0 && f(7) == 0.0 && matches!(self.filter, ResampleFilter::Nearest) {
+            let center_x = dx + 0.5;
+            let center_y = dy + 0.5;
+            let sx = (f(0) * center_x + f(1) * center_y + f(2)).floor();
+            let sy = (f(3) * center_x + f(4) * center_y + f(5)).floor();
+            return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
+        }
+        let denominator = f(6) * dx + f(7) * dy + 1.0;
+        if denominator == 0.0 || !denominator.is_finite() {
+            return None;
+        }
+        let sx = (f(0) * dx + f(1) * dy + f(2)) / denominator;
+        let sy = (f(3) * dx + f(4) * dy + f(5)) / denominator;
+        (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
+    }
+
+    #[inline]
+    fn shader_quad_source(&self, dx: f32, dy: f32) -> Option<(f32, f32)> {
+        let f = |index: usize| self.shader_coefficient(index);
+        let x0 = f(0);
+        let y0 = f(1);
+        if x0 == f(2) && x0 == f(4) && x0 == f(6) && y0 == f(3) && y0 == f(5) && y0 == f(7) {
+            // Geometry.c filters after subtracting 0.5. The shader expects
+            // the already-shifted source coordinate for filtered sampling.
+            if !matches!(self.filter, ResampleFilter::Nearest) {
+                return Some((x0 - 0.5, y0 - 0.5));
+            }
+            return Some((x0, y0));
+        }
+        let width = self.output_dimensions.0 as f32;
+        let height = self.output_dimensions.1 as f32;
+        let u = dx / width;
+        let v = dy / height;
+        let sx = x0 + (f(6) - x0) * u + (f(2) - x0) * v + (f(4) - f(2) - f(6) + x0) * u * v;
+        let sy = y0 + (f(7) - y0) * u + (f(3) - y0) * v + (f(5) - f(3) - f(7) + y0) * u * v;
+        (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
+    }
+
+    #[inline]
+    fn shader_mesh_source(&self, dx: f32, dy: f32) -> Option<(f32, f32)> {
+        let f = |index: usize| self.shader_coefficient(index);
+        let bx0 = f(0);
+        let by0 = f(1);
+        let bx1 = f(2);
+        let by1 = f(3);
+        if dx < bx0 || dx >= bx1 || dy < by0 || dy >= by1 {
+            return None;
+        }
+        let width = self.output_dimensions.0 as f32;
+        let height = self.output_dimensions.1 as f32;
+        let x0 = f(4);
+        let y0 = f(5);
+        if x0 == f(6) && x0 == f(8) && x0 == f(10) && y0 == f(7) && y0 == f(9) && y0 == f(11) {
+            if !matches!(self.filter, ResampleFilter::Nearest) {
+                return Some((x0 - 0.5, y0 - 0.5));
+            }
+            return Some((x0, y0));
+        }
+        let direct_relocation = bx0 == 0.0
+            && by0 == 0.0
+            && bx1 == width
+            && by1 == height
+            && f(6) == x0
+            && f(7) == y0 + height
+            && f(8) == x0 + width
+            && f(9) == y0 + height
+            && f(10) == x0 + width
+            && f(11) == y0;
+        let swapped_relocation = bx0 == 0.0
+            && by0 == 0.0
+            && bx1 == width
+            && by1 == height
+            && f(6) == x0 + height
+            && f(7) == y0
+            && f(8) == x0 + height
+            && f(9) == y0 + width
+            && f(10) == x0
+            && f(11) == y0 + width;
+        if direct_relocation {
+            return Some((x0 + dx, y0 + dy));
+        }
+        if swapped_relocation {
+            return Some((x0 + dy, y0 + dx));
+        }
+        let bw = (bx1 - bx0).max(1.0);
+        let bh = (by1 - by0).max(1.0);
+        let u = (dx - bx0) / bw;
+        let v = (dy - by0) / bh;
+        let sx = (1.0 - u) * (1.0 - v) * x0
+            + u * (1.0 - v) * f(10)
+            + u * v * f(8)
+            + (1.0 - u) * v * f(6);
+        let sy = (1.0 - u) * (1.0 - v) * y0
+            + u * (1.0 - v) * f(11)
+            + u * v * f(9)
+            + (1.0 - u) * v * f(7);
+        (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
+    }
 }

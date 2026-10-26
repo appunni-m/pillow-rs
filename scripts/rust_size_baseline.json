@@ -8,23 +8,12 @@
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/batch_execution/routing.rs",
       "signature": "pub(in crate::compute::pool_gpu) fn execute_batch_with_policy( &self, ops: &[PipelineOp], img: &DynamicImage, mode: Option<&str>, allow_cpu_fallback: bool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
-      "lines": 408,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn gpu_projective_uniform_is_exact( op: &PipelineOp, mode: Option<&str>, source_dimensions: (u32, u32), ) -> bool {"
     }
   ],
   "legacy_owners": {
     "pillow-rs/src/compute/pool_gpu/batch_execution/routing.rs": {
       "owner": "lazytrot",
       "reason": "Moved GPU preflight, fallback, and batch routing under the batch execution concern; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU projective nearest and uniform exactness proofs; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     }
   }
