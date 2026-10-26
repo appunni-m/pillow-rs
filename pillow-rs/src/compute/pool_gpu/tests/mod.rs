@@ -11,6 +11,25 @@ use crate::{Backend, Image, ResampleInput};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+fn native_gpu_result_or_skip<T>(
+    result: Result<T, impl std::fmt::Display>,
+    context: impl std::fmt::Display,
+) -> Option<T> {
+    match result {
+        Ok(value) => Some(value),
+        Err(error) => {
+            let message = error.to_string();
+            if message.contains("GPU adapter not available")
+                || message.contains("GPU device initialization failed")
+            {
+                None
+            } else {
+                panic!("{context}: {error}");
+            }
+        }
+    }
+}
+
 #[cfg(target_endian = "little")]
 fn rgba_transpose_reference(
     image: &RgbaImage,

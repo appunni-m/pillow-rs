@@ -8,6 +8,19 @@ impl Drop for RestorePipelineTelemetry {
     }
 }
 
+fn take_native_filter_resources(
+    receipt_message: &str,
+    resources_message: &str,
+    expected_dispatch_count: u64,
+) -> crate::compute::PipelineResourceTelemetry {
+    let receipt = Backend::take_pipeline_telemetry().expect(receipt_message);
+    assert_eq!(receipt.0, Some(Backend::Gpu));
+    assert_eq!(receipt.1, Backend::Gpu);
+    assert_eq!(receipt.6, Some(expected_dispatch_count));
+    assert_eq!(receipt.7, None);
+    receipt.8.expect(resources_message)
+}
+
 #[test]
 #[cfg(target_endian = "little")]
 fn gpu_luma_box_blur_radius_one_matches_cpu_at_edges_and_fuses_axes() {
@@ -28,33 +41,23 @@ fn gpu_luma_box_blur_radius_one_matches_cpu_at_edges_and_fuses_axes() {
             .expect("CPU L BoxBlur reference");
         let prepared = prepare_execution(std::slice::from_ref(&operation), Some(Backend::Gpu))
             .expect("GPU L BoxBlur routing");
-        let actual = match execute_prepared(
-            &prepared,
-            std::slice::from_ref(&operation),
-            &source,
-            Some("L"),
-        ) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU L BoxBlur failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(
+                &prepared,
+                std::slice::from_ref(&operation),
+                &source,
+                Some("L"),
+            ),
+            "native GPU L BoxBlur failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageLuma8(_)));
         assert_eq!(actual.dimensions(), expected.dimensions());
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt = Backend::take_pipeline_telemetry().expect("native L blur receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native L blur resources");
+        let resources =
+            take_native_filter_resources("native L blur receipt", "native L blur resources", 1);
         let transfer_bytes = pixel_count.div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -90,33 +93,23 @@ fn gpu_rgb_box_blur_radius_one_matches_cpu_at_edges_and_fuses_axes() {
             .expect("CPU RGB BoxBlur reference");
         let prepared = prepare_execution(std::slice::from_ref(&operation), Some(Backend::Gpu))
             .expect("GPU RGB BoxBlur routing");
-        let actual = match execute_prepared(
-            &prepared,
-            std::slice::from_ref(&operation),
-            &source,
-            Some("RGB"),
-        ) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU RGB BoxBlur failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(
+                &prepared,
+                std::slice::from_ref(&operation),
+                &source,
+                Some("RGB"),
+            ),
+            "native GPU RGB BoxBlur failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageRgb8(_)));
         assert_eq!(actual.dimensions(), expected.dimensions());
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt = Backend::take_pipeline_telemetry().expect("native RGB blur receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native RGB blur resources");
+        let resources =
+            take_native_filter_resources("native RGB blur receipt", "native RGB blur resources", 1);
         let transfer_bytes = byte_count.div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -177,15 +170,8 @@ fn packed_la_rank_filter_work_estimate_respects_selection_cost() {
 fn gpu_packed_la_filter_5x5_preserves_channels_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let weights = [1.0, 4.0, 6.0, 4.0, 1.0];
     let kernel = std::array::from_fn(|index| weights[index / 5] * weights[index % 5]);
     let op = [PipelineOp::Filter5x5 {
@@ -206,28 +192,20 @@ fn gpu_packed_la_filter_5x5_preserves_channels_and_compact_transfers() {
             .expect("CPU LA Filter5x5 reference");
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA Filter5x5 routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU LA Filter5x5 failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("LA")),
+            "native GPU LA Filter5x5 failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageLumaA8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt =
-            Backend::take_pipeline_telemetry().expect("native LA Filter5x5 execution receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native LA Filter5x5 resources");
+        let resources = take_native_filter_resources(
+            "native LA Filter5x5 execution receipt",
+            "native LA Filter5x5 resources",
+            1,
+        );
         let transfer_bytes = (pixel_count * 2).div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -240,15 +218,8 @@ fn gpu_packed_la_filter_5x5_preserves_channels_and_compact_transfers() {
 fn gpu_packed_la_binomial_filter_3x3_preserves_channels_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let op = [PipelineOp::Filter3x3 {
         kernel: [1.0, 2.0, 1.0, 2.0, 4.0, 2.0, 1.0, 2.0, 1.0],
         scale: 16.0,
@@ -267,28 +238,20 @@ fn gpu_packed_la_binomial_filter_3x3_preserves_channels_and_compact_transfers() 
             .expect("CPU LA Filter3x3 reference");
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA Filter3x3 routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU LA Filter3x3 failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("LA")),
+            "native GPU LA Filter3x3 failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageLumaA8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt =
-            Backend::take_pipeline_telemetry().expect("native LA Filter3x3 execution receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native LA Filter3x3 resources");
+        let resources = take_native_filter_resources(
+            "native LA Filter3x3 execution receipt",
+            "native LA Filter3x3 resources",
+            1,
+        );
         let transfer_bytes = (pixel_count * 2).div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -313,27 +276,17 @@ fn gpu_packed_la_median_filter_preserves_odd_width_rows_and_alpha() {
         .expect("CPU LA MedianFilter reference");
     let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA MedianFilter routing");
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
-        Ok(actual) => actual,
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            Backend::set_pipeline_telemetry_enabled(previous);
-            return;
-        }
-        Err(error) => panic!("native GPU LA MedianFilter failed: {error}"),
+    let Some(actual) = native_gpu_result_or_skip(
+        execute_prepared(&prepared, &op, &source, Some("LA")),
+        "native GPU LA MedianFilter failed",
+    ) else {
+        Backend::set_pipeline_telemetry_enabled(previous);
+        return;
     };
     assert!(matches!(&actual, DynamicImage::ImageLumaA8(_)));
     assert_eq!(actual.as_bytes(), expected.as_bytes());
-    let receipt = Backend::take_pipeline_telemetry().expect("native LA median receipt");
-    assert_eq!(receipt.0, Some(Backend::Gpu));
-    assert_eq!(receipt.1, Backend::Gpu);
-    assert_eq!(receipt.6, Some(1));
-    assert_eq!(receipt.7, None);
-    let resources = receipt.8.expect("native LA median resources");
+    let resources =
+        take_native_filter_resources("native LA median receipt", "native LA median resources", 1);
     let transfer_bytes = (width as usize * height as usize * 2).div_ceil(4) * 4;
     assert_eq!(resources.upload_bytes, transfer_bytes as u64);
     assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -346,15 +299,8 @@ fn gpu_packed_la_median_filter_preserves_odd_width_rows_and_alpha() {
 fn gpu_packed_la_rank_filter_preserves_rank_edges_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let (width, height) = (65u32, 47u32);
     let bytes = (0..width as usize * height as usize * 2)
         .map(|index| ((index * 71 + index / 11 * 29 + 17) % 256) as u8)
@@ -369,28 +315,20 @@ fn gpu_packed_la_rank_filter_preserves_rank_edges_and_compact_transfers() {
             .expect("CPU LA RankFilter reference");
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA RankFilter routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU LA RankFilter(rank={rank}) failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("LA")),
+            format_args!("native GPU LA RankFilter(rank={rank}) failed"),
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageLumaA8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "rank={rank}");
 
-        let receipt =
-            Backend::take_pipeline_telemetry().expect("native LA RankFilter execution receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native LA RankFilter resources");
+        let resources = take_native_filter_resources(
+            "native LA RankFilter execution receipt",
+            "native LA RankFilter resources",
+            1,
+        );
         let transfer_bytes = (width as usize * height as usize * 2).div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -403,15 +341,8 @@ fn gpu_packed_la_rank_filter_preserves_rank_edges_and_compact_transfers() {
 fn gpu_packed_la_max_filter_preserves_edges_alpha_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let op = [PipelineOp::MaxFilter { size: 3 }];
     for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (5, 3), (33, 35)] {
         let pixel_count = width as usize * height as usize;
@@ -425,27 +356,17 @@ fn gpu_packed_la_max_filter_preserves_edges_alpha_and_compact_transfers() {
             .expect("CPU LA MaxFilter reference");
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA MaxFilter routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU LA MaxFilter failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("LA")),
+            "native GPU LA MaxFilter failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageLumaA8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt = Backend::take_pipeline_telemetry().expect("native LA max receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native LA max resources");
+        let resources =
+            take_native_filter_resources("native LA max receipt", "native LA max resources", 1);
         let transfer_bytes = (pixel_count * 2).div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -458,15 +379,8 @@ fn gpu_packed_la_max_filter_preserves_edges_alpha_and_compact_transfers() {
 fn gpu_packed_la_min_filter_preserves_edges_alpha_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let op = [PipelineOp::MinFilter { size: 3 }];
     for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (5, 3), (33, 35)] {
         let pixel_count = width as usize * height as usize;
@@ -480,27 +394,17 @@ fn gpu_packed_la_min_filter_preserves_edges_alpha_and_compact_transfers() {
             .expect("CPU LA MinFilter reference");
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA MinFilter routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU LA MinFilter failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("LA")),
+            "native GPU LA MinFilter failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageLumaA8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt = Backend::take_pipeline_telemetry().expect("native LA min receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native LA min resources");
+        let resources =
+            take_native_filter_resources("native LA min receipt", "native LA min resources", 1);
         let transfer_bytes = (pixel_count * 2).div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -513,15 +417,8 @@ fn gpu_packed_la_min_filter_preserves_edges_alpha_and_compact_transfers() {
 fn gpu_packed_rgb_median_filter_preserves_edges_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let op = [PipelineOp::MedianFilter { size: 3 }];
     for (width, height) in [(1u32, 1u32), (1, 3), (33, 35)] {
         let bytes = (0..width as usize * height as usize * 3)
@@ -534,27 +431,20 @@ fn gpu_packed_rgb_median_filter_preserves_edges_and_compact_transfers() {
             .expect("CPU RGB MedianFilter reference");
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU RGB MedianFilter routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("RGB")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU RGB MedianFilter failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("RGB")),
+            "native GPU RGB MedianFilter failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageRgb8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt = Backend::take_pipeline_telemetry().expect("native RGB median receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native RGB median resources");
+        let resources = take_native_filter_resources(
+            "native RGB median receipt",
+            "native RGB median resources",
+            1,
+        );
         let transfer_bytes = (width as usize * height as usize * 3).div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -567,15 +457,8 @@ fn gpu_packed_rgb_median_filter_preserves_edges_and_compact_transfers() {
 fn gpu_packed_luma_rank_one_preserves_edges_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let op = [PipelineOp::RankFilter { size: 3, rank: 1 }];
     for (width, height) in [(33u32, 35u32), (65, 47)] {
         let pixel_count = width as usize * height as usize;
@@ -589,27 +472,17 @@ fn gpu_packed_luma_rank_one_preserves_edges_and_compact_transfers() {
             .expect("CPU L RankFilter reference");
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU L RankFilter routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("L")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU L RankFilter failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("L")),
+            "native GPU L RankFilter failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageLuma8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt = Backend::take_pipeline_telemetry().expect("native L rank receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native L rank resources");
+        let resources =
+            take_native_filter_resources("native L rank receipt", "native L rank resources", 1);
         let transfer_bytes = pixel_count.div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -622,15 +495,8 @@ fn gpu_packed_luma_rank_one_preserves_edges_and_compact_transfers() {
 fn gpu_packed_luma_max_filter_preserves_edges_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let op = [PipelineOp::MaxFilter { size: 3 }];
     for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (5, 3), (33, 35)] {
         let pixel_count = width as usize * height as usize;
@@ -643,27 +509,17 @@ fn gpu_packed_luma_max_filter_preserves_edges_and_compact_transfers() {
         let expected = crate::compute::registry::execute_cpu(&op[0], &source, Some("L"))
             .expect("CPU L MaxFilter reference");
         let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU L MaxFilter routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("L")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU L MaxFilter failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("L")),
+            "native GPU L MaxFilter failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageLuma8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt = Backend::take_pipeline_telemetry().expect("native L max receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native L max resources");
+        let resources =
+            take_native_filter_resources("native L max receipt", "native L max resources", 1);
         let transfer_bytes = pixel_count.div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -676,15 +532,8 @@ fn gpu_packed_luma_max_filter_preserves_edges_and_compact_transfers() {
 fn gpu_packed_luma_min_filter_preserves_edges_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let op = [PipelineOp::MinFilter { size: 3 }];
     for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (5, 3), (33, 35)] {
         let pixel_count = width as usize * height as usize;
@@ -697,27 +546,17 @@ fn gpu_packed_luma_min_filter_preserves_edges_and_compact_transfers() {
         let expected = crate::compute::registry::execute_cpu(&op[0], &source, Some("L"))
             .expect("CPU L MinFilter reference");
         let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU L MinFilter routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("L")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU L MinFilter failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("L")),
+            "native GPU L MinFilter failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageLuma8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt = Backend::take_pipeline_telemetry().expect("native L min receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native L min resources");
+        let resources =
+            take_native_filter_resources("native L min receipt", "native L min resources", 1);
         let transfer_bytes = pixel_count.div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -730,15 +569,8 @@ fn gpu_packed_luma_min_filter_preserves_edges_and_compact_transfers() {
 fn gpu_packed_rgb_max_filter_preserves_edges_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let op = [PipelineOp::MaxFilter { size: 3 }];
     for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (8, 3), (5, 3), (33, 35)] {
         let bytes = (0..width as usize * height as usize * 3)
@@ -751,27 +583,17 @@ fn gpu_packed_rgb_max_filter_preserves_edges_and_compact_transfers() {
             .expect("CPU RGB MaxFilter reference");
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU RGB MaxFilter routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("RGB")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU RGB MaxFilter failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("RGB")),
+            "native GPU RGB MaxFilter failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageRgb8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt = Backend::take_pipeline_telemetry().expect("native RGB max receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native RGB max resources");
+        let resources =
+            take_native_filter_resources("native RGB max receipt", "native RGB max resources", 1);
         let transfer_bytes = (width as usize * height as usize * 3).div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -784,15 +606,8 @@ fn gpu_packed_rgb_max_filter_preserves_edges_and_compact_transfers() {
 fn gpu_packed_rgb_min_filter_preserves_edges_and_compact_transfers() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let op = [PipelineOp::MinFilter { size: 3 }];
     for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (8, 3), (5, 3), (33, 35)] {
         let bytes = (0..width as usize * height as usize * 3)
@@ -805,27 +620,17 @@ fn gpu_packed_rgb_min_filter_preserves_edges_and_compact_transfers() {
             .expect("CPU RGB MinFilter reference");
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU RGB MinFilter routing");
-        let actual = match execute_prepared(&prepared, &op, &source, Some("RGB")) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                return;
-            }
-            Err(error) => panic!("native GPU RGB MinFilter failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            execute_prepared(&prepared, &op, &source, Some("RGB")),
+            "native GPU RGB MinFilter failed",
+        ) else {
+            return;
         };
         assert!(matches!(&actual, DynamicImage::ImageRgb8(_)));
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
 
-        let receipt = Backend::take_pipeline_telemetry().expect("native RGB min receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native RGB min resources");
+        let resources =
+            take_native_filter_resources("native RGB min receipt", "native RGB min resources", 1);
         let transfer_bytes = (width as usize * height as usize * 3).div_ceil(4) * 4;
         assert_eq!(resources.upload_bytes, transfer_bytes as u64);
         assert_eq!(resources.readback_bytes, transfer_bytes as u64);
@@ -850,26 +655,16 @@ fn gpu_packed_la_gaussian_blur_preserves_odd_width_rows_and_alpha() {
         .expect("CPU LA GaussianBlur reference");
     let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA GaussianBlur routing");
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
-        Ok(actual) => actual,
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            Backend::set_pipeline_telemetry_enabled(previous);
-            return;
-        }
-        Err(error) => panic!("native GPU LA GaussianBlur failed: {error}"),
+    let Some(actual) = native_gpu_result_or_skip(
+        execute_prepared(&prepared, &op, &source, Some("LA")),
+        "native GPU LA GaussianBlur failed",
+    ) else {
+        Backend::set_pipeline_telemetry_enabled(previous);
+        return;
     };
     assert_eq!(actual.as_bytes(), expected.as_bytes());
-    let receipt = Backend::take_pipeline_telemetry().expect("native LA blur receipt");
-    assert_eq!(receipt.0, Some(Backend::Gpu));
-    assert_eq!(receipt.1, Backend::Gpu);
-    assert_eq!(receipt.6, Some(6));
-    assert_eq!(receipt.7, None);
-    let resources = receipt.8.expect("native LA blur resources");
+    let resources =
+        take_native_filter_resources("native LA blur receipt", "native LA blur resources", 6);
     let transfer_bytes = (width as usize * height as usize * 2).div_ceil(4) * 4;
     assert_eq!(resources.upload_bytes, transfer_bytes as u64);
     assert_eq!(resources.readback_bytes, transfer_bytes as u64);
