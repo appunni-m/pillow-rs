@@ -21,50 +21,58 @@ fn f_resize_compact_box_proof_covers_horizontal_over_binding_row() {
         h: 1,
         filter: ResampleFilter::Box,
     };
+    assert_horizontal_over_binding_compact_box_proof(&op, &source_dynamic, height as u32);
+}
+
+fn assert_horizontal_over_binding_compact_box_proof(
+    op: &PipelineOp,
+    source: &DynamicImage,
+    height: u32,
+) {
     assert!(gpu_f_resize_compact_box_vertical_only_geometry(
-        &op,
-        (1, height as u32),
+        op,
+        (1, height),
         (1, 1),
         Some("F")
     ));
     assert!(gpu_f_resize_compact_box_is_exact(
-        std::slice::from_ref(&op),
-        &source_dynamic,
+        std::slice::from_ref(op),
+        source,
         Some("F")
     ));
     let compact_words =
-        encode_resize_compact_box_axis(height as u32, 1).expect("compact Box coefficient row");
+        encode_resize_compact_box_axis(height, 1).expect("compact Box coefficient row");
     assert_eq!(compact_words.len(), 7);
-    assert_eq!(&compact_words[0..3], &[0, height as u32, 0]);
+    assert_eq!(&compact_words[0..3], &[0, height, 0]);
     assert!(!gpu_f_resize_f64_is_exact(
-        std::slice::from_ref(&op),
-        &source_dynamic,
+        std::slice::from_ref(op),
+        source,
         Some("F")
     ));
     assert!(!gpu_f_resize_dyadic_is_exact(
-        std::slice::from_ref(&op),
-        &source_dynamic,
+        std::slice::from_ref(op),
+        source,
         Some("F")
     ));
     assert!(gpu_f_resize_f64_ordered_is_exact(
-        std::slice::from_ref(&op),
-        &source_dynamic,
+        std::slice::from_ref(op),
+        source,
         Some("F")
     ));
     assert!(!gpu_dimensions_require_cpu(
-        std::slice::from_ref(&op),
-        &source_dynamic,
+        std::slice::from_ref(op),
+        source,
         Some("F")
     ));
     assert!(!gpu_dispatch_dimensions_require_cpu(
-        std::slice::from_ref(&op),
-        (1, height as u32),
+        std::slice::from_ref(op),
+        (1, height),
         65_535,
         Some("F"),
         false,
     ));
     assert_eq!(
-        gpu_dispatch_count(std::slice::from_ref(&op), Some("F"), (1, height as u32)),
+        gpu_dispatch_count(std::slice::from_ref(op), Some("F"), (1, height)),
         1
     );
 }
@@ -91,35 +99,7 @@ fn f_resize_compact_box_proof_covers_multiple_output_rows() {
         h: 1,
         filter: ResampleFilter::Box,
     };
-    assert!(gpu_f_resize_compact_box_is_exact(
-        std::slice::from_ref(&op),
-        &source_dynamic,
-        Some("F")
-    ));
-    let compact_words = encode_resize_compact_box_axis(width as u32, 2)
-        .expect("multi-output compact Box coefficient rows");
-    assert_eq!(compact_words.len(), 10);
-    assert_eq!(
-        &compact_words[0..6],
-        &[0, ratio as u32, 0, ratio as u32, ratio as u32, 0]
-    );
-    assert_eq!(
-        &compact_words[6..],
-        &encode_resize_compact_box_axis(ratio as u32, 1)
-            .expect("single-output compact Box coefficient row")[3..]
-    );
-    assert!(!gpu_dimensions_require_cpu(
-        std::slice::from_ref(&op),
-        &source_dynamic,
-        Some("F")
-    ));
-    assert!(!gpu_dispatch_dimensions_require_cpu(
-        std::slice::from_ref(&op),
-        (width as u32, 1),
-        65_535,
-        Some("F"),
-        false,
-    ));
+    assert_multiple_output_compact_box_proof(&op, &source_dynamic, width as u32, ratio as u32);
     let filter = ResampleInput::Name("BOX".into());
     let expected = source
         .resize((2, 1), Some(filter.clone()), None)
@@ -144,6 +124,40 @@ fn f_resize_compact_box_proof_covers_multiple_output_rows() {
 
     assert!(!gpu_f_resize_compact_box_axis(width as u32 + 1, 2));
     assert!(encode_resize_compact_box_axis(width as u32 + 1, 2).is_err());
+}
+
+fn assert_multiple_output_compact_box_proof(
+    op: &PipelineOp,
+    source: &DynamicImage,
+    width: u32,
+    ratio: u32,
+) {
+    assert!(gpu_f_resize_compact_box_is_exact(
+        std::slice::from_ref(op),
+        source,
+        Some("F")
+    ));
+    let compact_words = encode_resize_compact_box_axis(width, 2)
+        .expect("multi-output compact Box coefficient rows");
+    assert_eq!(compact_words.len(), 10);
+    assert_eq!(&compact_words[0..6], &[0, ratio, 0, ratio, ratio, 0]);
+    assert_eq!(
+        &compact_words[6..],
+        &encode_resize_compact_box_axis(ratio, 1)
+            .expect("single-output compact Box coefficient row")[3..]
+    );
+    assert!(!gpu_dimensions_require_cpu(
+        std::slice::from_ref(op),
+        source,
+        Some("F")
+    ));
+    assert!(!gpu_dispatch_dimensions_require_cpu(
+        std::slice::from_ref(op),
+        (width, 1),
+        65_535,
+        Some("F"),
+        false,
+    ));
 }
 
 #[test]
