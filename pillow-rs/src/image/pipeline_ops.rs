@@ -633,6 +633,115 @@ pub(crate) fn pipeline_mode_cache() -> PipelineModeCache {
     Arc::new(OnceLock::new())
 }
 
+struct PipelineOutputMetadata {
+    source_is_paletted: bool,
+    palette_safe: bool,
+    promotes_p_to_pa: bool,
+    explicit_mode: Option<String>,
+    palette: Option<Vec<u8>>,
+    palette_alpha: Option<Vec<u8>>,
+}
+
+fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMetadata {
+    let source_is_paletted = source.has_palette_samples();
+    let palette_safe = source_is_paletted && Image::is_palette_safe_op_for_source(source, op);
+    let indexed_chops_result_without_palette =
+        source_is_paletted && Image::indexed_chops_result_without_palette(op);
+    let putalpha_mode = match op {
+        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => Some(*mode),
+        _ => None,
+    };
+    let promotes_p_to_pa = source.has_palette_mode()
+        && matches!(
+            op,
+            PipelineOp::PutAlpha {
+                mode: PixelMode::P,
+                ..
+            } | PipelineOp::PutAlphaData {
+                mode: PixelMode::P,
+                ..
+            }
+        );
+    let explicit_mode =
+        pipeline_output_mode(source, op, source_is_paletted, palette_safe, putalpha_mode);
+    let (palette, palette_alpha) = pipeline_output_palette(
+        source,
+        op,
+        palette_safe,
+        indexed_chops_result_without_palette,
+    );
+    PipelineOutputMetadata {
+        source_is_paletted,
+        palette_safe,
+        promotes_p_to_pa,
+        explicit_mode,
+        palette,
+        palette_alpha,
+    }
+}
+
+fn new_pipeline_node(
+    source: Arc<Image>,
+    ops: PipelineOps,
+    backend: Option<crate::compute::Backend>,
+    explicit_mode: Option<String>,
+    palette: Option<Vec<u8>>,
+    palette_alpha: Option<Vec<u8>>,
+) -> Image {
+    Image::Pipeline {
+        source,
+        ops,
+        format: None,
+        explicit_mode,
+        backend,
+        palette,
+        palette_alpha,
+        materialized: materialization_cache(),
+        shape: pipeline_shape_cache(),
+        mode: pipeline_mode_cache(),
+    }
+}
+
+fn append_pipeline_op(
+    source: &Arc<Image>,
+    ops: &PipelineOps,
+    backend: Option<crate::compute::Backend>,
+    materialized: &MaterializationCache,
+    op: PipelineOp,
+    source_is_paletted: bool,
+    explicit_mode: Option<String>,
+    palette: Option<Vec<u8>>,
+    palette_alpha: Option<Vec<u8>>,
+) -> Image {
+    let can_reuse_prefix =
+        !source_is_paletted && !ops.is_empty() && ops.mode_preserving() && op_preserves_mode(&op);
+    let ancestor_cache = if can_reuse_prefix {
+        if materialized.get().is_some() {
+            Some(PipelinePrefixCache {
+                ops_len: ops.len(),
+                materialized: Arc::clone(materialized),
+            })
+        } else {
+            // An unmaterialized prefix must stay part of the flattened batch.
+            // Marking its empty cache here makes evaluate_pipeline split every
+            // lazy chain into a prefix and suffix submission, defeating GPU
+            // batching and adding an avoidable frame copy.
+            ops.prefix_cache().cloned()
+        }
+    } else {
+        None
+    };
+    let new_ops = ops.append(op).with_prefix_cache(ancestor_cache);
+    new_pipeline_node(
+        Arc::clone(source),
+        new_ops,
+        backend,
+        explicit_mode,
+        palette,
+        palette_alpha,
+    )
+}
+
 fn pipeline_output_mode(
     source: &Image,
     op: &PipelineOp,
@@ -719,35 +828,14 @@ impl Image {
     /// when the operation can preserve them; operations that fundamentally
     /// change mode clear or replace the explicit mode tag.
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
-        let source_is_paletted = source.has_palette_samples();
-        let palette_safe = source_is_paletted && Self::is_palette_safe_op_for_source(source, &op);
-        let indexed_chops_result_without_palette =
-            source_is_paletted && Self::indexed_chops_result_without_palette(&op);
-        let putalpha_mode = match &op {
-            PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
-                Some(*mode)
-            }
-            _ => None,
-        };
-        let promotes_p_to_pa = source.has_palette_mode()
-            && matches!(
-                &op,
-                PipelineOp::PutAlpha {
-                    mode: crate::pipeline::PixelMode::P,
-                    ..
-                } | PipelineOp::PutAlphaData {
-                    mode: crate::pipeline::PixelMode::P,
-                    ..
-                }
-            );
-        let explicit_mode =
-            pipeline_output_mode(source, &op, source_is_paletted, palette_safe, putalpha_mode);
-        let (source_palette, source_palette_alpha) = pipeline_output_palette(
-            source,
-            &op,
+        let PipelineOutputMetadata {
+            source_is_paletted,
             palette_safe,
-            indexed_chops_result_without_palette,
-        );
+            promotes_p_to_pa,
+            explicit_mode,
+            palette,
+            palette_alpha,
+        } = pipeline_output_metadata(source, &op);
         match source {
             // Keep a concrete sample-layout boundary around palette expansion
             // and P↔PA transitions. A flattened batch has only one external
@@ -759,21 +847,14 @@ impl Image {
                         || promotes_p_to_pa
                         || source.explicit_mode() == Some("PA")) =>
             {
-                Image::Pipeline {
-                    source: Arc::new(source.clone()),
-                    ops: PipelineOps::one(op),
-                    // Pillow derived images (resize, crop, getchannel,
-                    // convert, rotate, ...) report format None; only the
-                    // originally opened image carries the container format.
-                    format: None,
+                new_pipeline_node(
+                    Arc::new(source.clone()),
+                    PipelineOps::one(op),
+                    source.backend(),
                     explicit_mode,
-                    backend: source.backend(),
-                    palette: source_palette,
-                    palette_alpha: source_palette_alpha,
-                    materialized: materialization_cache(),
-                    shape: pipeline_shape_cache(),
-                    mode: pipeline_mode_cache(),
-                }
+                    palette,
+                    palette_alpha,
+                )
             }
             Image::Pipeline {
                 source: pipeline_source,
@@ -781,54 +862,25 @@ impl Image {
                 backend,
                 materialized: pipeline_materialized,
                 ..
-            } => {
-                let can_reuse_prefix = !source_is_paletted
-                    && !ops.is_empty()
-                    && ops.mode_preserving()
-                    && op_preserves_mode(&op);
-                let ancestor_cache = if can_reuse_prefix {
-                    if pipeline_materialized.get().is_some() {
-                        Some(PipelinePrefixCache {
-                            ops_len: ops.len(),
-                            materialized: Arc::clone(pipeline_materialized),
-                        })
-                    } else {
-                        // An unmaterialized prefix must stay part of the
-                        // flattened batch. Marking its empty cache here
-                        // makes evaluate_pipeline split every lazy chain
-                        // into a prefix and suffix submission, defeating
-                        // GPU batching and adding an avoidable frame copy.
-                        ops.prefix_cache().cloned()
-                    }
-                } else {
-                    None
-                };
-                let new_ops = ops.append(op).with_prefix_cache(ancestor_cache);
-                Image::Pipeline {
-                    source: Arc::clone(pipeline_source),
-                    ops: new_ops,
-                    format: None,
-                    explicit_mode,
-                    backend: *backend,
-                    palette: source_palette,
-                    palette_alpha: source_palette_alpha,
-                    materialized: materialization_cache(),
-                    shape: pipeline_shape_cache(),
-                    mode: pipeline_mode_cache(),
-                }
-            }
-            other => Image::Pipeline {
-                source: Arc::new(other.clone()),
-                ops: PipelineOps::one(op),
-                format: None,
+            } => append_pipeline_op(
+                pipeline_source,
+                ops,
+                *backend,
+                pipeline_materialized,
+                op,
+                source_is_paletted,
                 explicit_mode,
-                backend: other.backend(),
-                palette: source_palette,
-                palette_alpha: source_palette_alpha,
-                materialized: materialization_cache(),
-                shape: pipeline_shape_cache(),
-                mode: pipeline_mode_cache(),
-            },
+                palette,
+                palette_alpha,
+            ),
+            other => new_pipeline_node(
+                Arc::new(other.clone()),
+                PipelineOps::one(op),
+                other.backend(),
+                explicit_mode,
+                palette,
+                palette_alpha,
+            ),
         }
     }
 
