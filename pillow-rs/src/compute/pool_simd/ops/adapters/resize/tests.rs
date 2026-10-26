@@ -412,86 +412,143 @@ fn cover_hsv_i32_two_pass_matches_widened_at_edges_and_tails() {
     for (width, height, output_width, output_height) in
         [(5, 3, 7, 5), (37, 17, 53, 23), (67, 29, 31, 41)]
     {
-        let horizontal = precompute_coeffs(output_width, width, ResampleFilter::Bicubic);
-        let vertical = precompute_coeffs(output_height, height, ResampleFilter::Bicubic);
-        assert!(super::resize_u8_coefficients_fit_i32(&horizontal));
-        assert!(super::resize_u8_coefficients_fit_i32(&vertical));
-        let plan =
-            super::build_resize_horizontal_plan(&horizontal, output_width as usize, 3, false)
-                .expect("HSV horizontal plan");
-
-        for pattern in 0..4u32 {
-            let source = (0..width * height * 3)
-                .map(|index| match pattern {
-                    0 => 0,
-                    1 => 255,
-                    2 if (index + index / (width * 3)) % 2 == 0 => 0,
-                    2 => 255,
-                    _ => index
-                        .wrapping_mul(97)
-                        .wrapping_add(index / (width * 3) * 53) as u8,
-                })
-                .collect::<Vec<_>>();
-            let mut widened_intermediate = vec![0u8; height as usize * output_width as usize * 3];
-            let mut narrow_intermediate = widened_intermediate.clone();
-            for y in 0..height as usize {
-                let source_row = &source[y * width as usize * 3..(y + 1) * width as usize * 3];
-                let row_start = y * output_width as usize * 3;
-                let row_end = row_start + output_width as usize * 3;
-                super::resize_horizontal_vector_row(
-                    source_row,
-                    3,
-                    &horizontal,
-                    &plan,
-                    output_width as usize,
-                    &mut widened_intermediate[row_start..row_end],
-                    false,
-                )
-                .expect("wide HSV horizontal pass");
-                super::resize_horizontal_hsv_i32_vector_row(
-                    source_row,
-                    &horizontal,
-                    &plan,
-                    output_width as usize,
-                    &mut narrow_intermediate[row_start..row_end],
-                )
-                .expect("bounded HSV horizontal pass");
-            }
-            assert_eq!(
-                narrow_intermediate, widened_intermediate,
-                "horizontal {pattern}"
-            );
-
-            let mut widened = vec![0u8; output_width as usize * output_height as usize * 3];
-            let mut narrow = widened.clone();
-            for y in 0..output_height as usize {
-                let row_start = y * output_width as usize * 3;
-                let row_end = row_start + output_width as usize * 3;
-                super::resize_vertical_vector_row(
-                    &widened_intermediate,
-                    output_width as usize,
-                    height as usize,
-                    3,
-                    &vertical,
-                    y,
-                    &mut widened[row_start..row_end],
-                    false,
-                    false,
-                )
-                .expect("wide HSV vertical pass");
-                super::resize_vertical_hsv_i32_vector_row(
-                    &narrow_intermediate,
-                    output_width as usize,
-                    height as usize,
-                    &vertical,
-                    y,
-                    &mut narrow[row_start..row_end],
-                )
-                .expect("bounded HSV vertical pass");
-            }
-            assert_eq!(narrow, widened, "vertical {pattern}");
-        }
+        assert_cover_hsv_i32_case(width, height, output_width, output_height);
     }
+}
+
+fn assert_cover_hsv_i32_case(width: u32, height: u32, output_width: u32, output_height: u32) {
+    let horizontal = precompute_coeffs(output_width, width, ResampleFilter::Bicubic);
+    let vertical = precompute_coeffs(output_height, height, ResampleFilter::Bicubic);
+    assert!(super::resize_u8_coefficients_fit_i32(&horizontal));
+    assert!(super::resize_u8_coefficients_fit_i32(&vertical));
+    let plan = super::build_resize_horizontal_plan(&horizontal, output_width as usize, 3, false)
+        .expect("HSV horizontal plan");
+
+    for pattern in 0..4u32 {
+        assert_cover_hsv_i32_pattern(
+            width,
+            height,
+            output_width,
+            output_height,
+            pattern,
+            &horizontal,
+            &vertical,
+            &plan,
+        );
+    }
+}
+
+fn assert_cover_hsv_i32_pattern(
+    width: u32,
+    height: u32,
+    output_width: u32,
+    output_height: u32,
+    pattern: u32,
+    horizontal: &FilterCoeffs,
+    vertical: &FilterCoeffs,
+    plan: &super::ResizeHorizontalPlan,
+) {
+    let source = (0..width * height * 3)
+        .map(|index| match pattern {
+            0 => 0,
+            1 => 255,
+            2 if (index + index / (width * 3)) % 2 == 0 => 0,
+            2 => 255,
+            _ => index
+                .wrapping_mul(97)
+                .wrapping_add(index / (width * 3) * 53) as u8,
+        })
+        .collect::<Vec<_>>();
+    let (widened_intermediate, narrow_intermediate) =
+        cover_hsv_i32_horizontal_outputs(&source, width, height, output_width, horizontal, plan);
+    assert_eq!(
+        narrow_intermediate, widened_intermediate,
+        "horizontal {pattern}"
+    );
+    assert_cover_hsv_i32_vertical_outputs(
+        &widened_intermediate,
+        &narrow_intermediate,
+        height,
+        output_width,
+        output_height,
+        vertical,
+        pattern,
+    );
+}
+
+fn cover_hsv_i32_horizontal_outputs(
+    source: &[u8],
+    width: u32,
+    height: u32,
+    output_width: u32,
+    horizontal: &FilterCoeffs,
+    plan: &super::ResizeHorizontalPlan,
+) -> (Vec<u8>, Vec<u8>) {
+    let mut widened = vec![0u8; height as usize * output_width as usize * 3];
+    let mut narrow = widened.clone();
+    for y in 0..height as usize {
+        let source_row = &source[y * width as usize * 3..(y + 1) * width as usize * 3];
+        let row_start = y * output_width as usize * 3;
+        let row_end = row_start + output_width as usize * 3;
+        super::resize_horizontal_vector_row(
+            source_row,
+            3,
+            horizontal,
+            plan,
+            output_width as usize,
+            &mut widened[row_start..row_end],
+            false,
+        )
+        .expect("wide HSV horizontal pass");
+        super::resize_horizontal_hsv_i32_vector_row(
+            source_row,
+            horizontal,
+            plan,
+            output_width as usize,
+            &mut narrow[row_start..row_end],
+        )
+        .expect("bounded HSV horizontal pass");
+    }
+    (widened, narrow)
+}
+
+fn assert_cover_hsv_i32_vertical_outputs(
+    widened_intermediate: &[u8],
+    narrow_intermediate: &[u8],
+    height: u32,
+    output_width: u32,
+    output_height: u32,
+    vertical: &FilterCoeffs,
+    pattern: u32,
+) {
+    let mut widened = vec![0u8; output_width as usize * output_height as usize * 3];
+    let mut narrow = widened.clone();
+    for y in 0..output_height as usize {
+        let row_start = y * output_width as usize * 3;
+        let row_end = row_start + output_width as usize * 3;
+        super::resize_vertical_vector_row(
+            widened_intermediate,
+            output_width as usize,
+            height as usize,
+            3,
+            vertical,
+            y,
+            &mut widened[row_start..row_end],
+            false,
+            false,
+        )
+        .expect("wide HSV vertical pass");
+        super::resize_vertical_hsv_i32_vector_row(
+            narrow_intermediate,
+            output_width as usize,
+            height as usize,
+            vertical,
+            y,
+            &mut narrow[row_start..row_end],
+        )
+        .expect("bounded HSV vertical pass");
+    }
+    assert_eq!(narrow, widened, "vertical {pattern}");
 }
 
 #[test]
