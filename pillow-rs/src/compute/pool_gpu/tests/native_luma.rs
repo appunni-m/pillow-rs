@@ -100,6 +100,12 @@ fn gpu_native_expand_requires_matching_singleton_layout() {
         border: 1,
         fill: (7, 11, 13, 17),
     };
+    assert_gpu_native_expand_matching_layouts(&expand);
+    assert_gpu_native_expand_rejects_mismatches(&expand);
+}
+
+#[cfg(target_endian = "little")]
+fn assert_gpu_native_expand_matching_layouts(expand: &PipelineOp) {
     let cases = [
         (
             DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![3, 5]).unwrap()),
@@ -138,23 +144,26 @@ fn gpu_native_expand_requires_matching_singleton_layout() {
     ];
     for (image, mode, expected) in cases {
         assert_eq!(
-            super::gpu_native_expand_channels(std::slice::from_ref(&expand), &image, mode),
+            super::gpu_native_expand_channels(std::slice::from_ref(expand), &image, mode),
             expected,
             "mode {mode:?}"
         );
     }
+}
 
+#[cfg(target_endian = "little")]
+fn assert_gpu_native_expand_rejects_mismatches(expand: &PipelineOp) {
     let rgb = DynamicImage::ImageRgb8(RgbImage::from_raw(1, 1, vec![1, 2, 3]).unwrap());
     assert_eq!(
-        super::gpu_native_expand_channels(std::slice::from_ref(&expand), &rgb, Some("CMYK")),
+        super::gpu_native_expand_channels(std::slice::from_ref(expand), &rgb, Some("CMYK")),
         None
     );
     let luma = DynamicImage::ImageLuma8(GrayImage::from_raw(1, 1, vec![3]).unwrap());
     assert_eq!(
-        super::gpu_native_expand_channels(std::slice::from_ref(&expand), &luma, Some("1")),
+        super::gpu_native_expand_channels(std::slice::from_ref(expand), &luma, Some("1")),
         None
     );
-    let multiple = [expand, PipelineOp::Duplicate];
+    let multiple = [expand.clone(), PipelineOp::Duplicate];
     assert_eq!(
         super::gpu_native_expand_channels(&multiple, &rgb, Some("RGB")),
         None
@@ -334,60 +343,76 @@ fn gpu_packed_luma_point_admits_lut_and_lowered_l_autocontrast() {
     };
     let equalize = PipelineOp::Equalize;
     let luma = DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![31, 207]).unwrap());
+    assert_gpu_packed_luma_point_admissions(&eval, &equalize, &luma);
+    assert_gpu_packed_luma_point_rejections(&eval, &equalize, &luma);
+}
+
+fn assert_gpu_packed_luma_point_admissions(
+    eval: &PipelineOp,
+    equalize: &PipelineOp,
+    luma: &DynamicImage,
+) {
     assert!(super::gpu_packed_luma_point_input(
         true,
         false,
-        std::slice::from_ref(&eval),
-        &luma,
+        std::slice::from_ref(eval),
+        luma,
         None
     ));
     assert!(super::gpu_packed_luma_point_input(
         false,
         true,
-        std::slice::from_ref(&eval),
-        &luma,
+        std::slice::from_ref(eval),
+        luma,
         Some("L")
     ));
     assert!(super::gpu_packed_luma_point_input(
         false,
         false,
-        std::slice::from_ref(&equalize),
-        &luma,
+        std::slice::from_ref(equalize),
+        luma,
         Some("L")
     ));
+}
+
+fn assert_gpu_packed_luma_point_rejections(
+    eval: &PipelineOp,
+    equalize: &PipelineOp,
+    luma: &DynamicImage,
+) {
     assert!(!super::gpu_packed_luma_point_input(
         false,
         false,
-        std::slice::from_ref(&equalize),
-        &luma,
+        std::slice::from_ref(equalize),
+        luma,
         Some("P")
     ));
     assert!(!super::gpu_packed_luma_point_input(
         false,
         false,
-        std::slice::from_ref(&eval),
-        &luma,
+        std::slice::from_ref(eval),
+        luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_luma_point_input(
         false,
         true,
-        std::slice::from_ref(&eval),
-        &luma,
+        std::slice::from_ref(eval),
+        luma,
         Some("P")
     ));
     assert!(!super::gpu_packed_luma_point_input(
         false,
         true,
         &[eval.clone(), PipelineOp::Duplicate],
-        &luma,
+        luma,
         Some("L")
     ));
     let empty = DynamicImage::ImageLuma8(GrayImage::new(0, 1));
     assert!(!super::gpu_packed_luma_point_input(
         false,
         true,
-        std::slice::from_ref(&eval),
+        std::slice::from_ref(eval),
         &empty,
         Some("L")
     ));
