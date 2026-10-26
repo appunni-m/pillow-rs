@@ -586,23 +586,8 @@ fn try_specialized_filter5x5(
     offset: f32,
     mode: Option<&str>,
 ) -> Result<Option<DynamicImage>, PilError> {
-    if matches!(mode, None | Some("LA"))
-        && matches!(img, DynamicImage::ImageLumaA8(_))
-        && crate::compute::pool_cpu::ops::filter::la_single_outlier5x5_parameters_match(
-            kernel, scale, offset,
-        )
-    {
-        let mut output = img.as_bytes().to_vec();
-        if let Some((vector_blocks, scalar_tail)) =
-            kernels::native_filter_5x5_single_outlier_la_rows(
-                img.as_bytes(),
-                &mut output,
-                img.width() as usize,
-                img.height() as usize,
-            )
-        {
-            return finish_native_filter5x5(img, output, 2, vector_blocks, scalar_tail).map(Some);
-        }
+    if let Some(result) = try_filter5x5_single_outlier_la(img, kernel, scale, offset, mode)? {
+        return Ok(Some(result));
     }
     if matches!(mode, None | Some("L"))
         && matches!(img, DynamicImage::ImageLuma8(_))
@@ -647,6 +632,35 @@ fn try_specialized_filter5x5(
             img.width() as usize,
             img.height() as usize,
         ) {
+            return finish_native_filter5x5(img, output, 2, vector_blocks, scalar_tail).map(Some);
+        }
+    }
+    Ok(None)
+}
+
+#[inline(always)]
+fn try_filter5x5_single_outlier_la(
+    img: &DynamicImage,
+    kernel: &[f32; 25],
+    scale: f32,
+    offset: f32,
+    mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    if matches!(mode, None | Some("LA"))
+        && matches!(img, DynamicImage::ImageLumaA8(_))
+        && crate::compute::pool_cpu::ops::filter::la_single_outlier5x5_parameters_match(
+            kernel, scale, offset,
+        )
+    {
+        let mut output = img.as_bytes().to_vec();
+        if let Some((vector_blocks, scalar_tail)) =
+            kernels::native_filter_5x5_single_outlier_la_rows(
+                img.as_bytes(),
+                &mut output,
+                img.width() as usize,
+                img.height() as usize,
+            )
+        {
             return finish_native_filter5x5(img, output, 2, vector_blocks, scalar_tail).map(Some);
         }
     }
