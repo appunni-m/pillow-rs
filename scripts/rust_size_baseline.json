@@ -40,12 +40,6 @@
       "signature": "pub(crate) fn execute_rgb_putpixel_thumbnail_fusion( img: &DynamicImage, putpixel_ops: &[PipelineOp], thumbnail: &PipelineOp, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 194,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/transform.rs",
-      "signature": "pub fn op_transform( img: &DynamicImage, w: u32, h: u32, method: &TransformMethod, data: &[f64], filter: &ResampleFilter, fill: Option<(u8, u8, u8, u8)>, fill_is_none: bool, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 105,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs",
@@ -389,11 +383,6 @@
       "owner": "lazytrot",
       "reason": "Thumbnail retains pre-existing functions above the 100-line ratchet after the geometry family split; track the remaining reduction under pillow-rs#wtxv.",
       "reduction_task": "pillow-rs#wtxv"
-    },
-    "pillow-rs/src/compute/pool_cpu/ops/transform.rs": {
-      "owner": "lazytrot",
-      "reason": "Retains pre-existing functions above the 100-line limit moved from effects.rs during the CPU operation family split; preserve their bodies and track any later reductions under pillow-rs#8rfy.",
-      "reduction_task": "pillow-rs#8rfy"
     },
     "pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs": {
       "owner": "lazytrot",
