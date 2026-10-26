@@ -66,36 +66,18 @@ pub(crate) fn simd_rgb_putpixel_thumbnail_fusion_supported(
         && native_thumbnail_supported_for_image(img, *w, *h, effective_filter, mode)
 }
 
-/// Fold pending RGB writes into the existing sparse 2×2 reduction.
-/// `None` leaves dense sources on the ordinary per-operation executor path.
-pub(crate) fn simd_rgb_putpixel_thumbnail_prepare(
-    img: &DynamicImage,
+#[inline(always)]
+fn apply_rgb_putpixel_overrides_to_reduction(
+    source_bytes: &[u8],
+    source_width: usize,
+    reduced_width: usize,
     putpixel_ops: &[PipelineOp],
-    thumbnail: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<Option<DynamicImage>, PilError> {
-    if !simd_rgb_putpixel_thumbnail_fusion_supported(img, putpixel_ops, thumbnail, mode) {
-        return Ok(None);
-    }
-    let DynamicImage::ImageRgb8(source) = img else {
-        return Ok(None);
-    };
-    let PipelineOp::Thumbnail { .. } = thumbnail else {
-        return Ok(None);
-    };
-    let Some((mut reduced, reduced_width, reduced_height)) = native_reduce_sparse_rgb_2x2(img)
-    else {
-        return Ok(None);
-    };
-
-    // Preserve write order: the final value for a repeated coordinate wins.
-    // Recompute only affected 2×2 blocks against the original native bytes.
-    let source_width = img.width() as usize;
-    let reduced_width = reduced_width as usize;
+    reduced: &mut [u8],
+) -> Option<()> {
     let mut pixel_overrides = std::collections::BTreeMap::<usize, [u8; 3]>::new();
     for op in putpixel_ops {
         let PipelineOp::PutPixel { x, y, color, .. } = op else {
-            return Ok(None);
+            return None;
         };
         let pixel_index = *y as usize * source_width + *x as usize;
         pixel_overrides.insert(pixel_index, [color.0, color.1, color.2]);
@@ -108,7 +90,6 @@ pub(crate) fn simd_rgb_putpixel_thumbnail_prepare(
             (y / 2) * reduced_width + x / 2
         })
         .collect::<std::collections::BTreeSet<_>>();
-    let source_bytes = source.as_raw();
     for block_index in affected_blocks {
         let block_x = block_index % reduced_width;
         let block_y = block_index / reduced_width;
@@ -136,6 +117,46 @@ pub(crate) fn simd_rgb_putpixel_thumbnail_prepare(
         for channel in 0..3 {
             reduced[output_start + channel] = ((sums[channel] + 2) >> 2) as u8;
         }
+    }
+    Some(())
+}
+
+/// Fold pending RGB writes into the existing sparse 2×2 reduction.
+/// `None` leaves dense sources on the ordinary per-operation executor path.
+pub(crate) fn simd_rgb_putpixel_thumbnail_prepare(
+    img: &DynamicImage,
+    putpixel_ops: &[PipelineOp],
+    thumbnail: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    if !simd_rgb_putpixel_thumbnail_fusion_supported(img, putpixel_ops, thumbnail, mode) {
+        return Ok(None);
+    }
+    let DynamicImage::ImageRgb8(source) = img else {
+        return Ok(None);
+    };
+    let PipelineOp::Thumbnail { .. } = thumbnail else {
+        return Ok(None);
+    };
+    let Some((mut reduced, reduced_width, reduced_height)) = native_reduce_sparse_rgb_2x2(img)
+    else {
+        return Ok(None);
+    };
+
+    // Preserve write order: the final value for a repeated coordinate wins.
+    // Recompute only affected 2×2 blocks against the original native bytes.
+    let source_width = img.width() as usize;
+    let reduced_width = reduced_width as usize;
+    if apply_rgb_putpixel_overrides_to_reduction(
+        source.as_raw(),
+        source_width,
+        reduced_width,
+        putpixel_ops,
+        &mut reduced,
+    )
+    .is_none()
+    {
+        return Ok(None);
     }
 
     let reduced = RgbImage::from_raw(reduced_width as u32, reduced_height, reduced)
