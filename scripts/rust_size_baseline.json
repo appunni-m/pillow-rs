@@ -52,12 +52,6 @@
       "signature": "fn execute_projection_terminal( &self, image: &DynamicImage, ops: &[PipelineOp], channels: u8, source_is_known_zero: bool, ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {"
     },
     {
-      "lines": 275,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/rgb_merge.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_rgb_luma_merge( &self, image: &DynamicImage, bands: &[crate::image::Image], dispatch: NativeRgbMergeDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 408,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs",
@@ -98,11 +92,6 @@
     "pillow-rs/src/compute/pool_gpu/projection.rs": {
       "owner": "lazytrot",
       "reason": "Moved GPU getprojection admission, sparse override dispatch, and readback out of the oversized coordinator; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/rgb_merge.rs": {
-      "owner": "lazytrot",
-      "reason": "Consolidated GPU RGB merge admission, limits, and native execution under the merge concern; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs": {
