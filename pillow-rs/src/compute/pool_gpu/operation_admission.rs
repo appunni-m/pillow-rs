@@ -20,11 +20,6 @@ pub(super) fn gpu_dimensions_require_cpu(
     // the order-statistic admission below can select it.
     let packed_luma_rank_filter_9 = gpu_packed_luma_rank_filter_9_input(ops, image, logical_mode);
     let packed_la_rank_filter_3 = gpu_packed_la_rank_filter_3_input(ops, image, logical_mode);
-    let dimensions_fit = |w: u32, h: u32| {
-        CheckedDims::new(w, h, 1)
-            .map(|dims| dims.total_pixels() <= GPU_BUFFER_CAPACITY as usize)
-            .unwrap_or(false)
-    };
 
     if !gpu_image_layout_is_supported(image)
         && !gpu_luma16_geometry_is_supported(ops, image, None)
@@ -41,79 +36,106 @@ pub(super) fn gpu_dimensions_require_cpu(
         return true;
     }
     let (mut cur_w, mut cur_h) = image.dimensions();
-    if cur_w == 0 || cur_h == 0 || !dimensions_fit(cur_w, cur_h) {
+    if cur_w == 0 || cur_h == 0 || !gpu_dimensions_fit(cur_w, cur_h) {
         return true;
     }
     for op in ops {
-        if gpu_operation_mode_requires_cpu(op, image) {
+        let Some(next) = gpu_operation_output_dimensions_if_safe(
+            op,
+            ops,
+            image,
+            logical_mode,
+            (cur_w, cur_h),
+            packed_luma_rank_filter_9,
+            packed_la_rank_filter_3,
+        ) else {
             return true;
-        }
-        // CPU PutPixel reports IndexError for an out-of-range coordinate;
-        // the shader would silently perform no write. Route that case to the
-        // CPU before device initialization so error semantics are preserved.
-        if let PipelineOp::PutPixel { x, y, .. } = op
-            && (*x >= cur_w || *y >= cur_h)
-        {
-            return true;
-        }
-        let next = match op_output_dims(op, cur_w, cur_h) {
-            Some(dimensions) => dimensions,
-            None if op_has_explicit_output_dimensions(op) => return true,
-            None => (cur_w, cur_h),
         };
-        if let PipelineOp::Resize { filter, .. }
-        | PipelineOp::Scale { filter, .. }
-        | PipelineOp::Contain { filter, .. }
-        | PipelineOp::Cover { filter, .. } = op
-            && gpu_resize_dimensions_require_cpu(
-                ops,
-                image,
-                logical_mode,
-                *filter,
-                (cur_w, cur_h),
-                next,
-            )
-        {
-            return true;
-        }
-        if let PipelineOp::Fit {
-            bleed,
-            centering,
-            filter,
-            ..
-        } = op
-            && !gpu_fit_coefficients_are_safe((cur_w, cur_h), next, *bleed, *centering, *filter)
-        {
-            return true;
-        }
-        if let PipelineOp::Pad { filter, .. } = op {
-            let Some(((resize_w, resize_h), _)) = gpu_pad_geometry(op, cur_w, cur_h) else {
-                return true;
-            };
-            if !gpu_resize_coefficients_are_safe(*filter, (cur_w, cur_h), (resize_w, resize_h)) {
-                return true;
-            }
-        }
-        if next.0 == 0 || next.1 == 0 || !dimensions_fit(next.0, next.1) {
-            return true;
-        }
-        if packed_luma_rank_filter_9 && matches!(op, PipelineOp::RankFilter { size: 9, .. }) {
-            if gpu_packed_luma_rank_filter_9_work_items(next) > MAX_GPU_SHADER_WORK_ITEMS {
-                return true;
-            }
-        } else if packed_la_rank_filter_3 {
-            let PipelineOp::RankFilter { rank, .. } = op else {
-                return true;
-            };
-            if gpu_packed_la_rank_filter_3_work_items(next, *rank) > MAX_GPU_SHADER_WORK_ITEMS {
-                return true;
-            }
-        } else if gpu_shader_work_requires_cpu(op, (cur_w, cur_h), next, None) {
-            return true;
-        }
         (cur_w, cur_h) = next;
     }
     false
+}
+
+fn gpu_dimensions_fit(width: u32, height: u32) -> bool {
+    CheckedDims::new(width, height, 1)
+        .map(|dims| dims.total_pixels() <= GPU_BUFFER_CAPACITY as usize)
+        .unwrap_or(false)
+}
+
+fn gpu_operation_output_dimensions_if_safe(
+    op: &PipelineOp,
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+    source_dimensions: (u32, u32),
+    packed_luma_rank_filter_9: bool,
+    packed_la_rank_filter_3: bool,
+) -> Option<(u32, u32)> {
+    let (cur_w, cur_h) = source_dimensions;
+    if gpu_operation_mode_requires_cpu(op, image) {
+        return None;
+    }
+    // CPU PutPixel reports IndexError for an out-of-range coordinate; the
+    // shader would silently perform no write. Preserve the CPU error route.
+    if let PipelineOp::PutPixel { x, y, .. } = op
+        && (*x >= cur_w || *y >= cur_h)
+    {
+        return None;
+    }
+    let next = match op_output_dims(op, cur_w, cur_h) {
+        Some(dimensions) => dimensions,
+        None if op_has_explicit_output_dimensions(op) => return None,
+        None => source_dimensions,
+    };
+    if let PipelineOp::Resize { filter, .. }
+    | PipelineOp::Scale { filter, .. }
+    | PipelineOp::Contain { filter, .. }
+    | PipelineOp::Cover { filter, .. } = op
+        && gpu_resize_dimensions_require_cpu(
+            ops,
+            image,
+            logical_mode,
+            *filter,
+            source_dimensions,
+            next,
+        )
+    {
+        return None;
+    }
+    if let PipelineOp::Fit {
+        bleed,
+        centering,
+        filter,
+        ..
+    } = op
+        && !gpu_fit_coefficients_are_safe(source_dimensions, next, *bleed, *centering, *filter)
+    {
+        return None;
+    }
+    if let PipelineOp::Pad { filter, .. } = op {
+        let ((resize_w, resize_h), _) = gpu_pad_geometry(op, cur_w, cur_h)?;
+        if !gpu_resize_coefficients_are_safe(*filter, source_dimensions, (resize_w, resize_h)) {
+            return None;
+        }
+    }
+    if next.0 == 0 || next.1 == 0 || !gpu_dimensions_fit(next.0, next.1) {
+        return None;
+    }
+    if packed_luma_rank_filter_9 && matches!(op, PipelineOp::RankFilter { size: 9, .. }) {
+        if gpu_packed_luma_rank_filter_9_work_items(next) > MAX_GPU_SHADER_WORK_ITEMS {
+            return None;
+        }
+    } else if packed_la_rank_filter_3 {
+        let PipelineOp::RankFilter { rank, .. } = op else {
+            return None;
+        };
+        if gpu_packed_la_rank_filter_3_work_items(next, *rank) > MAX_GPU_SHADER_WORK_ITEMS {
+            return None;
+        }
+    } else if gpu_shader_work_requires_cpu(op, source_dimensions, next, None) {
+        return None;
+    }
+    Some(next)
 }
 
 fn gpu_resize_dimensions_require_cpu(
