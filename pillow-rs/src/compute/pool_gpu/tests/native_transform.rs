@@ -52,6 +52,12 @@ fn gpu_native_luma_affine_nearest_transform_reads_and_writes_packed_bytes() {
     };
     assert_eq!(actual, expected, "native L transform parity");
 
+    assert_native_luma_transform_receipt();
+    assert_aligned_native_luma_transform();
+}
+
+#[cfg(target_endian = "little")]
+fn assert_native_luma_transform_receipt() {
     let receipt = Backend::take_pipeline_telemetry()
         .expect("native L transform must publish a telemetry receipt");
     assert_eq!(receipt.0, Some(Backend::Gpu));
@@ -72,8 +78,6 @@ fn gpu_native_luma_affine_nearest_transform_reads_and_writes_packed_bytes() {
     assert_eq!(resources.upload_bytes, 16);
     assert_eq!(resources.readback_bytes, 16);
     assert_eq!(resources.mode_conversion_count, 0);
-
-    assert_aligned_native_luma_transform();
 }
 
 #[cfg(target_endian = "little")]
