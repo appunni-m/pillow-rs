@@ -526,12 +526,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn gpu_projective_uniform_is_exact( op: &PipelineOp, mode: Option<&str>, source_dimensions: (u32, u32), ) -> bool {"
     },
     {
-      "lines": 134,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/transform/safety.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn gpu_geometry_host_control_reason( ops: &[PipelineOp], image: &DynamicImage, mode: Option<&str>, f_resize_constant_bits: Option<u32>, f_resize_box_copy_is_exact: bool, f_resize_identity_is_exact: bool, f_resize_box_average_is_exact: bool, f_resize_dyadic_is_exact: bool, f_resize_f64_is_exact: bool, ) -> Option<&'static str> {"
-    },
-    {
       "lines": 244,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/transform/safety.rs",

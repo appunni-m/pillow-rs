@@ -352,6 +352,94 @@ pub(in crate::compute::pool_gpu) fn gpu_rotate_nearest_affine_is_exact(
     gpu_nearest_affine_is_exact(&transformed, image, mode, source_dimensions)
 }
 
+fn gpu_resize_boxed_host_control_reason(
+    op: &PipelineOp,
+    image: &DynamicImage,
+    mode: Option<&str>,
+    dimensions: (u32, u32),
+) -> Option<&'static str> {
+    let PipelineOp::ResizeBoxed {
+        w,
+        h,
+        filter,
+        box_coords,
+    } = op
+    else {
+        return None;
+    };
+    let bounds = (
+        f64::from(box_coords.0 as f32),
+        f64::from(box_coords.1 as f32),
+        f64::from(box_coords.2 as f32),
+        f64::from(box_coords.3 as f32),
+    );
+    if bounds.0 < 0.0
+        || bounds.1 < 0.0
+        || bounds.2 > f64::from(dimensions.0 as f32)
+        || bounds.3 > f64::from(dimensions.1 as f32)
+        || bounds.2 < bounds.0
+        || bounds.3 < bounds.1
+    {
+        return Some("ResizeBoxed float32 bounds are outside the source image");
+    }
+    if !gpu_resize_boxed_coefficients_are_safe(dimensions, (*w, *h), *box_coords, *filter) {
+        return Some("ResizeBoxed coefficient tables exceed the GPU contract");
+    }
+    let horizontal_identity =
+        *w == dimensions.0 && box_coords.0 == 0.0 && box_coords.2 == f64::from(dimensions.0);
+    if !matches!(filter, ResampleFilter::Nearest)
+        && u64::from(dimensions.1) > u64::from(dimensions.0) * 100
+        && *h < dimensions.1
+        && !horizontal_identity
+    {
+        return Some("ResizeBoxed requires Pillow vertical-first pass order");
+    }
+    if !matches!(filter, ResampleFilter::Nearest)
+        && matches!(mode, Some("F" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N"))
+    {
+        return Some("ResizeBoxed typed ordered arithmetic is not proven");
+    }
+    let raw_alpha_mode = matches!(mode, Some("CMYK" | "La" | "PA" | "RGBa" | "RGBX"));
+    if !matches!(filter, ResampleFilter::Nearest)
+        && !raw_alpha_mode
+        && matches!(
+            image.color(),
+            crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
+        )
+    {
+        return Some("ResizeBoxed straight-alpha pass dependency is not proven");
+    }
+    None
+}
+
+fn gpu_fit_host_control_reason(
+    op: &PipelineOp,
+    mode: Option<&str>,
+    dimensions: (u32, u32),
+) -> Option<&'static str> {
+    let PipelineOp::Fit { w, h, filter, .. } = op else {
+        return None;
+    };
+    // Fit's fractional crop is lowered to the boxed Resample.c contract. The
+    // shared device convolution plan is proven for single-channel L and
+    // opaque RGB rows, plus the existing raw channel layouts. Keep
+    // straight-alpha/typed rows on the exact host path: tiny spans can expose
+    // stale horizontal intermediates on Metal. P forces NEAREST before this
+    // decision. Identity Fit is lowered to Duplicate and remains a native
+    // copy. F nearest remains native only when both axes are reductions;
+    // mixed/upsampling cases retain host control until the two-pass device
+    // dependency is proven on all adapters.
+    let native_f_nearest_fit = mode == Some("F")
+        && matches!(filter, ResampleFilter::Nearest)
+        && *w <= dimensions.0
+        && *h <= dimensions.1;
+    let native_fit_layout = matches!(
+        mode,
+        Some("L" | "RGB" | "P" | "PA" | "RGBX" | "RGBa" | "CMYK")
+    ) || native_f_nearest_fit;
+    (!native_fit_layout).then_some("Fit boxed-resize layout or pass dependency is not proven")
+}
+
 pub(in crate::compute::pool_gpu) fn gpu_geometry_host_control_reason(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -369,79 +457,11 @@ pub(in crate::compute::pool_gpu) fn gpu_geometry_host_control_reason(
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
-        if let PipelineOp::ResizeBoxed {
-            w,
-            h,
-            filter,
-            box_coords,
-        } = op
-        {
-            let bounds = (
-                f64::from(box_coords.0 as f32),
-                f64::from(box_coords.1 as f32),
-                f64::from(box_coords.2 as f32),
-                f64::from(box_coords.3 as f32),
-            );
-            if bounds.0 < 0.0
-                || bounds.1 < 0.0
-                || bounds.2 > f64::from(dimensions.0 as f32)
-                || bounds.3 > f64::from(dimensions.1 as f32)
-                || bounds.2 < bounds.0
-                || bounds.3 < bounds.1
-            {
-                return Some("ResizeBoxed float32 bounds are outside the source image");
-            }
-            if !gpu_resize_boxed_coefficients_are_safe(dimensions, (*w, *h), *box_coords, *filter) {
-                return Some("ResizeBoxed coefficient tables exceed the GPU contract");
-            }
-            let horizontal_identity = *w == dimensions.0
-                && box_coords.0 == 0.0
-                && box_coords.2 == f64::from(dimensions.0);
-            if !matches!(filter, ResampleFilter::Nearest)
-                && u64::from(dimensions.1) > u64::from(dimensions.0) * 100
-                && *h < dimensions.1
-                && !horizontal_identity
-            {
-                return Some("ResizeBoxed requires Pillow vertical-first pass order");
-            }
-            if !matches!(filter, ResampleFilter::Nearest)
-                && matches!(mode, Some("F" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N"))
-            {
-                return Some("ResizeBoxed typed ordered arithmetic is not proven");
-            }
-            let raw_alpha_mode = matches!(mode, Some("CMYK" | "La" | "PA" | "RGBa" | "RGBX"));
-            if !matches!(filter, ResampleFilter::Nearest)
-                && !raw_alpha_mode
-                && matches!(
-                    image.color(),
-                    crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
-                )
-            {
-                return Some("ResizeBoxed straight-alpha pass dependency is not proven");
-            }
+        if let Some(reason) = gpu_resize_boxed_host_control_reason(op, image, mode, dimensions) {
+            return Some(reason);
         }
-        if let PipelineOp::Fit { w, h, filter, .. } = op {
-            // Fit's fractional crop is lowered to the boxed Resample.c
-            // contract. The shared device convolution plan is proven for
-            // single-channel L and opaque RGB rows, plus the existing raw
-            // channel layouts. Keep straight-alpha/typed rows on the exact
-            // host path: tiny spans can expose stale horizontal
-            // intermediates on Metal. P forces NEAREST before this decision.
-            // Identity Fit is lowered to Duplicate and remains a native copy.
-            // F nearest remains native only when both axes are reductions;
-            // mixed/upsampling cases retain host control until their
-            // two-pass device dependency is proven on all adapters.
-            let native_f_nearest_fit = mode == Some("F")
-                && matches!(filter, ResampleFilter::Nearest)
-                && *w <= dimensions.0
-                && *h <= dimensions.1;
-            let native_fit_layout = matches!(
-                mode,
-                Some("L" | "RGB" | "P" | "PA" | "RGBX" | "RGBa" | "CMYK")
-            ) || native_f_nearest_fit;
-            if !native_fit_layout {
-                return Some("Fit boxed-resize layout or pass dependency is not proven");
-            }
+        if let Some(reason) = gpu_fit_host_control_reason(op, mode, dimensions) {
+            return Some(reason);
         }
         if mode == Some("F")
             && let PipelineOp::Resize { w, h, .. } = op
