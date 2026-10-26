@@ -136,18 +136,7 @@ fn byte_projective_integer_affine_nearest_native_gpu_preserves_pixels() {
                     .putpalette(&palette, "RGB")
                     .unwrap_or_else(|error| panic!("P palette: {error}"));
             }
-            let fill = match mode {
-                "L" | "P" => Some(TransformFill::Scalar(i64::from(*fill))),
-                "LA" => Some(TransformFill::Components(vec![i64::from(*fill), 93])),
-                "RGB" => Some(TransformFill::Components(vec![i64::from(*fill), 93, 41])),
-                "RGBA" => Some(TransformFill::Components(vec![
-                    i64::from(*fill),
-                    93,
-                    41,
-                    173,
-                ])),
-                _ => unreachable!(),
-            };
+            let fill = byte_projective_fill(mode, *fill);
             let transformed = source
                 .transform_public(
                     *output_size,
@@ -210,18 +199,7 @@ fn byte_projective_fractional_nearest_native_gpu_preserves_pixels() {
                     .putpalette(&palette, "RGB")
                     .unwrap_or_else(|error| panic!("P palette: {error}"));
             }
-            let fill = match mode {
-                "L" | "P" => Some(TransformFill::Scalar(i64::from(*fill))),
-                "LA" => Some(TransformFill::Components(vec![i64::from(*fill), 93])),
-                "RGB" => Some(TransformFill::Components(vec![i64::from(*fill), 93, 41])),
-                "RGBA" => Some(TransformFill::Components(vec![
-                    i64::from(*fill),
-                    93,
-                    41,
-                    173,
-                ])),
-                _ => unreachable!(),
-            };
+            let fill = byte_projective_fill(mode, *fill);
             let transformed = source
                 .transform_public(
                     *output_size,
@@ -264,6 +242,21 @@ fn byte_projective_fractional_nearest_native_gpu_preserves_pixels() {
         }
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn byte_projective_fill(mode: &str, fill: u8) -> Option<TransformFill> {
+    match mode {
+        "L" | "P" => Some(TransformFill::Scalar(i64::from(fill))),
+        "LA" => Some(TransformFill::Components(vec![i64::from(fill), 93])),
+        "RGB" => Some(TransformFill::Components(vec![i64::from(fill), 93, 41])),
+        "RGBA" => Some(TransformFill::Components(vec![
+            i64::from(fill),
+            93,
+            41,
+            173,
+        ])),
+        _ => unreachable!(),
+    }
 }
 
 #[test]
