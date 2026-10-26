@@ -484,44 +484,7 @@ fn shape_mutation_support(shape: SimdImageShape, op: &PipelineOp, mode: Option<&
             mask_alpha,
         } => super::paste::native_composite_plan_for_shape(shape, other, mask, *mask_alpha, mode)
             .is_some(),
-        PipelineOp::Paste {
-            source,
-            x,
-            y,
-            w,
-            h,
-            mask,
-            mask_alpha,
-        } => {
-            super::native_paste_plan_for_shape(
-                shape,
-                source,
-                *x,
-                *y,
-                *w,
-                *h,
-                mask.as_ref(),
-                *mask_alpha,
-                mode,
-            )
-            .is_some()
-                || super::native_paste_rgba_to_rgb_supported_for_shape(
-                    shape,
-                    source,
-                    *w,
-                    *h,
-                    mask.as_ref(),
-                    mode,
-                )
-                || super::native_paste_rgb_to_rgba_supported_for_shape(
-                    shape,
-                    source,
-                    *w,
-                    *h,
-                    mask.as_ref(),
-                    mode,
-                )
-        }
+        PipelineOp::Paste { .. } => shape_paste_support(shape, op, mode),
         PipelineOp::Merge {
             mode: target_mode,
             bands,
@@ -530,6 +493,49 @@ fn shape_mutation_support(shape: SimdImageShape, op: &PipelineOp, mode: Option<&
         PipelineOp::BlendModule { .. } => super::module_blend::supports_for_shape(shape, op, mode),
         _ => false,
     }
+}
+
+fn shape_paste_support(shape: SimdImageShape, op: &PipelineOp, mode: Option<&str>) -> bool {
+    let PipelineOp::Paste {
+        source,
+        x,
+        y,
+        w,
+        h,
+        mask,
+        mask_alpha,
+    } = op
+    else {
+        return false;
+    };
+    super::native_paste_plan_for_shape(
+        shape,
+        source,
+        *x,
+        *y,
+        *w,
+        *h,
+        mask.as_ref(),
+        *mask_alpha,
+        mode,
+    )
+    .is_some()
+        || super::native_paste_rgba_to_rgb_supported_for_shape(
+            shape,
+            source,
+            *w,
+            *h,
+            mask.as_ref(),
+            mode,
+        )
+        || super::native_paste_rgb_to_rgba_supported_for_shape(
+            shape,
+            source,
+            *w,
+            *h,
+            mask.as_ref(),
+            mode,
+        )
 }
 
 fn shape_color3dlut_support(shape: SimdImageShape, op: &PipelineOp, mode: Option<&str>) -> bool {
