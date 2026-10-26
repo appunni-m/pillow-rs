@@ -1,10 +1,14 @@
 //! Command encoding for already-admitted explicit GPU graphs.
 
+mod stage_encoding;
+
+use self::stage_encoding::encode_graph_stages;
+
 use super::super::batch_operation_planning::NativePackedChannelOutputDispatch;
 use super::super::pipeline_cache::CachedPipeline;
 use super::super::{
     AuxiliaryImages, BufferPool, GpuAuxiliaryCache, GpuInner, ReusableGpuBuffer, StagingBuffer,
-    aligned_bytes, create_sized_buffer, gpu_dispatch_count, gpu_working_set_bytes, op_output_dims,
+    aligned_bytes, create_sized_buffer, gpu_working_set_bytes, op_output_dims,
     plan_extract_band_dispatch, plan_native_rgb_point_output,
 };
 use super::graph::{LUMA_BAND, Plan, Stage, planned_channels};
@@ -154,105 +158,17 @@ fn encode_graph(
         second: None,
         third: None,
     }];
-    let mut stage_index = 0;
-    while stage_index < plan.stages.len() {
-        let stage = &plan.stages[stage_index];
-        let secondary = stage
-            .secondary
-            .as_deref()
-            .map(|child| encode_graph(child, gpu, encoder))
-            .transpose()?;
-        let tertiary = stage
-            .tertiary
-            .as_deref()
-            .map(|child| encode_graph(child, gpu, encoder))
-            .transpose()?;
-        if let Some(child) = &secondary {
-            retained += child.retained;
-            uploaded_bytes += child.upload;
-            dispatches += child.dispatches;
-        }
-        if let Some(child) = &tertiary {
-            retained += child.retained;
-            uploaded_bytes += child.upload;
-            dispatches += child.dispatches;
-        }
-        if stage_index + 1 < plan.stages.len()
-            && can_fuse_batch_alpha_composite_mirror(stage, &plan.stages[stage_index + 1])
-        {
-            current_a = encode_alpha_composite_mirror_stage(
-                gpu,
-                encoder,
-                &buffers,
-                stage,
-                secondary.as_ref().ok_or_else(|| {
-                    PilError::InternalError("GPU alpha-composite source was not encoded".into())
-                })?,
-                current_a,
-            )?;
-            dispatches += 1;
-            stage_index += 2;
-            continue;
-        } else if stage.flags.rgb_blur {
-            current_a = encode_rgb_blur_stage(gpu, encoder, &buffers, stage, current_a)?;
-        } else if matches!(stage.op, PipelineOp::Paste { .. }) {
-            if matches!(stage.op, PipelineOp::Paste { mask: Some(_), .. }) {
-                current_a = super::paste::encode_masked_paste_stage(
-                    gpu,
-                    encoder,
-                    &buffers,
-                    stage,
-                    secondary.as_ref().ok_or_else(|| {
-                        PilError::InternalError("GPU Paste source was not encoded".into())
-                    })?,
-                    tertiary.as_ref().ok_or_else(|| {
-                        PilError::InternalError("GPU Paste mask was not encoded".into())
-                    })?,
-                    current_a,
-                )?;
-            } else {
-                current_a = super::paste::encode_paste_stage(
-                    gpu,
-                    encoder,
-                    &buffers,
-                    stage,
-                    secondary.as_ref().ok_or_else(|| {
-                        PilError::InternalError("GPU Paste source was not encoded".into())
-                    })?,
-                    current_a,
-                )?;
-            }
-        } else if stage.relocation {
-            current_a = encode_relocation_stage(gpu, encoder, &buffers, stage, current_a)?;
-        } else if stage.byte {
-            current_a =
-                encode_byte_stage(gpu, encoder, &buffers, stage, secondary.as_ref(), current_a)?;
-        } else {
-            let (next_current_a, stage_retained) = encode_generic_stage(
-                gpu,
-                encoder,
-                &mut buffers,
-                stage,
-                plan.capacity,
-                &auxiliary,
-                current_a,
-            )?;
-            current_a = next_current_a;
-            retained += stage_retained;
-        }
-        dispatches += if matches!(stage.op, PipelineOp::BoxBlur { radius: 1 })
-            && matches!(stage.mode.as_str(), "L" | "RGB")
-        {
-            1
-        } else {
-            gpu_dispatch_count(
-                std::slice::from_ref(stage.op),
-                Some(&stage.mode),
-                (stage.width, stage.height),
-            )
-        };
-        stage_index += 1;
-    }
+    current_a = encode_graph_stages(
+        plan,
+        gpu,
+        encoder,
+        &mut buffers,
+        current_a,
+        &mut retained,
+        &mut dispatches,
+        &mut uploaded_bytes,
+        &auxiliary,
+    )?;
     let output = if current_a {
         buffers.buf_a.clone()
     } else {

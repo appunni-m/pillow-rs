@@ -82,12 +82,6 @@
       "signature": "fn encode_byte_stage( gpu: &GpuInner, encoder: &mut wgpu::CommandEncoder, buffers: &BufferPool, stage: &Stage<'_>, secondary: Option<&EncodedGraph>, current_a: bool, ) -> Result<bool, PilError> {"
     },
     {
-      "lines": 168,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/stream/encoding.rs",
-      "signature": "fn encode_graph( plan: &Plan<'_>, gpu: &'static GpuInner, encoder: &mut wgpu::CommandEncoder, ) -> Result<EncodedGraph, PilError> {"
-    },
-    {
       "lines": 408,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs",
