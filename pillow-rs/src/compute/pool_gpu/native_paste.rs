@@ -226,7 +226,7 @@ pub(super) fn plan_gpu_native_masked_byte_paste(
     max_storage_binding_bytes: u32,
     max_buffer_bytes: u64,
 ) -> Option<NativeMaskedBytePasteDispatch> {
-    if !matches!(bytes_per_pixel, 1 | 2 | 3 | 4) {
+    if !matches!(bytes_per_pixel, 1..=4) {
         return None;
     }
     let destination =
@@ -355,7 +355,7 @@ pub(super) fn plan_gpu_native_byte_paste(
     max_storage_binding_bytes: u32,
     max_buffer_bytes: u64,
 ) -> Option<NativeBytePasteDispatch> {
-    if !matches!(bytes_per_pixel, 1 | 2 | 3) {
+    if !matches!(bytes_per_pixel, 1..=3) {
         return None;
     }
     let destination =

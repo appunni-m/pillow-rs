@@ -225,7 +225,8 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicIm
         }
         return DynamicImage::ImageLumaA8(output);
     }
-    let out = match img.color() {
+
+    match img.color() {
         crate::raster::ColorType::L8 => {
             let luma = img.to_luma8();
             let mut la = GrayAlphaImage::new(luma.width(), luma.height());
@@ -266,8 +267,7 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicIm
             }
             DynamicImage::ImageRgba8(rgba)
         }
-    };
-    out
+    }
 }
 
 /// Replaces the alpha channel from an L-mask, matching Pillow's image-backed

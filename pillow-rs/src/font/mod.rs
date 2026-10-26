@@ -259,7 +259,7 @@ impl ImageFontTextOptions {
         self.uses_default_layout()
             && !self.embedded_color
             && !self.start_invalid
-            && self.ink.map_or(true, |ink| ink == 0)
+            && self.ink.is_none_or(|ink| ink == 0)
     }
 }
 

@@ -430,8 +430,8 @@ fn resolve_paste_placement(
             let raw_height = bottom
                 .checked_sub(top)
                 .and_then(|value| u32::try_from(value).ok());
-            let degenerate = raw_width.map_or(true, |value| value == 0)
-                || raw_height.map_or(true, |value| value == 0);
+            let degenerate = raw_width.is_none_or(|value| value == 0)
+                || raw_height.is_none_or(|value| value == 0);
             // Pillow Paste.c no-ops a degenerate solid fill; image pastes still
             // report the size mismatch.
             if degenerate && !is_image {
