@@ -175,8 +175,8 @@ impl Image {
         }
 
         let (source_width, source_height) = source.size()?;
-        let source_width = i64::try_from(source_width).map_err(|_| coordinate_overflow())?;
-        let source_height = i64::try_from(source_height).map_err(|_| coordinate_overflow())?;
+        let source_width = i64::from(source_width);
+        let source_height = i64::from(source_height);
         let source_box = if source_box.len() == 2 {
             [source_box[0], source_box[1], source_width, source_height]
         } else {

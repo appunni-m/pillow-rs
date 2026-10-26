@@ -154,8 +154,7 @@ fn masked_paste_parameters(stage: &Stage<'_>) -> Result<(u32, [u32; 16]), PilErr
     let destination = CheckedDims::new(stage.width, stage.height, channels)?;
     let destination_bytes = u32::try_from(destination.total_bytes())
         .map_err(|_| PilError::ValueError("GPU masked Paste output is too large".into()))?;
-    let word_count = u32::try_from(destination_bytes.div_ceil(4))
-        .map_err(|_| PilError::ValueError("GPU masked Paste output is too large".into()))?;
+    let word_count = destination_bytes.div_ceil(4);
     let parameters = [
         stage.width,
         stage.height,

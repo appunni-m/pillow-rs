@@ -349,9 +349,8 @@ impl GpuInner {
         let dimensions = CheckedDims::new(image.width(), image.height(), 4)?;
         let transfer_bytes = u64::try_from(dimensions.total_bytes())
             .map_err(|_| PilError::ValueError("GPU native RGBA Flip is too large".into()))?;
-        let workgroup_count = u64::try_from(capacity)
-            .ok()
-            .and_then(|words| words.checked_mul(4))
+        let workgroup_count = u64::from(capacity)
+            .checked_mul(4)
             .ok_or_else(|| PilError::ValueError("GPU native RGBA Flip is too large".into()))?;
         let groups_x = image.width().div_ceil(16);
         let groups_y = image.height().div_ceil(16);
@@ -365,9 +364,7 @@ impl GpuInner {
                 "native RGBA Flip exceeds adapter or shader limits",
             ));
         }
-        let capacity_words = u32::try_from(capacity)
-            .map_err(|_| PilError::ValueError("GPU native RGBA Flip is too large".into()))?;
-        let mut buffers = self.acquire_buffers(capacity_words)?;
+        let mut buffers = self.acquire_buffers(capacity)?;
         let geometry_as_transpose = PipelineOp::Transpose {
             method: TransposeMethod::FlipTopBottom,
         };

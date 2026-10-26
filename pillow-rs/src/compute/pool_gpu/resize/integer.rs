@@ -275,7 +275,7 @@ pub(in crate::compute::pool_gpu) fn gpu_i_resize_f64_sample_slow(
         } else {
             i128::from(sample)
         };
-        let product = magnitude.checked_mul(i128::try_from(coeff.mantissa).ok()?)?;
+        let product = magnitude.checked_mul(i128::from(coeff.mantissa))?;
         let term = if shift >= 127 {
             return None;
         } else {

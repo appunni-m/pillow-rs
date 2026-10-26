@@ -253,8 +253,7 @@ pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Res
     let base_face_index = font.engine.source_face_index & 0xFFFF;
     let instance_index_long = ffi::FT_Long::try_from(instance_index)
         .map_err(|_| PilError::OsError("invalid argument".into()))?;
-    let instance_multiplier = ffi::FT_Long::try_from(1_i8)
-        .map_err(|_| PilError::OsError("invalid argument".into()))?
+    let instance_multiplier = ffi::FT_Long::from(1_i8)
         .checked_shl(16)
         .ok_or_else(|| PilError::OsError("invalid argument".into()))?;
     let encoded_instance = instance_index_long
