@@ -624,6 +624,25 @@ fn gpu_native_masked_byte_paste_mode(
     source: &DynamicImage,
     mask: &DynamicImage,
 ) -> Option<(u8, &'static str)> {
+    gpu_native_masked_byte_paste_single_band_mode(mode, source_mode, destination, source, mask)
+        .or_else(|| {
+            gpu_native_masked_byte_paste_la_mode(mode, source_mode, destination, source, mask)
+        })
+        .or_else(|| {
+            gpu_native_masked_byte_paste_rgb_mode(mode, source_mode, destination, source, mask)
+        })
+        .or_else(|| {
+            gpu_native_masked_byte_paste_rgba_mode(mode, source_mode, destination, source, mask)
+        })
+}
+
+fn gpu_native_masked_byte_paste_single_band_mode(
+    mode: Option<&str>,
+    source_mode: &str,
+    destination: &DynamicImage,
+    source: &DynamicImage,
+    mask: &DynamicImage,
+) -> Option<(u8, &'static str)> {
     Some(match (mode, source_mode, destination, source, mask) {
         (
             Some("1"),
@@ -646,6 +665,18 @@ fn gpu_native_masked_byte_paste_mode(
             DynamicImage::ImageLuma8(_),
             DynamicImage::ImageLuma8(_),
         ) => (1, "P"),
+        _ => return None,
+    })
+}
+
+fn gpu_native_masked_byte_paste_la_mode(
+    mode: Option<&str>,
+    source_mode: &str,
+    destination: &DynamicImage,
+    source: &DynamicImage,
+    mask: &DynamicImage,
+) -> Option<(u8, &'static str)> {
+    Some(match (mode, source_mode, destination, source, mask) {
         (
             Some("LA"),
             "LA",
@@ -660,6 +691,18 @@ fn gpu_native_masked_byte_paste_mode(
             DynamicImage::ImageLumaA8(_),
             DynamicImage::ImageLuma8(_),
         ) => (2, "PA"),
+        _ => return None,
+    })
+}
+
+fn gpu_native_masked_byte_paste_rgb_mode(
+    mode: Option<&str>,
+    source_mode: &str,
+    destination: &DynamicImage,
+    source: &DynamicImage,
+    mask: &DynamicImage,
+) -> Option<(u8, &'static str)> {
+    Some(match (mode, source_mode, destination, source, mask) {
         (
             Some("RGB"),
             "RGB",
@@ -674,6 +717,18 @@ fn gpu_native_masked_byte_paste_mode(
             DynamicImage::ImageRgb8(_),
             DynamicImage::ImageLuma8(_),
         ) => (3, "HSV"),
+        _ => return None,
+    })
+}
+
+fn gpu_native_masked_byte_paste_rgba_mode(
+    mode: Option<&str>,
+    source_mode: &str,
+    destination: &DynamicImage,
+    source: &DynamicImage,
+    mask: &DynamicImage,
+) -> Option<(u8, &'static str)> {
+    Some(match (mode, source_mode, destination, source, mask) {
         (
             Some("RGBA"),
             "RGBA",
