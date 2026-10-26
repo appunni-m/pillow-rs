@@ -206,6 +206,60 @@ struct NativePadCanvas {
     output_len: usize,
 }
 
+fn build_native_pad_canvas(
+    source_width: u32,
+    source_height: u32,
+    target_width: u32,
+    target_height: u32,
+    channels: usize,
+    centering: (f64, f64),
+) -> Result<Option<NativePadCanvas>, PilError> {
+    let Some((contained_width, contained_height)) =
+        native_pad_contained_dimensions(source_width, source_height, target_width, target_height)
+    else {
+        return Ok(None);
+    };
+    let Some((offset_x, offset_y)) = native_pad_offsets(
+        contained_width,
+        contained_height,
+        target_width,
+        target_height,
+        centering,
+    ) else {
+        return Ok(None);
+    };
+    let source_width = usize::try_from(contained_width).map_err(|_| simd_unsupported("Pad"))?;
+    let source_height = usize::try_from(contained_height).map_err(|_| simd_unsupported("Pad"))?;
+    let target_width_usize = usize::try_from(target_width).map_err(|_| simd_unsupported("Pad"))?;
+    let target_height_usize =
+        usize::try_from(target_height).map_err(|_| simd_unsupported("Pad"))?;
+    let source_stride = source_width
+        .checked_mul(channels)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    let target_stride = target_width_usize
+        .checked_mul(channels)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    let output_len = target_stride
+        .checked_mul(target_height_usize)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    Ok(Some(NativePadCanvas {
+        contained_width,
+        contained_height,
+        offset_x,
+        offset_y,
+        source_width,
+        source_height,
+        target_width,
+        target_height,
+        target_width_usize,
+        target_height_usize,
+        channels,
+        source_stride,
+        target_stride,
+        output_len,
+    }))
+}
+
 fn native_pad_empty_source(
     img: &DynamicImage,
     target_width: u32,
@@ -544,49 +598,16 @@ fn native_pad_bytes(
     if img.width() == 0 || img.height() == 0 {
         return native_pad_empty_source(img, target_width, target_height, channels, color);
     }
-    let Some((contained_width, contained_height)) =
-        native_pad_contained_dimensions(img.width(), img.height(), target_width, target_height)
+    let Some(canvas) = build_native_pad_canvas(
+        img.width(),
+        img.height(),
+        target_width,
+        target_height,
+        channels,
+        centering,
+    )?
     else {
         return Ok(None);
-    };
-    let Some((offset_x, offset_y)) = native_pad_offsets(
-        contained_width,
-        contained_height,
-        target_width,
-        target_height,
-        centering,
-    ) else {
-        return Ok(None);
-    };
-    let source_width = usize::try_from(contained_width).map_err(|_| simd_unsupported("Pad"))?;
-    let source_height = usize::try_from(contained_height).map_err(|_| simd_unsupported("Pad"))?;
-    let target_width_usize = usize::try_from(target_width).map_err(|_| simd_unsupported("Pad"))?;
-    let target_height_usize =
-        usize::try_from(target_height).map_err(|_| simd_unsupported("Pad"))?;
-    let source_stride = source_width
-        .checked_mul(channels)
-        .ok_or_else(|| simd_unsupported("Pad"))?;
-    let target_stride = target_width_usize
-        .checked_mul(channels)
-        .ok_or_else(|| simd_unsupported("Pad"))?;
-    let output_len = target_stride
-        .checked_mul(target_height_usize)
-        .ok_or_else(|| simd_unsupported("Pad"))?;
-    let canvas = NativePadCanvas {
-        contained_width,
-        contained_height,
-        offset_x,
-        offset_y,
-        source_width,
-        source_height,
-        target_width,
-        target_height,
-        target_width_usize,
-        target_height_usize,
-        channels,
-        source_stride,
-        target_stride,
-        output_len,
     };
     let default_fill = if channels == 2 || channels == 4 {
         (0, 0, 0, 0)
@@ -595,9 +616,9 @@ fn native_pad_bytes(
     };
     let fill = color.unwrap_or(default_fill);
 
-    if (img.width(), img.height()) == (contained_width, contained_height)
-        && offset_x == 0
-        && source_width == target_width_usize
+    if (img.width(), img.height()) == (canvas.contained_width, canvas.contained_height)
+        && canvas.offset_x == 0
+        && canvas.source_width == canvas.target_width_usize
     {
         return native_pad_vertical_identity(img, canvas, fill, mode);
     }
@@ -608,9 +629,9 @@ fn native_pad_bytes(
     if (mode == Some("RGBX")
         || matches!(mode, None | Some("L")) && matches!(img, DynamicImage::ImageLuma8(_)))
         && !matches!(filter, ResampleFilter::Nearest)
-        && (img.width(), img.height()) != (contained_width, contained_height)
-        && offset_x == 0
-        && source_width == target_width_usize
+        && (img.width(), img.height()) != (canvas.contained_width, canvas.contained_height)
+        && canvas.offset_x == 0
+        && canvas.source_width == canvas.target_width_usize
     {
         return native_pad_full_width_convolution(img, canvas, filter, fill, luma_byte_i32);
     }
