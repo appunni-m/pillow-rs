@@ -221,20 +221,8 @@ fn f_resize_ordered_f64_subnormal_vertical_native_matches_cpu() {
             &source_dynamic,
             Some("F")
         ));
-        let filter_name = match filter {
-            ResampleFilter::Bilinear => "BILINEAR",
-            ResampleFilter::Bicubic => "BICUBIC",
-            ResampleFilter::Lanczos => "LANCZOS",
-            ResampleFilter::Hamming => "HAMMING",
-            ResampleFilter::Box => "BOX",
-            _ => unreachable!(),
-        };
-        let expected = source
-            .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
-            .expect("CPU vertical subnormal/extreme F resize")
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU vertical subnormal/extreme F bytes");
+        let filter_name = ordered_f_resize_filter_name(filter);
+        let expected = vertical_f_cpu_expected(&source, filter_name);
         let previous = Backend::set_pipeline_telemetry_enabled(true);
         let actual = match source
             .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
@@ -258,18 +246,31 @@ fn f_resize_ordered_f64_subnormal_vertical_native_matches_cpu() {
             actual, expected,
             "32768-tap vertical {filter_name} F resize"
         );
-        let telemetry =
-            Backend::take_pipeline_telemetry().expect("vertical F resize must publish telemetry");
-        assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(
-            telemetry.1,
-            Backend::Gpu,
-            "vertical {filter_name}; fallback reason: {:?}",
-            telemetry.7
-        );
-        assert_eq!(telemetry.7, None);
+        assert_vertical_f_resize_telemetry(filter_name);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
+}
+
+fn vertical_f_cpu_expected(source: &Image, filter_name: &str) -> Vec<u8> {
+    source
+        .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+        .expect("CPU vertical subnormal/extreme F resize")
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU vertical subnormal/extreme F bytes")
+}
+
+fn assert_vertical_f_resize_telemetry(filter_name: &str) {
+    let telemetry =
+        Backend::take_pipeline_telemetry().expect("vertical F resize must publish telemetry");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(
+        telemetry.1,
+        Backend::Gpu,
+        "vertical {filter_name}; fallback reason: {:?}",
+        telemetry.7
+    );
+    assert_eq!(telemetry.7, None);
 }
 
 #[test]
