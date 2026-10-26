@@ -32,11 +32,298 @@ use radius_one::{
     blur_rgb_radius_one_fractional_line,
 };
 
+#[derive(Clone, Copy)]
+struct BoxBlurPassContext {
+    width: usize,
+    height: usize,
+    channels: usize,
+    passes: u32,
+    horizontal_radius: usize,
+    horizontal_weight: u32,
+    horizontal_fractional_weight: u32,
+    vertical_radius: usize,
+    vertical_weight: u32,
+    vertical_fractional_weight: u32,
+    rgb_gaussian_row_fusion: bool,
+    luma_gaussian_row_fusion: bool,
+    la_gaussian_row_fusion: bool,
+    rgba_gaussian_row_fusion: bool,
+}
+
+#[inline(always)]
+fn blur_horizontal_passes(
+    source: &[u8],
+    mut work: Vec<u8>,
+    mut scratch: Vec<u8>,
+    context: BoxBlurPassContext,
+) -> (Vec<u8>, Vec<u8>) {
+    #[cfg(feature = "parallel")]
+    let _ = source;
+
+    let BoxBlurPassContext {
+        width,
+        height,
+        channels,
+        passes,
+        horizontal_radius,
+        horizontal_weight,
+        horizontal_fractional_weight,
+        rgb_gaussian_row_fusion,
+        luma_gaussian_row_fusion,
+        la_gaussian_row_fusion,
+        rgba_gaussian_row_fusion,
+        ..
+    } = context;
+    // PIL does ALL horizontal passes first (matching ImagingBoxBlur order)
+    if rgb_gaussian_row_fusion {
+        #[cfg(not(feature = "parallel"))]
+        blur_interleaved_rows_three_passes::<3>(
+            source,
+            &mut work,
+            width,
+            height,
+            horizontal_radius,
+            horizontal_weight,
+            horizontal_fractional_weight,
+        );
+    } else if luma_gaussian_row_fusion {
+        #[cfg(not(feature = "parallel"))]
+        blur_luma_rows_three_passes(
+            source,
+            &mut work,
+            width,
+            height,
+            horizontal_radius,
+            horizontal_weight,
+            horizontal_fractional_weight,
+        );
+    } else if la_gaussian_row_fusion {
+        #[cfg(not(feature = "parallel"))]
+        if horizontal_radius == 1 && horizontal_fractional_weight != 0 && width >= 5 {
+            blur_la_rows_three_passes_radius_one(
+                source,
+                &mut work,
+                width,
+                height,
+                horizontal_weight,
+                horizontal_fractional_weight,
+            );
+        } else {
+            blur_interleaved_rows_three_passes::<2>(
+                source,
+                &mut work,
+                width,
+                height,
+                horizontal_radius,
+                horizontal_weight,
+                horizontal_fractional_weight,
+            );
+        }
+    } else if rgba_gaussian_row_fusion {
+        #[cfg(not(feature = "parallel"))]
+        blur_interleaved_rows_three_passes::<4>(
+            source,
+            &mut work,
+            width,
+            height,
+            horizontal_radius,
+            horizontal_weight,
+            horizontal_fractional_weight,
+        );
+    } else {
+        for _ in 0..passes {
+            blur_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                channels,
+                horizontal_radius,
+                horizontal_weight,
+                horizontal_fractional_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+    }
+
+    (work, scratch)
+}
+
+#[cfg(feature = "parallel")]
+#[inline(always)]
+fn blur_transposed_vertical_passes(
+    mut work: Vec<u8>,
+    mut scratch: Vec<u8>,
+    context: BoxBlurPassContext,
+) -> Vec<u8> {
+    let BoxBlurPassContext {
+        width,
+        height,
+        channels,
+        passes,
+        vertical_radius,
+        vertical_weight,
+        vertical_fractional_weight,
+        ..
+    } = context;
+    transpose_interleaved_rows(&work, &mut scratch, width, height, channels);
+    for pass in 0..passes {
+        blur_rows(
+            &scratch,
+            &mut work,
+            height,
+            width,
+            channels,
+            vertical_radius,
+            vertical_weight,
+            vertical_fractional_weight,
+        );
+        // Keep the final blurred buffer in `work` for the final transpose.
+        if pass + 1 < passes {
+            std::mem::swap(&mut work, &mut scratch);
+        }
+    }
+    transpose_interleaved_rows(&work, &mut scratch, height, width, channels);
+    scratch
+}
+
+#[inline(always)]
+fn blur_vertical_passes(
+    mut work: Vec<u8>,
+    mut scratch: Vec<u8>,
+    context: BoxBlurPassContext,
+) -> Vec<u8> {
+    let BoxBlurPassContext {
+        width,
+        height,
+        channels,
+        passes,
+        vertical_radius,
+        vertical_weight,
+        vertical_fractional_weight,
+        luma_gaussian_row_fusion,
+        rgba_gaussian_row_fusion,
+        ..
+    } = context;
+    // Pillow transposes before its vertical passes. For large parallel jobs,
+    // keep that layout explicit: one transpose makes every original column a
+    // writable row, all vertical passes can then reuse the row-parallel blur,
+    // and one final transpose restores the public row-major layout. The
+    // serial/small-image path keeps the algebraically equivalent wide-row
+    // recurrence and avoids paying for the extra data movement.
+    #[cfg(feature = "parallel")]
+    let use_parallel_radius_one_vertical = width.saturating_mul(height)
+        >= VERTICAL_BLUR_TRANSPOSE_THRESHOLD
+        && passes > 0
+        && vertical_radius == 1
+        && vertical_fractional_weight == 0;
+    #[cfg(not(feature = "parallel"))]
+    let use_parallel_radius_one_vertical = false;
+    #[cfg(feature = "parallel")]
+    let use_transposed_vertical = width.saturating_mul(height) >= VERTICAL_BLUR_TRANSPOSE_THRESHOLD
+        && passes > 0
+        && !use_parallel_radius_one_vertical;
+    #[cfg(not(feature = "parallel"))]
+    let use_transposed_vertical = false;
+
+    if use_parallel_radius_one_vertical {
+        #[cfg(feature = "parallel")]
+        for _ in 0..passes {
+            blur_columns_radius_one_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                channels,
+                vertical_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+    } else if use_transposed_vertical {
+        #[cfg(feature = "parallel")]
+        return blur_transposed_vertical_passes(work, scratch, context);
+    } else if luma_gaussian_row_fusion && vertical_radius == 1 {
+        #[cfg(not(feature = "parallel"))]
+        for _ in 0..passes {
+            blur_luma_vertical_radius_one_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                vertical_weight,
+                vertical_fractional_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+    } else if rgba_gaussian_row_fusion && vertical_radius == 1 && vertical_fractional_weight != 0 {
+        #[cfg(not(feature = "parallel"))]
+        for _ in 0..passes {
+            blur_interleaved_vertical_radius_one_fractional_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                channels,
+                vertical_weight,
+                vertical_fractional_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+    } else {
+        let mut vertical_accumulator = vec![0u32; width * channels];
+        for _ in 0..passes {
+            blur_columns(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                channels,
+                vertical_radius,
+                vertical_weight,
+                vertical_fractional_weight,
+                &mut vertical_accumulator,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+    }
+
+    if use_transposed_vertical {
+        scratch
+    } else {
+        work
+    }
+}
+
 // ── PIL-style box blur ──
 
 const BOX_BLUR_SCALE: u32 = 1 << 24;
 const BOX_BLUR_BIAS: u32 = 1 << 23;
 const UNIFORM_BOX_BLUR_MAX_PIXELS: usize = 64 * 64;
+
+/// Check whether a box blur has no image domain or no active radius.
+#[inline(always)]
+fn box_blur_input_is_noop(width: u32, height: u32, radius_x: f32, radius_y: f32) -> bool {
+    width == 0 || height == 0 || (radius_x == 0.0 && radius_y == 0.0)
+}
+
+/// Check small images for the replicated-edge box-blur identity case.
+#[inline(always)]
+fn small_uniform_box_blur_is_identity(
+    img: &DynamicImage,
+    width: usize,
+    height: usize,
+    channels: usize,
+) -> bool {
+    if width.saturating_mul(height) > UNIFORM_BOX_BLUR_MAX_PIXELS {
+        return false;
+    }
+    let mut pixels = img.as_bytes().chunks_exact(channels);
+    if let Some(first_pixel) = pixels.next() {
+        pixels.all(|pixel| pixel == first_pixel) && pixels.remainder().is_empty()
+    } else {
+        false
+    }
+}
 
 /// Return whether Pillow's fixed-point box pass leaves one constant byte
 /// unchanged for every position in a replicated-edge line.
@@ -114,6 +401,23 @@ fn uniform_rgba_box_blur_is_identity(
     raw.chunks_exact(4).all(|pixel| pixel == first_pixel)
 }
 
+/// Preserve the exact large-uniform RGBA Gaussian fast path.
+#[cfg(not(feature = "parallel"))]
+#[inline(always)]
+fn large_uniform_rgba_gaussian_blur_is_identity(
+    img: &DynamicImage,
+    width: usize,
+    height: usize,
+    passes: u32,
+    horizontal: (usize, u32, u32),
+    vertical: (usize, u32, u32),
+) -> bool {
+    passes == 3
+        && width.saturating_mul(height) > UNIFORM_BOX_BLUR_MAX_PIXELS
+        && matches!(img, DynamicImage::ImageRgba8(_))
+        && uniform_rgba_box_blur_is_identity(img.as_bytes(), width, height, horizontal, vertical)
+}
+
 #[inline]
 fn blur_parameters(radius: f32) -> (usize, u32, u32) {
     // Integer part of radius (PIL: (int)floatRadius).
@@ -158,27 +462,14 @@ fn pil_box_blur_xy_impl(
 ) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let (w_u32, h_u32) = (img.width(), img.height());
-    if w_u32 == 0 || h_u32 == 0 || (radius_x == 0.0 && radius_y == 0.0) {
+    if box_blur_input_is_noop(w_u32, h_u32, radius_x, radius_y) {
         return Ok(img.clone());
     }
 
     let (width, height) = (w_u32 as usize, h_u32 as usize);
 
-    // ImagingBoxBlur's replicated-edge average is identity for a uniform
-    // image when its rounded fixed-point result preserves every channel byte.
-    // Keep this small-image check before allocating the work buffers.
-    if width.saturating_mul(height) <= UNIFORM_BOX_BLUR_MAX_PIXELS {
-        let raw = img.as_bytes();
-        let mut pixels = raw.chunks_exact(channels);
-        if let Some(first_pixel) = pixels.next()
-            && pixels.all(|pixel| pixel == first_pixel)
-            && pixels.remainder().is_empty()
-        {
-            return Ok(img.clone());
-        }
-    }
-
-    if passes == 0 {
+    // This replicated-edge identity check avoids allocating work buffers.
+    if small_uniform_box_blur_is_identity(img, width, height, channels) || passes == 0 {
         return Ok(img.clone());
     }
 
@@ -186,26 +477,20 @@ fn pil_box_blur_xy_impl(
         blur_parameters(radius_x);
     let (vertical_radius, vertical_weight, vertical_fractional_weight) = blur_parameters(radius_y);
 
-    // A full uniformity scan is worthwhile for the large RGBA Gaussian path
-    // only when its exact fixed-point transform is an identity for the input
-    // tuple. In particular, fractional weights may sum to 2^24 - 1; checking
-    // the actual rounded result avoids assuming that they sum exactly to 1.
+    // The exact rounded fixed-point proof protects the large RGBA fast path.
     #[cfg(not(feature = "parallel"))]
-    if passes == 3
-        && width.saturating_mul(height) > UNIFORM_BOX_BLUR_MAX_PIXELS
-        && matches!(img, DynamicImage::ImageRgba8(_))
-        && uniform_rgba_box_blur_is_identity(
-            img.as_bytes(),
-            width,
-            height,
-            (
-                horizontal_radius,
-                horizontal_weight,
-                horizontal_fractional_weight,
-            ),
-            (vertical_radius, vertical_weight, vertical_fractional_weight),
-        )
-    {
+    if large_uniform_rgba_gaussian_blur_is_identity(
+        img,
+        width,
+        height,
+        passes,
+        (
+            horizontal_radius,
+            horizontal_weight,
+            horizontal_fractional_weight,
+        ),
+        (vertical_radius, vertical_weight, vertical_fractional_weight),
+    ) {
         return Ok(img.clone());
     }
 
@@ -252,7 +537,23 @@ fn pil_box_blur_xy_impl(
     #[cfg(feature = "parallel")]
     let rgba_gaussian_row_fusion = false;
 
-    let mut work = if rgb_gaussian_row_fusion
+    let pass_context = BoxBlurPassContext {
+        width,
+        height,
+        channels,
+        passes,
+        horizontal_radius,
+        horizontal_weight,
+        horizontal_fractional_weight,
+        vertical_radius,
+        vertical_weight,
+        vertical_fractional_weight,
+        rgb_gaussian_row_fusion,
+        luma_gaussian_row_fusion,
+        la_gaussian_row_fusion,
+        rgba_gaussian_row_fusion,
+    };
+    let work = if rgb_gaussian_row_fusion
         || luma_gaussian_row_fusion
         || la_gaussian_row_fusion
         || rgba_gaussian_row_fusion
@@ -261,189 +562,9 @@ fn pil_box_blur_xy_impl(
     } else {
         img.as_bytes().to_vec()
     };
-    let mut scratch = CheckedDims::new(w_u32, h_u32, channels as u8)?.alloc_buffer();
-
-    // PIL does ALL horizontal passes first (matching ImagingBoxBlur order)
-    if rgb_gaussian_row_fusion {
-        #[cfg(not(feature = "parallel"))]
-        blur_interleaved_rows_three_passes::<3>(
-            img.as_bytes(),
-            &mut work,
-            width,
-            height,
-            horizontal_radius,
-            horizontal_weight,
-            horizontal_fractional_weight,
-        );
-    } else if luma_gaussian_row_fusion {
-        #[cfg(not(feature = "parallel"))]
-        blur_luma_rows_three_passes(
-            img.as_bytes(),
-            &mut work,
-            width,
-            height,
-            horizontal_radius,
-            horizontal_weight,
-            horizontal_fractional_weight,
-        );
-    } else if la_gaussian_row_fusion {
-        #[cfg(not(feature = "parallel"))]
-        if horizontal_radius == 1 && horizontal_fractional_weight != 0 && width >= 5 {
-            blur_la_rows_three_passes_radius_one(
-                img.as_bytes(),
-                &mut work,
-                width,
-                height,
-                horizontal_weight,
-                horizontal_fractional_weight,
-            );
-        } else {
-            blur_interleaved_rows_three_passes::<2>(
-                img.as_bytes(),
-                &mut work,
-                width,
-                height,
-                horizontal_radius,
-                horizontal_weight,
-                horizontal_fractional_weight,
-            );
-        }
-    } else if rgba_gaussian_row_fusion {
-        #[cfg(not(feature = "parallel"))]
-        blur_interleaved_rows_three_passes::<4>(
-            img.as_bytes(),
-            &mut work,
-            width,
-            height,
-            horizontal_radius,
-            horizontal_weight,
-            horizontal_fractional_weight,
-        );
-    } else {
-        for _ in 0..passes {
-            blur_rows(
-                &work,
-                &mut scratch,
-                width,
-                height,
-                channels,
-                horizontal_radius,
-                horizontal_weight,
-                horizontal_fractional_weight,
-            );
-            std::mem::swap(&mut work, &mut scratch);
-        }
-    }
-
-    // Pillow transposes before its vertical passes. For large parallel jobs,
-    // keep that layout explicit: one transpose makes every original column a
-    // writable row, all vertical passes can then reuse the row-parallel blur,
-    // and one final transpose restores the public row-major layout. The
-    // serial/small-image path keeps the algebraically equivalent wide-row
-    // recurrence and avoids paying for the extra data movement.
-    #[cfg(feature = "parallel")]
-    let use_parallel_radius_one_vertical = width.saturating_mul(height)
-        >= VERTICAL_BLUR_TRANSPOSE_THRESHOLD
-        && passes > 0
-        && vertical_radius == 1
-        && vertical_fractional_weight == 0;
-    #[cfg(not(feature = "parallel"))]
-    let use_parallel_radius_one_vertical = false;
-    #[cfg(feature = "parallel")]
-    let use_transposed_vertical = width.saturating_mul(height) >= VERTICAL_BLUR_TRANSPOSE_THRESHOLD
-        && passes > 0
-        && !use_parallel_radius_one_vertical;
-    #[cfg(not(feature = "parallel"))]
-    let use_transposed_vertical = false;
-
-    if use_parallel_radius_one_vertical {
-        #[cfg(feature = "parallel")]
-        for _ in 0..passes {
-            blur_columns_radius_one_rows(
-                &work,
-                &mut scratch,
-                width,
-                height,
-                channels,
-                vertical_weight,
-            );
-            std::mem::swap(&mut work, &mut scratch);
-        }
-    } else if use_transposed_vertical {
-        #[cfg(feature = "parallel")]
-        {
-            transpose_interleaved_rows(&work, &mut scratch, width, height, channels);
-            for pass in 0..passes {
-                blur_rows(
-                    &scratch,
-                    &mut work,
-                    height,
-                    width,
-                    channels,
-                    vertical_radius,
-                    vertical_weight,
-                    vertical_fractional_weight,
-                );
-                // The freshly blurred result is in `work`.  Swap only when
-                // another pass still needs to read it; swapping after the
-                // final pass would make the final transpose consume the
-                // pre-blur transposed buffer for odd pass counts.
-                if pass + 1 < passes {
-                    std::mem::swap(&mut work, &mut scratch);
-                }
-            }
-            transpose_interleaved_rows(&work, &mut scratch, height, width, channels);
-        }
-    } else if luma_gaussian_row_fusion && vertical_radius == 1 {
-        #[cfg(not(feature = "parallel"))]
-        for _ in 0..passes {
-            blur_luma_vertical_radius_one_rows(
-                &work,
-                &mut scratch,
-                width,
-                height,
-                vertical_weight,
-                vertical_fractional_weight,
-            );
-            std::mem::swap(&mut work, &mut scratch);
-        }
-    } else if rgba_gaussian_row_fusion && vertical_radius == 1 && vertical_fractional_weight != 0 {
-        #[cfg(not(feature = "parallel"))]
-        for _ in 0..passes {
-            blur_interleaved_vertical_radius_one_fractional_rows(
-                &work,
-                &mut scratch,
-                width,
-                height,
-                channels,
-                vertical_weight,
-                vertical_fractional_weight,
-            );
-            std::mem::swap(&mut work, &mut scratch);
-        }
-    } else {
-        let mut vertical_accumulator = vec![0u32; width * channels];
-        for _ in 0..passes {
-            blur_columns(
-                &work,
-                &mut scratch,
-                width,
-                height,
-                channels,
-                vertical_radius,
-                vertical_weight,
-                vertical_fractional_weight,
-                &mut vertical_accumulator,
-            );
-            std::mem::swap(&mut work, &mut scratch);
-        }
-    }
-
-    let output = if use_transposed_vertical {
-        scratch
-    } else {
-        work
-    };
+    let scratch = CheckedDims::new(w_u32, h_u32, channels as u8)?.alloc_buffer();
+    let (work, scratch) = blur_horizontal_passes(img.as_bytes(), work, scratch, pass_context);
+    let output = blur_vertical_passes(work, scratch, pass_context);
     let result = raw_bytes_to_image(w_u32, h_u32, output, channels)?;
     Ok(preserve_mode(img, result))
 }
