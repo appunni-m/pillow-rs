@@ -178,12 +178,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn execute_native_composite( &self, image: &DynamicImage, other: &DynamicImage, mask: &DynamicImage, channels: u8, mask_channels: u8, mask_channel: u8, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 147,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/native_hsv_pad.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_hsv_pad( &self, image: &DynamicImage, dispatch: NativeHsvPadDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 215,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/native_paste/execution.rs",
@@ -616,11 +610,6 @@
     "pillow-rs/src/compute/pool_gpu/native_composite.rs": {
       "owner": "lazytrot",
       "reason": "Moved the native GPU compositing executor beside its composition dispatch concern; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/native_hsv_pad.rs": {
-      "owner": "lazytrot",
-      "reason": "Consolidated native HSV Pad layout admission, sizing, and shader execution under its operation concern; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/native_paste/execution.rs": {

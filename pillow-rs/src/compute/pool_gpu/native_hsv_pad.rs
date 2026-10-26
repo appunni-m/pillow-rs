@@ -89,6 +89,91 @@ pub(super) fn plan_native_hsv_pad_dispatch(
     })
 }
 
+#[cfg(target_endian = "little")]
+fn write_native_hsv_pad_parameters(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    buffers: &mut BufferPool,
+    source_dimensions: (u32, u32),
+    dispatch: NativeHsvPadDispatch,
+) {
+    buffers.params_arena.ensure_capacity(
+        device,
+        "gpu_pad_hsv_native_rgb_params",
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        64,
+        device.limits().min_uniform_buffer_offset_alignment as usize,
+    );
+    let parameters = [
+        source_dimensions.0,
+        source_dimensions.1,
+        2,
+        0,
+        source_dimensions.0,
+        source_dimensions.1,
+        3,
+        0,
+        dispatch.output_width,
+        dispatch.output_height,
+        dispatch.fill_pixel,
+        0,
+        dispatch.offset_y,
+        0,
+        0,
+        0,
+    ];
+    queue.write_buffer(
+        &buffers.params_arena.buffer,
+        0,
+        bytemuck::cast_slice(&parameters),
+    );
+}
+
+#[cfg(target_endian = "little")]
+fn native_hsv_pad_bind_group(
+    device: &wgpu::Device,
+    cached: &CachedPipeline,
+    buffers: &BufferPool,
+    dispatch: NativeHsvPadDispatch,
+) -> Result<wgpu::BindGroup, PilError> {
+    Ok(device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("gpu_pad_hsv_native_rgb"),
+        layout: &cached.bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: ranged_binding(
+                    &buffers.buf_a,
+                    Some(BufferRange {
+                        offset: 0,
+                        size: dispatch.input_transfer_bytes,
+                    }),
+                )?,
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: ranged_binding(
+                    &buffers.buf_b,
+                    Some(BufferRange {
+                        offset: 0,
+                        size: dispatch.output.transfer_bytes,
+                    }),
+                )?,
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: ranged_binding(
+                    &buffers.params_arena.buffer,
+                    Some(BufferRange {
+                        offset: 0,
+                        size: 64,
+                    }),
+                )?,
+            },
+        ],
+    }))
+}
+
 impl GpuInner {
     /// Keep identity-contain HSV Pad in its native three-byte representation.
     #[cfg(target_endian = "little")]
@@ -124,77 +209,19 @@ impl GpuInner {
             3,
             rgb.as_raw(),
         )?;
-        buffers.params_arena.ensure_capacity(
+        write_native_hsv_pad_parameters(
             &self.device,
-            "gpu_pad_hsv_native_rgb_params",
-            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            64,
-            self.device.limits().min_uniform_buffer_offset_alignment as usize,
-        );
-        let parameters = [
-            image.width(),
-            image.height(),
-            2,
-            0,
-            image.width(),
-            image.height(),
-            3,
-            0,
-            dispatch.output_width,
-            dispatch.output_height,
-            dispatch.fill_pixel,
-            0,
-            dispatch.offset_y,
-            0,
-            0,
-            0,
-        ];
-        self.queue.write_buffer(
-            &buffers.params_arena.buffer,
-            0,
-            bytemuck::cast_slice(&parameters),
+            &self.queue,
+            buffers,
+            image.dimensions(),
+            dispatch,
         );
         let cached = self.resolve_pipeline(
             "__internal_pad_hsv_native_rgb",
             "pad_hsv_native_rgb.wgsl",
             include_str!("shaders/pad_hsv_native_rgb.wgsl"),
         )?;
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("gpu_pad_hsv_native_rgb"),
-            layout: &cached.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: ranged_binding(
-                        &buffers.buf_a,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.input_transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: ranged_binding(
-                        &buffers.buf_b,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.output.transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: ranged_binding(
-                        &buffers.params_arena.buffer,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: 64,
-                        }),
-                    )?,
-                },
-            ],
-        });
+        let bind_group = native_hsv_pad_bind_group(&self.device, &cached, buffers, dispatch)?;
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
