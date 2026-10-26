@@ -383,13 +383,7 @@ fn f_resize_f64_wide_lanczos_cancellation_native_matches_pillow() {
         f32::from_bits(0xc000_0000),
         f32::from_bits(0xdaa1_ab41),
     ]);
-    let cpu = source
-        .resize((3, 1), Some(ResampleInput::Name("LANCZOS".into())), None)
-        .expect("CPU wide Lanczos resize operation")
-        .use_backend(Backend::Cpu)
-        .tobytes()
-        .expect("CPU wide Lanczos resize");
-    assert_eq!(cpu, expected);
+    assert_wide_lanczos_cpu_bytes(&source, &expected);
 
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     let actual = match source
@@ -417,6 +411,16 @@ fn f_resize_f64_wide_lanczos_cancellation_native_matches_pillow() {
     assert_eq!(telemetry.1, Backend::Gpu);
     assert_eq!(telemetry.7, None);
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_wide_lanczos_cpu_bytes(source: &Image, expected: &[u8]) {
+    let cpu = source
+        .resize((3, 1), Some(ResampleInput::Name("LANCZOS".into())), None)
+        .expect("CPU wide Lanczos resize operation")
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU wide Lanczos resize");
+    assert_eq!(cpu, expected);
 }
 
 #[test]
