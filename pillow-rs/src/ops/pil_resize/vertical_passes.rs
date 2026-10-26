@@ -717,6 +717,24 @@ mod rgb_vertical_pass_tests {
     }
 }
 
+#[inline(always)]
+fn write_vertical_pass_alpha_pixel(
+    row: &mut [u8],
+    start: usize,
+    channels: usize,
+    alpha_channel: usize,
+    value: [u8; 4],
+) {
+    let alpha = value[alpha_channel];
+    for channel in 0..channels {
+        row[start + channel] = if channel == alpha_channel {
+            alpha
+        } else {
+            unpremultiply_channel(value[channel], alpha)
+        };
+    }
+}
+
 #[inline]
 pub(super) fn vertical_pass_rows_alpha(
     intermediate: &[u8],
@@ -752,14 +770,7 @@ pub(super) fn vertical_pass_rows_alpha(
                     y,
                 );
                 let start = dx as usize * channels;
-                let alpha = value[alpha_channel];
-                for c in 0..channels {
-                    row[start + c] = if c == alpha_channel {
-                        alpha
-                    } else {
-                        unpremultiply_channel(value[c], alpha)
-                    };
-                }
+                write_vertical_pass_alpha_pixel(row, start, channels, alpha_channel, value);
             }
         }
         return;
@@ -798,14 +809,7 @@ pub(super) fn vertical_pass_rows_alpha(
                     y,
                 );
                 let start = dx as usize * channels;
-                let alpha = value[alpha_channel];
-                for c in 0..channels {
-                    row[start + c] = if c == alpha_channel {
-                        alpha
-                    } else {
-                        unpremultiply_channel(value[c], alpha)
-                    };
-                }
+                write_vertical_pass_alpha_pixel(row, start, channels, alpha_channel, value);
             }
         }
     );
@@ -825,14 +829,7 @@ pub(super) fn vertical_pass_rows_alpha(
                 y,
             );
             let start = dx as usize * channels;
-            let alpha = value[alpha_channel];
-            for c in 0..channels {
-                row[start + c] = if c == alpha_channel {
-                    alpha
-                } else {
-                    unpremultiply_channel(value[c], alpha)
-                };
-            }
+            write_vertical_pass_alpha_pixel(row, start, channels, alpha_channel, value);
         }
     }
 }

@@ -668,12 +668,6 @@
       "occurrence": 1,
       "path": "pillow-rs/src/ops/pil_resize/vertical_passes.rs",
       "signature": "fn vertical_pass_col( intermediate: &[u8], _src_rows: u32, out_x: u32, out_w: u32, channels: usize, coeffs: &FilterCoeffs, out_y: usize, ) -> [u8; 4] {"
-    },
-    {
-      "lines": 103,
-      "occurrence": 1,
-      "path": "pillow-rs/src/ops/pil_resize/vertical_passes.rs",
-      "signature": "pub(super) fn vertical_pass_rows_alpha( intermediate: &[u8], source_rows: u32, output_width: u32, output_height: u32, channels: usize, coeffs: &FilterCoeffs, output: &mut [u8], parallel_pixel_threshold: usize, ) {"
     }
   ],
   "legacy_owners": {
