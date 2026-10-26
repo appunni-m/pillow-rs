@@ -563,33 +563,40 @@ fn cmyk_nearest_rotate_native_gpu_preserves_raw_samples() {
     ];
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for rotated in cases {
-        let expected = rotated
-            .clone()
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU CMYK rotate");
-        let actual = match rotated.use_backend(Backend::Gpu).tobytes() {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU CMYK rotate failed: {error}"),
-        };
-        assert_eq!(actual, expected, "CMYK rotate parity");
-        let telemetry = Backend::take_pipeline_telemetry()
-            .expect("native GPU CMYK rotate must publish a receipt");
-        assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(telemetry.1, Backend::Gpu);
-        assert_eq!(telemetry.6, Some(1));
-        assert_eq!(telemetry.7, None);
+        if !assert_cmyk_rotate_native_gpu_case(rotated, previous) {
+            return;
+        }
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_cmyk_rotate_native_gpu_case(rotated: Image, previous: bool) -> bool {
+    let expected = rotated
+        .clone()
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU CMYK rotate");
+    let actual = match rotated.use_backend(Backend::Gpu).tobytes() {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return false;
+        }
+        Err(error) => panic!("native GPU CMYK rotate failed: {error}"),
+    };
+    assert_eq!(actual, expected, "CMYK rotate parity");
+    let telemetry =
+        Backend::take_pipeline_telemetry().expect("native GPU CMYK rotate must publish a receipt");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(telemetry.1, Backend::Gpu);
+    assert_eq!(telemetry.6, Some(1));
+    assert_eq!(telemetry.7, None);
+    true
 }
 
 #[test]
