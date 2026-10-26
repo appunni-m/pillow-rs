@@ -1,5 +1,8 @@
 use super::*;
 
+mod blur_sources;
+use blur_sources::{native_rgb_packed_blur_sources, packed_native_byte_blur_sources};
+
 pub(super) enum ResolvedPipeline {
     Single(Arc<CachedPipeline>),
     /// The second public operation of a private fused dispatch.  It remains
@@ -562,69 +565,23 @@ impl<'a> BatchPipelineResolver<'a> {
         &self,
         op: &PipelineOp,
     ) -> Result<(Arc<CachedPipeline>, Arc<CachedPipeline>), PilError> {
-        let (horizontal, vertical) = if self.options.native_rgb_packed_output
-            && matches!(self.logical_mode, None | Some("RGB"))
-            && matches!(op, PipelineOp::BoxBlur { radius: 1 })
-        {
-            (
-                (
-                    "__internal_blur_h_rgb_packed",
-                    "box_blur_h_rgb_packed.wgsl",
-                    include_str!("shaders/box_blur_h_rgb_packed.wgsl"),
-                ),
-                (
-                    "__internal_blur_v_rgb_packed",
-                    "box_blur_v_rgb_packed.wgsl",
-                    include_str!("shaders/box_blur_v_rgb_packed.wgsl"),
-                ),
-            )
-        } else if self.options.packed_native_byte_filter
-            && matches!(
-                op,
-                PipelineOp::GaussianBlur { .. } | PipelineOp::BoxBlur { radius: 1 }
-            )
-        {
-            if matches!(self.logical_mode, Some("LA")) {
+        let sources = native_rgb_packed_blur_sources(self.options, self.logical_mode, op)
+            .or_else(|| packed_native_byte_blur_sources(self.options, self.logical_mode, op))
+            .unwrap_or({
                 (
                     (
-                        "__internal_blur_h_la_packed",
-                        "box_blur_h_la_packed.wgsl",
-                        include_str!("shaders/box_blur_h_la_packed.wgsl"),
+                        "__internal_blur_h",
+                        "box_blur_h.wgsl",
+                        include_str!("shaders/box_blur_h.wgsl"),
                     ),
                     (
-                        "__internal_blur_v_la_packed",
-                        "box_blur_v_la_packed.wgsl",
-                        include_str!("shaders/box_blur_v_la_packed.wgsl"),
+                        "__internal_blur_v",
+                        "box_blur_v.wgsl",
+                        include_str!("shaders/box_blur_v.wgsl"),
                     ),
                 )
-            } else {
-                (
-                    (
-                        "__internal_blur_h_luma_packed",
-                        "box_blur_h_luma_packed.wgsl",
-                        include_str!("shaders/box_blur_h_luma_packed.wgsl"),
-                    ),
-                    (
-                        "__internal_blur_v_luma_packed",
-                        "box_blur_v_luma_packed.wgsl",
-                        include_str!("shaders/box_blur_v_luma_packed.wgsl"),
-                    ),
-                )
-            }
-        } else {
-            (
-                (
-                    "__internal_blur_h",
-                    "box_blur_h.wgsl",
-                    include_str!("shaders/box_blur_h.wgsl"),
-                ),
-                (
-                    "__internal_blur_v",
-                    "box_blur_v.wgsl",
-                    include_str!("shaders/box_blur_v.wgsl"),
-                ),
-            )
-        };
+            });
+        let (horizontal, vertical) = sources;
         Ok((
             self.resolve_source(horizontal)?,
             self.resolve_source(vertical)?,
