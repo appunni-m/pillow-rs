@@ -695,109 +695,155 @@ fn native_masked_rgba_layout_keeps_four_stored_channels() {
 #[test]
 #[cfg(target_endian = "little")]
 fn native_masked_rgb_and_hsv_paste_use_the_three_byte_shader() {
-    use crate::ops::paste::PasteSource;
+    if !native_masked_rgb_gpu_available_or_skip() {
+        return;
+    }
+    let _restore = RestoreGpuDiagnostics::enable();
+    let _ = Backend::take_gpu_shader_coverage();
+    let (destination_bytes, source_bytes, mask_bytes) = native_masked_rgb_hsv_fixture_bytes();
+    for mode in ["RGB", "HSV"] {
+        for position in [(-1, -1), (2, 1)] {
+            assert_native_masked_rgb_hsv_case(
+                mode,
+                position,
+                &destination_bytes,
+                &source_bytes,
+                &mask_bytes,
+            );
+        }
+    }
+}
 
+#[cfg(target_endian = "little")]
+struct RestoreGpuDiagnostics {
+    telemetry: bool,
+    shader_coverage: bool,
+}
+
+#[cfg(target_endian = "little")]
+impl RestoreGpuDiagnostics {
+    fn enable() -> Self {
+        Self {
+            telemetry: Backend::set_pipeline_telemetry_enabled(true),
+            shader_coverage: Backend::set_gpu_shader_coverage_enabled(true),
+        }
+    }
+}
+
+#[cfg(target_endian = "little")]
+impl Drop for RestoreGpuDiagnostics {
+    fn drop(&mut self) {
+        Backend::set_pipeline_telemetry_enabled(self.telemetry);
+        Backend::set_gpu_shader_coverage_enabled(self.shader_coverage);
+    }
+}
+
+#[cfg(target_endian = "little")]
+fn native_masked_rgb_gpu_available_or_skip() -> bool {
     match super::GpuPool::ensure_init() {
-        Ok(_) => {}
+        Ok(_) => true,
         Err(error)
             if error.to_string().contains("GPU adapter not available")
                 || error
                     .to_string()
                     .contains("GPU device initialization failed") =>
         {
-            return;
+            false
         }
         Err(error) => panic!("native masked RGB GPU initialization failed: {error}"),
     }
+}
 
-    struct RestoreDiagnostics {
-        telemetry: bool,
-        shader_coverage: bool,
-    }
-    impl Drop for RestoreDiagnostics {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.telemetry);
-            Backend::set_gpu_shader_coverage_enabled(self.shader_coverage);
-        }
-    }
-    let _restore = RestoreDiagnostics {
-        telemetry: Backend::set_pipeline_telemetry_enabled(true),
-        shader_coverage: Backend::set_gpu_shader_coverage_enabled(true),
-    };
-    let _ = Backend::take_gpu_shader_coverage();
-
+#[cfg(target_endian = "little")]
+fn native_masked_rgb_hsv_fixture_bytes() -> (Vec<u8>, Vec<u8>, Vec<u8>) {
     let mut destination_bytes = (0..45)
-        .map(|index| (index * 41 + 19) as u8)
+        .map(|index: i32| (index.wrapping_mul(41).wrapping_add(19)) as u8)
         .collect::<Vec<_>>();
     let mut source_bytes = (0..45)
-        .map(|index| (231i32 - index * 17) as u8)
+        .map(|index: i32| 231i32.wrapping_sub(index.wrapping_mul(17)) as u8)
         .collect::<Vec<_>>();
     for pixel in [0usize, 1, 7, 8] {
-        destination_bytes[pixel * 3..pixel * 3 + 3].copy_from_slice(&[100, 100, 100]);
+        let start = pixel.saturating_mul(3);
+        let end = start.saturating_add(3);
+        destination_bytes[start..end].copy_from_slice(&[100, 100, 100]);
     }
     for pixel in [0usize, 1, 6, 7] {
-        source_bytes[pixel * 3..pixel * 3 + 3].copy_from_slice(&[101, 99, 100]);
+        let start = pixel.saturating_mul(3);
+        let end = start.saturating_add(3);
+        source_bytes[start..end].copy_from_slice(&[101, 99, 100]);
     }
     let mut mask_bytes = vec![
         0, 1, 127, 128, 254, 255, 127, 128, 127, 128, 254, 255, 254, 1, 127,
     ];
     mask_bytes[0..2].copy_from_slice(&[127, 128]);
-    let positions = [(-1, -1), (2, 1)];
-    for mode in ["RGB", "HSV"] {
-        for position in positions {
-            let source = Image::frombytes(mode, (5, 3), &source_bytes).unwrap();
-            let mask = Image::frombytes("L", (5, 3), &mask_bytes).unwrap();
-            let mut expected_image = Image::frombytes(mode, (5, 3), &destination_bytes).unwrap();
-            expected_image
-                .paste_at(
-                    PasteSource::Image(Box::new(source.clone())),
-                    Some(position),
-                    Some(&mask),
-                )
-                .unwrap();
-            let expected = expected_image
-                .use_backend(Backend::Cpu)
-                .tobytes()
-                .expect("CPU masked Paste reference");
+    (destination_bytes, source_bytes, mask_bytes)
+}
 
-            let mut actual_image = Image::frombytes(mode, (5, 3), &destination_bytes).unwrap();
-            actual_image
-                .paste_at(
-                    PasteSource::Image(Box::new(source)),
-                    Some(position),
-                    Some(&mask),
-                )
-                .unwrap();
-            let actual = actual_image
-                .use_backend(Backend::Gpu)
-                .tobytes()
-                .expect("native GPU masked Paste");
-            assert_eq!(actual, expected, "masked {mode} Paste at {position:?}");
+#[cfg(target_endian = "little")]
+fn assert_native_masked_rgb_hsv_case(
+    mode: &str,
+    position: (i32, i32),
+    destination_bytes: &[u8],
+    source_bytes: &[u8],
+    mask_bytes: &[u8],
+) {
+    use crate::ops::paste::PasteSource;
 
-            let receipt = Backend::take_pipeline_telemetry()
-                .expect("native masked Paste must publish a telemetry receipt");
-            assert_eq!(receipt.0, Some(Backend::Gpu));
-            assert_eq!(receipt.1, Backend::Gpu);
-            assert_eq!(receipt.6, Some(1));
-            assert_eq!(receipt.7, None);
-            let resources = receipt.8.expect("native masked GPU resources");
-            assert_eq!(resources.mode_conversion_count, 0);
-            assert_eq!(resources.upload_bytes, 48 + 48 + 16);
-            assert_eq!(resources.auxiliary_bytes, 48 + 16);
-            assert_eq!(resources.readback_bytes, 48);
+    let source = Image::frombytes(mode, (5, 3), source_bytes).unwrap();
+    let mask = Image::frombytes("L", (5, 3), mask_bytes).unwrap();
+    let mut expected_image = Image::frombytes(mode, (5, 3), destination_bytes).unwrap();
+    expected_image
+        .paste_at(
+            PasteSource::Image(Box::new(source.clone())),
+            Some(position),
+            Some(&mask),
+        )
+        .unwrap();
+    let expected = expected_image
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU masked Paste reference");
 
-            let shader_dispatches = Backend::take_gpu_shader_coverage();
-            assert_eq!(shader_dispatches.len(), 1);
-            assert_eq!(
-                shader_dispatches[0].variant_name,
-                "__internal_paste_native_masked_rgb"
-            );
-            assert_eq!(
-                shader_dispatches[0].shader_file,
-                "paste_native_masked_rgb.wgsl"
-            );
-            assert_eq!(shader_dispatches[0].dispatches, 1);
-            assert_eq!(shader_dispatches[0].workgroups, 1);
-        }
-    }
+    let mut actual_image = Image::frombytes(mode, (5, 3), destination_bytes).unwrap();
+    actual_image
+        .paste_at(
+            PasteSource::Image(Box::new(source)),
+            Some(position),
+            Some(&mask),
+        )
+        .unwrap();
+    let actual = actual_image
+        .use_backend(Backend::Gpu)
+        .tobytes()
+        .expect("native GPU masked Paste");
+    assert_eq!(actual, expected, "masked {mode} Paste at {position:?}");
+    assert_native_masked_paste_receipt();
+}
+
+#[cfg(target_endian = "little")]
+fn assert_native_masked_paste_receipt() {
+    let receipt = Backend::take_pipeline_telemetry()
+        .expect("native masked Paste must publish a telemetry receipt");
+    assert_eq!(receipt.0, Some(Backend::Gpu));
+    assert_eq!(receipt.1, Backend::Gpu);
+    assert_eq!(receipt.6, Some(1));
+    assert_eq!(receipt.7, None);
+    let resources = receipt.8.expect("native masked GPU resources");
+    assert_eq!(resources.mode_conversion_count, 0);
+    assert_eq!(resources.upload_bytes, 48 + 48 + 16);
+    assert_eq!(resources.auxiliary_bytes, 48 + 16);
+    assert_eq!(resources.readback_bytes, 48);
+
+    let shader_dispatches = Backend::take_gpu_shader_coverage();
+    assert_eq!(shader_dispatches.len(), 1);
+    assert_eq!(
+        shader_dispatches[0].variant_name,
+        "__internal_paste_native_masked_rgb"
+    );
+    assert_eq!(
+        shader_dispatches[0].shader_file,
+        "paste_native_masked_rgb.wgsl"
+    );
+    assert_eq!(shader_dispatches[0].dispatches, 1);
+    assert_eq!(shader_dispatches[0].workgroups, 1);
 }
