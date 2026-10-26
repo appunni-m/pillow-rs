@@ -490,12 +490,6 @@
       "signature": "fn gpu_native_flip_keeps_mode_specific_storage_and_pixels() {"
     },
     {
-      "lines": 126,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/transform/projective_admission.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn gpu_transform_geometry_words( op: &PipelineOp, source: (u32, u32), mode: Option<&str>, ) -> Result<Vec<u32>, PilError> {"
-    },
-    {
       "lines": 408,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs",
@@ -824,11 +818,6 @@
     "pillow-rs/src/compute/pool_gpu/tests/transpose_planning.rs": {
       "owner": "lazytrot",
       "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/transform/projective_admission.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU projective, quad, and mesh admission proofs; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs": {
