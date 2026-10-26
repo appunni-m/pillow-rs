@@ -351,27 +351,20 @@ fn f_resize_f64_relocation_chain_native_matches_cpu() {
                 None,
             )
             .expect("GPU first relocation-chain resize");
-        let actual = match Image::push_op(&first, relocation)
-            .resize(
-                (i64::from(final_dimensions.0), i64::from(final_dimensions.1)),
-                Some(ResampleInput::Name("LANCZOS".into())),
-                None,
-            )
-            .expect("GPU second relocation-chain resize")
-            .use_backend(Backend::Gpu)
-            .tobytes()
-        {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU {name} relocation chain failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            Image::push_op(&first, relocation)
+                .resize(
+                    (i64::from(final_dimensions.0), i64::from(final_dimensions.1)),
+                    Some(ResampleInput::Name("LANCZOS".into())),
+                    None,
+                )
+                .expect("GPU second relocation-chain resize")
+                .use_backend(Backend::Gpu)
+                .tobytes(),
+            format_args!("native GPU {name} relocation chain failed"),
+        ) else {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
         };
         assert_eq!(
             actual, expected,
