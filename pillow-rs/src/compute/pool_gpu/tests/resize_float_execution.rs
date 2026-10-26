@@ -309,55 +309,74 @@ fn f_resize_integer_emulation_matches_cpu_for_heterogeneous_significands() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for filter in filters {
         for size in sizes {
-            let expected = source
-                .resize(size, Some(ResampleInput::Name(filter.into())), None)
-                .expect("CPU resize operation")
-                .use_backend(Backend::Cpu)
-                .tobytes()
-                .expect("CPU F resize");
-            let actual = match source
-                .resize(size, Some(ResampleInput::Name(filter.into())), None)
-                .expect("GPU resize operation")
-                .use_backend(Backend::Gpu)
-                .tobytes()
-            {
-                Ok(actual) => actual,
-                Err(error)
-                    if error.to_string().contains("GPU adapter not available")
-                        || error
-                            .to_string()
-                            .contains("GPU device initialization failed") =>
-                {
-                    Backend::set_pipeline_telemetry_enabled(previous);
-                    return;
-                }
-                Err(error) => panic!("native GPU F {filter} resize failed: {error}"),
-            };
-            assert_eq!(actual, expected, "F {filter} integer emulation parity");
-            let telemetry = Backend::take_pipeline_telemetry()
-                .expect("native GPU F resize must publish a telemetry receipt");
-            assert_eq!(telemetry.0, Some(Backend::Gpu));
-            assert_eq!(telemetry.1, Backend::Gpu);
-            assert_eq!(telemetry.6, Some(2));
-            assert_eq!(telemetry.7, None);
+            if !assert_f_resize_integer_emulation_case(&source, size, filter) {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
         }
     }
 
-    // Exercise the signed accumulator and the second f32 boundary in a
-    // single native two-axis Bilinear dispatch.
+    let signed_source = f_resize_signed_source();
+    if !assert_f_resize_signed_two_axis_case(&signed_source) {
+        Backend::set_pipeline_telemetry_enabled(previous);
+        return;
+    }
+    Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_f_resize_integer_emulation_case(source: &Image, size: (i64, i64), filter: &str) -> bool {
+    let expected = source
+        .resize(size, Some(ResampleInput::Name(filter.into())), None)
+        .expect("CPU resize operation")
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU F resize");
+    let actual = match source
+        .resize(size, Some(ResampleInput::Name(filter.into())), None)
+        .expect("GPU resize operation")
+        .use_backend(Backend::Gpu)
+        .tobytes()
+    {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            return false;
+        }
+        Err(error) => panic!("native GPU F {filter} resize failed: {error}"),
+    };
+    assert_eq!(actual, expected, "F {filter} integer emulation parity");
+    let telemetry = Backend::take_pipeline_telemetry()
+        .expect("native GPU F resize must publish a telemetry receipt");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(telemetry.1, Backend::Gpu);
+    assert_eq!(telemetry.6, Some(2));
+    assert_eq!(telemetry.7, None);
+    true
+}
+
+fn f_resize_signed_source() -> Image {
     let signed_values = [0.1f32, -0.3, 1.7, 2.9];
     let signed_bytes: Vec<u8> = signed_values
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect();
-    let signed_source = Image::frombytes("F", (2, 2), &signed_bytes).expect("F source");
-    let expected = signed_source
+    Image::frombytes("F", (2, 2), &signed_bytes).expect("F source")
+}
+
+fn assert_f_resize_signed_two_axis_case(source: &Image) -> bool {
+    // Exercise the signed accumulator and the second f32 boundary in a
+    // single native two-axis Bilinear dispatch.
+    let expected = source
         .resize((1, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
         .expect("CPU two-axis resize operation")
         .use_backend(Backend::Cpu)
         .tobytes()
         .expect("CPU two-axis F resize");
-    let actual = match signed_source
+    let actual = match source
         .resize((1, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
         .expect("GPU two-axis resize operation")
         .use_backend(Backend::Gpu)
@@ -370,8 +389,7 @@ fn f_resize_integer_emulation_matches_cpu_for_heterogeneous_significands() {
                     .to_string()
                     .contains("GPU device initialization failed") =>
         {
-            Backend::set_pipeline_telemetry_enabled(previous);
-            return;
+            return false;
         }
         Err(error) => panic!("native GPU signed two-axis F resize failed: {error}"),
     };
@@ -382,7 +400,7 @@ fn f_resize_integer_emulation_matches_cpu_for_heterogeneous_significands() {
     assert_eq!(telemetry.1, Backend::Gpu);
     assert_eq!(telemetry.6, Some(2));
     assert_eq!(telemetry.7, None);
-    Backend::set_pipeline_telemetry_enabled(previous);
+    true
 }
 
 #[test]
