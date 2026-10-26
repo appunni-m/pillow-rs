@@ -574,12 +574,6 @@
       "signature": "fn frombytes_with_data( mode: &str, size: (u32, u32), data: Cow<'_, [u8]>, ) -> Result<Self, PilError> {"
     },
     {
-      "lines": 156,
-      "occurrence": 1,
-      "path": "pillow-rs/src/image/entropy.rs",
-      "signature": "pub fn entropy_with_mask(&self, mask: Option<&Image>) -> Result<f64, PilError> {"
-    },
-    {
       "lines": 144,
       "occurrence": 1,
       "path": "pillow-rs/src/image/pipeline_ops.rs",
@@ -949,11 +943,6 @@
     "pillow-rs/src/image/construction.rs": {
       "owner": "lazytrot",
       "reason": "Moved existing Image constructor methods from image.rs without increasing their 117/156-line sizes; continue reducing under pillow-rs#knsf.",
-      "reduction_task": "pillow-rs#knsf"
-    },
-    "pillow-rs/src/image/entropy.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved the existing long Image::entropy_with_mask implementation from image.rs; continue reducing under pillow-rs#knsf.",
       "reduction_task": "pillow-rs#knsf"
     },
     "pillow-rs/src/image/pipeline_ops.rs": {
