@@ -773,8 +773,12 @@ pub(super) fn gpu_shader_work_requires_cpu(
         .is_none_or(|work| work > MAX_GPU_SHADER_WORK_ITEMS)
 }
 
+fn gpu_f32_finite(value: f64) -> bool {
+    value.is_finite() && (value as f32).is_finite()
+}
+
 pub(super) fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
-    let finite_f32 = |value: f64| value.is_finite() && (value as f32).is_finite();
+    let finite_f32 = gpu_f32_finite;
     match op {
         PipelineOp::Filter3x3 {
             kernel,
@@ -870,15 +874,7 @@ pub(super) fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
             center,
             translate,
             ..
-        } => {
-            angle.is_finite()
-                && center
-                    .map(|(x, y)| x.is_finite() && y.is_finite())
-                    .unwrap_or(true)
-                && translate
-                    .map(|(x, y)| x.is_finite() && y.is_finite())
-                    .unwrap_or(true)
-        }
+        } => gpu_rotate_op_is_safe(*angle, *center, *translate),
         PipelineOp::Transform {
             w,
             h,
@@ -886,45 +882,65 @@ pub(super) fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
             data,
             filter,
             ..
-        } => {
-            let shape_valid = match method {
-                TransformMethod::Affine | TransformMethod::Perspective | TransformMethod::Quad => {
-                    data.len()
-                        >= if matches!(method, TransformMethod::Affine) {
-                            6
-                        } else {
-                            8
-                        }
-                }
-                // The GPU mesh lowering carries one complete 12-value mesh
-                // record in its uniform block. Larger meshes remain on the
-                // CPU until a bounded auxiliary mesh buffer is available.
-                TransformMethod::Mesh => data.len() == 12,
-            };
-            if gpu_transform_is_projective(op) {
-                return gpu_transform_geometry_is_admitted(op, None, (1, 1));
-            }
-            *w > 0
-                && *h > 0
-                && shape_valid
-                && data.iter().copied().all(finite_f32)
-                // The image-aware admission proof owns the narrow
-                // direct/axis unit-relocation cases for filtered Quad and
-                // one-record Mesh transforms. Keep arbitrary filtered maps
-                // on the exact host semantic path before this coarse check
-                // reaches execution.
-                && (!matches!(method, TransformMethod::Mesh)
-                    || matches!(
-                        filter,
-                        ResampleFilter::Nearest
-                            | ResampleFilter::Bilinear
-                            | ResampleFilter::Bicubic
-                    ))
-        }
+        } => gpu_transform_op_is_safe(op, w, h, method, data, filter),
         PipelineOp::AlphaComposite { dest, src, .. } => *dest == (0, 0) && *src == (0, 0),
         PipelineOp::Autocontrast { cutoff, .. } => finite_f32(*cutoff),
         _ => true,
     }
+}
+
+fn gpu_rotate_op_is_safe(
+    angle: f64,
+    center: Option<(f64, f64)>,
+    translate: Option<(f64, f64)>,
+) -> bool {
+    angle.is_finite()
+        && center
+            .map(|(x, y)| x.is_finite() && y.is_finite())
+            .unwrap_or(true)
+        && translate
+            .map(|(x, y)| x.is_finite() && y.is_finite())
+            .unwrap_or(true)
+}
+
+fn gpu_transform_op_is_safe(
+    op: &PipelineOp,
+    width: &u32,
+    height: &u32,
+    method: &TransformMethod,
+    data: &[f64],
+    filter: &ResampleFilter,
+) -> bool {
+    let shape_valid = match method {
+        TransformMethod::Affine | TransformMethod::Perspective | TransformMethod::Quad => {
+            data.len()
+                >= if matches!(method, TransformMethod::Affine) {
+                    6
+                } else {
+                    8
+                }
+        }
+        // The GPU mesh lowering carries one complete 12-value mesh record in
+        // its uniform block. Larger meshes remain on the CPU until a bounded
+        // auxiliary mesh buffer is available.
+        TransformMethod::Mesh => data.len() == 12,
+    };
+    if gpu_transform_is_projective(op) {
+        return gpu_transform_geometry_is_admitted(op, None, (1, 1));
+    }
+    *width > 0
+        && *height > 0
+        && shape_valid
+        && data.iter().copied().all(gpu_f32_finite)
+        // The image-aware admission proof owns the narrow direct/axis
+        // unit-relocation cases for filtered Quad and one-record Mesh
+        // transforms. Keep arbitrary filtered maps on the exact host semantic
+        // path before this coarse check reaches execution.
+        && (!matches!(method, TransformMethod::Mesh)
+            || matches!(
+                filter,
+                ResampleFilter::Nearest | ResampleFilter::Bilinear | ResampleFilter::Bicubic
+            ))
 }
 
 /// Return whether an operation's GPU capability depends on the source image.

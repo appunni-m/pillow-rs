@@ -220,12 +220,6 @@
       "signature": "pub(super) fn gpu_dimensions_require_cpu( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
     },
     {
-      "lines": 134,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/operation_admission.rs",
-      "signature": "pub(super) fn gpu_operation_is_safe(op: &PipelineOp) -> bool {"
-    },
-    {
       "lines": 226,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/operation_support.rs",
