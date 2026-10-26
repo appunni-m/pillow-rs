@@ -2,6 +2,96 @@ use super::alpha::unpremultiply_channel;
 use super::coefficients::fixed_point_to_u8;
 use super::*;
 
+/// Resample an RGB column with fixed-point taps in the original accumulation order.
+#[inline(always)]
+fn vertical_pass_rgb_col(
+    intermediate: &[u8],
+    out_x: u32,
+    out_w: u32,
+    y0: i64,
+    cnt: usize,
+    weights: &[i64],
+) -> [u8; 4] {
+    let mut result = [0u8; 4];
+    let x_index = out_x as usize * 3;
+    let row_stride = out_w as usize * 3;
+    let (red_acc, green_acc, blue_acc) = if cnt == 4 {
+        let mut red_acc = 0i64;
+        let mut green_acc = 0i64;
+        let mut blue_acc = 0i64;
+        let mut source_index = y0 as usize * row_stride + x_index;
+        red_acc += i64::from(intermediate[source_index]) * weights[0];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[0];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[0];
+        source_index += row_stride;
+        red_acc += i64::from(intermediate[source_index]) * weights[1];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[1];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[1];
+        source_index += row_stride;
+        red_acc += i64::from(intermediate[source_index]) * weights[2];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[2];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[2];
+        source_index += row_stride;
+        red_acc += i64::from(intermediate[source_index]) * weights[3];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[3];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[3];
+        (red_acc, green_acc, blue_acc)
+    } else if cnt == 8 {
+        let weights: &[i64; 8] = weights
+            .try_into()
+            .expect("an eight-tap coefficient span contains eight weights");
+        let mut source_index = y0 as usize * row_stride + x_index;
+        let mut red_acc = i64::from(intermediate[source_index]) * weights[0];
+        let mut green_acc = i64::from(intermediate[source_index + 1]) * weights[0];
+        let mut blue_acc = i64::from(intermediate[source_index + 2]) * weights[0];
+        source_index += row_stride;
+        red_acc += i64::from(intermediate[source_index]) * weights[1];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[1];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[1];
+        source_index += row_stride;
+        red_acc += i64::from(intermediate[source_index]) * weights[2];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[2];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[2];
+        source_index += row_stride;
+        red_acc += i64::from(intermediate[source_index]) * weights[3];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[3];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[3];
+        source_index += row_stride;
+        red_acc += i64::from(intermediate[source_index]) * weights[4];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[4];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[4];
+        source_index += row_stride;
+        red_acc += i64::from(intermediate[source_index]) * weights[5];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[5];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[5];
+        source_index += row_stride;
+        red_acc += i64::from(intermediate[source_index]) * weights[6];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[6];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[6];
+        source_index += row_stride;
+        red_acc += i64::from(intermediate[source_index]) * weights[7];
+        green_acc += i64::from(intermediate[source_index + 1]) * weights[7];
+        blue_acc += i64::from(intermediate[source_index + 2]) * weights[7];
+        (red_acc, green_acc, blue_acc)
+    } else {
+        let mut red_acc = 0i64;
+        let mut green_acc = 0i64;
+        let mut blue_acc = 0i64;
+        for (cix, &weight) in weights.iter().enumerate() {
+            let sy = (y0 + cix as i64) as usize;
+            let source_index = sy * row_stride + x_index;
+            red_acc += i64::from(intermediate[source_index]) * weight;
+            green_acc += i64::from(intermediate[source_index + 1]) * weight;
+            blue_acc += i64::from(intermediate[source_index + 2]) * weight;
+        }
+        (red_acc, green_acc, blue_acc)
+    };
+    result[0] = fixed_point_to_u8(red_acc);
+    result[1] = fixed_point_to_u8(green_acc);
+    result[2] = fixed_point_to_u8(blue_acc);
+    result
+}
+
 /// Resample one column into the output rows.
 ///
 /// This is the vertical pass: it computes one column of the final image
@@ -24,85 +114,8 @@ fn vertical_pass_col(
     let weights = coeffs.weights_for(out_y);
     let mut result = [0u8; 4];
     if channels == 3 {
-        let x_index = out_x as usize * 3;
-        let row_stride = out_w as usize * 3;
-        let (red_acc, green_acc, blue_acc) = if cnt == 4 {
-            let mut red_acc = 0i64;
-            let mut green_acc = 0i64;
-            let mut blue_acc = 0i64;
-            let mut source_index = y0 as usize * row_stride + x_index;
-            red_acc += i64::from(intermediate[source_index]) * weights[0];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[0];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[0];
-            source_index += row_stride;
-            red_acc += i64::from(intermediate[source_index]) * weights[1];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[1];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[1];
-            source_index += row_stride;
-            red_acc += i64::from(intermediate[source_index]) * weights[2];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[2];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[2];
-            source_index += row_stride;
-            red_acc += i64::from(intermediate[source_index]) * weights[3];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[3];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[3];
-            (red_acc, green_acc, blue_acc)
-        } else if cnt == 8 {
-            let weights: &[i64; 8] = weights
-                .try_into()
-                .expect("an eight-tap coefficient span contains eight weights");
-            let mut source_index = y0 as usize * row_stride + x_index;
-            let mut red_acc = i64::from(intermediate[source_index]) * weights[0];
-            let mut green_acc = i64::from(intermediate[source_index + 1]) * weights[0];
-            let mut blue_acc = i64::from(intermediate[source_index + 2]) * weights[0];
-            source_index += row_stride;
-            red_acc += i64::from(intermediate[source_index]) * weights[1];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[1];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[1];
-            source_index += row_stride;
-            red_acc += i64::from(intermediate[source_index]) * weights[2];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[2];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[2];
-            source_index += row_stride;
-            red_acc += i64::from(intermediate[source_index]) * weights[3];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[3];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[3];
-            source_index += row_stride;
-            red_acc += i64::from(intermediate[source_index]) * weights[4];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[4];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[4];
-            source_index += row_stride;
-            red_acc += i64::from(intermediate[source_index]) * weights[5];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[5];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[5];
-            source_index += row_stride;
-            red_acc += i64::from(intermediate[source_index]) * weights[6];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[6];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[6];
-            source_index += row_stride;
-            red_acc += i64::from(intermediate[source_index]) * weights[7];
-            green_acc += i64::from(intermediate[source_index + 1]) * weights[7];
-            blue_acc += i64::from(intermediate[source_index + 2]) * weights[7];
-            (red_acc, green_acc, blue_acc)
-        } else {
-            let mut red_acc = 0i64;
-            let mut green_acc = 0i64;
-            let mut blue_acc = 0i64;
-            for (cix, &weight) in weights.iter().enumerate() {
-                let sy = (y0 + cix as i64) as usize;
-                let source_index = sy * row_stride + x_index;
-                red_acc += i64::from(intermediate[source_index]) * weight;
-                green_acc += i64::from(intermediate[source_index + 1]) * weight;
-                blue_acc += i64::from(intermediate[source_index + 2]) * weight;
-            }
-            (red_acc, green_acc, blue_acc)
-        };
-        result[0] = fixed_point_to_u8(red_acc);
-        result[1] = fixed_point_to_u8(green_acc);
-        result[2] = fixed_point_to_u8(blue_acc);
-        return result;
+        return vertical_pass_rgb_col(intermediate, out_x, out_w, y0, cnt, weights);
     }
-
     if channels == 4 {
         let x_index = out_x as usize * 4;
         let row_stride = out_w as usize * 4;

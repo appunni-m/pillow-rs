@@ -458,12 +458,6 @@
       "occurrence": 1,
       "path": "pillow-rs/src/ops/pil_resize/resize.rs",
       "signature": "pub fn pil_resize( img: &DynamicImage, dst_w: u32, dst_h: u32, filter: ResampleFilter, explicit_mode: Option<&str>, ) -> DynamicImage {"
-    },
-    {
-      "lines": 116,
-      "occurrence": 1,
-      "path": "pillow-rs/src/ops/pil_resize/vertical_passes.rs",
-      "signature": "fn vertical_pass_col( intermediate: &[u8], _src_rows: u32, out_x: u32, out_w: u32, channels: usize, coeffs: &FilterCoeffs, out_y: usize, ) -> [u8; 4] {"
     }
   ],
   "legacy_owners": {
@@ -733,11 +727,6 @@
       "reduction_task": "pillow-rs#nsax"
     },
     "pillow-rs/src/ops/pil_resize/resize.rs": {
-      "owner": "lazytrot",
-      "reason": "Resize routines still exceed the 100-line function review ceiling after moving into focused family modules; their bodies stay intact for this behavior-preserving split, with further reductions reserved for a scoped follow-up under pillow-rs#nsax.",
-      "reduction_task": "pillow-rs#nsax"
-    },
-    "pillow-rs/src/ops/pil_resize/vertical_passes.rs": {
       "owner": "lazytrot",
       "reason": "Resize routines still exceed the 100-line function review ceiling after moving into focused family modules; their bodies stay intact for this behavior-preserving split, with further reductions reserved for a scoped follow-up under pillow-rs#nsax.",
       "reduction_task": "pillow-rs#nsax"
