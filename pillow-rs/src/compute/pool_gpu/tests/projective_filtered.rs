@@ -98,62 +98,7 @@ fn byte_quad_mesh_filtered_relocations_native_gpu_preserve_pixels() {
             "RGBA" => Some(TransformFill::Components(vec![199, 71, 17, 83])),
             _ => None,
         };
-        let cases = [
-            (
-                3,
-                TransformData::Affine(vec![0.0, 0.0, 0.0, 6.0, 9.0, 6.0, 9.0, 0.0]),
-                (9, 6),
-            ),
-            (
-                3,
-                TransformData::Affine(vec![0.0, 0.0, 6.0, 0.0, 6.0, 9.0, 0.0, 9.0]),
-                (9, 6),
-            ),
-            (
-                3,
-                TransformData::Affine(vec![1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0]),
-                (9, 6),
-            ),
-            (
-                3,
-                TransformData::Affine(vec![1.0, 2.0, 7.0, 2.0, 7.0, 11.0, 1.0, 11.0]),
-                (9, 6),
-            ),
-            (
-                3,
-                TransformData::Affine(vec![1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5]),
-                (9, 6),
-            ),
-            (
-                3,
-                TransformData::Affine(vec![2.5, 3.5, 2.5, 3.5, 2.5, 3.5, 2.5, 3.5]),
-                (9, 6),
-            ),
-            (
-                4,
-                TransformData::Mesh(vec![(
-                    vec![0.0, 0.0, 9.0, 6.0],
-                    vec![1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0],
-                )]),
-                (9, 6),
-            ),
-            (
-                4,
-                TransformData::Mesh(vec![(
-                    vec![0.0, 0.0, 9.0, 6.0],
-                    vec![1.0, 2.0, 7.0, 2.0, 7.0, 11.0, 1.0, 11.0],
-                )]),
-                (9, 6),
-            ),
-            (
-                4,
-                TransformData::Mesh(vec![(
-                    vec![0.0, 0.0, 9.0, 6.0],
-                    vec![1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5],
-                )]),
-                (9, 6),
-            ),
-        ];
+        let cases = byte_quad_mesh_filtered_cases();
         for (method, data, output_size) in cases {
             for filter in [ResampleFilter::Bilinear, ResampleFilter::Bicubic] {
                 let transformed = source
@@ -208,6 +153,65 @@ fn byte_quad_mesh_filtered_relocations_native_gpu_preserve_pixels() {
         }
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn byte_quad_mesh_filtered_cases() -> [(i32, TransformData, (u32, u32)); 9] {
+    [
+        (
+            3,
+            TransformData::Affine(vec![0.0, 0.0, 0.0, 6.0, 9.0, 6.0, 9.0, 0.0]),
+            (9, 6),
+        ),
+        (
+            3,
+            TransformData::Affine(vec![0.0, 0.0, 6.0, 0.0, 6.0, 9.0, 0.0, 9.0]),
+            (9, 6),
+        ),
+        (
+            3,
+            TransformData::Affine(vec![1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0]),
+            (9, 6),
+        ),
+        (
+            3,
+            TransformData::Affine(vec![1.0, 2.0, 7.0, 2.0, 7.0, 11.0, 1.0, 11.0]),
+            (9, 6),
+        ),
+        (
+            3,
+            TransformData::Affine(vec![1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5]),
+            (9, 6),
+        ),
+        (
+            3,
+            TransformData::Affine(vec![2.5, 3.5, 2.5, 3.5, 2.5, 3.5, 2.5, 3.5]),
+            (9, 6),
+        ),
+        (
+            4,
+            TransformData::Mesh(vec![(
+                vec![0.0, 0.0, 9.0, 6.0],
+                vec![1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0],
+            )]),
+            (9, 6),
+        ),
+        (
+            4,
+            TransformData::Mesh(vec![(
+                vec![0.0, 0.0, 9.0, 6.0],
+                vec![1.0, 2.0, 7.0, 2.0, 7.0, 11.0, 1.0, 11.0],
+            )]),
+            (9, 6),
+        ),
+        (
+            4,
+            TransformData::Mesh(vec![(
+                vec![0.0, 0.0, 9.0, 6.0],
+                vec![1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5],
+            )]),
+            (9, 6),
+        ),
+    ]
 }
 
 #[test]
