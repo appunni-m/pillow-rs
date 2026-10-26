@@ -10,6 +10,18 @@ struct NativeRgbCropExecution<'a> {
     dispatch: NativeRgbCropDispatch,
 }
 
+struct NativeBytePasteExecution<'a> {
+    destination: &'a DynamicImage,
+    source: &'a DynamicImage,
+    offset: (i32, i32),
+    width: u32,
+    height: u32,
+    source_width: u32,
+    source_height: u32,
+    bytes_per_pixel: usize,
+    dispatch: NativeBytePasteDispatch,
+}
+
 impl GpuInner {
     #[cfg(target_endian = "little")]
     #[inline(always)]
@@ -288,19 +300,19 @@ impl GpuInner {
         self.submit_native_rgb_crop(&cached, &bind_group, &execution, buffers)
     }
 
-    pub(in crate::compute::pool_gpu) fn execute_native_byte_paste(
+    #[inline(always)]
+    fn validate_native_byte_paste(
         &self,
-        destination: &DynamicImage,
-        source: &DynamicImage,
-        offset: (i32, i32),
-        dispatch: NativeBytePasteDispatch,
-        buffers: &mut BufferPool,
-    ) -> Result<DynamicImage, PilError> {
-        let (width, height) = destination.dimensions();
-        let (source_width, source_height) = source.dimensions();
-        let bytes_per_pixel = usize::from(dispatch.bytes_per_pixel);
+        execution: &NativeBytePasteExecution<'_>,
+        buffers: &BufferPool,
+    ) -> Result<(), PilError> {
+        let dispatch = execution.dispatch;
         if !matches!(
-            (dispatch.bytes_per_pixel, destination, source),
+            (
+                dispatch.bytes_per_pixel,
+                execution.destination,
+                execution.source
+            ),
             (1, DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_))
                 | (
                     2,
@@ -313,12 +325,17 @@ impl GpuInner {
                 "GPU native Paste storage variant mismatch".into(),
             ));
         }
-        let destination_dims = CheckedDims::new(width, height, dispatch.bytes_per_pixel)?;
-        let source_dims = CheckedDims::new(source_width, source_height, dispatch.bytes_per_pixel)?;
+        let destination_dims =
+            CheckedDims::new(execution.width, execution.height, dispatch.bytes_per_pixel)?;
+        let source_dims = CheckedDims::new(
+            execution.source_width,
+            execution.source_height,
+            dispatch.bytes_per_pixel,
+        )?;
         if destination_dims.total_bytes() != dispatch.destination_bytes
             || source_dims.total_bytes() != dispatch.source_bytes
-            || destination.as_bytes().len() != dispatch.destination_bytes
-            || source.as_bytes().len() != dispatch.source_bytes
+            || execution.destination.as_bytes().len() != dispatch.destination_bytes
+            || execution.source.as_bytes().len() != dispatch.source_bytes
         {
             return Err(PilError::InternalError(
                 "GPU native Paste layout mismatch".into(),
@@ -336,7 +353,16 @@ impl GpuInner {
                 "GPU native Paste exceeds adapter buffer limits".into(),
             ));
         }
+        Ok(())
+    }
 
+    #[inline(always)]
+    fn upload_native_byte_paste(
+        &self,
+        execution: &NativeBytePasteExecution<'_>,
+        buffers: &mut BufferPool,
+    ) -> Result<(), PilError> {
+        let dispatch = execution.dispatch;
         buffers.img2_arena.ensure_capacity(
             &self.device,
             "gpu_paste_native_byte_source",
@@ -374,26 +400,26 @@ impl GpuInner {
         };
         write_padded(
             &buffers.buf_a,
-            destination.as_bytes(),
+            execution.destination.as_bytes(),
             dispatch.destination_transfer_bytes,
         )?;
         write_padded(
             &buffers.img2_arena.buffer,
-            source.as_bytes(),
+            execution.source.as_bytes(),
             dispatch.source_transfer_bytes,
         )?;
 
         let parameters = [
-            width,
-            height,
-            source_width,
-            source_height,
+            execution.width,
+            execution.height,
+            execution.source_width,
+            execution.source_height,
             dispatch.destination_pixels,
             dispatch.word_count,
             u32::from(dispatch.bytes_per_pixel),
             0,
-            offset.0 as u32,
-            offset.1 as u32,
+            execution.offset.0 as u32,
+            execution.offset.1 as u32,
             0,
             0,
         ];
@@ -402,12 +428,18 @@ impl GpuInner {
             0,
             bytemuck::cast_slice(&parameters),
         );
-        let cached = self.resolve_pipeline(
-            "__internal_paste_native_bytes",
-            "paste_native_bytes.wgsl",
-            include_str!("../shaders/paste_native_bytes.wgsl"),
-        )?;
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn native_byte_paste_bind_group(
+        &self,
+        cached: &CachedPipeline,
+        execution: &NativeBytePasteExecution<'_>,
+        buffers: &BufferPool,
+    ) -> Result<wgpu::BindGroup, PilError> {
+        let dispatch = execution.dispatch;
+        Ok(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("gpu_native_byte_paste"),
             layout: &cached.bind_group_layout,
             entries: &[
@@ -452,7 +484,18 @@ impl GpuInner {
                     )?,
                 },
             ],
-        });
+        }))
+    }
+
+    #[inline(always)]
+    fn submit_native_byte_paste(
+        &self,
+        cached: &CachedPipeline,
+        bind_group: &wgpu::BindGroup,
+        execution: &NativeBytePasteExecution<'_>,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
+        let dispatch = execution.dispatch;
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -464,7 +507,7 @@ impl GpuInner {
                 timestamp_writes: None,
             });
             pass.set_pipeline(&cached.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
+            pass.set_bind_group(0, bind_group, &[]);
             crate::compute::record_gpu_shader_dispatch(
                 cached.variant_name,
                 cached.shader_file,
@@ -496,7 +539,12 @@ impl GpuInner {
                 }
                 let bytes = mapped[..dispatch.destination_bytes].to_vec();
                 crate::compute::record_pipeline_allocation(bytes.len());
-                crate::image_utils::raw_bytes_to_image(width, height, bytes, bytes_per_pixel)
+                crate::image_utils::raw_bytes_to_image(
+                    execution.width,
+                    execution.height,
+                    bytes,
+                    execution.bytes_per_pixel,
+                )
             },
         )?;
         crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
@@ -514,6 +562,38 @@ impl GpuInner {
             self.recycle_staging(staging);
         }
         Ok(result)
+    }
+
+    pub(in crate::compute::pool_gpu) fn execute_native_byte_paste(
+        &self,
+        destination: &DynamicImage,
+        source: &DynamicImage,
+        offset: (i32, i32),
+        dispatch: NativeBytePasteDispatch,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
+        let (width, height) = destination.dimensions();
+        let (source_width, source_height) = source.dimensions();
+        let execution = NativeBytePasteExecution {
+            destination,
+            source,
+            offset,
+            width,
+            height,
+            source_width,
+            source_height,
+            bytes_per_pixel: usize::from(dispatch.bytes_per_pixel),
+            dispatch,
+        };
+        self.validate_native_byte_paste(&execution, buffers)?;
+        self.upload_native_byte_paste(&execution, buffers)?;
+        let cached = self.resolve_pipeline(
+            "__internal_paste_native_bytes",
+            "paste_native_bytes.wgsl",
+            include_str!("../shaders/paste_native_bytes.wgsl"),
+        )?;
+        let bind_group = self.native_byte_paste_bind_group(&cached, &execution, buffers)?;
+        self.submit_native_byte_paste(&cached, &bind_group, &execution, buffers)
     }
 
     /// Paste native packed RGB bytes into an RGBA destination without

@@ -142,12 +142,6 @@
       "signature": "pub(super) fn gpu_logical_mode_is_supported( ops: &[PipelineOp], img: Option<&DynamicImage>, mode: Option<&str>, f_resize_constant_bits: Option<u32>, f_pad_f64_is_exact: bool, inspect_auxiliary_modes: bool, ) -> bool {"
     },
     {
-      "lines": 215,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/native_paste/execution.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_byte_paste( &self, destination: &DynamicImage, source: &DynamicImage, offset: (i32, i32), dispatch: NativeBytePasteDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 216,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/native_paste/execution.rs",
