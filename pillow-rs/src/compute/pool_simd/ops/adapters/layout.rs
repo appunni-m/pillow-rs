@@ -506,6 +506,17 @@ fn update_shape_geometry(
     if update_shape_crop_geometry(next, shape, op)? {
         return Some(true);
     }
+    if update_shape_fixed_geometry(next, shape, op)? {
+        return Some(true);
+    }
+    update_shape_resampling_geometry(next, shape, op)
+}
+
+fn update_shape_fixed_geometry(
+    next: &mut SimdImageShape,
+    shape: SimdImageShape,
+    op: &PipelineOp,
+) -> Option<bool> {
     match op {
         PipelineOp::Expand { border, .. } => {
             let twice = border.checked_mul(2)?;
@@ -540,6 +551,21 @@ fn update_shape_geometry(
             next.height = *h;
             Some(true)
         }
+        PipelineOp::Transform { w, h, .. } | PipelineOp::Pad { w, h, .. } => {
+            next.width = *w;
+            next.height = *h;
+            Some(true)
+        }
+        _ => Some(false),
+    }
+}
+
+fn update_shape_resampling_geometry(
+    next: &mut SimdImageShape,
+    shape: SimdImageShape,
+    op: &PipelineOp,
+) -> Option<bool> {
+    match op {
         PipelineOp::Scale { factor, .. } => {
             (next.width, next.height) =
                 resize::native_scale_dimensions(shape.width, shape.height, *factor)?;
@@ -571,16 +597,6 @@ fn update_shape_geometry(
         PipelineOp::Fit { w, h, .. } => {
             next.width = (*w).max(1);
             next.height = (*h).max(1);
-            Some(true)
-        }
-        PipelineOp::Transform { w, h, .. } => {
-            next.width = *w;
-            next.height = *h;
-            Some(true)
-        }
-        PipelineOp::Pad { w, h, .. } => {
-            next.width = *w;
-            next.height = *h;
             Some(true)
         }
         _ => Some(false),
