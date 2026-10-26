@@ -451,14 +451,11 @@ fn encode_alpha_composite_mirror_stage(
             },
         ],
     });
-    let groups_x = stage.width.div_ceil(16);
-    let groups_y = stage.height.div_ceil(16);
-    let maximum = gpu.device.limits().max_compute_workgroups_per_dimension;
-    if groups_x > maximum || groups_y > maximum {
-        return Err(PilError::ValueError(
-            "GPU alpha-composite mirror dispatch exceeds device limit".into(),
-        ));
-    }
+    let (groups_x, groups_y) = alpha_composite_mirror_workgroups(
+        stage.width,
+        stage.height,
+        gpu.device.limits().max_compute_workgroups_per_dimension,
+    )?;
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: Some("gpu_stream_alpha_composite_mirror"),
         timestamp_writes: None,
@@ -472,6 +469,20 @@ fn encode_alpha_composite_mirror_stage(
         u64::from(groups_x) * u64::from(groups_y),
     );
     Ok(!current_a)
+}
+
+fn alpha_composite_mirror_workgroups(
+    width: u32,
+    height: u32,
+    maximum: u32,
+) -> Result<(u32, u32), PilError> {
+    let groups = (width.div_ceil(16), height.div_ceil(16));
+    if groups.0 > maximum || groups.1 > maximum {
+        return Err(PilError::ValueError(
+            "GPU alpha-composite mirror dispatch exceeds device limit".into(),
+        ));
+    }
+    Ok(groups)
 }
 
 fn encode_relocation_stage(
