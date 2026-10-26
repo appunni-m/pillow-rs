@@ -125,6 +125,16 @@ fn pipeline_operation_telemetry_to_js(
     values.into()
 }
 
+fn operation_telemetry_only_to_js(samples: Vec<pillow_rs::PipelineOperationTelemetry>) -> JsValue {
+    if samples.is_empty() {
+        return JsValue::NULL;
+    }
+    let object = js_sys::Object::new();
+    let operation_telemetry = pipeline_operation_telemetry_to_js(samples);
+    set_pipeline_telemetry_field(&object, "operation_telemetry", &operation_telemetry);
+    object.into()
+}
+
 /// Enable bounded WASM image-pipeline execution telemetry for parity evidence.
 #[wasm_bindgen(js_name = "setPipelineTelemetry")]
 pub fn set_pipeline_telemetry(enabled: bool) -> bool {
@@ -149,13 +159,7 @@ pub fn take_pipeline_telemetry() -> JsValue {
         resize_coeff_cache_misses,
     )) = pillow_rs::Backend::take_pipeline_telemetry()
     else {
-        if operation_telemetry.is_empty() {
-            return JsValue::NULL;
-        }
-        let object = js_sys::Object::new();
-        let operation_telemetry = pipeline_operation_telemetry_to_js(operation_telemetry);
-        set_pipeline_telemetry_field(&object, "operation_telemetry", &operation_telemetry);
-        return object.into();
+        return operation_telemetry_only_to_js(operation_telemetry);
     };
 
     let object = js_sys::Object::new();
