@@ -76,12 +76,6 @@
       "signature": "pub(super) fn expand_gpu_geometry_ops( ops: &[PipelineOp], image: &DynamicImage, dimensions: (u32, u32), logical_mode: Option<&str>, ) -> Vec<PipelineOp> {"
     },
     {
-      "lines": 228,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/pipeline_cache.rs",
-      "signature": "fn build_pipeline( device: &wgpu::Device, variant_name: &'static str, shader_file: &'static str, shader_source: &str, ) -> Option<CachedPipeline> {"
-    },
-    {
       "lines": 301,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/projection.rs",
@@ -346,11 +340,6 @@
     "pillow-rs/src/compute/pool_gpu/operation_support.rs": {
       "owner": "lazytrot",
       "reason": "Relocated GPU operation support and exactness guards; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/pipeline_cache.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved GPU shader pipeline construction and cache lookup into a focused module; continue reducing under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/projection.rs": {

@@ -96,6 +96,73 @@ impl GpuInner {
         Ok(pipeline)
     }
 
+    fn push_storage_binding(
+        bindings: &mut Vec<wgpu::BindGroupLayoutEntry>,
+        binding: u32,
+        read_only: bool,
+    ) {
+        bindings.push(wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        });
+    }
+
+    fn push_uniform_binding(bindings: &mut Vec<wgpu::BindGroupLayoutEntry>, binding: u32) {
+        bindings.push(wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        });
+    }
+
+    fn bind_group_layout_entries(
+        num_bindings: u32,
+        is_lut: bool,
+        is_output_only: bool,
+    ) -> Vec<wgpu::BindGroupLayoutEntry> {
+        let mut bindings = Vec::with_capacity(num_bindings as usize);
+        if num_bindings == 5 {
+            for binding in 0..3 {
+                Self::push_storage_binding(&mut bindings, binding, true);
+            }
+            Self::push_storage_binding(&mut bindings, 3, false);
+            Self::push_uniform_binding(&mut bindings, 4);
+        } else if num_bindings == 4 {
+            if is_lut {
+                Self::push_storage_binding(&mut bindings, 0, true);
+                Self::push_storage_binding(&mut bindings, 1, false);
+                Self::push_uniform_binding(&mut bindings, 2);
+                Self::push_storage_binding(&mut bindings, 3, true);
+            } else {
+                Self::push_storage_binding(&mut bindings, 0, true);
+                Self::push_storage_binding(&mut bindings, 1, true);
+                Self::push_storage_binding(&mut bindings, 2, false);
+                Self::push_uniform_binding(&mut bindings, 3);
+            }
+        } else if is_output_only {
+            Self::push_storage_binding(&mut bindings, 0, false);
+            Self::push_uniform_binding(&mut bindings, 1);
+        } else {
+            Self::push_storage_binding(&mut bindings, 0, true);
+            Self::push_storage_binding(&mut bindings, 1, false);
+            if num_bindings > 2 {
+                Self::push_uniform_binding(&mut bindings, 2);
+            }
+        }
+        bindings
+    }
+
     fn build_pipeline(
         device: &wgpu::Device,
         variant_name: &'static str,
@@ -129,194 +196,7 @@ impl GpuInner {
         let is_output_only = num_bindings == 2 && is_output_only_shader(shader_source);
         let is_in_place = variant_name == "AlphaComposite";
 
-        // Build bind group layout matching shader declarations.
-        // Layout depends on binding count and LUT variant:
-        //   2: [input(read), output(read_write)]
-        //   2 (generator): [output(read_write), params(uniform)]
-        //   3: [input(read), output(read_write), params(uniform)]
-        //   4 (dual-input): [input_a(read), input_b(read), output(read_write), params(uniform)]
-        //   4 (LUT):        [input(read), output(read_write), params(uniform), lut(read)]
-        //   5: [input_a(read), input_b(read), input_c(read), output(read_write), params(uniform)]
-        let mut bindings = Vec::with_capacity(num_bindings as usize);
-
-        if num_bindings == 5 {
-            // 5-binding: 3 inputs + output + params (Composite/CompositeModule/Paste)
-            for i in 0..3 {
-                bindings.push(wgpu::BindGroupLayoutEntry {
-                    binding: i,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                });
-            }
-            bindings.push(wgpu::BindGroupLayoutEntry {
-                binding: 3,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            bindings.push(wgpu::BindGroupLayoutEntry {
-                binding: 4,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-        } else if num_bindings == 4 {
-            if is_lut {
-                // LUT layout: [input(read), output(rw), params(uniform), lut(read)]
-                bindings.push(wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                });
-                bindings.push(wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                });
-                bindings.push(wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                });
-                bindings.push(wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                });
-            } else {
-                // Dual-input layout
-                bindings.push(wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                });
-                bindings.push(wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                });
-                bindings.push(wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                });
-                bindings.push(wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                });
-            }
-        } else if is_output_only {
-            // Generator layout: [output(rw), params(uniform)].
-            bindings.push(wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            bindings.push(wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-        } else {
-            // 2 or 3 binding (single-input) layout
-            bindings.push(wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            bindings.push(wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-
-            if num_bindings > 2 {
-                bindings.push(wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                });
-            }
-        }
+        let bindings = Self::bind_group_layout_entries(num_bindings, is_lut, is_output_only);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some(variant_name),
