@@ -127,7 +127,7 @@ fn register_part_2(m: &mut Registry) {
     });
 }
 
-fn register_part_3(m: &mut Registry) {
+fn register_circle_polygon(m: &mut Registry) {
     draw_entry!(m, "DrawCircle", |img, op, mode| {
         if let PipelineOp::DrawCircle {
             cx,
@@ -169,7 +169,9 @@ fn register_part_3(m: &mut Registry) {
             Err(PilError::ValueError("expected DrawPolygon".into()))
         }
     });
+}
 
+fn register_arc(m: &mut Registry) {
     draw_entry!(m, "DrawArc", |img, op, mode| {
         if let PipelineOp::DrawArc {
             x0,
@@ -202,7 +204,7 @@ fn register_part_3(m: &mut Registry) {
     });
 }
 
-fn register_part_4(m: &mut Registry) {
+fn register_chord_pieslice(m: &mut Registry) {
     draw_entry!(m, "DrawChord", |img, op, mode| {
         if let PipelineOp::DrawChord {
             x0,
@@ -268,7 +270,9 @@ fn register_part_4(m: &mut Registry) {
             Err(PilError::ValueError("expected DrawPieslice".into()))
         }
     });
+}
 
+fn register_point(m: &mut Registry) {
     draw_entry!(m, "DrawPoint", |img, op, mode| {
         if let PipelineOp::DrawPoint {
             points,
@@ -286,7 +290,9 @@ fn register_part_4(m: &mut Registry) {
 pub(super) fn register(m: &mut Registry) -> Result<(), PilError> {
     register_part_1(m);
     register_part_2(m);
-    register_part_3(m);
-    register_part_4(m);
+    register_circle_polygon(m);
+    register_arc(m);
+    register_chord_pieslice(m);
+    register_point(m);
     Ok(())
 }
