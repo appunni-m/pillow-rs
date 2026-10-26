@@ -125,21 +125,38 @@ fn gpu_operation_output_dimensions_if_safe(
     if next.0 == 0 || next.1 == 0 || !gpu_dimensions_fit(next.0, next.1) {
         return None;
     }
-    if packed_luma_rank_filter_9 && matches!(op, PipelineOp::RankFilter { size: 9, .. }) {
-        if gpu_packed_luma_rank_filter_9_work_items(next) > MAX_GPU_SHADER_WORK_ITEMS {
-            return None;
-        }
-    } else if packed_la_rank_filter_3 {
-        let PipelineOp::RankFilter { rank, .. } = op else {
-            return None;
-        };
-        if gpu_packed_la_rank_filter_3_work_items(next, *rank) > MAX_GPU_SHADER_WORK_ITEMS {
-            return None;
-        }
-    } else if gpu_shader_work_requires_cpu(op, source_dimensions, next, None) {
+    if gpu_operation_work_requires_cpu(
+        op,
+        source_dimensions,
+        next,
+        packed_luma_rank_filter_9,
+        packed_la_rank_filter_3,
+    ) {
         return None;
     }
     Some(next)
+}
+
+#[inline]
+fn gpu_operation_work_requires_cpu(
+    op: &PipelineOp,
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    packed_luma_rank_filter_9: bool,
+    packed_la_rank_filter_3: bool,
+) -> bool {
+    if packed_luma_rank_filter_9 && matches!(op, PipelineOp::RankFilter { size: 9, .. }) {
+        return gpu_packed_luma_rank_filter_9_work_items(output_dimensions)
+            > MAX_GPU_SHADER_WORK_ITEMS;
+    }
+    if packed_la_rank_filter_3 {
+        let PipelineOp::RankFilter { rank, .. } = op else {
+            return true;
+        };
+        return gpu_packed_la_rank_filter_3_work_items(output_dimensions, *rank)
+            > MAX_GPU_SHADER_WORK_ITEMS;
+    }
+    gpu_shader_work_requires_cpu(op, source_dimensions, output_dimensions, None)
 }
 
 fn gpu_resize_dimensions_require_cpu(
