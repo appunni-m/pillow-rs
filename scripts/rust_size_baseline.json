@@ -4,12 +4,6 @@
   "format_version": 1,
   "function_lines": [
     {
-      "lines": 208,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/paste.rs",
-      "signature": "pub fn op_paste( img: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &Option<Arc<Image>>, mask_alpha: bool, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 105,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs",
@@ -323,11 +317,6 @@
     }
   ],
   "legacy_owners": {
-    "pillow-rs/src/compute/pool_cpu/ops/paste.rs": {
-      "owner": "lazytrot",
-      "reason": "Retains pre-existing functions above the 100-line limit moved from effects.rs during the CPU operation family split; preserve their bodies and track any later reductions under pillow-rs#8rfy.",
-      "reduction_task": "pillow-rs#8rfy"
-    },
     "pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs": {
       "owner": "lazytrot",
       "reason": "The moved transpose contract test remains above the 100-line function ratchet; track its continued reduction with the geometry family split under pillow-rs#wtxv.",

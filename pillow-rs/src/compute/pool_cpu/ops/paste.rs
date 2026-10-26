@@ -397,6 +397,208 @@ fn paste_native_masked_binary_row(
     }
 }
 
+#[derive(Clone, Copy)]
+struct PasteRegion {
+    source_left: u32,
+    source_top: u32,
+    dest_left: u32,
+    dest_top: u32,
+    copy_width: u32,
+    copy_height: u32,
+}
+
+enum Luma16PasteMask {
+    Native(PasteMaskPixels),
+    Luma(crate::raster::GrayImage),
+    Alpha(crate::raster::RgbaImage),
+}
+
+enum PasteMask {
+    Native(PasteMaskPixels),
+    Luma(crate::raster::GrayImage),
+    Alpha(crate::raster::RgbaImage),
+}
+
+#[inline(always)]
+fn paste_luma16_fallback(
+    img: &DynamicImage,
+    src_img: &DynamicImage,
+    mask: &Option<Arc<Image>>,
+    mask_alpha: bool,
+    mode: Option<&str>,
+    region: PasteRegion,
+) -> Result<DynamicImage, PilError> {
+    // Pillow's masked I;16 Paste updates the first byte in the mode's
+    // storage order, preserving the other byte. The unmasked path still
+    // copies full unsigned 16-bit samples.
+    let source_luma = src_img.to_luma16();
+    let mut destination = img.to_luma16();
+    let mask_pixels = match mask {
+        Some(mask_image) => {
+            if let Some(pixels) = paste_mask_pixels(mask_image, mask_alpha)? {
+                Some(Luma16PasteMask::Native(pixels))
+            } else {
+                let materialized = mask_image.materialize()?;
+                if mask_alpha {
+                    Some(Luma16PasteMask::Alpha(materialized.to_rgba8()))
+                } else {
+                    Some(Luma16PasteMask::Luma(materialized.to_luma8()))
+                }
+            }
+        }
+        None => None,
+    };
+    let mask_mode = mask.as_ref().map(|image| image.mode()).transpose()?;
+    let binary_mask = mask_mode.as_deref() == Some("1");
+
+    for offset_y in 0..region.copy_height {
+        let source_y = region.source_top + offset_y;
+        let dest_y = region.dest_top + offset_y;
+        for offset_x in 0..region.copy_width {
+            let source_x = region.source_left + offset_x;
+            let dest_x = region.dest_left + offset_x;
+            let Some(mask_image) = mask_pixels.as_ref() else {
+                let source_value = source_luma.get_pixel(source_x, source_y)[0];
+                destination.put_pixel(dest_x, dest_y, crate::raster::Luma([source_value]));
+                continue;
+            };
+            let mask_value = match mask_image {
+                Luma16PasteMask::Native(pixels) => pixels.value(source_x, source_y),
+                Luma16PasteMask::Luma(pixels) => pixels.get_pixel(source_x, source_y)[0],
+                Luma16PasteMask::Alpha(pixels) => pixels.get_pixel(source_x, source_y)[3],
+            };
+            let premultiplied_mask = matches!(
+                mask_image,
+                Luma16PasteMask::Native(pixels) if pixels.layout.premultiplied
+            );
+            if binary_mask {
+                if mask_value != 0 {
+                    let source_value = source_luma.get_pixel(source_x, source_y)[0];
+                    destination.put_pixel(dest_x, dest_y, crate::raster::Luma([source_value]));
+                }
+                continue;
+            }
+
+            // Pillow's 8-bit L/RGBA/RGBa mask loops advance the I;16
+            // image8 pointer by one byte per image pixel. Preserve this
+            // odd byte stride exactly; RGBa also applies PREBLEND at a
+            // zero mask value. This is Pillow's observable contract.
+            if mask_value == 0 && !premultiplied_mask {
+                continue;
+            }
+            let source_byte_offset = source_x;
+            let destination_byte_offset = dest_x;
+            let source_byte_x = source_byte_offset / 2;
+            let destination_byte_x = destination_byte_offset / 2;
+            let source_value = source_luma.get_pixel(source_byte_x, source_y)[0];
+            let destination_value = destination.get_pixel(destination_byte_x, dest_y)[0];
+            let source_shift = paste_luma16_storage_byte_shift(mode, source_byte_offset);
+            let destination_shift = paste_luma16_storage_byte_shift(mode, destination_byte_offset);
+            let source_byte = ((source_value >> source_shift) & 0xff) as u8;
+            let destination_byte = ((destination_value >> destination_shift) & 0xff) as u8;
+            let mask = u32::from(mask_value);
+            let inverse = 255 - mask;
+            let blended = if premultiplied_mask {
+                let scaled = u32::from(destination_byte) * inverse + 128;
+                ((((scaled >> 8) + scaled) >> 8) + u32::from(source_byte)) as u8
+            } else {
+                ((u32::from(source_byte) * mask + u32::from(destination_byte) * inverse + 127)
+                    / 255) as u8
+            };
+            let byte_mask = 0xffu16 << destination_shift;
+            let updated =
+                (destination_value & !byte_mask) | (u16::from(blended) << destination_shift);
+            destination.put_pixel(destination_byte_x, dest_y, crate::raster::Luma([updated]));
+        }
+    }
+
+    Ok(DynamicImage::ImageLuma16(destination))
+}
+
+#[inline(always)]
+fn paste_rgba_fallback(
+    img: &DynamicImage,
+    src_img: &DynamicImage,
+    mask: &Option<Arc<Image>>,
+    mask_alpha: bool,
+    region: PasteRegion,
+) -> Result<DynamicImage, PilError> {
+    let source_rgba = src_img.to_rgba8();
+    let mut destination = img.to_rgba8();
+    let mask_pixels = match mask {
+        Some(mask_image) => {
+            if let Some(pixels) = paste_mask_pixels(mask_image, mask_alpha)? {
+                Some(PasteMask::Native(pixels))
+            } else {
+                let materialized = mask_image.materialize()?;
+                if mask_alpha {
+                    Some(PasteMask::Alpha(materialized.to_rgba8()))
+                } else {
+                    Some(PasteMask::Luma(materialized.to_luma8()))
+                }
+            }
+        }
+        None => None,
+    };
+
+    for offset_y in 0..region.copy_height {
+        let source_y = region.source_top + offset_y;
+        let dest_y = region.dest_top + offset_y;
+        for offset_x in 0..region.copy_width {
+            let source_x = region.source_left + offset_x;
+            let dest_x = region.dest_left + offset_x;
+            let source_pixel = *source_rgba.get_pixel(source_x, source_y);
+            let Some(mask_image) = mask_pixels.as_ref() else {
+                destination.put_pixel(dest_x, dest_y, source_pixel);
+                continue;
+            };
+            let mask_value = match mask_image {
+                PasteMask::Native(pixels) => pixels.value(source_x, source_y),
+                PasteMask::Luma(pixels) => pixels.get_pixel(source_x, source_y)[0],
+                PasteMask::Alpha(pixels) => pixels.get_pixel(source_x, source_y)[3],
+            };
+            let premultiplied_mask = matches!(
+                mask_image,
+                PasteMask::Native(pixels) if pixels.layout.premultiplied
+            );
+            if mask_value == 0 && !premultiplied_mask {
+                continue;
+            }
+            if mask_value == 255 {
+                destination.put_pixel(dest_x, dest_y, source_pixel);
+                continue;
+            }
+
+            // Pillow libImaging uses BLEND/DIV255 for every active band:
+            // DIV255(src * mask + dst * (255 - mask)). Its integer macro is
+            // equivalent to round-to-nearest for this 8-bit input range.
+            let destination_pixel = *destination.get_pixel(dest_x, dest_y);
+            let mask = u16::from(mask_value);
+            let inverse = 255u16 - mask;
+            let blend = |src: u8, dst: u8| -> u8 {
+                if premultiplied_mask {
+                    let scaled = u32::from(dst) * u32::from(inverse) + 128;
+                    ((((scaled >> 8) + scaled) >> 8) + u32::from(src)) as u8
+                } else {
+                    ((u16::from(src) * mask + u16::from(dst) * inverse + 127) / 255) as u8
+                }
+            };
+            destination.put_pixel(
+                dest_x,
+                dest_y,
+                crate::raster::Rgba([
+                    blend(source_pixel[0], destination_pixel[0]),
+                    blend(source_pixel[1], destination_pixel[1]),
+                    blend(source_pixel[2], destination_pixel[2]),
+                    blend(source_pixel[3], destination_pixel[3]),
+                ]),
+            );
+        }
+    }
+
+    Ok(preserve_mode(img, DynamicImage::ImageRgba8(destination)))
+}
+
 fn native_paste_source_mode<'a>(
     source: &Image,
     mask: &Option<Arc<Image>>,
@@ -477,17 +679,24 @@ pub fn op_paste(
     };
     let (src_w, src_h) = (src_img.width(), src_img.height());
     let (dest_w, dest_h) = img.dimensions();
-    let source_left = x.saturating_neg().max(0).min(i64::from(src_w)) as u32;
-    let source_top = y.saturating_neg().max(0).min(i64::from(src_h)) as u32;
-    let dest_left = x.max(0).min(i64::from(dest_w)) as u32;
-    let dest_top = y.max(0).min(i64::from(dest_h)) as u32;
-    let copy_width = src_w
-        .saturating_sub(source_left)
-        .min(dest_w.saturating_sub(dest_left));
-    let copy_height = src_h
-        .saturating_sub(source_top)
-        .min(dest_h.saturating_sub(dest_top));
-    if copy_width == 0 || copy_height == 0 {
+    let region = PasteRegion {
+        source_left: x.saturating_neg().max(0).min(i64::from(src_w)) as u32,
+        source_top: y.saturating_neg().max(0).min(i64::from(src_h)) as u32,
+        dest_left: x.max(0).min(i64::from(dest_w)) as u32,
+        dest_top: y.max(0).min(i64::from(dest_h)) as u32,
+        copy_width: 0,
+        copy_height: 0,
+    };
+    let region = PasteRegion {
+        copy_width: src_w
+            .saturating_sub(region.source_left)
+            .min(dest_w.saturating_sub(region.dest_left)),
+        copy_height: src_h
+            .saturating_sub(region.source_top)
+            .min(dest_h.saturating_sub(region.dest_top)),
+        ..region
+    };
+    if region.copy_width == 0 || region.copy_height == 0 {
         return Ok(img.clone());
     }
     // Image::paste validates mask dimensions against the paste region before
@@ -495,97 +704,7 @@ pub fn op_paste(
     // Keep malformed PipelineOp fallback arms out of this public-input path.
 
     if img.color() == crate::raster::ColorType::L16 {
-        // Pillow's masked I;16 Paste updates the first byte in the mode's
-        // storage order, preserving the other byte. The unmasked path still
-        // copies full unsigned 16-bit samples.
-        let source_luma = src_img.to_luma16();
-        let mut destination = img.to_luma16();
-        enum Luma16PasteMask {
-            Native(PasteMaskPixels),
-            Luma(crate::raster::GrayImage),
-            Alpha(crate::raster::RgbaImage),
-        }
-        let mask_pixels = match mask {
-            Some(mask_image) => {
-                if let Some(pixels) = paste_mask_pixels(mask_image, mask_alpha)? {
-                    Some(Luma16PasteMask::Native(pixels))
-                } else {
-                    let materialized = mask_image.materialize()?;
-                    if mask_alpha {
-                        Some(Luma16PasteMask::Alpha(materialized.to_rgba8()))
-                    } else {
-                        Some(Luma16PasteMask::Luma(materialized.to_luma8()))
-                    }
-                }
-            }
-            None => None,
-        };
-        let mask_mode = mask.as_ref().map(|image| image.mode()).transpose()?;
-        let binary_mask = mask_mode.as_deref() == Some("1");
-
-        for offset_y in 0..copy_height {
-            let source_y = source_top + offset_y;
-            let dest_y = dest_top + offset_y;
-            for offset_x in 0..copy_width {
-                let source_x = source_left + offset_x;
-                let dest_x = dest_left + offset_x;
-                let Some(mask_image) = mask_pixels.as_ref() else {
-                    let source_value = source_luma.get_pixel(source_x, source_y)[0];
-                    destination.put_pixel(dest_x, dest_y, crate::raster::Luma([source_value]));
-                    continue;
-                };
-                let mask_value = match mask_image {
-                    Luma16PasteMask::Native(pixels) => pixels.value(source_x, source_y),
-                    Luma16PasteMask::Luma(pixels) => pixels.get_pixel(source_x, source_y)[0],
-                    Luma16PasteMask::Alpha(pixels) => pixels.get_pixel(source_x, source_y)[3],
-                };
-                let premultiplied_mask = matches!(
-                    mask_image,
-                    Luma16PasteMask::Native(pixels) if pixels.layout.premultiplied
-                );
-                if binary_mask {
-                    if mask_value != 0 {
-                        let source_value = source_luma.get_pixel(source_x, source_y)[0];
-                        destination.put_pixel(dest_x, dest_y, crate::raster::Luma([source_value]));
-                    }
-                    continue;
-                }
-
-                // Pillow's 8-bit L/RGBA/RGBa mask loops advance the I;16
-                // image8 pointer by one byte per image pixel. Preserve this
-                // odd byte stride exactly; RGBa also applies PREBLEND at a
-                // zero mask value. This is Pillow's observable contract.
-                if mask_value == 0 && !premultiplied_mask {
-                    continue;
-                }
-                let source_byte_offset = source_x;
-                let destination_byte_offset = dest_x;
-                let source_byte_x = source_byte_offset / 2;
-                let destination_byte_x = destination_byte_offset / 2;
-                let source_value = source_luma.get_pixel(source_byte_x, source_y)[0];
-                let destination_value = destination.get_pixel(destination_byte_x, dest_y)[0];
-                let source_shift = paste_luma16_storage_byte_shift(mode, source_byte_offset);
-                let destination_shift =
-                    paste_luma16_storage_byte_shift(mode, destination_byte_offset);
-                let source_byte = ((source_value >> source_shift) & 0xff) as u8;
-                let destination_byte = ((destination_value >> destination_shift) & 0xff) as u8;
-                let mask = u32::from(mask_value);
-                let inverse = 255 - mask;
-                let blended = if premultiplied_mask {
-                    let scaled = u32::from(destination_byte) * inverse + 128;
-                    ((((scaled >> 8) + scaled) >> 8) + u32::from(source_byte)) as u8
-                } else {
-                    ((u32::from(source_byte) * mask + u32::from(destination_byte) * inverse + 127)
-                        / 255) as u8
-                };
-                let byte_mask = 0xffu16 << destination_shift;
-                let updated =
-                    (destination_value & !byte_mask) | (u16::from(blended) << destination_shift);
-                destination.put_pixel(destination_byte_x, dest_y, crate::raster::Luma([updated]));
-            }
-        }
-
-        return Ok(DynamicImage::ImageLuma16(destination));
+        return paste_luma16_fallback(img, &src_img, mask, mask_alpha, mode, region);
     }
 
     if mask.is_none()
@@ -596,85 +715,7 @@ pub fn op_paste(
         return Ok(output);
     }
 
-    let source_rgba = src_img.to_rgba8();
-    let mut destination = img.to_rgba8();
-    enum PasteMask {
-        Native(PasteMaskPixels),
-        Luma(crate::raster::GrayImage),
-        Alpha(crate::raster::RgbaImage),
-    }
-    let mask_pixels = match mask {
-        Some(mask_image) => {
-            if let Some(pixels) = paste_mask_pixels(mask_image, mask_alpha)? {
-                Some(PasteMask::Native(pixels))
-            } else {
-                let materialized = mask_image.materialize()?;
-                if mask_alpha {
-                    Some(PasteMask::Alpha(materialized.to_rgba8()))
-                } else {
-                    Some(PasteMask::Luma(materialized.to_luma8()))
-                }
-            }
-        }
-        None => None,
-    };
-
-    for offset_y in 0..copy_height {
-        let source_y = source_top + offset_y;
-        let dest_y = dest_top + offset_y;
-        for offset_x in 0..copy_width {
-            let source_x = source_left + offset_x;
-            let dest_x = dest_left + offset_x;
-            let source_pixel = *source_rgba.get_pixel(source_x, source_y);
-            let Some(mask_image) = mask_pixels.as_ref() else {
-                destination.put_pixel(dest_x, dest_y, source_pixel);
-                continue;
-            };
-            let mask_value = match mask_image {
-                PasteMask::Native(pixels) => pixels.value(source_x, source_y),
-                PasteMask::Luma(pixels) => pixels.get_pixel(source_x, source_y)[0],
-                PasteMask::Alpha(pixels) => pixels.get_pixel(source_x, source_y)[3],
-            };
-            let premultiplied_mask = matches!(
-                mask_image,
-                PasteMask::Native(pixels) if pixels.layout.premultiplied
-            );
-            if mask_value == 0 && !premultiplied_mask {
-                continue;
-            }
-            if mask_value == 255 {
-                destination.put_pixel(dest_x, dest_y, source_pixel);
-                continue;
-            }
-
-            // Pillow libImaging uses BLEND/DIV255 for every active band:
-            // DIV255(src * mask + dst * (255 - mask)). Its integer macro is
-            // equivalent to round-to-nearest for this 8-bit input range.
-            let destination_pixel = *destination.get_pixel(dest_x, dest_y);
-            let mask = u16::from(mask_value);
-            let inverse = 255u16 - mask;
-            let blend = |src: u8, dst: u8| -> u8 {
-                if premultiplied_mask {
-                    let scaled = u32::from(dst) * u32::from(inverse) + 128;
-                    ((((scaled >> 8) + scaled) >> 8) + u32::from(src)) as u8
-                } else {
-                    ((u16::from(src) * mask + u16::from(dst) * inverse + 127) / 255) as u8
-                }
-            };
-            destination.put_pixel(
-                dest_x,
-                dest_y,
-                crate::raster::Rgba([
-                    blend(source_pixel[0], destination_pixel[0]),
-                    blend(source_pixel[1], destination_pixel[1]),
-                    blend(source_pixel[2], destination_pixel[2]),
-                    blend(source_pixel[3], destination_pixel[3]),
-                ]),
-            );
-        }
-    }
-
-    Ok(preserve_mode(img, DynamicImage::ImageRgba8(destination)))
+    paste_rgba_fallback(img, &src_img, mask, mask_alpha, region)
 }
 
 fn expand_compact_masked_source(
