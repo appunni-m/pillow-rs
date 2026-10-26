@@ -16,12 +16,6 @@
       "signature": "pub fn op_paste( img: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &Option<Arc<Image>>, mask_alpha: bool, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 230,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/reduce.rs",
-      "signature": "pub(super) fn execute_reduce_rgb_with_sparse_rows( img: &DynamicImage, x_factor: u32, y_factor: u32, explicit_mode: Option<&str>, ) -> SparseRgbReductionResult {"
-    },
-    {
       "lines": 132,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/thumbnail.rs",
@@ -356,11 +350,6 @@
       "owner": "lazytrot",
       "reason": "Retains pre-existing functions above the 100-line limit moved from effects.rs during the CPU operation family split; preserve their bodies and track any later reductions under pillow-rs#8rfy.",
       "reduction_task": "pillow-rs#8rfy"
-    },
-    "pillow-rs/src/compute/pool_cpu/ops/reduce.rs": {
-      "owner": "lazytrot",
-      "reason": "Reduce retains pre-existing functions above the 100-line ratchet after the geometry family split; track the remaining reduction under pillow-rs#wtxv.",
-      "reduction_task": "pillow-rs#wtxv"
     },
     "pillow-rs/src/compute/pool_cpu/ops/thumbnail.rs": {
       "owner": "lazytrot",

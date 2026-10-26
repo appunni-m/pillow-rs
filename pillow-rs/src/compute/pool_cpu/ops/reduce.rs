@@ -5,7 +5,10 @@ use crate::error::PilError;
 use crate::image_utils::raw_bytes_to_image;
 use crate::raster::{DynamicImage, GenericImageView};
 
+mod kernels;
+
 use super::thumbnail::{reduce_f_thumbnail, reduce_i_thumbnail};
+use kernels::{execute_reduce_rgb_general, reduce_rgb_dense_even_2x2};
 
 type SparseRgbReduction = (DynamicImage, Option<Vec<bool>>);
 type SparseRgbReductionResult = Result<Option<SparseRgbReduction>, PilError>;
@@ -33,6 +36,28 @@ struct ReduceRowContext<'a> {
     corner: ReduceRounding,
     premultiplied_alpha: bool,
     native_rgba_reduce: bool,
+}
+
+#[derive(Clone, Copy)]
+struct RgbReduceRounding {
+    multiplier: u32,
+    amend: u32,
+}
+
+struct RgbReduceRowContext<'a> {
+    source: &'a [u8],
+    source_stride: usize,
+    output_width: u32,
+    x_factor: u32,
+    y_factor: u32,
+    main_width: u32,
+    main_height: u32,
+    right_width: u32,
+    bottom_height: u32,
+    full: RgbReduceRounding,
+    right: RgbReduceRounding,
+    bottom: RgbReduceRounding,
+    corner: RgbReduceRounding,
 }
 
 #[inline(always)]
@@ -291,204 +316,50 @@ pub(super) fn execute_reduce_rgb_with_sparse_rows(
     let corner_amend = corner_divider / 2;
     let source_stride = source_stride.expect("RGB source stride was checked");
 
-    // Pillow's reducing-gap thumbnail path commonly reduces RGB by 2×2
-    // before its final resample. Avoid four dynamic loops and per-block
-    // coordinate work for this dense interior case; keep odd dimensions on
-    // the general path so their partial right/bottom divisors are unchanged.
+    // Pillow's reducing-gap thumbnail path commonly reduces RGB by 2×2.
+    // Keep the dense even-sized specialization ahead of the general edge path.
     if fx == 2 && fy == 2 && width % 2 == 0 && height % 2 == 0 {
-        let output_stride = new_width as usize * 3;
-        let process_row = |output_y: usize, output_row: &mut [u8]| {
-            let source_top = output_y * 2 * source_stride;
-            let source_bottom = source_top + source_stride;
-            let top_row = &source[source_top..source_top + source_stride];
-            let bottom_row = &source[source_bottom..source_bottom + source_stride];
-
-            for (block_x, output_pixel) in output_row.chunks_exact_mut(3).enumerate() {
-                let source_x = block_x * 6;
-                let top_right = source_x + 3;
-                for channel in 0..3 {
-                    let sum = u32::from(top_row[source_x + channel])
-                        + u32::from(top_row[top_right + channel])
-                        + u32::from(bottom_row[source_x + channel])
-                        + u32::from(bottom_row[top_right + channel]);
-                    // For a 2×2 block Pillow's reciprocal is exactly
-                    // `(sum + 2) / 4`; keep the rounding bias and replace the
-                    // general per-channel reciprocal multiply with a shift.
-                    #[expect(
-                        clippy::arithmetic_side_effects,
-                        reason = "four byte samples plus the Pillow rounding bias fit u32"
-                    )]
-                    let average = (sum + 2) >> 2;
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "the Pillow 2x2 average is bounded to one byte"
-                    )]
-                    {
-                        output_pixel[channel] = average as u8;
-                    }
-                }
-            }
-        };
-
-        #[cfg(feature = "parallel")]
-        {
-            const REDUCE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
-            let input_pixels = (width as usize).saturating_mul(height as usize);
-            if input_pixels >= REDUCE_PARALLEL_PIXEL_THRESHOLD {
-                crate::par_rows_mut!(
-                    &mut output,
-                    output_stride,
-                    new_height as usize,
-                    |_row_start, _row_end, y, row| { process_row(y as usize, row) }
-                );
-            } else {
-                for y in 0..new_height as usize {
-                    let start = y * output_stride;
-                    process_row(y, &mut output[start..start + output_stride]);
-                }
-            }
-        }
-
-        #[cfg(not(feature = "parallel"))]
-        for y in 0..new_height as usize {
-            let start = y * output_stride;
-            process_row(y, &mut output[start..start + output_stride]);
-        }
-
+        reduce_rgb_dense_even_2x2(
+            source,
+            source_stride,
+            width,
+            height,
+            new_width,
+            new_height,
+            &mut output,
+        );
         return raw_bytes_to_image(new_width, new_height, output, 3)
             .map(|image| Some((image, None)));
     }
 
-    let write_rgb_block = |row: &mut [u8],
-                           output_x: usize,
-                           source_x: usize,
-                           source_y: usize,
-                           block_width: usize,
-                           block_height: usize,
-                           multiplier: u32,
-                           amend: u32| {
-        let mut red_sum = 0u32;
-        let mut green_sum = 0u32;
-        let mut blue_sum = 0u32;
-        let mut source_row_start = source_y * source_stride + source_x * 3;
-        for _ in 0..block_height {
-            let mut red_row_sum = 0u32;
-            let mut green_row_sum = 0u32;
-            let mut blue_row_sum = 0u32;
-            let mut source_index = source_row_start;
-            for _ in 0..block_width {
-                red_row_sum += u32::from(source[source_index]);
-                green_row_sum += u32::from(source[source_index + 1]);
-                blue_row_sum += u32::from(source[source_index + 2]);
-                source_index += 3;
-            }
-            red_sum += red_row_sum;
-            green_sum += green_row_sum;
-            blue_sum += blue_row_sum;
-            source_row_start += source_stride;
-        }
-
-        let destination_index = output_x * 3;
-        #[expect(
-            clippy::arithmetic_side_effects,
-            reason = "the factor-area guard proves sums plus amend and the 24-bit reciprocal multiply fit u32"
-        )]
-        let red = ((red_sum + amend) * multiplier) >> 24;
-        #[expect(
-            clippy::arithmetic_side_effects,
-            reason = "the factor-area guard proves sums plus amend and the 24-bit reciprocal multiply fit u32"
-        )]
-        let green = ((green_sum + amend) * multiplier) >> 24;
-        #[expect(
-            clippy::arithmetic_side_effects,
-            reason = "the factor-area guard proves sums plus amend and the 24-bit reciprocal multiply fit u32"
-        )]
-        let blue = ((blue_sum + amend) * multiplier) >> 24;
-        let red = red as u8;
-        let green = green as u8;
-        let blue = blue as u8;
-        row[destination_index] = red;
-        row[destination_index + 1] = green;
-        row[destination_index + 2] = blue;
+    let context = RgbReduceRowContext {
+        source,
+        source_stride,
+        output_width: new_width,
+        x_factor: fx,
+        y_factor: fy,
+        main_width,
+        main_height,
+        right_width,
+        bottom_height,
+        full: RgbReduceRounding {
+            multiplier: full_multiplier,
+            amend: full_amend,
+        },
+        right: RgbReduceRounding {
+            multiplier: right_multiplier,
+            amend: right_amend,
+        },
+        bottom: RgbReduceRounding {
+            multiplier: bottom_multiplier,
+            amend: bottom_amend,
+        },
+        corner: RgbReduceRounding {
+            multiplier: corner_multiplier,
+            amend: corner_amend,
+        },
     };
-
-    let process_row = |y: u32, row: &mut [u8]| {
-        let full_y = y < main_height;
-        let source_y = if full_y {
-            (y * fy) as usize
-        } else {
-            (main_height * fy) as usize
-        };
-        let block_height = if full_y {
-            fy as usize
-        } else {
-            bottom_height as usize
-        };
-        let (interior_multiplier, interior_amend) = if full_y {
-            (full_multiplier, full_amend)
-        } else {
-            (bottom_multiplier, bottom_amend)
-        };
-        for x in 0..main_width {
-            write_rgb_block(
-                row,
-                x as usize,
-                (x * fx) as usize,
-                source_y,
-                fx as usize,
-                block_height,
-                interior_multiplier,
-                interior_amend,
-            );
-        }
-        if right_width != 0 {
-            let (edge_multiplier, edge_amend) = if full_y {
-                (right_multiplier, right_amend)
-            } else {
-                (corner_multiplier, corner_amend)
-            };
-            write_rgb_block(
-                row,
-                main_width as usize,
-                (main_width * fx) as usize,
-                source_y,
-                right_width as usize,
-                block_height,
-                edge_multiplier,
-                edge_amend,
-            );
-        }
-    };
-
-    let output_stride = (new_width as usize) * 3;
-    #[cfg(feature = "parallel")]
-    {
-        const REDUCE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
-        let input_pixels = (width as usize).saturating_mul(height as usize);
-        if input_pixels >= REDUCE_PARALLEL_PIXEL_THRESHOLD {
-            crate::par_rows_mut!(
-                &mut output,
-                output_stride,
-                new_height as usize,
-                |_row_start, _row_end, y, row| {
-                    process_row(y, row);
-                }
-            );
-        } else {
-            for y in 0..new_height {
-                let start = y as usize * output_stride;
-                process_row(y, &mut output[start..start + output_stride]);
-            }
-        }
-    }
-
-    #[cfg(not(feature = "parallel"))]
-    for y in 0..new_height {
-        let start = y as usize * output_stride;
-        process_row(y, &mut output[start..start + output_stride]);
-    }
-
-    raw_bytes_to_image(new_width, new_height, output, 3).map(|image| Some((image, None)))
+    execute_reduce_rgb_general(&context, width, height, new_height, output)
 }
 
 /// Reduce large sparse RGB sources by updating only blocks with nonzero input.
