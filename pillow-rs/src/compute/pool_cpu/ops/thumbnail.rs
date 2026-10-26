@@ -20,6 +20,15 @@ use super::resize::{
 };
 use super::resize::{resize_f, resize_i, resize_i_boxed};
 
+enum ThumbnailPreparation {
+    #[cfg(not(feature = "parallel"))]
+    Completed(DynamicImage),
+    Ready {
+        image: DynamicImage,
+        resize_box: Option<(f64, f64, f64, f64)>,
+    },
+}
+
 /// Execute a Thumbnail operation.
 /// Computes the scale factor to fit within the given box, preserving aspect ratio.
 /// Matches PIL's thumbnail behavior including the reducing_gap optimization
@@ -46,68 +55,17 @@ pub(crate) fn execute_thumbnail(
         Some("1") | Some("P") => ResampleFilter::Nearest,
         _ => *filter,
     };
-    // PIL's thumbnail uses reducing_gap=2.0 by default: first integer-reduce
-    // by up to scale/reducing_gap, then resize the rest.
-    // This matches PIL's ImagingReduce then ImagingResample two-step.
-    // Skip reducing_gap for modes with alpha (LA, RGBA) to avoid premultiply
-    // issues. F/I use RGBA storage internally but are scalar modes, and CMYK
-    // uses the same four-byte storage without an alpha channel.
-    let has_alpha = matches!(
-        img.color(),
-        crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
-    ) && !matches!(explicit_mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
-    let needs_reduce = !matches!(effective_filter, ResampleFilter::Nearest) && !has_alpha;
-    let mut resize_box = None;
-    let work_img = if needs_reduce {
-        let scale_x = cur_w as f64 / new_w as f64;
-        let scale_y = cur_h as f64 / new_h as f64;
-        // Image.resize computes these independently for the two axes before
-        // calling Image.reduce(factor=(factor_x, factor_y)).
-        let factor_x = ((scale_x / 2.0) as u32).max(1);
-        let factor_y = ((scale_y / 2.0) as u32).max(1);
-        if factor_x > 1 || factor_y > 1 {
-            let (rw, rh) = (cur_w.div_ceil(factor_x), cur_h.div_ceil(factor_y));
-            // Image.resize keeps the original full-image box after reduce and
-            // scales its right/bottom edges by the integer factors. When the
-            // source dimensions are not divisible by a factor, that box ends
-            // inside the ceil-sized reduced image; using the whole reduced
-            // image changes boundary pixels (Pillow's _get_safe_box path).
-            resize_box = Some((
-                0.0,
-                0.0,
-                cur_w as f64 / factor_x as f64,
-                cur_h as f64 / factor_y as f64,
-            ));
-            match explicit_mode {
-                // Pillow keeps F/I samples in their native scalar domain for
-                // the reducing_gap pass. Averaging encoded RGBA bytes would
-                // corrupt the representation before resize_f/resize_i runs.
-                Some("F") if matches!(img, DynamicImage::ImageRgba8(_)) => {
-                    reduce_f_thumbnail(img, rw, rh, factor_x, factor_y)?
-                }
-                #[cfg(not(feature = "parallel"))]
-                Some("I")
-                    if matches!(img, DynamicImage::ImageRgba8(_))
-                        && factor_x == 2
-                        && factor_y == 2
-                        && cur_w % 2 == 0
-                        && cur_h % 2 == 0 =>
-                {
-                    return Ok(preserve_mode(
-                        img,
-                        resize_i_thumbnail_reduce2x2(img, new_w, new_h, effective_filter)?,
-                    ));
-                }
-                Some("I") if matches!(img, DynamicImage::ImageRgba8(_)) => {
-                    reduce_i_thumbnail(img, rw, rh, factor_x, factor_y)?
-                }
-                _ => execute_reduce(img, factor_x, factor_y, explicit_mode)?,
-            }
-        } else {
-            img.clone()
-        }
-    } else {
-        img.clone()
+    let preparation = prepare_thumbnail_work_image(
+        img,
+        (cur_w, cur_h),
+        (new_w, new_h),
+        effective_filter,
+        explicit_mode,
+    )?;
+    let (work_img, resize_box) = match preparation {
+        #[cfg(not(feature = "parallel"))]
+        ThumbnailPreparation::Completed(result) => return Ok(preserve_mode(img, result)),
+        ThumbnailPreparation::Ready { image, resize_box } => (image, resize_box),
     };
     // Only use F/I thumbnail paths when the image is already stored as Rgba8
     // (4 bytes per pixel), meaning it has been converted to F/I mode already.
@@ -177,6 +135,81 @@ pub(crate) fn execute_thumbnail(
         _ => pil_resize(&work_img, new_w, new_h, effective_filter, explicit_mode),
     };
     Ok(preserve_mode(img, result))
+}
+
+fn prepare_thumbnail_work_image(
+    img: &DynamicImage,
+    (cur_w, cur_h): (u32, u32),
+    (new_w, new_h): (u32, u32),
+    effective_filter: ResampleFilter,
+    explicit_mode: Option<&str>,
+) -> Result<ThumbnailPreparation, PilError> {
+    // PIL's thumbnail uses reducing_gap=2.0 by default: first integer-reduce
+    // by up to scale/reducing_gap, then resize the rest.
+    // This matches PIL's ImagingReduce then ImagingResample two-step.
+    // Skip reducing_gap for modes with alpha (LA, RGBA) to avoid premultiply
+    // issues. F/I use RGBA storage internally but are scalar modes, and CMYK
+    // uses the same four-byte storage without an alpha channel.
+    let has_alpha = matches!(
+        img.color(),
+        crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+    ) && !matches!(explicit_mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
+    let needs_reduce = !matches!(effective_filter, ResampleFilter::Nearest) && !has_alpha;
+    let mut resize_box = None;
+    let work_img = if needs_reduce {
+        let scale_x = cur_w as f64 / new_w as f64;
+        let scale_y = cur_h as f64 / new_h as f64;
+        // Image.resize computes these independently for the two axes before
+        // calling Image.reduce(factor=(factor_x, factor_y)).
+        let factor_x = ((scale_x / 2.0) as u32).max(1);
+        let factor_y = ((scale_y / 2.0) as u32).max(1);
+        if factor_x > 1 || factor_y > 1 {
+            let (rw, rh) = (cur_w.div_ceil(factor_x), cur_h.div_ceil(factor_y));
+            // Image.resize keeps the original full-image box after reduce and
+            // scales its right/bottom edges by the integer factors. When the
+            // source dimensions are not divisible by a factor, that box ends
+            // inside the ceil-sized reduced image; using the whole reduced
+            // image changes boundary pixels (Pillow's _get_safe_box path).
+            resize_box = Some((
+                0.0,
+                0.0,
+                cur_w as f64 / factor_x as f64,
+                cur_h as f64 / factor_y as f64,
+            ));
+            match explicit_mode {
+                // Pillow keeps F/I samples in their native scalar domain for
+                // the reducing_gap pass. Averaging encoded RGBA bytes would
+                // corrupt the representation before resize_f/resize_i runs.
+                Some("F") if matches!(img, DynamicImage::ImageRgba8(_)) => {
+                    reduce_f_thumbnail(img, rw, rh, factor_x, factor_y)?
+                }
+                #[cfg(not(feature = "parallel"))]
+                Some("I")
+                    if matches!(img, DynamicImage::ImageRgba8(_))
+                        && factor_x == 2
+                        && factor_y == 2
+                        && cur_w % 2 == 0
+                        && cur_h % 2 == 0 =>
+                {
+                    return Ok(ThumbnailPreparation::Completed(
+                        resize_i_thumbnail_reduce2x2(img, new_w, new_h, effective_filter)?,
+                    ));
+                }
+                Some("I") if matches!(img, DynamicImage::ImageRgba8(_)) => {
+                    reduce_i_thumbnail(img, rw, rh, factor_x, factor_y)?
+                }
+                _ => execute_reduce(img, factor_x, factor_y, explicit_mode)?,
+            }
+        } else {
+            img.clone()
+        }
+    } else {
+        img.clone()
+    };
+    Ok(ThumbnailPreparation::Ready {
+        image: work_img,
+        resize_box,
+    })
 }
 
 /// Return whether a validated RGB pixel-write prefix can be folded into a

@@ -76,12 +76,6 @@
       "signature": "pub(crate) fn execute_rgb_putpixel_thumbnail_fusion( img: &DynamicImage, putpixel_ops: &[PipelineOp], thumbnail: &PipelineOp, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 117,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/thumbnail.rs",
-      "signature": "pub(crate) fn execute_thumbnail( img: &DynamicImage, w: u32, h: u32, filter: &ResampleFilter, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 194,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/transform.rs",
