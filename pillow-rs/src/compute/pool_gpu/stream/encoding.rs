@@ -631,12 +631,54 @@ fn encode_rgb_blur_dispatch(
     !current_a
 }
 
+#[inline(always)]
+fn encode_rgb_blur_separable_passes(
+    gpu: &GpuInner,
+    encoder: &mut wgpu::CommandEncoder,
+    buffers: &BufferPool,
+    stage: &Stage<'_>,
+    uniform: &wgpu::Buffer,
+    plan: NativePackedChannelOutputDispatch,
+    mut current_a: bool,
+) -> Result<bool, PilError> {
+    let passes = GpuInner::blur_pass_count(stage.op)
+        .ok_or_else(|| PilError::InternalError("missing native RGB blur pass count".into()))?;
+    for (key, file, source) in [
+        (
+            "__internal_blur_h_rgb_packed",
+            "box_blur_h_rgb_packed.wgsl",
+            include_str!("../shaders/box_blur_h_rgb_packed.wgsl"),
+        ),
+        (
+            "__internal_blur_v_rgb_packed",
+            "box_blur_v_rgb_packed.wgsl",
+            include_str!("../shaders/box_blur_v_rgb_packed.wgsl"),
+        ),
+    ] {
+        let cached = gpu.resolve_pipeline(key, file, source)?;
+        for _ in 0..passes {
+            current_a = encode_rgb_blur_dispatch(
+                gpu,
+                encoder,
+                buffers,
+                uniform,
+                &cached,
+                plan,
+                current_a,
+                "gpu_stream_rgb_blur_bind",
+                "gpu_stream_rgb_blur",
+            );
+        }
+    }
+    Ok(current_a)
+}
+
 fn encode_rgb_blur_stage(
     gpu: &GpuInner,
     encoder: &mut wgpu::CommandEncoder,
     buffers: &BufferPool,
     stage: &Stage<'_>,
-    mut current_a: bool,
+    current_a: bool,
 ) -> Result<bool, PilError> {
     let limits = gpu.device.limits();
     let plan = plan_native_rgb_point_output(
@@ -685,34 +727,5 @@ fn encode_rgb_blur_stage(
             "gpu_stream_rgb_blur_fused",
         ));
     }
-    let passes = GpuInner::blur_pass_count(stage.op)
-        .ok_or_else(|| PilError::InternalError("missing native RGB blur pass count".into()))?;
-    for (key, file, source) in [
-        (
-            "__internal_blur_h_rgb_packed",
-            "box_blur_h_rgb_packed.wgsl",
-            include_str!("../shaders/box_blur_h_rgb_packed.wgsl"),
-        ),
-        (
-            "__internal_blur_v_rgb_packed",
-            "box_blur_v_rgb_packed.wgsl",
-            include_str!("../shaders/box_blur_v_rgb_packed.wgsl"),
-        ),
-    ] {
-        let cached = gpu.resolve_pipeline(key, file, source)?;
-        for _ in 0..passes {
-            current_a = encode_rgb_blur_dispatch(
-                gpu,
-                encoder,
-                buffers,
-                &uniform,
-                &cached,
-                plan,
-                current_a,
-                "gpu_stream_rgb_blur_bind",
-                "gpu_stream_rgb_blur",
-            );
-        }
-    }
-    Ok(current_a)
+    encode_rgb_blur_separable_passes(gpu, encoder, buffers, stage, &uniform, plan, current_a)
 }
