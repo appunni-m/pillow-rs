@@ -614,6 +614,15 @@ impl Image {
                 }
             }
         };
+        Self::decode_frombytes_pixels(mode, frombytes_mode, size, data)
+    }
+
+    fn decode_frombytes_pixels(
+        mode: &str,
+        frombytes_mode: FromBytesMode,
+        (w, h): (u32, u32),
+        data: Cow<'_, [u8]>,
+    ) -> Result<Self, PilError> {
         let img = match frombytes_mode {
             FromBytesMode::L => DynamicImage::ImageLuma8(
                 crate::raster::GrayImage::from_raw(w, h, data.into_owned())
