@@ -485,7 +485,30 @@ fn run_palette_alpha_constant_cases(
 
 #[test]
 fn palette_alpha_projective_filtered_relocations_native_gpu_preserve_pairs() {
-    let cases = [
+    let cases = palette_alpha_filtered_relocation_cases();
+    let palette = vec![10, 20, 30, 40, 50, 60];
+    let previous = Backend::set_pipeline_telemetry_enabled(true);
+    for (source_size, output_size, matrix, fill) in cases {
+        let (source_width, source_height) = source_size;
+        let source_bytes = (0..source_width * source_height)
+            .flat_map(|index| [(index * 17 + 3) as u8, (index * 29 + 11) as u8])
+            .collect::<Vec<_>>();
+        let mut source = Image::frombytes("LA", source_size, &source_bytes).expect("LA source");
+        source.putpalette(&palette, "RGB").expect("PA palette");
+        assert_eq!(source.mode().expect("PA mode"), "PA");
+        if !assert_palette_filtered_case(&source, source_size, output_size, matrix, fill, &palette)
+        {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
+        }
+    }
+    Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+type PaletteAlphaFilteredCase = ((u32, u32), (u32, u32), [f64; 8], Option<TransformFill>);
+
+fn palette_alpha_filtered_relocation_cases() -> [PaletteAlphaFilteredCase; 8] {
+    [
         (
             (1, 1),
             (1, 1),
@@ -534,24 +557,7 @@ fn palette_alpha_projective_filtered_relocations_native_gpu_preserve_pairs() {
             [0.0, 0.0, -0.5, 0.0, 0.0, -0.5, 0.0, 0.0],
             Some(TransformFill::Components(vec![17, 203])),
         ),
-    ];
-    let palette = vec![10, 20, 30, 40, 50, 60];
-    let previous = Backend::set_pipeline_telemetry_enabled(true);
-    for (source_size, output_size, matrix, fill) in cases {
-        let (source_width, source_height) = source_size;
-        let source_bytes = (0..source_width * source_height)
-            .flat_map(|index| [(index * 17 + 3) as u8, (index * 29 + 11) as u8])
-            .collect::<Vec<_>>();
-        let mut source = Image::frombytes("LA", source_size, &source_bytes).expect("LA source");
-        source.putpalette(&palette, "RGB").expect("PA palette");
-        assert_eq!(source.mode().expect("PA mode"), "PA");
-        if !assert_palette_filtered_case(&source, source_size, output_size, matrix, fill, &palette)
-        {
-            Backend::set_pipeline_telemetry_enabled(previous);
-            return;
-        }
-    }
-    Backend::set_pipeline_telemetry_enabled(previous);
+    ]
 }
 
 fn assert_palette_filtered_case(
