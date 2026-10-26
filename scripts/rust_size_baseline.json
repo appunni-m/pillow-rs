@@ -226,12 +226,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn execute_native_rgba_put_alpha_data( &self, image: &DynamicImage, mask: &DynamicImage, dispatch: NativeRgbaPutAlphaDataDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 416,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/point_ops/native_byte_op.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_byte_op( &self, op: &PipelineOp, image: &DynamicImage, other: Option<&DynamicImage>, channels: u8, logical_mode: Option<&str>, fused_screen: bool, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 301,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/projection.rs",
@@ -635,11 +629,6 @@
     "pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs": {
       "owner": "lazytrot",
       "reason": "Moved native PutAlpha GPU executors beside point-operation execution; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/point_ops/native_byte_op.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved the native byte point-operation executor beside GPU point-operation support; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/projection.rs": {
