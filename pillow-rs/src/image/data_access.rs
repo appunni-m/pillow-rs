@@ -220,6 +220,41 @@ fn validated_band_index(band: i32, band_count: usize) -> Result<usize, PilError>
 }
 
 impl Image {
+    fn getdata_band(&self, image: &DynamicImage, band: i32) -> Result<Vec<u8>, PilError> {
+        // Pillow validates the requested logical band before extracting it.
+        // Keep this check in the core so every binding observes the same
+        // contract instead of silently clamping to RGBA channel 3.
+        let mode = self.mode_from_materialized(image);
+        let band = validated_band_index(band, pillow_band_count(&mode))?;
+        if mode == "LAB" {
+            if let DynamicImage::ImageRgb8(image) = image {
+                return Ok(select_lab_band(image.as_raw(), band));
+            }
+            return Ok(select_lab_band(image.to_rgb8().as_raw(), band));
+        }
+        // Keep ordinary byte layouts narrow for banded reads. The old
+        // fallback widened the complete frame to RGBA before selecting a
+        // single channel, which made a read-only terminal operation pay
+        // for an avoidable full-frame allocation and conversion.
+        match image {
+            DynamicImage::ImageLuma8(image) if band == 0 => {
+                return Ok(image.as_raw().clone());
+            }
+            DynamicImage::ImageLumaA8(image) if band < 2 => {
+                return Ok(select_interleaved_band(image.as_raw(), 2, band));
+            }
+            DynamicImage::ImageRgb8(image) if band < 3 => {
+                return Ok(select_interleaved_band(image.as_raw(), 3, band));
+            }
+            DynamicImage::ImageRgba8(image) if band < 4 => {
+                return Ok(select_interleaved_band(image.as_raw(), 4, band));
+            }
+            _ => {}
+        }
+        let rgba = image.to_rgba8();
+        Ok(rgba.pixels().map(|pixel| pixel[band]).collect())
+    }
+
     /// Returns pixel data as a flat sequence of channel bytes.
     ///
     /// When `band` is `Some`, returns only that channel. Negative bands are not
@@ -232,38 +267,7 @@ impl Image {
     pub fn getdata(&self, band: Option<i32>) -> Result<Vec<u8>, PilError> {
         let img = self.materialized_shared()?;
         if let Some(band) = band {
-            // Pillow validates the requested logical band before extracting
-            // it. Keep this check in the core so every binding observes the
-            // same contract instead of silently clamping to RGBA channel 3.
-            let mode = self.mode_from_materialized(&img);
-            let band = validated_band_index(band, pillow_band_count(&mode))?;
-            if mode == "LAB" {
-                if let DynamicImage::ImageRgb8(image) = img.as_ref() {
-                    return Ok(select_lab_band(image.as_raw(), band));
-                }
-                return Ok(select_lab_band(img.to_rgb8().as_raw(), band));
-            }
-            // Keep ordinary byte layouts narrow for banded reads. The old
-            // fallback widened the complete frame to RGBA before selecting a
-            // single channel, which made a read-only terminal operation pay
-            // for an avoidable full-frame allocation and conversion.
-            match img.as_ref() {
-                DynamicImage::ImageLuma8(image) if band == 0 => {
-                    return Ok(image.as_raw().clone());
-                }
-                DynamicImage::ImageLumaA8(image) if band < 2 => {
-                    return Ok(select_interleaved_band(image.as_raw(), 2, band));
-                }
-                DynamicImage::ImageRgb8(image) if band < 3 => {
-                    return Ok(select_interleaved_band(image.as_raw(), 3, band));
-                }
-                DynamicImage::ImageRgba8(image) if band < 4 => {
-                    return Ok(select_interleaved_band(image.as_raw(), 4, band));
-                }
-                _ => {}
-            }
-            let rgba = img.to_rgba8();
-            return Ok(rgba.pixels().map(|p| p[band]).collect());
+            return self.getdata_band(&img, band);
         }
         let mode = self.mode_from_materialized(&img);
         if mode == "LAB" {
