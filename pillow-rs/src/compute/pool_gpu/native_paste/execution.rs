@@ -25,6 +25,25 @@ struct NativeBytePasteExecution<'a> {
     dispatch: NativeBytePasteDispatch,
 }
 
+#[cfg(target_endian = "little")]
+#[inline(always)]
+fn record_native_rgb_crop_telemetry(
+    buffers: &BufferPool,
+    dispatch: &NativeRgbCropDispatch,
+    readback: &ReadbackTarget,
+) {
+    crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+        upload_bytes: dispatch.source_transfer_bytes,
+        readback_bytes: dispatch.output_transfer_bytes,
+        parameter_bytes: 48,
+        retained_cache_bytes: buffers.retained_bytes(),
+        full_frame_copy_count: 2 + u64::from(matches!(readback, ReadbackTarget::Staging(_))),
+        mode_conversion_count: 0,
+        ..PipelineResourceTelemetry::default()
+    });
+    crate::compute::record_pipeline_dispatch_count(1);
+}
+
 impl GpuInner {
     #[cfg(target_endian = "little")]
     #[inline(always)]
@@ -250,16 +269,7 @@ impl GpuInner {
                 )
             },
         )?;
-        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
-            upload_bytes: dispatch.source_transfer_bytes,
-            readback_bytes: dispatch.output_transfer_bytes,
-            parameter_bytes: 48,
-            retained_cache_bytes: buffers.retained_bytes(),
-            full_frame_copy_count: 2 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
-            mode_conversion_count: 0,
-            ..PipelineResourceTelemetry::default()
-        });
-        crate::compute::record_pipeline_dispatch_count(1);
+        record_native_rgb_crop_telemetry(buffers, &dispatch, &readback);
         if let ReadbackTarget::Staging(staging) = readback {
             self.recycle_staging(staging);
         }
