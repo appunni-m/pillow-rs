@@ -148,12 +148,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn execute_native_byte_paste( &self, destination: &DynamicImage, source: &DynamicImage, offset: (i32, i32), dispatch: NativeBytePasteDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 196,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/native_paste/execution.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_rgb_crop( &self, source: &DynamicImage, left: u32, top: u32, dispatch: NativeRgbCropDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 216,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/native_paste/execution.rs",

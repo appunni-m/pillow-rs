@@ -1,39 +1,48 @@
 use super::*;
 
+#[cfg(target_endian = "little")]
+struct NativeRgbCropExecution<'a> {
+    source: &'a crate::raster::RgbImage,
+    left: u32,
+    top: u32,
+    source_width: u32,
+    source_height: u32,
+    dispatch: NativeRgbCropDispatch,
+}
+
 impl GpuInner {
-    /// Copy or clip one exact-layout unmasked L/LA/RGB Paste in native bytes.
-    /// The shader packs each output word directly, avoiding RGBA staging and
-    /// mode restoration; RGB bytes that cross word boundaries share one writer.
     #[cfg(target_endian = "little")]
-    pub(in crate::compute::pool_gpu) fn execute_native_rgb_crop(
+    #[inline(always)]
+    fn validate_native_rgb_crop(
         &self,
-        source: &DynamicImage,
-        left: u32,
-        top: u32,
-        dispatch: NativeRgbCropDispatch,
-        buffers: &mut BufferPool,
-    ) -> Result<DynamicImage, PilError> {
-        let DynamicImage::ImageRgb8(source) = source else {
-            return Err(PilError::InternalError(
-                "GPU native RGB Crop storage variant mismatch".into(),
-            ));
-        };
-        let (source_width, source_height) = source.dimensions();
-        let source_dims = CheckedDims::new(source_width, source_height, 3)?;
-        let output_dims = CheckedDims::new(dispatch.output_width, dispatch.output_height, 3)?;
-        let right = left.checked_add(dispatch.output_width).ok_or_else(|| {
-            PilError::ValueError("GPU native RGB Crop coordinate overflow".into())
-        })?;
-        let bottom = top.checked_add(dispatch.output_height).ok_or_else(|| {
-            PilError::ValueError("GPU native RGB Crop coordinate overflow".into())
-        })?;
-        if source_dims.total_bytes() != dispatch.source_bytes
-            || source.as_raw().len() != dispatch.source_bytes
-            || output_dims.total_bytes() != dispatch.output_bytes
-            || left >= right
-            || top >= bottom
-            || right > source_width
-            || bottom > source_height
+        execution: &NativeRgbCropExecution<'_>,
+        buffers: &BufferPool,
+    ) -> Result<(), PilError> {
+        let source_dims = CheckedDims::new(execution.source_width, execution.source_height, 3)?;
+        let output_dims = CheckedDims::new(
+            execution.dispatch.output_width,
+            execution.dispatch.output_height,
+            3,
+        )?;
+        let right = execution
+            .left
+            .checked_add(execution.dispatch.output_width)
+            .ok_or_else(|| {
+                PilError::ValueError("GPU native RGB Crop coordinate overflow".into())
+            })?;
+        let bottom = execution
+            .top
+            .checked_add(execution.dispatch.output_height)
+            .ok_or_else(|| {
+                PilError::ValueError("GPU native RGB Crop coordinate overflow".into())
+            })?;
+        if source_dims.total_bytes() != execution.dispatch.source_bytes
+            || execution.source.as_raw().len() != execution.dispatch.source_bytes
+            || output_dims.total_bytes() != execution.dispatch.output_bytes
+            || execution.left >= right
+            || execution.top >= bottom
+            || right > execution.source_width
+            || bottom > execution.source_height
         {
             return Err(PilError::InternalError(
                 "GPU native RGB Crop layout mismatch".into(),
@@ -42,11 +51,11 @@ impl GpuInner {
         let buffer_capacity = u64::from(buffers.capacity)
             .checked_mul(4)
             .ok_or_else(|| PilError::ValueError("GPU native RGB Crop is too large".into()))?;
-        if dispatch.source_transfer_bytes > buffer_capacity
-            || dispatch.output_transfer_bytes > buffer_capacity
+        if execution.dispatch.source_transfer_bytes > buffer_capacity
+            || execution.dispatch.output_transfer_bytes > buffer_capacity
             || [
-                dispatch.source_transfer_bytes,
-                dispatch.output_transfer_bytes,
+                execution.dispatch.source_transfer_bytes,
+                execution.dispatch.output_transfer_bytes,
             ]
             .into_iter()
             .any(|size| {
@@ -58,7 +67,17 @@ impl GpuInner {
                 "GPU native RGB Crop exceeds adapter buffer limits".into(),
             ));
         }
+        Ok(())
+    }
 
+    #[cfg(target_endian = "little")]
+    #[inline(always)]
+    fn upload_native_rgb_crop(
+        &self,
+        execution: &NativeRgbCropExecution<'_>,
+        buffers: &mut BufferPool,
+    ) -> Result<(), PilError> {
+        let dispatch = execution.dispatch;
         buffers.params_arena.ensure_capacity(
             &self.device,
             "gpu_crop_native_rgb_params",
@@ -76,21 +95,21 @@ impl GpuInner {
             })?;
         let mapped = upload.as_mut();
         if mapped.len() != dispatch.source_transfer_bytes as usize
-            || source.as_raw().len() > mapped.len()
+            || execution.source.as_raw().len() > mapped.len()
         {
             return Err(PilError::InternalError(
                 "GPU native RGB Crop upload length mismatch".into(),
             ));
         }
-        mapped[..source.as_raw().len()].copy_from_slice(source.as_raw());
-        mapped[source.as_raw().len()..].fill(0);
+        mapped[..execution.source.as_raw().len()].copy_from_slice(execution.source.as_raw());
+        mapped[execution.source.as_raw().len()..].fill(0);
         drop(upload);
 
         let parameters = [
-            source_width,
-            source_height,
-            left,
-            top,
+            execution.source_width,
+            execution.source_height,
+            execution.left,
+            execution.top,
             dispatch.output_width,
             dispatch.output_height,
             u32::try_from(dispatch.source_transfer_bytes).map_err(|_| {
@@ -107,12 +126,19 @@ impl GpuInner {
             0,
             bytemuck::cast_slice(&parameters),
         );
-        let cached = self.resolve_pipeline(
-            "__internal_crop_native_rgb",
-            "crop_native_rgb.wgsl",
-            include_str!("../shaders/crop_native_rgb.wgsl"),
-        )?;
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        Ok(())
+    }
+
+    #[cfg(target_endian = "little")]
+    #[inline(always)]
+    fn native_rgb_crop_bind_group(
+        &self,
+        cached: &CachedPipeline,
+        execution: &NativeRgbCropExecution<'_>,
+        buffers: &BufferPool,
+    ) -> Result<wgpu::BindGroup, PilError> {
+        let dispatch = execution.dispatch;
+        Ok(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("gpu_native_rgb_crop"),
             layout: &cached.bind_group_layout,
             entries: &[
@@ -147,7 +173,19 @@ impl GpuInner {
                     )?,
                 },
             ],
-        });
+        }))
+    }
+
+    #[cfg(target_endian = "little")]
+    #[inline(always)]
+    fn submit_native_rgb_crop(
+        &self,
+        cached: &CachedPipeline,
+        bind_group: &wgpu::BindGroup,
+        execution: &NativeRgbCropExecution<'_>,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
+        let dispatch = execution.dispatch;
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -159,7 +197,7 @@ impl GpuInner {
                 timestamp_writes: None,
             });
             pass.set_pipeline(&cached.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
+            pass.set_bind_group(0, bind_group, &[]);
             crate::compute::record_gpu_shader_dispatch(
                 cached.variant_name,
                 cached.shader_file,
@@ -211,6 +249,43 @@ impl GpuInner {
             self.recycle_staging(staging);
         }
         Ok(result)
+    }
+
+    /// Copy or clip one exact-layout unmasked L/LA/RGB Paste in native bytes.
+    /// The shader packs each output word directly, avoiding RGBA staging and
+    /// mode restoration; RGB bytes that cross word boundaries share one writer.
+    #[cfg(target_endian = "little")]
+    pub(in crate::compute::pool_gpu) fn execute_native_rgb_crop(
+        &self,
+        source: &DynamicImage,
+        left: u32,
+        top: u32,
+        dispatch: NativeRgbCropDispatch,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
+        let DynamicImage::ImageRgb8(source) = source else {
+            return Err(PilError::InternalError(
+                "GPU native RGB Crop storage variant mismatch".into(),
+            ));
+        };
+        let (source_width, source_height) = source.dimensions();
+        let execution = NativeRgbCropExecution {
+            source,
+            left,
+            top,
+            source_width,
+            source_height,
+            dispatch,
+        };
+        self.validate_native_rgb_crop(&execution, buffers)?;
+        self.upload_native_rgb_crop(&execution, buffers)?;
+        let cached = self.resolve_pipeline(
+            "__internal_crop_native_rgb",
+            "crop_native_rgb.wgsl",
+            include_str!("../shaders/crop_native_rgb.wgsl"),
+        )?;
+        let bind_group = self.native_rgb_crop_bind_group(&cached, &execution, buffers)?;
+        self.submit_native_rgb_crop(&cached, &bind_group, &execution, buffers)
     }
 
     pub(in crate::compute::pool_gpu) fn execute_native_byte_paste(
