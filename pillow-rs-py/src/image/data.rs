@@ -214,8 +214,7 @@ impl PyImage {
                 for key in ["background", "transparency"] {
                     if let Some(value) = info.get_item(key)?
                         && let Ok(value) = value.extract::<f64>()
-                        && value >= 0.0
-                        && value <= 255.0
+                        && (0.0..=255.0).contains(&value)
                         && value.fract() == 0.0
                     {
                         reserved.push(value as u32);

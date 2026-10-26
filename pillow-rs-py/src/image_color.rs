@@ -82,8 +82,6 @@ fn palette_save_to_file(palette: Vec<u8>, mode: &str, fp: &str) -> PyResult<()> 
     })
 }
 
-/// Compute Pillow ImageStat values from a precomputed histogram.
-
 pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(getrgb, m)?)?;
     m.add_function(wrap_pyfunction!(getcolor, m)?)?;

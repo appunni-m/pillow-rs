@@ -76,14 +76,6 @@ pub(super) fn supports_for_shape(
     *dest == (0, 0) && *src == (0, 0) && simd_alpha_composite_shape_supported(shape, source, mode)
 }
 
-/// Whether an operation preserves the concrete pixel-buffer contract.
-///
-/// The automatic planner can keep adjacent operations in one backend segment
-/// only while width, height, channel layout, and logical sample semantics are
-/// unchanged. Operations not listed here are deliberately treated as a
-/// segment boundary; a conservative boundary costs a dispatch opportunity but
-/// cannot make a later capability check observe stale layout information.
-
 #[inline]
 fn alpha_composite_div255(value: u32x8) -> u32x8 {
     // Pillow's SHIFTFORDIV255(a) is ((a >> 8) + a) >> 8.  This is the

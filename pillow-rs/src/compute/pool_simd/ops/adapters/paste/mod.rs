@@ -202,7 +202,6 @@ fn simd_paste_rgba_to_rgb(
 
 /// Copy RGB pixels into an RGBA paste region and insert opaque alpha in the
 /// same four-pixel shuffle that writes each destination block.
-
 pub fn simd_paste(
     img: &DynamicImage,
     op: &PipelineOp,

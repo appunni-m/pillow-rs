@@ -34,7 +34,7 @@ impl Image {
         format: &str,
         option_pairs: Vec<String>,
     ) -> Result<Vec<u8>, JsValue> {
-        if option_pairs.len() % 2 != 0 {
+        if !option_pairs.len().is_multiple_of(2) {
             return Err(err(pillow_rs::PilError::ValueError(
                 "encoder options must be key/value pairs".to_owned(),
             )));

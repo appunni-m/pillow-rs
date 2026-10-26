@@ -196,7 +196,7 @@ thread_local! {
     #[cfg(test)]
     static GPU_SHADER_COVERAGE_ENABLED: Cell<bool> = const { Cell::new(false) };
     #[cfg(test)]
-    static GPU_SHADER_COVERAGE: RefCell<BTreeMap<(&'static str, &'static str), GpuShaderDispatchCounters>> = RefCell::new(BTreeMap::new());
+    static GPU_SHADER_COVERAGE: RefCell<BTreeMap<(&'static str, &'static str), GpuShaderDispatchCounters>> = const { RefCell::new(BTreeMap::new()) };
     static PIPELINE_TELEMETRY_ENABLED: Cell<bool> = const { Cell::new(false) };
     static LAST_PIPELINE_TELEMETRY: RefCell<Option<PipelineTelemetry>> = const { RefCell::new(None) };
     static LAST_PIPELINE_RESOURCE_TELEMETRY: RefCell<Option<PipelineResourceTelemetry>> = const { RefCell::new(None) };

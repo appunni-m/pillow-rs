@@ -279,11 +279,6 @@ fn push_simd_draw_point(
     Ok(())
 }
 
-/// Draw a width-one Bresenham line with scalar geometry and native-byte SIMD
-/// spans.  Consecutive pixels on the same raster row are coalesced into one
-/// contiguous span; steep lines remain a sequence of one-pixel masked vector
-/// stores rather than entering the scalar CPU draw adapter.
-
 /// Draw points through the native-byte masked vector kernel.  Adjacent points
 /// on one row are coalesced so a point cloud that forms a span still gets wide
 /// vector stores; isolated points use a masked vector block and never call the
