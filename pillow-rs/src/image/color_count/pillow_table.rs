@@ -94,7 +94,7 @@ impl PillowColorCounts {
 
             let mut slots = Vec::new();
             if slots.try_reserve_exact(slot_count).is_ok() {
-                slots.resize(slot_count, 0);
+                slots.extend(std::iter::repeat_n(0, slot_count));
                 return Self::Direct(slots);
             }
         }
