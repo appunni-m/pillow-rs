@@ -99,11 +99,20 @@ fn assert_palette_alpha_nearest_proofs(
     ));
 }
 
+const PALETTE_ALPHA_MESH_CONSTANT: [f64; 12] =
+    [0.0, 0.0, 9.0, 6.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0];
+
 fn assert_palette_alpha_filtered_shape_proofs(
     image: &DynamicImage,
     quad_constant_fractional: &[f64; 8],
     mesh_relocation: &[f64; 12],
 ) {
+    assert_palette_alpha_quad_filtered_shape_proofs(quad_constant_fractional);
+    assert_palette_alpha_mesh_nearest_shape_proofs(image, mesh_relocation);
+    assert_palette_alpha_mesh_filtered_shape_proofs();
+}
+
+fn assert_palette_alpha_quad_filtered_shape_proofs(quad_constant_fractional: &[f64; 8]) {
     let quad_constant_half = [1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5];
     assert!(gpu_projective_filtered_relocation_is_admitted(
         TransformMethod::Quad,
@@ -119,6 +128,12 @@ fn assert_palette_alpha_filtered_shape_proofs(
         Some("PA"),
         (9, 6),
     ));
+}
+
+fn assert_palette_alpha_mesh_nearest_shape_proofs(
+    image: &DynamicImage,
+    mesh_relocation: &[f64; 12],
+) {
     let mesh_filtered = PipelineOp::Transform {
         w: 9,
         h: 6,
@@ -141,13 +156,15 @@ fn assert_palette_alpha_filtered_shape_proofs(
         ResampleFilter::Nearest,
         (9, 6),
     ));
-    let mesh_constant = [0.0, 0.0, 9.0, 6.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0];
     assert!(gpu_palette_alpha_projective_relocation_is_admitted(
         TransformMethod::Mesh,
-        &mesh_constant,
+        &PALETTE_ALPHA_MESH_CONSTANT,
         ResampleFilter::Nearest,
         (9, 6),
     ));
+}
+
+fn assert_palette_alpha_mesh_filtered_shape_proofs() {
     let mesh_constant_half = [0.0, 0.0, 9.0, 6.0, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5];
     assert!(gpu_projective_filtered_relocation_is_admitted(
         TransformMethod::Mesh,
@@ -158,7 +175,7 @@ fn assert_palette_alpha_filtered_shape_proofs(
     ));
     assert!(!gpu_projective_filtered_relocation_is_admitted(
         TransformMethod::Mesh,
-        &mesh_constant,
+        &PALETTE_ALPHA_MESH_CONSTANT,
         ResampleFilter::Bicubic,
         Some("PA"),
         (9, 6),
