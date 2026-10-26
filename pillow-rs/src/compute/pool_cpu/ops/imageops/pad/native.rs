@@ -112,48 +112,19 @@ fn native_pad_row_layout(
     channels: usize,
     explicit_mode: Option<&str>,
 ) -> Result<Option<NativePadRowLayout>, PilError> {
-    if w == 0 || h == 0 || nw == 0 || nh == 0 {
-        return Ok(None);
-    }
-    let Some(source_width) = usize::try_from(nw).ok() else {
-        return Ok(None);
-    };
-    let Some(source_height) = usize::try_from(nh).ok() else {
+    let Some((source_width, source_height, width, height)) =
+        native_pad_nonzero_dimensions(w, h, nw, nh)
+    else {
         return Ok(None);
     };
-    let Some(width) = usize::try_from(w).ok() else {
+    let Some((source_stride, output_stride)) =
+        native_pad_row_strides(source_len, source_width, source_height, width, channels)
+    else {
         return Ok(None);
     };
-    let Some(height) = usize::try_from(h).ok() else {
-        return Ok(None);
-    };
-    let Some(source_stride) = source_width.checked_mul(channels) else {
-        return Ok(None);
-    };
-    let Some(expected_source_len) = source_stride.checked_mul(source_height) else {
-        return Ok(None);
-    };
-    if source_len != expected_source_len {
-        return Ok(None);
-    }
-    let Some(output_stride) = width.checked_mul(channels) else {
-        return Ok(None);
-    };
-    let copy_width = nw.min(w) as usize;
-    let copy_height = nh.min(h) as usize;
-    let Some(offset_x_end) = offset_x.checked_add(copy_width) else {
-        return Ok(None);
-    };
-    let Some(offset_y_end) = offset_y.checked_add(copy_height) else {
-        return Ok(None);
-    };
-    if offset_x_end > width || offset_y_end > height {
-        return Ok(None);
-    }
-    let Some(byte_count) = copy_width.checked_mul(channels) else {
-        return Ok(None);
-    };
-    let Some(output_x_bytes) = offset_x.checked_mul(channels) else {
+    let Some((copy_width, copy_height, offset_y_end, byte_count, output_x_bytes)) =
+        native_pad_row_copy_region(w, h, nw, nh, offset_x, offset_y, width, height, channels)
+    else {
         return Ok(None);
     };
     let output_dims = CheckedDims::new(w, h, channels as u8)?;
@@ -175,6 +146,64 @@ fn native_pad_row_layout(
         append_vertical_rows,
         output_dims,
     }))
+}
+
+fn native_pad_nonzero_dimensions(
+    w: u32,
+    h: u32,
+    nw: u32,
+    nh: u32,
+) -> Option<(usize, usize, usize, usize)> {
+    if w == 0 || h == 0 || nw == 0 || nh == 0 {
+        return None;
+    }
+    Some((
+        usize::try_from(nw).ok()?,
+        usize::try_from(nh).ok()?,
+        usize::try_from(w).ok()?,
+        usize::try_from(h).ok()?,
+    ))
+}
+
+fn native_pad_row_strides(
+    source_len: usize,
+    source_width: usize,
+    source_height: usize,
+    width: usize,
+    channels: usize,
+) -> Option<(usize, usize)> {
+    let source_stride = source_width.checked_mul(channels)?;
+    if source_len != source_stride.checked_mul(source_height)? {
+        return None;
+    }
+    Some((source_stride, width.checked_mul(channels)?))
+}
+
+fn native_pad_row_copy_region(
+    w: u32,
+    h: u32,
+    nw: u32,
+    nh: u32,
+    offset_x: usize,
+    offset_y: usize,
+    width: usize,
+    height: usize,
+    channels: usize,
+) -> Option<(usize, usize, usize, usize, usize)> {
+    let copy_width = nw.min(w) as usize;
+    let copy_height = nh.min(h) as usize;
+    let offset_x_end = offset_x.checked_add(copy_width)?;
+    let offset_y_end = offset_y.checked_add(copy_height)?;
+    if offset_x_end > width || offset_y_end > height {
+        return None;
+    }
+    Some((
+        copy_width,
+        copy_height,
+        offset_y_end,
+        copy_width.checked_mul(channels)?,
+        offset_x.checked_mul(channels)?,
+    ))
 }
 
 fn allocate_native_pad_rows(layout: &NativePadRowLayout, fill_pixel: &[u8]) -> Option<Vec<u8>> {
