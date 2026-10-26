@@ -442,6 +442,14 @@ impl Image {
         if mode == "1" || mode == "L" || mode == "P" {
             return Self::getcolors_histogram(maxcolors, &img);
         }
+        Self::getcolors_multiband(maxcolors, img.as_ref())
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn getcolors_multiband(
+        maxcolors: u32,
+        img: &DynamicImage,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
         // For multi-channel modes, use pixel-level counting
         let n_bands = match img.color() {
             crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
@@ -461,10 +469,10 @@ impl Image {
         } else {
             0
         };
-        let pixel_count = pillow_image_pixel_count(img.as_ref());
+        let pixel_count = pillow_image_pixel_count(img);
         if maxcolors > 1023
             && pixel_count >= 64 * 1024
-            && let DynamicImage::ImageRgb8(rgb) = img.as_ref()
+            && let DynamicImage::ImageRgb8(rgb) = img
         {
             match getcolors_rgb8_grayscale(rgb, max_distinct_colors, code_mask, code_polynomial) {
                 RgbGrayscaleColorCounts::NotGrayscale => {}
@@ -483,7 +491,7 @@ impl Image {
                 code_polynomial,
             )
         };
-        match (n_bands, img.as_ref()) {
+        match (n_bands, img) {
             (2, crate::raster::DynamicImage::ImageLumaA8(image)) => {
                 for pixel in image.pixels() {
                     if !count_pixel(pillow_color_pixel(&pixel.0)) {

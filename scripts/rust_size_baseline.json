@@ -610,12 +610,6 @@
       "signature": "fn getcolors_scalar( maxcolors: u32, mode: &str, img: &DynamicImage, ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {"
     },
     {
-      "lines": 122,
-      "occurrence": 1,
-      "path": "pillow-rs/src/image/statistics.rs",
-      "signature": "pub fn getcolors( &self, maxcolors: u32, ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {"
-    },
-    {
       "lines": 265,
       "occurrence": 1,
       "path": "pillow-rs/src/image/statistics.rs",
