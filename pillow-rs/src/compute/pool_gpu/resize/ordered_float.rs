@@ -117,6 +117,121 @@ pub(in crate::compute::pool_gpu) fn gpu_f64_signed_u128_add(
     }
 }
 
+#[derive(Clone, Copy)]
+struct F64ResizeSampleScan {
+    ordered_accumulator: f64,
+    first_nan: Option<u32>,
+    positive_infinity: bool,
+    negative_infinity: bool,
+    has_special: bool,
+    minimum_exponent: Option<i32>,
+}
+
+#[inline(always)]
+fn gpu_f_resize_f64_sample_word(
+    bytes: &[u8],
+    source_w: usize,
+    source_h: usize,
+    source_start: usize,
+    horizontal: bool,
+    line: usize,
+    tap: usize,
+) -> Option<u32> {
+    let coordinate = source_start.checked_add(tap)?;
+    let pixel = if horizontal {
+        (coordinate < source_w).then_some(line.checked_mul(source_w)?.checked_add(coordinate)?)?
+    } else {
+        (coordinate < source_h).then_some(coordinate.checked_mul(source_w)?.checked_add(line)?)?
+    };
+    let offset = pixel.checked_mul(4)?;
+    let word = bytes.get(offset..offset.checked_add(4)?)?;
+    Some(u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+}
+
+#[inline(always)]
+fn gpu_f_resize_f64_scan_sample_row(
+    bytes: &[u8],
+    source_w: usize,
+    source_h: usize,
+    source_start: usize,
+    weights: &[f64],
+    horizontal: bool,
+    line: usize,
+) -> Option<F64ResizeSampleScan> {
+    let mut scan = F64ResizeSampleScan {
+        ordered_accumulator: 0.0,
+        first_nan: None,
+        positive_infinity: false,
+        negative_infinity: false,
+        has_special: false,
+        minimum_exponent: None,
+    };
+    // Non-finite F words do not need floating-point arithmetic on the device:
+    // a finite coefficient times NaN is NaN, a zero coefficient times an
+    // infinity is the invalid NaN operation, and opposite signed infinities
+    // cancel to NaN. Preserve the first NaN payload in tap order (the same
+    // payload Pillow's ordered `mul_add` path exposes). The host-side f64
+    // result below must agree with this device state machine before admission.
+    for (tap, &weight) in weights.iter().enumerate() {
+        let coeff = gpu_f64_integer_parts(weight)?;
+        let bits = gpu_f_resize_f64_sample_word(
+            bytes,
+            source_w,
+            source_h,
+            source_start,
+            horizontal,
+            line,
+            tap,
+        )?;
+        let sample = f32::from_bits(bits);
+        let separate_product_add =
+            gpu_f_resize_uses_separate_horizontal_product_add(horizontal, weights.len(), tap);
+        gpu_f_resize_accumulate_f64(
+            &mut scan.ordered_accumulator,
+            weight,
+            sample,
+            separate_product_add,
+        );
+        let exponent_bits = (bits >> 23) & 0xff;
+        if exponent_bits != 0xff {
+            if weights.len() <= GPU_F_RESIZE_MARKER9_MAX_TAPS && coeff.mantissa != 0 {
+                let sample = gpu_f32_f64_integer_parts(bits)?;
+                if sample.mantissa != 0 {
+                    let exponent = sample
+                        .exponent
+                        .checked_sub(23)?
+                        .checked_add(coeff.exponent)?;
+                    scan.minimum_exponent = Some(
+                        scan.minimum_exponent
+                            .map_or(exponent, |minimum: i32| minimum.min(exponent)),
+                    );
+                }
+            }
+            continue;
+        }
+        scan.has_special = true;
+        let fraction = bits & 0x7f_ff_ff;
+        if fraction != 0 {
+            scan.first_nan.get_or_insert(bits | 0x0040_0000);
+        } else if coeff.mantissa == 0 {
+            // 0 * infinity is invalid. Pillow stores the resulting quiet NaN
+            // with the canonical f32 payload.
+            scan.first_nan.get_or_insert(0x7fc0_0000);
+        } else if (bits & 0x8000_0000) != 0 {
+            if coeff.negative {
+                scan.positive_infinity = true;
+            } else {
+                scan.negative_infinity = true;
+            }
+        } else if coeff.negative {
+            scan.negative_infinity = true;
+        } else {
+            scan.positive_infinity = true;
+        }
+    }
+    Some(scan)
+}
+
 /// Evaluate one f64-coefficient row as an exact integer sum, then compare its
 /// final f32 bits with Pillow's ordered arm64 FLOAT32 accumulation. Horizontal
 /// rows use scalar FMA through 15 taps, complete 16-tap vector product/add
@@ -148,101 +263,30 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_f64_sample_bits(
     if line >= if horizontal { source_h } else { source_w } {
         return None;
     }
-    let source_pixel = |tap: usize| -> Option<usize> {
-        let coordinate = source_start.checked_add(tap)?;
-        if horizontal {
-            (coordinate < source_w).then_some(line.checked_mul(source_w)?.checked_add(coordinate)?)
-        } else {
-            (coordinate < source_h).then_some(coordinate.checked_mul(source_w)?.checked_add(line)?)
-        }
-    };
-    let sample_bits_at = |tap: usize| -> Option<u32> {
-        let pixel = source_pixel(tap)?;
-        let offset = pixel.checked_mul(4)?;
-        let word = bytes.get(offset..offset.checked_add(4)?)?;
-        Some(u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
-    };
-    let sample_at = |tap: usize| -> Option<(u32, F32IntegerParts)> {
-        let bits = sample_bits_at(tap)?;
-        Some((bits, gpu_f32_f64_integer_parts(bits)?))
-    };
-
-    // Non-finite F words do not need floating-point arithmetic on the device:
-    // a finite coefficient times NaN is NaN, a zero coefficient times an
-    // infinity is the invalid NaN operation, and opposite signed infinities
-    // cancel to NaN.  Preserve the first NaN payload in tap order (the same
-    // payload Pillow's ordered `mul_add` path exposes). The host-side f64
-    // result below still has to agree with this device state machine before
-    // the row is admitted.
-    let mut ordered_accumulator = 0.0f64;
-    let mut first_nan = None;
-    let mut positive_infinity = false;
-    let mut negative_infinity = false;
-    let mut has_special = false;
-    let mut minimum_exponent = None;
-    for (tap, &weight) in weights.iter().enumerate() {
-        let coeff = gpu_f64_integer_parts(weight)?;
-        let bits = sample_bits_at(tap)?;
-        let sample = f32::from_bits(bits);
-        let separate_product_add =
-            gpu_f_resize_uses_separate_horizontal_product_add(horizontal, weights.len(), tap);
-        gpu_f_resize_accumulate_f64(
-            &mut ordered_accumulator,
-            weight,
-            sample,
-            separate_product_add,
-        );
-        let exponent_bits = (bits >> 23) & 0xff;
-        if exponent_bits != 0xff {
-            if weights.len() <= GPU_F_RESIZE_MARKER9_MAX_TAPS && coeff.mantissa != 0 {
-                let sample = gpu_f32_f64_integer_parts(bits)?;
-                if sample.mantissa != 0 {
-                    let exponent = sample
-                        .exponent
-                        .checked_sub(23)?
-                        .checked_add(coeff.exponent)?;
-                    minimum_exponent = Some(
-                        minimum_exponent.map_or(exponent, |minimum: i32| minimum.min(exponent)),
-                    );
-                }
-            }
-            continue;
-        }
-        has_special = true;
-        let fraction = bits & 0x7f_ff_ff;
-        if fraction != 0 {
-            first_nan.get_or_insert(bits | 0x0040_0000);
-        } else if coeff.mantissa == 0 {
-            // 0 * infinity is an invalid operation.  Pillow stores the
-            // resulting quiet NaN with the canonical f32 payload.
-            first_nan.get_or_insert(0x7fc0_0000);
-        } else if (bits & 0x8000_0000) != 0 {
-            if coeff.negative {
-                positive_infinity = true;
-            } else {
-                negative_infinity = true;
-            }
-        } else if coeff.negative {
-            negative_infinity = true;
-        } else {
-            positive_infinity = true;
-        }
-    }
-    if has_special {
-        let actual = if let Some(bits) = first_nan {
+    let scan = gpu_f_resize_f64_scan_sample_row(
+        bytes,
+        source_w,
+        source_h,
+        source_start,
+        weights,
+        horizontal,
+        line,
+    )?;
+    if scan.has_special {
+        let actual = if let Some(bits) = scan.first_nan {
             bits
-        } else if positive_infinity && negative_infinity {
+        } else if scan.positive_infinity && scan.negative_infinity {
             0x7fc0_0000
-        } else if positive_infinity {
+        } else if scan.positive_infinity {
             0x7f80_0000
-        } else if negative_infinity {
+        } else if scan.negative_infinity {
             0xff80_0000
         } else {
             // The special scan only reaches this branch for an impossible
             // coefficient/source combination; keep the admission conservative.
             return None;
         };
-        let expected = (ordered_accumulator as f32).to_bits();
+        let expected = (scan.ordered_accumulator as f32).to_bits();
         return (actual == expected).then_some(actual);
     }
 
@@ -254,7 +298,7 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_f64_sample_bits(
     if weights.len() > GPU_F_RESIZE_MARKER9_MAX_TAPS {
         return None;
     }
-    let Some(minimum_exponent) = minimum_exponent else {
+    let Some(minimum_exponent) = scan.minimum_exponent else {
         return Some(0);
     };
 
@@ -268,7 +312,16 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_f64_sample_bits(
     };
     for (tap, &weight) in weights.iter().enumerate() {
         let coeff = gpu_f64_integer_parts(weight)?;
-        let (_, sample) = sample_at(tap)?;
+        let bits = gpu_f_resize_f64_sample_word(
+            bytes,
+            source_w,
+            source_h,
+            source_start,
+            horizontal,
+            line,
+            tap,
+        )?;
+        let sample = gpu_f32_f64_integer_parts(bits)?;
         if coeff.mantissa == 0 || sample.mantissa == 0 {
             continue;
         }
@@ -288,10 +341,10 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_f64_sample_bits(
         sum = gpu_f64_signed_u128_add(sum, term, sample.negative != coeff.negative)?;
     }
 
-    let expected = (ordered_accumulator as f32).to_bits();
+    let expected = (scan.ordered_accumulator as f32).to_bits();
     let expected_exponent = expected & 0x7f80_0000;
     if (expected_exponent == 0x7f80_0000 && (expected & 0x007f_ffff) != 0)
-        || (expected_exponent != 0x7f80_0000 && !ordered_accumulator.is_finite())
+        || (expected_exponent != 0x7f80_0000 && !scan.ordered_accumulator.is_finite())
     {
         return None;
     }
