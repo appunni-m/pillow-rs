@@ -2,6 +2,7 @@
 
 mod compact_box;
 mod float_exactness;
+mod float_exactness_f64;
 mod float_fast_paths;
 mod integer;
 mod integer_arithmetic;
@@ -11,6 +12,7 @@ mod tiled;
 
 pub(super) use compact_box::*;
 pub(super) use float_exactness::*;
+pub(super) use float_exactness_f64::gpu_f_resize_f64_is_exact;
 pub(super) use float_fast_paths::*;
 pub(super) use integer::*;
 pub(super) use integer_arithmetic::*;
