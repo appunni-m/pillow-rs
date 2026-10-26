@@ -46,12 +46,6 @@
       "signature": "pub(super) fn gpu_logical_mode_is_supported( ops: &[PipelineOp], img: Option<&DynamicImage>, mode: Option<&str>, f_resize_constant_bits: Option<u32>, f_pad_f64_is_exact: bool, inspect_auxiliary_modes: bool, ) -> bool {"
     },
     {
-      "lines": 301,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/projection.rs",
-      "signature": "fn execute_projection_terminal( &self, image: &DynamicImage, ops: &[PipelineOp], channels: u8, source_is_known_zero: bool, ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {"
-    },
-    {
       "lines": 408,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs",
@@ -87,11 +81,6 @@
     "pillow-rs/src/compute/pool_gpu/logical_mode_admission.rs": {
       "owner": "lazytrot",
       "reason": "Moved the logical-mode admission whitelist out of the oversized GPU coordinator; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/projection.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved GPU getprojection admission, sparse override dispatch, and readback out of the oversized coordinator; continue reducing under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs": {
