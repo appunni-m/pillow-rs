@@ -11,6 +11,18 @@ struct Bounds {
     bottom: u32,
 }
 
+#[inline]
+fn pixel_index_coordinate(index: usize) -> u32 {
+    u32::try_from(index).expect("pixel indices are bounded by u32 image dimensions")
+}
+
+#[inline]
+fn pixel_index_exclusive_edge(index: usize) -> u32 {
+    pixel_index_coordinate(index)
+        .checked_add(1)
+        .expect("exclusive image edges fit in u32")
+}
+
 impl Bounds {
     fn new(width: u32, height: u32) -> Self {
         Self {
@@ -30,6 +42,9 @@ impl Bounds {
         self.bottom = self.bottom.max(y);
     }
 
+    // Callers derive `index` from exact-size pixel iterators whose dimensions
+    // are u32; retaining these casts avoids range checks for every nonzero pixel.
+    #[allow(clippy::cast_possible_truncation)]
     #[inline(always)]
     fn include_index(&mut self, index: usize) {
         let x = (index % self.width) as u32;
@@ -77,27 +92,33 @@ fn getbbox_f_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
         };
 
         if left_nonzero && right_nonzero {
-            return Some((left as u32, right_x as u32));
+            return Some((
+                pixel_index_coordinate(left),
+                pixel_index_coordinate(right_x),
+            ));
         }
         if left_nonzero {
             let mut x = right_x;
             while x > left {
                 x -= 1;
                 if is_nonzero(x) {
-                    return Some((left as u32, x as u32));
+                    return Some((pixel_index_coordinate(left), pixel_index_coordinate(x)));
                 }
             }
-            return Some((left as u32, left as u32));
+            return Some((pixel_index_coordinate(left), pixel_index_coordinate(left)));
         }
         if right_nonzero {
             let mut x = left;
             while x < right_x {
                 x += 1;
                 if is_nonzero(x) {
-                    return Some((x as u32, right_x as u32));
+                    return Some((pixel_index_coordinate(x), pixel_index_coordinate(right_x)));
                 }
             }
-            return Some((right_x as u32, right_x as u32));
+            return Some((
+                pixel_index_coordinate(right_x),
+                pixel_index_coordinate(right_x),
+            ));
         }
 
         left += 1;
@@ -129,7 +150,7 @@ fn getbbox_i_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
         |sample: &[u8]| u32::from_le_bytes(sample.try_into().expect("4-byte I-mode sample")) != 0;
     let left = samples.clone().position(is_nonzero)?;
     let right = samples.rposition(is_nonzero).unwrap_or(left);
-    Some((left as u32, right as u32))
+    Some((pixel_index_coordinate(left), pixel_index_coordinate(right)))
 }
 
 fn getbbox_rgb_bounds(image: &crate::raster::RgbImage) -> Option<(u32, u32, u32, u32)> {
@@ -162,22 +183,35 @@ fn getbbox_rgb_bounds(image: &crate::raster::RgbImage) -> Option<(u32, u32, u32,
             .enumerate()
             .rposition(|(_, row)| row.chunks_exact(3).any(is_nonzero))
     {
-        return Some((0, top as u32, image.width(), bottom as u32 + 1));
+        return Some((
+            0,
+            pixel_index_coordinate(top),
+            image.width(),
+            pixel_index_exclusive_edge(bottom),
+        ));
     }
 
-    let (mut bbox_left, mut bbox_right, mut bbox_bottom) =
-        (left as u32, right as u32 + 1, top as u32 + 1);
+    let (mut bbox_left, mut bbox_right, mut bbox_bottom) = (
+        pixel_index_coordinate(left),
+        pixel_index_exclusive_edge(right),
+        pixel_index_exclusive_edge(top),
+    );
     for (y, row) in rows.enumerate().skip(top + 1) {
         let mut pixels = row.chunks_exact(3);
         let Some(row_left) = pixels.clone().position(is_nonzero) else {
             continue;
         };
         let row_right = pixels.rposition(is_nonzero).unwrap_or(row_left);
-        bbox_left = bbox_left.min(row_left as u32);
-        bbox_right = bbox_right.max(row_right as u32 + 1);
-        bbox_bottom = y as u32 + 1;
+        bbox_left = bbox_left.min(pixel_index_coordinate(row_left));
+        bbox_right = bbox_right.max(pixel_index_exclusive_edge(row_right));
+        bbox_bottom = pixel_index_exclusive_edge(y);
     }
-    Some((bbox_left, top as u32, bbox_right, bbox_bottom))
+    Some((
+        bbox_left,
+        pixel_index_coordinate(top),
+        bbox_right,
+        bbox_bottom,
+    ))
 }
 
 fn getbbox_i_bounds(image: &crate::raster::DynamicImage) -> Option<(u32, u32, u32, u32)> {
@@ -191,7 +225,7 @@ fn getbbox_i_bounds(image: &crate::raster::DynamicImage) -> Option<(u32, u32, u3
     // full-width bounds, only a reverse scan for the last nonzero row remains.
     for (y, row) in rows.clone().enumerate() {
         if let Some((left, right)) = getbbox_i_row_bounds(row) {
-            bounds.include_row(y as u32, left, right);
+            bounds.include_row(pixel_index_coordinate(y), left, right);
             if bounds.left == 0 && bounds.right == width - 1 {
                 if let Some((last_y, _)) = rows
                     .clone()
@@ -199,7 +233,7 @@ fn getbbox_i_bounds(image: &crate::raster::DynamicImage) -> Option<(u32, u32, u3
                     .rev()
                     .find(|(_, row)| getbbox_i_row_bounds(row).is_some())
                 {
-                    bounds.bottom = last_y as u32;
+                    bounds.bottom = pixel_index_coordinate(last_y);
                 }
                 break;
             }
@@ -216,7 +250,7 @@ fn getbbox_f_bounds(image: &crate::raster::DynamicImage) -> Option<(u32, u32, u3
     let mut full_width = false;
     for (y, row) in raw.chunks_exact(row_bytes).enumerate() {
         if let Some((left, right)) = getbbox_f_row_bounds(row) {
-            bounds.include_row(y as u32, left, right);
+            bounds.include_row(pixel_index_coordinate(y), left, right);
             if bounds.left == 0 && bounds.right == width - 1 {
                 // No later row can widen the horizontal bounds. Stop and find
                 // the bottom edge with a reverse row scan.
@@ -228,7 +262,7 @@ fn getbbox_f_bounds(image: &crate::raster::DynamicImage) -> Option<(u32, u32, u3
     if full_width {
         for (y, row) in raw.chunks_exact(row_bytes).enumerate().rev() {
             if getbbox_f_row_bounds(row).is_some() {
-                bounds.bottom = y as u32;
+                bounds.bottom = pixel_index_coordinate(y);
                 break;
             }
         }
@@ -236,6 +270,9 @@ fn getbbox_f_bounds(image: &crate::raster::DynamicImage) -> Option<(u32, u32, u3
     bounds.finish()
 }
 
+// `x` and `y` range directly over the image's u32 dimensions. Keep the
+// narrowing casts in this pixel loop so each nonzero sample stays branch-free.
+#[allow(clippy::cast_possible_truncation)]
 fn getbbox_l16_byte_bounds(image: &crate::raster::DynamicImage) -> Option<(u32, u32, u32, u32)> {
     // Pillow's ImagingCore getbbox dispatches I;16* through its byte-oriented
     // image8 scan. Each row contributes its first `width` stored bytes rather
