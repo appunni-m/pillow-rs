@@ -9,7 +9,10 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
-use super::{Image, PipelineOps, image_mode_name, materialization_cache};
+use super::{
+    Image, MaterializationCache, PipelineModeCache, PipelineOps, image_mode_name,
+    materialization_cache,
+};
 
 impl Image {
     /// Locks this image pipeline to one compute backend.
@@ -254,55 +257,16 @@ impl Image {
                 palette,
                 mode,
                 ..
-            } => {
-                if backend.is_some_and(|backend| backend != crate::Backend::Gpu) {
-                    return Err(PilError::ValueError(
-                        "GPU batch graph is locked to another backend".into(),
-                    ));
-                }
-                if palette.is_some() || matches!(explicit_mode.as_deref(), Some("P" | "PA")) {
-                    return Err(PilError::ValueError(
-                        "GPU graph palette boundary is not yet represented by a native plan".into(),
-                    ));
-                }
-                if let Some(pixels) = materialized.get() {
-                    let pixels = pixels.clone()?;
-                    let pixel_mode = explicit_mode
-                        .clone()
-                        .or_else(|| {
-                            mode.get()
-                                .and_then(|m| m.as_ref().ok().and_then(|m| m.clone()))
-                        })
-                        .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
-                    return Ok(self.gpu_cached_pending_graph(pixels, pixel_mode));
-                }
-                let (mut graph, skip) = if let Some(prefix) = ops.prefix_cache()
-                    && let Some(pixels) = prefix.materialized.get()
-                {
-                    let pixels = pixels.clone()?;
-                    let pixel_mode = explicit_mode
-                        .clone()
-                        .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
-                    (
-                        self.gpu_cached_pending_graph(pixels, pixel_mode),
-                        prefix.ops_len,
-                    )
-                } else {
-                    (source.gpu_pending_graph_depth(depth + 1)?, 0)
-                };
-                if graph
-                    .ops
-                    .len()
-                    .saturating_add(ops.len().saturating_sub(skip))
-                    > 256
-                {
-                    return Err(PilError::ValueError(
-                        "GPU batch graph exceeds 256 pending operations".into(),
-                    ));
-                }
-                graph.ops.extend(ops.as_slice()[skip..].iter());
-                Ok(graph)
-            }
+            } => self.gpu_pending_pipeline_graph_depth(
+                source,
+                ops,
+                materialized,
+                *backend,
+                explicit_mode.as_deref(),
+                palette.is_some(),
+                mode,
+                depth,
+            ),
             Self::Loaded(data) => Ok(GpuPendingGraph {
                 source: self,
                 cached: Some(data.image.clone()),
@@ -333,6 +297,67 @@ impl Image {
                 "GPU source has no proven native byte header/layout".into(),
             )),
         }
+    }
+
+    #[cfg(feature = "gpu")]
+    fn gpu_pending_pipeline_graph_depth<'a>(
+        &'a self,
+        source: &'a Arc<Image>,
+        ops: &'a PipelineOps,
+        materialized: &'a MaterializationCache,
+        backend: Option<crate::Backend>,
+        explicit_mode: Option<&'a str>,
+        has_palette: bool,
+        mode: &'a PipelineModeCache,
+        depth: usize,
+    ) -> Result<GpuPendingGraph<'a>, PilError> {
+        if backend.is_some_and(|backend| backend != crate::Backend::Gpu) {
+            return Err(PilError::ValueError(
+                "GPU batch graph is locked to another backend".into(),
+            ));
+        }
+        if has_palette || matches!(explicit_mode, Some("P" | "PA")) {
+            return Err(PilError::ValueError(
+                "GPU graph palette boundary is not yet represented by a native plan".into(),
+            ));
+        }
+        if let Some(pixels) = materialized.get() {
+            let pixels = pixels.clone()?;
+            let pixel_mode = explicit_mode
+                .map(str::to_owned)
+                .or_else(|| {
+                    mode.get()
+                        .and_then(|m| m.as_ref().ok().and_then(|m| m.clone()))
+                })
+                .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
+            return Ok(self.gpu_cached_pending_graph(pixels, pixel_mode));
+        }
+        let (mut graph, skip) = if let Some(prefix) = ops.prefix_cache()
+            && let Some(pixels) = prefix.materialized.get()
+        {
+            let pixels = pixels.clone()?;
+            let pixel_mode = explicit_mode
+                .map(str::to_owned)
+                .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
+            (
+                self.gpu_cached_pending_graph(pixels, pixel_mode),
+                prefix.ops_len,
+            )
+        } else {
+            (source.gpu_pending_graph_depth(depth + 1)?, 0)
+        };
+        if graph
+            .ops
+            .len()
+            .saturating_add(ops.len().saturating_sub(skip))
+            > 256
+        {
+            return Err(PilError::ValueError(
+                "GPU batch graph exceeds 256 pending operations".into(),
+            ));
+        }
+        graph.ops.extend(ops.as_slice()[skip..].iter());
+        Ok(graph)
     }
 
     #[cfg(feature = "gpu")]
