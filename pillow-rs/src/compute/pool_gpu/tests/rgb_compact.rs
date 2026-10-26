@@ -372,8 +372,6 @@ fn assert_rgb_transform_case(
 #[test]
 #[cfg(target_endian = "little")]
 fn rgb_autocontrast_packed_point_matches_cpu_for_every_rgb_tail() {
-    use crate::compute::BackendImpl;
-
     struct RestoreTelemetry(bool);
     impl Drop for RestoreTelemetry {
         fn drop(&mut self) {
@@ -397,66 +395,71 @@ fn rgb_autocontrast_packed_point_matches_cpu_for_every_rgb_tail() {
     }
 
     for (width, height) in [(5u32, 1u32), (3, 2), (5, 3), (8, 1)] {
-        let pixel_count = width as usize * height as usize;
-        let source = DynamicImage::ImageRgb8(
-            RgbImage::from_raw(
-                width,
-                height,
-                (0..pixel_count * 3)
-                    .map(|index| index.wrapping_mul(47).wrapping_add(index / 3) as u8)
-                    .collect(),
-            )
-            .expect("RGB AutoContrast source"),
-        );
-        let op = PipelineOp::Autocontrast {
-            cutoff: 0.0,
-            mask: None,
-        };
-        let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGB"))
-            .unwrap_or_else(|error| panic!("CPU RGB AutoContrast {width}x{height}: {error}"));
-        let actual = super::GpuPool
-            .execute_batch_strict(std::slice::from_ref(&op), &source, Some("RGB"))
-            .unwrap_or_else(|error| panic!("GPU RGB AutoContrast {width}x{height}: {error}"));
-        assert_eq!(actual.color(), expected.color(), "{width}x{height} mode");
-        assert_eq!(
-            actual.as_bytes(),
-            expected.as_bytes(),
-            "{width}x{height} pixels"
-        );
-
-        let resources = crate::compute::take_pipeline_resource_telemetry()
-            .unwrap_or_else(|| panic!("{width}x{height} resource receipt"));
-        let transfer_bytes = (pixel_count * 3).div_ceil(4) * 4;
-        assert_eq!(
-            resources.upload_bytes, transfer_bytes as u64,
-            "{width}x{height} upload"
-        );
-        assert_eq!(
-            resources.readback_bytes, transfer_bytes as u64,
-            "{width}x{height} readback"
-        );
-        assert_eq!(
-            resources.mode_conversion_count, 0,
-            "{width}x{height} conversion"
-        );
-        assert_eq!(
-            crate::compute::take_pipeline_dispatch_count(),
-            Some(1),
-            "{width}x{height} dispatch"
-        );
-        assert_eq!(
-            crate::compute::take_pipeline_backend_override(),
-            None,
-            "{width}x{height} fallback"
-        );
+        assert_rgb_autocontrast_packed_case(width, height);
     }
+}
+
+#[cfg(target_endian = "little")]
+fn assert_rgb_autocontrast_packed_case(width: u32, height: u32) {
+    use crate::compute::BackendImpl;
+
+    let pixel_count = width as usize * height as usize;
+    let source = DynamicImage::ImageRgb8(
+        RgbImage::from_raw(
+            width,
+            height,
+            (0..pixel_count * 3)
+                .map(|index| index.wrapping_mul(47).wrapping_add(index / 3) as u8)
+                .collect(),
+        )
+        .expect("RGB AutoContrast source"),
+    );
+    let op = PipelineOp::Autocontrast {
+        cutoff: 0.0,
+        mask: None,
+    };
+    let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGB"))
+        .unwrap_or_else(|error| panic!("CPU RGB AutoContrast {width}x{height}: {error}"));
+    let actual = super::GpuPool
+        .execute_batch_strict(std::slice::from_ref(&op), &source, Some("RGB"))
+        .unwrap_or_else(|error| panic!("GPU RGB AutoContrast {width}x{height}: {error}"));
+    assert_eq!(actual.color(), expected.color(), "{width}x{height} mode");
+    assert_eq!(
+        actual.as_bytes(),
+        expected.as_bytes(),
+        "{width}x{height} pixels"
+    );
+
+    let resources = crate::compute::take_pipeline_resource_telemetry()
+        .unwrap_or_else(|| panic!("{width}x{height} resource receipt"));
+    let transfer_bytes = (pixel_count * 3).div_ceil(4) * 4;
+    assert_eq!(
+        resources.upload_bytes, transfer_bytes as u64,
+        "{width}x{height} upload"
+    );
+    assert_eq!(
+        resources.readback_bytes, transfer_bytes as u64,
+        "{width}x{height} readback"
+    );
+    assert_eq!(
+        resources.mode_conversion_count, 0,
+        "{width}x{height} conversion"
+    );
+    assert_eq!(
+        crate::compute::take_pipeline_dispatch_count(),
+        Some(1),
+        "{width}x{height} dispatch"
+    );
+    assert_eq!(
+        crate::compute::take_pipeline_backend_override(),
+        None,
+        "{width}x{height} fallback"
+    );
 }
 
 #[test]
 #[cfg(target_endian = "little")]
 fn rgb_equalize_packed_histogram_matches_cpu_for_every_rgb_tail() {
-    use crate::compute::BackendImpl;
-
     struct RestoreTelemetry(bool);
     impl Drop for RestoreTelemetry {
         fn drop(&mut self) {
@@ -482,62 +485,69 @@ fn rgb_equalize_packed_histogram_matches_cpu_for_every_rgb_tail() {
     // Exercise every compact RGB word tail plus the row-tiled dispatch
     // layout. These counts exceed Pillow's zero-step equalize boundary.
     for (width, height) in [(257u32, 1u32), (258, 1), (259, 1), (260, 1), (16, 17)] {
-        let pixel_count = width as usize * height as usize;
-        let bytes: Vec<u8> = (0..pixel_count)
-            .flat_map(|pixel| {
-                [
-                    pixel.wrapping_mul(73).wrapping_add(pixel / 17) as u8,
-                    pixel
-                        .wrapping_mul(41)
-                        .wrapping_add(pixel / 11)
-                        .wrapping_add(19) as u8,
-                    pixel
-                        .wrapping_mul(29)
-                        .wrapping_add(pixel / 7)
-                        .wrapping_add(37) as u8,
-                ]
-            })
-            .collect();
-        let source = DynamicImage::ImageRgb8(
-            RgbImage::from_raw(width, height, bytes).expect("RGB Equalize source"),
-        );
-        let op = PipelineOp::Equalize;
-        let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGB"))
-            .unwrap_or_else(|error| panic!("CPU RGB Equalize {width}x{height}: {error}"));
-        let actual = super::GpuPool
-            .execute_batch_strict(std::slice::from_ref(&op), &source, Some("RGB"))
-            .unwrap_or_else(|error| panic!("GPU RGB Equalize {width}x{height}: {error}"));
-        assert_eq!(actual.color(), expected.color(), "{width}x{height} mode");
-        assert_eq!(
-            actual.as_bytes(),
-            expected.as_bytes(),
-            "{width}x{height} pixels"
-        );
-
-        let resources = crate::compute::take_pipeline_resource_telemetry()
-            .unwrap_or_else(|| panic!("{width}x{height} resource receipt"));
-        let transfer_bytes = (pixel_count * 3).div_ceil(4) * 4;
-        assert_eq!(
-            resources.upload_bytes, transfer_bytes as u64,
-            "{width}x{height} upload"
-        );
-        assert_eq!(
-            resources.readback_bytes, transfer_bytes as u64,
-            "{width}x{height} readback"
-        );
-        assert_eq!(
-            resources.mode_conversion_count, 0,
-            "{width}x{height} conversion"
-        );
-        assert_eq!(
-            crate::compute::take_pipeline_dispatch_count(),
-            Some(3),
-            "{width}x{height} compute dispatches"
-        );
-        assert_eq!(
-            crate::compute::take_pipeline_backend_override(),
-            None,
-            "{width}x{height} fallback"
-        );
+        assert_rgb_equalize_packed_case(width, height);
     }
+}
+
+#[cfg(target_endian = "little")]
+fn assert_rgb_equalize_packed_case(width: u32, height: u32) {
+    use crate::compute::BackendImpl;
+
+    let pixel_count = width as usize * height as usize;
+    let bytes: Vec<u8> = (0..pixel_count)
+        .flat_map(|pixel| {
+            [
+                pixel.wrapping_mul(73).wrapping_add(pixel / 17) as u8,
+                pixel
+                    .wrapping_mul(41)
+                    .wrapping_add(pixel / 11)
+                    .wrapping_add(19) as u8,
+                pixel
+                    .wrapping_mul(29)
+                    .wrapping_add(pixel / 7)
+                    .wrapping_add(37) as u8,
+            ]
+        })
+        .collect();
+    let source = DynamicImage::ImageRgb8(
+        RgbImage::from_raw(width, height, bytes).expect("RGB Equalize source"),
+    );
+    let op = PipelineOp::Equalize;
+    let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGB"))
+        .unwrap_or_else(|error| panic!("CPU RGB Equalize {width}x{height}: {error}"));
+    let actual = super::GpuPool
+        .execute_batch_strict(std::slice::from_ref(&op), &source, Some("RGB"))
+        .unwrap_or_else(|error| panic!("GPU RGB Equalize {width}x{height}: {error}"));
+    assert_eq!(actual.color(), expected.color(), "{width}x{height} mode");
+    assert_eq!(
+        actual.as_bytes(),
+        expected.as_bytes(),
+        "{width}x{height} pixels"
+    );
+
+    let resources = crate::compute::take_pipeline_resource_telemetry()
+        .unwrap_or_else(|| panic!("{width}x{height} resource receipt"));
+    let transfer_bytes = (pixel_count * 3).div_ceil(4) * 4;
+    assert_eq!(
+        resources.upload_bytes, transfer_bytes as u64,
+        "{width}x{height} upload"
+    );
+    assert_eq!(
+        resources.readback_bytes, transfer_bytes as u64,
+        "{width}x{height} readback"
+    );
+    assert_eq!(
+        resources.mode_conversion_count, 0,
+        "{width}x{height} conversion"
+    );
+    assert_eq!(
+        crate::compute::take_pipeline_dispatch_count(),
+        Some(3),
+        "{width}x{height} compute dispatches"
+    );
+    assert_eq!(
+        crate::compute::take_pipeline_backend_override(),
+        None,
+        "{width}x{height} fallback"
+    );
 }
