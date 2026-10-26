@@ -22,12 +22,6 @@
       "signature": "pub(super) fn execute_reduce_rgb_with_sparse_rows( img: &DynamicImage, x_factor: u32, y_factor: u32, explicit_mode: Option<&str>, ) -> SparseRgbReductionResult {"
     },
     {
-      "lines": 156,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/resize/float.rs",
-      "signature": "pub(crate) fn resize_f_with_fma<F: F64MulAdd>( img: &DynamicImage, dst_w: u32, dst_h: u32, filter: &ResampleFilter, fma: &F, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 237,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/rotate/affine.rs",
@@ -390,11 +384,6 @@
     "pillow-rs/src/compute/pool_cpu/ops/reduce.rs": {
       "owner": "lazytrot",
       "reason": "Reduce retains pre-existing functions above the 100-line ratchet after the geometry family split; track the remaining reduction under pillow-rs#wtxv.",
-      "reduction_task": "pillow-rs#wtxv"
-    },
-    "pillow-rs/src/compute/pool_cpu/ops/resize/float.rs": {
-      "owner": "lazytrot",
-      "reason": "Resize F-mode retains pre-existing functions above the 100-line ratchet after the geometry family split; track the remaining reduction under pillow-rs#wtxv.",
       "reduction_task": "pillow-rs#wtxv"
     },
     "pillow-rs/src/compute/pool_cpu/ops/rotate/affine.rs": {

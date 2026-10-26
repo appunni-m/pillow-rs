@@ -634,9 +634,22 @@ pub(crate) fn resize_f_with_fma<F: F64MulAdd>(
         return Ok(DynamicImage::ImageRgba8(out));
     }
 
+    resize_f_resample(&src_floats, sw, sh, dst_w, dst_h, filter, fma)
+}
+
+#[inline]
+fn resize_f_resample<F: F64MulAdd>(
+    src_floats: &[f32],
+    sw: u32,
+    sh: u32,
+    dst_w: u32,
+    dst_h: u32,
+    filter: &ResampleFilter,
+    fma: &F,
+) -> Result<DynamicImage, PilError> {
     // The x86 finite-only FMA route is admitted only after proving the source
     // samples finite. Portable and other architecture paths skip this scan.
-    let finite_source_samples = f_resize_samples_allow_finite_fma(fma, &src_floats);
+    let finite_source_samples = f_resize_samples_allow_finite_fma(fma, src_floats);
     let (kernel, support) = resample_kernel(filter);
     let needs_horizontal = dst_w != sw;
     let needs_vertical = dst_h != sh;
@@ -651,7 +664,7 @@ pub(crate) fn resize_f_with_fma<F: F64MulAdd>(
         let h_coeffs = precompute_coeffs_f64(dst_w, sw, kernel, support);
         if finite_source_samples && f_resize_coefficients_allow_finite_fma(&h_coeffs) {
             f_resize_horizontal_pass::<true, _>(
-                &src_floats,
+                src_floats,
                 &mut intermediate,
                 sw as usize,
                 dst_w as usize,
@@ -661,7 +674,7 @@ pub(crate) fn resize_f_with_fma<F: F64MulAdd>(
             );
         } else {
             f_resize_horizontal_pass::<false, _>(
-                &src_floats,
+                src_floats,
                 &mut intermediate,
                 sw as usize,
                 dst_w as usize,
