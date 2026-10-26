@@ -301,22 +301,37 @@ fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
         h: 4,
         filter: ResampleFilter::Bilinear,
     };
-    let box_resize = |w, h| PipelineOp::Resize {
+    assert_f_resize_dyadic_basic_cases(&image, &bilinear);
+    assert_f_resize_dyadic_box_chain_cases(&image);
+    assert_f_resize_dyadic_arithmetic_filter_boundaries();
+    assert_f_resize_dyadic_geometry_rejections(&image);
+    assert_f_resize_dyadic_source_word_rejections(&bilinear);
+    assert!(!gpu_f_resize_dyadic_is_exact(
+        std::slice::from_ref(&bilinear),
+        &image,
+        Some("I")
+    ));
+}
+
+fn dyadic_box_resize(w: u32, h: u32) -> PipelineOp {
+    PipelineOp::Resize {
         w,
         h,
         filter: ResampleFilter::Box,
-    };
+    }
+}
 
+fn assert_f_resize_dyadic_basic_cases(image: &DynamicImage, bilinear: &PipelineOp) {
     // Bilinear 2x rows contain only exact dyadic weights.  A 4:1 Box
     // reduction has four equal dyadic taps; both exercise marker 6.
     assert!(gpu_f_resize_dyadic_is_exact(
-        std::slice::from_ref(&bilinear),
-        &image,
+        std::slice::from_ref(bilinear),
+        image,
         Some("F")
     ));
     assert!(gpu_f_resize_dyadic_is_exact(
-        &[box_resize(1, 2)],
-        &image,
+        &[dyadic_box_resize(1, 2)],
+        image,
         Some("F")
     ));
     assert!(gpu_f_resize_dyadic_is_exact(
@@ -325,18 +340,20 @@ fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
                 data: bytes::Bytes::copy_from_slice(image.as_bytes()),
                 mode: PixelMode::F,
             },
-            box_resize(1, 2),
+            dyadic_box_resize(1, 2),
         ],
-        &image,
+        image,
         Some("F")
     ));
+}
 
+fn assert_f_resize_dyadic_box_chain_cases(image: &DynamicImage) {
     // Two changed power-of-two Box axes remain exact because every
     // horizontal dyadic average is exactly representable before the
     // vertical pass consumes it.
     assert!(gpu_f_resize_dyadic_is_exact(
-        &[box_resize(1, 1)],
-        &image,
+        &[dyadic_box_resize(1, 1)],
+        image,
         Some("F")
     ));
     // Chained Box reductions retain exactness when the cumulative dyadic
@@ -345,13 +362,13 @@ fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
     // of two, so this guards the chain proof rather than the one-pass
     // source-word check above.
     assert!(gpu_f_resize_dyadic_is_exact(
-        &[box_resize(2, 1), box_resize(1, 1)],
-        &image,
+        &[dyadic_box_resize(2, 1), dyadic_box_resize(1, 1)],
+        image,
         Some("F")
     ));
     assert!(gpu_f_resize_dyadic_is_exact(
         &[
-            box_resize(3, 2),
+            dyadic_box_resize(3, 2),
             PipelineOp::PutData {
                 data: bytes::Bytes::from(
                     [1.0f32, 2.0, 4.0, 8.0, 16.0, 32.0]
@@ -361,10 +378,10 @@ fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
                 ),
                 mode: PixelMode::F,
             },
-            box_resize(2, 1),
-            box_resize(1, 1),
+            dyadic_box_resize(2, 1),
+            dyadic_box_resize(1, 1),
         ],
-        &image,
+        image,
         Some("F")
     ));
     // Mixing an arithmetic filter into the chain is still outside the
@@ -372,14 +389,14 @@ fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
     // domain after an intermediate f32 store.
     assert!(!gpu_f_resize_dyadic_is_exact(
         &[
-            box_resize(2, 1),
+            dyadic_box_resize(2, 1),
             PipelineOp::Resize {
                 w: 1,
                 h: 1,
                 filter: ResampleFilter::Bilinear,
             },
         ],
-        &image,
+        image,
         Some("F")
     ));
     // Non-divisor Box geometry can still be dyadic when each output row
@@ -387,29 +404,13 @@ fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
     // taps, so it exercises the generalized row proof rather than the
     // integral power-of-two ratio shortcut.
     assert!(gpu_f_resize_dyadic_is_exact(
-        &[box_resize(3, 4)],
-        &image,
+        &[dyadic_box_resize(3, 4)],
+        image,
         Some("F")
     ));
-    let non_dyadic_box_source = DynamicImage::ImageRgba8(
-        RgbaImage::from_raw(
-            7,
-            1,
-            [1.0f32, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
-                .into_iter()
-                .flat_map(f32::to_le_bytes)
-                .collect(),
-        )
-        .unwrap(),
-    );
-    // The middle 7 -> 3 Box row has three 1/3 taps, which is outside the
-    // dyadic device proof even though the fixed shader table is valid.
-    assert!(!gpu_f_resize_dyadic_is_exact(
-        &[box_resize(3, 1)],
-        &non_dyadic_box_source,
-        Some("F")
-    ));
+}
 
+fn assert_f_resize_dyadic_arithmetic_filter_boundaries() {
     // The smallest two-sample reduction has exact, non-negative 1/2
     // rows for these arithmetic filters.  Their kernels differ away
     // from this geometry, so this matrix guards the proof's row-level
@@ -462,6 +463,28 @@ fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
             Some("F")
         ));
     }
+}
+
+fn assert_f_resize_dyadic_geometry_rejections(image: &DynamicImage) {
+    let non_dyadic_box_source = DynamicImage::ImageRgba8(
+        RgbaImage::from_raw(
+            7,
+            1,
+            [1.0f32, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
+                .into_iter()
+                .flat_map(f32::to_le_bytes)
+                .collect(),
+        )
+        .unwrap(),
+    );
+    // The middle 7 -> 3 Box row has three 1/3 taps, which is outside the
+    // dyadic device proof even though the fixed shader table is valid.
+    assert!(!gpu_f_resize_dyadic_is_exact(
+        &[dyadic_box_resize(3, 1)],
+        &non_dyadic_box_source,
+        Some("F")
+    ));
+
     let wide_two_axis = DynamicImage::ImageRgba8(
         RgbaImage::from_raw(
             4,
@@ -485,7 +508,7 @@ fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
     // A second reduction would expose a 24-bit-plus significand span;
     // retain exact host control rather than relying on device rounding.
     assert!(!gpu_f_resize_dyadic_is_exact(
-        &[box_resize(1, 1)],
+        &[dyadic_box_resize(1, 1)],
         &wide_two_axis,
         Some("F")
     ));
@@ -495,10 +518,12 @@ fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
             h: 4,
             filter: ResampleFilter::Bicubic,
         }],
-        &image,
+        image,
         Some("F")
     ));
+}
 
+fn assert_f_resize_dyadic_source_word_rejections(bilinear: &PipelineOp) {
     let rejects = [
         (
             [(-0.0f32), 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0],
@@ -532,16 +557,10 @@ fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
             .unwrap(),
         );
         assert!(
-            !gpu_f_resize_dyadic_is_exact(std::slice::from_ref(&bilinear), &rejected, Some("F")),
+            !gpu_f_resize_dyadic_is_exact(std::slice::from_ref(bilinear), &rejected, Some("F")),
             "unexpected admission for {_label}"
         );
     }
-
-    assert!(!gpu_f_resize_dyadic_is_exact(
-        std::slice::from_ref(&bilinear),
-        &image,
-        Some("I")
-    ));
 }
 
 #[test]
@@ -562,9 +581,22 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
         h: 2,
         filter: ResampleFilter::Bilinear,
     };
-    assert!(gpu_f_resize_f64_is_exact(
+    assert_f_resize_f64_two_axis_proofs(&image, &horizontal);
+    assert_f_resize_f64_putdata_proofs(&image);
+    assert_f_resize_f64_mixed_geometry_proofs(&image);
+    assert_f_resize_f64_special_value_proofs(&horizontal);
+    assert_f_resize_f64_subnormal_word_proofs(&horizontal);
+    assert!(!gpu_f_resize_f64_is_exact(
         std::slice::from_ref(&horizontal),
         &image,
+        Some("I")
+    ));
+}
+
+fn assert_f_resize_f64_two_axis_proofs(image: &DynamicImage, horizontal: &PipelineOp) {
+    assert!(gpu_f_resize_f64_is_exact(
+        std::slice::from_ref(horizontal),
+        image,
         Some("F")
     ));
 
@@ -576,7 +608,7 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
             h: 1,
             filter: ResampleFilter::Bilinear,
         }],
-        &image,
+        image,
         Some("F")
     ));
 
@@ -589,12 +621,12 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
     };
     assert!(!gpu_f_resize_integer_is_exact(
         std::slice::from_ref(&non_dyadic_two_axis),
-        &image,
+        image,
         Some("F")
     ));
     assert!(gpu_f_resize_f64_is_exact(
         std::slice::from_ref(&non_dyadic_two_axis),
-        &image,
+        image,
         Some("F")
     ));
     let filtered_chain = [
@@ -609,12 +641,10 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
             filter: ResampleFilter::Lanczos,
         },
     ];
-    assert!(gpu_f_resize_f64_is_exact(
-        &filtered_chain,
-        &image,
-        Some("F")
-    ));
+    assert!(gpu_f_resize_f64_is_exact(&filtered_chain, image, Some("F")));
+}
 
+fn assert_f_resize_f64_putdata_proofs(image: &DynamicImage) {
     // PutData(F) replaces the deferred source words before the resize;
     // the marker-9 proof must validate and consume that replacement rather
     // than conservatively routing an otherwise exact non-dyadic resize.
@@ -636,7 +666,7 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
                 filter: ResampleFilter::Bilinear,
             },
         ],
-        &image,
+        image,
         Some("F")
     ));
     assert!(!gpu_f_resize_f64_is_exact(
@@ -651,7 +681,7 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
                 filter: ResampleFilter::Bilinear,
             },
         ],
-        &image,
+        image,
         Some("F")
     ));
     assert!(!gpu_f_resize_f64_is_exact(
@@ -666,9 +696,12 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
                 filter: ResampleFilter::Bilinear,
             },
         ],
-        &image,
+        image,
         Some("F")
     ));
+}
+
+fn assert_f_resize_f64_mixed_geometry_proofs(image: &DynamicImage) {
     // The explicit horizontal/vertical compute-pass boundary also makes
     // the opposite mixed geometry safe: horizontal upscaling is fully
     // materialized before the vertical downscale consumes it.
@@ -678,7 +711,7 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
             h: 1,
             filter: ResampleFilter::Bilinear,
         }],
-        &image,
+        image,
         Some("F")
     ));
     // Marker 6 and the broader dyadic Box proof retain their own
@@ -715,12 +748,9 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
         &mixed_box_source,
         Some("F")
     ));
-    assert!(!gpu_f_resize_f64_is_exact(
-        std::slice::from_ref(&horizontal),
-        &image,
-        Some("I")
-    ));
+}
 
+fn assert_f_resize_f64_special_value_proofs(horizontal: &PipelineOp) {
     for value in [f32::NAN.to_bits(), f32::INFINITY.to_bits()] {
         let special = DynamicImage::ImageRgba8(
             RgbaImage::from_raw(
@@ -734,11 +764,13 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
             .unwrap(),
         );
         assert!(
-            gpu_f_resize_f64_is_exact(std::slice::from_ref(&horizontal), &special, Some("F")),
+            gpu_f_resize_f64_is_exact(std::slice::from_ref(horizontal), &special, Some("F")),
             "finite-coefficient special-value rows should use the exact marker"
         );
     }
+}
 
+fn assert_f_resize_f64_subnormal_word_proofs(horizontal: &PipelineOp) {
     // Finite subnormal words use the explicit 2^-149 source scale and
     // remain eligible for the same exact integer reducer.  Keep both
     // signs here; the filtered path canonicalizes only an exact zero
@@ -766,7 +798,7 @@ fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
             .unwrap(),
         );
         assert!(gpu_f_resize_f64_is_exact(
-            std::slice::from_ref(&horizontal),
+            std::slice::from_ref(horizontal),
             &subnormal,
             Some("F")
         ));

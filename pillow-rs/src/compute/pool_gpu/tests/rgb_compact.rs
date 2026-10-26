@@ -25,138 +25,17 @@ fn gpu_native_rgb_compact_input_requires_supported_native_rgb_operations() {
     let min_filter = PipelineOp::MinFilter { size: 3 };
     let max_filter = PipelineOp::MaxFilter { size: 3 };
     let box_blur = PipelineOp::BoxBlur { radius: 1 };
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&convert_rgba),
+    assert_rgb_compact_conversion_and_transform_support(&rgb, &convert_rgba, &transform);
+    assert_rgb_compact_filter_support(
         &rgb,
-        None,
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&convert_rgba),
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&transform),
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&transform),
-        &rgb,
-        None,
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&equalize),
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&equalize),
-        &rgb,
-        None,
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&median),
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&median),
-        &rgb,
-        None,
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&min_filter),
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&min_filter),
-        &rgb,
-        None,
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&max_filter),
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&max_filter),
-        &rgb,
-        None,
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&box_blur),
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&box_blur),
-        &rgb,
-        None,
-        false
-    ));
-    assert!(!super::gpu_native_rgb_compact_input(
-        &[PipelineOp::BoxBlur { radius: 2 }],
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(!super::gpu_native_rgb_compact_input(
-        &[PipelineOp::MaxFilter { size: 5 }],
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(!super::gpu_native_rgb_compact_input(
-        &[PipelineOp::MinFilter { size: 5 }],
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(!super::gpu_native_rgb_compact_input(
-        &[PipelineOp::MedianFilter { size: 5 }],
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(!super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&equalize),
-        &rgb,
-        Some("RGBA"),
-        false
-    ));
-    assert!(!super::gpu_native_rgb_compact_input(
-        std::slice::from_ref(&convert_rgba),
-        &rgb,
-        Some("HSV"),
-        false
-    ));
-    assert!(!super::gpu_native_rgb_compact_input(
-        &[convert_rgba.clone(), PipelineOp::Duplicate],
-        &rgb,
-        Some("RGB"),
-        false
-    ));
-    assert!(!super::gpu_native_rgb_compact_input(
-        &[transform.clone(), PipelineOp::Duplicate],
-        &rgb,
-        Some("RGB"),
-        false
-    ));
+        &equalize,
+        &median,
+        &min_filter,
+        &max_filter,
+        &box_blur,
+    );
+    assert_rgb_compact_size_rejections(&rgb);
+    assert_rgb_compact_mode_and_context_rejections(&rgb, &convert_rgba, &transform, &equalize);
     let empty = DynamicImage::ImageRgb8(RgbImage::new(0, 1));
     assert!(!super::gpu_native_rgb_compact_input(
         std::slice::from_ref(&convert_rgba),
@@ -181,11 +60,169 @@ fn gpu_native_rgb_compact_input_requires_supported_native_rgb_operations() {
     ));
 }
 
+fn assert_rgb_compact_conversion_and_transform_support(
+    rgb: &DynamicImage,
+    convert_rgba: &PipelineOp,
+    transform: &PipelineOp,
+) {
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(convert_rgba),
+        rgb,
+        None,
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(convert_rgba),
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(transform),
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(transform),
+        rgb,
+        None,
+        false
+    ));
+}
+
+fn assert_rgb_compact_filter_support(
+    rgb: &DynamicImage,
+    equalize: &PipelineOp,
+    median: &PipelineOp,
+    min_filter: &PipelineOp,
+    max_filter: &PipelineOp,
+    box_blur: &PipelineOp,
+) {
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(equalize),
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(equalize),
+        rgb,
+        None,
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(median),
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(median),
+        rgb,
+        None,
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(min_filter),
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(min_filter),
+        rgb,
+        None,
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(max_filter),
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(max_filter),
+        rgb,
+        None,
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(box_blur),
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(box_blur),
+        rgb,
+        None,
+        false
+    ));
+}
+
+fn assert_rgb_compact_size_rejections(rgb: &DynamicImage) {
+    assert!(!super::gpu_native_rgb_compact_input(
+        &[PipelineOp::BoxBlur { radius: 2 }],
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(!super::gpu_native_rgb_compact_input(
+        &[PipelineOp::MaxFilter { size: 5 }],
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(!super::gpu_native_rgb_compact_input(
+        &[PipelineOp::MinFilter { size: 5 }],
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(!super::gpu_native_rgb_compact_input(
+        &[PipelineOp::MedianFilter { size: 5 }],
+        rgb,
+        Some("RGB"),
+        false
+    ));
+}
+
+fn assert_rgb_compact_mode_and_context_rejections(
+    rgb: &DynamicImage,
+    convert_rgba: &PipelineOp,
+    transform: &PipelineOp,
+    equalize: &PipelineOp,
+) {
+    assert!(!super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(equalize),
+        rgb,
+        Some("RGBA"),
+        false
+    ));
+    assert!(!super::gpu_native_rgb_compact_input(
+        std::slice::from_ref(convert_rgba),
+        rgb,
+        Some("HSV"),
+        false
+    ));
+    assert!(!super::gpu_native_rgb_compact_input(
+        &[convert_rgba.clone(), PipelineOp::Duplicate],
+        rgb,
+        Some("RGB"),
+        false
+    ));
+    assert!(!super::gpu_native_rgb_compact_input(
+        &[transform.clone(), PipelineOp::Duplicate],
+        rgb,
+        Some("RGB"),
+        false
+    ));
+}
+
 #[test]
 #[cfg(target_endian = "little")]
 fn rgb_transform_consumes_compact_input_for_affine_and_geometry_shaders() {
-    use crate::compute::BackendImpl;
-
     struct RestoreTelemetry(bool);
     impl Drop for RestoreTelemetry {
         fn drop(&mut self) {
@@ -220,7 +257,16 @@ fn rgb_transform_consumes_compact_input_for_affine_and_geometry_shaders() {
         )
         .expect("RGB transform source"),
     );
-    let cases = [
+    for (name, mode, op) in rgb_transform_cases(width, height) {
+        assert_rgb_transform_case(name, mode, &op, &source, pixel_count);
+    }
+}
+
+fn rgb_transform_cases(
+    width: u32,
+    height: u32,
+) -> [(&'static str, Option<&'static str>, PipelineOp); 3] {
+    [
         (
             "affine nearest",
             None,
@@ -263,56 +309,64 @@ fn rgb_transform_consumes_compact_input_for_affine_and_geometry_shaders() {
                 palette_fill: None,
             },
         ),
-    ];
+    ]
+}
 
-    for (name, mode, op) in cases {
-        if name == "perspective geometry table" {
-            assert!(super::gpu_transform_uses_geometry_table(
-                &op,
-                mode,
-                (width, height)
-            ));
-        }
-        let expected = crate::compute::registry::execute_cpu(&op, &source, mode)
-            .unwrap_or_else(|error| panic!("CPU {name}: {error}"));
-        let actual = super::GpuPool
-            .execute_batch_strict(std::slice::from_ref(&op), &source, mode)
-            .unwrap_or_else(|error| panic!("GPU {name}: {error}"));
-        assert_eq!(actual.color(), expected.color(), "{name} mode");
-        assert_eq!(
-            actual.dimensions(),
-            expected.dimensions(),
-            "{name} dimensions"
-        );
-        assert_eq!(actual.as_bytes(), expected.as_bytes(), "{name} pixels");
+fn assert_rgb_transform_case(
+    name: &str,
+    mode: Option<&str>,
+    op: &PipelineOp,
+    source: &DynamicImage,
+    pixel_count: usize,
+) {
+    use crate::compute::BackendImpl;
 
-        let resources = crate::compute::take_pipeline_resource_telemetry()
-            .unwrap_or_else(|| panic!("{name} resource receipt"));
-        assert_eq!(
-            resources.upload_bytes,
-            (pixel_count * 3).div_ceil(4) as u64 * 4,
-            "{name} upload"
-        );
-        assert_eq!(
-            resources.readback_bytes,
-            pixel_count as u64 * 4,
-            "{name} readback"
-        );
-        assert_eq!(
-            resources.mode_conversion_count, 0,
-            "{name} input conversion"
-        );
-        assert_eq!(
-            crate::compute::take_pipeline_dispatch_count(),
-            Some(1),
-            "{name} dispatches"
-        );
-        assert_eq!(
-            crate::compute::take_pipeline_backend_override(),
-            None,
-            "{name} fallback"
-        );
+    if name == "perspective geometry table" {
+        assert!(super::gpu_transform_uses_geometry_table(
+            op,
+            mode,
+            source.dimensions()
+        ));
     }
+    let expected = crate::compute::registry::execute_cpu(op, source, mode)
+        .unwrap_or_else(|error| panic!("CPU {name}: {error}"));
+    let actual = super::GpuPool
+        .execute_batch_strict(std::slice::from_ref(op), source, mode)
+        .unwrap_or_else(|error| panic!("GPU {name}: {error}"));
+    assert_eq!(actual.color(), expected.color(), "{name} mode");
+    assert_eq!(
+        actual.dimensions(),
+        expected.dimensions(),
+        "{name} dimensions"
+    );
+    assert_eq!(actual.as_bytes(), expected.as_bytes(), "{name} pixels");
+
+    let resources = crate::compute::take_pipeline_resource_telemetry()
+        .unwrap_or_else(|| panic!("{name} resource receipt"));
+    assert_eq!(
+        resources.upload_bytes,
+        (pixel_count * 3).div_ceil(4) as u64 * 4,
+        "{name} upload"
+    );
+    assert_eq!(
+        resources.readback_bytes,
+        pixel_count as u64 * 4,
+        "{name} readback"
+    );
+    assert_eq!(
+        resources.mode_conversion_count, 0,
+        "{name} input conversion"
+    );
+    assert_eq!(
+        crate::compute::take_pipeline_dispatch_count(),
+        Some(1),
+        "{name} dispatches"
+    );
+    assert_eq!(
+        crate::compute::take_pipeline_backend_override(),
+        None,
+        "{name} fallback"
+    );
 }
 
 #[test]

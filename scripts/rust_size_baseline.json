@@ -88,30 +88,6 @@
       "signature": "fn encode_graph( plan: &Plan<'_>, gpu: &'static GpuInner, encoder: &mut wgpu::CommandEncoder, ) -> Result<EncodedGraph, PilError> {"
     },
     {
-      "lines": 223,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/resize_float_proofs.rs",
-      "signature": "fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {"
-    },
-    {
-      "lines": 203,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/resize_float_proofs.rs",
-      "signature": "fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {"
-    },
-    {
-      "lines": 176,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs",
-      "signature": "fn gpu_native_rgb_compact_input_requires_supported_native_rgb_operations() {"
-    },
-    {
-      "lines": 124,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs",
-      "signature": "fn rgb_transform_consumes_compact_input_for_affine_and_geometry_shaders() {"
-    },
-    {
       "lines": 408,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs",
@@ -177,16 +153,6 @@
     "pillow-rs/src/compute/pool_gpu/stream/encoding.rs": {
       "owner": "lazytrot",
       "reason": "Moved the existing graph encoder from stream.rs without increasing its over-limit functions; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/tests/resize_float_proofs.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs": {
