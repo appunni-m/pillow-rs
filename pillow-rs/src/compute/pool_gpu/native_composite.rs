@@ -1,33 +1,52 @@
 use super::*;
 
+#[cfg(target_endian = "little")]
+struct NativeCompositeInput<'a> {
+    image: &'a DynamicImage,
+    other: &'a DynamicImage,
+    mask: &'a DynamicImage,
+    channels: u8,
+    mask_channels: u8,
+    mask_channel: u8,
+}
+
+#[cfg(target_endian = "little")]
+struct NativeCompositePlan {
+    width: u32,
+    height: u32,
+    channels: u8,
+    mask_channel: u8,
+    output_length: usize,
+    input_transfer: u64,
+    other_transfer: u64,
+    mask_transfer: u64,
+    output_transfer: u64,
+    word_count: u32,
+    workgroups: u32,
+    groups_x: u32,
+    groups_y: u32,
+}
+
 impl GpuInner {
-    /// Execute a full-size ImageChops composite using native byte buffers.
-    /// The shader treats each packed word as four independent result bytes,
-    /// so L/LA/RGB channels and an L/alpha mask stay compact from upload to
-    /// readback instead of expanding every input to packed RGBA pixels.
     #[cfg(target_endian = "little")]
-    pub(in crate::compute::pool_gpu) fn execute_native_composite(
+    #[inline(always)]
+    fn plan_native_composite(
         &self,
-        image: &DynamicImage,
-        other: &DynamicImage,
-        mask: &DynamicImage,
-        channels: u8,
-        mask_channels: u8,
-        mask_channel: u8,
-        buffers: &mut BufferPool,
-    ) -> Result<DynamicImage, PilError> {
-        let (width, height) = image.dimensions();
-        let dimensions = CheckedDims::new(width, height, channels)?;
+        input: &NativeCompositeInput<'_>,
+        buffers: &BufferPool,
+    ) -> Result<NativeCompositePlan, PilError> {
+        let (width, height) = input.image.dimensions();
+        let dimensions = CheckedDims::new(width, height, input.channels)?;
         let pixels = dimensions.total_pixels();
         let output_length = dimensions.total_bytes();
         let mask_length = pixels
-            .checked_mul(usize::from(mask_channels))
+            .checked_mul(usize::from(input.mask_channels))
             .ok_or_else(|| PilError::ValueError("GPU native composite is too large".into()))?;
-        if image.as_bytes().len() != output_length
-            || other.dimensions() != (width, height)
-            || other.as_bytes().len() != output_length
-            || mask.dimensions() != (width, height)
-            || mask.as_bytes().len() != mask_length
+        if input.image.as_bytes().len() != output_length
+            || input.other.dimensions() != (width, height)
+            || input.other.as_bytes().len() != output_length
+            || input.mask.dimensions() != (width, height)
+            || input.mask.as_bytes().len() != mask_length
         {
             return Err(PilError::InternalError(
                 "GPU native composite layout mismatch".into(),
@@ -64,18 +83,43 @@ impl GpuInner {
             PilError::ValueError("GPU native composite exceeds adapter workgroup grid limit".into())
         })?;
 
+        Ok(NativeCompositePlan {
+            width,
+            height,
+            channels: input.channels,
+            mask_channel: input.mask_channel,
+            output_length,
+            input_transfer,
+            other_transfer,
+            mask_transfer,
+            output_transfer,
+            word_count,
+            workgroups,
+            groups_x,
+            groups_y,
+        })
+    }
+
+    #[cfg(target_endian = "little")]
+    #[inline(always)]
+    fn prepare_native_composite_buffers(
+        &self,
+        input: &NativeCompositeInput<'_>,
+        plan: &NativeCompositePlan,
+        buffers: &mut BufferPool,
+    ) -> Result<(), PilError> {
         buffers.img2_arena.ensure_capacity(
             &self.device,
             "gpu_composite_native_img2",
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            other_transfer as usize,
+            plan.other_transfer as usize,
             4,
         );
         buffers.img3_arena.ensure_capacity(
             &self.device,
             "gpu_composite_native_mask",
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mask_transfer as usize,
+            plan.mask_transfer as usize,
             4,
         );
         buffers.params_arena.ensure_capacity(
@@ -87,13 +131,13 @@ impl GpuInner {
         );
 
         let mut parameters = [0u32; 8];
-        parameters[0] = u32::from(channels);
-        parameters[1] = u32::from(mask_channels);
-        parameters[2] = u32::from(mask_channel);
-        parameters[3] = u32::try_from(output_length)
+        parameters[0] = u32::from(input.channels);
+        parameters[1] = u32::from(input.mask_channels);
+        parameters[2] = u32::from(plan.mask_channel);
+        parameters[3] = u32::try_from(plan.output_length)
             .map_err(|_| PilError::ValueError("GPU native composite is too large".into()))?;
-        parameters[4] = word_count;
-        parameters[5] = groups_x;
+        parameters[4] = plan.word_count;
+        parameters[5] = plan.groups_x;
         let write_bytes = |buffer: &wgpu::Buffer, bytes: &[u8], size: u64| {
             let size = NonZeroU64::new(size).ok_or_else(|| {
                 PilError::InternalError("GPU native composite upload is empty".into())
@@ -109,21 +153,34 @@ impl GpuInner {
             mapped[bytes.len()..].fill(0);
             Ok::<(), PilError>(())
         };
-        write_bytes(&buffers.buf_a, image.as_bytes(), input_transfer)?;
-        write_bytes(&buffers.img2_arena.buffer, other.as_bytes(), other_transfer)?;
-        write_bytes(&buffers.img3_arena.buffer, mask.as_bytes(), mask_transfer)?;
+        write_bytes(&buffers.buf_a, input.image.as_bytes(), plan.input_transfer)?;
+        write_bytes(
+            &buffers.img2_arena.buffer,
+            input.other.as_bytes(),
+            plan.other_transfer,
+        )?;
+        write_bytes(
+            &buffers.img3_arena.buffer,
+            input.mask.as_bytes(),
+            plan.mask_transfer,
+        )?;
         self.queue.write_buffer(
             &buffers.params_arena.buffer,
             0,
             bytemuck::cast_slice(&parameters),
         );
-        let cached = self.resolve_pipeline(
-            "__internal_composite_native",
-            "composite_native.wgsl",
-            include_str!("shaders/composite_native.wgsl"),
-        )?;
+        Ok(())
+    }
 
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+    #[cfg(target_endian = "little")]
+    #[inline(always)]
+    fn native_composite_bind_group(
+        &self,
+        cached: &CachedPipeline,
+        plan: &NativeCompositePlan,
+        buffers: &BufferPool,
+    ) -> Result<wgpu::BindGroup, PilError> {
+        Ok(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("gpu_native_composite"),
             layout: &cached.bind_group_layout,
             entries: &[
@@ -133,7 +190,7 @@ impl GpuInner {
                         &buffers.buf_a,
                         Some(BufferRange {
                             offset: 0,
-                            size: input_transfer,
+                            size: plan.input_transfer,
                         }),
                     )?,
                 },
@@ -143,7 +200,7 @@ impl GpuInner {
                         &buffers.img2_arena.buffer,
                         Some(BufferRange {
                             offset: 0,
-                            size: other_transfer,
+                            size: plan.other_transfer,
                         }),
                     )?,
                 },
@@ -153,7 +210,7 @@ impl GpuInner {
                         &buffers.img3_arena.buffer,
                         Some(BufferRange {
                             offset: 0,
-                            size: mask_transfer,
+                            size: plan.mask_transfer,
                         }),
                     )?,
                 },
@@ -163,7 +220,7 @@ impl GpuInner {
                         &buffers.buf_b,
                         Some(BufferRange {
                             offset: 0,
-                            size: output_transfer,
+                            size: plan.output_transfer,
                         }),
                     )?,
                 },
@@ -178,7 +235,18 @@ impl GpuInner {
                     )?,
                 },
             ],
-        });
+        }))
+    }
+
+    #[cfg(target_endian = "little")]
+    #[inline(always)]
+    fn submit_native_composite(
+        &self,
+        cached: &CachedPipeline,
+        bind_group: &wgpu::BindGroup,
+        plan: &NativeCompositePlan,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -190,35 +258,49 @@ impl GpuInner {
                 timestamp_writes: None,
             });
             pass.set_pipeline(&cached.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
+            pass.set_bind_group(0, bind_group, &[]);
             crate::compute::record_gpu_shader_dispatch(
                 cached.variant_name,
                 cached.shader_file,
-                u64::from(workgroups),
+                u64::from(plan.workgroups),
             );
-            pass.dispatch_workgroups(groups_x, groups_y, 1);
+            pass.dispatch_workgroups(plan.groups_x, plan.groups_y, 1);
         }
-        let readback = self.prepare_readback(&buffers.buf_b, output_transfer)?;
+        let readback = self.prepare_readback(&buffers.buf_b, plan.output_transfer)?;
         if let ReadbackTarget::Staging(staging) = &readback {
-            encoder.copy_buffer_to_buffer(&buffers.buf_b, 0, &staging.buffer, 0, output_transfer);
+            encoder.copy_buffer_to_buffer(
+                &buffers.buf_b,
+                0,
+                &staging.buffer,
+                0,
+                plan.output_transfer,
+            );
         }
         self.queue.submit(Some(encoder.finish()));
         self.poll_device("GPU native composite submission")?;
-        let result =
-            self.readback_with(output_transfer, readback.buffer(buffers, false), |mapped| {
-                if mapped.len() != output_transfer as usize {
+        let result = self.readback_with(
+            plan.output_transfer,
+            readback.buffer(buffers, false),
+            |mapped| {
+                if mapped.len() != plan.output_transfer as usize {
                     return Err(PilError::InternalError(
                         "GPU native composite readback length mismatch".into(),
                     ));
                 }
-                let bytes = mapped[..output_length].to_vec();
+                let bytes = mapped[..plan.output_length].to_vec();
                 crate::compute::record_pipeline_allocation(bytes.len());
-                crate::image_utils::raw_bytes_to_image(width, height, bytes, usize::from(channels))
-            })?;
+                crate::image_utils::raw_bytes_to_image(
+                    plan.width,
+                    plan.height,
+                    bytes,
+                    usize::from(plan.channels),
+                )
+            },
+        )?;
         crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
-            upload_bytes: input_transfer + other_transfer + mask_transfer,
-            auxiliary_bytes: other_transfer + mask_transfer,
-            readback_bytes: output_transfer,
+            upload_bytes: plan.input_transfer + plan.other_transfer + plan.mask_transfer,
+            auxiliary_bytes: plan.other_transfer + plan.mask_transfer,
+            readback_bytes: plan.output_transfer,
             parameter_bytes: 32,
             retained_cache_bytes: buffers.retained_bytes(),
             full_frame_copy_count: 3 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
@@ -230,5 +312,39 @@ impl GpuInner {
             self.recycle_staging(staging);
         }
         Ok(result)
+    }
+
+    /// Execute a full-size ImageChops composite using native byte buffers.
+    /// The shader treats each packed word as four independent result bytes,
+    /// so L/LA/RGB channels and an L/alpha mask stay compact from upload to
+    /// readback instead of expanding every input to packed RGBA pixels.
+    #[cfg(target_endian = "little")]
+    pub(in crate::compute::pool_gpu) fn execute_native_composite(
+        &self,
+        image: &DynamicImage,
+        other: &DynamicImage,
+        mask: &DynamicImage,
+        channels: u8,
+        mask_channels: u8,
+        mask_channel: u8,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
+        let input = NativeCompositeInput {
+            image,
+            other,
+            mask,
+            channels,
+            mask_channels,
+            mask_channel,
+        };
+        let plan = self.plan_native_composite(&input, buffers)?;
+        self.prepare_native_composite_buffers(&input, &plan, buffers)?;
+        let cached = self.resolve_pipeline(
+            "__internal_composite_native",
+            "composite_native.wgsl",
+            include_str!("shaders/composite_native.wgsl"),
+        )?;
+        let bind_group = self.native_composite_bind_group(&cached, &plan, buffers)?;
+        self.submit_native_composite(&cached, &bind_group, &plan, buffers)
     }
 }

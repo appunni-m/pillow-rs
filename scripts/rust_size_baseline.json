@@ -142,12 +142,6 @@
       "signature": "pub(super) fn gpu_logical_mode_is_supported( ops: &[PipelineOp], img: Option<&DynamicImage>, mode: Option<&str>, f_resize_constant_bits: Option<u32>, f_pad_f64_is_exact: bool, inspect_auxiliary_modes: bool, ) -> bool {"
     },
     {
-      "lines": 210,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/native_composite.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_composite( &self, image: &DynamicImage, other: &DynamicImage, mask: &DynamicImage, channels: u8, mask_channels: u8, mask_channel: u8, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 215,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/native_paste/execution.rs",
@@ -530,11 +524,6 @@
     "pillow-rs/src/compute/pool_gpu/logical_mode_admission.rs": {
       "owner": "lazytrot",
       "reason": "Moved the logical-mode admission whitelist out of the oversized GPU coordinator; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/native_composite.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved the native GPU compositing executor beside its composition dispatch concern; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/native_paste/execution.rs": {
