@@ -34,12 +34,6 @@
       "signature": "pub(crate) fn rotate_arbitrary_generic( img: &DynamicImage, angle: f64, expand: bool, fill: Option<(u8, u8, u8, u8)>, filter: ResampleFilter, nearest: bool, center: Option<(f64, f64)>, translate: Option<(f64, f64)>, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 159,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/rotate/scalar.rs",
-      "signature": "pub(crate) fn rotate_arbitrary_scalar( source: &[u8], source_size: (u32, u32), destination_size: (u32, u32), channels: usize, affine: [f64; 6], fill: (u8, u8, u8, u8), filter: ResampleFilter, is_float: bool, output: &mut [u8], ) {"
-    },
-    {
       "lines": 132,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/thumbnail.rs",
@@ -389,11 +383,6 @@
     "pillow-rs/src/compute/pool_cpu/ops/rotate/affine.rs": {
       "owner": "lazytrot",
       "reason": "Rotate affine retains pre-existing functions above the 100-line ratchet after the geometry family split; track the remaining reduction under pillow-rs#wtxv.",
-      "reduction_task": "pillow-rs#wtxv"
-    },
-    "pillow-rs/src/compute/pool_cpu/ops/rotate/scalar.rs": {
-      "owner": "lazytrot",
-      "reason": "Rotate scalar retains pre-existing functions above the 100-line ratchet after the geometry family split; track the remaining reduction under pillow-rs#wtxv.",
       "reduction_task": "pillow-rs#wtxv"
     },
     "pillow-rs/src/compute/pool_cpu/ops/thumbnail.rs": {
