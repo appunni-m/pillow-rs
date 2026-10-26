@@ -260,7 +260,7 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_box_average_is_exact(
     // flush threshold. Positive zero is exact; keep negative zero out because
     // Pillow canonicalizes convolution zeroes. Requiring one sign for all
     // nonzero samples also rules out cancellation into that relaxed range.
-    const MIN_SAFE_VALUE: f32 = 9.536_743_164_062_5e-7_f32; // 2^-20
+    const MIN_SAFE_VALUE: f32 = f32::from_bits(0x3580_0000); // exact f32 value 2^-20
     let words_are_supported = |bytes: &[u8]| {
         if !bytes.chunks_exact(4).remainder().is_empty() {
             return false;

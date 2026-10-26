@@ -28,6 +28,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::error::PilError;
 
+fn allocation_lengths(total_pixels: u64, total_bytes: u64) -> Result<(usize, usize), PilError> {
+    let total_pixels = usize::try_from(total_pixels).map_err(|_| {
+        PilError::DimensionError("image pixel count exceeds the platform addressable range".into())
+    })?;
+    let total_bytes = usize::try_from(total_bytes).map_err(|_| {
+        PilError::DimensionError("image buffer size exceeds the platform addressable range".into())
+    })?;
+    Ok((total_pixels, total_bytes))
+}
+
 /// Default maximum pixel count accepted by [`CheckedDims::new`].
 ///
 /// The value allows roughly one GiB of RGBA data:
@@ -128,13 +138,14 @@ impl CheckedDims {
                 total_pixels, channels
             ))
         })?;
+        let (total_pixels, total_bytes) = allocation_lengths(total_pixels, total_bytes)?;
 
         Ok(Self {
             width,
             height,
             channels,
-            total_pixels: total_pixels as usize,
-            total_bytes: total_bytes as usize,
+            total_pixels,
+            total_bytes,
         })
     }
 
@@ -184,13 +195,14 @@ impl CheckedDims {
                 total_pixels, channels
             ))
         })?;
+        let (total_pixels, total_bytes) = allocation_lengths(total_pixels, total_bytes)?;
 
         Ok(Self {
             width,
             height,
             channels,
-            total_pixels: total_pixels as usize,
-            total_bytes: total_bytes as usize,
+            total_pixels,
+            total_bytes,
         })
     }
 
