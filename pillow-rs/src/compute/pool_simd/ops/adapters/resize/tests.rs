@@ -505,24 +505,7 @@ fn cover_cmyk_i32_two_pass_matches_widened_at_edges_and_tails() {
         assert!(super::resize_u8_coefficients_fit_i32(&vertical));
 
         for pattern in 0..4u32 {
-            let source = (0..width as usize * height as usize * 4)
-                .map(|index| match pattern {
-                    0 => 0,
-                    1 => 255,
-                    2 => {
-                        let pixel = index / 4;
-                        if ((pixel % width as usize) ^ (pixel / width as usize)) & 1 == 0 {
-                            0
-                        } else {
-                            255
-                        }
-                    }
-                    _ => index
-                        .wrapping_mul(97)
-                        .wrapping_add((index / (width as usize * 4)).wrapping_mul(53))
-                        .to_le_bytes()[0],
-                })
-                .collect::<Vec<_>>();
+            let source = cover_cmyk_resize_pattern_source(width, height, pattern);
             let image = DynamicImage::ImageRgba8(
                 RgbaImage::from_raw(width, height, source)
                     .expect("test CMYK byte-storage image shape"),
@@ -562,6 +545,27 @@ fn cover_cmyk_i32_two_pass_matches_widened_at_edges_and_tails() {
             );
         }
     }
+}
+
+fn cover_cmyk_resize_pattern_source(width: u32, height: u32, pattern: u32) -> Vec<u8> {
+    (0..width as usize * height as usize * 4)
+        .map(|index| match pattern {
+            0 => 0,
+            1 => 255,
+            2 => {
+                let pixel = index / 4;
+                if ((pixel % width as usize) ^ (pixel / width as usize)) & 1 == 0 {
+                    0
+                } else {
+                    255
+                }
+            }
+            _ => index
+                .wrapping_mul(97)
+                .wrapping_add((index / (width as usize * 4)).wrapping_mul(53))
+                .to_le_bytes()[0],
+        })
+        .collect()
 }
 
 #[test]
