@@ -27,6 +27,17 @@ struct NativeCompositePlan {
     groups_y: u32,
 }
 
+#[cfg(target_endian = "little")]
+#[inline(always)]
+fn native_composite_transfer_size(length: usize) -> Result<u64, PilError> {
+    let length = u64::try_from(length)
+        .map_err(|_| PilError::ValueError("GPU native composite is too large".into()))?;
+    Ok(length
+        .checked_add(3)
+        .ok_or_else(|| PilError::ValueError("GPU native composite is too large".into()))?
+        & !3)
+}
+
 impl GpuInner {
     #[cfg(target_endian = "little")]
     #[inline(always)]
@@ -53,18 +64,10 @@ impl GpuInner {
             ));
         }
 
-        let transfer = |length: usize| -> Result<u64, PilError> {
-            let length = u64::try_from(length)
-                .map_err(|_| PilError::ValueError("GPU native composite is too large".into()))?;
-            Ok(length
-                .checked_add(3)
-                .ok_or_else(|| PilError::ValueError("GPU native composite is too large".into()))?
-                & !3)
-        };
-        let input_transfer = transfer(output_length)?;
+        let input_transfer = native_composite_transfer_size(output_length)?;
         let output_transfer = input_transfer;
         let other_transfer = input_transfer;
-        let mask_transfer = transfer(mask_length)?;
+        let mask_transfer = native_composite_transfer_size(mask_length)?;
         if output_transfer > u64::from(buffers.capacity) * 4
             || mask_transfer > u64::from(self.device.limits().max_storage_buffer_binding_size)
         {
