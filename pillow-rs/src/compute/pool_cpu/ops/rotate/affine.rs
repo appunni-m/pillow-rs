@@ -528,13 +528,6 @@ pub(crate) fn rotate_arbitrary_generic(
     // target's fused multiply-add grouping only when sampling pixels.
     let transform =
         |x: f64, y: f64, c: f64, f: f64| (aff_a * x + aff_b * y + c, aff_d * x + aff_e * y + f);
-    let sample_transform = |x: f64, y: f64, c: f64, f: f64| {
-        (
-            aff_a.mul_add(x, aff_b * y) + c,
-            aff_d.mul_add(x, aff_e * y) + f,
-        )
-    };
-
     // Pillow rounds each outer edge independently. This differs from taking
     // ceil(max - min) whenever the transformed minimum is fractional.
     let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
@@ -562,71 +555,20 @@ pub(crate) fn rotate_arbitrary_generic(
     }
 
     if let DynamicImage::ImageLuma16(source) = img {
-        let fill_value = fill.map_or(0, |value| u16::from_le_bytes([value.0, value.1]));
-        let mut output = vec![fill_value; (dw as usize) * (dh as usize)];
-        if nearest {
-            // SPECIAL modes use Geometry.c's generic floating-point mapping,
-            // then copy both bytes. They bypass the ordinary 16.16 sampler.
-            for y in 0..dh {
-                for x in 0..dw {
-                    let (sx, sy) =
-                        sample_transform(f64::from(x) + 0.5, f64::from(y) + 0.5, aff_c, aff_f);
-                    if sx >= 0.0 && sx < sw && sy >= 0.0 && sy < sh {
-                        output[(y * dw + x) as usize] = source.get_pixel(sx as u32, sy as u32)[0];
-                    }
-                }
-            }
-        } else {
-            // Pillow's filtered I;16 path selects filter8: it samples the
-            // first `width` bytes of each two-byte source row and writes only
-            // byte zero of each destination sample. Preserve that observable
-            // byte ABI, including the untouched fill byte, instead of
-            // interpreting the filter as a numeric u16 convolution.
-            let big_endian = explicit_mode == Some("I;16B")
-                || (cfg!(target_endian = "big") && matches!(explicit_mode, Some("I;16" | "I;16N")));
-            let encode = |value: u16| {
-                if big_endian {
-                    value.to_be_bytes()
-                } else {
-                    value.to_le_bytes()
-                }
-            };
-            let fill_bytes = encode(fill_value);
-            let mut plane = Vec::with_capacity((w as usize) * (h as usize));
-            for y in 0..h as usize {
-                plane.extend(
-                    source.as_raw()[y * w as usize..(y + 1) * w as usize]
-                        .iter()
-                        .flat_map(|&value| encode(value))
-                        .take(w as usize),
-                );
-            }
-            let plane = crate::raster::GrayImage::from_raw(w, h, plane).ok_or_else(|| {
-                PilError::InternalError("rotate I;16 source shape mismatch".into())
-            })?;
-            let sampled = rotate_arbitrary_generic(
-                &DynamicImage::ImageLuma8(plane),
-                angle,
-                expand,
-                fill.map(|_| (fill_bytes[0], 0, 0, 0)),
-                filter,
-                false,
-                center,
-                translate,
-                Some("L"),
-            )?;
-            for (value, &byte) in output.iter_mut().zip(sampled.as_bytes()) {
-                let bytes = [byte, fill_bytes[1]];
-                *value = if big_endian {
-                    u16::from_be_bytes(bytes)
-                } else {
-                    u16::from_le_bytes(bytes)
-                };
-            }
-        }
-        return crate::raster::ImageBuffer::from_raw(dw, dh, output)
-            .map(DynamicImage::ImageLuma16)
-            .ok_or_else(|| PilError::InternalError("rotate I;16 result shape mismatch".into()));
+        return rotate_arbitrary_luma16(
+            source,
+            (w, h),
+            (dw, dh),
+            angle,
+            expand,
+            fill,
+            filter,
+            nearest,
+            explicit_mode,
+            center,
+            translate,
+            [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f],
+        );
     }
 
     let raw = img.as_bytes();
@@ -657,111 +599,214 @@ pub(crate) fn rotate_arbitrary_generic(
             &mut out,
         );
     } else {
-        for dy in 0..dh {
-            for dx in 0..dw {
-                // Geometry.c first maps the destination pixel center and the
-                // bilinear filter then converts that center to the source
-                // pixel's corner coordinate by subtracting 0.5. Keep the
-                // two stages explicit so arbitrary rotations use the same
-                // source coordinates as Pillow's affine kernel.
-                let (sx_rel, sy_rel) =
-                    sample_transform(dx as f64 + 0.5, dy as f64 + 0.5, aff_c, aff_f);
-                // Geometry.c subtracts half a pixel for every filtered
-                // byte layout, including PA's independent index/alpha bands.
-                let (sx_rel, sy_rel) = (sx_rel - 0.5, sy_rel - 0.5);
-                let out_idx = (dy * dw + dx) as usize * channels;
-                let in_filter_support =
-                    sx_rel >= -0.5 && sx_rel < sw - 0.5 && sy_rel >= -0.5 && sy_rel < sh - 0.5;
-                if in_filter_support {
-                    let sx_rel = if matches!(filter, ResampleFilter::Bicubic) {
-                        sx_rel
-                    } else {
-                        sx_rel.clamp(0.0, sw - 1.0)
-                    };
-                    let sy_rel = if matches!(filter, ResampleFilter::Bicubic) {
-                        sy_rel
-                    } else {
-                        sy_rel.clamp(0.0, sh - 1.0)
-                    };
-                    let bilinear_x = sx_rel.floor() as i64;
-                    let bilinear_y = sy_rel.floor() as i64;
-                    let bicubic_x = bilinear_x - 1;
-                    let bicubic_y = bilinear_y - 1;
-                    let fx = sx_rel - bilinear_x as f64;
-                    let fy = sy_rel - bilinear_y as f64;
-                    for c in 0..channels {
-                        let value = match filter {
-                            ResampleFilter::Bicubic => {
-                                let cubic_fx = sx_rel - (bicubic_x + 1) as f64;
-                                let cubic_fy = sy_rel - (bicubic_y + 1) as f64;
-                                let mut rows = [0.0f64; 4];
-                                for (row, output) in rows.iter_mut().enumerate() {
-                                    let yy = bicubic_y + row as i64;
-                                    let cy = yy.clamp(0, i64::from(h - 1)) as usize;
-                                    let samples = [
-                                        raw[(cy * w as usize
-                                            + bicubic_x.clamp(0, i64::from(w - 1)) as usize)
-                                            * channels
-                                            + c] as f64,
-                                        raw[(cy * w as usize
-                                            + (bicubic_x + 1).clamp(0, i64::from(w - 1)) as usize)
-                                            * channels
-                                            + c] as f64,
-                                        raw[(cy * w as usize
-                                            + (bicubic_x + 2).clamp(0, i64::from(w - 1)) as usize)
-                                            * channels
-                                            + c] as f64,
-                                        raw[(cy * w as usize
-                                            + (bicubic_x + 3).clamp(0, i64::from(w - 1)) as usize)
-                                            * channels
-                                            + c] as f64,
-                                    ];
-                                    *output = rotate_cubic_horizontal_f64(samples, cubic_fx);
-                                }
-                                rotate_cubic_vertical_f64(rows, cubic_fy)
-                            }
-                            _ => {
-                                let sx = bilinear_x.clamp(0, i64::from(w - 1)) as u32;
-                                let sy = bilinear_y.clamp(0, i64::from(h - 1)) as u32;
-                                let sx1 = (bilinear_x + 1).clamp(0, i64::from(w - 1)) as u32;
-                                let sy1 = (bilinear_y + 1).clamp(0, i64::from(h - 1)) as u32;
-                                let p00 = raw[(sy * w + sx) as usize * channels + c] as f64;
-                                let p10 = raw[(sy * w + sx1) as usize * channels + c] as f64;
-                                let p01 = raw[(sy1 * w + sx) as usize * channels + c] as f64;
-                                let p11 = raw[(sy1 * w + sx1) as usize * channels + c] as f64;
-                                // Geometry.c's BILINEAR macro evaluates each
-                                // horizontal row as `a + (b-a) * d`, then
-                                // applies the same form vertically. Keep the
-                                // fused operations explicit so byte filters
-                                // use the native rounding order, including
-                                // CMYK and palette-alpha rows.
-                                let top = (p10 - p00).mul_add(fx, p00);
-                                let bottom = (p11 - p01).mul_add(fx, p01);
-                                (bottom - top).mul_add(fy, top)
-                            }
-                        };
-                        // Geometry.c's UINT8 filters store a C cast of the
-                        // interpolated value, truncating toward zero. This
-                        // matters for the premultiplied alpha round trip.
-                        out[out_idx + c] = if matches!(filter, ResampleFilter::Bicubic) {
-                            value.clamp(0.0, 255.0) as u8
-                        } else {
-                            value as u8
-                        };
-                    }
+        rotate_arbitrary_byte_filter(
+            raw,
+            (w, h),
+            (dw, dh),
+            channels,
+            [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f],
+            filter,
+            fill_color,
+            &mut out,
+        );
+    }
+
+    raw_bytes_to_image(dw, dh, out, channels)
+}
+
+fn rotate_arbitrary_luma16(
+    source: &crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    angle: f64,
+    expand: bool,
+    fill: Option<(u8, u8, u8, u8)>,
+    filter: ResampleFilter,
+    nearest: bool,
+    explicit_mode: Option<&str>,
+    center: Option<(f64, f64)>,
+    translate: Option<(f64, f64)>,
+    affine: [f64; 6],
+) -> Result<DynamicImage, PilError> {
+    let (w, h) = source_size;
+    let (dw, dh) = destination_size;
+    let [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f] = affine;
+    let sw = f64::from(w);
+    let sh = f64::from(h);
+    let fill_value = fill.map_or(0, |value| u16::from_le_bytes([value.0, value.1]));
+    let mut output = vec![fill_value; dw as usize * dh as usize];
+    if nearest {
+        // SPECIAL modes use Geometry.c's generic mapping and copy both bytes.
+        for y in 0..dh {
+            for x in 0..dw {
+                let x_center = f64::from(x) + 0.5;
+                let y_center = f64::from(y) + 0.5;
+                let sx = aff_a.mul_add(x_center, aff_b * y_center) + aff_c;
+                let sy = aff_d.mul_add(x_center, aff_e * y_center) + aff_f;
+                if sx >= 0.0 && sx < sw && sy >= 0.0 && sy < sh {
+                    output[(y * dw + x) as usize] = source.get_pixel(sx as u32, sy as u32)[0];
+                }
+            }
+        }
+    } else {
+        // Pillow's filtered I;16 path selects filter8: it samples the first
+        // `width` bytes of each source row and writes only destination byte 0.
+        let big_endian = explicit_mode == Some("I;16B")
+            || (cfg!(target_endian = "big") && matches!(explicit_mode, Some("I;16" | "I;16N")));
+        let encode = |value: u16| {
+            if big_endian {
+                value.to_be_bytes()
+            } else {
+                value.to_le_bytes()
+            }
+        };
+        let fill_bytes = encode(fill_value);
+        let mut plane = Vec::with_capacity(w as usize * h as usize);
+        for y in 0..h as usize {
+            plane.extend(
+                source.as_raw()[y * w as usize..(y + 1) * w as usize]
+                    .iter()
+                    .flat_map(|&value| encode(value))
+                    .take(w as usize),
+            );
+        }
+        let plane = crate::raster::GrayImage::from_raw(w, h, plane)
+            .ok_or_else(|| PilError::InternalError("rotate I;16 source shape mismatch".into()))?;
+        let sampled = rotate_arbitrary_generic(
+            &DynamicImage::ImageLuma8(plane),
+            angle,
+            expand,
+            fill.map(|_| (fill_bytes[0], 0, 0, 0)),
+            filter,
+            false,
+            center,
+            translate,
+            Some("L"),
+        )?;
+        for (value, &byte) in output.iter_mut().zip(sampled.as_bytes()) {
+            let bytes = [byte, fill_bytes[1]];
+            *value = if big_endian {
+                u16::from_be_bytes(bytes)
+            } else {
+                u16::from_le_bytes(bytes)
+            };
+        }
+    }
+    crate::raster::ImageBuffer::from_raw(dw, dh, output)
+        .map(DynamicImage::ImageLuma16)
+        .ok_or_else(|| PilError::InternalError("rotate I;16 result shape mismatch".into()))
+}
+
+#[inline(always)]
+fn rotate_arbitrary_byte_filter(
+    raw: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    channels: usize,
+    affine: [f64; 6],
+    filter: ResampleFilter,
+    fill_color: (u8, u8, u8, u8),
+    out: &mut [u8],
+) {
+    let (w, h) = source_size;
+    let (dw, dh) = destination_size;
+    let sw = w as f64;
+    let sh = h as f64;
+    let [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f] = affine;
+    let sample_transform = |x: f64, y: f64| {
+        (
+            aff_a.mul_add(x, aff_b * y) + aff_c,
+            aff_d.mul_add(x, aff_e * y) + aff_f,
+        )
+    };
+
+    for dy in 0..dh {
+        for dx in 0..dw {
+            // Map the destination center, then subtract half a pixel for
+            // Geometry.c's filtered source-corner coordinates.
+            let (sx_rel, sy_rel) = sample_transform(dx as f64 + 0.5, dy as f64 + 0.5);
+            let (sx_rel, sy_rel) = (sx_rel - 0.5, sy_rel - 0.5);
+            let out_idx = (dy * dw + dx) as usize * channels;
+            let in_filter_support =
+                sx_rel >= -0.5 && sx_rel < sw - 0.5 && sy_rel >= -0.5 && sy_rel < sh - 0.5;
+            if in_filter_support {
+                let sx_rel = if matches!(filter, ResampleFilter::Bicubic) {
+                    sx_rel
                 } else {
-                    for c in 0..channels.min(4) {
-                        out[out_idx + c] = match c {
-                            0 => fill_color.0,
-                            1 => fill_color.1,
-                            2 => fill_color.2,
-                            _ => fill_color.3,
-                        };
-                    }
+                    sx_rel.clamp(0.0, sw - 1.0)
+                };
+                let sy_rel = if matches!(filter, ResampleFilter::Bicubic) {
+                    sy_rel
+                } else {
+                    sy_rel.clamp(0.0, sh - 1.0)
+                };
+                let bilinear_x = sx_rel.floor() as i64;
+                let bilinear_y = sy_rel.floor() as i64;
+                let bicubic_x = bilinear_x - 1;
+                let bicubic_y = bilinear_y - 1;
+                let fx = sx_rel - bilinear_x as f64;
+                let fy = sy_rel - bilinear_y as f64;
+                for c in 0..channels {
+                    let value = match filter {
+                        ResampleFilter::Bicubic => {
+                            let cubic_fx = sx_rel - (bicubic_x + 1) as f64;
+                            let cubic_fy = sy_rel - (bicubic_y + 1) as f64;
+                            let mut rows = [0.0f64; 4];
+                            for (row, output) in rows.iter_mut().enumerate() {
+                                let yy = bicubic_y + row as i64;
+                                let cy = yy.clamp(0, i64::from(h - 1)) as usize;
+                                let samples = [
+                                    raw[(cy * w as usize
+                                        + bicubic_x.clamp(0, i64::from(w - 1)) as usize)
+                                        * channels
+                                        + c] as f64,
+                                    raw[(cy * w as usize
+                                        + (bicubic_x + 1).clamp(0, i64::from(w - 1)) as usize)
+                                        * channels
+                                        + c] as f64,
+                                    raw[(cy * w as usize
+                                        + (bicubic_x + 2).clamp(0, i64::from(w - 1)) as usize)
+                                        * channels
+                                        + c] as f64,
+                                    raw[(cy * w as usize
+                                        + (bicubic_x + 3).clamp(0, i64::from(w - 1)) as usize)
+                                        * channels
+                                        + c] as f64,
+                                ];
+                                *output = rotate_cubic_horizontal_f64(samples, cubic_fx);
+                            }
+                            rotate_cubic_vertical_f64(rows, cubic_fy)
+                        }
+                        _ => {
+                            let sx = bilinear_x.clamp(0, i64::from(w - 1)) as u32;
+                            let sy = bilinear_y.clamp(0, i64::from(h - 1)) as u32;
+                            let sx1 = (bilinear_x + 1).clamp(0, i64::from(w - 1)) as u32;
+                            let sy1 = (bilinear_y + 1).clamp(0, i64::from(h - 1)) as u32;
+                            let p00 = raw[(sy * w + sx) as usize * channels + c] as f64;
+                            let p10 = raw[(sy * w + sx1) as usize * channels + c] as f64;
+                            let p01 = raw[(sy1 * w + sx) as usize * channels + c] as f64;
+                            let p11 = raw[(sy1 * w + sx1) as usize * channels + c] as f64;
+                            let top = (p10 - p00).mul_add(fx, p00);
+                            let bottom = (p11 - p01).mul_add(fx, p01);
+                            (bottom - top).mul_add(fy, top)
+                        }
+                    };
+                    out[out_idx + c] = if matches!(filter, ResampleFilter::Bicubic) {
+                        value.clamp(0.0, 255.0) as u8
+                    } else {
+                        value as u8
+                    };
+                }
+            } else {
+                for c in 0..channels.min(4) {
+                    out[out_idx + c] = match c {
+                        0 => fill_color.0,
+                        1 => fill_color.1,
+                        2 => fill_color.2,
+                        _ => fill_color.3,
+                    };
                 }
             }
         }
     }
-
-    raw_bytes_to_image(dw, dh, out, channels)
 }
