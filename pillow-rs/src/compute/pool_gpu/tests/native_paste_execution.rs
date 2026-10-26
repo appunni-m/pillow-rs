@@ -1,34 +1,29 @@
 use super::*;
 
+struct RestoreGpuDiagnostics {
+    telemetry: bool,
+    shader_coverage: bool,
+}
+
+impl Drop for RestoreGpuDiagnostics {
+    fn drop(&mut self) {
+        Backend::set_pipeline_telemetry_enabled(self.telemetry);
+        Backend::set_gpu_shader_coverage_enabled(self.shader_coverage);
+    }
+}
+
 #[test]
 #[cfg(target_endian = "little")]
 fn native_masked_rgba_paste_matches_cpu_with_compact_gpu_shader() {
     use crate::ops::paste::PasteSource;
 
-    match super::GpuPool::ensure_init() {
-        Ok(_) => {}
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            return;
-        }
-        Err(error) => panic!("native masked RGBA GPU initialization failed: {error}"),
-    }
-
-    struct RestoreDiagnostics {
-        telemetry: bool,
-        shader_coverage: bool,
-    }
-    impl Drop for RestoreDiagnostics {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.telemetry);
-            Backend::set_gpu_shader_coverage_enabled(self.shader_coverage);
-        }
-    }
-    let _restore = RestoreDiagnostics {
+    let Some(_) = native_gpu_result_or_skip(
+        super::GpuPool::ensure_init(),
+        "native masked RGBA GPU initialization failed",
+    ) else {
+        return;
+    };
+    let _restore = RestoreGpuDiagnostics {
         telemetry: Backend::set_pipeline_telemetry_enabled(true),
         shader_coverage: Backend::set_gpu_shader_coverage_enabled(true),
     };
@@ -107,18 +102,12 @@ fn native_masked_rgba_paste_matches_cpu_with_compact_gpu_shader() {
 #[test]
 #[cfg(target_endian = "little")]
 fn native_masked_rgba_paste_shader_covers_a_two_dimensional_grid() {
-    match super::GpuPool::ensure_init() {
-        Ok(_) => {}
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            return;
-        }
-        Err(error) => panic!("native masked RGBA GPU initialization failed: {error}"),
-    }
+    let Some(_) = native_gpu_result_or_skip(
+        super::GpuPool::ensure_init(),
+        "native masked RGBA GPU initialization failed",
+    ) else {
+        return;
+    };
     let gpu = super::GpuPool::ensure_init().expect("GPU initialized above");
     let (width, height) = (129u32, 1u32);
     let source_bytes = (0..width as usize * 4)
@@ -200,18 +189,12 @@ fn native_masked_rgba_paste_shader_covers_a_two_dimensional_grid() {
 fn native_masked_pa_paste_executes_the_pa_shader_without_color_conversion() {
     use crate::ops::paste::PasteSource;
 
-    match super::GpuPool::ensure_init() {
-        Ok(_) => {}
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            return;
-        }
-        Err(error) => panic!("native masked PA GPU initialization failed: {error}"),
-    }
+    let Some(_) = native_gpu_result_or_skip(
+        super::GpuPool::ensure_init(),
+        "native masked PA GPU initialization failed",
+    ) else {
+        return;
+    };
 
     let palette = [10, 20, 30, 40, 50, 60];
     let source_bytes = (0usize..5 * 3 * 2)
@@ -268,30 +251,14 @@ fn native_masked_pa_paste_executes_the_pa_shader_without_color_conversion() {
 #[test]
 #[cfg(target_endian = "little")]
 fn native_rgb_crop_uses_its_shader_and_preserves_odd_output_tail() {
-    match super::GpuPool::ensure_init() {
-        Ok(_) => {}
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            return;
-        }
-        Err(error) => panic!("native RGB Crop GPU initialization failed: {error}"),
-    }
+    let Some(_) = native_gpu_result_or_skip(
+        super::GpuPool::ensure_init(),
+        "native RGB Crop GPU initialization failed",
+    ) else {
+        return;
+    };
 
-    struct RestoreDiagnostics {
-        telemetry: bool,
-        shader_coverage: bool,
-    }
-    impl Drop for RestoreDiagnostics {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.telemetry);
-            Backend::set_gpu_shader_coverage_enabled(self.shader_coverage);
-        }
-    }
-    let _restore = RestoreDiagnostics {
+    let _restore = RestoreGpuDiagnostics {
         telemetry: Backend::set_pipeline_telemetry_enabled(true),
         shader_coverage: Backend::set_gpu_shader_coverage_enabled(true),
     };
