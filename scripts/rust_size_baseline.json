@@ -94,12 +94,6 @@
       "signature": "pub(crate) fn execute_thumbnail( img: &DynamicImage, w: u32, h: u32, filter: &ResampleFilter, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 101,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/thumbnail.rs",
-      "signature": "pub(super) fn reduce_f_thumbnail( img: &DynamicImage, dst_w: u32, dst_h: u32, factor_x: u32, factor_y: u32, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 194,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/transform.rs",

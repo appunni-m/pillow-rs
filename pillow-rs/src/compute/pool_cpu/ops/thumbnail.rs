@@ -471,71 +471,84 @@ pub(super) fn reduce_f_thumbnail(
         });
     }
 
+    let mut out = Vec::with_capacity((dst_w * dst_h * 4) as usize);
+    for y in 0..dst_h {
+        reduce_f_thumbnail_general_row(source_image, dst_w, factor_x, factor_y, y, &mut out);
+    }
+    raw_bytes_to_image(dst_w, dst_h, out, 4)
+}
+
+fn reduce_f_thumbnail_general_row(
+    source_image: &crate::raster::RgbaImage,
+    dst_w: u32,
+    factor_x: u32,
+    factor_y: u32,
+    y: u32,
+    out: &mut Vec<u8>,
+) {
+    let src_w = source_image.width();
+    let src_h = source_image.height();
     let sample_f32 = |x: u32, y: u32| {
         let sample = source_image.get_pixel(x, y);
         f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]])
     };
-    let mut out = Vec::with_capacity((dst_w * dst_h * 4) as usize);
     let main_width = src_w / factor_x;
     let main_height = src_h / factor_y;
-    for y in 0..dst_h {
-        let source_y = y * factor_y;
-        let block_h = factor_y.min(src_h - source_y);
-        for x in 0..dst_w {
-            let source_x = x * factor_x;
-            let block_w = factor_x.min(src_w - source_x);
-            // `ImagingReduceNxN_32bpc` uses a double accumulator, but its
-            // interior 2x2 groups are formed by float additions before being
-            // promoted to double. The corner helper handles partial right,
-            // bottom, and bottom-right blocks as scalar float values. Keep
-            // those two paths distinct: a flat f32 sum drifts on constants,
-            // while a flat f64 sum differs on heterogeneous blocks.
-            let mut sum = 0.0f64;
-            if x < main_width && y < main_height {
-                let mut dy = 0;
-                while dy + 1 < block_h {
-                    let mut dx = 0;
-                    while dx + 1 < block_w {
-                        let value = |offset_x: u32, offset_y: u32| {
-                            sample_f32(source_x + offset_x, source_y + offset_y)
-                        };
-                        let top_left = value(dx, dy);
-                        let top_right = value(dx + 1, dy);
-                        let bottom_left = value(dx, dy + 1);
-                        let bottom_right = value(dx + 1, dy + 1);
-                        let quartet = ((top_left + top_right) + bottom_left) + bottom_right;
-                        sum += f64::from(quartet);
-                        dx += 2;
-                    }
-                    if dx < block_w {
-                        let value = |offset_y: u32| sample_f32(source_x + dx, source_y + offset_y);
-                        sum += f64::from(value(dy) + value(dy + 1));
-                    }
-                    dy += 2;
+    let source_y = y * factor_y;
+    let block_h = factor_y.min(src_h - source_y);
+    for x in 0..dst_w {
+        let source_x = x * factor_x;
+        let block_w = factor_x.min(src_w - source_x);
+        // `ImagingReduceNxN_32bpc` uses a double accumulator, but its
+        // interior 2x2 groups are formed by float additions before being
+        // promoted to double. The corner helper handles partial right,
+        // bottom, and bottom-right blocks as scalar float values. Keep
+        // those two paths distinct: a flat f32 sum drifts on constants,
+        // while a flat f64 sum differs on heterogeneous blocks.
+        let mut sum = 0.0f64;
+        if x < main_width && y < main_height {
+            let mut dy = 0;
+            while dy + 1 < block_h {
+                let mut dx = 0;
+                while dx + 1 < block_w {
+                    let value = |offset_x: u32, offset_y: u32| {
+                        sample_f32(source_x + offset_x, source_y + offset_y)
+                    };
+                    let top_left = value(dx, dy);
+                    let top_right = value(dx + 1, dy);
+                    let bottom_left = value(dx, dy + 1);
+                    let bottom_right = value(dx + 1, dy + 1);
+                    let quartet = ((top_left + top_right) + bottom_left) + bottom_right;
+                    sum += f64::from(quartet);
+                    dx += 2;
                 }
-                if dy < block_h {
-                    let mut dx = 0;
-                    while dx + 1 < block_w {
-                        let value = |offset_x: u32| sample_f32(source_x + offset_x, source_y + dy);
-                        sum += f64::from(value(dx) + value(dx + 1));
-                        dx += 2;
-                    }
-                    if dx < block_w {
-                        sum += f64::from(sample_f32(source_x + dx, source_y + dy));
-                    }
+                if dx < block_w {
+                    let value = |offset_y: u32| sample_f32(source_x + dx, source_y + offset_y);
+                    sum += f64::from(value(dy) + value(dy + 1));
                 }
-            } else {
-                for dy in 0..block_h {
-                    for dx in 0..block_w {
-                        sum += f64::from(sample_f32(source_x + dx, source_y + dy));
-                    }
+                dy += 2;
+            }
+            if dy < block_h {
+                let mut dx = 0;
+                while dx + 1 < block_w {
+                    let value = |offset_x: u32| sample_f32(source_x + offset_x, source_y + dy);
+                    sum += f64::from(value(dx) + value(dx + 1));
+                    dx += 2;
+                }
+                if dx < block_w {
+                    sum += f64::from(sample_f32(source_x + dx, source_y + dy));
                 }
             }
-            let value = (sum * (1.0 / f64::from(block_w * block_h))) as f32;
-            out.extend_from_slice(&value.to_le_bytes());
+        } else {
+            for dy in 0..block_h {
+                for dx in 0..block_w {
+                    sum += f64::from(sample_f32(source_x + dx, source_y + dy));
+                }
+            }
         }
+        let value = (sum * (1.0 / f64::from(block_w * block_h))) as f32;
+        out.extend_from_slice(&value.to_le_bytes());
     }
-    raw_bytes_to_image(dst_w, dst_h, out, 4)
 }
 
 #[cfg(not(feature = "parallel"))]
