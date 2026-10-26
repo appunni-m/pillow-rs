@@ -124,12 +124,6 @@
       "signature": "fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {"
     },
     {
-      "lines": 135,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/resize_ordered_taps.rs",
-      "signature": "fn f_resize_ordered_f64_through_8388607_taps_native_matches_cpu() {"
-    },
-    {
       "lines": 176,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs",
@@ -232,11 +226,6 @@
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/tests/resize_float_proofs.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/tests/resize_ordered_taps.rs": {
       "owner": "lazytrot",
       "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
