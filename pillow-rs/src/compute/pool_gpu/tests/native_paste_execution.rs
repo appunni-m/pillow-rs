@@ -124,6 +124,45 @@ fn native_masked_rgba_paste_shader_covers_a_two_dimensional_grid() {
     };
     let gpu = super::GpuPool::ensure_init().expect("GPU initialized above");
     let (width, height) = (129u32, 1u32);
+    let (destination, source, mask, expected) = native_masked_rgba_grid_fixture(width, height);
+
+    let limits = gpu.device.limits();
+    let dispatch = plan_gpu_native_masked_byte_paste(
+        width,
+        height,
+        width,
+        height,
+        width,
+        height,
+        4,
+        2,
+        limits.max_storage_buffer_binding_size,
+        limits.max_buffer_size,
+    )
+    .expect("the synthetic two-workgroup axis limit yields a two-dimensional grid");
+    assert_eq!((dispatch.workgroups_x, dispatch.workgroups_y), (2, 2));
+
+    let mut buffers = gpu.acquire_buffers(dispatch.word_count).unwrap();
+    let actual = gpu
+        .execute_native_masked_byte_paste(
+            &destination,
+            &source,
+            &mask,
+            "RGBA",
+            (0, 0),
+            dispatch,
+            &mut buffers,
+        )
+        .expect("the bounded 2×2 GPU dispatch completes");
+    gpu.recycle_buffers(buffers);
+
+    assert_eq!(actual.as_bytes(), expected);
+}
+
+fn native_masked_rgba_grid_fixture(
+    width: u32,
+    height: u32,
+) -> (DynamicImage, DynamicImage, DynamicImage, Vec<u8>) {
     let source_bytes = (0..width as usize * 4)
         .map(|index| {
             u8::try_from(index % 256)
@@ -165,37 +204,7 @@ fn native_masked_rgba_paste_shader_covers_a_two_dimensional_grid() {
     );
     let mask =
         DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, mask_bytes).expect("L mask"));
-    let limits = gpu.device.limits();
-    let dispatch = plan_gpu_native_masked_byte_paste(
-        width,
-        height,
-        width,
-        height,
-        width,
-        height,
-        4,
-        2,
-        limits.max_storage_buffer_binding_size,
-        limits.max_buffer_size,
-    )
-    .expect("the synthetic two-workgroup axis limit yields a two-dimensional grid");
-    assert_eq!((dispatch.workgroups_x, dispatch.workgroups_y), (2, 2));
-
-    let mut buffers = gpu.acquire_buffers(dispatch.word_count).unwrap();
-    let actual = gpu
-        .execute_native_masked_byte_paste(
-            &destination,
-            &source,
-            &mask,
-            "RGBA",
-            (0, 0),
-            dispatch,
-            &mut buffers,
-        )
-        .expect("the bounded 2×2 GPU dispatch completes");
-    gpu.recycle_buffers(buffers);
-
-    assert_eq!(actual.as_bytes(), expected);
+    (destination, source, mask, expected)
 }
 
 #[test]
