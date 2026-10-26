@@ -91,84 +91,104 @@ type DyadicResizeCase = ((u32, u32), (u32, u32), ResampleInput, Vec<f32>, Vec<u3
 
 fn f_resize_dyadic_first_cases() -> [DyadicResizeCase; 5] {
     [
-        (
-            (1, 2),
-            (1, 7),
-            ResampleInput::Name("NEAREST".into()),
-            vec![1.0f32, 2.0],
-            vec![
-                1.0f32.to_bits(),
-                1.0f32.to_bits(),
-                1.0f32.to_bits(),
-                1.0f32.to_bits(),
-                2.0f32.to_bits(),
-                2.0f32.to_bits(),
-                2.0f32.to_bits(),
-            ],
-        ),
-        (
-            (1, 2),
-            (1, 7),
-            ResampleInput::Name("NEAREST".into()),
-            vec![(-0.0f32), f32::NAN],
-            vec![
-                (-0.0f32).to_bits(),
-                (-0.0f32).to_bits(),
-                (-0.0f32).to_bits(),
-                (-0.0f32).to_bits(),
-                f32::NAN.to_bits(),
-                f32::NAN.to_bits(),
-                f32::NAN.to_bits(),
-            ],
-        ),
-        (
-            (2, 2),
-            (4, 4),
-            ResampleInput::Name("BILINEAR".into()),
-            vec![1.0f32, 2.0, 4.0, 8.0],
-            vec![
-                0x3f80_0000,
-                0x3fa0_0000,
-                0x3fe0_0000,
-                0x4000_0000,
-                0x3fe0_0000,
-                0x400c_0000,
-                0x4044_0000,
-                0x4060_0000,
-                0x4050_0000,
-                0x4082_0000,
-                0x40b6_0000,
-                0x40d0_0000,
-                0x4080_0000,
-                0x40a0_0000,
-                0x40e0_0000,
-                0x4100_0000,
-            ],
-        ),
-        (
-            (2, 2),
-            (1, 2),
-            ResampleInput::Name("BILINEAR".into()),
-            vec![0.1f32, -0.3, 1.7, 2.9],
-            vec![0xbdcc_ccce, 0x4013_3334],
-        ),
-        (
-            (8, 1),
-            (2, 1),
-            ResampleInput::Name("BOX".into()),
-            vec![
-                2.0f32.powi(-80),
-                2.0f32.powi(-79),
-                2.0f32.powi(-78),
-                2.0f32.powi(-77),
-                2.0f32.powi(-76),
-                2.0f32.powi(-75),
-                2.0f32.powi(-74),
-                2.0f32.powi(-73),
-            ],
-            vec![0x1870_0000, 0x1a70_0000],
-        ),
+        f_resize_dyadic_nearest_case(),
+        f_resize_dyadic_special_nearest_case(),
+        f_resize_dyadic_bilinear_expand_case(),
+        f_resize_dyadic_bilinear_reduce_case(),
+        f_resize_dyadic_box_subnormal_case(),
     ]
+}
+
+fn f_resize_dyadic_nearest_case() -> DyadicResizeCase {
+    (
+        (1, 2),
+        (1, 7),
+        ResampleInput::Name("NEAREST".into()),
+        vec![1.0f32, 2.0],
+        vec![
+            1.0f32.to_bits(),
+            1.0f32.to_bits(),
+            1.0f32.to_bits(),
+            1.0f32.to_bits(),
+            2.0f32.to_bits(),
+            2.0f32.to_bits(),
+            2.0f32.to_bits(),
+        ],
+    )
+}
+
+fn f_resize_dyadic_special_nearest_case() -> DyadicResizeCase {
+    (
+        (1, 2),
+        (1, 7),
+        ResampleInput::Name("NEAREST".into()),
+        vec![(-0.0f32), f32::NAN],
+        vec![
+            (-0.0f32).to_bits(),
+            (-0.0f32).to_bits(),
+            (-0.0f32).to_bits(),
+            (-0.0f32).to_bits(),
+            f32::NAN.to_bits(),
+            f32::NAN.to_bits(),
+            f32::NAN.to_bits(),
+        ],
+    )
+}
+
+fn f_resize_dyadic_bilinear_expand_case() -> DyadicResizeCase {
+    (
+        (2, 2),
+        (4, 4),
+        ResampleInput::Name("BILINEAR".into()),
+        vec![1.0f32, 2.0, 4.0, 8.0],
+        vec![
+            0x3f80_0000,
+            0x3fa0_0000,
+            0x3fe0_0000,
+            0x4000_0000,
+            0x3fe0_0000,
+            0x400c_0000,
+            0x4044_0000,
+            0x4060_0000,
+            0x4050_0000,
+            0x4082_0000,
+            0x40b6_0000,
+            0x40d0_0000,
+            0x4080_0000,
+            0x40a0_0000,
+            0x40e0_0000,
+            0x4100_0000,
+        ],
+    )
+}
+
+fn f_resize_dyadic_bilinear_reduce_case() -> DyadicResizeCase {
+    (
+        (2, 2),
+        (1, 2),
+        ResampleInput::Name("BILINEAR".into()),
+        vec![0.1f32, -0.3, 1.7, 2.9],
+        vec![0xbdcc_ccce, 0x4013_3334],
+    )
+}
+
+fn f_resize_dyadic_box_subnormal_case() -> DyadicResizeCase {
+    (
+        (8, 1),
+        (2, 1),
+        ResampleInput::Name("BOX".into()),
+        vec![
+            2.0f32.powi(-80),
+            2.0f32.powi(-79),
+            2.0f32.powi(-78),
+            2.0f32.powi(-77),
+            2.0f32.powi(-76),
+            2.0f32.powi(-75),
+            2.0f32.powi(-74),
+            2.0f32.powi(-73),
+        ],
+        vec![0x1870_0000, 0x1a70_0000],
+    )
 }
 
 fn f_resize_dyadic_remaining_cases() -> [DyadicResizeCase; 6] {
