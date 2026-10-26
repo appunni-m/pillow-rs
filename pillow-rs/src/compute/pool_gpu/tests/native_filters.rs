@@ -1,19 +1,20 @@
 use super::*;
 
+struct RestorePipelineTelemetry(bool);
+
+impl Drop for RestorePipelineTelemetry {
+    fn drop(&mut self) {
+        Backend::set_pipeline_telemetry_enabled(self.0);
+    }
+}
+
 #[test]
 #[cfg(target_endian = "little")]
 fn gpu_luma_box_blur_radius_one_matches_cpu_at_edges_and_fuses_axes() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let operation = PipelineOp::BoxBlur { radius: 1 };
     for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (5, 3), (33, 35)] {
         let pixel_count = width as usize * height as usize;
@@ -66,15 +67,8 @@ fn gpu_luma_box_blur_radius_one_matches_cpu_at_edges_and_fuses_axes() {
 fn gpu_rgb_box_blur_radius_one_matches_cpu_at_edges_and_fuses_axes() {
     use crate::compute::{execute_prepared, prepare_execution};
 
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let _restore_telemetry = RestoreTelemetry(previous);
+    let _restore_telemetry = RestorePipelineTelemetry(previous);
     let operation = PipelineOp::BoxBlur { radius: 1 };
     for (width, height) in [
         (1u32, 1u32),
