@@ -95,59 +95,62 @@ fn native_unmasked_paste_copies_each_supported_layout_verbatim() {
     ];
 
     for (mode, channels) in cases {
-        let destination_bytes = (0..channels * 2)
-            .map(|index| 10 + index as u8)
-            .collect::<Vec<_>>();
-        let source_bytes = (0..channels)
-            .map(|index| 100 + index as u8)
-            .collect::<Vec<_>>();
-        let destination = match channels {
-            1 => DynamicImage::ImageLuma8(
-                GrayImage::from_raw(2, 1, destination_bytes.clone()).expect("destination L buffer"),
-            ),
-            2 => DynamicImage::ImageLumaA8(
-                GrayAlphaImage::from_raw(2, 1, destination_bytes.clone())
-                    .expect("destination LA buffer"),
-            ),
-            3 => DynamicImage::ImageRgb8(
-                RgbImage::from_raw(2, 1, destination_bytes.clone())
-                    .expect("destination RGB buffer"),
-            ),
-            4 => DynamicImage::ImageRgba8(
-                RgbaImage::from_raw(2, 1, destination_bytes.clone())
-                    .expect("destination four-byte buffer"),
-            ),
-            _ => unreachable!("test cases use one through four channels"),
-        };
-        let source_image = match channels {
-            1 => DynamicImage::ImageLuma8(
-                GrayImage::from_raw(1, 1, source_bytes.clone()).expect("source L buffer"),
-            ),
-            2 => DynamicImage::ImageLumaA8(
-                GrayAlphaImage::from_raw(1, 1, source_bytes.clone()).expect("source LA buffer"),
-            ),
-            3 => DynamicImage::ImageRgb8(
-                RgbImage::from_raw(1, 1, source_bytes.clone()).expect("source RGB buffer"),
-            ),
-            4 => DynamicImage::ImageRgba8(
-                RgbaImage::from_raw(1, 1, source_bytes.clone()).expect("source four-byte buffer"),
-            ),
-            _ => unreachable!("test cases use one through four channels"),
-        };
-        let source = Arc::new(crate::Image::from_dynamic(
-            source_image,
-            Some(mode.to_owned()),
-        ));
-
-        let result = op_paste(&destination, &source, 1, 0, &None, false, Some(mode))
-            .unwrap_or_else(|error| panic!("native {mode} paste: {error}"));
-        let expected = destination_bytes[..channels]
-            .iter()
-            .chain(source_bytes.iter())
-            .copied()
-            .collect::<Vec<_>>();
-        assert_eq!(result.as_bytes(), expected, "native {mode} bytes");
+        assert_native_unmasked_paste_case(mode, channels);
     }
+}
+
+fn assert_native_unmasked_paste_case(mode: &str, channels: usize) {
+    let destination_bytes = (0..channels * 2)
+        .map(|index| 10 + index as u8)
+        .collect::<Vec<_>>();
+    let source_bytes = (0..channels)
+        .map(|index| 100 + index as u8)
+        .collect::<Vec<_>>();
+    let destination = match channels {
+        1 => DynamicImage::ImageLuma8(
+            GrayImage::from_raw(2, 1, destination_bytes.clone()).expect("destination L buffer"),
+        ),
+        2 => DynamicImage::ImageLumaA8(
+            GrayAlphaImage::from_raw(2, 1, destination_bytes.clone())
+                .expect("destination LA buffer"),
+        ),
+        3 => DynamicImage::ImageRgb8(
+            RgbImage::from_raw(2, 1, destination_bytes.clone()).expect("destination RGB buffer"),
+        ),
+        4 => DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 1, destination_bytes.clone())
+                .expect("destination four-byte buffer"),
+        ),
+        _ => unreachable!("test cases use one through four channels"),
+    };
+    let source_image = match channels {
+        1 => DynamicImage::ImageLuma8(
+            GrayImage::from_raw(1, 1, source_bytes.clone()).expect("source L buffer"),
+        ),
+        2 => DynamicImage::ImageLumaA8(
+            GrayAlphaImage::from_raw(1, 1, source_bytes.clone()).expect("source LA buffer"),
+        ),
+        3 => DynamicImage::ImageRgb8(
+            RgbImage::from_raw(1, 1, source_bytes.clone()).expect("source RGB buffer"),
+        ),
+        4 => DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(1, 1, source_bytes.clone()).expect("source four-byte buffer"),
+        ),
+        _ => unreachable!("test cases use one through four channels"),
+    };
+    let source = Arc::new(crate::Image::from_dynamic(
+        source_image,
+        Some(mode.to_owned()),
+    ));
+
+    let result = op_paste(&destination, &source, 1, 0, &None, false, Some(mode))
+        .unwrap_or_else(|error| panic!("native {mode} paste: {error}"));
+    let expected = destination_bytes[..channels]
+        .iter()
+        .chain(source_bytes.iter())
+        .copied()
+        .collect::<Vec<_>>();
+    assert_eq!(result.as_bytes(), expected, "native {mode} bytes");
 }
 
 #[test]
