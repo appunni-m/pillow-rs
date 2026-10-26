@@ -248,6 +248,16 @@ fn gpu_pending_cmyk_projection_applies_zero_overwrites_across_wide_row_boundarie
     image.putpixel(514, 18, 0, 0, 0, 1)?;
     image = image.use_backend(Backend::Gpu);
 
+    assert_gpu_pending_cmyk_projection_result(image, ops.len())
+}
+
+#[cfg(feature = "gpu")]
+fn assert_gpu_pending_cmyk_projection_result(
+    image: Image,
+    operation_count: usize,
+) -> Result<(), PilError> {
+    use crate::compute::Backend;
+
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     let result = image.getprojection();
     let receipt = Backend::take_pipeline_telemetry();
@@ -268,7 +278,7 @@ fn gpu_pending_cmyk_projection_applies_zero_overwrites_across_wide_row_boundarie
     let receipt = receipt.expect("GPU projection terminal receipt");
     assert_eq!(receipt.0, Some(Backend::Gpu));
     assert_eq!(receipt.1, Backend::Gpu);
-    assert_eq!(receipt.2, ops.len());
+    assert_eq!(receipt.2, operation_count);
     assert_eq!(receipt.6, Some(1));
     assert_eq!(receipt.7, None);
     let resources = receipt.8.expect("GPU projection resources");
