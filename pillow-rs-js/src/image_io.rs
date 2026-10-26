@@ -7,6 +7,7 @@ use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
 #[wasm_bindgen]
 impl Image {
+    /// Encodes the image as PNG and returns the encoded bytes.
     #[wasm_bindgen(js_name = "save")]
     pub fn save(&mut self) -> Result<Vec<u8>, JsValue> {
         // Returns PNG-encoded bytes for download (browser) or fs.writeFile (server).
@@ -14,6 +15,9 @@ impl Image {
         self.inner.to_png_bytes().map_err(err)
     }
 
+    /// Encodes the image using a format name or filename extension.
+    ///
+    /// Missing format and extension values are resolved by the core save-format rules.
     #[wasm_bindgen(js_name = "saveWithInput")]
     pub fn save_with_input(
         &mut self,
@@ -62,12 +66,15 @@ impl Image {
     }
 
     #[wasm_bindgen(js_name = "show")]
+    /// Does nothing in the WASM binding because it has no desktop display service.
     pub fn show(&self) {}
 
     #[wasm_bindgen(js_name = "close")]
+    /// Does nothing in the WASM binding; there is no external image resource to close.
     pub fn close(&self) {}
 
     #[wasm_bindgen(js_name = "draftFn")]
+    /// Returns a clone of this image; decoder-specific draft optimization is unavailable.
     pub fn draft_fn(&self, _m: &str, _w: u32, _h: u32) -> Image {
         Image {
             inner: self.inner.clone(),
@@ -75,16 +82,19 @@ impl Image {
     }
 
     #[wasm_bindgen(js_name = "toqimage")]
+    /// Returns a JavaScript message indicating that Qt images are unavailable in WASM.
     pub fn toqimage(&self) -> JsValue {
         JsValue::from_str("Qt not available in WASM")
     }
 
     #[wasm_bindgen(js_name = "toqpixmap")]
+    /// Returns a JavaScript message indicating that Qt pixmaps are unavailable in WASM.
     pub fn toqpixmap(&self) -> JsValue {
         JsValue::from_str("Qt not available in WASM")
     }
 
     #[wasm_bindgen(js_name = "getim")]
+    /// Returns `null`; the native Pillow imaging-core handle is not exposed in WASM.
     pub fn getim(&self) -> JsValue {
         JsValue::null()
     }
@@ -92,28 +102,34 @@ impl Image {
 
 #[wasm_bindgen]
 impl Image {
+    /// Selects a frame in a multi-frame image.
     #[wasm_bindgen(js_name = "seek")]
     pub fn seek(&mut self, f: u32) -> Result<(), JsValue> {
         self.inner.seek(f).map_err(err)
     }
+    /// Returns the current frame index.
     #[wasm_bindgen(js_name = "tell")]
     pub fn tell_js(&self) -> u32 {
         self.inner.tell()
     }
+    /// Materializes the current image frame.
     #[wasm_bindgen(js_name = "load")]
     pub fn load(&mut self) -> Result<(), JsValue> {
         self.inner.load().map_err(err)
     }
+    /// Verifies the current image's decoded data and returns any validation error.
     #[wasm_bindgen(js_name = "verify")]
     pub fn verify(&self) -> Result<(), JsValue> {
         self.inner.verify().map_err(err)
     }
+    /// Creates an image from raw pixel bytes in the requested mode and dimensions.
     #[wasm_bindgen(js_name = "fromBytes")]
     pub fn frombytes(&self, m: &str, w: u32, h: u32, d: Vec<u8>) -> Result<Image, JsValue> {
         RsImage::frombytes(m, (w, h), &d)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Replaces this image's contents with raw bytes in the requested mode and dimensions.
     #[wasm_bindgen(js_name = "fromBytesInPlace")]
     pub fn frombytes_in_place(
         &mut self,
@@ -125,6 +141,7 @@ impl Image {
         self.inner = RsImage::frombytes(m, (w, h), &d).map_err(err)?;
         Ok(())
     }
+    /// Pastes an image or color value into this image, with an optional box and mask.
     #[wasm_bindgen(js_name = "pasteValue")]
     pub fn paste_value(
         &mut self,
@@ -140,6 +157,7 @@ impl Image {
             )
             .map_err(err)
     }
+    /// Pastes an image or color value into this image using `mask`.
     #[wasm_bindgen(js_name = "pasteValueMasked")]
     pub fn paste_value_masked(
         &mut self,
@@ -155,6 +173,9 @@ impl Image {
             )
             .map_err(err)
     }
+    /// Writes sequence values into the image, applying optional scale and offset values.
+    ///
+    /// `data` must be a byte array or an array of numeric or pixel-component values.
     #[wasm_bindgen(js_name = "putdataValues")]
     pub fn putdata_values(
         &mut self,
@@ -261,10 +282,14 @@ impl Image {
             .putdata_values(&values, scale.unwrap_or(1.0), offset.unwrap_or(0.0))
             .map_err(err)
     }
+    /// Writes raw bytes to the image using the core `putdata` semantics.
     #[wasm_bindgen(js_name = "putdata")]
     pub fn putdata(&mut self, d: Vec<u8>) -> Result<(), JsValue> {
         self.inner.putdata(&d).map_err(err)
     }
+    /// Applies an affine transform to an output image of the requested dimensions.
+    ///
+    /// `size` must contain exactly two dimensions.
     #[wasm_bindgen(js_name = "transform")]
     pub fn transform(&self, sz: Vec<u32>, d: Vec<f64>) -> Result<Image, JsValue> {
         let [width, height] = sz.as_slice() else {
@@ -284,6 +309,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Applies a transform with explicit method, data, resampling, fill, and fill color.
     #[wasm_bindgen(js_name = "transformWithInput")]
     pub fn transform_with_input(
         &self,
@@ -331,10 +357,12 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Returns the raw pixel bytes for the current image mode.
     #[wasm_bindgen(js_name = "toBytes")]
     pub fn tobytes(&self) -> Result<Vec<u8>, JsValue> {
         self.inner.tobytes().map_err(err)
     }
+    /// Encodes raw pixel bytes using the named encoder and its arguments.
     #[wasm_bindgen(js_name = "toBytesEncoded")]
     pub fn tobytes_encoded(
         &self,
@@ -346,6 +374,7 @@ impl Image {
             .tobytes_encoded(&mode, encoder_name, &args)
             .map_err(err)
     }
+    /// Returns a copy of this image.
     #[wasm_bindgen(js_name = "copy")]
     pub fn copy(&self) -> Image {
         Image {
@@ -353,51 +382,62 @@ impl Image {
         }
     }
     #[wasm_bindgen(js_name = "tobitmap")]
+    /// Encodes the image as a one-bit bitmap.
     pub fn tobitmap(&mut self) -> Result<Vec<u8>, JsValue> {
         self.inner.tobitmap().map_err(err)
     }
     // More methods
     #[wasm_bindgen(js_name = "getpalette")]
+    /// Returns palette bytes, optionally converted to `rawmode`.
     pub fn getpalette(&self, rawmode: Option<String>) -> Result<Option<Vec<u8>>, JsValue> {
         self.inner
             .getpalette_with_input(rawmode.as_deref())
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "putpalette")]
+    /// Sets the image palette from bytes, interpreting them in `rawmode` or RGB by default.
     pub fn putpalette(&mut self, data: Vec<u8>, rawmode: Option<String>) -> Result<(), JsValue> {
         self.inner
             .putpalette(&data, rawmode.as_deref().unwrap_or("RGB"))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "getexif")]
+    /// Returns the image's EXIF metadata bytes.
     pub fn getexif(&self) -> Vec<u8> {
         self.inner.getexif()
     }
     #[wasm_bindgen(js_name = "getxmp")]
+    /// Returns an empty XMP object representation; XMP extraction is not implemented here.
     pub fn getxmp(&self) -> JsValue {
         JsValue::from_str("{}")
     }
     #[wasm_bindgen(js_name = "getChildImages")]
+    /// Returns no child images in the current WASM image sequence implementation.
     pub fn get_child_images(&self) -> Vec<Image> {
         vec![]
     }
     #[wasm_bindgen(js_name = "getFlattenedData")]
+    /// Returns the image's raw pixel bytes without encoding a file format.
     pub fn get_flattened(&self) -> Result<Vec<u8>, JsValue> {
         self.inner.tobytes().map_err(err)
     }
     #[wasm_bindgen(js_name = "applyTransparency")]
+    /// Applies pending palette transparency data to the image.
     pub fn apply_transparency(&mut self) -> Result<(), JsValue> {
         self.inner.apply_transparency().map_err(err)
     }
     #[wasm_bindgen(js_name = "paletteMode")]
+    /// Returns the palette mode when the image has a palette.
     pub fn palette_mode(&self) -> Option<String> {
         self.inner.palette_mode().map(str::to_owned)
     }
     #[wasm_bindgen(js_name = "paletteRgba")]
+    /// Returns the palette expanded to RGBA entries when available.
     pub fn palette_rgba(&self) -> Option<Vec<u8>> {
         self.inner.getpalette_rgba()
     }
     #[wasm_bindgen(js_name = "pendingTransparencyIndex")]
+    /// Returns a pending palette transparency index, if one is present.
     pub fn pending_transparency_index(&self) -> Option<u8> {
         match self.inner.pending_palette_transparency() {
             Some(pillow_rs::PaletteTransparency::Index(index)) => Some(index),
@@ -405,6 +445,7 @@ impl Image {
         }
     }
     #[wasm_bindgen(js_name = "pendingTransparencyTable")]
+    /// Returns a pending per-entry palette transparency table, if one is present.
     pub fn pending_transparency_table(&self) -> Option<Vec<u8>> {
         match self.inner.pending_palette_transparency() {
             Some(pillow_rs::PaletteTransparency::Table(alpha)) => Some(alpha),
@@ -412,16 +453,19 @@ impl Image {
         }
     }
     #[wasm_bindgen(js_name = "hasTransparencyData")]
+    /// Reports whether the image still has unapplied transparency data.
     pub fn has_transparency_data(&self) -> bool {
         self.inner.has_transparency_data()
     }
     #[wasm_bindgen(js_name = "draft")]
+    /// Returns a clone of this image; decoder-specific draft optimization is unavailable.
     pub fn draft(&self) -> Image {
         Image {
             inner: self.inner.clone(),
         }
     }
     #[wasm_bindgen(js_name = "putpixelRaw")]
+    /// Writes the supplied RGBA components at `(x, y)` using the image's pixel mode.
     pub fn putpixel_raw(
         &mut self,
         x: u32,
@@ -434,6 +478,7 @@ impl Image {
         self.inner.putpixel(x, y, r, g, b, a).map_err(err)
     }
 
+    /// Formats the image dimensions and mode as a diagnostic string.
     pub fn repr(&mut self) -> Result<String, JsValue> {
         let (w, h) = self.inner.size().map_err(err)?;
         let m = self.inner.mode().map_err(err)?;
@@ -442,12 +487,14 @@ impl Image {
 }
 
 #[wasm_bindgen]
+/// Single-pass iterator over the frame exposed by the current WASM image sequence.
 pub struct ImageSequence {
     image: Image,
     yielded: bool,
 }
 #[wasm_bindgen]
 impl ImageSequence {
+    /// Creates a sequence that yields a clone of `img` once.
     #[wasm_bindgen(constructor)]
     pub fn new(img: &Image) -> ImageSequence {
         ImageSequence {
@@ -458,6 +505,7 @@ impl ImageSequence {
         }
     }
     #[wasm_bindgen(js_name = "next")]
+    /// Returns the sequence image once, then returns `undefined` on later calls.
     pub fn next_frame(&mut self) -> Option<Image> {
         if self.yielded {
             return None;
@@ -470,12 +518,14 @@ impl ImageSequence {
 }
 
 #[wasm_bindgen(js_name = "imageOpen")]
+/// Rejects path-based opening; WASM callers must pass encoded bytes to `Image.open`.
 pub fn image_open_path(_path: &str) -> Result<Image, JsValue> {
     Err(JsValue::from_str(
         "Use Image.open(bytes) instead of file path in WASM",
     ))
 }
 #[wasm_bindgen(js_name = "imageNew")]
+/// Creates a new image filled with the supplied RGBA color.
 pub fn image_new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Result<Image, JsValue> {
     RsImage::new(w, h, mode, (r, g, b, a))
         .map(|i| Image { inner: i })
@@ -483,6 +533,7 @@ pub fn image_new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Resu
 }
 
 #[wasm_bindgen(js_name = "imageNewWithInput")]
+/// Creates an image from a mode-aware JavaScript color value.
 pub fn image_new_with_input(mode: &str, w: u32, h: u32, color: JsValue) -> Result<Image, JsValue> {
     let input = js_new_color_input(
         mode,
@@ -494,6 +545,7 @@ pub fn image_new_with_input(mode: &str, w: u32, h: u32, color: JsValue) -> Resul
 }
 
 #[wasm_bindgen(js_name = "fromBytesFn")]
+/// Decodes raw pixel bytes using the named raw decoder, or `raw` by default.
 pub fn from_bytes_fn(
     mode: &str,
     w: u32,
@@ -512,6 +564,7 @@ pub fn from_bytes_fn(
 }
 
 #[wasm_bindgen(js_name = "fromArrayFn")]
+/// Creates an image from array shape, dtype, optional mode, and pixel bytes.
 pub fn from_array_fn(
     shape: Vec<f64>,
     typestr: &str,
@@ -540,6 +593,7 @@ pub fn from_array_fn(
 }
 
 #[wasm_bindgen(js_name = "openFn")]
+/// Opens encoded bytes, optionally restricting the decoder to selected formats.
 pub fn open_fn(data: Vec<u8>, mode: JsValue, formats: JsValue) -> Result<Image, JsValue> {
     let mode = if mode.is_null() || mode.is_undefined() {
         pillow_rs::PythonOpenModeInput::None
@@ -572,6 +626,7 @@ pub fn open_fn(data: Vec<u8>, mode: JsValue, formats: JsValue) -> Result<Image, 
 }
 
 #[wasm_bindgen(js_name = "validateOpenInputs")]
+/// Validates the optional mode and format-list arguments used by `openFn`.
 pub fn validate_open_inputs(mode: JsValue, formats: JsValue) -> Result<(), JsValue> {
     let mode = if mode.is_null() || mode.is_undefined() {
         pillow_rs::PythonOpenModeInput::None
@@ -600,6 +655,7 @@ pub fn validate_open_inputs(mode: JsValue, formats: JsValue) -> Result<(), JsVal
 }
 
 #[wasm_bindgen(js_name = "validateOpenSource")]
+/// Validates that the supplied bytes can be used as an image source.
 pub fn validate_open_source(data: Vec<u8>) -> Result<(), JsValue> {
     pillow_rs::validate_python_open_source_bytes(&data)
         .map(|_| ())
@@ -607,6 +663,7 @@ pub fn validate_open_source(data: Vec<u8>) -> Result<(), JsValue> {
 }
 
 #[wasm_bindgen(js_name = "imageNewPaletteIndex")]
+/// Creates a palette-index image initialized to `index`.
 pub fn image_new_palette_index(w: u32, h: u32, index: u8) -> Image {
     Image {
         inner: RsImage::new_palette_index(w, h, index),
@@ -616,11 +673,13 @@ pub fn image_new_palette_index(w: u32, h: u32, index: u8) -> Image {
 // ── ImageChops ───────────────────────────────────────────────────
 
 #[wasm_bindgen(js_name = "exifOrientation")]
+/// Returns the EXIF orientation value found in the supplied metadata bytes.
 pub fn exif_orientation(raw: Vec<u8>) -> Option<u32> {
     pillow_rs::exif_get_orientation(&raw)
 }
 
 #[wasm_bindgen(js_name = "exifRemoveOrientation")]
+/// Returns EXIF metadata bytes with the orientation entry removed.
 pub fn exif_remove_orientation(raw: Vec<u8>) -> Vec<u8> {
     pillow_rs::exif_remove_orientation(&raw)
 }
