@@ -132,13 +132,16 @@ fn put_alpha_data_shape(
     if !mode_matches {
         return None;
     }
-    let source_matches = match (alpha_mode, img) {
-        (PixelMode::L | PixelMode::P, DynamicImage::ImageLuma8(_)) => true,
-        (PixelMode::LA | PixelMode::PA, DynamicImage::ImageLumaA8(_)) => true,
-        (PixelMode::RGB, DynamicImage::ImageRgb8(_)) => true,
-        (PixelMode::RGBA | PixelMode::CMYK, DynamicImage::ImageRgba8(_)) => true,
-        _ => false,
-    };
+    let source_matches = matches!(
+        (alpha_mode, img),
+        (PixelMode::L | PixelMode::P, DynamicImage::ImageLuma8(_))
+            | (PixelMode::LA | PixelMode::PA, DynamicImage::ImageLumaA8(_))
+            | (PixelMode::RGB, DynamicImage::ImageRgb8(_))
+            | (
+                PixelMode::RGBA | PixelMode::CMYK,
+                DynamicImage::ImageRgba8(_)
+            )
+    );
     source_matches.then_some((
         source_channels,
         output_channels,
@@ -179,13 +182,16 @@ fn put_alpha_shape(
     if !mode_matches {
         return None;
     }
-    let source_matches = match (alpha_mode, img) {
-        (PixelMode::L | PixelMode::P, DynamicImage::ImageLuma8(_)) => true,
-        (PixelMode::LA | PixelMode::PA, DynamicImage::ImageLumaA8(_)) => true,
-        (PixelMode::RGB, DynamicImage::ImageRgb8(_)) => true,
-        (PixelMode::RGBA | PixelMode::CMYK, DynamicImage::ImageRgba8(_)) => true,
-        _ => false,
-    };
+    let source_matches = matches!(
+        (alpha_mode, img),
+        (PixelMode::L | PixelMode::P, DynamicImage::ImageLuma8(_))
+            | (PixelMode::LA | PixelMode::PA, DynamicImage::ImageLumaA8(_))
+            | (PixelMode::RGB, DynamicImage::ImageRgb8(_))
+            | (
+                PixelMode::RGBA | PixelMode::CMYK,
+                DynamicImage::ImageRgba8(_)
+            )
+    );
     source_matches.then_some((
         source_channels,
         output_channels,
@@ -260,10 +266,10 @@ pub fn simd_put_alpha(
     else {
         return Err(PilError::ValueError("expected PutAlpha op".into()));
     };
-    let native_two_band_alpha = match (*alpha_mode, mode) {
-        (PixelMode::LA, None | Some("LA")) | (PixelMode::PA, Some("PA")) => true,
-        _ => false,
-    };
+    let native_two_band_alpha = matches!(
+        (*alpha_mode, mode),
+        (PixelMode::LA, None | Some("LA")) | (PixelMode::PA, Some("PA"))
+    );
     if native_two_band_alpha && let DynamicImage::ImageLumaA8(source) = img {
         // LA stores [luma, alpha] and PA stores [index, alpha]. Both already
         // have the requested two-byte output layout. Clone once and update

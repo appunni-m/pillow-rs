@@ -387,11 +387,12 @@ pub(super) fn gpu_auxiliary_modes_are_safe_for_color(
             .second
             .as_deref()
             .is_some_and(|source| matches!(source, DynamicImage::ImageLuma16(_)));
-        let mask_is_supported = match (*mask_alpha, auxiliary.third.as_deref()) {
-            (false, None) | (false, Some(DynamicImage::ImageLuma8(_))) => true,
-            (true, Some(DynamicImage::ImageRgba8(_))) => true,
-            _ => false,
-        };
+        let mask_is_supported = matches!(
+            (*mask_alpha, auxiliary.third.as_deref()),
+            (false, None)
+                | (false, Some(DynamicImage::ImageLuma8(_)))
+                | (true, Some(DynamicImage::ImageRgba8(_)))
+        );
         return source_is_luma16 && mask_is_supported;
     }
     if let PipelineOp::CompositeModule { mask_alpha, .. } = op {

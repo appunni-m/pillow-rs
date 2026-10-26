@@ -417,12 +417,12 @@ pub fn simd_brightness(
     // in the adapter's fixed-point domain. LA's active-byte mask keeps alpha
     // unchanged while shifting luma; RGB applies the shift to each native
     // three-byte sample.
-    let shift_layout = match (img, mode) {
+    let shift_layout = matches!(
+        (img, mode),
         (DynamicImage::ImageLuma8(_), None | Some("L"))
-        | (DynamicImage::ImageLumaA8(_), None | Some("LA"))
-        | (DynamicImage::ImageRgb8(_), None | Some("RGB")) => true,
-        _ => false,
-    };
+            | (DynamicImage::ImageLumaA8(_), None | Some("LA"))
+            | (DynamicImage::ImageRgb8(_), None | Some("RGB"))
+    );
     if shift_layout
         && let Some(shift) = match factor_fp {
             500 => Some(1),

@@ -209,11 +209,13 @@ fn gpu_paste_compact_solid_source_supported(
     }
     let source_mode = source.mode().ok();
     let mask_mode = mask.and_then(|image| image.mode().ok());
-    match (source_mode.as_deref(), mask_mode.as_deref()) {
-        (Some("1" | "P" | "L" | "LA" | "PA" | "RGB" | "HSV" | "RGBA" | "CMYK"), Some("1")) => true,
-        (Some("L" | "RGB" | "HSV" | "RGBA" | "CMYK"), Some("L")) => true,
-        _ => false,
-    }
+    matches!(
+        (source_mode.as_deref(), mask_mode.as_deref()),
+        (
+            Some("1" | "P" | "L" | "LA" | "PA" | "RGB" | "HSV" | "RGBA" | "CMYK"),
+            Some("1")
+        ) | (Some("L" | "RGB" | "HSV" | "RGBA" | "CMYK"), Some("L"))
+    )
 }
 
 pub(super) fn gpu_auxiliary_shapes_are_safe(
