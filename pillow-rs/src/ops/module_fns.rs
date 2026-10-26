@@ -800,7 +800,10 @@ mod tests {
             assert_eq!(result.tobytes().expect("bytes"), bytes);
             assert_eq!(result.getbands().expect("bands"), names);
         }
+        assert_lab_merge_encoding(l0, l1, l2);
+    }
 
+    fn assert_lab_merge_encoding(l0: Image, l1: Image, l2: Image) {
         let lab = merge("LAB", &[l0, l1, l2]).expect("LAB merge succeeds");
         assert_eq!(lab.mode().expect("mode"), "LAB");
         assert_eq!(

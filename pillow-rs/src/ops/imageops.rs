@@ -371,23 +371,31 @@ mod tests {
     #[test]
     fn fit_preserves_zero_dimension_source_rules() {
         let source = empty_image((0, 2));
-        let empty = fit_with_input(&source, 0, 2, None, 0.0, CenteringInput::Default)
+        assert_fit_zero_dimension_outputs(&source);
+        assert_fit_zero_dimension_errors(&source);
+        assert_fit_filter_ordering_and_centering(&source);
+    }
+
+    fn assert_fit_zero_dimension_outputs(source: &Image) {
+        let empty = fit_with_input(source, 0, 2, None, 0.0, CenteringInput::Default)
             .expect("same-size empty-width fit is a valid copy")
             .materialize()
             .expect("empty-width fit materializes");
         assert_eq!(empty.dimensions(), (0, 2));
         assert!(empty.as_bytes().is_empty());
 
-        let black = fit_with_input(&source, 2, 2, None, 0.0, CenteringInput::Default)
+        let black = fit_with_input(source, 2, 2, None, 0.0, CenteringInput::Default)
             .expect("a positive target at the source height is valid")
             .materialize()
             .expect("zero-width source fit materializes");
         assert_eq!(black.dimensions(), (2, 2));
         assert_eq!(black.as_bytes(), &[0, 0, 0, 0]);
+    }
 
+    fn assert_fit_zero_dimension_errors(source: &Image) {
         for target in [(0, 1), (1, 1), (1, 0), (0, 3)] {
             let error = fit_with_input(
-                &source,
+                source,
                 target.0,
                 target.1,
                 None,
@@ -405,9 +413,11 @@ mod tests {
                 (target, error) => panic!("unexpected fit result for {target:?}: {error:?}"),
             }
         }
+    }
 
+    fn assert_fit_filter_ordering_and_centering(source: &Image) {
         let invalid_filter = fit_with_input(
-            &source,
+            source,
             2,
             2,
             Some(ResampleInput::Code(99)),
@@ -421,7 +431,7 @@ mod tests {
         ));
 
         let invalid_filter_after_zero_width = fit_with_input(
-            &source,
+            source,
             0,
             3,
             Some(ResampleInput::Code(99)),
@@ -435,7 +445,7 @@ mod tests {
         ));
 
         let normalized_centering = fit_with_input(
-            &source,
+            source,
             2,
             2,
             None,

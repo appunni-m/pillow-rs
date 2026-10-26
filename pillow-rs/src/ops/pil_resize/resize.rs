@@ -444,7 +444,14 @@ mod typed_nearest_tests {
     use crate::raster::{DynamicImage, ImageBuffer, Rgb, Rgba};
 
     fn typed_images() -> Vec<DynamicImage> {
-        vec![
+        typed_integer_images()
+            .into_iter()
+            .chain(typed_float_images())
+            .collect()
+    }
+
+    fn typed_integer_images() -> [DynamicImage; 4] {
+        [
             DynamicImage::ImageLuma16(
                 ImageBuffer::from_raw(3, 2, vec![0, 1, 32_768, 65_535, 257, 65_407])
                     .expect("L16 samples"),
@@ -481,67 +488,77 @@ mod typed_nearest_tests {
                 )
                 .expect("RGBA16 samples"),
             ),
-            DynamicImage::ImageRgb32F(
-                ImageBuffer::<Rgb<f32>, Vec<f32>>::from_raw(
-                    3,
-                    2,
-                    vec![
-                        0.0,
-                        0.5,
-                        1.0,
-                        -1.0,
-                        0.25,
-                        2.0,
-                        f32::NAN,
-                        f32::INFINITY,
-                        f32::NEG_INFINITY,
-                        0.1,
-                        0.9,
-                        1.1,
-                        -0.0,
-                        0.001,
-                        0.999,
-                        0.75,
-                        0.33,
-                        0.66,
-                    ],
-                )
-                .expect("RGB32F samples"),
-            ),
-            DynamicImage::ImageRgba32F(
-                ImageBuffer::<Rgba<f32>, Vec<f32>>::from_raw(
-                    3,
-                    2,
-                    vec![
-                        0.0,
-                        0.5,
-                        1.0,
-                        1.0,
-                        -1.0,
-                        0.25,
-                        2.0,
-                        0.5,
-                        f32::NAN,
-                        f32::INFINITY,
-                        f32::NEG_INFINITY,
-                        0.0,
-                        0.1,
-                        0.9,
-                        1.1,
-                        0.25,
-                        -0.0,
-                        0.001,
-                        0.999,
-                        0.75,
-                        0.75,
-                        0.33,
-                        0.66,
-                        0.5,
-                    ],
-                )
-                .expect("RGBA32F samples"),
-            ),
         ]
+    }
+
+    fn typed_float_images() -> [DynamicImage; 2] {
+        [typed_rgb32f_image(), typed_rgba32f_image()]
+    }
+
+    fn typed_rgb32f_image() -> DynamicImage {
+        DynamicImage::ImageRgb32F(
+            ImageBuffer::<Rgb<f32>, Vec<f32>>::from_raw(
+                3,
+                2,
+                vec![
+                    0.0,
+                    0.5,
+                    1.0,
+                    -1.0,
+                    0.25,
+                    2.0,
+                    f32::NAN,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    0.1,
+                    0.9,
+                    1.1,
+                    -0.0,
+                    0.001,
+                    0.999,
+                    0.75,
+                    0.33,
+                    0.66,
+                ],
+            )
+            .expect("RGB32F samples"),
+        )
+    }
+
+    fn typed_rgba32f_image() -> DynamicImage {
+        DynamicImage::ImageRgba32F(
+            ImageBuffer::<Rgba<f32>, Vec<f32>>::from_raw(
+                3,
+                2,
+                vec![
+                    0.0,
+                    0.5,
+                    1.0,
+                    1.0,
+                    -1.0,
+                    0.25,
+                    2.0,
+                    0.5,
+                    f32::NAN,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    0.0,
+                    0.1,
+                    0.9,
+                    1.1,
+                    0.25,
+                    -0.0,
+                    0.001,
+                    0.999,
+                    0.75,
+                    0.75,
+                    0.33,
+                    0.66,
+                    0.5,
+                ],
+            )
+            .expect("RGBA32F samples"),
+        )
     }
 
     fn typed_public_byte_mode(image: &DynamicImage) -> DynamicImage {
@@ -600,68 +617,92 @@ mod typed_nearest_tests {
         let destination = (4, 3);
         let box_bounds = (0.25, 0.5, 2.75, 1.5);
         for image in typed_images().into_iter().skip(1) {
-            let byte_mode = typed_public_byte_mode(&image);
-            let normal_expected = pil_resize(
-                &byte_mode,
-                destination.0,
-                destination.1,
-                ResampleFilter::Bicubic,
-                None,
-            );
-            let normal_actual = pil_resize(
-                &image,
-                destination.0,
-                destination.1,
-                ResampleFilter::Bicubic,
-                None,
-            );
-            assert_eq!(
-                normal_actual.color(),
-                normal_expected.color(),
-                "standard resize layout for {:?}",
-                image.color()
-            );
-            assert_eq!(
-                normal_actual.as_bytes(),
-                normal_expected.as_bytes(),
-                "standard resize samples for {:?}",
-                image.color()
-            );
-
-            let boxed_expected = super::pil_resize_boxed(
-                &byte_mode,
-                destination.0,
-                destination.1,
-                box_bounds.0,
-                box_bounds.1,
-                box_bounds.2,
-                box_bounds.3,
-                ResampleFilter::Bicubic,
-                None,
-            );
-            let boxed_actual = super::pil_resize_boxed(
-                &image,
-                destination.0,
-                destination.1,
-                box_bounds.0,
-                box_bounds.1,
-                box_bounds.2,
-                box_bounds.3,
-                ResampleFilter::Bicubic,
-                None,
-            );
-            assert_eq!(
-                boxed_actual.color(),
-                boxed_expected.color(),
-                "boxed resize layout for {:?}",
-                image.color()
-            );
-            assert_eq!(
-                boxed_actual.as_bytes(),
-                boxed_expected.as_bytes(),
-                "boxed resize samples for {:?}",
-                image.color()
-            );
+            assert_typed_filtered_resize_layout(&image, destination, box_bounds);
         }
+    }
+
+    fn assert_typed_filtered_resize_layout(
+        image: &DynamicImage,
+        destination: (u32, u32),
+        box_bounds: (f64, f64, f64, f64),
+    ) {
+        let byte_mode = typed_public_byte_mode(image);
+        assert_typed_standard_resize_layout(image, &byte_mode, destination);
+        assert_typed_boxed_resize_layout(image, &byte_mode, destination, box_bounds);
+    }
+
+    fn assert_typed_standard_resize_layout(
+        image: &DynamicImage,
+        byte_mode: &DynamicImage,
+        destination: (u32, u32),
+    ) {
+        let normal_expected = pil_resize(
+            byte_mode,
+            destination.0,
+            destination.1,
+            ResampleFilter::Bicubic,
+            None,
+        );
+        let normal_actual = pil_resize(
+            image,
+            destination.0,
+            destination.1,
+            ResampleFilter::Bicubic,
+            None,
+        );
+        assert_eq!(
+            normal_actual.color(),
+            normal_expected.color(),
+            "standard resize layout for {:?}",
+            image.color()
+        );
+        assert_eq!(
+            normal_actual.as_bytes(),
+            normal_expected.as_bytes(),
+            "standard resize samples for {:?}",
+            image.color()
+        );
+    }
+
+    fn assert_typed_boxed_resize_layout(
+        image: &DynamicImage,
+        byte_mode: &DynamicImage,
+        destination: (u32, u32),
+        box_bounds: (f64, f64, f64, f64),
+    ) {
+        let boxed_expected = super::pil_resize_boxed(
+            byte_mode,
+            destination.0,
+            destination.1,
+            box_bounds.0,
+            box_bounds.1,
+            box_bounds.2,
+            box_bounds.3,
+            ResampleFilter::Bicubic,
+            None,
+        );
+        let boxed_actual = super::pil_resize_boxed(
+            image,
+            destination.0,
+            destination.1,
+            box_bounds.0,
+            box_bounds.1,
+            box_bounds.2,
+            box_bounds.3,
+            ResampleFilter::Bicubic,
+            None,
+        );
+        assert_eq!(
+            boxed_actual.color(),
+            boxed_expected.color(),
+            "boxed resize layout for {:?}",
+            image.color()
+        );
+        assert_eq!(
+            boxed_actual.as_bytes(),
+            boxed_expected.as_bytes(),
+            "boxed resize samples for {:?}",
+            image.color()
+        );
     }
 }

@@ -611,20 +611,31 @@ mod tests {
         let actual = super::simd_rgb_putpixel_thumbnail_resize(&reduced, &thumbnail, Some("RGB"))
             .expect("SIMD thumbnail resize");
 
-        let mut materialized = source;
-        for op in writes {
-            let PipelineOp::PutPixel { x, y, color, .. } = op else {
-                unreachable!();
-            };
-            let start = (y as usize * width as usize + x as usize) * 3;
-            materialized[start..start + 3].copy_from_slice(&[color.0, color.1, color.2]);
-        }
-        let materialized = DynamicImage::ImageRgb8(
-            RgbImage::from_raw(width, height, materialized).expect("written RGB shape"),
-        );
+        let materialized = materialize_sparse_rgb_putpixel_writes(source, width, height, writes);
         let expected = execute_thumbnail(&materialized, 128, 128, &filter, Some("RGB"))
             .expect("CPU thumbnail reference");
         assert_eq!(actual.as_bytes(), expected.as_bytes());
+    }
+
+    fn materialize_sparse_rgb_putpixel_writes(
+        mut source: Vec<u8>,
+        width: u32,
+        height: u32,
+        writes: [crate::pipeline::PipelineOp; 3],
+    ) -> crate::raster::DynamicImage {
+        for op in writes {
+            let crate::pipeline::PipelineOp::PutPixel { x, y, color, .. } = op else {
+                unreachable!();
+            };
+            let start = (y as usize)
+                .wrapping_mul(width as usize)
+                .wrapping_add(x as usize)
+                .wrapping_mul(3);
+            source[start..start.wrapping_add(3)].copy_from_slice(&[color.0, color.1, color.2]);
+        }
+        crate::raster::DynamicImage::ImageRgb8(
+            crate::raster::RgbImage::from_raw(width, height, source).expect("written RGB shape"),
+        )
     }
 
     #[test]

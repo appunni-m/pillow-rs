@@ -239,6 +239,14 @@ mod transpose_tests {
         Ok(())
     }
 
+    struct RestoreTelemetry(bool);
+
+    impl Drop for RestoreTelemetry {
+        fn drop(&mut self) {
+            Backend::set_pipeline_telemetry_enabled(self.0);
+        }
+    }
+
     #[test]
     fn transpose_identity_all_pairs_and_continuations_preserve_native_pixels()
     -> Result<(), PilError> {
@@ -363,12 +371,6 @@ mod transpose_tests {
     #[test]
     fn transpose_identity_preserves_ownership_and_reports_zero_kernel_work() -> Result<(), PilError>
     {
-        struct RestoreTelemetry(bool);
-        impl Drop for RestoreTelemetry {
-            fn drop(&mut self) {
-                Backend::set_pipeline_telemetry_enabled(self.0);
-            }
-        }
         let bytes: Vec<u8> = (0..9 * 31 * 3)
             .map(|index| (index * 37 + index / 11) as u8)
             .collect();
@@ -377,65 +379,96 @@ mod transpose_tests {
         let expected_invert = registry::execute_cpu(&PipelineOp::Invert, &source, Some("RGB"))?;
         let _telemetry = RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
         for backend in [&CpuPool as &dyn BackendImpl, &SimdPool] {
+            let (result, retained) =
+                assert_transpose_identity_owned_output(backend, &identity, &source, &bytes)?;
+            assert_transpose_identity_invert_continuations(
+                backend,
+                &identity,
+                &source,
+                &expected_invert,
+                &result,
+                &retained,
+                &bytes,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn assert_transpose_identity_owned_output(
+        backend: &dyn BackendImpl,
+        identity: &[PipelineOp],
+        source: &DynamicImage,
+        bytes: &[u8],
+    ) -> Result<(DynamicImage, Vec<u8>), PilError> {
+        crate::compute::reset_pipeline_operation_telemetry();
+        Backend::reset_pipeline_allocation_telemetry();
+        let mut result = backend.execute_batch(identity, source, Some("RGB"))?;
+        let records = crate::compute::take_pipeline_operation_telemetry();
+        assert_eq!(records.len(), 2);
+        for record in records {
+            assert_eq!(record.operation, "Transpose");
+            assert_eq!(record.vector_block_count, 0);
+            assert_eq!(record.scalar_tail_count, 0);
+            assert_eq!(record.mode_conversion_count, 0);
+            assert_eq!(record.handoff_count, 0);
+            assert_eq!(
+                record.path,
+                if backend.name() == Backend::Cpu {
+                    "cpu"
+                } else {
+                    "scalar-control"
+                }
+            );
+        }
+        let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
+        assert_eq!(resources.fused_operation_count, 2);
+        assert_eq!(resources.host_buffer_count, 2);
+        let allocations = Backend::take_pipeline_allocation_telemetry();
+        assert_eq!(allocations.allocation_count, 1);
+        assert_eq!(allocations.allocated_bytes, bytes.len() as u64);
+        assert_eq!(result.as_bytes(), bytes);
+        assert_ne!(result.as_bytes().as_ptr(), source.as_bytes().as_ptr());
+        result
+            .as_mut_rgb8()
+            .unwrap()
+            .put_pixel(0, 0, Rgb([1, 2, 3]));
+        let retained = result.as_bytes().to_vec();
+        assert_eq!(source.as_bytes(), bytes);
+        Ok((result, retained))
+    }
+
+    fn assert_transpose_identity_invert_continuations(
+        backend: &dyn BackendImpl,
+        identity: &[PipelineOp],
+        source: &DynamicImage,
+        expected_invert: &DynamicImage,
+        result: &DynamicImage,
+        retained: &[u8],
+        bytes: &[u8],
+    ) -> Result<(), PilError> {
+        for leading_identity in [false, true] {
+            let ops = if leading_identity {
+                vec![identity[0].clone(), identity[1].clone(), PipelineOp::Invert]
+            } else {
+                vec![PipelineOp::Invert, identity[0].clone(), identity[1].clone()]
+            };
             crate::compute::reset_pipeline_operation_telemetry();
-            Backend::reset_pipeline_allocation_telemetry();
-            let mut result = backend.execute_batch(&identity, &source, Some("RGB"))?;
+            let actual = backend.execute_batch(&ops, source, Some("RGB"))?;
+            assert_eq!(actual.as_bytes(), expected_invert.as_bytes());
             let records = crate::compute::take_pipeline_operation_telemetry();
-            assert_eq!(records.len(), 2);
-            for record in records {
-                assert_eq!(record.operation, "Transpose");
+            assert_eq!(records.len(), 3);
+            for record in records
+                .iter()
+                .filter(|record| record.operation == "Transpose")
+            {
                 assert_eq!(record.vector_block_count, 0);
                 assert_eq!(record.scalar_tail_count, 0);
-                assert_eq!(record.mode_conversion_count, 0);
-                assert_eq!(record.handoff_count, 0);
-                assert_eq!(
-                    record.path,
-                    if backend.name() == Backend::Cpu {
-                        "cpu"
-                    } else {
-                        "scalar-control"
-                    }
-                );
             }
             let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
             assert_eq!(resources.fused_operation_count, 2);
             assert_eq!(resources.host_buffer_count, 2);
-            let allocations = Backend::take_pipeline_allocation_telemetry();
-            assert_eq!(allocations.allocation_count, 1);
-            assert_eq!(allocations.allocated_bytes, bytes.len() as u64);
-            assert_eq!(result.as_bytes(), bytes);
-            assert_ne!(result.as_bytes().as_ptr(), source.as_bytes().as_ptr());
-            result
-                .as_mut_rgb8()
-                .unwrap()
-                .put_pixel(0, 0, Rgb([1, 2, 3]));
-            let retained = result.as_bytes().to_vec();
+            assert_eq!(result.as_bytes(), retained);
             assert_eq!(source.as_bytes(), bytes);
-
-            for leading_identity in [false, true] {
-                let ops = if leading_identity {
-                    vec![identity[0].clone(), identity[1].clone(), PipelineOp::Invert]
-                } else {
-                    vec![PipelineOp::Invert, identity[0].clone(), identity[1].clone()]
-                };
-                crate::compute::reset_pipeline_operation_telemetry();
-                let actual = backend.execute_batch(&ops, &source, Some("RGB"))?;
-                assert_eq!(actual.as_bytes(), expected_invert.as_bytes());
-                let records = crate::compute::take_pipeline_operation_telemetry();
-                assert_eq!(records.len(), 3);
-                for record in records
-                    .iter()
-                    .filter(|record| record.operation == "Transpose")
-                {
-                    assert_eq!(record.vector_block_count, 0);
-                    assert_eq!(record.scalar_tail_count, 0);
-                }
-                let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
-                assert_eq!(resources.fused_operation_count, 2);
-                assert_eq!(resources.host_buffer_count, 2);
-                assert_eq!(result.as_bytes(), retained);
-                assert_eq!(source.as_bytes(), bytes);
-            }
         }
         Ok(())
     }
