@@ -224,13 +224,7 @@ fn f_resize_arm64_wide_horizontal_vector_native_matches_pillow() {
             Some("F")
         ));
         let expected = bytes(&[expected_word]);
-        let cpu = source
-            .resize((1, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
-            .expect("CPU wide F resize operation")
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU wide F resize");
-        assert_eq!(cpu, expected, "CPU wide F resize at width {width}");
+        assert_wide_f_cpu_reference(&source, &expected, width);
 
         let actual = match source
             .resize((1, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
@@ -259,6 +253,16 @@ fn f_resize_arm64_wide_horizontal_vector_native_matches_pillow() {
         assert_eq!(telemetry.7, None);
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_wide_f_cpu_reference(source: &Image, expected: &[u8], width: usize) {
+    let cpu = source
+        .resize((1, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
+        .expect("CPU wide F resize operation")
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU wide F resize");
+    assert_eq!(cpu, expected, "CPU wide F resize at width {width}");
 }
 
 #[test]
