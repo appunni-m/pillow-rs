@@ -176,54 +176,13 @@ fn gpu_primary_readback_concurrent_public_pipelines_keep_outputs_owned() {
     let Some(_gpu) = primary_readback_test_gpu() else {
         return;
     };
-
     // Reference bytes are computed before either GPU worker exists. Equal
     // pixel capacities with different shapes, modes, and values stress the
     // shared pool without allowing one worker's image to resemble another.
-    let jobs: Vec<_> = (0usize..2)
-        .map(|worker| {
-            (0usize..6)
-                .map(|iteration| {
-                    let (mode, channels) = if worker == 0 { ("RGB", 3) } else { ("RGBA", 4) };
-                    let (width, height) = if (worker + iteration) % 2 == 0 {
-                        (129usize, 131usize)
-                    } else {
-                        (131usize, 129usize)
-                    };
-                    let source: Vec<u8> = (0..width * height * channels)
-                        .map(|index| {
-                            index
-                                .wrapping_mul(113)
-                                .wrapping_add(index / channels * 7)
-                                .wrapping_add(index / (width * channels) * 29)
-                                .wrapping_add(worker * 61)
-                                .wrapping_add(iteration * 43) as u8
-                        })
-                        .collect();
-                    let mut expected = vec![0u8; source.len()];
-                    for output_y in 0..width {
-                        for output_x in 0..height {
-                            let input_offset = (output_x * width + output_y) * channels;
-                            let output_offset = (output_y * height + output_x) * channels;
-                            expected[output_offset..output_offset + channels]
-                                .copy_from_slice(&source[input_offset..input_offset + channels]);
-                        }
-                    }
-                    (mode, width as u32, height as u32, source, expected)
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect();
-
+    let jobs: Vec<_> = (0usize..2).map(native_public_readback_cases).collect();
     // Enable telemetry in every worker: the parent's thread-local setting
     // is deliberately not inherited by newly spawned threads.
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
-    let _telemetry = RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
+    let _telemetry = RestorePublicReadbackTelemetry(Backend::set_pipeline_telemetry_enabled(true));
     let start = std::sync::Barrier::new(2);
     let completed = std::thread::scope(|scope| {
         let handles: Vec<_> = jobs
@@ -231,59 +190,7 @@ fn gpu_primary_readback_concurrent_public_pipelines_keep_outputs_owned() {
             .enumerate()
             .map(|(worker, cases)| {
                 let start = &start;
-                scope.spawn(move || {
-                    let _telemetry =
-                        RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
-                    // Only synchronize once: a later assertion failure
-                    // cannot strand the peer at another barrier.
-                    start.wait();
-                    let mut retained = Vec::new();
-                    for (iteration, (mode, width, height, source, expected)) in
-                        cases.into_iter().enumerate()
-                    {
-                        let pipeline = Image::frombytes(mode, (width, height), &source)
-                            .expect("concurrent native source")
-                            .transpose("TRANSPOSE")
-                            .expect("concurrent transpose construction")
-                            .use_backend(Backend::Gpu);
-                        let actual = pipeline.tobytes().expect("concurrent GPU materialization");
-                        let receipt = Backend::take_pipeline_telemetry()
-                            .expect("each worker must publish its own GPU receipt");
-                        assert_eq!(receipt.0, Some(Backend::Gpu));
-                        assert_eq!(
-                            receipt.1,
-                            Backend::Gpu,
-                            "worker={worker} iteration={iteration}"
-                        );
-                        assert_eq!(receipt.2, 1);
-                        assert_eq!(receipt.6, Some(1));
-                        assert_eq!(receipt.7, None, "native test must never accept fallback");
-                        let resources = receipt.8.expect("concurrent GPU resource receipt");
-                        assert_eq!(
-                            resources.full_frame_copy_count,
-                            if cfg!(target_endian = "little") { 0 } else { 1 },
-                        );
-                        let pixels = u64::from(width) * u64::from(height);
-                        let transfer_bytes = if cfg!(target_endian = "little") && mode == "RGB" {
-                            (pixels * 3 + 3) & !3
-                        } else {
-                            pixels * 4
-                        };
-                        assert_eq!(resources.readback_bytes, transfer_bytes);
-                        assert_eq!(resources.upload_bytes, transfer_bytes);
-                        assert_eq!(resources.mode_conversion_count, 0);
-                        assert_eq!(actual, expected, "worker={worker} iteration={iteration}");
-                        assert_eq!(pipeline.size().unwrap(), (height, width));
-                        retained.push((pipeline, actual, expected));
-                        // Keep earlier public images and returned bytes
-                        // alive while both workers reuse pooled storage.
-                        for (image, bytes, reference) in &retained {
-                            assert_eq!(bytes, reference);
-                            assert_eq!(image.tobytes().unwrap(), *reference);
-                        }
-                    }
-                    retained
-                })
+                scope.spawn(move || execute_public_readback_worker(worker, cases, start))
             })
             .collect();
         handles
@@ -297,6 +204,120 @@ fn gpu_primary_readback_concurrent_public_pipelines_keep_outputs_owned() {
         assert_eq!(bytes, expected);
         assert_eq!(image.tobytes().unwrap(), expected);
     }
+}
+
+type PublicReadbackCase = (&'static str, u32, u32, Vec<u8>, Vec<u8>);
+
+struct RestorePublicReadbackTelemetry(bool);
+
+impl Drop for RestorePublicReadbackTelemetry {
+    fn drop(&mut self) {
+        Backend::set_pipeline_telemetry_enabled(self.0);
+    }
+}
+
+fn native_public_readback_cases(worker: usize) -> Vec<PublicReadbackCase> {
+    (0usize..6)
+        .map(|iteration| {
+            let (mode, channels) = if worker == 0 { ("RGB", 3) } else { ("RGBA", 4) };
+            let (width, height) = if worker.wrapping_add(iteration).is_multiple_of(2) {
+                (129usize, 131usize)
+            } else {
+                (131usize, 129usize)
+            };
+            let source: Vec<u8> = (0..width.saturating_mul(height).saturating_mul(channels))
+                .map(|index| {
+                    index
+                        .wrapping_mul(113)
+                        .wrapping_add(
+                            index
+                                .checked_div(channels)
+                                .expect("readback channels are nonzero")
+                                .wrapping_mul(7),
+                        )
+                        .wrapping_add(
+                            index
+                                .checked_div(width.saturating_mul(channels))
+                                .expect("readback row width is nonzero")
+                                .wrapping_mul(29),
+                        )
+                        .wrapping_add(worker.wrapping_mul(61))
+                        .wrapping_add(iteration.wrapping_mul(43)) as u8
+                })
+                .collect();
+            let mut expected = vec![0u8; source.len()];
+            for output_y in 0..width {
+                for output_x in 0..height {
+                    let input_offset = output_x
+                        .saturating_mul(width)
+                        .saturating_add(output_y)
+                        .saturating_mul(channels);
+                    let output_offset = output_y
+                        .saturating_mul(height)
+                        .saturating_add(output_x)
+                        .saturating_mul(channels);
+                    expected[output_offset..output_offset.saturating_add(channels)]
+                        .copy_from_slice(
+                            &source[input_offset..input_offset.saturating_add(channels)],
+                        );
+                }
+            }
+            (mode, width as u32, height as u32, source, expected)
+        })
+        .collect()
+}
+
+fn execute_public_readback_worker(
+    worker: usize,
+    cases: Vec<PublicReadbackCase>,
+    start: &std::sync::Barrier,
+) -> Vec<(Image, Vec<u8>, Vec<u8>)> {
+    let _telemetry = RestorePublicReadbackTelemetry(Backend::set_pipeline_telemetry_enabled(true));
+    // Only synchronize once: a later assertion failure cannot strand the peer.
+    start.wait();
+    let mut retained = Vec::new();
+    for (iteration, (mode, width, height, source, expected)) in cases.into_iter().enumerate() {
+        let pipeline = Image::frombytes(mode, (width, height), &source)
+            .expect("concurrent native source")
+            .transpose("TRANSPOSE")
+            .expect("concurrent transpose construction")
+            .use_backend(Backend::Gpu);
+        let actual = pipeline.tobytes().expect("concurrent GPU materialization");
+        let receipt = Backend::take_pipeline_telemetry()
+            .expect("each worker must publish its own GPU receipt");
+        assert_eq!(receipt.0, Some(Backend::Gpu));
+        assert_eq!(
+            receipt.1,
+            Backend::Gpu,
+            "worker={worker} iteration={iteration}"
+        );
+        assert_eq!(receipt.2, 1);
+        assert_eq!(receipt.6, Some(1));
+        assert_eq!(receipt.7, None, "native test must never accept fallback");
+        let resources = receipt.8.expect("concurrent GPU resource receipt");
+        assert_eq!(
+            resources.full_frame_copy_count,
+            if cfg!(target_endian = "little") { 0 } else { 1 },
+        );
+        let pixels = u64::from(width).saturating_mul(u64::from(height));
+        let transfer_bytes = if cfg!(target_endian = "little") && mode == "RGB" {
+            pixels.saturating_mul(3).saturating_add(3) & !3
+        } else {
+            pixels.saturating_mul(4)
+        };
+        assert_eq!(resources.readback_bytes, transfer_bytes);
+        assert_eq!(resources.upload_bytes, transfer_bytes);
+        assert_eq!(resources.mode_conversion_count, 0);
+        assert_eq!(actual, expected, "worker={worker} iteration={iteration}");
+        assert_eq!(pipeline.size().unwrap(), (height, width));
+        retained.push((pipeline, actual, expected));
+        // Keep earlier public images and returned bytes alive while both workers reuse pooled storage.
+        for (image, bytes, reference) in &retained {
+            assert_eq!(bytes, reference);
+            assert_eq!(image.tobytes().unwrap(), *reference);
+        }
+    }
+    retained
 }
 
 #[test]

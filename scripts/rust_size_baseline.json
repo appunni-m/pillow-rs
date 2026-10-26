@@ -124,12 +124,6 @@
       "signature": "fn projective_filtered_integer_constants_native_gpu_preserve_pixels() {"
     },
     {
-      "lines": 111,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/readback.rs",
-      "signature": "fn gpu_primary_readback_concurrent_public_pipelines_keep_outputs_owned() {"
-    },
-    {
       "lines": 102,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/readback.rs",
