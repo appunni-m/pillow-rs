@@ -12,42 +12,7 @@ mod native_byte_op;
 /// Extract and pack LUT data from a PipelineOp into [u32; 256] for GPU upload.
 /// Each u32 packs RGBA channels for one LUT entry (R in byte 0, G byte 1, B byte 2, A byte 3).
 pub(super) fn extract_lut(op: &PipelineOp, mode: u32) -> Option<[u32; 256]> {
-    if let PipelineOp::RemapPalette { dest_map } = op {
-        let mut inverse = [0u8; 256];
-        for (new_index, &old_index) in dest_map.iter().take(256).enumerate() {
-            inverse[usize::from(old_index)] = new_index as u8;
-        }
-        let mut packed = [0u32; 256];
-        for (entry, &value) in packed.iter_mut().zip(inverse.iter()) {
-            let value = u32::from(value);
-            *entry = value | (value << 8) | (value << 16) | (value << 24);
-        }
-        return Some(packed);
-    }
-    if let PipelineOp::Colorize {
-        black,
-        white,
-        mid,
-        blackpoint,
-        midpoint,
-        whitepoint,
-    } = op
-    {
-        let channels = crate::compute::pool_cpu::ops::imageops::colorize_lut(
-            black,
-            white,
-            *mid,
-            *blackpoint,
-            *midpoint,
-            *whitepoint,
-        );
-        let mut packed = [0u32; 256];
-        for (index, entry) in packed.iter_mut().enumerate() {
-            *entry = u32::from(channels[0][index])
-                | (u32::from(channels[1][index]) << 8)
-                | (u32::from(channels[2][index]) << 16)
-                | (u32::from(u8::MAX) << 24);
-        }
+    if let Some(packed) = extract_specialized_lut(op) {
         return Some(packed);
     }
     let lut_bytes: &[u8] = match op {
@@ -90,6 +55,49 @@ pub(super) fn extract_lut(op: &PipelineOp, mode: u32) -> Option<[u32; 256]> {
         *p = r | (g << 8) | (b << 16) | (a << 24);
     }
     Some(packed)
+}
+
+#[inline(always)]
+fn extract_specialized_lut(op: &PipelineOp) -> Option<[u32; 256]> {
+    if let PipelineOp::RemapPalette { dest_map } = op {
+        let mut inverse = [0u8; 256];
+        for (new_index, &old_index) in dest_map.iter().take(256).enumerate() {
+            inverse[usize::from(old_index)] = new_index as u8;
+        }
+        let mut packed = [0u32; 256];
+        for (entry, &value) in packed.iter_mut().zip(inverse.iter()) {
+            let value = u32::from(value);
+            *entry = value | (value << 8) | (value << 16) | (value << 24);
+        }
+        return Some(packed);
+    }
+    if let PipelineOp::Colorize {
+        black,
+        white,
+        mid,
+        blackpoint,
+        midpoint,
+        whitepoint,
+    } = op
+    {
+        let channels = crate::compute::pool_cpu::ops::imageops::colorize_lut(
+            black,
+            white,
+            *mid,
+            *blackpoint,
+            *midpoint,
+            *whitepoint,
+        );
+        let mut packed = [0u32; 256];
+        for (index, entry) in packed.iter_mut().enumerate() {
+            *entry = u32::from(channels[0][index])
+                | (u32::from(channels[1][index]) << 8)
+                | (u32::from(channels[2][index]) << 16)
+                | (u32::from(u8::MAX) << 24);
+        }
+        return Some(packed);
+    }
+    None
 }
 
 /// Build the byte LUT represented by a GPU-compatible point operation.
