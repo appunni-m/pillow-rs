@@ -466,6 +466,10 @@ pub(super) fn known_pipeline_op_dimensions(
     op: &PipelineOp,
     (width, height): (u32, u32),
 ) -> Option<(u32, u32)> {
+    if is_known_dimension_preserving_op(op) {
+        return Some((width, height));
+    }
+
     match op {
         PipelineOp::Resize { w, h, .. }
         | PipelineOp::ResizeBoxed { w, h, .. }
@@ -513,61 +517,66 @@ pub(super) fn known_pipeline_op_dimensions(
                 matches!(op, PipelineOp::Cover { .. }),
             )
         }
-        // These operations are unary and have no deferred dimension or
-        // secondary-image validation.  Keeping them here is what makes long
-        // point/filter/draw chains answer `size()` without replaying pixels.
-        PipelineOp::Convert { .. }
-        | PipelineOp::ConvertLab { .. }
-        | PipelineOp::RemapPalette { .. }
-        | PipelineOp::Color3DLut { .. }
-        | PipelineOp::ExtractBand { .. }
-        | PipelineOp::Filter3x3 { .. }
-        | PipelineOp::Filter5x5 { .. }
-        | PipelineOp::GaussianBlur { .. }
-        | PipelineOp::BoxBlur { .. }
-        | PipelineOp::BoxBlurXY { .. }
-        | PipelineOp::MedianFilter { .. }
-        | PipelineOp::MaxFilter { .. }
-        | PipelineOp::MinFilter { .. }
-        | PipelineOp::RankFilter { .. }
-        | PipelineOp::Autocontrast { .. }
-        | PipelineOp::Equalize
-        | PipelineOp::EqualizeMasked { .. }
-        | PipelineOp::Invert
-        | PipelineOp::Flip
-        | PipelineOp::Mirror
-        | PipelineOp::Posterize { .. }
-        | PipelineOp::Solarize { .. }
-        | PipelineOp::Grayscale
-        | PipelineOp::Colorize { .. }
-        | PipelineOp::Constant { .. }
-        // Public putpixel validates coordinates before queuing and cannot
-        // change the image dimensions. Keeping its shape known prevents a
-        // later write from materializing the earlier writes just to check
-        // bounds.
-        | PipelineOp::PutPixel { .. }
-        | PipelineOp::Offset { .. }
-        | PipelineOp::Duplicate
-        | PipelineOp::InvertChops
-        | PipelineOp::Brightness { .. }
-        | PipelineOp::Contrast { .. }
-        | PipelineOp::ColorSaturation { .. }
-        | PipelineOp::Sharpness { .. }
-        | PipelineOp::EffectSpread { .. }
-        | PipelineOp::Eval { .. }
-        | PipelineOp::EffectNoise { .. }
-        | PipelineOp::DrawLine { .. }
-        | PipelineOp::DrawRectangle { .. }
-        | PipelineOp::DrawRoundedRect { .. }
-        | PipelineOp::DrawEllipse { .. }
-        | PipelineOp::DrawCircle { .. }
-        | PipelineOp::DrawPolygon { .. }
-        | PipelineOp::DrawArc { .. }
-        | PipelineOp::DrawChord { .. }
-        | PipelineOp::DrawPieslice { .. }
-        | PipelineOp::DrawPoint { .. } => Some((width, height)),
         _ => None,
     }
+}
+
+#[inline]
+fn is_known_dimension_preserving_op(op: &PipelineOp) -> bool {
+    // These unary operations have no deferred dimension or secondary-image
+    // validation. Keeping their shape known lets point/filter/draw chains
+    // answer `size()` without replaying pixels.
+    matches!(
+        op,
+        PipelineOp::Convert { .. }
+            | PipelineOp::ConvertLab { .. }
+            | PipelineOp::RemapPalette { .. }
+            | PipelineOp::Color3DLut { .. }
+            | PipelineOp::ExtractBand { .. }
+            | PipelineOp::Filter3x3 { .. }
+            | PipelineOp::Filter5x5 { .. }
+            | PipelineOp::GaussianBlur { .. }
+            | PipelineOp::BoxBlur { .. }
+            | PipelineOp::BoxBlurXY { .. }
+            | PipelineOp::MedianFilter { .. }
+            | PipelineOp::MaxFilter { .. }
+            | PipelineOp::MinFilter { .. }
+            | PipelineOp::RankFilter { .. }
+            | PipelineOp::Autocontrast { .. }
+            | PipelineOp::Equalize
+            | PipelineOp::EqualizeMasked { .. }
+            | PipelineOp::Invert
+            | PipelineOp::Flip
+            | PipelineOp::Mirror
+            | PipelineOp::Posterize { .. }
+            | PipelineOp::Solarize { .. }
+            | PipelineOp::Grayscale
+            | PipelineOp::Colorize { .. }
+            | PipelineOp::Constant { .. }
+            // Public putpixel validates coordinates before queuing and cannot
+            // change dimensions. Knowing the shape avoids materializing prior writes.
+            | PipelineOp::PutPixel { .. }
+            | PipelineOp::Offset { .. }
+            | PipelineOp::Duplicate
+            | PipelineOp::InvertChops
+            | PipelineOp::Brightness { .. }
+            | PipelineOp::Contrast { .. }
+            | PipelineOp::ColorSaturation { .. }
+            | PipelineOp::Sharpness { .. }
+            | PipelineOp::EffectSpread { .. }
+            | PipelineOp::Eval { .. }
+            | PipelineOp::EffectNoise { .. }
+            | PipelineOp::DrawLine { .. }
+            | PipelineOp::DrawRectangle { .. }
+            | PipelineOp::DrawRoundedRect { .. }
+            | PipelineOp::DrawEllipse { .. }
+            | PipelineOp::DrawCircle { .. }
+            | PipelineOp::DrawPolygon { .. }
+            | PipelineOp::DrawArc { .. }
+            | PipelineOp::DrawChord { .. }
+            | PipelineOp::DrawPieslice { .. }
+            | PipelineOp::DrawPoint { .. }
+    )
 }
 
 impl std::ops::Deref for PipelineOps {
