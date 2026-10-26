@@ -162,6 +162,33 @@ impl GpuInner {
         auxiliary_images: &[AuxiliaryImages],
         limits: &wgpu::Limits,
     ) -> Result<Option<DynamicImage>, PilError> {
+        if let Some(result) = self.try_execute_native_rgb_put_alpha_data_route(
+            ops,
+            image,
+            mode,
+            auxiliary_images,
+            limits,
+        )? {
+            return Ok(Some(result));
+        }
+        self.try_execute_native_rgba_put_alpha_data_route(
+            ops,
+            image,
+            mode,
+            auxiliary_images,
+            limits,
+        )
+    }
+
+    #[cfg(target_endian = "little")]
+    fn try_execute_native_rgb_put_alpha_data_route(
+        &self,
+        ops: &[PipelineOp],
+        image: &DynamicImage,
+        mode: Option<&str>,
+        auxiliary_images: &[AuxiliaryImages],
+        limits: &wgpu::Limits,
+    ) -> Result<Option<DynamicImage>, PilError> {
         if let (
             [
                 PipelineOp::PutAlphaData {
@@ -194,7 +221,18 @@ impl GpuInner {
             self.recycle_buffers(buffers);
             return Ok(Some(result));
         }
+        Ok(None)
+    }
 
+    #[cfg(target_endian = "little")]
+    fn try_execute_native_rgba_put_alpha_data_route(
+        &self,
+        ops: &[PipelineOp],
+        image: &DynamicImage,
+        mode: Option<&str>,
+        auxiliary_images: &[AuxiliaryImages],
+        limits: &wgpu::Limits,
+    ) -> Result<Option<DynamicImage>, PilError> {
         if let (
             [
                 PipelineOp::PutAlphaData {
