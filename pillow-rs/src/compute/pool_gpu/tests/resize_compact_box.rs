@@ -276,7 +276,21 @@ fn f_resize_compact_box_special_over_binding_native_matches_cpu() {
     // signed-infinity cancellation as marker 9 without a full table.
     // Exercise both shader directions at the adapter-fitting boundary.
     let width = 8_388_608usize;
-    let cases = [
+    let cases = f_resize_compact_box_special_cases(width);
+    let previous = Backend::set_pipeline_telemetry_enabled(true);
+    for (source_w, source_h, specials, label) in cases {
+        if !assert_f_resize_compact_box_special_case(width, source_w, source_h, specials, label) {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
+        }
+    }
+    Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+type FResizeCompactBoxSpecialCase = (u32, u32, Vec<(usize, u32)>, &'static str);
+
+fn f_resize_compact_box_special_cases(width: usize) -> [FResizeCompactBoxSpecialCase; 4] {
+    [
         (
             width as u32,
             1u32,
@@ -301,67 +315,68 @@ fn f_resize_compact_box_special_over_binding_native_matches_cpu() {
             vec![(width / 2, 0x7fc2_3456u32)],
             "vertical NaN",
         ),
-    ];
-    let previous = Backend::set_pipeline_telemetry_enabled(true);
-    for (source_w, source_h, specials, label) in cases {
-        let mut words = vec![0x3f80_0000u32; width];
-        for (index, value) in specials {
-            words[index] = value;
-        }
-        let source = Image::frombytes("F", (source_w, source_h), &f32_words_to_bytes(&words))
-            .expect("compact special F source");
-        let source_dynamic = source
-            .materialize()
-            .expect("materialize compact special F source");
-        let op = PipelineOp::Resize {
-            w: 1,
-            h: 1,
-            filter: ResampleFilter::Box,
-        };
-        assert!(
-            gpu_f_resize_compact_box_is_exact(
-                std::slice::from_ref(&op),
-                &source_dynamic,
-                Some("F")
-            ),
-            "compact proof should cover {label}"
-        );
-        let filter = ResampleInput::Name("BOX".into());
-        let expected = source
-            .resize((1, 1), Some(filter.clone()), None)
-            .expect("CPU compact special F resize")
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU compact special F bytes");
-        let actual = match source
-            .resize((1, 1), Some(filter), None)
-            .expect("GPU compact special F resize")
-            .use_backend(Backend::Gpu)
-            .tobytes()
-        {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU compact special F resize failed: {error}"),
-        };
-        assert_eq!(actual, expected, "native compact special {label}");
-        let telemetry = Backend::take_pipeline_telemetry()
-            .expect("compact special F resize must publish telemetry");
-        assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(
-            telemetry.1,
-            Backend::Gpu,
-            "{label}; fallback reason: {:?}",
-            telemetry.7
-        );
-        assert_eq!(telemetry.7, None);
+    ]
+}
+
+fn assert_f_resize_compact_box_special_case(
+    width: usize,
+    source_w: u32,
+    source_h: u32,
+    specials: Vec<(usize, u32)>,
+    label: &str,
+) -> bool {
+    let mut words = vec![0x3f80_0000u32; width];
+    for (index, value) in specials {
+        words[index] = value;
     }
-    Backend::set_pipeline_telemetry_enabled(previous);
+    let source = Image::frombytes("F", (source_w, source_h), &f32_words_to_bytes(&words))
+        .expect("compact special F source");
+    let source_dynamic = source
+        .materialize()
+        .expect("materialize compact special F source");
+    let op = PipelineOp::Resize {
+        w: 1,
+        h: 1,
+        filter: ResampleFilter::Box,
+    };
+    assert!(
+        gpu_f_resize_compact_box_is_exact(std::slice::from_ref(&op), &source_dynamic, Some("F")),
+        "compact proof should cover {label}"
+    );
+    let filter = ResampleInput::Name("BOX".into());
+    let expected = source
+        .resize((1, 1), Some(filter.clone()), None)
+        .expect("CPU compact special F resize")
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU compact special F bytes");
+    let actual = match source
+        .resize((1, 1), Some(filter), None)
+        .expect("GPU compact special F resize")
+        .use_backend(Backend::Gpu)
+        .tobytes()
+    {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            return false;
+        }
+        Err(error) => panic!("native GPU compact special F resize failed: {error}"),
+    };
+    assert_eq!(actual, expected, "native compact special {label}");
+    let telemetry = Backend::take_pipeline_telemetry()
+        .expect("compact special F resize must publish telemetry");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(
+        telemetry.1,
+        Backend::Gpu,
+        "{label}; fallback reason: {:?}",
+        telemetry.7
+    );
+    assert_eq!(telemetry.7, None);
+    true
 }
