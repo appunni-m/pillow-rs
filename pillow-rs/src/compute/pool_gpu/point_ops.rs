@@ -166,50 +166,8 @@ pub(super) fn gpu_native_byte_op_channels(
     mode: Option<&str>,
 ) -> Option<u8> {
     match op {
-        PipelineOp::Duplicate if image.width() > 0 && image.height() > 0 => match image {
-            DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
-            DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-            DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
-                Some(3)
-            }
-            DynamicImage::ImageRgba8(_)
-                if matches!(
-                    mode,
-                    None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")
-                ) =>
-            {
-                Some(4)
-            }
-            _ => None,
-        },
-        PipelineOp::Brightness { factor }
-            if registry::gpu_brightness_factor_int(*factor).is_some() =>
-        {
-            match image {
-                DynamicImage::ImageLuma8(_)
-                    if matches!(mode, None | Some("L"))
-                        && image.width() > 0
-                        && image.height() > 0 =>
-                {
-                    Some(1)
-                }
-                DynamicImage::ImageLumaA8(_)
-                    if matches!(mode, None | Some("LA"))
-                        && image.width() > 0
-                        && image.height() > 0 =>
-                {
-                    Some(2)
-                }
-                DynamicImage::ImageRgb8(_)
-                    if matches!(mode, None | Some("RGB"))
-                        && image.width() > 0
-                        && image.height() > 0 =>
-                {
-                    Some(3)
-                }
-                _ => None,
-            }
-        }
+        PipelineOp::Duplicate => gpu_native_duplicate_channels(image, mode),
+        PipelineOp::Brightness { factor } => gpu_native_brightness_channels(*factor, image, mode),
         PipelineOp::PutAlpha {
             mode: PixelMode::LA,
             ..
@@ -282,19 +240,7 @@ pub(super) fn gpu_native_byte_op_channels(
         {
             Some(1)
         }
-        PipelineOp::BlendModule { .. } => match image {
-            DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
-            DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "La")) => Some(2),
-            DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
-                Some(3)
-            }
-            DynamicImage::ImageRgba8(_)
-                if matches!(mode, None | Some("RGBA" | "RGBa" | "RGBX" | "CMYK")) =>
-            {
-                Some(4)
-            }
-            _ => None,
-        },
+        PipelineOp::BlendModule { .. } => gpu_native_blend_module_channels(image, mode),
         PipelineOp::Solarize { .. } => match image {
             DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
             DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
@@ -304,11 +250,83 @@ pub(super) fn gpu_native_byte_op_channels(
             dest: (0, 0),
             src: (0, 0),
             ..
-        } => match image {
-            DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
-            DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some(4),
-            _ => None,
-        },
+        } => gpu_native_alpha_composite_channels(image, mode),
+        _ => None,
+    }
+}
+
+#[cfg(target_endian = "little")]
+fn gpu_native_duplicate_channels(image: &DynamicImage, mode: Option<&str>) -> Option<u8> {
+    if image.width() == 0 || image.height() == 0 {
+        return None;
+    }
+    match image {
+        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
+        DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
+            Some(3)
+        }
+        DynamicImage::ImageRgba8(_)
+            if matches!(
+                mode,
+                None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")
+            ) =>
+        {
+            Some(4)
+        }
+        _ => None,
+    }
+}
+
+#[cfg(target_endian = "little")]
+fn gpu_native_brightness_channels(
+    factor: f64,
+    image: &DynamicImage,
+    mode: Option<&str>,
+) -> Option<u8> {
+    registry::gpu_brightness_factor_int(factor)?;
+    match image {
+        DynamicImage::ImageLuma8(_)
+            if matches!(mode, None | Some("L")) && image.width() > 0 && image.height() > 0 =>
+        {
+            Some(1)
+        }
+        DynamicImage::ImageLumaA8(_)
+            if matches!(mode, None | Some("LA")) && image.width() > 0 && image.height() > 0 =>
+        {
+            Some(2)
+        }
+        DynamicImage::ImageRgb8(_)
+            if matches!(mode, None | Some("RGB")) && image.width() > 0 && image.height() > 0 =>
+        {
+            Some(3)
+        }
+        _ => None,
+    }
+}
+
+#[cfg(target_endian = "little")]
+fn gpu_native_blend_module_channels(image: &DynamicImage, mode: Option<&str>) -> Option<u8> {
+    match image {
+        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
+        DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "La")) => Some(2),
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
+            Some(3)
+        }
+        DynamicImage::ImageRgba8(_)
+            if matches!(mode, None | Some("RGBA" | "RGBa" | "RGBX" | "CMYK")) =>
+        {
+            Some(4)
+        }
+        _ => None,
+    }
+}
+
+#[cfg(target_endian = "little")]
+fn gpu_native_alpha_composite_channels(image: &DynamicImage, mode: Option<&str>) -> Option<u8> {
+    match image {
+        DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
+        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some(4),
         _ => None,
     }
 }

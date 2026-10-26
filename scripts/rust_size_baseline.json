@@ -226,12 +226,6 @@
       "signature": "fn build_pipeline( device: &wgpu::Device, variant_name: &'static str, shader_file: &'static str, shader_source: &str, ) -> Option<CachedPipeline> {"
     },
     {
-      "lines": 143,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/point_ops.rs",
-      "signature": "pub(super) fn gpu_native_byte_op_channels( op: &PipelineOp, image: &DynamicImage, mode: Option<&str>, ) -> Option<u8> {"
-    },
-    {
       "lines": 137,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs",
@@ -670,11 +664,6 @@
     "pillow-rs/src/compute/pool_gpu/pipeline_cache.rs": {
       "owner": "lazytrot",
       "reason": "Moved GPU shader pipeline construction and cache lookup into a focused module; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/point_ops.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU point operation LUT and byte layout helpers; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs": {
