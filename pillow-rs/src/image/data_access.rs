@@ -456,6 +456,15 @@ impl Image {
             return Ok(());
         }
 
+        self.write_getdata_band_cpu(band, selected_backend, output)
+    }
+
+    fn write_getdata_band_cpu(
+        &self,
+        band: i32,
+        selected_backend: Option<crate::compute::Backend>,
+        output: &mut [u8],
+    ) -> Result<(), PilError> {
         let telemetry =
             crate::compute::begin_eager_cpu_operation_telemetry("GetData", selected_backend);
         let result = (|| {

@@ -604,12 +604,6 @@
       "signature": "pub fn new( width: u32, height: u32, mode: &str, color: (u8, u8, u8, u8), ) -> Result<Self, PilError> {"
     },
     {
-      "lines": 101,
-      "occurrence": 1,
-      "path": "pillow-rs/src/image/data_access.rs",
-      "signature": "pub fn getdata_band_into(&self, band: i32, output: &mut [u8]) -> Result<(), PilError> {"
-    },
-    {
       "lines": 156,
       "occurrence": 1,
       "path": "pillow-rs/src/image/entropy.rs",
@@ -1024,11 +1018,6 @@
     "pillow-rs/src/image/construction.rs": {
       "owner": "lazytrot",
       "reason": "Moved existing Image constructor methods from image.rs without increasing their 117/156-line sizes; continue reducing under pillow-rs#knsf.",
-      "reduction_task": "pillow-rs#knsf"
-    },
-    "pillow-rs/src/image/data_access.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved existing Image::getdata_band_into from image.rs without increasing its 101-line size; continue reducing under pillow-rs#knsf.",
       "reduction_task": "pillow-rs#knsf"
     },
     "pillow-rs/src/image/entropy.rs": {
