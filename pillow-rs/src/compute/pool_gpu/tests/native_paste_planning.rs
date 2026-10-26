@@ -47,6 +47,13 @@ fn put_alpha_output_keeps_native_results_and_consumes_rgba_fallback() {
 #[test]
 fn native_byte_paste_planner_checks_l_la_rgb_and_adapter_boundaries() {
     let max_workgroups = 65_535;
+    assert_native_l_byte_paste_boundary(max_workgroups);
+    assert_native_la_byte_paste_boundary(max_workgroups);
+    assert_native_rgb_byte_paste_boundary(max_workgroups);
+    assert_native_byte_paste_adapter_rejections(max_workgroups);
+}
+
+fn assert_native_l_byte_paste_boundary(max_workgroups: u32) {
     let l_max_pixels = u64::from(max_workgroups) * 64 * 4;
     let l_max_width = u32::try_from(l_max_pixels).expect("L boundary fits image dimensions");
     let l_at_limit =
@@ -72,7 +79,9 @@ fn native_byte_paste_planner_checks_l_la_rgb_and_adapter_boundaries() {
         )
         .is_none()
     );
+}
 
+fn assert_native_la_byte_paste_boundary(max_workgroups: u32) {
     let la_max_pixels = u64::from(max_workgroups) * 64 * 2;
     let la_max_width = u32::try_from(la_max_pixels).expect("LA boundary fits image dimensions");
     let la_at_limit =
@@ -98,7 +107,9 @@ fn native_byte_paste_planner_checks_l_la_rgb_and_adapter_boundaries() {
         )
         .is_none()
     );
+}
 
+fn assert_native_rgb_byte_paste_boundary(max_workgroups: u32) {
     let rgb_max_transfer = u64::from(max_workgroups) * 64 * 4;
     let rgb_max_width =
         u32::try_from(rgb_max_transfer / 3).expect("RGB boundary fits image dimensions");
@@ -131,7 +142,9 @@ fn native_byte_paste_planner_checks_l_la_rgb_and_adapter_boundaries() {
         )
         .is_none()
     );
+}
 
+fn assert_native_byte_paste_adapter_rejections(max_workgroups: u32) {
     assert!(plan_gpu_native_byte_paste(8, 1, 1, 1, 1, max_workgroups, 7, u64::MAX,).is_none());
     assert!(plan_gpu_native_byte_paste(8, 1, 1, 1, 1, max_workgroups, u32::MAX, 7,).is_none());
     assert!(
@@ -400,6 +413,12 @@ fn native_masked_la_paste_planner_checks_two_pixel_packing_and_limits() {
 #[test]
 fn native_masked_rgb_paste_planner_checks_three_byte_words_and_limits() {
     let max_workgroups = 65_535;
+    assert_masked_rgb_paste_workgroup_boundary(max_workgroups);
+    assert_masked_rgb_paste_global_limit();
+    assert_masked_rgb_paste_odd_transfer_padding(max_workgroups);
+}
+
+fn assert_masked_rgb_paste_workgroup_boundary(max_workgroups: u32) {
     let max_pixels = max_workgroups * 64 * 4;
     let at_limit = plan_gpu_native_masked_byte_paste(
         max_pixels,
@@ -441,6 +460,9 @@ fn native_masked_rgb_paste_planner_checks_three_byte_words_and_limits() {
         .is_none(),
         "an extra pixel would exceed the one-dimensional workgroup limit"
     );
+}
+
+fn assert_masked_rgb_paste_global_limit() {
     assert!(
         plan_gpu_native_masked_byte_paste(
             GPU_BUFFER_CAPACITY + 1,
@@ -473,7 +495,9 @@ fn native_masked_rgb_paste_planner_checks_three_byte_words_and_limits() {
     .expect("the global pixel cap remains independently enforced");
     assert_eq!(global_limit.destination_pixels, GPU_BUFFER_CAPACITY);
     assert_eq!(global_limit.workgroups, 65_536);
+}
 
+fn assert_masked_rgb_paste_odd_transfer_padding(max_workgroups: u32) {
     let odd_pixels =
         plan_gpu_native_masked_byte_paste(5, 3, 5, 3, 5, 3, 3, max_workgroups, u32::MAX, u64::MAX)
             .expect("odd RGB byte counts use padded native transfers");
