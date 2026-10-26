@@ -25,36 +25,7 @@ fn gpu_packed_rgb_transpose_layout_bounds_and_padding() {
 #[test]
 #[cfg(target_endian = "little")]
 fn gpu_native_byte_flip_dispatch_bounds_padded_rows_and_grid() {
-    let luma = super::plan_native_byte_flip_dispatch(
-        5,
-        3,
-        1,
-        65_535,
-        u32::MAX,
-        u64::MAX,
-        super::GPU_BUFFER_CAPACITY,
-    )
-    .unwrap();
-    assert_eq!(luma.row_bytes, 5);
-    assert_eq!(luma.words_per_row, 2);
-    assert_eq!(luma.word_count, 6);
-    assert_eq!(luma.transfer_bytes, 24);
-    assert_eq!((luma.groups_x, luma.groups_y), (1, 1));
-
-    let alpha = super::plan_native_byte_flip_dispatch(
-        5,
-        3,
-        2,
-        65_535,
-        u32::MAX,
-        u64::MAX,
-        super::GPU_BUFFER_CAPACITY,
-    )
-    .unwrap();
-    assert_eq!(alpha.row_bytes, 10);
-    assert_eq!(alpha.words_per_row, 3);
-    assert_eq!(alpha.word_count, 9);
-    assert_eq!(alpha.transfer_bytes, 36);
+    assert_native_byte_flip_padded_row_plans();
 
     let exact_axis = super::plan_native_byte_flip_dispatch(
         256,
@@ -117,6 +88,45 @@ fn gpu_native_byte_flip_dispatch_bounds_padded_rows_and_grid() {
     .unwrap();
     assert_eq!(two_dimensional_grid.groups_y, 2);
 
+    assert_native_byte_flip_rejected_limits();
+}
+
+#[cfg(target_endian = "little")]
+fn assert_native_byte_flip_padded_row_plans() {
+    let luma = super::plan_native_byte_flip_dispatch(
+        5,
+        3,
+        1,
+        65_535,
+        u32::MAX,
+        u64::MAX,
+        super::GPU_BUFFER_CAPACITY,
+    )
+    .unwrap();
+    assert_eq!(luma.row_bytes, 5);
+    assert_eq!(luma.words_per_row, 2);
+    assert_eq!(luma.word_count, 6);
+    assert_eq!(luma.transfer_bytes, 24);
+    assert_eq!((luma.groups_x, luma.groups_y), (1, 1));
+
+    let alpha = super::plan_native_byte_flip_dispatch(
+        5,
+        3,
+        2,
+        65_535,
+        u32::MAX,
+        u64::MAX,
+        super::GPU_BUFFER_CAPACITY,
+    )
+    .unwrap();
+    assert_eq!(alpha.row_bytes, 10);
+    assert_eq!(alpha.words_per_row, 3);
+    assert_eq!(alpha.word_count, 9);
+    assert_eq!(alpha.transfer_bytes, 36);
+}
+
+#[cfg(target_endian = "little")]
+fn assert_native_byte_flip_rejected_limits() {
     assert!(
         super::plan_native_byte_flip_dispatch(
             1,
