@@ -131,75 +131,116 @@ fn transpose_native_odd_collect_preserves_all_methods_and_payload_bits() {
         0xffc5_4321,
     ];
     for (width, height) in [(768usize, 769usize), (1023, 1025)] {
-        let mut source: Vec<u8> = (0..width * height)
-            .flat_map(|index| {
-                let bits = if index % 11 < typed_bits.len() {
-                    typed_bits[index % 11]
-                } else {
-                    (index as u32)
-                        .wrapping_mul(0x9e37_79b9)
-                        .rotate_left((index % 31) as u32)
-                };
-                bits.to_ne_bytes()
-            })
-            .collect();
-        // Valid ImageBuffer storage may include unused trailing bytes.
-        source.extend_from_slice(&[0xA5; 19]);
-        let original = source.clone();
-        for method in [
-            TransposeMethod::FlipLeftRight,
-            TransposeMethod::FlipTopBottom,
-            TransposeMethod::Rotate90,
-            TransposeMethod::Rotate180,
-            TransposeMethod::Rotate270,
-            TransposeMethod::Transpose,
-            TransposeMethod::Transverse,
-        ] {
-            let swapped = matches!(
-                method,
-                TransposeMethod::Rotate90
-                    | TransposeMethod::Rotate270
-                    | TransposeMethod::Transpose
-                    | TransposeMethod::Transverse
-            );
-            let expected = odd_transpose_reference(&source, width, height, &method);
-            let _ = Backend::take_pipeline_allocation_telemetry();
-            let (actual, out_width, out_height, vectors, tail, _) =
-                native_transpose_bytes(&source, width as u32, height as u32, 4, method.clone())
-                    .expect("odd native four-byte transpose");
-            let allocations = Backend::take_pipeline_allocation_telemetry();
-            assert_eq!(actual, expected, "{width}x{height} {method:?}");
-            assert_eq!(
-                (out_width, out_height),
-                if swapped {
-                    (height as u32, width as u32)
-                } else {
-                    (width as u32, height as u32)
-                }
-            );
-            if swapped {
-                assert!(transpose_native_odd_collect_admitted(
-                    width,
-                    height,
-                    4,
-                    expected.len(),
-                    &method,
-                ));
-                let tile_pixels = (width / 4 * 4) * (height / 4 * 4);
-                // Indexed task splits may repeat complete cache fills.
-                // The deterministic split test below proves exact work.
-                assert!(vectors >= (tile_pixels / 4) as u64);
-                assert!(tail >= ((width * height - tile_pixels) * 4) as u64);
-                let padded_bytes = (width * height).div_ceil(4) * 16;
-                let scratch_bytes = height * 4 * 4;
-                assert!(allocations.allocation_count >= 2);
-                assert_eq!(
-                    allocations.allocated_bytes,
-                    padded_bytes as u64 + (allocations.allocation_count - 1) * scratch_bytes as u64,
-                );
-            }
-            assert_eq!(source, original);
+        assert_native_odd_collect_payload_case(width, height, &typed_bits);
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn assert_native_odd_collect_payload_case(width: usize, height: usize, typed_bits: &[u32; 6]) {
+    let mut source: Vec<u8> = (0..width * height)
+        .flat_map(|index| {
+            let bits = if index % 11 < typed_bits.len() {
+                typed_bits[index % 11]
+            } else {
+                (index as u32)
+                    .wrapping_mul(0x9e37_79b9)
+                    .rotate_left((index % 31) as u32)
+            };
+            bits.to_ne_bytes()
+        })
+        .collect();
+    // Valid ImageBuffer storage may include unused trailing bytes.
+    source.extend_from_slice(&[0xA5; 19]);
+    let original = source.clone();
+    for method in [
+        TransposeMethod::FlipLeftRight,
+        TransposeMethod::FlipTopBottom,
+        TransposeMethod::Rotate90,
+        TransposeMethod::Rotate180,
+        TransposeMethod::Rotate270,
+        TransposeMethod::Transpose,
+        TransposeMethod::Transverse,
+    ] {
+        assert_native_odd_collect_payload_method(&source, &original, width, height, method);
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn assert_native_odd_collect_payload_method(
+    source: &[u8],
+    original: &[u8],
+    width: usize,
+    height: usize,
+    method: TransposeMethod,
+) {
+    let swapped = matches!(
+        method,
+        TransposeMethod::Rotate90
+            | TransposeMethod::Rotate270
+            | TransposeMethod::Transpose
+            | TransposeMethod::Transverse
+    );
+    let expected = odd_transpose_reference(source, width, height, &method);
+    let _ = crate::compute::Backend::take_pipeline_allocation_telemetry();
+    let (actual, out_width, out_height, vectors, tail, _) =
+        native_transpose_bytes(source, width as u32, height as u32, 4, method.clone())
+            .expect("odd native four-byte transpose");
+    let allocations = crate::compute::Backend::take_pipeline_allocation_telemetry();
+    assert_eq!(actual, expected, "{width}x{height} {method:?}");
+    assert_eq!(
+        (out_width, out_height),
+        if swapped {
+            (height as u32, width as u32)
+        } else {
+            (width as u32, height as u32)
         }
+    );
+    assert_native_odd_collect_payload_metrics(
+        width,
+        height,
+        expected.len(),
+        &method,
+        swapped,
+        vectors,
+        tail,
+        allocations.allocation_count,
+        allocations.allocated_bytes,
+    );
+    assert_eq!(source, original);
+}
+
+#[cfg(feature = "parallel")]
+fn assert_native_odd_collect_payload_metrics(
+    width: usize,
+    height: usize,
+    expected_len: usize,
+    method: &TransposeMethod,
+    swapped: bool,
+    vectors: u64,
+    tail: u64,
+    allocation_count: u64,
+    allocated_bytes: u64,
+) {
+    if swapped {
+        assert!(transpose_native_odd_collect_admitted(
+            width,
+            height,
+            4,
+            expected_len,
+            method,
+        ));
+        let tile_pixels = (width / 4 * 4) * (height / 4 * 4);
+        // Indexed task splits may repeat complete cache fills.
+        // The deterministic split test below proves exact work.
+        assert!(vectors >= (tile_pixels / 4) as u64);
+        assert!(tail >= ((width * height - tile_pixels) * 4) as u64);
+        let padded_bytes = (width * height).div_ceil(4) * 16;
+        let scratch_bytes = height * 4 * 4;
+        assert!(allocation_count >= 2);
+        assert_eq!(
+            allocated_bytes,
+            padded_bytes as u64 + (allocation_count - 1) * scratch_bytes as u64,
+        );
     }
 }
 
