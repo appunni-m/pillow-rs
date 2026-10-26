@@ -67,11 +67,31 @@ pub(crate) fn execute_thumbnail(
         ThumbnailPreparation::Completed(result) => return Ok(preserve_mode(img, result)),
         ThumbnailPreparation::Ready { image, resize_box } => (image, resize_box),
     };
+    let result = resize_prepared_thumbnail(
+        &work_img,
+        (cur_w, cur_h),
+        (new_w, new_h),
+        effective_filter,
+        explicit_mode,
+        resize_box,
+    )?;
+    Ok(preserve_mode(img, result))
+}
+
+#[inline(always)]
+fn resize_prepared_thumbnail(
+    work_img: &DynamicImage,
+    (cur_w, cur_h): (u32, u32),
+    (new_w, new_h): (u32, u32),
+    effective_filter: ResampleFilter,
+    explicit_mode: Option<&str>,
+    resize_box: Option<(f64, f64, f64, f64)>,
+) -> Result<DynamicImage, PilError> {
     // Only use F/I thumbnail paths when the image is already stored as Rgba8
     // (4 bytes per pixel), meaning it has been converted to F/I mode already.
     // If the image is still RGB or other format, use normal thumbnail regardless
     // of explicit_mode, because the F/I convert hasn't happened yet in the pipeline.
-    let result = match (explicit_mode, &work_img, resize_box) {
+    let result = match (explicit_mode, work_img, resize_box) {
         (Some("F"), DynamicImage::ImageRgba8(_), Some((left, top, right, bottom)))
             if cur_w % 2 == 0
                 && cur_h % 2 == 0
@@ -84,7 +104,7 @@ pub(crate) fn execute_thumbnail(
                 && new_w < work_img.width()
                 && new_h < work_img.height() =>
         {
-            resize_f(&work_img, new_w, new_h, &effective_filter)?
+            resize_f(work_img, new_w, new_h, &effective_filter)?
         }
         (Some("F"), DynamicImage::ImageRgba8(_), Some((left, top, right, bottom))) => {
             // Image.resize adjusts the source box after its reducing-gap pass.
@@ -92,7 +112,7 @@ pub(crate) fn execute_thumbnail(
             // ceil-sized reduction includes partial edge samples that Pillow
             // deliberately excludes from the final convolution.
             pil_resize_boxed(
-                &work_img,
+                work_img,
                 new_w,
                 new_h,
                 left,
@@ -104,11 +124,11 @@ pub(crate) fn execute_thumbnail(
             )
         }
         (Some("F"), DynamicImage::ImageRgba8(_), None) => {
-            resize_f(&work_img, new_w, new_h, &effective_filter)?
+            resize_f(work_img, new_w, new_h, &effective_filter)?
         }
         (Some("I"), DynamicImage::ImageRgba8(_), Some((left, top, right, bottom))) => {
             resize_i_boxed(
-                &work_img,
+                work_img,
                 new_w,
                 new_h,
                 left,
@@ -119,10 +139,10 @@ pub(crate) fn execute_thumbnail(
             )?
         }
         (Some("I"), DynamicImage::ImageRgba8(_), None) => {
-            resize_i(&work_img, new_w, new_h, &effective_filter)?
+            resize_i(work_img, new_w, new_h, &effective_filter)?
         }
         (_, _, Some((left, top, right, bottom))) => pil_resize_boxed(
-            &work_img,
+            work_img,
             new_w,
             new_h,
             left,
@@ -132,9 +152,9 @@ pub(crate) fn execute_thumbnail(
             effective_filter,
             explicit_mode,
         ),
-        _ => pil_resize(&work_img, new_w, new_h, effective_filter, explicit_mode),
+        _ => pil_resize(work_img, new_w, new_h, effective_filter, explicit_mode),
     };
-    Ok(preserve_mode(img, result))
+    Ok(result)
 }
 
 fn prepare_thumbnail_work_image(
