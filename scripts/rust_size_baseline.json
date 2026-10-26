@@ -130,12 +130,6 @@
       "signature": "fn f_resize_dyadic_gpu_bytes_match_reference_and_publish_native_receipt() {"
     },
     {
-      "lines": 107,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/resize_float_proofs.rs",
-      "signature": "fn f_resize_box_average_lowering_requires_2x_axes_and_safe_values() {"
-    },
-    {
       "lines": 223,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/resize_float_proofs.rs",

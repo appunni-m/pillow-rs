@@ -175,42 +175,51 @@ fn f_resize_box_average_lowering_requires_2x_axes_and_safe_values() {
         )
         .unwrap(),
     );
-    let box_resize = |w, h| PipelineOp::Resize {
-        w,
-        h,
-        filter: ResampleFilter::Box,
-    };
-
     let coefficients = super::gpu_resize_coefficients(2, 4, ResampleFilter::Box);
     assert_eq!(coefficients.count, [2, 2]);
     assert_eq!(coefficients.weights, [1 << 21, 1 << 21, 1 << 21, 1 << 21]);
 
-    assert!(gpu_f_resize_box_average_is_exact(
-        &[box_resize(2, 4)],
-        &image,
-        Some("F")
-    ));
-    assert!(gpu_f_resize_box_average_is_exact(
-        &[box_resize(4, 2)],
-        &image,
-        Some("F")
-    ));
-    assert!(gpu_f_resize_box_average_is_exact(
-        &[box_resize(2, 2)],
-        &image,
-        Some("F")
-    ));
-    assert!(!gpu_f_resize_box_average_is_exact(
-        &[box_resize(3, 4)],
-        &image,
-        Some("F")
-    ));
-    assert!(!gpu_f_resize_box_average_is_exact(
-        &[box_resize(2, 4), box_resize(1, 4)],
-        &image,
-        Some("F")
-    ));
+    assert_box_average_geometry(&image);
+    assert_box_average_value_domain();
+}
 
+fn box_average_resize(w: u32, h: u32) -> PipelineOp {
+    PipelineOp::Resize {
+        w,
+        h,
+        filter: ResampleFilter::Box,
+    }
+}
+
+fn assert_box_average_geometry(image: &DynamicImage) {
+    assert!(gpu_f_resize_box_average_is_exact(
+        &[box_average_resize(2, 4)],
+        image,
+        Some("F")
+    ));
+    assert!(gpu_f_resize_box_average_is_exact(
+        &[box_average_resize(4, 2)],
+        image,
+        Some("F")
+    ));
+    assert!(gpu_f_resize_box_average_is_exact(
+        &[box_average_resize(2, 2)],
+        image,
+        Some("F")
+    ));
+    assert!(!gpu_f_resize_box_average_is_exact(
+        &[box_average_resize(3, 4)],
+        image,
+        Some("F")
+    ));
+    assert!(!gpu_f_resize_box_average_is_exact(
+        &[box_average_resize(2, 4), box_average_resize(1, 4)],
+        image,
+        Some("F")
+    ));
+}
+
+fn assert_box_average_value_domain() {
     let mixed_sign = DynamicImage::ImageRgba8(
         RgbaImage::from_raw(
             4,
@@ -226,7 +235,7 @@ fn f_resize_box_average_lowering_requires_2x_axes_and_safe_values() {
         .unwrap(),
     );
     assert!(!gpu_f_resize_box_average_is_exact(
-        &[box_resize(2, 4)],
+        &[box_average_resize(2, 4)],
         &mixed_sign,
         Some("F")
     ));
@@ -235,7 +244,7 @@ fn f_resize_box_average_lowering_requires_2x_axes_and_safe_values() {
         RgbaImage::from_raw(4, 4, (f32::MIN_POSITIVE).to_le_bytes().repeat(16)).unwrap(),
     );
     assert!(!gpu_f_resize_box_average_is_exact(
-        &[box_resize(2, 4)],
+        &[box_average_resize(2, 4)],
         &subnormal,
         Some("F")
     ));
@@ -243,7 +252,7 @@ fn f_resize_box_average_lowering_requires_2x_axes_and_safe_values() {
         RgbaImage::from_raw(4, 4, f32::from_bits(0x3580_0000).to_le_bytes().repeat(16)).unwrap(),
     );
     assert!(gpu_f_resize_box_average_is_exact(
-        &[box_resize(2, 4)],
+        &[box_average_resize(2, 4)],
         &floor,
         Some("F")
     ));
@@ -260,7 +269,7 @@ fn f_resize_box_average_lowering_requires_2x_axes_and_safe_values() {
         .unwrap(),
     );
     assert!(!gpu_f_resize_box_average_is_exact(
-        &[box_resize(2, 4)],
+        &[box_average_resize(2, 4)],
         &below_floor,
         Some("F")
     ));
@@ -268,7 +277,7 @@ fn f_resize_box_average_lowering_requires_2x_axes_and_safe_values() {
         RgbaImage::from_raw(4, 4, (-0.0f32).to_le_bytes().repeat(16)).unwrap(),
     );
     assert!(!gpu_f_resize_box_average_is_exact(
-        &[box_resize(2, 4)],
+        &[box_average_resize(2, 4)],
         &negative_zero,
         Some("F")
     ));
