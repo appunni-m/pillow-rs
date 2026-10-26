@@ -1,3 +1,4 @@
+//! Python bindings for the Rust image engine, exposed through the `PIL` namespace.
 // AS PER DESIGN — DO NOT REMOVE: Deferred lint cleanup. See CODEBASE_AUDIT.md Fix 2.
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
@@ -60,12 +61,18 @@ pub(crate) use image_chops::chops_offset_from_python;
 
 // Pillow's custom exception for images exceeding its decompression-bomb limit.
 #[cfg(not(feature = "parallel-wheel"))]
-pyo3::create_exception!(_core, DecompressionBombError, pyo3::exceptions::PyException);
+pyo3::create_exception!(
+    _core,
+    DecompressionBombError,
+    pyo3::exceptions::PyException,
+    "Raised when an image exceeds the configured decompression-bomb limit."
+);
 #[cfg(feature = "parallel-wheel")]
 pyo3::create_exception!(
     _core_parallel,
     DecompressionBombError,
-    pyo3::exceptions::PyException
+    pyo3::exceptions::PyException,
+    "Raised when an image exceeds the configured decompression-bomb limit."
 );
 
 fn filter_size_from_python(size: i64, negative_is_identity: bool) -> PyResult<u32> {
