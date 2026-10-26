@@ -621,7 +621,7 @@ pub(super) fn gpu_shader_work_items(
     // valid zero-interior GPU workloads; only the shader's invocation count,
     // not the kernel radius, determines their safety.
     let output_pixels = u64::from(output_dimensions.0) * u64::from(output_dimensions.1);
-    let (source_w, source_h) = source_dimensions;
+    let source_h = source_dimensions.1;
     if matches!(op, PipelineOp::Fit { .. } | PipelineOp::ResizeBoxed { .. })
         || matches!(op, PipelineOp::Resize { filter, .. } | PipelineOp::Scale { filter, .. }
         if !matches!(filter, ResampleFilter::Nearest)
@@ -663,6 +663,17 @@ pub(super) fn gpu_shader_work_items(
                 .saturating_add(vertical_work),
         );
     }
+    let inner_work = gpu_shader_inner_work_items(op, source_dimensions, logical_mode)?;
+    Some(output_pixels.saturating_mul(inner_work))
+}
+
+#[inline]
+fn gpu_shader_inner_work_items(
+    op: &PipelineOp,
+    source_dimensions: (u32, u32),
+    logical_mode: Option<&str>,
+) -> Option<u64> {
+    let (source_w, source_h) = source_dimensions;
     let inner_work = match op {
         PipelineOp::BoxBlur { radius } => gpu_blur_pass_work_items(*radius).saturating_mul(2),
         PipelineOp::BoxBlurXY {
@@ -711,7 +722,7 @@ pub(super) fn gpu_shader_work_items(
         // before its cumulative dispatch cost can monopolize one submission.
         _ => 1,
     };
-    Some(output_pixels.saturating_mul(inner_work))
+    Some(inner_work)
 }
 
 pub(super) fn gpu_shader_work_requires_cpu(
