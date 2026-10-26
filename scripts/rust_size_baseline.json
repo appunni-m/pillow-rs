@@ -262,12 +262,6 @@
       "signature": "fn execute_projection_terminal( &self, image: &DynamicImage, ops: &[PipelineOp], channels: u8, source_is_known_zero: bool, ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {"
     },
     {
-      "lines": 113,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/resize/compact_box.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_is_exact( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
-    },
-    {
       "lines": 103,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/resize/compact_box.rs",

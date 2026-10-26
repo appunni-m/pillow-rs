@@ -280,6 +280,25 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_is_exact(
         return false;
     }
 
+    gpu_f_resize_compact_box_materialization_matches(
+        pixels.as_raw(),
+        source_dimensions,
+        (*w, *h),
+        horizontal_compact,
+        vertical_compact,
+        *filter,
+    )
+}
+
+fn gpu_f_resize_compact_box_materialization_matches(
+    source_bytes: &[u8],
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    horizontal_compact: bool,
+    vertical_compact: bool,
+    filter: ResampleFilter,
+) -> bool {
+    let (kernel, support) = filter_from_resample(filter);
     let ordered_pass =
         |bytes: &[u8], dimensions: (u32, u32), coeffs: &FilterCoeffsF64, horizontal| {
             let safe = coeffs.xmin.len() == coeffs.count.len()
@@ -303,23 +322,27 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_is_exact(
         }
         Some(result)
     };
-    let (kernel, support) = filter_from_resample(*filter);
-    let mut bytes = pixels.as_raw().to_vec();
+    let mut bytes = source_bytes.to_vec();
     let mut dimensions = source_dimensions;
 
     if horizontal_compact {
-        let Some(words) =
-            gpu_f_resize_compact_box_pass_bits(&bytes, dimensions, source_dimensions.0, *w, true)
-        else {
+        let Some(words) = gpu_f_resize_compact_box_pass_bits(
+            &bytes,
+            dimensions,
+            source_dimensions.0,
+            output_dimensions.0,
+            true,
+        ) else {
             return false;
         };
         let Some(next_bytes) = words_to_bytes(words) else {
             return false;
         };
         bytes = next_bytes;
-        dimensions.0 = *w;
-    } else if *w != source_dimensions.0 {
-        let coeffs = precompute_coeffs_f64(*w, source_dimensions.0, kernel, support);
+        dimensions.0 = output_dimensions.0;
+    } else if output_dimensions.0 != source_dimensions.0 {
+        let coeffs =
+            precompute_coeffs_f64(output_dimensions.0, source_dimensions.0, kernel, support);
         let Some(words) = ordered_pass(&bytes, dimensions, &coeffs, true) else {
             return false;
         };
@@ -327,22 +350,27 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_is_exact(
             return false;
         };
         bytes = next_bytes;
-        dimensions.0 = *w;
+        dimensions.0 = output_dimensions.0;
     }
 
     if vertical_compact {
-        let Some(words) =
-            gpu_f_resize_compact_box_pass_bits(&bytes, dimensions, source_dimensions.1, *h, false)
-        else {
+        let Some(words) = gpu_f_resize_compact_box_pass_bits(
+            &bytes,
+            dimensions,
+            source_dimensions.1,
+            output_dimensions.1,
+            false,
+        ) else {
             return false;
         };
         let Some(next_bytes) = words_to_bytes(words) else {
             return false;
         };
         bytes = next_bytes;
-        dimensions.1 = *h;
-    } else if *h != source_dimensions.1 {
-        let coeffs = precompute_coeffs_f64(*h, source_dimensions.1, kernel, support);
+        dimensions.1 = output_dimensions.1;
+    } else if output_dimensions.1 != source_dimensions.1 {
+        let coeffs =
+            precompute_coeffs_f64(output_dimensions.1, source_dimensions.1, kernel, support);
         let Some(words) = ordered_pass(&bytes, dimensions, &coeffs, false) else {
             return false;
         };
@@ -350,10 +378,10 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_is_exact(
             return false;
         };
         bytes = next_bytes;
-        dimensions.1 = *h;
+        dimensions.1 = output_dimensions.1;
     }
 
-    dimensions == (*w, *h) && !bytes.is_empty()
+    dimensions == output_dimensions && !bytes.is_empty()
 }
 
 pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_vertical_only_is_exact(
