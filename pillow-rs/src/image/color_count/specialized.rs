@@ -115,6 +115,25 @@ pub(in crate::image) fn getcolors_scalar_byte_domain(
         histogram[index] = next_count;
     }
 
+    scalar_byte_domain_counts(
+        mode,
+        &histogram,
+        first_seen,
+        maxcolors,
+        code_mask,
+        code_polynomial,
+    )
+}
+
+#[inline]
+fn scalar_byte_domain_counts(
+    mode: &str,
+    histogram: &[u32; 256],
+    first_seen: Vec<u8>,
+    maxcolors: usize,
+    code_mask: u32,
+    code_polynomial: u32,
+) -> ScalarColorDomainCounts {
     // Preserve Pillow's first-insertion probe sequence without allocating its
     // maxcolors-sized direct table for this bounded scalar domain.
     let mut counts =
