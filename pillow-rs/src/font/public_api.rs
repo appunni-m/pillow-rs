@@ -1,9 +1,9 @@
 //! Public root wrappers for Pillow's ImageFont and FreeTypeFont API.
 
 use super::{
-    FreeTypeFont, ImageFontFaceInfo, ImageFontLoadOptions, ImageFontSourceInput,
-    ImageFontTextInput, ImageFontTextOptions, ImageFontVariantOptions, ImageFontVariationAxesInput,
-    ImageFontVariationAxis, ImageFontVariationNameInput,
+    FontMaskAndOffset, FontSizeAndOffset, FreeTypeFont, ImageFontFaceInfo, ImageFontLoadOptions,
+    ImageFontSourceInput, ImageFontTextInput, ImageFontTextOptions, ImageFontVariantOptions,
+    ImageFontVariationAxesInput, ImageFontVariationAxis, ImageFontVariationNameInput,
 };
 use crate::error::PilError;
 
@@ -79,7 +79,7 @@ pub fn imagefont_native_getlength_26dot6(font: &FreeTypeFont, text: &str) -> Res
 pub fn imagefont_native_getsize(
     font: &FreeTypeFont,
     text: &str,
-) -> Result<((i32, i32), (i32, i32)), PilError> {
+) -> Result<FontSizeAndOffset, PilError> {
     font.native_getsize(text)
 }
 
@@ -88,7 +88,7 @@ pub fn imagefont_native_render(
     font: &FreeTypeFont,
     text: &str,
     options: &ImageFontTextOptions,
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     font.native_render(text, options)
 }
 
@@ -97,7 +97,7 @@ pub fn imagefont_native_render_input(
     font: &FreeTypeFont,
     text: ImageFontTextInput,
     options: &ImageFontTextOptions,
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     font.native_render_input(text, options)
 }
 
@@ -425,10 +425,7 @@ pub fn imagefont_getmask_bytes(
 }
 
 /// Render a Pillow-compatible mask with offset.
-pub fn imagefont_getmask2(
-    font: &FreeTypeFont,
-    text: &str,
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+pub fn imagefont_getmask2(font: &FreeTypeFont, text: &str) -> Result<FontMaskAndOffset, PilError> {
     font.getmask2(text)
 }
 
@@ -436,7 +433,7 @@ pub fn imagefont_getmask2(
 pub fn imagefont_getmask2_bytes(
     font: &FreeTypeFont,
     text: &[u8],
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     font.getmask2_bytes(text)
 }
 
@@ -472,7 +469,7 @@ pub fn imagefont_getmask2_with_start(
     font: &FreeTypeFont,
     text: &str,
     start: (f64, f64),
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     font.getmask2_with_start(text, start)
 }
 
@@ -481,7 +478,7 @@ pub fn imagefont_getmask2_bytes_with_start(
     font: &FreeTypeFont,
     text: &[u8],
     start: (f64, f64),
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     font.getmask2_bytes_with_start(text, start)
 }
 
@@ -490,7 +487,7 @@ pub fn imagefont_getmask2_with_options(
     font: &FreeTypeFont,
     text: &str,
     options: &ImageFontTextOptions,
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     font.getmask2_with_options(text, options)
 }
 
@@ -499,7 +496,7 @@ pub fn imagefont_getmask2_bytes_with_options(
     font: &FreeTypeFont,
     text: &[u8],
     options: &ImageFontTextOptions,
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     font.getmask2_bytes_with_options(text, options)
 }
 
@@ -508,7 +505,7 @@ pub fn imagefont_getmask2_input_with_options(
     font: &FreeTypeFont,
     text: ImageFontTextInput,
     options: &ImageFontTextOptions,
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     font.getmask2_input_with_options(text, options)
 }
 

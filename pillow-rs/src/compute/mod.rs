@@ -155,6 +155,23 @@ pub enum Backend {
     Simd = 2,
 }
 
+/// One completed pipeline timing sample and its backend/resource counters.
+///
+/// The fields follow the order documented by [`Backend::take_pipeline_telemetry`].
+pub type PipelineTelemetrySample = (
+    Option<Backend>,
+    Backend,
+    usize,
+    u64,
+    u64,
+    u64,
+    Option<u64>,
+    Option<String>,
+    Option<PipelineResourceTelemetry>,
+    u64,
+    u64,
+);
+
 impl Backend {
     /// Parses a backend name used by CLI, environment, or binding-layer options.
     ///
@@ -215,19 +232,7 @@ impl Backend {
     /// nanoseconds, validation nanoseconds, backend nanoseconds, optional
     /// dispatch count, fallback reason, optional resource counters, and
     /// resize-coefficient cache counters.
-    pub fn take_pipeline_telemetry() -> Option<(
-        Option<Self>,
-        Self,
-        usize,
-        u64,
-        u64,
-        u64,
-        Option<u64>,
-        Option<String>,
-        Option<PipelineResourceTelemetry>,
-        u64,
-        u64,
-    )> {
+    pub fn take_pipeline_telemetry() -> Option<PipelineTelemetrySample> {
         take_pipeline_telemetry()
     }
 

@@ -17,7 +17,7 @@ pub(crate) fn getlength(font: &FreeTypeFont, text: &str) -> Result<f32, PilError
 pub(crate) fn getlength_and_bbox(
     font: &FreeTypeFont,
     text: &str,
-) -> Result<(f32, (i32, i32, i32, i32)), PilError> {
+) -> Result<FontLengthAndBounds, PilError> {
     validate_text_length(text)?;
     let run = glyph_run(font, text, TGT_NORM)?;
     let length = run.final_pen as f32 / 64.0;
@@ -33,7 +33,7 @@ pub(crate) fn native_getlength_26dot6(font: &FreeTypeFont, text: &str) -> Result
 pub(crate) fn native_getsize(
     font: &FreeTypeFont,
     text: &str,
-) -> Result<((i32, i32), (i32, i32)), PilError> {
+) -> Result<FontSizeAndOffset, PilError> {
     let (left, top, right, bottom) = getbbox(font, text)?;
     Ok(((right - left, bottom - top), (left, top)))
 }

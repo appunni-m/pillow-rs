@@ -11,8 +11,9 @@
 //! ImageFont rows pass; fix the real lower implementation instead.
 
 use super::{
-    FreeTypeFont, ImageFontFaceInfo, ImageFontLoadOptions, ImageFontTextOptions,
-    ImageFontVariantOptions, ImageFontVariationAxis,
+    FontLengthAndBounds, FontMaskAndBounds, FontMaskAndOffset, FontSizeAndOffset, FreeTypeFont,
+    ImageFontFaceInfo, ImageFontLoadOptions, ImageFontTextOptions, ImageFontVariantOptions,
+    ImageFontVariationAxis,
 };
 use crate::error::PilError;
 use crate::image::Image;

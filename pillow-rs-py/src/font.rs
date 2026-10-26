@@ -4,6 +4,8 @@ use pillow_rs::PilError;
 use pyo3::{pyclass, pyfunction, pymethods, wrap_pyfunction};
 use std::sync::{Mutex, OnceLock};
 
+type PythonFontBBox = (Py<PyAny>, Py<PyAny>, Py<PyAny>, Py<PyAny>);
+
 #[pyfunction]
 fn transposed_font_orientation(orientation: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
     if orientation.is_none() {
@@ -51,7 +53,7 @@ fn font_bbox_value_to_python(
 fn imagefont_normalize_bbox(
     py: Python<'_>,
     bbox: (f64, f64, f64, f64),
-) -> PyResult<(Py<PyAny>, Py<PyAny>, Py<PyAny>, Py<PyAny>)> {
+) -> PyResult<PythonFontBBox> {
     let values = pillow_rs::normalize_font_bbox(bbox);
     Ok((
         font_bbox_value_to_python(py, values[0])?,

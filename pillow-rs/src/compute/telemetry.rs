@@ -1,6 +1,6 @@
 //! Bounded execution telemetry and receipt collection for compute backends.
 
-use super::Backend;
+use super::{Backend, PipelineTelemetrySample};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 use std::cell::{Cell, RefCell};
@@ -625,19 +625,7 @@ pub(super) fn pipeline_telemetry_enabled() -> bool {
     PIPELINE_TELEMETRY_ENABLED.with(Cell::get)
 }
 
-pub(super) fn take_pipeline_telemetry() -> Option<(
-    Option<Backend>,
-    Backend,
-    usize,
-    u64,
-    u64,
-    u64,
-    Option<u64>,
-    Option<String>,
-    Option<PipelineResourceTelemetry>,
-    u64,
-    u64,
-)> {
+pub(super) fn take_pipeline_telemetry() -> Option<PipelineTelemetrySample> {
     LAST_PIPELINE_TELEMETRY.with(|last| {
         last.borrow_mut().take().map(|sample| {
             (

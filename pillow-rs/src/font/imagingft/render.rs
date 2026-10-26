@@ -18,7 +18,7 @@ pub(crate) fn native_render(
     font: &FreeTypeFont,
     text: &str,
     options: &ImageFontTextOptions,
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     getmask2_with_options(font, text, options)
 }
 
@@ -37,10 +37,7 @@ pub(crate) fn getmask_with_options(
 }
 
 /// Render a Pillow-compatible mask together with its BASIC-layout offset.
-pub(crate) fn getmask2(
-    font: &FreeTypeFont,
-    text: &str,
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+pub(crate) fn getmask2(font: &FreeTypeFont, text: &str) -> Result<FontMaskAndOffset, PilError> {
     validate_text_length(text)?;
     getmask2_with_start(font, text, (0.0, 0.0))
 }
@@ -53,7 +50,7 @@ pub(crate) fn getmask2_with_start(
     font: &FreeTypeFont,
     text: &str,
     start: (f64, f64),
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     validate_text_length(text)?;
     let (width, height, pixels, bbox) =
         mask_from_run_with_start_and_bbox(font, text, TGT_NORM, start)?;
@@ -64,7 +61,7 @@ pub(crate) fn getmask2_with_options(
     font: &FreeTypeFont,
     text: &str,
     options: &ImageFontTextOptions,
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+) -> Result<FontMaskAndOffset, PilError> {
     validate_text_length(text)?;
     validate_basic_layout_options(options)?;
     if options.start_invalid {
@@ -189,7 +186,7 @@ fn mask_from_run_with_start_and_bbox(
     text: &str,
     load_flags: i32,
     start: (f64, f64),
-) -> Result<(u32, u32, Vec<u8>, (i32, i32, i32, i32)), PilError> {
+) -> Result<FontMaskAndBounds, PilError> {
     let mut loaded_slots = Vec::new();
     let run = if load_flags == TGT_NORM {
         glyph_run_with_slot_visitor(ttf, text, load_flags, |slot, _, _| {

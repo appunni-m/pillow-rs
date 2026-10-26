@@ -5,6 +5,8 @@ use pyo3::types::{PyAnyMethods, PyModule, PyModuleMethods};
 use pyo3::{Bound, IntoPyObject, Py, PyAny, PyErr, PyResult, Python, pyclass, pymethods};
 use std::collections::HashMap;
 
+type PythonBatchResult = (u64, Py<PyAny>, Py<PyAny>);
+
 pyo3::create_exception!(_core, GpuBatchError, pyo3::exceptions::PyRuntimeError);
 
 fn batch_error(error: BatchError) -> PyErr {
@@ -116,7 +118,7 @@ impl PyGpuBatchExecutor {
             .set_resident_output(resident)
             .map_err(batch_error)
     }
-    fn next_result(&mut self, py: Python<'_>) -> PyResult<Option<(u64, Py<PyAny>, Py<PyAny>)>> {
+    fn next_result(&mut self, py: Python<'_>) -> PyResult<Option<PythonBatchResult>> {
         let Some(result) = py
             .detach(|| self.inner.next_result())
             .map_err(batch_error)?

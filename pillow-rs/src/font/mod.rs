@@ -7,6 +7,21 @@
 use crate::error::PilError;
 use crate::image::Image;
 
+/// A rendered grayscale mask with its `(x, y)` layout offset.
+pub type FontMaskAndOffset = (u32, u32, Vec<u8>, (i32, i32));
+
+/// A rendered grayscale mask with its full `(left, top, right, bottom)` bounds.
+pub type FontMaskAndBounds = (u32, u32, Vec<u8>, (i32, i32, i32, i32));
+
+/// Pillow-compatible text bounds in `(left, top, right, bottom)` order.
+pub type FontTextBounds = (i32, i32, i32, i32);
+
+/// Text advance and the bounds produced by the same glyph layout pass.
+pub type FontLengthAndBounds = (f32, FontTextBounds);
+
+/// Text size followed by its `(left, top)` offset.
+pub type FontSizeAndOffset = ((i32, i32), (i32, i32));
+
 mod default_aileron;
 pub(crate) mod imagingft;
 pub(crate) mod pilfont;
@@ -575,7 +590,7 @@ impl FreeTypeFont {
     }
 
     /// Return Pillow native `_imagingft.Font.getsize()` size and offset tuple.
-    pub fn native_getsize(&self, text: &str) -> Result<((i32, i32), (i32, i32)), PilError> {
+    pub fn native_getsize(&self, text: &str) -> Result<FontSizeAndOffset, PilError> {
         imagingft::native_getsize(self, text)
     }
 
@@ -584,7 +599,7 @@ impl FreeTypeFont {
         &self,
         text: &str,
         options: &ImageFontTextOptions,
-    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    ) -> Result<FontMaskAndOffset, PilError> {
         imagingft::native_render(self, text, options)
     }
 
@@ -593,7 +608,7 @@ impl FreeTypeFont {
         &self,
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
-    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    ) -> Result<FontMaskAndOffset, PilError> {
         let text = text.into_text();
         self.native_render(&text, options)
     }
@@ -794,7 +809,7 @@ impl FreeTypeFont {
         &self,
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
-    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    ) -> Result<FontMaskAndOffset, PilError> {
         match text {
             ImageFontTextInput::Text(text) => self.getmask2_with_options(&text, options),
             ImageFontTextInput::Bytes(text) => self.getmask2_bytes_with_options(&text, options),
@@ -815,12 +830,12 @@ impl FreeTypeFont {
     }
 
     /// Return Pillow's public `getmask2` mask and offset tuple.
-    pub fn getmask2(&self, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    pub fn getmask2(&self, text: &str) -> Result<FontMaskAndOffset, PilError> {
         imagingft::getmask2(self, text)
     }
 
     /// Return Pillow's public `getmask2` mask and offset tuple for byte text.
-    pub fn getmask2_bytes(&self, text: &[u8]) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    pub fn getmask2_bytes(&self, text: &[u8]) -> Result<FontMaskAndOffset, PilError> {
         let text = pillow_bytes_to_text(text);
         self.getmask2(&text)
     }
@@ -830,7 +845,7 @@ impl FreeTypeFont {
         &self,
         text: &str,
         options: &ImageFontTextOptions,
-    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    ) -> Result<FontMaskAndOffset, PilError> {
         if let Some(start) = options.start
             && options.uses_default_mask_except_start()
         {
@@ -847,7 +862,7 @@ impl FreeTypeFont {
         &self,
         text: &[u8],
         options: &ImageFontTextOptions,
-    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    ) -> Result<FontMaskAndOffset, PilError> {
         if let Some(start) = options.start
             && options.uses_default_mask_except_start()
         {
@@ -865,7 +880,7 @@ impl FreeTypeFont {
         &self,
         text: &str,
         start: (f64, f64),
-    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    ) -> Result<FontMaskAndOffset, PilError> {
         imagingft::getmask2_with_start(self, text, start)
     }
 
@@ -874,7 +889,7 @@ impl FreeTypeFont {
         &self,
         text: &[u8],
         start: (f64, f64),
-    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    ) -> Result<FontMaskAndOffset, PilError> {
         let text = pillow_bytes_to_text(text);
         self.getmask2_with_start(&text, start)
     }

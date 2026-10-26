@@ -3,13 +3,12 @@ use crate::values::*;
 use crate::{Image, ImageFont};
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
+type DrawTextColorAndKind = ((u8, u8, u8, u8), bool);
+
 // ── ImageDraw ────────────────────────────────────────────────────
 use pillow_rs::Draw;
 
-fn js_text_color_and_kind(
-    draw: &Draw,
-    value: &JsValue,
-) -> Result<((u8, u8, u8, u8), bool), JsValue> {
+fn js_text_color_and_kind(draw: &Draw, value: &JsValue) -> Result<DrawTextColorAndKind, JsValue> {
     let input = js_draw_color_input(value);
     let is_integer = matches!(&input, pillow_rs::DrawColorInput::Integer(_));
     draw.text_color_with_input(input)

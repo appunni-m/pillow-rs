@@ -93,7 +93,7 @@ fn transform_components_fill(
     mode: &str,
     values: &[i64],
     default_palette_fill: Option<u8>,
-) -> Result<((u8, u8, u8, u8), Option<u8>), PilError> {
+) -> Result<TransformFillResult, PilError> {
     let fill = match mode {
         "P" => match values {
             [value] => {
