@@ -324,33 +324,15 @@ pub(super) fn execute_automatic_simd_segments(
             Backend::Cpu
         };
 
-        let mut end = index + 1;
-        if backend == Backend::Simd {
-            // Every operation in this segment is checked against the same
-            // concrete layout. A transpose-only run is the exception: the
-            // SIMD batch executor composes it before dispatch, and each
-            // transform is checked against this original image layout.
-            while end < ops.len()
-                && automatic_segments::can_extend(&ops[end - 1], &ops[end])
-                && simd.supports_for_image(&ops[end], input, op_mode)?
-            {
-                end += 1;
-            }
-        } else {
-            // CPU can absorb adjacent CPU-only work, including draw batches,
-            // as long as the current layout contract remains unchanged. Stop
-            // before an operation that SIMD can execute so the next segment
-            // can return to the vector path without replaying this segment.
-            while end < ops.len()
-                && automatic_segments::preserves_native_contract(&ops[end - 1])
-                && !simd.supports_for_image(&ops[end], input, op_mode)?
-            {
-                if !cpu.supports(&ops[end])? {
-                    break;
-                }
-                end += 1;
-            }
-        }
+        let end = automatic_segments::segment_end(
+            ops,
+            index,
+            backend,
+            input,
+            op_mode,
+            simd.as_ref(),
+            cpu.as_ref(),
+        )?;
 
         if previous_backend.is_some_and(|previous| previous != backend) {
             record_pipeline_operation_handoff(1);
