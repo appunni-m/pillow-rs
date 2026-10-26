@@ -4,7 +4,7 @@ use super::prelude::{
     op_cover, op_crop_border, op_equalize, op_equalize_with_mask, op_expand, op_fit, op_flip,
     op_invert, op_mirror, op_pad, op_posterize, op_scale, op_solarize,
 };
-fn register_part_1(m: &mut Registry) {
+fn register_autocontrast_equalize(m: &mut Registry) {
     m.insert(
         "Autocontrast",
         gpu_entry!(
@@ -48,7 +48,9 @@ fn register_part_1(m: &mut Registry) {
             "equalize.wgsl"
         ),
     );
+}
 
+fn register_invert_flip(m: &mut Registry) {
     m.insert(
         "Invert",
         gpu_entry!(
@@ -84,7 +86,7 @@ fn register_part_1(m: &mut Registry) {
     );
 }
 
-fn register_part_2(m: &mut Registry) {
+fn register_mirror_posterize_solarize(m: &mut Registry) {
     m.insert(
         "Mirror",
         gpu_entry!(
@@ -135,7 +137,9 @@ fn register_part_2(m: &mut Registry) {
             "solarize.wgsl"
         ),
     );
+}
 
+fn register_grayscale(m: &mut Registry) {
     m.insert(
         "Grayscale",
         gpu_entry!(
@@ -215,7 +219,7 @@ fn register_part_3(m: &mut Registry) {
     );
 }
 
-fn register_part_4(m: &mut Registry) {
+fn register_fit_pad(m: &mut Registry) {
     m.insert(
         "Fit",
         gpu_entry!(
@@ -263,7 +267,9 @@ fn register_part_4(m: &mut Registry) {
             "pad.wgsl"
         ),
     );
+}
 
+fn register_scale_expand(m: &mut Registry) {
     m.insert(
         "Scale",
         gpu_entry!(
@@ -319,10 +325,13 @@ fn register_part_5(m: &mut Registry) {
 }
 
 pub(super) fn register(m: &mut Registry) -> Result<(), PilError> {
-    register_part_1(m);
-    register_part_2(m);
+    register_autocontrast_equalize(m);
+    register_invert_flip(m);
+    register_mirror_posterize_solarize(m);
+    register_grayscale(m);
     register_part_3(m);
-    register_part_4(m);
+    register_fit_pad(m);
+    register_scale_expand(m);
     register_part_5(m);
     Ok(())
 }
