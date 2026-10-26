@@ -100,7 +100,7 @@ fn color3dlut_table_length_error(
 /// zero and even sizes; silently rounding those values changes the operation
 /// instead of reporting the same public error.
 fn validate_rank_filter_size(size: u32) -> Result<(), PilError> {
-    if size == 0 || size % 2 == 0 || size.checked_mul(size).is_none() {
+    if size == 0 || size.is_multiple_of(2) || size.checked_mul(size).is_none() {
         return Err(PilError::ValueError("bad filter size".into()));
     }
     Ok(())

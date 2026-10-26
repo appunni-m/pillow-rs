@@ -376,8 +376,9 @@ pub(super) fn plan_native_rgb_point_output(
         NATIVE_EXPAND_WORKGROUP_WIDTH.checked_mul(NATIVE_EXPAND_WORKGROUP_HEIGHT)?;
     let required_workgroups = output_group_count.div_ceil(workgroup_items);
     let max_groups = u64::from(max_workgroups_per_dimension);
-    let row_groups_x =
-        (width % 4 == 0).then(|| u64::from(width / 4).div_ceil(NATIVE_EXPAND_WORKGROUP_WIDTH));
+    let row_groups_x = width
+        .is_multiple_of(4)
+        .then(|| u64::from(width / 4).div_ceil(NATIVE_EXPAND_WORKGROUP_WIDTH));
     let row_groups_y = u64::from(height).div_ceil(NATIVE_EXPAND_WORKGROUP_HEIGHT);
     let row_tiled_workgroups = row_groups_x.and_then(|groups_x| groups_x.checked_mul(row_groups_y));
     let row_tiled = row_groups_x.is_some_and(|groups_x| {

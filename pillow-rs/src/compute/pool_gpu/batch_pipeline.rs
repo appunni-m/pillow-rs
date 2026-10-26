@@ -291,7 +291,7 @@ impl GpuInner {
                 continue;
             }
             if packed_luma_order_statistic && matches!(op, PipelineOp::RankFilter { size: 9, .. }) {
-                let rank = if input_dims[index].0 % 4 == 0 {
+                let rank = if input_dims[index].0.is_multiple_of(4) {
                     self.resolve_pipeline(
                         "__internal_rank_filter_9x9_luma_row_packed",
                         "rank_filter_9x9_luma_row_packed.wgsl",

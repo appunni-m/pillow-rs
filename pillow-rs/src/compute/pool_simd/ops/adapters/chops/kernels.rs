@@ -221,7 +221,7 @@ where
     let channels = native_chops_pair_channels(img, other, mode)?;
     let left = img.as_bytes();
     let right = other.as_bytes();
-    if left.len() != right.len() || left.len() % channels != 0 {
+    if left.len() != right.len() || !left.len().is_multiple_of(channels) {
         return None;
     }
     let Some(expected_len) = img
@@ -368,7 +368,7 @@ fn native_chops_lut_formula(
     let channels = native_chops_pair_channels(img, other, mode)?;
     let left = img.as_bytes();
     let right = other.as_bytes();
-    if left.len() != right.len() || left.len() % channels != 0 {
+    if left.len() != right.len() || !left.len().is_multiple_of(channels) {
         return None;
     }
     if left.is_empty() {
@@ -454,7 +454,7 @@ pub(super) fn native_chops_soft_light(
     let channels = native_chops_pair_channels(img, other, mode)?;
     let left = img.as_bytes();
     let right = other.as_bytes();
-    if left.len() != right.len() || left.len() % channels != 0 {
+    if left.len() != right.len() || !left.len().is_multiple_of(channels) {
         return None;
     }
     if left.is_empty() {

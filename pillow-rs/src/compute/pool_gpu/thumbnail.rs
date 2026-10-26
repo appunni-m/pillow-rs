@@ -75,7 +75,8 @@ pub(super) fn gpu_thumbnail_requires_exact_host_control(
         return false;
     }
     (factor_x > 1 || factor_y > 1)
-        && (source_dimensions.0 % factor_x != 0 || source_dimensions.1 % factor_y != 0)
+        && (!source_dimensions.0.is_multiple_of(factor_x)
+            || !source_dimensions.1.is_multiple_of(factor_y))
 }
 
 /// Return whether a constant F Thumbnail can skip the scalar reducing-gap

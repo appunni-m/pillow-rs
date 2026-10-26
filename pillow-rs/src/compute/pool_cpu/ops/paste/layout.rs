@@ -87,7 +87,7 @@ pub(super) fn paste_luma16_storage_byte_shift(mode: Option<&str>, byte_offset: u
         Some("I;16" | "I;16N") | None => cfg!(target_endian = "big"),
         _ => cfg!(target_endian = "big"),
     };
-    if byte_offset % 2 == 0 {
+    if byte_offset.is_multiple_of(2) {
         if high_byte_first { 8 } else { 0 }
     } else if high_byte_first {
         0

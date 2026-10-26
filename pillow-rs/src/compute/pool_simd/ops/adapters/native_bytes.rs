@@ -39,7 +39,7 @@ pub(super) fn native_expand_fill_sample(
     match channels {
         1 => fill.0,
         2 => {
-            if index % 2 == 0 {
+            if index.is_multiple_of(2) {
                 fill.0
             } else {
                 fill.3

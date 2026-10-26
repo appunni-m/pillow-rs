@@ -15,7 +15,10 @@ mod tests;
 /// lengths; typed, palette, and malformed descriptors retain the established
 /// implementation.
 fn map_native_byte_lut<const CHANNELS: usize>(source: &[u8], lut: &[u8]) -> Option<Vec<u8>> {
-    if CHANNELS == 0 || lut.len() != CHANNELS.checked_mul(256)? || source.len() % CHANNELS != 0 {
+    if CHANNELS == 0
+        || lut.len() != CHANNELS.checked_mul(256)?
+        || !source.len().is_multiple_of(CHANNELS)
+    {
         return None;
     }
     let mut affine = [(0u8, 0u8); CHANNELS];

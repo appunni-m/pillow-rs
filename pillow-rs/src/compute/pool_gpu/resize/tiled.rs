@@ -157,7 +157,7 @@ impl GpuInner {
                             lines as u32,
                         )?;
                         dispatches += 1;
-                        if dispatches % 8 == 0 {
+                        if dispatches.is_multiple_of(8) {
                             self.device.poll(wgpu::Maintain::Wait);
                             self.ensure_healthy("GPU tiled F resize bounded queue")?;
                         }

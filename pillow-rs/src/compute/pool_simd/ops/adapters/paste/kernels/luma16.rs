@@ -149,12 +149,12 @@ fn blend_masked_region(
                 source_block[lane] = source[source_row_start + source_byte_offset / 2];
                 destination_block[lane] =
                     destination[destination_row_start + destination_byte_offset / 2];
-                source_byte_shifts[lane] = if source_byte_offset % 2 == 0 {
+                source_byte_shifts[lane] = if source_byte_offset.is_multiple_of(2) {
                     plan.luma16_mask_byte_shift
                 } else {
                     8 - plan.luma16_mask_byte_shift
                 };
-                destination_byte_shifts[lane] = if destination_byte_offset % 2 == 0 {
+                destination_byte_shifts[lane] = if destination_byte_offset.is_multiple_of(2) {
                     plan.luma16_mask_byte_shift
                 } else {
                     8 - plan.luma16_mask_byte_shift

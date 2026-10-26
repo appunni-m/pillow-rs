@@ -21,7 +21,7 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_sample_bits(
 ) -> Option<u32> {
     if source_axis == 0
         || output_axis == 0
-        || source_axis % output_axis != 0
+        || !source_axis.is_multiple_of(output_axis)
         || output_index >= usize::try_from(output_axis).ok()?
         || line
             >= usize::try_from(if horizontal {
@@ -178,7 +178,7 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_axis(
     output_size: u32,
 ) -> bool {
     output_size != 0
-        && source_size % output_size == 0
+        && source_size.is_multiple_of(output_size)
         && source_size / output_size > GPU_F_RESIZE_ORDERED_MAX_TAPS as u32
 }
 

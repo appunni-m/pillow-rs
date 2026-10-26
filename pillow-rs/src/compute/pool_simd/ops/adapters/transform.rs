@@ -223,7 +223,7 @@ fn native_mesh_transform_supported_for_image(
         && img.width() != 0
         && img.height() != 0
         && !data.is_empty()
-        && data.len() % 12 == 0
+        && data.len().is_multiple_of(12)
         && data.iter().all(|value| value.is_finite())
         && native_affine_nearest_transform_channels(img, mode).is_some_and(|channels| {
             (img.width() as usize)
@@ -247,7 +247,7 @@ fn native_mesh_transform_supported_for_shape(
         && shape.width != 0
         && shape.height != 0
         && !data.is_empty()
-        && data.len() % 12 == 0
+        && data.len().is_multiple_of(12)
         && data.iter().all(|value| value.is_finite())
         && native_affine_nearest_transform_channels_for_shape(shape, mode).is_some()
 }

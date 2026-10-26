@@ -287,7 +287,7 @@ pub(super) fn encode_resize_compact_box_axis(
     output_size: u32,
 ) -> Result<Vec<u32>, PilError> {
     if output_size == 0
-        || source_size % output_size != 0
+        || !source_size.is_multiple_of(output_size)
         || source_size / output_size <= GPU_F_RESIZE_ORDERED_MAX_TAPS as u32
     {
         return Err(PilError::InternalError(

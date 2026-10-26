@@ -299,7 +299,7 @@ pub(super) fn gpu_packed_native_byte_filter_input(
                     // row starts must therefore remain word-aligned. It uses
                     // the same ordered f32/FMA contract as the general 5x5
                     // shader, but only when that contract is proven safe.
-                    image.width() % 4 == 0
+                    image.width().is_multiple_of(4)
                         && registry::gpu_filter_kernel_is_exact(kernel, *scale, *offset)
                 }
                 _ => false,

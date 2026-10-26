@@ -96,9 +96,9 @@ fn simd_thumbnail_reduce_f_2x2_neon(
     if source.len() != source_len
         || source_width / 2 != output_width
         || source_height / 2 != output_height
-        || source_width % 2 != 0
-        || source_height % 2 != 0
-        || output_width % OUTPUT_LANES != 0
+        || !source_width.is_multiple_of(2)
+        || !source_height.is_multiple_of(2)
+        || !output_width.is_multiple_of(OUTPUT_LANES)
         || !output.is_empty()
         || output.capacity() < output_len
     {

@@ -41,7 +41,7 @@ fn record_vector_and_scalar_work(vector_blocks: u64, scalar_tail: u64) {
 }
 
 fn broadcast_source_row(source: &[u8], row_bytes: usize, pixel_bytes: usize) -> Option<Vec<u8>> {
-    if pixel_bytes == 0 || source.len() != pixel_bytes || row_bytes % pixel_bytes != 0 {
+    if pixel_bytes == 0 || source.len() != pixel_bytes || !row_bytes.is_multiple_of(pixel_bytes) {
         return None;
     }
     let mut row = vec![0; row_bytes];

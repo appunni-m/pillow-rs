@@ -242,7 +242,7 @@ pub(super) fn plan_sharpness_l_dispatch(
     }
 
     let max_groups = u64::from(max_workgroups_per_dimension);
-    if width % 4 == 0 {
+    if width.is_multiple_of(4) {
         let words_per_row = u64::from(width) / 4;
         let groups_x = words_per_row.div_ceil(SHARPNESS_L_WORKGROUP_WIDTH);
         let groups_y = u64::from(height).div_ceil(SHARPNESS_L_WORKGROUP_HEIGHT);

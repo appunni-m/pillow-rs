@@ -229,7 +229,10 @@ fn native_module_blend(
     else {
         return None;
     };
-    if left.len() != right.len() || left.len() != expected_len || left.len() % channels != 0 {
+    if left.len() != right.len()
+        || left.len() != expected_len
+        || !left.len().is_multiple_of(channels)
+    {
         return None;
     }
     if left.is_empty() {

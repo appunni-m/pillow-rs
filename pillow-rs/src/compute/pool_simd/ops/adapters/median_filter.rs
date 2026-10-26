@@ -564,7 +564,7 @@ pub(super) fn simd_order_statistic_filter(
         && matches!(mode, None | Some("LA"));
     let area = u64::from(size).saturating_mul(u64::from(size));
     if size == 0
-        || size % 2 == 0
+        || size.is_multiple_of(2)
         || size > SIMD_ORDER_STATISTIC_HISTOGRAM_MAX_SIZE
         || area > SIMD_ORDER_STATISTIC_MAX_AREA as u64
         || u64::from(rank) >= area

@@ -108,7 +108,7 @@ pub(in super::super) fn simd_mesh_transform_bytes(
         || destination_width == 0
         || destination_height == 0
         || data.is_empty()
-        || data.len() % 12 != 0
+        || !data.len().is_multiple_of(12)
     {
         return Ok(None);
     }

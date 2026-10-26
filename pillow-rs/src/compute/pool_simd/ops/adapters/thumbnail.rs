@@ -124,9 +124,9 @@ fn native_thumbnail_typed_reduce_supported_for_image(
         return false;
     };
     let output_pixels = (img.width() / factor_x.max(1))
-        .saturating_add(u32::from(img.width() % factor_x.max(1) != 0))
+        .saturating_add(u32::from(!img.width().is_multiple_of(factor_x.max(1))))
         * (img.height() / factor_y.max(1))
-            .saturating_add(u32::from(img.height() % factor_y.max(1) != 0));
+            .saturating_add(u32::from(!img.height().is_multiple_of(factor_y.max(1))));
     img.as_bytes().len() == expected_bytes && output_pixels != 0
 }
 
@@ -260,8 +260,8 @@ pub(crate) fn simd_thumbnail(
     if mode == Some("I")
         && factor_x == 2
         && factor_y == 2
-        && img.width() % 2 == 0
-        && img.height() % 2 == 0
+        && img.width().is_multiple_of(2)
+        && img.height().is_multiple_of(2)
     {
         // Current Apple ARM64 controls for native I 1024x768 are slower than
         // CPU (0.609/0.640 ms SIMD vs 0.425/0.430 ms CPU; see

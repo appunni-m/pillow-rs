@@ -178,7 +178,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_rgb_l_masked_ro
     let vector_len16 = source.len() / 16 * 16;
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
     let neon_prefix = if source.len() == destination.len()
-        && source.len() % 3 == 0
+        && source.len().is_multiple_of(3)
         && source.len() / 3 == mask.len()
     {
         source.len() / 48 * 48
@@ -340,7 +340,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_paste_cmyk_l_masked_r
     let vector_len16 = source.len() / 16 * 16;
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
     let neon_prefix = if source.len() == destination.len()
-        && source.len() % 4 == 0
+        && source.len().is_multiple_of(4)
         && source.len() / 4 == mask.len()
     {
         source.len() / 64 * 64

@@ -374,7 +374,7 @@ fn simd_extreme_filter(
 ) -> Result<DynamicImage, PilError> {
     let channels = native_filter_byte_layout(img, mode)
         .ok_or_else(|| simd_unsupported(if select_max { "MaxFilter" } else { "MinFilter" }))?;
-    if size == 0 || size % 2 == 0 || img.width() == 0 || img.height() == 0 {
+    if size == 0 || size.is_multiple_of(2) || img.width() == 0 || img.height() == 0 {
         return Err(simd_unsupported(if select_max {
             "MaxFilter"
         } else {
