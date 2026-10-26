@@ -545,56 +545,68 @@ fn palette_alpha_projective_filtered_relocations_native_gpu_preserve_pairs() {
         let mut source = Image::frombytes("LA", source_size, &source_bytes).expect("LA source");
         source.putpalette(&palette, "RGB").expect("PA palette");
         assert_eq!(source.mode().expect("PA mode"), "PA");
-
-        for filter in [(2, ResampleFilter::Bilinear), (3, ResampleFilter::Bicubic)] {
-            let transformed = source
-                .transform_public(
-                    output_size,
-                    2,
-                    Some(TransformData::Affine(matrix.to_vec())),
-                    filter.0,
-                    0,
-                    fill.clone(),
-                )
-                .expect("PA filtered projective transform");
-            assert_eq!(transformed.mode().expect("transformed PA mode"), "PA");
-            assert_eq!(transformed.palette(), Some(palette.clone()));
-            let expected_image = transformed.clone().use_backend(Backend::Cpu);
-            let expected = expected_image
-                .tobytes()
-                .expect("CPU PA filtered projective transform");
-            let gpu_image = transformed.clone().use_backend(Backend::Gpu);
-            assert_eq!(gpu_image.mode().expect("GPU PA mode"), "PA");
-            assert_eq!(gpu_image.palette(), Some(palette.clone()));
-            let actual = match gpu_image.tobytes() {
-                Ok(actual) => actual,
-                Err(error)
-                    if error.to_string().contains("GPU adapter not available")
-                        || error
-                            .to_string()
-                            .contains("GPU device initialization failed") =>
-                {
-                    Backend::set_pipeline_telemetry_enabled(previous);
-                    return;
-                }
-                Err(error) => {
-                    panic!("native GPU PA filtered projective transform failed: {error}")
-                }
-            };
-            assert_eq!(
-                actual, expected,
-                "PA filtered projective parity for {source_size:?} -> {output_size:?}, filter={:?}",
-                filter.1
-            );
-            let telemetry = Backend::take_pipeline_telemetry()
-                .expect("native PA filtered projective transform must publish a receipt");
-            assert_eq!(telemetry.0, Some(Backend::Gpu));
-            assert_eq!(telemetry.1, Backend::Gpu, "telemetry={telemetry:?}");
-            assert_eq!(telemetry.6, Some(1));
-            assert_eq!(telemetry.7, None);
+        if !assert_palette_filtered_case(&source, source_size, output_size, matrix, fill, &palette)
+        {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
         }
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_palette_filtered_case(
+    source: &Image,
+    source_size: (u32, u32),
+    output_size: (u32, u32),
+    matrix: [f64; 8],
+    fill: Option<TransformFill>,
+    palette: &[u8],
+) -> bool {
+    for filter in [(2, ResampleFilter::Bilinear), (3, ResampleFilter::Bicubic)] {
+        let transformed = source
+            .transform_public(
+                output_size,
+                2,
+                Some(TransformData::Affine(matrix.to_vec())),
+                filter.0,
+                0,
+                fill.clone(),
+            )
+            .expect("PA filtered projective transform");
+        assert_eq!(transformed.mode().expect("transformed PA mode"), "PA");
+        assert_eq!(transformed.palette(), Some(palette.to_vec()));
+        let expected_image = transformed.clone().use_backend(Backend::Cpu);
+        let expected = expected_image
+            .tobytes()
+            .expect("CPU PA filtered projective transform");
+        let gpu_image = transformed.clone().use_backend(Backend::Gpu);
+        assert_eq!(gpu_image.mode().expect("GPU PA mode"), "PA");
+        assert_eq!(gpu_image.palette(), Some(palette.to_vec()));
+        let actual = match gpu_image.tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                return false;
+            }
+            Err(error) => panic!("native GPU PA filtered projective transform failed: {error}"),
+        };
+        assert_eq!(
+            actual, expected,
+            "PA filtered projective parity for {source_size:?} -> {output_size:?}, filter={:?}",
+            filter.1
+        );
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native PA filtered projective transform must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu, "telemetry={telemetry:?}");
+        assert_eq!(telemetry.6, Some(1));
+        assert_eq!(telemetry.7, None);
+    }
+    true
 }
 
 #[test]
