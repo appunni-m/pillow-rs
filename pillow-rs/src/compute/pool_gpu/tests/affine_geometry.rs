@@ -146,6 +146,10 @@ fn float_nearest_affine_proof_matches_fixed_coordinate_selection() {
         (2, 2)
     ));
 
+    assert_nearest_affine_no_fill_uses_transparent_fill();
+}
+
+fn assert_nearest_affine_no_fill_uses_transparent_fill() {
     let no_fill = PipelineOp::Transform {
         w: 1,
         h: 1,
