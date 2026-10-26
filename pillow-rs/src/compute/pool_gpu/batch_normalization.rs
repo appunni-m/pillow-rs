@@ -75,6 +75,16 @@ pub(super) enum BatchNormalization {
     Return(DynamicImage),
 }
 
+fn gpu_source_is_luma_point_run(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    mode: Option<&str>,
+) -> bool {
+    ops.iter().all(|op| matches!(op, PipelineOp::Eval { .. }))
+        && matches!(image, DynamicImage::ImageLuma8(_))
+        && matches!(mode, None | Some("L"))
+}
+
 impl GpuPool {
     pub(super) fn normalize_batch_operations(
         &self,
@@ -82,9 +92,7 @@ impl GpuPool {
         image: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<BatchNormalization, PilError> {
-        let source_is_luma_point_run = ops.iter().all(|op| matches!(op, PipelineOp::Eval { .. }))
-            && matches!(image, DynamicImage::ImageLuma8(_))
-            && matches!(mode, None | Some("L"));
+        let source_is_luma_point_run = gpu_source_is_luma_point_run(ops, image, mode);
         let native_cover_input_channels = gpu_native_cover_input_channels(ops, image, mode);
         // For unmasked native L/RGB inputs, histogram selection is small
         // control-plane work compared with the packed full-frame GPU path.
