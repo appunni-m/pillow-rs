@@ -184,12 +184,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn execute_batch_with_policy( &self, ops: &[PipelineOp], img: &DynamicImage, mode: Option<&str>, allow_cpu_fallback: bool, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 103,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/batch_operation_planning.rs",
-      "signature": "pub(super) fn plan_native_transform_output( ops: &[PipelineOp], output_channels: u32, max_workgroups_per_dimension: u32, max_storage_buffer_binding_size: u32, max_buffer_size: u64, capacity_words: u32, ) -> Option<NativePackedChannelOutputDispatch> {"
-    },
-    {
       "lines": 628,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/batch_pipeline.rs",
@@ -821,11 +815,6 @@
     "pillow-rs/src/compute/pool_gpu/batch_execution/routing.rs": {
       "owner": "lazytrot",
       "reason": "Moved GPU preflight, fallback, and batch routing under the batch execution concern; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/batch_operation_planning.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved native packed-output dispatch layouts into GPU batch operation planning; continue reducing under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/batch_pipeline.rs": {

@@ -144,6 +144,35 @@ pub(super) fn plan_native_expand_output_dispatch(
     })
 }
 
+fn affine_coordinate_bounds_fit(
+    step_x: i64,
+    step_y: i64,
+    origin: i64,
+    max_x: i128,
+    max_y: i128,
+) -> bool {
+    let step_x = i128::from(step_x);
+    let step_y = i128::from(step_y);
+    let origin = i128::from(origin);
+    let x_offsets = [0, max_x * step_x];
+    let partials = x_offsets.map(|x| origin + x);
+    partials
+        .into_iter()
+        .all(|value| i32::try_from(value).is_ok())
+        && [
+            origin,
+            origin + max_x * step_x,
+            origin + max_y * step_y,
+            origin + max_x * step_x + max_y * step_y,
+        ]
+        .into_iter()
+        .all(|value| i32::try_from(value).is_ok())
+        && max_x * step_x <= i128::from(i32::MAX)
+        && max_x * step_x >= i128::from(i32::MIN)
+        && max_y * step_y <= i128::from(i32::MAX)
+        && max_y * step_y >= i128::from(i32::MIN)
+}
+
 /// Plan a compact native-L affine-nearest output. The dedicated shader writes
 /// four logical pixels to each storage word, so its bounds are the packed
 /// readback size and its signed coordinate walk must fit i32.
@@ -244,29 +273,9 @@ pub(super) fn plan_native_transform_output(
         crate::compute::pool_cpu::ops::effects::affine_nearest_fixed(affine, *w, *h)?;
     let max_x = i128::from(*w - 1);
     let max_y = i128::from(*h - 1);
-    let coords_fit = |step_x: i64, step_y: i64, origin: i64| {
-        let step_x = i128::from(step_x);
-        let step_y = i128::from(step_y);
-        let origin = i128::from(origin);
-        let x_offsets = [0, max_x * step_x];
-        let partials = x_offsets.map(|x| origin + x);
-        partials
-            .into_iter()
-            .all(|value| i32::try_from(value).is_ok())
-            && [
-                origin,
-                origin + max_x * step_x,
-                origin + max_y * step_y,
-                origin + max_x * step_x + max_y * step_y,
-            ]
-            .into_iter()
-            .all(|value| i32::try_from(value).is_ok())
-            && max_x * step_x <= i128::from(i32::MAX)
-            && max_x * step_x >= i128::from(i32::MIN)
-            && max_y * step_y <= i128::from(i32::MAX)
-            && max_y * step_y >= i128::from(i32::MIN)
-    };
-    if !coords_fit(step_x, step_y, origin_x) || !coords_fit(step_x_y, step_y_y, origin_y) {
+    if !affine_coordinate_bounds_fit(step_x, step_y, origin_x, max_x, max_y)
+        || !affine_coordinate_bounds_fit(step_x_y, step_y_y, origin_y, max_x, max_y)
+    {
         return None;
     }
 
