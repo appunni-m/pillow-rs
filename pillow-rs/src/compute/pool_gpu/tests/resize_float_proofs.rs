@@ -1,5 +1,14 @@
 use super::*;
 
+fn f32_putdata_bytes(values: [f32; 4]) -> bytes::Bytes {
+    bytes::Bytes::from(
+        values
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect::<Vec<_>>(),
+    )
+}
+
 #[test]
 fn f_resize_constant_lowering_requires_exact_finite_source() {
     let resize = PipelineOp::Resize {
@@ -819,19 +828,10 @@ fn f_order_filter_putdata_requires_finite_words() {
         .unwrap(),
     );
     let rank = PipelineOp::RankFilter { size: 3, rank: 4 };
-    let words = |values: [f32; 4]| -> bytes::Bytes {
-        bytes::Bytes::from(
-            values
-                .into_iter()
-                .flat_map(f32::to_le_bytes)
-                .collect::<Vec<_>>(),
-        )
-    };
-
     assert!(gpu_float_filter_is_supported(
         &[
             PipelineOp::PutData {
-                data: words([4.0, 3.0, 2.0, 1.0]),
+                data: f32_putdata_bytes([4.0, 3.0, 2.0, 1.0]),
                 mode: PixelMode::F,
             },
             rank.clone(),
@@ -842,7 +842,7 @@ fn f_order_filter_putdata_requires_finite_words() {
         assert!(!gpu_float_filter_is_supported(
             &[
                 PipelineOp::PutData {
-                    data: words([special, 3.0, 2.0, 1.0]),
+                    data: f32_putdata_bytes([special, 3.0, 2.0, 1.0]),
                     mode: PixelMode::F,
                 },
                 rank.clone(),
@@ -863,7 +863,7 @@ fn f_order_filter_putdata_requires_finite_words() {
     assert!(!gpu_float_filter_is_supported(
         &[
             PipelineOp::PutData {
-                data: words([4.0, 3.0, 2.0, 1.0]),
+                data: f32_putdata_bytes([4.0, 3.0, 2.0, 1.0]),
                 mode: PixelMode::I,
             },
             rank,
