@@ -112,12 +112,6 @@
       "signature": "fn byte_quad_mesh_filtered_relocations_native_gpu_preserve_pixels() {"
     },
     {
-      "lines": 144,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/projective_filtered.rs",
-      "signature": "fn projective_filtered_constant_proof_is_narrow() {"
-    },
-    {
       "lines": 206,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/resize_float_execution.rs",

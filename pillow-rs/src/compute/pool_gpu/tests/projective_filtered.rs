@@ -438,59 +438,82 @@ fn projective_filtered_constant_proof_is_narrow() {
         Some("RGBX"),
         Some("RGBa"),
     ] {
-        assert!(gpu_projective_filtered_constant_is_admitted(
-            TransformMethod::Perspective,
-            &perspective,
-            ResampleFilter::Bilinear,
-            mode,
-            source,
-            output,
-        ));
-        assert!(gpu_projective_filtered_constant_is_admitted(
-            TransformMethod::Quad,
-            &quad,
-            ResampleFilter::Bilinear,
-            mode,
-            source,
-            output,
-        ));
-        assert!(gpu_projective_filtered_constant_is_admitted(
-            TransformMethod::Mesh,
-            &mesh,
-            ResampleFilter::Bilinear,
-            mode,
-            source,
-            output,
-        ));
-        assert!(gpu_projective_filtered_constant_is_admitted(
-            TransformMethod::Perspective,
-            &perspective,
-            ResampleFilter::Bicubic,
-            mode,
-            source,
-            output,
-        ));
-        assert!(gpu_projective_filtered_constant_is_admitted(
-            TransformMethod::Quad,
-            &quad,
-            ResampleFilter::Bicubic,
-            mode,
-            source,
-            output,
-        ));
-        assert!(gpu_projective_filtered_constant_is_admitted(
-            TransformMethod::Mesh,
-            &mesh,
-            ResampleFilter::Bicubic,
-            mode,
-            source,
-            output,
-        ));
+        assert_standard_projective_constant_modes(mode, source, output, &perspective, &quad, &mesh);
     }
+    assert_alpha_projective_constant_modes(source, output, &perspective);
+    assert_projective_constant_source_boundaries(source, output);
+    assert_projective_constant_quarter_translation(source, output);
+    assert_projective_constant_cmyk_edges(source, output);
+    assert_partial_projective_constant_mesh(source, output);
+}
+
+fn assert_standard_projective_constant_modes(
+    mode: Option<&str>,
+    source: (u32, u32),
+    output: (u32, u32),
+    perspective: &[f64; 8],
+    quad: &[f64; 8],
+    mesh: &[f64; 12],
+) {
+    assert!(gpu_projective_filtered_constant_is_admitted(
+        TransformMethod::Perspective,
+        perspective,
+        ResampleFilter::Bilinear,
+        mode,
+        source,
+        output,
+    ));
+    assert!(gpu_projective_filtered_constant_is_admitted(
+        TransformMethod::Quad,
+        quad,
+        ResampleFilter::Bilinear,
+        mode,
+        source,
+        output,
+    ));
+    assert!(gpu_projective_filtered_constant_is_admitted(
+        TransformMethod::Mesh,
+        mesh,
+        ResampleFilter::Bilinear,
+        mode,
+        source,
+        output,
+    ));
+    assert!(gpu_projective_filtered_constant_is_admitted(
+        TransformMethod::Perspective,
+        perspective,
+        ResampleFilter::Bicubic,
+        mode,
+        source,
+        output,
+    ));
+    assert!(gpu_projective_filtered_constant_is_admitted(
+        TransformMethod::Quad,
+        quad,
+        ResampleFilter::Bicubic,
+        mode,
+        source,
+        output,
+    ));
+    assert!(gpu_projective_filtered_constant_is_admitted(
+        TransformMethod::Mesh,
+        mesh,
+        ResampleFilter::Bicubic,
+        mode,
+        source,
+        output,
+    ));
+}
+
+fn assert_alpha_projective_constant_modes(
+    source: (u32, u32),
+    output: (u32, u32),
+    perspective: &[f64; 8],
+) {
     for mode in [Some("LA"), Some("RGBA")] {
         assert!(gpu_projective_filtered_constant_is_admitted(
             TransformMethod::Perspective,
-            &perspective,
+            perspective,
             ResampleFilter::Bilinear,
             mode,
             source,
@@ -498,13 +521,16 @@ fn projective_filtered_constant_proof_is_narrow() {
         ));
         assert!(!gpu_projective_filtered_constant_is_admitted(
             TransformMethod::Perspective,
-            &perspective,
+            perspective,
             ResampleFilter::Bicubic,
             mode,
             source,
             output,
         ));
     }
+}
+
+fn assert_projective_constant_source_boundaries(source: (u32, u32), output: (u32, u32)) {
     for (x, y) in [
         (0.0, 5.0),
         (16.0, 5.0),
@@ -530,6 +556,9 @@ fn projective_filtered_constant_proof_is_narrow() {
             output,
         ));
     }
+}
+
+fn assert_projective_constant_quarter_translation(source: (u32, u32), output: (u32, u32)) {
     let quarter_map = [0.0, 0.0, 3.25, 0.0, 0.0, 5.0, 0.0, 0.0];
     assert!(gpu_projective_filtered_constant_is_admitted(
         TransformMethod::Perspective,
@@ -547,6 +576,9 @@ fn projective_filtered_constant_proof_is_narrow() {
         source,
         output,
     ));
+}
+
+fn assert_projective_constant_cmyk_edges(source: (u32, u32), output: (u32, u32)) {
     for (x, y) in [(1.0, 5.0), (15.0, 5.0), (3.0, 1.0), (3.0, 15.0)] {
         let map = [0.0, 0.0, x, 0.0, 0.0, y, 0.0, 0.0];
         assert!(!gpu_projective_filtered_constant_is_admitted(
@@ -558,6 +590,9 @@ fn projective_filtered_constant_proof_is_narrow() {
             output,
         ));
     }
+}
+
+fn assert_partial_projective_constant_mesh(source: (u32, u32), output: (u32, u32)) {
     let partial_mesh = [1.0, 1.0, 8.0, 6.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0];
     assert!(!gpu_projective_filtered_constant_is_admitted(
         TransformMethod::Mesh,
