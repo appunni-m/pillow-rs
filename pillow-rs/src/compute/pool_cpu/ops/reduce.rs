@@ -217,20 +217,8 @@ pub(super) fn execute_reduce_rgb_with_sparse_rows(
             reason = "the factor-area guard proves sums plus amend and the 24-bit reciprocal multiply fit u32"
         )]
         let blue = ((blue_sum + amend) * multiplier) >> 24;
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "Pillow's RGB box average is an 8-bit result"
-        )]
         let red = red as u8;
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "Pillow's RGB box average is an 8-bit result"
-        )]
         let green = green as u8;
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "Pillow's RGB box average is an 8-bit result"
-        )]
         let blue = blue as u8;
         row[destination_index] = red;
         row[destination_index + 1] = green;

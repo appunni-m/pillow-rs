@@ -535,16 +535,15 @@ fn rank_filter_order_statistic_row(
                     value_index += 1;
                 }
             }
-            let selected = if channels == 1 && size == 3 && rank == 4 {
-                median_of_nine_vectors(&mut values[..area])
-            } else if use_luma_alpha_median_network && size == 3 && rank == 4 {
-                median_of_nine_vectors(&mut values[..area])
-            } else if size <= SIMD_ORDER_STATISTIC_SORT_MAX_SIZE as usize {
-                sort_order_statistic_vectors(&mut values[..area]);
-                values[rank]
-            } else {
-                select_order_statistic_vectors(&values[..area], rank as u8)
-            };
+            let selected =
+                if (channels == 1 || use_luma_alpha_median_network) && size == 3 && rank == 4 {
+                    median_of_nine_vectors(&mut values[..area])
+                } else if size <= SIMD_ORDER_STATISTIC_SORT_MAX_SIZE as usize {
+                    sort_order_statistic_vectors(&mut values[..area]);
+                    values[rank]
+                } else {
+                    select_order_statistic_vectors(&values[..area], rank as u8)
+                };
             store_rank_filter_channel_vector(output_row, 0, channels, channel, x, active, selected);
             x += active;
         }
