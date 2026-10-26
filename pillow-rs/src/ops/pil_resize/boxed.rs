@@ -77,6 +77,57 @@ fn pil_resize_f_boxed(
     )
 }
 
+#[inline]
+fn pil_resize_f_boxed_nearest(
+    img: &DynamicImage,
+    source_bytes: &[u8],
+    source_width: u32,
+    source_height: u32,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    output_len: usize,
+) -> DynamicImage {
+    if source_width == dst_w
+        && source_height == dst_h
+        && f_boxed_nearest_axis_maps_identity(source_width, dst_w, box_left, box_right)
+        && f_boxed_nearest_axis_maps_identity(source_height, dst_h, box_top, box_bottom)
+    {
+        // The fractional box can still select the same scalar sample at
+        // every destination coordinate. A single owned copy then has the
+        // same bytes as the general gather path and avoids its per-pixel
+        // coordinate and output loops.
+        return img.clone();
+    }
+    let scale_x = (box_right as f32 - box_left as f32) as f64 / f64::from(dst_w);
+    let scale_y = (box_bottom as f32 - box_top as f32) as f64 / f64::from(dst_h);
+    let last_x = i64::from(source_width - 1);
+    let last_y = i64::from(source_height - 1);
+    let mut output = Vec::with_capacity(output_len);
+    // Pillow's nearest boxed F resize also reaches ImagingScaleAffine,
+    // whose coordinates advance cumulatively from one pixel to the next.
+    // Keep that recurrence so exact upsample boundaries select the same
+    // source word as the native path.
+    let mut source_y = box_top + scale_y * 0.5;
+    for _ in 0..dst_h {
+        let source_y_index = source_y.floor() as i64;
+        let source_y_index = source_y_index.clamp(0, last_y) as usize;
+        let mut source_x = box_left + scale_x * 0.5;
+        for _ in 0..dst_w {
+            let source_x_index = source_x.floor() as i64;
+            let source_x_index = source_x_index.clamp(0, last_x) as usize;
+            let source_start = (source_y_index * source_width as usize + source_x_index) * 4;
+            output.extend_from_slice(&source_bytes[source_start..source_start + 4]);
+            source_x += scale_x;
+        }
+        source_y += scale_y;
+    }
+    raw_to_dynamic_owned(output, dst_w, dst_h, 4)
+}
+
 fn pil_resize_f_boxed_with_fma<F: F64MulAdd, const UNROLL_EIGHT: bool>(
     img: &DynamicImage,
     dst_w: u32,
@@ -112,41 +163,19 @@ fn pil_resize_f_boxed_with_fma<F: F64MulAdd, const UNROLL_EIGHT: bool>(
     let need_vertical = dst_h != source_height || box_top != 0.0 || box_bottom != dst_h as f64;
 
     if matches!(filter, ResampleFilter::Nearest) {
-        if source_width == dst_w
-            && source_height == dst_h
-            && f_boxed_nearest_axis_maps_identity(source_width, dst_w, box_left, box_right)
-            && f_boxed_nearest_axis_maps_identity(source_height, dst_h, box_top, box_bottom)
-        {
-            // The fractional box can still select the same scalar sample at
-            // every destination coordinate. A single owned copy then has the
-            // same bytes as the general gather path and avoids its per-pixel
-            // coordinate and output loops.
-            return img.clone();
-        }
-        let scale_x = (box_right as f32 - box_left as f32) as f64 / f64::from(dst_w);
-        let scale_y = (box_bottom as f32 - box_top as f32) as f64 / f64::from(dst_h);
-        let last_x = i64::from(source_width - 1);
-        let last_y = i64::from(source_height - 1);
-        let mut output = Vec::with_capacity(output_len);
-        // Pillow's nearest boxed F resize also reaches ImagingScaleAffine,
-        // whose coordinates advance cumulatively from one pixel to the next.
-        // Keep that recurrence so exact upsample boundaries select the same
-        // source word as the native path.
-        let mut source_y = box_top + scale_y * 0.5;
-        for _ in 0..dst_h {
-            let source_y_index = source_y.floor() as i64;
-            let source_y_index = source_y_index.clamp(0, last_y) as usize;
-            let mut source_x = box_left + scale_x * 0.5;
-            for _ in 0..dst_w {
-                let source_x_index = source_x.floor() as i64;
-                let source_x_index = source_x_index.clamp(0, last_x) as usize;
-                let source_start = (source_y_index * source_width as usize + source_x_index) * 4;
-                output.extend_from_slice(&source_bytes[source_start..source_start + 4]);
-                source_x += scale_x;
-            }
-            source_y += scale_y;
-        }
-        return raw_to_dynamic_owned(output, dst_w, dst_h, 4);
+        return pil_resize_f_boxed_nearest(
+            img,
+            source_bytes,
+            source_width,
+            source_height,
+            dst_w,
+            dst_h,
+            box_left,
+            box_top,
+            box_right,
+            box_bottom,
+            output_len,
+        );
     }
 
     // Filtered resampling requires numeric samples and keeps Pillow's
