@@ -15,8 +15,6 @@ impl Drop for RestoreGpuDiagnostics {
 #[test]
 #[cfg(target_endian = "little")]
 fn native_masked_rgba_paste_matches_cpu_with_compact_gpu_shader() {
-    use crate::ops::paste::PasteSource;
-
     let Some(_) = native_gpu_result_or_skip(
         super::GpuPool::ensure_init(),
         "native masked RGBA GPU initialization failed",
@@ -43,60 +41,76 @@ fn native_masked_rgba_paste_matches_cpu_with_compact_gpu_shader() {
         .collect::<Vec<_>>();
     let positions = [(-1, -1), (2, 1)];
     for position in positions {
-        let source = Image::frombytes("RGBA", (5, 3), &source_bytes).unwrap();
-        let mask = Image::frombytes("L", (5, 3), &mask_bytes).unwrap();
-        let mut expected_image = Image::frombytes("RGBA", (7, 4), &destination_bytes).unwrap();
-        expected_image
-            .paste_at(
-                PasteSource::Image(Box::new(source.clone())),
-                Some(position),
-                Some(&mask),
-            )
-            .unwrap();
-        let expected = expected_image
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU masked RGBA Paste reference");
-
-        let mut actual_image = Image::frombytes("RGBA", (7, 4), &destination_bytes).unwrap();
-        actual_image
-            .paste_at(
-                PasteSource::Image(Box::new(source)),
-                Some(position),
-                Some(&mask),
-            )
-            .unwrap();
-        let actual = actual_image
-            .use_backend(Backend::Gpu)
-            .tobytes()
-            .expect("native GPU masked RGBA Paste");
-        assert_eq!(actual, expected, "masked RGBA Paste at {position:?}");
-
-        let receipt = Backend::take_pipeline_telemetry()
-            .expect("native RGBA Paste must publish GPU telemetry");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native masked RGBA GPU resources");
-        assert_eq!(resources.mode_conversion_count, 0);
-        assert_eq!(resources.upload_bytes, 112 + 60 + 16);
-        assert_eq!(resources.auxiliary_bytes, 60 + 16);
-        assert_eq!(resources.readback_bytes, 112);
-
-        let shader_dispatches = Backend::take_gpu_shader_coverage();
-        assert_eq!(shader_dispatches.len(), 1);
-        assert_eq!(
-            shader_dispatches[0].variant_name,
-            "__internal_paste_native_masked_rgba"
+        assert_native_masked_rgba_paste_case(
+            position,
+            &source_bytes,
+            &destination_bytes,
+            &mask_bytes,
         );
-        assert_eq!(
-            shader_dispatches[0].shader_file,
-            "paste_native_masked_rgba.wgsl"
-        );
-        assert_eq!(shader_dispatches[0].dispatches, 1);
-        assert_eq!(shader_dispatches[0].workgroups, 1);
     }
+}
+
+fn assert_native_masked_rgba_paste_case(
+    position: (i32, i32),
+    source_bytes: &[u8],
+    destination_bytes: &[u8],
+    mask_bytes: &[u8],
+) {
+    use crate::ops::paste::PasteSource;
+
+    let source = Image::frombytes("RGBA", (5, 3), source_bytes).unwrap();
+    let mask = Image::frombytes("L", (5, 3), mask_bytes).unwrap();
+    let mut expected_image = Image::frombytes("RGBA", (7, 4), destination_bytes).unwrap();
+    expected_image
+        .paste_at(
+            PasteSource::Image(Box::new(source.clone())),
+            Some(position),
+            Some(&mask),
+        )
+        .unwrap();
+    let expected = expected_image
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU masked RGBA Paste reference");
+
+    let mut actual_image = Image::frombytes("RGBA", (7, 4), destination_bytes).unwrap();
+    actual_image
+        .paste_at(
+            PasteSource::Image(Box::new(source)),
+            Some(position),
+            Some(&mask),
+        )
+        .unwrap();
+    let actual = actual_image
+        .use_backend(Backend::Gpu)
+        .tobytes()
+        .expect("native GPU masked RGBA Paste");
+    assert_eq!(actual, expected, "masked RGBA Paste at {position:?}");
+
+    let receipt =
+        Backend::take_pipeline_telemetry().expect("native RGBA Paste must publish GPU telemetry");
+    assert_eq!(receipt.0, Some(Backend::Gpu));
+    assert_eq!(receipt.1, Backend::Gpu);
+    assert_eq!(receipt.6, Some(1));
+    assert_eq!(receipt.7, None);
+    let resources = receipt.8.expect("native masked RGBA GPU resources");
+    assert_eq!(resources.mode_conversion_count, 0);
+    assert_eq!(resources.upload_bytes, 112 + 60 + 16);
+    assert_eq!(resources.auxiliary_bytes, 60 + 16);
+    assert_eq!(resources.readback_bytes, 112);
+
+    let shader_dispatches = Backend::take_gpu_shader_coverage();
+    assert_eq!(shader_dispatches.len(), 1);
+    assert_eq!(
+        shader_dispatches[0].variant_name,
+        "__internal_paste_native_masked_rgba"
+    );
+    assert_eq!(
+        shader_dispatches[0].shader_file,
+        "paste_native_masked_rgba.wgsl"
+    );
+    assert_eq!(shader_dispatches[0].dispatches, 1);
+    assert_eq!(shader_dispatches[0].workgroups, 1);
 }
 
 #[test]
