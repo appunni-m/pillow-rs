@@ -254,6 +254,7 @@ mod pipeline_fusion;
 mod point_merge;
 mod projective_filtered;
 mod projective_nearest_execution;
+mod projective_nearest_execution_cases;
 mod projective_nearest_proofs;
 mod putalpha_planners;
 mod readback;

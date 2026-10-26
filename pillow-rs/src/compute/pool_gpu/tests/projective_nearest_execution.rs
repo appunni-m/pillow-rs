@@ -1,3 +1,9 @@
+use super::projective_nearest_execution_cases::{
+    byte_projective_fractional_cases, byte_projective_integer_affine_cases,
+    byte_projective_nearest_byte_modes, byte_projective_nearest_palette_modes,
+    byte_projective_nearest_proven_cases, byte_projective_nonconstant_denominator_cases,
+    byte_projective_quad_mesh_cases,
+};
 use super::*;
 
 #[test]
@@ -66,116 +72,12 @@ fn indexed_projective_nearest_native_gpu_preserves_index_bytes() {
 #[test]
 fn byte_projective_nearest_proven_native_gpu_preserves_pixels() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    for (mode, channels) in [
-        ("L", 1usize),
-        ("LA", 2usize),
-        ("RGB", 3usize),
-        ("RGBA", 4usize),
-    ] {
+    for (mode, channels) in byte_projective_nearest_byte_modes() {
         let bytes = (0..16 * 16 * channels)
             .map(|index| (index * 29 + 7) as u8)
             .collect::<Vec<_>>();
         let source = Image::frombytes(mode, (16, 16), &bytes).expect("byte source");
-        let cases = [
-            (
-                2,
-                TransformData::Affine(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
-            ),
-            (
-                2,
-                TransformData::Affine(vec![1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
-            ),
-            (
-                2,
-                TransformData::Affine(vec![0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
-            ),
-            (
-                2,
-                TransformData::Affine(vec![1.0, 0.0, -1.0, 0.0, 1.0, -1.0, 0.0, 0.0]),
-            ),
-            (
-                2,
-                TransformData::Affine(vec![-1.0, 0.0, 8.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
-            ),
-            (
-                2,
-                TransformData::Affine(vec![1.0, 0.0, 0.0, 0.0, -1.0, 8.0, 0.0, 0.0]),
-            ),
-            (
-                2,
-                TransformData::Affine(vec![-1.0, 0.0, 8.0, 0.0, -1.0, 8.0, 0.0, 0.0]),
-            ),
-            (
-                2,
-                TransformData::Affine(vec![0.0, -1.0, 8.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
-            ),
-            (
-                2,
-                TransformData::Affine(vec![0.0, 1.0, 0.0, -1.0, 0.0, 8.0, 0.0, 0.0]),
-            ),
-            (
-                2,
-                TransformData::Affine(vec![0.0, -1.0, 8.0, -1.0, 0.0, 8.0, 0.0, 0.0]),
-            ),
-            (
-                3,
-                TransformData::Affine(vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0]),
-            ),
-            (
-                3,
-                TransformData::Affine(vec![0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 8.0, 0.0]),
-            ),
-            (
-                3,
-                TransformData::Affine(vec![3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0]),
-            ),
-            (
-                3,
-                TransformData::Affine(vec![-1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0]),
-            ),
-            (
-                4,
-                TransformData::Mesh(vec![(
-                    vec![0.0, 0.0, 8.0, 8.0],
-                    vec![0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 8.0, 0.0],
-                )]),
-            ),
-            (
-                4,
-                TransformData::Mesh(vec![(
-                    vec![0.0, 0.0, 8.0, 8.0],
-                    vec![1.0, 1.0, 1.0, 9.0, 9.0, 9.0, 9.0, 1.0],
-                )]),
-            ),
-            (
-                4,
-                TransformData::Mesh(vec![(
-                    vec![0.0, 0.0, 8.0, 8.0],
-                    vec![-1.0, -1.0, -1.0, 7.0, 7.0, 7.0, 7.0, -1.0],
-                )]),
-            ),
-            (
-                4,
-                TransformData::Mesh(vec![(
-                    vec![0.0, 0.0, 8.0, 8.0],
-                    vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0],
-                )]),
-            ),
-            (
-                4,
-                TransformData::Mesh(vec![(
-                    vec![0.0, 0.0, 8.0, 8.0],
-                    vec![3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0],
-                )]),
-            ),
-            (
-                4,
-                TransformData::Mesh(vec![(
-                    vec![0.0, 0.0, 8.0, 8.0],
-                    vec![-1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0],
-                )]),
-            ),
-        ];
+        let cases = byte_projective_nearest_proven_cases();
         for (method, data) in cases {
             let transformed = source
                 .transform_public((8, 8), method, Some(data), 0, 0, None)
@@ -218,39 +120,8 @@ fn byte_projective_nearest_proven_native_gpu_preserves_pixels() {
 #[test]
 fn byte_projective_integer_affine_nearest_native_gpu_preserves_pixels() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let cases = [
-        (
-            (9u32, 7u32),
-            (4u32, 4u32),
-            [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0],
-            251u8,
-        ),
-        (
-            (9u32, 7u32),
-            (7u32, 5u32),
-            [-2.0, 1.0, 8.0, 1.0, 2.0, -3.0, 0.0, 0.0],
-            251u8,
-        ),
-        (
-            (9u32, 7u32),
-            (6u32, 5u32),
-            [1.0, 2.0, -3.0, 2.0, -1.0, 6.0, 0.0, 0.0],
-            17u8,
-        ),
-        (
-            (13u32, 11u32),
-            (9u32, 7u32),
-            [3.0, -1.0, 5.0, 1.0, 2.0, -4.0, 0.0, 0.0],
-            199u8,
-        ),
-    ];
-    for (mode, channels) in [
-        ("L", 1usize),
-        ("LA", 2usize),
-        ("RGB", 3usize),
-        ("RGBA", 4usize),
-        ("P", 1usize),
-    ] {
+    let cases = byte_projective_integer_affine_cases();
+    for (mode, channels) in byte_projective_nearest_palette_modes() {
         for (seed, (source_size, output_size, matrix, fill)) in cases.iter().enumerate() {
             let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
                 .map(|index| (index * (29 + 2 * seed) + 7 * channels + seed) as u8)
@@ -323,39 +194,8 @@ fn byte_projective_integer_affine_nearest_native_gpu_preserves_pixels() {
 #[test]
 fn byte_projective_fractional_nearest_native_gpu_preserves_pixels() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let cases = [
-        (
-            (9u32, 8u32),
-            (8u32, 7u32),
-            [1.0, 0.0, 0.25, 0.0, 1.0, 0.25, 0.0, 0.0],
-            251u8,
-        ),
-        (
-            (16u32, 16u32),
-            (13u32, 11u32),
-            [0.5, 0.25, 0.125, -0.25, 0.5, 0.375, 0.0, 0.0],
-            17u8,
-        ),
-        (
-            (5u32, 7u32),
-            (9u32, 6u32),
-            [0.75, -0.125, 0.25, 0.125, 0.625, 0.375, 0.0, 0.0],
-            199u8,
-        ),
-        (
-            (32u32, 32u32),
-            (16u32, 16u32),
-            [1.0, 0.125, 0.25, -0.125, 1.0, 0.375, 0.0, 0.0],
-            61u8,
-        ),
-    ];
-    for (mode, channels) in [
-        ("L", 1usize),
-        ("LA", 2usize),
-        ("RGB", 3usize),
-        ("RGBA", 4usize),
-        ("P", 1usize),
-    ] {
+    let cases = byte_projective_fractional_cases();
+    for (mode, channels) in byte_projective_nearest_palette_modes() {
         for (case_index, (source_size, output_size, matrix, fill)) in cases.iter().enumerate() {
             let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
                 .map(|index| (index * (31 + case_index * 7) + 13 + channels) as u8)
@@ -429,32 +269,8 @@ fn byte_projective_fractional_nearest_native_gpu_preserves_pixels() {
 #[test]
 fn byte_projective_nonconstant_denominator_nearest_native_gpu_preserves_pixels() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let cases = [
-        (
-            (9u32, 8u32),
-            (8u32, 7u32),
-            [1.0, 0.0, 8.0, 0.0, 1.0, 4.0, -0.125, 0.015625],
-            251u8,
-        ),
-        (
-            (16u32, 16u32),
-            (8u32, 7u32),
-            [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0 / 1024.0, 1.0 / 1024.0],
-            17u8,
-        ),
-        (
-            (16u32, 16u32),
-            (8u32, 7u32),
-            [1.0, 0.0, -2.0, 0.0, 1.0, -1.0, 1.0 / 32.0, -1.0 / 32.0],
-            83u8,
-        ),
-    ];
-    for (mode, channels) in [
-        ("L", 1usize),
-        ("LA", 2usize),
-        ("RGB", 3usize),
-        ("RGBA", 4usize),
-    ] {
+    let cases = byte_projective_nonconstant_denominator_cases();
+    for (mode, channels) in byte_projective_nearest_byte_modes() {
         for (case_index, (source_size, output_size, matrix, fill)) in cases.iter().enumerate() {
             let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
                 .map(|index| (index * (37 + case_index * 11) + 13 + channels) as u8)
@@ -554,63 +370,8 @@ fn byte_projective_nonconstant_denominator_nearest_native_gpu_preserves_pixels()
 #[test]
 fn byte_projective_quad_mesh_nearest_proof_native_gpu_preserves_pixels() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let cases = [
-        (
-            3,
-            TransformData::Affine(vec![0.0, 0.0, 9.0, 0.0, 9.0, 6.0, 0.0, 6.0]),
-            (9, 6),
-        ),
-        (
-            3,
-            TransformData::Affine(vec![1.25, 1.0, 1.25, 7.0, 10.25, 7.0, 10.0, 1.0]),
-            (9, 6),
-        ),
-        (
-            3,
-            TransformData::Affine(vec![1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0]),
-            (9, 6),
-        ),
-        (
-            3,
-            TransformData::Affine(vec![2.0, 1.0, 2.0, 7.0, 8.0, 7.0, 8.0, 1.0]),
-            (9, 6),
-        ),
-        (
-            3,
-            TransformData::Affine(vec![2.0, 1.0, 8.0, 1.0, 8.0, 10.0, 2.0, 10.0]),
-            (9, 6),
-        ),
-        (
-            4,
-            TransformData::Mesh(vec![(
-                vec![0.0, 0.0, 9.0, 6.0],
-                vec![0.0, 0.0, 0.0, 6.0, 9.0, 6.0, 9.0, 0.0],
-            )]),
-            (9, 6),
-        ),
-        (
-            4,
-            TransformData::Mesh(vec![(
-                vec![0.0, 0.0, 9.0, 6.0],
-                vec![1.25, 1.0, 1.25, 7.0, 10.25, 7.0, 10.0, 1.0],
-            )]),
-            (9, 6),
-        ),
-        (
-            4,
-            TransformData::Mesh(vec![(
-                vec![0.0, 0.0, 9.0, 6.0],
-                vec![1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0],
-            )]),
-            (9, 6),
-        ),
-    ];
-    for (mode, channels) in [
-        ("L", 1usize),
-        ("LA", 2usize),
-        ("RGB", 3usize),
-        ("RGBA", 4usize),
-    ] {
+    let cases = byte_projective_quad_mesh_cases();
+    for (mode, channels) in byte_projective_nearest_byte_modes() {
         let source_size = (16u32, 16u32);
         let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
             .map(|index| (index * 29 + 7 + channels) as u8)

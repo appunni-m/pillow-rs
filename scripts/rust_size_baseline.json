@@ -142,36 +142,6 @@
       "signature": "fn projective_filtered_integer_constants_native_gpu_preserve_pixels() {"
     },
     {
-      "lines": 102,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs",
-      "signature": "fn byte_projective_fractional_nearest_native_gpu_preserves_pixels() {"
-    },
-    {
-      "lines": 101,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs",
-      "signature": "fn byte_projective_integer_affine_nearest_native_gpu_preserves_pixels() {"
-    },
-    {
-      "lines": 148,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs",
-      "signature": "fn byte_projective_nearest_proven_native_gpu_preserves_pixels() {"
-    },
-    {
-      "lines": 121,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs",
-      "signature": "fn byte_projective_nonconstant_denominator_nearest_native_gpu_preserves_pixels() {"
-    },
-    {
-      "lines": 113,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs",
-      "signature": "fn byte_projective_quad_mesh_nearest_proof_native_gpu_preserves_pixels() {"
-    },
-    {
       "lines": 111,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/readback.rs",
@@ -344,11 +314,6 @@
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/tests/projective_filtered.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs": {
       "owner": "lazytrot",
       "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
