@@ -120,75 +120,113 @@ fn rgba_radius_one_direct_passes_match_generic_simd() {
             let source: Vec<u8> = (0..dimensions.total_bytes())
                 .map(|index| (index.wrapping_mul(73).wrapping_add(29) % 256) as u8)
                 .collect();
-
-            let mut horizontal_expected = dimensions.alloc_buffer();
-            super::simd_blur_rows::<false>(
+            assert_rgba_radius_one_horizontal_case(
                 &source,
-                &mut horizontal_expected,
-                width as usize,
-                height as usize,
-                4,
-                1,
+                &dimensions,
+                width,
+                height,
+                radius,
                 whole_weight,
                 fractional_weight,
             );
-            let mut horizontal_actual = dimensions.alloc_buffer();
-            super::simd_rgba_horizontal_radius_one_rows(
+            assert_rgba_radius_one_vertical_case(
                 &source,
-                &mut horizontal_actual,
-                width as usize,
-                height as usize,
+                &dimensions,
+                width,
+                height,
+                radius,
                 whole_weight,
                 fractional_weight,
-            );
-            assert_eq!(
-                horizontal_actual, horizontal_expected,
-                "horizontal dimensions={width}x{height} radius={radius}"
-            );
-
-            let mut transposed = dimensions.alloc_buffer();
-            super::simd_transpose_interleaved_rows(
-                &source,
-                &mut transposed,
-                width as usize,
-                height as usize,
-                4,
-            );
-            let mut transposed_blurred = dimensions.alloc_buffer();
-            super::simd_blur_rows::<false>(
-                &transposed,
-                &mut transposed_blurred,
-                height as usize,
-                width as usize,
-                4,
-                1,
-                whole_weight,
-                fractional_weight,
-            );
-            let mut vertical_expected = dimensions.alloc_buffer();
-            super::simd_transpose_interleaved_rows(
-                &transposed_blurred,
-                &mut vertical_expected,
-                height as usize,
-                width as usize,
-                4,
-            );
-
-            let mut vertical_actual = dimensions.alloc_buffer();
-            super::simd_rgba_vertical_radius_one_rows(
-                &source,
-                &mut vertical_actual,
-                width as usize,
-                height as usize,
-                whole_weight,
-                fractional_weight,
-            );
-            assert_eq!(
-                vertical_actual, vertical_expected,
-                "vertical dimensions={width}x{height} radius={radius}"
             );
         }
     }
+}
+
+fn assert_rgba_radius_one_horizontal_case(
+    source: &[u8],
+    dimensions: &crate::checked_dims::CheckedDims,
+    width: u32,
+    height: u32,
+    radius: f32,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let mut horizontal_expected = dimensions.alloc_buffer();
+    super::simd_blur_rows::<false>(
+        source,
+        &mut horizontal_expected,
+        width as usize,
+        height as usize,
+        4,
+        1,
+        whole_weight,
+        fractional_weight,
+    );
+    let mut horizontal_actual = dimensions.alloc_buffer();
+    super::simd_rgba_horizontal_radius_one_rows(
+        source,
+        &mut horizontal_actual,
+        width as usize,
+        height as usize,
+        whole_weight,
+        fractional_weight,
+    );
+    assert_eq!(
+        horizontal_actual, horizontal_expected,
+        "horizontal dimensions={width}x{height} radius={radius}"
+    );
+}
+
+fn assert_rgba_radius_one_vertical_case(
+    source: &[u8],
+    dimensions: &crate::checked_dims::CheckedDims,
+    width: u32,
+    height: u32,
+    radius: f32,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let mut transposed = dimensions.alloc_buffer();
+    super::simd_transpose_interleaved_rows(
+        source,
+        &mut transposed,
+        width as usize,
+        height as usize,
+        4,
+    );
+    let mut transposed_blurred = dimensions.alloc_buffer();
+    super::simd_blur_rows::<false>(
+        &transposed,
+        &mut transposed_blurred,
+        height as usize,
+        width as usize,
+        4,
+        1,
+        whole_weight,
+        fractional_weight,
+    );
+    let mut vertical_expected = dimensions.alloc_buffer();
+    super::simd_transpose_interleaved_rows(
+        &transposed_blurred,
+        &mut vertical_expected,
+        height as usize,
+        width as usize,
+        4,
+    );
+
+    let mut vertical_actual = dimensions.alloc_buffer();
+    super::simd_rgba_vertical_radius_one_rows(
+        source,
+        &mut vertical_actual,
+        width as usize,
+        height as usize,
+        whole_weight,
+        fractional_weight,
+    );
+    assert_eq!(
+        vertical_actual, vertical_expected,
+        "vertical dimensions={width}x{height} radius={radius}"
+    );
 }
 
 #[test]
