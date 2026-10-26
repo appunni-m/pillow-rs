@@ -7,7 +7,7 @@ use super::prelude::{
     op_chops_overlay, op_chops_screen, op_chops_soft_light, op_chops_subtract,
     op_chops_subtract_modulo,
 };
-fn register_part_1(m: &mut Registry) {
+fn register_scaled_add_subtract(m: &mut Registry) {
     m.insert(
         "Add",
         gpu_entry!(
@@ -45,7 +45,9 @@ fn register_part_1(m: &mut Registry) {
             "subtract.wgsl"
         ),
     );
+}
 
+fn register_multiply_screen_darker(m: &mut Registry) {
     m.insert(
         "Multiply",
         gpu_entry!(
@@ -89,7 +91,7 @@ fn register_part_1(m: &mut Registry) {
     );
 }
 
-fn register_part_2(m: &mut Registry) {
+fn register_light_difference_ops(m: &mut Registry) {
     m.insert(
         "Lighter",
         gpu_entry!(
@@ -131,7 +133,9 @@ fn register_part_2(m: &mut Registry) {
             "overlay.wgsl"
         ),
     );
+}
 
+fn register_hard_soft_light_ops(m: &mut Registry) {
     m.insert(
         "HardLight",
         gpu_entry!(
@@ -161,7 +165,7 @@ fn register_part_2(m: &mut Registry) {
     );
 }
 
-fn register_part_3(m: &mut Registry) {
+fn register_modulo_arithmetic(m: &mut Registry) {
     m.insert(
         "AddModulo",
         gpu_entry!(
@@ -189,7 +193,9 @@ fn register_part_3(m: &mut Registry) {
             "subtract_modulo.wgsl"
         ),
     );
+}
 
+fn register_logical_ops(m: &mut Registry) {
     m.insert(
         "LogicalAnd",
         gpu_entry!(
@@ -233,7 +239,7 @@ fn register_part_3(m: &mut Registry) {
     );
 }
 
-fn register_part_4(m: &mut Registry) {
+fn register_constant_offset(m: &mut Registry) {
     m.insert(
         "Constant",
         gpu_entry!(
@@ -267,7 +273,9 @@ fn register_part_4(m: &mut Registry) {
             "offset.wgsl"
         ),
     );
+}
 
+fn register_duplicate_invert(m: &mut Registry) {
     m.insert(
         "Duplicate",
         gpu_entry!(
@@ -304,9 +312,13 @@ fn register_part_4(m: &mut Registry) {
 }
 
 pub(super) fn register(m: &mut Registry) -> Result<(), PilError> {
-    register_part_1(m);
-    register_part_2(m);
-    register_part_3(m);
-    register_part_4(m);
+    register_scaled_add_subtract(m);
+    register_multiply_screen_darker(m);
+    register_light_difference_ops(m);
+    register_hard_soft_light_ops(m);
+    register_modulo_arithmetic(m);
+    register_logical_ops(m);
+    register_constant_offset(m);
+    register_duplicate_invert(m);
     Ok(())
 }
