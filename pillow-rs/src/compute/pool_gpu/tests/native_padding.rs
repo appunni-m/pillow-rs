@@ -12,26 +12,7 @@ fn gpu_packed_luma_pad_admits_identity_and_aligned_native_l_resize() {
         color: Some((173, 0, 0, 255)),
         centering: (0.5, 0.5),
     };
-    assert!(super::gpu_packed_luma_pad_input(
-        std::slice::from_ref(&identity),
-        &luma,
-        None
-    ));
-    assert!(super::gpu_packed_luma_pad_input(
-        std::slice::from_ref(&identity),
-        &luma,
-        Some("L")
-    ));
-    assert!(!super::gpu_packed_luma_pad_input(
-        std::slice::from_ref(&identity),
-        &luma,
-        Some("RGB")
-    ));
-    assert!(!super::gpu_packed_luma_pad_input(
-        &[identity.clone(), PipelineOp::Duplicate],
-        &luma,
-        Some("L")
-    ));
+    assert_gpu_packed_luma_identity_pad_admission(&identity, &luma);
 
     let aligned_luma = DynamicImage::ImageLuma8(
         GrayImage::from_raw(8, 6, (0..48).map(|sample| sample as u8).collect()).unwrap(),
@@ -43,16 +24,7 @@ fn gpu_packed_luma_pad_admits_identity_and_aligned_native_l_resize() {
         color: Some((173, 0, 0, 255)),
         centering: (0.5, 0.5),
     };
-    assert!(super::gpu_packed_luma_pad_input(
-        std::slice::from_ref(&aligned_resize),
-        &aligned_luma,
-        Some("L")
-    ));
-    assert!(super::gpu_packed_luma_pad_dispatch_supported(
-        &aligned_resize,
-        aligned_luma.dimensions(),
-        65_535
-    ));
+    assert_gpu_packed_luma_aligned_resize_pad_admission(&aligned_resize, &aligned_luma);
 
     let resized = PipelineOp::Pad {
         w: 5,
@@ -61,18 +33,68 @@ fn gpu_packed_luma_pad_admits_identity_and_aligned_native_l_resize() {
         color: Some((173, 0, 0, 255)),
         centering: (0.5, 0.5),
     };
-    assert!(!super::gpu_packed_luma_pad_input(
-        std::slice::from_ref(&resized),
-        &luma,
+    assert_gpu_packed_luma_pad_rejections(&identity, &resized, &luma);
+}
+
+#[cfg(target_endian = "little")]
+fn assert_gpu_packed_luma_identity_pad_admission(pad: &PipelineOp, luma: &DynamicImage) {
+    assert!(super::gpu_packed_luma_pad_input(
+        std::slice::from_ref(pad),
+        luma,
+        None
+    ));
+    assert!(super::gpu_packed_luma_pad_input(
+        std::slice::from_ref(pad),
+        luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_luma_pad_input(
-        std::slice::from_ref(&identity),
+        std::slice::from_ref(pad),
+        luma,
+        Some("RGB")
+    ));
+    assert!(!super::gpu_packed_luma_pad_input(
+        &[pad.clone(), PipelineOp::Duplicate],
+        luma,
+        Some("L")
+    ));
+}
+
+#[cfg(target_endian = "little")]
+fn assert_gpu_packed_luma_aligned_resize_pad_admission(
+    pad: &PipelineOp,
+    aligned_luma: &DynamicImage,
+) {
+    assert!(super::gpu_packed_luma_pad_input(
+        std::slice::from_ref(pad),
+        aligned_luma,
+        Some("L")
+    ));
+    assert!(super::gpu_packed_luma_pad_dispatch_supported(
+        pad,
+        aligned_luma.dimensions(),
+        65_535
+    ));
+}
+
+#[cfg(target_endian = "little")]
+fn assert_gpu_packed_luma_pad_rejections(
+    identity: &PipelineOp,
+    resized: &PipelineOp,
+    luma: &DynamicImage,
+) {
+    assert!(!super::gpu_packed_luma_pad_input(
+        std::slice::from_ref(resized),
+        luma,
+        Some("L")
+    ));
+    assert!(!super::gpu_packed_luma_pad_input(
+        std::slice::from_ref(identity),
         &DynamicImage::ImageRgb8(RgbImage::from_raw(3, 2, vec![11; 18]).unwrap()),
         Some("L")
     ));
     assert!(!super::gpu_packed_luma_pad_input(
-        std::slice::from_ref(&identity),
+        std::slice::from_ref(identity),
         &DynamicImage::ImageLuma8(GrayImage::new(0, 2)),
         Some("L")
     ));
