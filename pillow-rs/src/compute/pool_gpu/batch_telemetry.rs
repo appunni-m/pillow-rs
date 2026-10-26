@@ -1,5 +1,17 @@
 use super::*;
 
+fn padded_input_transfer_bytes(
+    width: u32,
+    height: u32,
+    channels: u8,
+    error_message: &'static str,
+) -> Result<u64, PilError> {
+    let raw_bytes = CheckedDims::new(width, height, channels)?.total_bytes();
+    let transfer_bytes = padded_transfer_bytes(raw_bytes)
+        .ok_or_else(|| PilError::ValueError(error_message.into()))?;
+    u64::try_from(transfer_bytes).map_err(|_| PilError::ValueError(error_message.into()))
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct GpuBatchResourceTelemetryOptions<'a> {
     pub(super) input_dimensions: (u32, u32),
@@ -42,30 +54,15 @@ impl GpuBatchResourceTelemetryOptions<'_> {
         if self.output_only_constant || self.full_luma_putdata {
             Ok(0)
         } else if let Some(channels) = self.native_extract_band_channels {
-            let raw_bytes = CheckedDims::new(width, height, channels)?.total_bytes();
-            let transfer_bytes = padded_transfer_bytes(raw_bytes)
-                .ok_or_else(|| PilError::ValueError("GPU channel input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU channel input is too large".into()))
+            padded_input_transfer_bytes(width, height, channels, "GPU channel input is too large")
         } else if self.native_grayscale_rgb_input || self.native_rgb_compact_input {
-            let raw_bytes = CheckedDims::new(width, height, 3)?.total_bytes();
-            let transfer_bytes = padded_transfer_bytes(raw_bytes)
-                .ok_or_else(|| PilError::ValueError("GPU native RGB input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU native RGB input is too large".into()))
+            padded_input_transfer_bytes(width, height, 3, "GPU native RGB input is too large")
         } else if self.native_alpha_convert_input {
-            let raw_bytes = CheckedDims::new(width, height, 2)?.total_bytes();
-            let transfer_bytes = padded_transfer_bytes(raw_bytes)
-                .ok_or_else(|| PilError::ValueError("GPU native LA input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU native LA input is too large".into()))
+            padded_input_transfer_bytes(width, height, 2, "GPU native LA input is too large")
         } else if self.native_sharpness_l_input {
             compact_luma8_transfer_bytes(width, height)
         } else if self.packed_native_byte_filter && matches!(self.mode, Some("LA")) {
-            let raw_bytes = CheckedDims::new(width, height, 2)?.total_bytes();
-            padded_transfer_bytes(raw_bytes)
-                .and_then(|bytes| u64::try_from(bytes).ok())
-                .ok_or_else(|| PilError::ValueError("GPU native LA input is too large".into()))
+            padded_input_transfer_bytes(width, height, 2, "GPU native LA input is too large")
         } else if self.packed_native_byte_filter {
             compact_luma8_transfer_bytes(width, height)
         } else if self.packed_la_pad {
@@ -73,29 +70,13 @@ impl GpuBatchResourceTelemetryOptions<'_> {
         } else if self.packed_luma_pad {
             compact_luma8_transfer_bytes(width, height)
         } else if self.native_sharpness_la_input || self.native_la_transform_output {
-            let raw_bytes = CheckedDims::new(width, height, 2)?.total_bytes();
-            let transfer_bytes = padded_transfer_bytes(raw_bytes)
-                .ok_or_else(|| PilError::ValueError("GPU native LA input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU native LA input is too large".into()))
+            padded_input_transfer_bytes(width, height, 2, "GPU native LA input is too large")
         } else if self.native_sharpness_rgb_input || self.native_reduce_rgb_input {
-            let raw_bytes = CheckedDims::new(width, height, 3)?.total_bytes();
-            let transfer_bytes = padded_transfer_bytes(raw_bytes)
-                .ok_or_else(|| PilError::ValueError("GPU native RGB input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU native RGB input is too large".into()))
+            padded_input_transfer_bytes(width, height, 3, "GPU native RGB input is too large")
         } else if let Some(channels) = self.native_expand_channels {
-            let raw_bytes = CheckedDims::new(width, height, channels)?.total_bytes();
-            let transfer_bytes = padded_transfer_bytes(raw_bytes)
-                .ok_or_else(|| PilError::ValueError("GPU Expand input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU Expand input is too large".into()))
+            padded_input_transfer_bytes(width, height, channels, "GPU Expand input is too large")
         } else if let Some(channels) = self.native_cover_input_channels {
-            let raw_bytes = CheckedDims::new(width, height, channels)?.total_bytes();
-            let transfer_bytes = padded_transfer_bytes(raw_bytes)
-                .ok_or_else(|| PilError::ValueError("GPU Cover input is too large".into()))?;
-            u64::try_from(transfer_bytes)
-                .map_err(|_| PilError::ValueError("GPU Cover input is too large".into()))
+            padded_input_transfer_bytes(width, height, channels, "GPU Cover input is too large")
         } else if self.packed_luma_colorize
             || self.packed_luma_convert
             || self.packed_luma_transform_input
