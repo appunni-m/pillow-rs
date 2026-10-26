@@ -40,6 +40,54 @@ fn putalpha_conversion_target(mode: &str) -> Option<&'static str> {
     }
 }
 
+#[inline(always)]
+fn eager_getchannel_tiny_rgb(
+    image: &DynamicImage,
+    mode: &str,
+    channel: u8,
+    backend: crate::compute::Backend,
+) -> Result<Option<DynamicImage>, PilError> {
+    let operation = PipelineOp::ExtractBand { index: channel };
+    match backend {
+        crate::compute::Backend::Cpu => {
+            Ok(Some(crate::compute::execute_eager_cpu_image_operation(
+                "ExtractBand",
+                image,
+                // The ExtractBand kernel records its output allocation;
+                // manual accounting would count it twice.
+                false,
+                || crate::compute::registry::execute_cpu(&operation, image, Some(mode)),
+            )?))
+        }
+        crate::compute::Backend::Simd => {
+            crate::compute::execute_eager_simd_image_operation("ExtractBand", image, || {
+                let (width, height) = image.dimensions();
+                let mut output =
+                    crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?
+                        .alloc_buffer();
+                let (vector_blocks, scalar_tail, path) = crate::compute::simd_extract_band_into(
+                    image,
+                    channel,
+                    Some(mode),
+                    &mut output,
+                )?;
+                let output =
+                    crate::raster::GrayImage::from_raw(width, height, output).ok_or_else(|| {
+                        PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into())
+                    })?;
+                Ok((
+                    DynamicImage::ImageLuma8(output),
+                    vector_blocks,
+                    scalar_tail,
+                    path,
+                ))
+            })
+            .map(Some)
+        }
+        crate::compute::Backend::Gpu => Ok(None),
+    }
+}
+
 impl Image {
     /// Extracts one channel as an `L` image.
     ///
@@ -58,10 +106,12 @@ impl Image {
         // Validate channel index (requires materialized image for band count)
         let img = self.materialized_shared()?;
         let bands = img.color().channel_count();
-        if channel < 0 || channel >= bands as i32 {
-            return Err(PilError::ValueError("band index out of range".into()));
-        }
-        let ch = channel as usize;
+        let ch = usize::try_from(channel)
+            .ok()
+            .filter(|&channel| channel < usize::from(bands))
+            .ok_or_else(|| PilError::ValueError("band index out of range".into()))?;
+        let backend_channel =
+            u8::try_from(ch).expect("image channel count fits in a byte-sized index");
         // Pillow treats a single-band P image's only band as the palette-index
         // image itself, preserving its mode and retained palette. Extracting
         // it through the generic raster path would expand the indices to L and
@@ -105,58 +155,8 @@ impl Image {
             && u64::from(img.width()) * u64::from(img.height()) <= 256
             && let Some((backend, _)) = crate::compute::preferred_active_backend()?
         {
-            let operation = PipelineOp::ExtractBand { index: ch as u8 };
-            let extracted = match backend {
-                crate::compute::Backend::Cpu => {
-                    Some(crate::compute::execute_eager_cpu_image_operation(
-                        "ExtractBand",
-                        img.as_ref(),
-                        // The ExtractBand kernel records its output
-                        // allocation; manual accounting would count it twice.
-                        false,
-                        || {
-                            crate::compute::registry::execute_cpu(
-                                &operation,
-                                img.as_ref(),
-                                Some(&mode),
-                            )
-                        },
-                    )?)
-                }
-                crate::compute::Backend::Simd => {
-                    Some(crate::compute::execute_eager_simd_image_operation(
-                        "ExtractBand",
-                        img.as_ref(),
-                        || {
-                            let (width, height) = img.dimensions();
-                            let mut output = crate::checked_dims::CheckedDims::new_allow_empty(
-                                width, height, 1,
-                            )?
-                            .alloc_buffer();
-                            let (vector_blocks, scalar_tail, path) =
-                                crate::compute::simd_extract_band_into(
-                                    img.as_ref(),
-                                    ch as u8,
-                                    Some(&mode),
-                                    &mut output,
-                                )?;
-                            let output = crate::raster::GrayImage::from_raw(width, height, output)
-                                .ok_or_else(|| {
-                                    PilError::InternalError(
-                                        "SIMD ExtractBand buffer shape mismatch".into(),
-                                    )
-                                })?;
-                            Ok((
-                                DynamicImage::ImageLuma8(output),
-                                vector_blocks,
-                                scalar_tail,
-                                path,
-                            ))
-                        },
-                    )?)
-                }
-                crate::compute::Backend::Gpu => None,
-            };
+            let extracted =
+                eager_getchannel_tiny_rgb(img.as_ref(), &mode, backend_channel, backend)?;
             if let Some(extracted) = extracted {
                 let mut result = Image::from_dynamic(extracted, None);
                 if let Image::Loaded(data) = &mut result {
@@ -177,7 +177,9 @@ impl Image {
             };
         let extracted = Image::push_op(
             &extraction_source,
-            PipelineOp::ExtractBand { index: ch as u8 },
+            PipelineOp::ExtractBand {
+                index: backend_channel,
+            },
         );
         Ok(match self.backend() {
             Some(backend) => extracted.use_backend(backend),
