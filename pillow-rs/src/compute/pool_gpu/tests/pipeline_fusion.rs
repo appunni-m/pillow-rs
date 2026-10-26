@@ -275,6 +275,12 @@ fn gpu_transpose_public_pa_chain_preserves_materialization_boundary() {
 
 #[test]
 fn ordered_f64_state_covers_subnormal_overflow_and_nan_boundaries() {
+    assert_ordered_f64_subnormal_states();
+    assert_ordered_f64_cancellation_state();
+    assert_ordered_f64_overflow_and_nan_states();
+}
+
+fn assert_ordered_f64_subnormal_states() {
     let smallest = gpu_f64_ordered_round(
         F64SignedMagnitude {
             magnitude: 1,
@@ -301,7 +307,9 @@ fn ordered_f64_state_covers_subnormal_overflow_and_nan_boundaries() {
     assert_eq!(underflow.magnitude, 0);
     assert!(underflow.negative);
     assert_eq!(gpu_f64_ordered_state_to_f32(underflow), Some(1u32 << 31));
+}
 
+fn assert_ordered_f64_cancellation_state() {
     let positive = gpu_f64_ordered_add_product(
         F64OrderedState {
             magnitude: 0,
@@ -321,7 +329,9 @@ fn ordered_f64_state_covers_subnormal_overflow_and_nan_boundaries() {
     assert_eq!(cancelled.magnitude, 0);
     assert!(!cancelled.negative);
     assert_eq!(gpu_f64_ordered_state_to_f32(cancelled), Some(0));
+}
 
+fn assert_ordered_f64_overflow_and_nan_states() {
     let positive_infinity = gpu_f64_ordered_add_product(
         F64OrderedState {
             magnitude: 0,
