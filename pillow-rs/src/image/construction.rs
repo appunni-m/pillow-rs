@@ -275,7 +275,74 @@ impl Image {
         mode: &str,
         color: (u8, u8, u8, u8),
     ) -> Result<Self, PilError> {
-        let img = match mode {
+        if mode == "P" {
+            // A tuple color allocates palette entry zero. Scalar P fills use
+            // `new_palette_index` because this resolved tuple no longer carries
+            // the Python argument's scalar-versus-tuple distinction.
+            return Ok(Image::Paletted(PalettedData {
+                indices: crate::raster::GrayImage::from_pixel(
+                    width,
+                    height,
+                    crate::raster::Luma([0u8]),
+                ),
+                // Pillow retains one structural RGB entry here. Keeping 768
+                // zero-padded bytes would make getpalette() invent trailing
+                // black entries now that palette length is exact.
+                palette: vec![color.0, color.1, color.2],
+                palette_alpha: Vec::new(),
+                source_format: None,
+                info: None,
+                exif: None,
+                materialized: materialization_cache(),
+            }));
+        }
+
+        let img = Self::new_dynamic_image(width, height, mode, color)?;
+        crate::compute::record_pipeline_allocation(img.as_bytes().len());
+        let explicit = if matches!(
+            mode,
+            "CMYK"
+                | "YCbCr"
+                | "LAB"
+                | "HSV"
+                | "I"
+                | "F"
+                | "RGBa"
+                | "La"
+                | "RGBX"
+                | "PA"
+                | "1"
+                | "I;16"
+                | "I;16L"
+                | "I;16B"
+                | "I;16N"
+        ) {
+            Some(mode.to_string())
+        } else {
+            None
+        };
+        let known_zero_fill = match mode {
+            "RGB" => color.0 == 0 && color.1 == 0 && color.2 == 0,
+            "CMYK" => color == (0, 0, 0, 0),
+            _ => false,
+        };
+        let mut image = Image::from_dynamic(img, explicit);
+        if known_zero_fill {
+            let Image::Loaded(data) = &mut image else {
+                unreachable!("RGB and CMYK constructors produce loaded images")
+            };
+            data.known_zero_fill = true;
+        }
+        Ok(image)
+    }
+
+    fn new_dynamic_image(
+        width: u32,
+        height: u32,
+        mode: &str,
+        color: (u8, u8, u8, u8),
+    ) -> Result<DynamicImage, PilError> {
+        let image = match mode {
             "RGB" => DynamicImage::ImageRgb8(crate::raster::RgbImage::from_pixel(
                 width,
                 height,
@@ -324,27 +391,6 @@ impl Image {
                 // PIL's new("1") stores the raw color value as-is.
                 crate::raster::Luma([color.0]),
             )),
-            // A tuple color allocates palette entry zero. Scalar P fills use
-            // `new_palette_index` because this resolved tuple no longer carries
-            // the Python argument's scalar-versus-tuple distinction.
-            "P" => {
-                return Ok(Image::Paletted(PalettedData {
-                    indices: crate::raster::GrayImage::from_pixel(
-                        width,
-                        height,
-                        crate::raster::Luma([0u8]),
-                    ),
-                    // Pillow retains one structural RGB entry here. Keeping
-                    // 768 zero-padded bytes would make getpalette() invent 255
-                    // trailing black entries now that palette length is exact.
-                    palette: vec![color.0, color.1, color.2],
-                    palette_alpha: Vec::new(),
-                    source_format: None,
-                    info: None,
-                    exif: None,
-                    materialized: materialization_cache(),
-                }));
-            }
             "CMYK" => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
                 width,
                 height,
@@ -376,41 +422,6 @@ impl Image {
             )),
             _ => return Err(PilError::ValueError("unrecognized image mode".into())),
         };
-        crate::compute::record_pipeline_allocation(img.as_bytes().len());
-        let explicit = if matches!(
-            mode,
-            "CMYK"
-                | "YCbCr"
-                | "LAB"
-                | "HSV"
-                | "I"
-                | "F"
-                | "RGBa"
-                | "La"
-                | "RGBX"
-                | "PA"
-                | "1"
-                | "I;16"
-                | "I;16L"
-                | "I;16B"
-                | "I;16N"
-        ) {
-            Some(mode.to_string())
-        } else {
-            None
-        };
-        let known_zero_fill = match mode {
-            "RGB" => color.0 == 0 && color.1 == 0 && color.2 == 0,
-            "CMYK" => color == (0, 0, 0, 0),
-            _ => false,
-        };
-        let mut image = Image::from_dynamic(img, explicit);
-        if known_zero_fill {
-            let Image::Loaded(data) = &mut image else {
-                unreachable!("RGB and CMYK constructors produce loaded images")
-            };
-            data.known_zero_fill = true;
-        }
         Ok(image)
     }
 

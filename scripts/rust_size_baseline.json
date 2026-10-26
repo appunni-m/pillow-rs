@@ -574,12 +574,6 @@
       "signature": "fn frombytes_with_data( mode: &str, size: (u32, u32), data: Cow<'_, [u8]>, ) -> Result<Self, PilError> {"
     },
     {
-      "lines": 117,
-      "occurrence": 1,
-      "path": "pillow-rs/src/image/construction.rs",
-      "signature": "pub fn new( width: u32, height: u32, mode: &str, color: (u8, u8, u8, u8), ) -> Result<Self, PilError> {"
-    },
-    {
       "lines": 156,
       "occurrence": 1,
       "path": "pillow-rs/src/image/entropy.rs",
