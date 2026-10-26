@@ -245,14 +245,18 @@ fn f_resize_arm64_wide_horizontal_vector_native_matches_pillow() {
             Err(error) => panic!("native GPU wide F resize failed: {error}"),
         };
         assert_eq!(actual, expected, "GPU wide F resize at width {width}");
-        let telemetry = Backend::take_pipeline_telemetry()
-            .expect("wide F resize must publish a telemetry receipt");
-        assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(telemetry.1, Backend::Gpu);
-        assert_eq!(telemetry.6, Some(2));
-        assert_eq!(telemetry.7, None);
+        assert_wide_f_resize_telemetry();
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_wide_f_resize_telemetry() {
+    let telemetry =
+        Backend::take_pipeline_telemetry().expect("wide F resize must publish a telemetry receipt");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(telemetry.1, Backend::Gpu);
+    assert_eq!(telemetry.6, Some(2));
+    assert_eq!(telemetry.7, None);
 }
 
 fn assert_wide_f_cpu_reference(source: &Image, expected: &[u8], width: usize) {
