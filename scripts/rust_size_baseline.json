@@ -136,12 +136,6 @@
       "signature": "fn rgb_transform_consumes_compact_input_for_affine_and_geometry_shaders() {"
     },
     {
-      "lines": 128,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/transpose_planning.rs",
-      "signature": "fn gpu_native_flip_keeps_mode_specific_storage_and_pixels() {"
-    },
-    {
       "lines": 408,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs",
@@ -225,11 +219,6 @@
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/tests/transpose_planning.rs": {
       "owner": "lazytrot",
       "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"

@@ -171,8 +171,6 @@ fn assert_native_byte_flip_rejected_limits() {
 #[test]
 #[cfg(target_endian = "little")]
 fn gpu_native_flip_keeps_mode_specific_storage_and_pixels() {
-    use crate::compute::{execute_prepared, prepare_execution, registry};
-
     match super::GpuPool::ensure_init() {
         Ok(_) => {}
         Err(error) if error.to_string().contains("GPU adapter not available") => return,
@@ -265,6 +263,16 @@ fn gpu_native_flip_keeps_mode_specific_storage_and_pixels() {
             60,
         ),
     ];
+    assert_native_flip_cases(cases);
+}
+
+#[cfg(target_endian = "little")]
+type NativeFlipCase = (&'static str, DynamicImage, u64);
+
+#[cfg(target_endian = "little")]
+fn assert_native_flip_cases(cases: [NativeFlipCase; 7]) {
+    use crate::compute::{execute_prepared, prepare_execution, registry};
+
     let op = PipelineOp::Flip;
     let ops = [op.clone()];
     let prepared = prepare_execution(&ops, Some(Backend::Gpu)).unwrap();
