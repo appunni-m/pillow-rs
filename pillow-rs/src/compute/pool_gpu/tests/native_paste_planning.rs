@@ -507,6 +507,12 @@ fn native_masked_rgb_paste_planner_checks_three_byte_words_and_limits() {
 fn native_masked_rgba_paste_planner_bounds_two_dimensional_dispatch() {
     let x_limit = 65_535u32;
     let x_boundary_pixels = x_limit * GPU_MASKED_RGBA_WORKGROUP_SIZE;
+    assert_native_masked_rgba_adapter_axis_limits(x_limit, x_boundary_pixels);
+    assert_native_masked_rgba_four_k_dispatch(x_limit);
+    assert_native_masked_rgba_small_grid_limit();
+}
+
+fn assert_native_masked_rgba_adapter_axis_limits(x_limit: u32, x_boundary_pixels: u32) {
     let one_axis = plan_gpu_native_masked_byte_paste(
         x_boundary_pixels,
         1,
@@ -540,7 +546,9 @@ fn native_masked_rgba_paste_planner_bounds_two_dimensional_dispatch() {
     assert_eq!(two_axes.workgroups, 65_536);
     assert_eq!(two_axes.workgroups_x, 256);
     assert_eq!(two_axes.workgroups_y, 256);
+}
 
+fn assert_native_masked_rgba_four_k_dispatch(x_limit: u32) {
     let four_k = plan_gpu_native_masked_byte_paste(
         4096,
         4096,
@@ -561,7 +569,9 @@ fn native_masked_rgba_paste_planner_bounds_two_dimensional_dispatch() {
     assert_eq!(four_k.workgroups, 262_144);
     assert_eq!(four_k.workgroups_x, 512);
     assert_eq!(four_k.workgroups_y, 512);
+}
 
+fn assert_native_masked_rgba_small_grid_limit() {
     let four_groups =
         plan_gpu_native_masked_byte_paste(256, 1, 1, 1, 1, 1, 4, 2, u32::MAX, u64::MAX)
             .expect("the last group at a two-dimensional boundary fits");

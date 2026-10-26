@@ -182,37 +182,11 @@ fn gpu_native_sharpness_l_requires_singleton_l_storage() {
 #[test]
 #[cfg(target_endian = "little")]
 fn gpu_native_sharpness_la_requires_singleton_la_storage() {
-    let sharpness = PipelineOp::Sharpness { factor: 1.5 };
     let la = DynamicImage::ImageLumaA8(
         GrayAlphaImage::from_raw(3, 1, vec![10, 20, 30, 40, 50, 60]).unwrap(),
     );
-    assert!(super::gpu_native_sharpness_la_input(
-        std::slice::from_ref(&sharpness),
-        &la,
-        None
-    ));
-    assert!(super::gpu_native_sharpness_la_input(
-        std::slice::from_ref(&sharpness),
-        &la,
-        Some("LA")
-    ));
-    assert!(!super::gpu_native_sharpness_la_input(
-        std::slice::from_ref(&sharpness),
-        &la,
-        Some("La")
-    ));
-    assert!(!super::gpu_native_sharpness_la_input(
-        std::slice::from_ref(&sharpness),
-        &la,
-        Some("PA")
-    ));
+    assert_gpu_native_sharpness_la_modes(&la);
 
-    let multiple = [sharpness, PipelineOp::Duplicate];
-    assert!(!super::gpu_native_sharpness_la_input(
-        &multiple,
-        &la,
-        Some("LA")
-    ));
     let putpixel = PipelineOp::PutPixel {
         x: 1,
         y: 0,
@@ -247,6 +221,38 @@ fn gpu_native_sharpness_la_requires_singleton_la_storage() {
     assert!(!super::gpu_native_sharpness_la_input(
         &[PipelineOp::Sharpness { factor: 1.5 }],
         &empty,
+        Some("LA")
+    ));
+}
+
+#[cfg(target_endian = "little")]
+fn assert_gpu_native_sharpness_la_modes(la: &DynamicImage) {
+    let sharpness = PipelineOp::Sharpness { factor: 1.5 };
+    assert!(super::gpu_native_sharpness_la_input(
+        std::slice::from_ref(&sharpness),
+        la,
+        None
+    ));
+    assert!(super::gpu_native_sharpness_la_input(
+        std::slice::from_ref(&sharpness),
+        la,
+        Some("LA")
+    ));
+    assert!(!super::gpu_native_sharpness_la_input(
+        std::slice::from_ref(&sharpness),
+        la,
+        Some("La")
+    ));
+    assert!(!super::gpu_native_sharpness_la_input(
+        std::slice::from_ref(&sharpness),
+        la,
+        Some("PA")
+    ));
+
+    let multiple = [sharpness, PipelineOp::Duplicate];
+    assert!(!super::gpu_native_sharpness_la_input(
+        &multiple,
+        la,
         Some("LA")
     ));
 }
