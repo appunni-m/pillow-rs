@@ -75,6 +75,7 @@ impl Image {
             .map_err(err)
     }
     /// Fills the destination box with the supplied RGBA color.
+    #[allow(clippy::too_many_arguments)] // Preserve scalar RGBA and box coordinates in the WASM API.
     #[wasm_bindgen(js_name = "pasteColor")]
     pub fn paste_color(
         &mut self,

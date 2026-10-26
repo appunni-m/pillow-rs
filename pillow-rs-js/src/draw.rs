@@ -34,6 +34,7 @@ impl ImageDraw {
 
     #[wasm_bindgen(js_name = "line")]
     /// Draws a line segment between two points using the supplied RGBA color.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn line(
         &mut self,
         x0: i32,
@@ -52,6 +53,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "lineWithInput")]
     /// Draws connected points from a flat or nested JavaScript sequence.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn line_with_input(
         &mut self,
         points: JsValue,
@@ -351,6 +353,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "rectangle")]
     /// Draws a rectangle from integer coordinates and optional RGBA fill and outline.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn rect(
         &mut self,
         x0: i32,
@@ -375,6 +378,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "ellipse")]
     /// Draws an ellipse from integer bounds and optional RGBA fill and outline.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn ellipse(
         &mut self,
         x0: i32,
@@ -399,6 +403,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "polygon")]
     /// Draws a polygon from flattened integer coordinates and optional colors.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn polygon(
         &mut self,
         points: Vec<i32>,
@@ -432,6 +437,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "arc")]
     /// Draws an arc inside integer bounds from `start` to `end` degrees.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn arc(
         &mut self,
         x0: i32,
@@ -452,6 +458,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "chord")]
     /// Draws a chord inside integer bounds with optional RGBA fill and outline colors.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn chord(
         &mut self,
         x0: i32,
@@ -478,6 +485,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "pieslice")]
     /// Draws a pie slice inside integer bounds with optional RGBA fill and outline colors.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn pieslice(
         &mut self,
         x0: i32,
@@ -504,6 +512,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "circle")]
     /// Draws a circle from its center, radius, and optional RGBA colors.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn circle(
         &mut self,
         cx: f64,
@@ -527,6 +536,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "roundedRectangle")]
     /// Draws a rounded rectangle from integer bounds and a corner radius.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn rounded_rect(
         &mut self,
         x0: i32,
@@ -552,6 +562,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "text")]
     /// Draws text at `(x, y)` using a loaded font and RGBA fill color.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn text(
         &mut self,
         x: f64,
@@ -777,6 +788,7 @@ impl ImageDraw {
     }
     #[wasm_bindgen(js_name = "bitmap")]
     /// Draws a bitmap image at `(x, y)` with an optional RGBA foreground color.
+    #[allow(clippy::too_many_arguments)] // Preserve the existing JavaScript method signature.
     pub fn bitmap(
         &mut self,
         x: i32,

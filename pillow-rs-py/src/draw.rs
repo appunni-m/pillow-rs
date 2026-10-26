@@ -453,6 +453,7 @@ impl PyDraw {
     }
 
     #[pyo3(signature = (xy, text, fill=None, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, stroke_fill=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow ImageDraw API.
     fn text(
         &mut self,
         xy: (f64, f64),
@@ -501,6 +502,7 @@ impl PyDraw {
     }
 
     #[pyo3(signature = (xy, text, fill=None, font=None, spacing=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, font_size=None, align=None, stroke_fill=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow ImageDraw API.
     fn multiline_text(
         &mut self,
         xy: (f64, f64),
@@ -556,6 +558,7 @@ impl PyDraw {
     /// Compute text bounding box. Loads default FreeType font if font is None.
     /// Returns (left, top, right, bottom).
     #[pyo3(signature = (xy, text, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, font_size=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow ImageDraw API.
     fn textbbox(
         &mut self,
         xy: (i32, i32),
@@ -597,6 +600,7 @@ impl PyDraw {
 
     /// Compute text length in pixels. Loads default FreeType font if font is None.
     #[pyo3(signature = (text, font=None, direction=None, features=None, language=None, embedded_color=false, font_size=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow ImageDraw API.
     fn textlength(
         &mut self,
         text: &Bound<'_, PyAny>,
@@ -632,6 +636,7 @@ impl PyDraw {
 
     /// Compute bounding box for multiline text. Matches PIL's exact algorithm.
     #[pyo3(signature = (xy, text, font=None, spacing=4, align="left", direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, font_size=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow ImageDraw API.
     fn multiline_textbbox(
         &mut self,
         xy: (i32, i32),

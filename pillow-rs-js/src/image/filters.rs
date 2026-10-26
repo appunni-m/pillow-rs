@@ -191,6 +191,7 @@ impl Image {
     /// Table traversal, callback-result slice semantics, and final length
     /// validation remain in the shared Rust core; this binding only decodes
     /// the callback asset name used by the JS host.
+    #[allow(clippy::too_many_arguments)] // Preserve the established WASM call signature.
     #[wasm_bindgen(js_name = "color3DLUTTransform")]
     pub fn color3dlut_transform(
         table: Vec<f64>,

@@ -212,6 +212,7 @@ impl PyFont {
     }
 
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow font API.
     fn getbbox_with_options(
         &self,
         text: &Bound<'_, PyAny>,
@@ -243,6 +244,7 @@ impl PyFont {
     }
 
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow font API.
     fn getmask_alpha_with_options(
         &self,
         text: &Bound<'_, PyAny>,
@@ -303,6 +305,7 @@ impl PyFont {
     }
 
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None, stroke_filled=false, has_args=false, has_kwargs=false))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow font API.
     fn getmask2_image_with_options(
         &self,
         text: &Bound<'_, PyAny>,

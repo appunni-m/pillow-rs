@@ -33,6 +33,7 @@ impl PyImage {
     }
 
     #[pyo3(signature = (angle, resample=None, expand=None, center=None, translate=None, fillcolor=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow Image.rotate API.
     fn rotate(
         &self,
         angle: f64,
@@ -490,6 +491,7 @@ impl PyImage {
     }
 
     #[pyo3(signature = (size, method, data=None, resample=0, fill=1, fillcolor=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow Image.transform API.
     fn transform(
         &self,
         size: (u32, u32),
