@@ -268,96 +268,127 @@ fn byte_projective_nonconstant_denominator_nearest_native_gpu_preserves_pixels()
             let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
                 .map(|index| (index * (37 + case_index * 11) + 13 + channels) as u8)
                 .collect::<Vec<_>>();
-            let proof_image = match mode {
-                "L" => DynamicImage::ImageLuma8(
-                    GrayImage::from_raw(source_size.0, source_size.1, source_bytes.clone())
-                        .expect("L proof image"),
-                ),
-                "LA" => DynamicImage::ImageLumaA8(
-                    GrayAlphaImage::from_raw(source_size.0, source_size.1, source_bytes.clone())
-                        .expect("LA proof image"),
-                ),
-                "RGB" => DynamicImage::ImageRgb8(
-                    RgbImage::from_raw(source_size.0, source_size.1, source_bytes.clone())
-                        .expect("RGB proof image"),
-                ),
-                "RGBA" => DynamicImage::ImageRgba8(
-                    RgbaImage::from_raw(source_size.0, source_size.1, source_bytes.clone())
-                        .expect("RGBA proof image"),
-                ),
-                _ => unreachable!(),
-            };
-            let proof_op = PipelineOp::Transform {
-                w: output_size.0,
-                h: output_size.1,
-                method: TransformMethod::Perspective,
-                data: Arc::from(matrix.to_vec()),
-                filter: ResampleFilter::Nearest,
-                fill: Some((*fill, 93, 41, 173)),
-                fill_is_none: false,
-                palette_fill: None,
-            };
-            assert!(
-                gpu_projective_nearest_is_exact(&proof_op, &proof_image, Some(mode), *source_size,),
-                "proof rejected case={case_index} mode={mode} matrix={matrix:?}"
+            assert_byte_projective_nonconstant_proof(
+                mode,
+                *source_size,
+                *output_size,
+                matrix,
+                *fill,
+                &source_bytes,
+                case_index,
             );
-            let source = Image::frombytes(mode, *source_size, &source_bytes)
-                .unwrap_or_else(|error| panic!("{mode} source: {error}"));
-            let fill = match mode {
-                "L" => Some(TransformFill::Scalar(i64::from(*fill))),
-                "LA" => Some(TransformFill::Components(vec![i64::from(*fill), 93])),
-                "RGB" => Some(TransformFill::Components(vec![i64::from(*fill), 93, 41])),
-                "RGBA" => Some(TransformFill::Components(vec![
-                    i64::from(*fill),
-                    93,
-                    41,
-                    173,
-                ])),
-                _ => unreachable!(),
-            };
-            let transformed = source
-                .transform_public(
-                    *output_size,
-                    2,
-                    Some(TransformData::Affine(matrix.to_vec())),
-                    0,
-                    0,
-                    fill,
-                )
-                .unwrap_or_else(|error| panic!("{mode} nonconstant transform: {error}"));
-            let expected = transformed
-                .clone()
-                .use_backend(Backend::Cpu)
-                .tobytes()
-                .unwrap_or_else(|error| panic!("{mode} CPU nonconstant transform: {error}"));
-            let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
-                Ok(actual) => actual,
-                Err(error)
-                    if error.to_string().contains("GPU adapter not available")
-                        || error
-                            .to_string()
-                            .contains("GPU device initialization failed") =>
-                {
-                    Backend::set_pipeline_telemetry_enabled(previous);
-                    return;
-                }
-                Err(error) => panic!("native GPU {mode} nonconstant transform failed: {error}"),
-            };
-            assert_eq!(actual, expected, "native {mode} matrix={matrix:?}");
-            let telemetry = Backend::take_pipeline_telemetry().unwrap_or_else(|| {
-                panic!("native GPU {mode} nonconstant transform missing telemetry")
-            });
-            assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
-            assert_eq!(
-                telemetry.1,
-                Backend::Gpu,
-                "{mode} actual backend case={case_index} matrix={matrix:?} telemetry={telemetry:?}"
-            );
-            assert_eq!(telemetry.6, Some(1), "{mode} dispatch count");
-            assert_eq!(telemetry.7, None, "{mode} fallback reason");
+            if !assert_byte_projective_nonconstant_native_case(
+                mode,
+                *source_size,
+                *output_size,
+                matrix,
+                *fill,
+                &source_bytes,
+                case_index,
+            ) {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
         }
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_byte_projective_nonconstant_proof(
+    mode: &str,
+    source_size: (u32, u32),
+    output_size: (u32, u32),
+    matrix: &[f64; 8],
+    fill: u8,
+    source_bytes: &[u8],
+    case_index: usize,
+) {
+    let proof_image = match mode {
+        "L" => DynamicImage::ImageLuma8(
+            GrayImage::from_raw(source_size.0, source_size.1, source_bytes.to_vec())
+                .expect("L proof image"),
+        ),
+        "LA" => DynamicImage::ImageLumaA8(
+            GrayAlphaImage::from_raw(source_size.0, source_size.1, source_bytes.to_vec())
+                .expect("LA proof image"),
+        ),
+        "RGB" => DynamicImage::ImageRgb8(
+            RgbImage::from_raw(source_size.0, source_size.1, source_bytes.to_vec())
+                .expect("RGB proof image"),
+        ),
+        "RGBA" => DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(source_size.0, source_size.1, source_bytes.to_vec())
+                .expect("RGBA proof image"),
+        ),
+        _ => unreachable!(),
+    };
+    let proof_op = PipelineOp::Transform {
+        w: output_size.0,
+        h: output_size.1,
+        method: TransformMethod::Perspective,
+        data: Arc::from(matrix.to_vec()),
+        filter: ResampleFilter::Nearest,
+        fill: Some((fill, 93, 41, 173)),
+        fill_is_none: false,
+        palette_fill: None,
+    };
+    assert!(
+        gpu_projective_nearest_is_exact(&proof_op, &proof_image, Some(mode), source_size,),
+        "proof rejected case={case_index} mode={mode} matrix={matrix:?}"
+    );
+}
+
+fn assert_byte_projective_nonconstant_native_case(
+    mode: &str,
+    source_size: (u32, u32),
+    output_size: (u32, u32),
+    matrix: &[f64; 8],
+    fill_value: u8,
+    source_bytes: &[u8],
+    case_index: usize,
+) -> bool {
+    let source = Image::frombytes(mode, source_size, source_bytes)
+        .unwrap_or_else(|error| panic!("{mode} source: {error}"));
+    let fill = byte_projective_fill(mode, fill_value);
+    let transformed = source
+        .transform_public(
+            output_size,
+            2,
+            Some(TransformData::Affine(matrix.to_vec())),
+            0,
+            0,
+            fill,
+        )
+        .unwrap_or_else(|error| panic!("{mode} nonconstant transform: {error}"));
+    let expected = transformed
+        .clone()
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .unwrap_or_else(|error| panic!("{mode} CPU nonconstant transform: {error}"));
+    let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            return false;
+        }
+        Err(error) => panic!("native GPU {mode} nonconstant transform failed: {error}"),
+    };
+    assert_eq!(actual, expected, "native {mode} matrix={matrix:?}");
+    let telemetry = Backend::take_pipeline_telemetry()
+        .unwrap_or_else(|| panic!("native GPU {mode} nonconstant transform missing telemetry"));
+    assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+    assert_eq!(
+        telemetry.1,
+        Backend::Gpu,
+        "{mode} actual backend case={case_index} matrix={matrix:?} telemetry={telemetry:?}"
+    );
+    assert_eq!(telemetry.6, Some(1), "{mode} dispatch count");
+    assert_eq!(telemetry.7, None, "{mode} fallback reason");
+    true
 }
 
 #[test]
