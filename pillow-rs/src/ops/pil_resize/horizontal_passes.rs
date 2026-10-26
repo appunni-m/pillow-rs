@@ -379,6 +379,38 @@ pub(super) fn horizontal_pass_boxed_rows(
         return;
     }
 
+    horizontal_pass_boxed_dense_rows(
+        work_bytes,
+        source_width,
+        first_source_row,
+        source_row_count,
+        channels,
+        coeffs,
+        output_width,
+        intermediate,
+        premultiplied_alpha,
+        parallel_pixel_threshold,
+        source_stride,
+        output_stride,
+    );
+}
+
+#[inline(always)]
+fn horizontal_pass_boxed_dense_rows(
+    work_bytes: &[u8],
+    source_width: u32,
+    first_source_row: u32,
+    source_row_count: u32,
+    channels: usize,
+    coeffs: &FilterCoeffs,
+    output_width: u32,
+    intermediate: &mut [u8],
+    premultiplied_alpha: bool,
+    parallel_pixel_threshold: usize,
+    source_stride: usize,
+    output_stride: usize,
+) {
+    #[cfg(not(feature = "parallel"))]
     let _ = parallel_pixel_threshold;
 
     #[cfg(feature = "parallel")]
