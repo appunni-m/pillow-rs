@@ -185,12 +185,12 @@ pub fn validate_python_open_source_bytes(data: &[u8]) -> Result<(), PilError> {
 enum FromBytesMode {
     L,
     LA,
-    LAB,
+    Lab,
     L16,
-    RGB,
-    RGBA,
-    CMYK,
-    HSV,
+    Rgb,
+    Rgba,
+    Cmyk,
+    Hsv,
     YCbCr,
     I,
     F,
@@ -524,11 +524,11 @@ impl Image {
             // the physical LA layout without interpreting indices as luma.
             "LA" | "La" | "PA" => FromBytesMode::LA,
             "I;16" | "I;16L" | "I;16B" | "I;16N" => FromBytesMode::L16,
-            "RGB" => FromBytesMode::RGB,
-            "LAB" => FromBytesMode::LAB,
-            "RGBA" | "RGBa" | "RGBX" => FromBytesMode::RGBA,
-            "CMYK" => FromBytesMode::CMYK,
-            "HSV" => FromBytesMode::HSV,
+            "RGB" => FromBytesMode::Rgb,
+            "LAB" => FromBytesMode::Lab,
+            "RGBA" | "RGBa" | "RGBX" => FromBytesMode::Rgba,
+            "CMYK" => FromBytesMode::Cmyk,
+            "HSV" => FromBytesMode::Hsv,
             "YCbCr" => FromBytesMode::YCbCr,
             "I" => FromBytesMode::I,
             "F" => FromBytesMode::F,
@@ -571,10 +571,10 @@ impl Image {
         let channels = match frombytes_mode {
             FromBytesMode::L | FromBytesMode::P | FromBytesMode::Mode1 => 1,
             FromBytesMode::LA | FromBytesMode::L16 => 2,
-            FromBytesMode::RGB | FromBytesMode::LAB | FromBytesMode::HSV | FromBytesMode::YCbCr => {
+            FromBytesMode::Rgb | FromBytesMode::Lab | FromBytesMode::Hsv | FromBytesMode::YCbCr => {
                 3
             }
-            FromBytesMode::RGBA | FromBytesMode::CMYK | FromBytesMode::I | FromBytesMode::F => 4,
+            FromBytesMode::Rgba | FromBytesMode::Cmyk | FromBytesMode::I | FromBytesMode::F => 4,
         };
         let expected = if matches!(frombytes_mode, FromBytesMode::Mode1) {
             (w as usize)
@@ -624,11 +624,11 @@ impl Image {
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
                 )
             }
-            FromBytesMode::RGB => DynamicImage::ImageRgb8(
+            FromBytesMode::Rgb => DynamicImage::ImageRgb8(
                 crate::raster::RgbImage::from_raw(w, h, data.into_owned())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
-            FromBytesMode::RGBA => DynamicImage::ImageRgba8(
+            FromBytesMode::Rgba => DynamicImage::ImageRgba8(
                 crate::raster::RgbaImage::from_raw(w, h, data.into_owned())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
@@ -650,11 +650,11 @@ impl Image {
                     materialized: materialization_cache(),
                 }));
             }
-            FromBytesMode::CMYK | FromBytesMode::I | FromBytesMode::F => DynamicImage::ImageRgba8(
+            FromBytesMode::Cmyk | FromBytesMode::I | FromBytesMode::F => DynamicImage::ImageRgba8(
                 crate::raster::RgbaImage::from_raw(w, h, data.into_owned())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
-            FromBytesMode::LAB | FromBytesMode::HSV | FromBytesMode::YCbCr => {
+            FromBytesMode::Lab | FromBytesMode::Hsv | FromBytesMode::YCbCr => {
                 DynamicImage::ImageRgb8(
                     crate::raster::RgbImage::from_raw(w, h, data.into_owned())
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
@@ -671,19 +671,19 @@ impl Image {
         };
         let explicit_mode = match frombytes_mode {
             FromBytesMode::Mode1
-            | FromBytesMode::CMYK
-            | FromBytesMode::LAB
-            | FromBytesMode::HSV
+            | FromBytesMode::Cmyk
+            | FromBytesMode::Lab
+            | FromBytesMode::Hsv
             | FromBytesMode::YCbCr
             | FromBytesMode::I
             | FromBytesMode::F => Some(mode.to_string()),
-            FromBytesMode::RGBA if matches!(mode, "RGBa" | "RGBX") => Some(mode.to_string()),
+            FromBytesMode::Rgba if matches!(mode, "RGBa" | "RGBX") => Some(mode.to_string()),
             FromBytesMode::LA if matches!(mode, "La" | "PA") => Some(mode.to_string()),
             FromBytesMode::L16 => Some(mode.to_string()),
             FromBytesMode::L
             | FromBytesMode::LA
-            | FromBytesMode::RGB
-            | FromBytesMode::RGBA
+            | FromBytesMode::Rgb
+            | FromBytesMode::Rgba
             | FromBytesMode::P => None,
         };
         Ok(Image::from_dynamic(img, explicit_mode))

@@ -359,8 +359,8 @@ pub(super) enum NativeFlipFormat {
     Palette,
     LA,
     PA,
-    RGB,
-    RGBA,
+    Rgb,
+    Rgba,
 }
 
 #[cfg(target_endian = "little")]
@@ -376,8 +376,8 @@ impl NativeFlipFormat {
         match self {
             Self::Mode1 | Self::L | Self::Palette => 1,
             Self::LA | Self::PA => 2,
-            Self::RGB => 3,
-            Self::RGBA => 4,
+            Self::Rgb => 3,
+            Self::Rgba => 4,
         }
     }
 }
@@ -400,8 +400,8 @@ pub(super) fn gpu_native_flip_format(
         (Some("P"), DynamicImage::ImageLuma8(_)) => Some(NativeFlipFormat::Palette),
         (Some("LA") | None, DynamicImage::ImageLumaA8(_)) => Some(NativeFlipFormat::LA),
         (Some("PA"), DynamicImage::ImageLumaA8(_)) => Some(NativeFlipFormat::PA),
-        (Some("RGB") | None, DynamicImage::ImageRgb8(_)) => Some(NativeFlipFormat::RGB),
-        (Some("RGBA") | None, DynamicImage::ImageRgba8(_)) => Some(NativeFlipFormat::RGBA),
+        (Some("RGB") | None, DynamicImage::ImageRgb8(_)) => Some(NativeFlipFormat::Rgb),
+        (Some("RGBA") | None, DynamicImage::ImageRgba8(_)) => Some(NativeFlipFormat::Rgba),
         _ => None,
     }
 }

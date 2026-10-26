@@ -258,8 +258,8 @@ impl GpuInner {
             | NativeFlipFormat::Palette
             | NativeFlipFormat::LA
             | NativeFlipFormat::PA => self.execute_native_byte_flip_format(image, format, limits),
-            NativeFlipFormat::RGB => self.execute_native_rgb_flip(image, limits),
-            NativeFlipFormat::RGBA => self.execute_native_rgba_flip(image, limits, capacity),
+            NativeFlipFormat::Rgb => self.execute_native_rgb_flip(image, limits),
+            NativeFlipFormat::Rgba => self.execute_native_rgba_flip(image, limits, capacity),
         }
     }
 
@@ -279,7 +279,7 @@ impl GpuInner {
             ),
             NativeFlipFormat::LA => (2, "native LA Flip exceeds adapter or shader limits"),
             NativeFlipFormat::PA => (2, "native PA Flip exceeds adapter or shader limits"),
-            NativeFlipFormat::RGB | NativeFlipFormat::RGBA => {
+            NativeFlipFormat::Rgb | NativeFlipFormat::Rgba => {
                 return Err(PilError::InternalError(
                     "native byte Flip received a multiword layout".into(),
                 ));

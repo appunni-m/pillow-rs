@@ -6,8 +6,8 @@ use crate::raster::{
 pub(super) enum NativeDrawCanvas {
     L(GrayImage),
     LA(GrayAlphaImage),
-    RGB(RgbImage, bool),
-    RGBA(RgbaImage),
+    Rgb(RgbImage, bool),
+    Rgba(RgbaImage),
     /// Unsigned 16-bit luma storage used by Pillow's I;16* draw modes.
     ///
     /// The raster keeps host-native samples. Pillow's draw backend, however,
@@ -25,12 +25,12 @@ impl NativeDrawCanvas {
         match image {
             DynamicImage::ImageLuma8(pixels) => Self::L(pixels.clone()),
             DynamicImage::ImageLumaA8(pixels) => Self::LA(pixels.clone()),
-            DynamicImage::ImageRgb8(pixels) => Self::RGB(pixels.clone(), alpha_blend_rgb),
-            DynamicImage::ImageRgba8(pixels) => Self::RGBA(pixels.clone()),
+            DynamicImage::ImageRgb8(pixels) => Self::Rgb(pixels.clone(), alpha_blend_rgb),
+            DynamicImage::ImageRgba8(pixels) => Self::Rgba(pixels.clone()),
             DynamicImage::ImageLuma16(pixels) => {
                 Self::L16(pixels.clone(), l16_draw_uses_big_endian(mode))
             }
-            _ => Self::RGBA(image.to_rgba8()),
+            _ => Self::Rgba(image.to_rgba8()),
         }
     }
 
@@ -38,14 +38,14 @@ impl NativeDrawCanvas {
         match self {
             Self::L(pixels) => DynamicImage::ImageLuma8(pixels),
             Self::LA(pixels) => DynamicImage::ImageLumaA8(pixels),
-            Self::RGB(pixels, _) => DynamicImage::ImageRgb8(pixels),
-            Self::RGBA(pixels) => DynamicImage::ImageRgba8(pixels),
+            Self::Rgb(pixels, _) => DynamicImage::ImageRgb8(pixels),
+            Self::Rgba(pixels) => DynamicImage::ImageRgba8(pixels),
             Self::L16(pixels, _) => DynamicImage::ImageLuma16(pixels),
         }
     }
 
     pub(super) fn set_alpha_blend_rgb(&mut self, enabled: bool) {
-        if let Self::RGB(_, alpha_blend_rgb) = self {
+        if let Self::Rgb(_, alpha_blend_rgb) = self {
             *alpha_blend_rgb = enabled;
         }
     }
@@ -66,8 +66,8 @@ impl DrawCanvas for NativeDrawCanvas {
         match self {
             Self::L(pixels) => pixels.width(),
             Self::LA(pixels) => pixels.width(),
-            Self::RGB(pixels, _) => pixels.width(),
-            Self::RGBA(pixels) => pixels.width(),
+            Self::Rgb(pixels, _) => pixels.width(),
+            Self::Rgba(pixels) => pixels.width(),
             Self::L16(pixels, _) => pixels.width(),
         }
     }
@@ -76,8 +76,8 @@ impl DrawCanvas for NativeDrawCanvas {
         match self {
             Self::L(pixels) => pixels.height(),
             Self::LA(pixels) => pixels.height(),
-            Self::RGB(pixels, _) => pixels.height(),
-            Self::RGBA(pixels) => pixels.height(),
+            Self::Rgb(pixels, _) => pixels.height(),
+            Self::Rgba(pixels) => pixels.height(),
             Self::L16(pixels, _) => pixels.height(),
         }
     }
@@ -90,7 +90,7 @@ impl DrawCanvas for NativeDrawCanvas {
             Self::LA(pixels) => {
                 pixels.put_pixel(x, y, crate::raster::LumaA([color[0], color[3]]));
             }
-            Self::RGB(pixels, alpha_blend_rgb) => {
+            Self::Rgb(pixels, alpha_blend_rgb) => {
                 if *alpha_blend_rgb {
                     let background = pixels.get_pixel(x, y);
                     let alpha = u16::from(color[3]);
@@ -112,7 +112,7 @@ impl DrawCanvas for NativeDrawCanvas {
                     pixels.put_pixel(x, y, crate::raster::Rgb([color[0], color[1], color[2]]));
                 }
             }
-            Self::RGBA(pixels) => {
+            Self::Rgba(pixels) => {
                 pixels.put_pixel(x, y, crate::raster::Rgba(color));
             }
             Self::L16(pixels, big_endian) => {
