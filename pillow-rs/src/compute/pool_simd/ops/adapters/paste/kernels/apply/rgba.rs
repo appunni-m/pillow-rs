@@ -102,5 +102,5 @@ pub(super) fn apply(context: &mut NativePasteApplyContext<'_>) -> bool {
     } else {
         "rgba-l-mask-vector"
     });
-    return true;
+    true
 }

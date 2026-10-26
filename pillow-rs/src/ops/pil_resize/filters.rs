@@ -13,7 +13,7 @@ use crate::pipeline::ResampleFilter;
 pub(crate) fn pillow_sin_f64(value: f64) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        return value.sin();
+        value.sin()
     }
 
     #[cfg(target_arch = "wasm32")]

@@ -280,19 +280,18 @@ fn open_memory_face(
 
     let source_face = ffi::FT_New_Memory_Face_Owned(library, Rc::clone(&data), face_index, size)
         .map_err(ft_error_to_pil)?;
-    if data.len() <= MAX_CACHED_SOURCE_BYTES {
-        if let Some(face) =
+    if data.len() <= MAX_CACHED_SOURCE_BYTES
+        && let Some(face) =
             ffi::FT_New_Memory_Face_From_Source(library, &source_face, data.as_slice(), face_index)
                 .map_err(ft_error_to_pil)?
-        {
-            CACHED_SOURCE_FACE.with(|cache| {
-                *cache.borrow_mut() = Some(CachedSourceFace {
-                    face_index,
-                    face: source_face,
-                });
+    {
+        CACHED_SOURCE_FACE.with(|cache| {
+            *cache.borrow_mut() = Some(CachedSourceFace {
+                face_index,
+                face: source_face,
             });
-            return Ok(face);
-        }
+        });
+        return Ok(face);
     }
     Ok(source_face)
 }

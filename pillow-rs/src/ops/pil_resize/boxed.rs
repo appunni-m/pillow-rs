@@ -627,16 +627,14 @@ fn pil_resize_boxed_with_hints(
                 && pixels <= BOXED_ZERO_FAST_PATH_MAX_PIXELS
                 && img.as_bytes().iter().all(|&value| value == 0)
         })
-    {
-        if let Some(output_len) = (dst_w as usize)
+        && let Some(output_len) = (dst_w as usize)
             .checked_mul(dst_h as usize)
             .and_then(|pixels| pixels.checked_mul(channels))
-        {
-            return pil_preserve_mode(
-                orig_img,
-                raw_to_dynamic_owned(vec![0; output_len], dst_w, dst_h, channels),
-            );
-        }
+    {
+        return pil_preserve_mode(
+            orig_img,
+            raw_to_dynamic_owned(vec![0; output_len], dst_w, dst_h, channels),
+        );
     }
 
     // Pillow's boxed nearest path is an affine sample, not a one-tap box

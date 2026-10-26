@@ -340,10 +340,9 @@ pub(crate) fn execute_rgb_putpixel_thumbnail_fusion(
         if reduced_bytes[output_start..output_start + 3]
             .iter()
             .any(|&sample| sample != 0)
+            && let Some(nonzero_rows) = sparse_nonzero_rows.as_mut()
         {
-            if let Some(nonzero_rows) = sparse_nonzero_rows.as_mut() {
-                nonzero_rows[block_index / reduced_width as usize] = true;
-            }
+            nonzero_rows[block_index / reduced_width as usize] = true;
         }
     }
 

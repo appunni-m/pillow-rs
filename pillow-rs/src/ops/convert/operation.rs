@@ -144,14 +144,13 @@ impl Image {
             },
         );
         // Set explicit_mode on the pipeline for non-standard modes
-        if let Some(em) = explicit_mode_for(mode) {
-            if let Image::Pipeline {
+        if let Some(em) = explicit_mode_for(mode)
+            && let Image::Pipeline {
                 explicit_mode: em_field,
                 ..
             } = &mut result
-            {
-                *em_field = Some(em.to_string());
-            }
+        {
+            *em_field = Some(em.to_string());
         }
         Ok(result)
     }

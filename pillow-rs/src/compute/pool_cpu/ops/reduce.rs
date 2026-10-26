@@ -21,6 +21,23 @@ pub(super) fn execute_reduce_rgb(
         .map(|reduced| reduced.map(|(image, _)| image))
 }
 
+fn try_reduce_sparse_2x2(
+    img: &DynamicImage,
+    factors: (u32, u32),
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+) -> Result<Option<(DynamicImage, Option<Vec<bool>>)>, PilError> {
+    let ((fx, fy), (width, height), (new_width, new_height)) =
+        (factors, source_dimensions, output_dimensions);
+    if fx != 2 || fy != 2 || width % 2 != 0 || height % 2 != 0 {
+        return Ok(None);
+    }
+    Ok(
+        execute_reduce_rgb_sparse_2x2_with_rows(img, new_width, new_height)?
+            .map(|(image, nonzero_rows)| (image, Some(nonzero_rows))),
+    )
+}
+
 /// Reduce RGB while retaining exact active rows when the sparse 2×2 path is
 /// selected. Thumbnail can use that proof to skip zero rows in both resample
 /// passes without rescanning the reduced image.
@@ -54,12 +71,10 @@ pub(super) fn execute_reduce_rgb_with_sparse_rows(
         return Ok(None);
     }
 
-    if fx == 2 && fy == 2 && width % 2 == 0 && height % 2 == 0 {
-        if let Some((output, nonzero_rows)) =
-            execute_reduce_rgb_sparse_2x2_with_rows(img, new_width, new_height)?
-        {
-            return Ok(Some((output, Some(nonzero_rows))));
-        }
+    if let Some(reduced) =
+        try_reduce_sparse_2x2(img, (fx, fy), (width, height), (new_width, new_height))?
+    {
+        return Ok(Some(reduced));
     }
 
     let mut output = CheckedDims::new(new_width, new_height, 3)?.alloc_buffer();

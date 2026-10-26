@@ -20,13 +20,13 @@ enum PipelinePhase {
 }
 
 thread_local! {
-    static LAST_PIPELINE_PHASE_TIMINGS: RefCell<PipelinePhaseTimings> = RefCell::new(
+    static LAST_PIPELINE_PHASE_TIMINGS: RefCell<PipelinePhaseTimings> = const { RefCell::new(
         PipelinePhaseTimings {
             transpose_output_allocation_zero_fill_ns: None,
             transpose_avx2_executor_ns: None,
             python_bytes_copy_ns: None,
         }
-    );
+    ) };
 }
 
 pub(super) fn clear() {

@@ -175,7 +175,7 @@ pub(super) fn pil_resize_luma16(
 
     let mut intermediate = ImageBuffer::<Luma<u16>, Vec<u16>>::new(img.height(), dst_w);
     {
-        let intermediate_data: &mut [u16] = &mut *intermediate;
+        let intermediate_data: &mut [u16] = &mut intermediate;
         for sy in 0..img.height() {
             let src_start = (sy * img.width()) as usize;
             let src_end = src_start + img.width() as usize;

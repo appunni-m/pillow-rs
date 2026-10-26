@@ -35,10 +35,11 @@ impl Image {
 
         Arc::make_mut(source).lock_backend_recursive(b);
         let mut flattened_ops = ops.to_vec();
-        let operation_origins = ops
-            .has_operation_origins()
-            .then(|| ops.operation_origins().to_vec())
-            .unwrap_or_default();
+        let operation_origins = if ops.has_operation_origins() {
+            ops.operation_origins().to_vec()
+        } else {
+            Default::default()
+        };
         for op in &mut flattened_ops {
             Self::lock_op_backend_recursive(op, b);
         }
@@ -337,7 +338,7 @@ impl Image {
                 ..
             } => Ok(GpuPendingGraph {
                 source: self,
-                cached: materialized.get().map(|image| image.clone()).transpose()?,
+                cached: materialized.get().cloned().transpose()?,
                 width: info.width,
                 height: info.height,
                 mode: image_mode_name(info.mode).to_owned(),

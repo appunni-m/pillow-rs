@@ -371,7 +371,7 @@ fn canonical_f32_nan() -> f32 {
 pub(super) fn f32_sub_c(left: f32, right: f32) -> f32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        return left - right;
+        left - right
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -395,7 +395,7 @@ pub(super) fn f32_sub_c(left: f32, right: f32) -> f32 {
 pub(super) fn f32_add_c(left: f32, right: f32) -> f32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        return left + right;
+        left + right
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -419,7 +419,7 @@ pub(super) fn f32_add_c(left: f32, right: f32) -> f32 {
 pub(super) fn f32_fma_c(left: f32, right: f32, addend: f32) -> f32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        return left.mul_add(right, addend);
+        left.mul_add(right, addend)
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -450,7 +450,7 @@ pub(super) fn f32_fma_c(left: f32, right: f32, addend: f32) -> f32 {
 pub(super) fn f64_from_f32_c(value: f32) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        return f64::from(value);
+        f64::from(value)
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -468,7 +468,7 @@ pub(super) fn f64_from_f32_c(value: f32) -> f64 {
 pub(super) fn f32_from_f64_c(value: f64) -> f32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        return value as f32;
+        value as f32
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -486,7 +486,7 @@ pub(super) fn f32_from_f64_c(value: f64) -> f32 {
 pub(super) fn f64_neg_c(value: f64) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        return -value;
+        -value
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -506,7 +506,7 @@ pub(super) fn f64_neg_c(value: f64) -> f64 {
 pub(super) fn f64_sub_c(left: f64, right: f64) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        return left - right;
+        left - right
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -530,7 +530,7 @@ pub(super) fn f64_sub_c(left: f64, right: f64) -> f64 {
 pub(super) fn f64_add_c(left: f64, right: f64) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        return left + right;
+        left + right
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -554,7 +554,7 @@ pub(super) fn f64_add_c(left: f64, right: f64) -> f64 {
 pub(super) fn f64_fma_c(left: f64, right: f64, addend: f64) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        return left.mul_add(right, addend);
+        left.mul_add(right, addend)
     }
     #[cfg(target_arch = "wasm32")]
     {

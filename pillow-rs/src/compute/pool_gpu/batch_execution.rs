@@ -125,48 +125,46 @@ impl GpuInner {
         ),
         PilError,
     > {
-        if logical_mode == Some("F") && (f_resize_f64_is_exact || f_resize_f64_ordered_is_exact) {
-            if let [
+        if logical_mode == Some("F")
+            && (f_resize_f64_is_exact || f_resize_f64_ordered_is_exact)
+            && let [
                 PipelineOp::Resize {
                     w: out_w,
                     h: out_h,
                     filter,
                 },
             ] = ops
+            && !matches!(filter, ResampleFilter::Nearest)
+            && !(matches!(filter, ResampleFilter::Box)
+                && gpu_f_resize_compact_box_any_axis((w, h), (*out_w, *out_h)))
+        {
+            let (kernel, support) = filter_from_resample(*filter);
+            let horizontal = precompute_coeffs_f64(*out_w, w, kernel, support);
+            let vertical = precompute_coeffs_f64(*out_h, h, kernel, support);
+            if gpu_f_resize_coefficients_need_tiles(&horizontal)
+                || gpu_f_resize_coefficients_need_tiles(&vertical)
             {
-                if !matches!(filter, ResampleFilter::Nearest)
-                    && !(matches!(filter, ResampleFilter::Box)
-                        && gpu_f_resize_compact_box_any_axis((w, h), (*out_w, *out_h)))
-                {
-                    let (kernel, support) = filter_from_resample(*filter);
-                    let horizontal = precompute_coeffs_f64(*out_w, w, kernel, support);
-                    let vertical = precompute_coeffs_f64(*out_h, h, kernel, support);
-                    if gpu_f_resize_coefficients_need_tiles(&horizontal)
-                        || gpu_f_resize_coefficients_need_tiles(&vertical)
-                    {
-                        return self
-                            .execute_f_resize_tiled(
-                                (w, h),
-                                (*out_w, *out_h),
-                                &horizontal,
-                                &vertical,
-                                buffers,
+                return self
+                    .execute_f_resize_tiled(
+                        (w, h),
+                        (*out_w, *out_h),
+                        &horizontal,
+                        &vertical,
+                        buffers,
+                    )
+                    .map(
+                        |(current_is_a, width, height, readback, telemetry, dispatches)| {
+                            (
+                                current_is_a,
+                                width,
+                                height,
+                                readback,
+                                telemetry,
+                                dispatches,
+                                false,
                             )
-                            .map(
-                                |(current_is_a, width, height, readback, telemetry, dispatches)| {
-                                    (
-                                        current_is_a,
-                                        width,
-                                        height,
-                                        readback,
-                                        telemetry,
-                                        dispatches,
-                                        false,
-                                    )
-                                },
-                            );
-                    }
-                }
+                        },
+                    );
             }
         }
         let mut current_is_a = true;

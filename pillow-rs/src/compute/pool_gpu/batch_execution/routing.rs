@@ -14,7 +14,7 @@ impl GpuPool {
         // execution boundary and therefore reports the pixels as CPU-owned
         // even when the packed result is subsequently copied through a real
         // GPU dispatch for transport/parity coverage.
-        crate::compute::record_pipeline_backend_fallback(&format!(
+        crate::compute::record_pipeline_backend_fallback(format!(
             "exact host semantic control: {reason}"
         ));
         let exact = crate::compute::CpuPool.execute_batch(ops, img, mode)?;
@@ -771,7 +771,7 @@ impl GpuPool {
         }
         if let Some(ct) = output_layout.output_color_type {
             // Bypass preserve_mode — use the override color type directly.
-            return gpu_result_as_color_type(result, ct);
+            gpu_result_as_color_type(result, ct)
         } else {
             Ok(crate::image::preserve_mode(img, result))
         }

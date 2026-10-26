@@ -282,9 +282,9 @@ impl GpuInner {
                     data.len()
                 )));
             }
-            return RgbaImage::from_raw(w, h, data)
+            RgbaImage::from_raw(w, h, data)
                 .map(DynamicImage::ImageRgba8)
-                .ok_or_else(|| PilError::ValueError("bad readback buffer".into()));
+                .ok_or_else(|| PilError::ValueError("bad readback buffer".into()))
         }
 
         #[cfg(target_endian = "big")]

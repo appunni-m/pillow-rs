@@ -555,10 +555,9 @@ pub(crate) fn simd_add(
     if *scale == 1.0
         && *offset == 0.0
         && native_chops_layout(img, mode).is_some_and(|channels| has_valid_byte_data(img, channels))
+        && let Some(result) = native_chops_add_clamped(img, &other_img, mode)
     {
-        if let Some(result) = native_chops_add_clamped(img, &other_img, mode) {
-            return Ok(result);
-        }
+        return Ok(result);
     }
     if *scale == 1.0 && *offset == 0.0 {
         if let Some(result) = native_chops_affine(img, &other_img, mode, 1.0, 0.0, false) {
@@ -591,10 +590,9 @@ pub(crate) fn simd_subtract(
     if *scale == 1.0
         && *offset == 0.0
         && native_chops_layout(img, mode).is_some_and(|channels| has_valid_byte_data(img, channels))
+        && let Some(result) = native_chops_subtract_clamped(img, &other_img, mode)
     {
-        if let Some(result) = native_chops_subtract_clamped(img, &other_img, mode) {
-            return Ok(result);
-        }
+        return Ok(result);
     }
     if *scale == 1.0 && *offset == 0.0 {
         if let Some(result) = native_chops_affine(img, &other_img, mode, 1.0, 0.0, true) {

@@ -731,7 +731,7 @@ impl Image {
                 ..
             } => {
                 let can_reuse_prefix = !source_is_paletted
-                    && ops.len() > 0
+                    && !ops.is_empty()
                     && ops.mode_preserving()
                     && op_preserves_mode(&op);
                 let ancestor_cache = if can_reuse_prefix {

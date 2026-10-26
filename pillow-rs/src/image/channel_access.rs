@@ -77,24 +77,22 @@ impl Image {
         // allocating a second full-frame buffer. Keep other backends and
         // non-exact storage on the normal extraction path so their execution
         // and trailing-sample behavior remain unchanged.
-        if mode == "L" && ch == 0 && matches!(self, Image::Loaded(_)) && !cfg!(feature = "parallel")
-        {
-            if let Some((crate::compute::Backend::Cpu, _)) =
+        if mode == "L"
+            && ch == 0
+            && matches!(self, Image::Loaded(_))
+            && !cfg!(feature = "parallel")
+            && let Some((crate::compute::Backend::Cpu, _)) =
                 crate::compute::preferred_active_backend()?
-            {
-                let pixel_count = crate::checked_dims::CheckedDims::new_allow_empty(
-                    img.width(),
-                    img.height(),
-                    1,
-                )?
-                .total_pixels();
-                if img.as_bytes().len() == pixel_count {
-                    return crate::compute::execute_eager_cpu_shared_result(
-                        "ExtractBand",
-                        img.as_ref(),
-                        || Ok(self.copy()),
-                    );
-                }
+        {
+            let pixel_count =
+                crate::checked_dims::CheckedDims::new_allow_empty(img.width(), img.height(), 1)?
+                    .total_pixels();
+            if img.as_bytes().len() == pixel_count {
+                return crate::compute::execute_eager_cpu_shared_result(
+                    "ExtractBand",
+                    img.as_ref(),
+                    || Ok(self.copy()),
+                );
             }
         }
         // Tiny RGB images can extract their band directly instead of paying
@@ -105,69 +103,67 @@ impl Image {
             && !cfg!(feature = "parallel")
             && mode == "RGB"
             && u64::from(img.width()) * u64::from(img.height()) <= 256
+            && let Some((backend, _)) = crate::compute::preferred_active_backend()?
         {
-            if let Some((backend, _)) = crate::compute::preferred_active_backend()? {
-                let operation = PipelineOp::ExtractBand { index: ch as u8 };
-                let extracted = match backend {
-                    crate::compute::Backend::Cpu => {
-                        Some(crate::compute::execute_eager_cpu_image_operation(
-                            "ExtractBand",
-                            img.as_ref(),
-                            // The ExtractBand kernel records its output
-                            // allocation; manual accounting would count it twice.
-                            false,
-                            || {
-                                crate::compute::registry::execute_cpu(
-                                    &operation,
-                                    img.as_ref(),
-                                    Some(&mode),
-                                )
-                            },
-                        )?)
-                    }
-                    crate::compute::Backend::Simd => {
-                        Some(crate::compute::execute_eager_simd_image_operation(
-                            "ExtractBand",
-                            img.as_ref(),
-                            || {
-                                let (width, height) = img.dimensions();
-                                let mut output = crate::checked_dims::CheckedDims::new_allow_empty(
-                                    width, height, 1,
-                                )?
-                                .alloc_buffer();
-                                let (vector_blocks, scalar_tail, path) =
-                                    crate::compute::simd_extract_band_into(
-                                        img.as_ref(),
-                                        ch as u8,
-                                        Some(&mode),
-                                        &mut output,
-                                    )?;
-                                let output =
-                                    crate::raster::GrayImage::from_raw(width, height, output)
-                                        .ok_or_else(|| {
-                                            PilError::InternalError(
-                                                "SIMD ExtractBand buffer shape mismatch".into(),
-                                            )
-                                        })?;
-                                Ok((
-                                    DynamicImage::ImageLuma8(output),
-                                    vector_blocks,
-                                    scalar_tail,
-                                    path,
-                                ))
-                            },
-                        )?)
-                    }
-                    crate::compute::Backend::Gpu => None,
-                };
-                if let Some(extracted) = extracted {
-                    let mut result = Image::from_dynamic(extracted, None);
-                    if let Image::Loaded(data) = &mut result {
-                        data.info = self.image_info();
-                        data.exif = self.exif_metadata();
-                    }
-                    return Ok(result);
+            let operation = PipelineOp::ExtractBand { index: ch as u8 };
+            let extracted = match backend {
+                crate::compute::Backend::Cpu => {
+                    Some(crate::compute::execute_eager_cpu_image_operation(
+                        "ExtractBand",
+                        img.as_ref(),
+                        // The ExtractBand kernel records its output
+                        // allocation; manual accounting would count it twice.
+                        false,
+                        || {
+                            crate::compute::registry::execute_cpu(
+                                &operation,
+                                img.as_ref(),
+                                Some(&mode),
+                            )
+                        },
+                    )?)
                 }
+                crate::compute::Backend::Simd => {
+                    Some(crate::compute::execute_eager_simd_image_operation(
+                        "ExtractBand",
+                        img.as_ref(),
+                        || {
+                            let (width, height) = img.dimensions();
+                            let mut output = crate::checked_dims::CheckedDims::new_allow_empty(
+                                width, height, 1,
+                            )?
+                            .alloc_buffer();
+                            let (vector_blocks, scalar_tail, path) =
+                                crate::compute::simd_extract_band_into(
+                                    img.as_ref(),
+                                    ch as u8,
+                                    Some(&mode),
+                                    &mut output,
+                                )?;
+                            let output = crate::raster::GrayImage::from_raw(width, height, output)
+                                .ok_or_else(|| {
+                                    PilError::InternalError(
+                                        "SIMD ExtractBand buffer shape mismatch".into(),
+                                    )
+                                })?;
+                            Ok((
+                                DynamicImage::ImageLuma8(output),
+                                vector_blocks,
+                                scalar_tail,
+                                path,
+                            ))
+                        },
+                    )?)
+                }
+                crate::compute::Backend::Gpu => None,
+            };
+            if let Some(extracted) = extracted {
+                let mut result = Image::from_dynamic(extracted, None);
+                if let Image::Loaded(data) = &mut result {
+                    data.info = self.image_info();
+                    data.exif = self.exif_metadata();
+                }
+                return Ok(result);
             }
         }
         // The validation above has already materialized a pending pipeline.

@@ -109,10 +109,10 @@ fn convert_to_luma_alpha(
         ),
         _ => None,
     };
-    if let Some(alpha) = &source_alpha {
-        if alpha.capacity() != 0 {
-            crate::compute::record_pipeline_allocation(alpha.capacity());
-        }
+    if let Some(alpha) = &source_alpha
+        && alpha.capacity() != 0
+    {
+        crate::compute::record_pipeline_allocation(alpha.capacity());
     }
     for (index, (target, gray_pixel)) in output.pixels_mut().zip(gray.pixels()).enumerate() {
         target[0] = gray_pixel[0];

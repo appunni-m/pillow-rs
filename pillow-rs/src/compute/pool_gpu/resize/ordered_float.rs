@@ -571,7 +571,7 @@ pub(in crate::compute::pool_gpu) fn gpu_f64_ordered_state_to_f32(
 /// conservative when an intermediate f64 rounding changes the final f32 word;
 /// marker 12 and its tiled transport emulate the scalar FMA path and the
 /// >15-tap horizontal vector product/add path in integer arithmetic. Tiled
-/// dispatches retain that state rather than storing an intermediate FLOAT32.
+/// > dispatches retain that state rather than storing an intermediate FLOAT32.
 pub(in crate::compute::pool_gpu) fn gpu_f_resize_f64_ordered_sample_bits(
     bytes: &[u8],
     source_dimensions: (u32, u32),

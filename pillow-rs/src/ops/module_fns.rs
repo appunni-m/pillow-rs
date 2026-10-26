@@ -29,7 +29,7 @@ const fn radial_integer_sqrt(value: u32) -> u32 {
     let mut low = 0u32;
     let mut high = 256u32;
     while low < high {
-        let middle = (low + high + 1) / 2;
+        let middle = (low + high).div_ceil(2);
         if middle * middle <= value {
             low = middle;
         } else {
@@ -274,10 +274,12 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
     if let Image::Pipeline {
         explicit_mode: tag, ..
     } = &mut result
+        && mode != "L"
+        && mode != "LA"
+        && mode != "RGB"
+        && mode != "RGBA"
     {
-        if mode != "L" && mode != "LA" && mode != "RGB" && mode != "RGBA" {
-            *tag = Some(mode.to_owned());
-        }
+        *tag = Some(mode.to_owned());
     }
     Ok(result)
 }

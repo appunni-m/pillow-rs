@@ -297,11 +297,11 @@ impl GpuBatchExecutor {
         };
         self.pending.push_back(job);
         self.stats.live_jobs += 1;
-        if !self.config.queue {
-            if let Err(error) = self.wait_for_result(Some(id)) {
-                self.close();
-                return Err(error);
-            }
+        if !self.config.queue
+            && let Err(error) = self.wait_for_result(Some(id))
+        {
+            self.close();
+            return Err(error);
         }
         Ok(id)
     }

@@ -88,7 +88,7 @@ fn cmyk_grayscale_block_neon(source: &[u8]) -> [u8; 16] {
 fn cmyk_grayscale_block(source: &[u8]) -> [u8; 16] {
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
     {
-        return cmyk_grayscale_block_neon(source);
+        cmyk_grayscale_block_neon(source)
     }
 
     #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]

@@ -23,6 +23,39 @@ use scalar::{transform_affine_f32, transform_mesh_scalar32, transform_projective
 
 pub(crate) use scalar::affine_nearest_fixed;
 
+fn try_transform_affine_nearest(
+    image: &DynamicImage,
+    width: u32,
+    height: u32,
+    coefficients: [f64; 6],
+    fill: Option<(u8, u8, u8, u8)>,
+    explicit_mode: Option<&str>,
+    use_nearest: bool,
+) -> Result<Option<DynamicImage>, PilError> {
+    if !use_nearest {
+        return Ok(None);
+    }
+    if matches!(explicit_mode, None | Some("L"))
+        && let Some(result) =
+            transform_affine_luma_nearest(image, width, height, coefficients, fill)?
+    {
+        return Ok(Some(result));
+    }
+    if matches!(explicit_mode, None | Some("LA"))
+        && let Some(result) =
+            transform_affine_luma_alpha_nearest(image, width, height, coefficients, fill)?
+    {
+        return Ok(Some(result));
+    }
+    if matches!(explicit_mode, None | Some("RGB" | "HSV" | "YCbCr"))
+        && let Some(result) =
+            transform_affine_rgb_nearest(image, width, height, coefficients, fill)?
+    {
+        return Ok(Some(result));
+    }
+    Ok(None)
+}
+
 pub fn op_transform(
     img: &DynamicImage,
     w: u32,
@@ -116,38 +149,16 @@ pub fn op_transform(
             let work = premultiplied.as_ref().unwrap_or(img);
             let transform_fill = fill;
 
-            if matches!(explicit_mode, None | Some("L")) && use_nearest {
-                if let Some(result) = transform_affine_luma_nearest(
-                    work,
-                    w,
-                    h,
-                    [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f],
-                    transform_fill,
-                )? {
-                    return Ok(preserve_mode(img, result));
-                }
-            }
-            if matches!(explicit_mode, None | Some("LA")) && use_nearest {
-                if let Some(result) = transform_affine_luma_alpha_nearest(
-                    work,
-                    w,
-                    h,
-                    [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f],
-                    transform_fill,
-                )? {
-                    return Ok(preserve_mode(img, result));
-                }
-            }
-            if matches!(explicit_mode, None | Some("RGB" | "HSV" | "YCbCr")) && use_nearest {
-                if let Some(result) = transform_affine_rgb_nearest(
-                    work,
-                    w,
-                    h,
-                    [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f],
-                    transform_fill,
-                )? {
-                    return Ok(preserve_mode(img, result));
-                }
+            if let Some(result) = try_transform_affine_nearest(
+                work,
+                w,
+                h,
+                [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f],
+                transform_fill,
+                explicit_mode,
+                use_nearest,
+            )? {
+                return Ok(preserve_mode(img, result));
             }
 
             let result = transform_affine_generic(

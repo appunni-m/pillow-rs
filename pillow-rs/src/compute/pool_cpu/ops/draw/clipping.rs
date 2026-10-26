@@ -210,7 +210,7 @@ pub(crate) fn arc_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -
                 combine(left, right),
                 clip(
                     0.0,
-                    if end < 180.0 || end > 540.0 {
+                    if !(180.0..=540.0).contains(&end) {
                         1.0
                     } else {
                         -1.0

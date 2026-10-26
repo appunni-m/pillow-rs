@@ -111,7 +111,7 @@ fn simd_blur_block_no_fractional(
 
     for component in 0..element_width {
         let bulk = u32x8::new(accumulated[component]) * u32x8::splat(whole_weight);
-        let values = (bulk + u32x8::splat(SIMD_BOX_BLUR_BIAS) >> 24u32).to_array();
+        let values = ((bulk + u32x8::splat(SIMD_BOX_BLUR_BIAS)) >> 24u32).to_array();
         for lane in 0..output_count {
             destination[(output_start + lane) * element_width + component] = values[lane] as u8;
         }
@@ -234,7 +234,7 @@ fn simd_blur_block<const GAUSSIAN_RGBA_SPECIALIZATION: bool, const GAUSSIAN_RGBA
     for component in 0..element_width {
         let bulk = u32x8::new(accumulated[component]) * u32x8::splat(whole_weight)
             + u32x8::new(fractional[component]);
-        let values = (bulk + u32x8::splat(SIMD_BOX_BLUR_BIAS) >> 24u32).to_array();
+        let values = ((bulk + u32x8::splat(SIMD_BOX_BLUR_BIAS)) >> 24u32).to_array();
         for lane in 0..output_count {
             destination[(output_start + lane) * element_width + component] = values[lane] as u8;
         }

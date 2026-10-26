@@ -516,12 +516,12 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
-        if let Some(start) = options.start {
-            if options.uses_default_mask_except_start() {
-                return self
-                    .getmask2_with_start(text, start)
-                    .map(|(width, height, pixels, _)| (width, height, pixels));
-            }
+        if let Some(start) = options.start
+            && options.uses_default_mask_except_start()
+        {
+            return self
+                .getmask2_with_start(text, start)
+                .map(|(width, height, pixels, _)| (width, height, pixels));
         }
         if options.uses_default_mask() {
             return self.getmask(text);
@@ -535,12 +535,12 @@ impl FreeTypeFont {
         text: &[u8],
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
-        if let Some(start) = options.start {
-            if options.uses_default_mask_except_start() {
-                return self
-                    .getmask2_bytes_with_start(text, start)
-                    .map(|(width, height, pixels, _)| (width, height, pixels));
-            }
+        if let Some(start) = options.start
+            && options.uses_default_mask_except_start()
+        {
+            return self
+                .getmask2_bytes_with_start(text, start)
+                .map(|(width, height, pixels, _)| (width, height, pixels));
         }
         if options.uses_default_mask() {
             return self.getmask_bytes(text);
@@ -831,10 +831,10 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
-        if let Some(start) = options.start {
-            if options.uses_default_mask_except_start() {
-                return self.getmask2_with_start(text, start);
-            }
+        if let Some(start) = options.start
+            && options.uses_default_mask_except_start()
+        {
+            return self.getmask2_with_start(text, start);
         }
         if options.uses_default_mask() {
             return self.getmask2(text);
@@ -848,10 +848,10 @@ impl FreeTypeFont {
         text: &[u8],
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
-        if let Some(start) = options.start {
-            if options.uses_default_mask_except_start() {
-                return self.getmask2_bytes_with_start(text, start);
-            }
+        if let Some(start) = options.start
+            && options.uses_default_mask_except_start()
+        {
+            return self.getmask2_bytes_with_start(text, start);
         }
         if options.uses_default_mask() {
             return self.getmask2_bytes(text);

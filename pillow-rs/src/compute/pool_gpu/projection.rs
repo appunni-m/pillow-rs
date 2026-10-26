@@ -92,15 +92,18 @@ impl GpuPool {
             return false;
         };
         let groups_x = width.div_ceil(16);
-        let groups_y = height
-            .div_ceil(16)
-            .checked_add(u64::from(ops.iter().any(|op| match op {
-                PipelineOp::PutPixel { color, .. } => {
-                    color.0 != 0 || color.1 != 0 || color.2 != 0 || (channels == 4 && color.3 != 0)
-                }
-                _ => false,
-            })))
-            .unwrap_or(u64::MAX);
+        let groups_y =
+            height
+                .div_ceil(16)
+                .saturating_add(u64::from(ops.iter().any(|op| match op {
+                    PipelineOp::PutPixel { color, .. } => {
+                        color.0 != 0
+                            || color.1 != 0
+                            || color.2 != 0
+                            || (channels == 4 && color.3 != 0)
+                    }
+                    _ => false,
+                })));
         if pixels > u64::from(GPU_BUFFER_CAPACITY)
             || capacity_words > u64::from(GPU_BUFFER_CAPACITY)
             || capacity_bytes > limits.max_buffer_size

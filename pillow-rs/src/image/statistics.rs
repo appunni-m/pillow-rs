@@ -462,14 +462,14 @@ impl Image {
             0
         };
         let pixel_count = pillow_image_pixel_count(img.as_ref());
-        if maxcolors > 1023 && pixel_count >= 64 * 1024 {
-            if let DynamicImage::ImageRgb8(rgb) = img.as_ref() {
-                match getcolors_rgb8_grayscale(rgb, max_distinct_colors, code_mask, code_polynomial)
-                {
-                    RgbGrayscaleColorCounts::NotGrayscale => {}
-                    RgbGrayscaleColorCounts::TooManyColors => return Ok(None),
-                    RgbGrayscaleColorCounts::Colors(result) => return Ok(Some(result)),
-                }
+        if maxcolors > 1023
+            && pixel_count >= 64 * 1024
+            && let DynamicImage::ImageRgb8(rgb) = img.as_ref()
+        {
+            match getcolors_rgb8_grayscale(rgb, max_distinct_colors, code_mask, code_polynomial) {
+                RgbGrayscaleColorCounts::NotGrayscale => {}
+                RgbGrayscaleColorCounts::TooManyColors => return Ok(None),
+                RgbGrayscaleColorCounts::Colors(result) => return Ok(Some(result)),
             }
         }
         let mut counts = PillowColorCounts::new(code_mask, initial_capacity, pixel_count);

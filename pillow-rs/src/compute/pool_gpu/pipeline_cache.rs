@@ -11,10 +11,10 @@ fn count_shader_bindings(source: &str) -> u32 {
     for line in source.lines() {
         if let Some(pos) = line.find("@binding(") {
             let rest = &line[pos + 9..];
-            if let Some(end) = rest.find(')') {
-                if let Ok(n) = rest[..end].trim().parse::<u32>() {
-                    max_binding = max_binding.max(n as i32);
-                }
+            if let Some(end) = rest.find(')')
+                && let Ok(n) = rest[..end].trim().parse::<u32>()
+            {
+                max_binding = max_binding.max(n as i32);
             }
         }
     }

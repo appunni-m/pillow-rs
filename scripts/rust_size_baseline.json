@@ -4,19 +4,13 @@
   "format_version": 1,
   "function_lines": [
     {
-      "lines": 136,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/composite.rs",
-      "signature": "pub fn op_merge( img: &DynamicImage, mode: &ColorMode, bands: &[Arc<Image>], logical_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 260,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/filter/blur.rs",
       "signature": "fn pil_box_blur_xy_impl( img: &DynamicImage, radius_x: f32, radius_y: f32, passes: u32, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 157,
+      "lines": 153,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs",
       "signature": "pub fn execute_filter5x5( img: &DynamicImage, kernel: &[f32; 25], scale: f32, offset: f32, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
@@ -34,13 +28,13 @@
       "signature": "fn rank_filter_impl( img: &DynamicImage, size: u32, rank: u32, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 219,
+      "lines": 127,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/paste.rs",
       "signature": "fn paste_native_masked( destination: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &Arc<Image>, mask_alpha: bool, mode: &str, ) -> Option<DynamicImage> {"
     },
     {
-      "lines": 235,
+      "lines": 208,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/paste.rs",
       "signature": "pub fn op_paste( img: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &Option<Arc<Image>>, mask_alpha: bool, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
@@ -52,7 +46,7 @@
       "signature": "pub(crate) fn execute_reduce( img: &DynamicImage, x_factor: u32, y_factor: u32, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 244,
+      "lines": 242,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/reduce.rs",
       "signature": "pub(super) fn execute_reduce_rgb_with_sparse_rows( img: &DynamicImage, x_factor: u32, y_factor: u32, explicit_mode: Option<&str>, ) -> Result<Option<(DynamicImage, Option<Vec<bool>>)>, PilError> {"
@@ -88,7 +82,7 @@
       "signature": "pub(crate) fn rotate_arbitrary_scalar( source: &[u8], source_size: (u32, u32), destination_size: (u32, u32), channels: usize, affine: [f64; 6], fill: (u8, u8, u8, u8), filter: ResampleFilter, is_float: bool, output: &mut [u8], ) {"
     },
     {
-      "lines": 133,
+      "lines": 132,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/thumbnail.rs",
       "signature": "pub(crate) fn execute_rgb_putpixel_thumbnail_fusion( img: &DynamicImage, putpixel_ops: &[PipelineOp], thumbnail: &PipelineOp, mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
@@ -106,7 +100,7 @@
       "signature": "pub(super) fn reduce_f_thumbnail( img: &DynamicImage, dst_w: u32, dst_h: u32, factor_x: u32, factor_y: u32, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 216,
+      "lines": 194,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/transform.rs",
       "signature": "pub fn op_transform( img: &DynamicImage, w: u32, h: u32, method: &TransformMethod, data: &[f64], filter: &ResampleFilter, fill: Option<(u8, u8, u8, u8)>, fill_is_none: bool, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
@@ -178,13 +172,13 @@
       "signature": "pub(super) fn estimate_resource_bytes( &self, op: &PipelineOp, auxiliary: &AuxiliaryImages, buffers: &BufferPool, uniform_alignment: usize, storage_alignment: usize, source_dimensions: (u32, u32), mode: u32, packed_luma_putdata: bool, logical_mode: Option<&str>, f_resize_f64_is_exact: bool, f_resize_f64_ordered_is_exact: bool, ) -> Result<usize, PilError> {"
     },
     {
-      "lines": 269,
+      "lines": 267,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/batch_execution.rs",
       "signature": "pub(super) fn execute_batch_impl( &self, ops: &[PipelineOp], auxiliary_images: &[AuxiliaryImages], w: u32, h: u32, mode: u32, packed_luma_colorize: bool, packed_luma_convert: bool, packed_luma_transform_input: bool, packed_luma_transform_output: bool, native_rgb_compact_input: bool, native_rgb_packed_output: bool, native_la_transform_output: bool, packed_luma_point: bool, packed_luma_putdata: bool, packed_luma_order_statistic: bool, packed_native_byte_filter: bool, packed_luma_pad: bool, packed_la_pad: bool, native_extract_band: bool, native_grayscale_rgb_input: bool, native_sharpness_l_input: bool, native_sharpness_la_input: bool, native_sharpness_rgb_input: bool, native_reduce_rgb_input: bool, native_expand_channels: Option<u8>, native_cover_input_channels: Option<u8>, native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>, logical_mode: Option<&str>, contrast_mean: Option<u8>, f_resize_constant_bits: Option<u32>, f_resize_box_copy_is_exact: bool, f_resize_identity_is_exact: bool, f_resize_box_average_is_exact: bool, f_resize_dyadic_is_exact: bool, f_resize_f64_is_exact: bool, f_resize_f64_ordered_is_exact: bool, initial_input: Option<&wgpu::Buffer>, buffers: &mut BufferPool, ) -> Result< ( bool, u32, u32, ReadbackTarget, PipelineResourceTelemetry, u64, bool, ), PilError, > {"
     },
     {
-      "lines": 659,
+      "lines": 658,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/batch_execution/routing.rs",
       "signature": "pub(in crate::compute::pool_gpu) fn execute_batch_with_policy( &self, ops: &[PipelineOp], img: &DynamicImage, mode: Option<&str>, allow_cpu_fallback: bool, ) -> Result<DynamicImage, PilError> {"
@@ -256,13 +250,13 @@
       "signature": "pub(in crate::compute::pool_gpu) fn execute_native_rgb_to_rgba_paste( &self, destination: &DynamicImage, source: &DynamicImage, offset: (i32, i32), dispatch: NativeRgbRgbaPasteDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 307,
+      "lines": 304,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/native_paste/masked_execution.rs",
       "signature": "pub(in crate::compute::pool_gpu) fn execute_native_masked_byte_paste( &self, destination: &DynamicImage, source: &DynamicImage, mask: &DynamicImage, logical_mode: &str, offset: (i32, i32), dispatch: NativeMaskedBytePasteDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 117,
+      "lines": 116,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/operation_admission.rs",
       "signature": "pub(super) fn gpu_dimensions_require_cpu( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
@@ -388,7 +382,7 @@
       "signature": "fn encode_byte_stage( gpu: &GpuInner, encoder: &mut wgpu::CommandEncoder, buffers: &BufferPool, stage: &Stage<'_>, secondary: Option<&EncodedGraph>, current_a: bool, ) -> Result<bool, PilError> {"
     },
     {
-      "lines": 271,
+      "lines": 168,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/stream/encoding.rs",
       "signature": "fn encode_graph( plan: &Plan<'_>, gpu: &'static GpuInner, encoder: &mut wgpu::CommandEncoder, ) -> Result<EncodedGraph, PilError> {"
@@ -616,7 +610,7 @@
       "signature": "fn gpu_pending_graph_depth(&self, depth: usize) -> Result<GpuPendingGraph<'_>, PilError> {"
     },
     {
-      "lines": 114,
+      "lines": 110,
       "occurrence": 1,
       "path": "pillow-rs/src/image/channel_access.rs",
       "signature": "pub fn getchannel(&self, channel: i32) -> Result<Image, PilError> {"
@@ -664,7 +658,7 @@
       "signature": "fn getprojection_from_materialized( img: &DynamicImage, mode: &str, ) -> Result<(Vec<u32>, Vec<u32>), PilError> {"
     },
     {
-      "lines": 208,
+      "lines": 198,
       "occurrence": 1,
       "path": "pillow-rs/src/image/projection.rs",
       "signature": "fn try_getprojection_putpixel_pipeline( &self, ) -> Result<Option<(Vec<u32>, Vec<u32>)>, PilError> {"
@@ -688,7 +682,7 @@
       "signature": "pub fn stat(&self) -> Result<Vec<Vec<f64>>, PilError> {"
     },
     {
-      "lines": 240,
+      "lines": 238,
       "occurrence": 1,
       "path": "pillow-rs/src/ops/pil_resize/boxed.rs",
       "signature": "fn pil_resize_boxed_with_hints( img: &DynamicImage, dst_w: u32, dst_h: u32, box_left: f64, box_top: f64, box_right: f64, box_bottom: f64, filter: ResampleFilter, explicit_mode: Option<&str>, parallel_pixel_threshold: usize, sparse_rgb_nonzero_rows: Option<&[bool]>, ) -> DynamicImage {"
@@ -731,11 +725,6 @@
     }
   ],
   "legacy_owners": {
-    "pillow-rs/src/compute/pool_cpu/ops/composite.rs": {
-      "owner": "lazytrot",
-      "reason": "Retains pre-existing functions above the 100-line limit moved from effects.rs during the CPU operation family split; preserve their bodies and track any later reductions under pillow-rs#8rfy.",
-      "reduction_task": "pillow-rs#8rfy"
-    },
     "pillow-rs/src/compute/pool_cpu/ops/filter/blur.rs": {
       "owner": "lazytrot",
       "reason": "Retains functions above the 100-line ratchet moved from the oversized CPU filter module; continue the scoped reduction under pillow-rs#qpfs.",

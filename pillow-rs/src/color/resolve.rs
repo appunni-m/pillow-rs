@@ -30,25 +30,25 @@ pub fn resolve_new_color(
         return parse_color_str(s);
     }
     // For I mode with i32 value, pack as 4-byte LE
-    if mode == "I" {
-        if let Some(v) = int32_val {
-            let bytes = v.to_le_bytes();
-            return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
-        }
+    if mode == "I"
+        && let Some(v) = int32_val
+    {
+        let bytes = v.to_le_bytes();
+        return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
     }
     // For F mode with f64 value, pack as 4-byte LE f32
-    if mode == "F" {
-        if let Some(v) = float_val {
-            let f = v as f32;
-            let bytes = f.to_le_bytes();
-            return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
-        }
+    if mode == "F"
+        && let Some(v) = float_val
+    {
+        let f = v as f32;
+        let bytes = f.to_le_bytes();
+        return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
     }
-    if matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N") {
-        if let Some(v) = int32_val {
-            let bytes = (v as u16).to_le_bytes();
-            return Ok((bytes[0], bytes[1], 0, 0));
-        }
+    if matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
+        && let Some(v) = int32_val
+    {
+        let bytes = (v as u16).to_le_bytes();
+        return Ok((bytes[0], bytes[1], 0, 0));
     }
     if let Some(v) = single_value {
         // PIL: single int for multi-band images = first band = value, rest = 0

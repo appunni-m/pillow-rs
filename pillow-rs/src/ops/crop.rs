@@ -157,10 +157,10 @@ impl Image {
         }
 
         let (source_width, source_height) = self.size()?;
-        let clip_left = i64::from(left).max(0);
-        let clip_top = i64::from(top).max(0);
-        let clip_right = i64::from(right).min(i64::from(source_width));
-        let clip_bottom = i64::from(bottom).min(i64::from(source_height));
+        let clip_left = left.max(0);
+        let clip_top = top.max(0);
+        let clip_right = right.min(i64::from(source_width));
+        let clip_bottom = bottom.min(i64::from(source_height));
         if clip_right <= clip_left || clip_bottom <= clip_top {
             return self.crop_canvas(output_width, output_height);
         }
@@ -173,18 +173,14 @@ impl Image {
             clip_right as u32,
             clip_bottom as u32,
         )?;
-        if clip_left == i64::from(left)
-            && clip_top == i64::from(top)
-            && clip_right == i64::from(right)
-            && clip_bottom == i64::from(bottom)
-        {
+        if clip_left == left && clip_top == top && clip_right == right && clip_bottom == bottom {
             return Ok(clipped);
         }
 
         let mut canvas = self.crop_canvas(output_width, output_height)?;
-        let paste_x = i32::try_from(clip_left - i64::from(left))
+        let paste_x = i32::try_from(clip_left - left)
             .map_err(|_| PilError::ValueError("crop offset overflow".into()))?;
-        let paste_y = i32::try_from(clip_top - i64::from(top))
+        let paste_y = i32::try_from(clip_top - top)
             .map_err(|_| PilError::ValueError("crop offset overflow".into()))?;
         canvas.paste_at(
             PasteSource::Image(Box::new(clipped)),

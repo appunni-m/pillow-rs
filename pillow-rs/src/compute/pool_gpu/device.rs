@@ -83,12 +83,12 @@ impl GpuInner {
         let adapter = adapter.ok_or_else(|| {
             #[cfg(not(target_arch = "wasm32"))]
             {
-                return PilError::ValueError(format!(
+                PilError::ValueError(format!(
                     "GPU adapter not available: requested={:?}, enabled={:?}, {}",
                     instance_descriptor.backends,
                     wgpu::Instance::enabled_backend_features(),
                     adapter_inventory,
-                ));
+                ))
             }
             #[cfg(target_arch = "wasm32")]
             {

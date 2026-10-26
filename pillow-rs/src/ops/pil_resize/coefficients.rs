@@ -278,17 +278,17 @@ fn cached_filter_coeffs(
         output_size,
         filter: filter_cache_id(filter),
     };
-    if let Ok(mut cache) = filter_coeff_cache().lock() {
-        if let Some(index) = cache.entries.iter().position(|entry| entry.key == key) {
-            let entry = cache
-                .entries
-                .remove(index)
-                .expect("resize coefficient cache entry disappeared");
-            let coeffs = Arc::clone(&entry.coeffs);
-            cache.entries.push_front(entry);
-            crate::compute::record_pipeline_resize_coeff_cache_hit();
-            return coeffs;
-        }
+    if let Ok(mut cache) = filter_coeff_cache().lock()
+        && let Some(index) = cache.entries.iter().position(|entry| entry.key == key)
+    {
+        let entry = cache
+            .entries
+            .remove(index)
+            .expect("resize coefficient cache entry disappeared");
+        let coeffs = Arc::clone(&entry.coeffs);
+        cache.entries.push_front(entry);
+        crate::compute::record_pipeline_resize_coeff_cache_hit();
+        return coeffs;
     }
 
     crate::compute::record_pipeline_resize_coeff_cache_miss();
@@ -344,17 +344,17 @@ fn cached_filter_coeffs_f64(
         kernel: kernel as usize,
         support_bits: support.to_bits(),
     };
-    if let Ok(mut cache) = filter_coeff_f64_cache().lock() {
-        if let Some(index) = cache.entries.iter().position(|entry| entry.key == key) {
-            let entry = cache
-                .entries
-                .remove(index)
-                .expect("f64 resize coefficient cache entry disappeared");
-            let coeffs = Arc::clone(&entry.coeffs);
-            cache.entries.push_front(entry);
-            crate::compute::record_pipeline_resize_coeff_cache_hit();
-            return coeffs;
-        }
+    if let Ok(mut cache) = filter_coeff_f64_cache().lock()
+        && let Some(index) = cache.entries.iter().position(|entry| entry.key == key)
+    {
+        let entry = cache
+            .entries
+            .remove(index)
+            .expect("f64 resize coefficient cache entry disappeared");
+        let coeffs = Arc::clone(&entry.coeffs);
+        cache.entries.push_front(entry);
+        crate::compute::record_pipeline_resize_coeff_cache_hit();
+        return coeffs;
     }
 
     crate::compute::record_pipeline_resize_coeff_cache_miss();

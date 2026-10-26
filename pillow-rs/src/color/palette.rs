@@ -109,10 +109,11 @@ fn palette_getcolor_validate_impl(
     if stored.len() > mode_len {
         stored.truncate(mode_len);
     }
-    if mode == "RGB" && stored.len() == 3 {
-        if let Some(index) = palette_getcolor(palette, stored[0], stored[1], stored[2]) {
-            return Ok(index);
-        }
+    if mode == "RGB"
+        && stored.len() == 3
+        && let Some(index) = palette_getcolor(palette, stored[0], stored[1], stored[2])
+    {
+        return Ok(index);
     }
     let entries = palette.len() / mode_len;
     for i in 0..entries {

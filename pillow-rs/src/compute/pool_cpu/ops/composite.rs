@@ -192,6 +192,66 @@ fn interleave_rgb_luma_bands(red: &[u8], green: &[u8], blue: &[u8]) -> Result<Ve
     Ok(output)
 }
 
+/// Merge three native L bands into interleaved RGB without cloning their
+/// complete source images.
+fn try_merge_rgb_luma_bands(
+    img: &DynamicImage,
+    mode: &ColorMode,
+    bands: &[Arc<Image>],
+    logical_mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    if !matches!(mode, ColorMode::RGB) || logical_mode != Some("RGB") || bands.len() != 3 {
+        return Ok(None);
+    }
+    let DynamicImage::ImageLuma8(red) = img else {
+        return Ok(None);
+    };
+    let green_image = bands[1].materialized_shared_for_ops()?;
+    let blue_image = bands[2].materialized_shared_for_ops()?;
+    let (DynamicImage::ImageLuma8(green), DynamicImage::ImageLuma8(blue)) =
+        (green_image.as_ref(), blue_image.as_ref())
+    else {
+        return Ok(None);
+    };
+    let (w, h) = red.dimensions();
+    let pixels = (w as usize)
+        .checked_mul(h as usize)
+        .ok_or_else(|| PilError::ValueError("merge: image dimensions overflow".into()))?;
+    if red.as_raw().len() != pixels
+        || green.as_raw().len() != pixels
+        || blue.as_raw().len() != pixels
+    {
+        return Ok(None);
+    }
+    let red = red.as_raw();
+    let green = green.as_raw();
+    let blue = blue.as_raw();
+
+    #[cfg(feature = "parallel")]
+    let rgb = {
+        let output_len = pixels
+            .checked_mul(3)
+            .ok_or_else(|| PilError::ValueError("merge: output length overflow".into()))?;
+        let mut rgb = vec![0u8; output_len];
+        apply_effect_rows(&mut rgb, w as usize, h as usize, 3, |row_index, row| {
+            let source_start = row_index * w as usize;
+            for (x, pixel) in row.chunks_exact_mut(3).enumerate() {
+                let source_index = source_start + x;
+                pixel[0] = red[source_index];
+                pixel[1] = green[source_index];
+                pixel[2] = blue[source_index];
+            }
+        });
+        rgb
+    };
+    #[cfg(not(feature = "parallel"))]
+    let rgb = interleave_rgb_luma_bands(red, green, blue)?;
+    crate::compute::record_pipeline_allocation(rgb.len());
+    let image = RgbImage::from_raw(w, h, rgb)
+        .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
+    Ok(Some(DynamicImage::ImageRgb8(image)))
+}
+
 pub fn op_merge(
     img: &DynamicImage,
     mode: &ColorMode,
@@ -209,55 +269,9 @@ pub fn op_merge(
         return Ok(img.clone());
     }
 
-    // RGB merge from three native L bands needs one interleaved output.
-    // `to_luma8()` and `materialize_for_ops()` each clone their complete
-    // DynamicImage buffer for already-native L inputs, so keep the shared
-    // source bands alive and read their bytes directly on this narrow path.
-    if matches!(mode, ColorMode::RGB) && logical_mode == Some("RGB") && bands.len() == 3 {
-        if let DynamicImage::ImageLuma8(red) = img {
-            let green_image = bands[1].materialized_shared_for_ops()?;
-            let blue_image = bands[2].materialized_shared_for_ops()?;
-            if let (DynamicImage::ImageLuma8(green), DynamicImage::ImageLuma8(blue)) =
-                (green_image.as_ref(), blue_image.as_ref())
-            {
-                let (w, h) = red.dimensions();
-                let pixels = (w as usize).checked_mul(h as usize).ok_or_else(|| {
-                    PilError::ValueError("merge: image dimensions overflow".into())
-                })?;
-                if red.as_raw().len() == pixels
-                    && green.as_raw().len() == pixels
-                    && blue.as_raw().len() == pixels
-                {
-                    let red = red.as_raw();
-                    let green = green.as_raw();
-                    let blue = blue.as_raw();
-
-                    #[cfg(feature = "parallel")]
-                    let rgb = {
-                        let output_len = pixels.checked_mul(3).ok_or_else(|| {
-                            PilError::ValueError("merge: output length overflow".into())
-                        })?;
-                        let mut rgb = vec![0u8; output_len];
-                        apply_effect_rows(&mut rgb, w as usize, h as usize, 3, |row_index, row| {
-                            let source_start = row_index * w as usize;
-                            for (x, pixel) in row.chunks_exact_mut(3).enumerate() {
-                                let source_index = source_start + x;
-                                pixel[0] = red[source_index];
-                                pixel[1] = green[source_index];
-                                pixel[2] = blue[source_index];
-                            }
-                        });
-                        rgb
-                    };
-                    #[cfg(not(feature = "parallel"))]
-                    let rgb = interleave_rgb_luma_bands(red, green, blue)?;
-                    crate::compute::record_pipeline_allocation(rgb.len());
-                    let image = RgbImage::from_raw(w, h, rgb)
-                        .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
-                    return Ok(DynamicImage::ImageRgb8(image));
-                }
-            }
-        }
+    // The native-L fast path avoids cloning each complete DynamicImage.
+    if let Some(image) = try_merge_rgb_luma_bands(img, mode, bands, logical_mode)? {
+        return Ok(image);
     }
 
     // Get pixel data from each byte band.

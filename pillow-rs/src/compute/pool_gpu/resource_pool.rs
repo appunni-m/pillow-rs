@@ -145,12 +145,12 @@ impl GpuAuxiliaryCache {
             current_mode = gpu_mode_after_op(current_mode, op);
         }
         for ((op, auxiliary), op_mode) in ops.iter().zip(auxiliary_images).zip(&op_modes) {
-            if !matches!(op, PipelineOp::PutData { .. }) {
-                if let Some(second) = auxiliary.second.as_ref() {
-                    *second_counts
-                        .entry(Arc::as_ptr(second) as usize)
-                        .or_default() += 1;
-                }
+            if !matches!(op, PipelineOp::PutData { .. })
+                && let Some(second) = auxiliary.second.as_ref()
+            {
+                *second_counts
+                    .entry(Arc::as_ptr(second) as usize)
+                    .or_default() += 1;
             }
             if let Some(third) = auxiliary.third.as_ref() {
                 *third_counts.entry(Arc::as_ptr(third) as usize).or_default() += 1;
@@ -162,34 +162,34 @@ impl GpuAuxiliaryCache {
 
         let mut cache = Self::default();
         for ((op, auxiliary), op_mode) in ops.iter().zip(auxiliary_images).zip(&op_modes) {
-            if !matches!(op, PipelineOp::PutData { .. }) {
-                if let Some(second) = auxiliary.second.as_ref() {
-                    let key = Arc::as_ptr(second) as usize;
-                    if second_counts.get(&key).copied().unwrap_or_default() > 1
-                        && !cache.second_ranges.contains_key(&key)
-                    {
-                        // Typed I;16 Paste sources use a numeric u16 word
-                        // rather than the ordinary RGBA byte transport. Do
-                        // not place that representation in the shared cache:
-                        // the cache key is the image identity and a later
-                        // byte-oriented operation could otherwise reuse the
-                        // same image with the wrong packing.
-                        if !gpu_luma16_paste_source(op, *op_mode, second) {
-                            let values = if matches!(op, PipelineOp::ConvertLab { .. }) {
-                                crate::lab::gpu_table_words().to_vec()
-                            } else {
-                                pack_dynamic_rgba(second.as_ref(), capacity)?
-                            };
-                            if cache.total_bytes().saturating_add(values.len() * 4)
-                                <= MAX_GPU_AUXILIARY_CACHE_BYTES
-                            {
-                                let range = append_arena_slice(
-                                    &mut cache.img2_values,
-                                    &values,
-                                    storage_alignment,
-                                );
-                                cache.second_ranges.insert(key, range);
-                            }
+            if !matches!(op, PipelineOp::PutData { .. })
+                && let Some(second) = auxiliary.second.as_ref()
+            {
+                let key = Arc::as_ptr(second) as usize;
+                if second_counts.get(&key).copied().unwrap_or_default() > 1
+                    && !cache.second_ranges.contains_key(&key)
+                {
+                    // Typed I;16 Paste sources use a numeric u16 word
+                    // rather than the ordinary RGBA byte transport. Do
+                    // not place that representation in the shared cache:
+                    // the cache key is the image identity and a later
+                    // byte-oriented operation could otherwise reuse the
+                    // same image with the wrong packing.
+                    if !gpu_luma16_paste_source(op, *op_mode, second) {
+                        let values = if matches!(op, PipelineOp::ConvertLab { .. }) {
+                            crate::lab::gpu_table_words().to_vec()
+                        } else {
+                            pack_dynamic_rgba(second.as_ref(), capacity)?
+                        };
+                        if cache.total_bytes().saturating_add(values.len() * 4)
+                            <= MAX_GPU_AUXILIARY_CACHE_BYTES
+                        {
+                            let range = append_arena_slice(
+                                &mut cache.img2_values,
+                                &values,
+                                storage_alignment,
+                            );
+                            cache.second_ranges.insert(key, range);
                         }
                     }
                 }
@@ -209,18 +209,14 @@ impl GpuAuxiliaryCache {
                     }
                 }
             }
-            if let Some(lut) = extract_lut(op, *op_mode) {
-                if lut_counts.get(&lut).copied().unwrap_or_default() > 1
-                    && !cache.lut_ranges.contains_key(&lut)
-                {
-                    if cache.total_bytes().saturating_add(lut.len() * 4)
-                        <= MAX_GPU_AUXILIARY_CACHE_BYTES
-                    {
-                        let range =
-                            append_arena_slice(&mut cache.lut_values, &lut, storage_alignment);
-                        cache.lut_ranges.insert(lut, range);
-                    }
-                }
+            if let Some(lut) = extract_lut(op, *op_mode)
+                && lut_counts.get(&lut).copied().unwrap_or_default() > 1
+                && !cache.lut_ranges.contains_key(&lut)
+                && cache.total_bytes().saturating_add(lut.len() * 4)
+                    <= MAX_GPU_AUXILIARY_CACHE_BYTES
+            {
+                let range = append_arena_slice(&mut cache.lut_values, &lut, storage_alignment);
+                cache.lut_ranges.insert(lut, range);
             }
         }
         Ok(cache)
@@ -613,12 +609,12 @@ impl BufferPool {
                 "GPU native channel input does not match its checked dimensions".into(),
             ));
         }
-        if let Some((offset, _)) = la_patch {
-            if channels != 2 || offset.checked_add(2).is_none_or(|end| end > expected_bytes) {
-                return Err(PilError::ValueError(
-                    "GPU native LA patch does not match its checked dimensions".into(),
-                ));
-            }
+        if let Some((offset, _)) = la_patch
+            && (channels != 2 || offset.checked_add(2).is_none_or(|end| end > expected_bytes))
+        {
+            return Err(PilError::ValueError(
+                "GPU native LA patch does not match its checked dimensions".into(),
+            ));
         }
         let transfer_bytes = expected_bytes
             .div_ceil(std::mem::size_of::<u32>())
@@ -857,10 +853,10 @@ impl GpuInner {
     }
 
     pub(super) fn mark_failed(&self, detail: String) {
-        if let Ok(mut state) = self.device_state.lock() {
-            if state.lost.is_none() {
-                state.lost = Some(detail);
-            }
+        if let Ok(mut state) = self.device_state.lock()
+            && state.lost.is_none()
+        {
+            state.lost = Some(detail);
         }
         self.invalidate_resource_pools();
     }

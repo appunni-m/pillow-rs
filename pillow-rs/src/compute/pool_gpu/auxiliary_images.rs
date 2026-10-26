@@ -142,13 +142,13 @@ pub(super) fn extract_second_image(
         // disagree with the CPU and SIMD paste implementations.
         return source.materialized_shared().map(Some);
     }
-    if let PipelineOp::CompositeModule { other, .. } = op {
-        if matches!(other.mode()?.as_str(), "P" | "PA") {
-            // Image.composite blends indexed samples and gives the result
-            // image2's palette. Upload image2's raw index/(index, alpha)
-            // bytes, not its visible RGB(A) expansion.
-            return other.materialized_shared().map(Some);
-        }
+    if let PipelineOp::CompositeModule { other, .. } = op
+        && matches!(other.mode()?.as_str(), "P" | "PA")
+    {
+        // Image.composite blends indexed samples and gives the result
+        // image2's palette. Upload image2's raw index/(index, alpha)
+        // bytes, not its visible RGB(A) expansion.
+        return other.materialized_shared().map(Some);
     }
 
     let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {

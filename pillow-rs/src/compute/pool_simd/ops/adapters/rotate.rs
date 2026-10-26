@@ -153,8 +153,8 @@ fn simd_rotate_geometry(
     if expand {
         let shift_x = -(f64::from(destination_width) - sw) / 2.0;
         let shift_y = -(f64::from(destination_height) - sh) / 2.0;
-        affine_c = affine_a * shift_x + affine_b * shift_y + affine_c;
-        affine_f = affine_d * shift_x + affine_e * shift_y + affine_f;
+        affine_c += affine_a * shift_x + affine_b * shift_y;
+        affine_f += affine_d * shift_x + affine_e * shift_y;
     }
     Some(SimdRotateGeometry {
         affine: [affine_a, affine_b, affine_c, affine_d, affine_e, affine_f],
@@ -622,10 +622,10 @@ pub(crate) fn simd_rotate(
     {
         return Ok(result);
     }
-    if rotate_identity_contract(*angle, *center, *translate) {
-        if let Some(result) = native_identity_rotate(img, mode)? {
-            return Ok(preserve_mode(img, result));
-        }
+    if rotate_identity_contract(*angle, *center, *translate)
+        && let Some(result) = native_identity_rotate(img, mode)?
+    {
+        return Ok(preserve_mode(img, result));
     }
     if rotate_uses_discrete_fast_path(
         *angle,

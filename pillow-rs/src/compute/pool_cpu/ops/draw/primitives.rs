@@ -103,13 +103,13 @@ pub(super) fn draw_rect_on_canvas<C: DrawCanvas>(
     // horizontal spans plus vertical line segments.  Keeping those primitive
     // calls separate is important for degenerate boxes: a zero-width or
     // zero-height box expands only through the outline's vertical segments.
-    if let Some(fc) = fill {
-        if img_h > 0 {
-            let start = i64::from(y0).max(0);
-            let end = i64::from(y1).min(i64::from(img_h) - 1);
-            for py in start..=end {
-                draw_horizontal_span(canvas, i64::from(x0), i64::from(x1), py, fc, img_w, img_h);
-            }
+    if let Some(fc) = fill
+        && img_h > 0
+    {
+        let start = i64::from(y0).max(0);
+        let end = i64::from(y1).min(i64::from(img_h) - 1);
+        for py in start..=end {
+            draw_horizontal_span(canvas, i64::from(x0), i64::from(x1), py, fc, img_w, img_h);
         }
     }
 
@@ -159,6 +159,5 @@ pub(super) fn draw_rect_on_canvas<C: DrawCanvas>(
     } else if outline.is_some() {
         // An explicitly zero-width outline is intentionally a no-op at the
         // Python layer, matching ImageDraw.rectangle's width guard.
-        return;
     }
 }

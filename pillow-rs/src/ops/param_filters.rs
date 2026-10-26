@@ -216,8 +216,8 @@ where
     F: FnMut(&[f64]) -> Result<Vec<f64>, E>,
     M: Fn(PilError) -> E,
 {
-    validate_color3dlut_size_tuple(size).map_err(|error| map_error(error))?;
-    validate_color3dlut_channels(channels).map_err(|error| map_error(error))?;
+    validate_color3dlut_size_tuple(size).map_err(&map_error)?;
+    validate_color3dlut_channels(channels).map_err(map_error)?;
 
     let (s1, s2, s3) = size;
     let channel_count = channels as usize;
@@ -257,7 +257,7 @@ where
     let channels_in = input.channels;
     let table = &input.table;
     let channels_out = channels_out.unwrap_or(channels_in);
-    validate_color3dlut_channels(channels_out).map_err(|error| map_error(error))?;
+    validate_color3dlut_channels(channels_out).map_err(map_error)?;
 
     let (s1, s2, s3) = size;
     let input_channels = channels_in as usize;

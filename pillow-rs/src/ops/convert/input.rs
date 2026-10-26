@@ -129,13 +129,13 @@ impl Image {
         if matrix.is_some() && !matches!(target_mode.as_str(), "L" | "RGB") {
             return Err(PilError::ValueError("illegal conversion".to_owned()));
         }
-        if let Some(matrix) = matrix.as_ref() {
-            if !matches!(matrix.len(), 4 | 12) {
-                return Err(PilError::TypeError(format!(
-                    "argument 2 must be sequence of length 12, not {}",
-                    matrix.len()
-                )));
-            }
+        if let Some(matrix) = matrix.as_ref()
+            && !matches!(matrix.len(), 4 | 12)
+        {
+            return Err(PilError::TypeError(format!(
+                "argument 2 must be sequence of length 12, not {}",
+                matrix.len()
+            )));
         }
 
         let palette = match palette {

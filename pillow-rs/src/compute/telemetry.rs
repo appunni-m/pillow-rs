@@ -245,12 +245,11 @@ pub(super) fn set_pipeline_telemetry_enabled(enabled: bool) -> bool {
 #[cfg(not(test))]
 pub(super) fn set_gpu_shader_coverage_enabled(enabled: bool) -> bool {
     let previous = GPU_SHADER_COVERAGE_ENABLED.swap(enabled, Ordering::Relaxed);
-    if !enabled {
-        if let Some(coverage) = GPU_SHADER_COVERAGE.get()
-            && let Ok(mut coverage) = coverage.lock()
-        {
-            coverage.clear();
-        }
+    if !enabled
+        && let Some(coverage) = GPU_SHADER_COVERAGE.get()
+        && let Ok(mut coverage) = coverage.lock()
+    {
+        coverage.clear();
     }
     previous
 }

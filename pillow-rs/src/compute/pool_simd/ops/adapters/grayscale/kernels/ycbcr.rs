@@ -65,11 +65,11 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_ycbcr_grayscale_bytes
                 .chunks_exact(3)
                 .map(|pixel| pixel[0]),
         );
-        return Some((
+        Some((
             output,
             (vector_pixels / 16) as u64,
             (pixels - vector_pixels) as u64,
-        ));
+        ))
     }
     #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
     Some(native_channel::gather_channel::<3, 0>(source.as_raw()))

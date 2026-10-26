@@ -86,24 +86,20 @@ pub fn execute_filter5x5(
     if matches!(explicit_mode, None | Some("L"))
         && matches!(img, DynamicImage::ImageLuma8(_))
         && binomial5x5_parameters_match(kernel, scale, offset)
-    {
-        if let Some(out) =
+        && let Some(out) =
             filter_5x5_binomial_luma_parallel_rows(raw, w_u32 as usize, h_u32 as usize)
-        {
-            let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
-            return Ok(preserve_mode(img, result));
-        }
+    {
+        let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        return Ok(preserve_mode(img, result));
     }
     #[cfg(feature = "parallel")]
     if matches!(explicit_mode, None | Some("LA"))
         && matches!(img, DynamicImage::ImageLumaA8(_))
         && binomial5x5_parameters_match(kernel, scale, offset)
+        && let Some(out) = filter_5x5_binomial_la_parallel_rows(raw, w_u32 as usize, h_u32 as usize)
     {
-        if let Some(out) = filter_5x5_binomial_la_parallel_rows(raw, w_u32 as usize, h_u32 as usize)
-        {
-            let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
-            return Ok(preserve_mode(img, result));
-        }
+        let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        return Ok(preserve_mode(img, result));
     }
     let mut out = raw.to_vec();
     #[cfg(not(feature = "parallel"))]

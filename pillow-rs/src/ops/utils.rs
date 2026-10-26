@@ -23,7 +23,7 @@ use crate::error::PilError;
 /// * `bits_per_pixel` — 1 for mode "1", 8 for "L"/"P"
 pub fn align_row_to_32(data: &[u8], width: u32, bits_per_pixel: u8) -> Result<Vec<u8>, PilError> {
     let bits_per_line = bits_per_pixel as u64 * width as u64;
-    let bytes_per_line = ((bits_per_line + 7) / 8) as usize;
+    let bytes_per_line = bits_per_line.div_ceil(8) as usize;
 
     // Pillow's ImageQt helper treats a zero-width row as already aligned: its
     // computed padding is zero and it returns the source bytes before any

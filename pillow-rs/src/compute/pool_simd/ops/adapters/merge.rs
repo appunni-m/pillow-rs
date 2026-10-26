@@ -97,9 +97,7 @@ fn native_merge_contract_for_shape(
         return None;
     }
     let pixels = (shape.width as usize).checked_mul(shape.height as usize)?;
-    if pixels.checked_mul(channels).is_none() {
-        return None;
-    }
+    pixels.checked_mul(channels)?;
     if !bands
         .iter()
         .all(|band| band.size().ok() == Some((shape.width, shape.height)))
@@ -253,26 +251,24 @@ pub(super) fn native_merge_bytes(
     // RGB's three native L inputs are already shared immutable buffers. Keep
     // their owners alive and interleave borrowed slices rather than cloning
     // every complete band before the vector kernel reads it.
-    if channels == 3 {
-        if let Some(owners) =
+    if channels == 3
+        && let Some(owners) =
             native_merge_rgb_luma_owners(img, target_mode, bands, logical_mode, pixels)?
-        {
-            if let DynamicImage::ImageLuma8(first) = img {
-                let mut band_bytes = Vec::with_capacity(3);
-                band_bytes.push(first.as_raw().as_slice());
-                for owner in &owners {
-                    let DynamicImage::ImageLuma8(image) = owner.as_ref() else {
-                        return Err(PilError::InternalError(
-                            "native RGB merge band changed storage while borrowed".into(),
-                        ));
-                    };
-                    band_bytes.push(image.as_raw().as_slice());
-                }
-                let (result, vector_blocks, scalar_tail, path) =
-                    native_merge_interleave(width, height, pixels, channels, &band_bytes)?;
-                return Ok(Some((result, vector_blocks, scalar_tail, path)));
-            }
+        && let DynamicImage::ImageLuma8(first) = img
+    {
+        let mut band_bytes = Vec::with_capacity(3);
+        band_bytes.push(first.as_raw().as_slice());
+        for owner in &owners {
+            let DynamicImage::ImageLuma8(image) = owner.as_ref() else {
+                return Err(PilError::InternalError(
+                    "native RGB merge band changed storage while borrowed".into(),
+                ));
+            };
+            band_bytes.push(image.as_raw().as_slice());
         }
+        let (result, vector_blocks, scalar_tail, path) =
+            native_merge_interleave(width, height, pixels, channels, &band_bytes)?;
+        return Ok(Some((result, vector_blocks, scalar_tail, path)));
     }
 
     let mut band_bytes = Vec::with_capacity(channels);

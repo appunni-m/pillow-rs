@@ -23,7 +23,7 @@ fn separable_box_blur_params(radius: u32) -> [u32; 3] {
 /// for both tuple and fractional public inputs.
 #[cfg(feature = "gpu")]
 pub(crate) fn separable_box_blur_params_f32(radius: f32) -> Option<[u32; 3]> {
-    if !radius.is_finite() || radius < 0.0 || radius > 64.0 {
+    if !radius.is_finite() || !(0.0..=64.0).contains(&radius) {
         return None;
     }
     let integer_radius = radius as u32;
@@ -63,7 +63,7 @@ fn separable_gaussian_blur_radius_and_fraction(sigma: f32) -> Option<(u32, f32)>
     // complete radius range through 64.  Keep the host proof aligned with
     // that shader limit so small images with a large Pillow sigma do not take
     // an unnecessary CPU path.
-    if !radius.is_finite() || radius < 0.0 || radius > 64.0 {
+    if !radius.is_finite() || !(0.0..=64.0).contains(&radius) {
         return None;
     }
     Some((radius as u32, radius))

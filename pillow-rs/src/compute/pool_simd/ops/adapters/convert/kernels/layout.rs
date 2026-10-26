@@ -234,8 +234,8 @@ pub(super) fn native_luma_alpha_to_rgba_bytes(img: &DynamicImage) -> Option<(Vec
     }
     let output_bytes = pixels.checked_mul(4)?;
     let mut output = Vec::with_capacity(output_bytes);
-    let mut source_blocks = source.as_raw().chunks(32);
-    while let Some(source_block) = source_blocks.next() {
+    let source_blocks = source.as_raw().chunks(32);
+    for source_block in source_blocks {
         let active_pixels = (pixels - output.len() / 4).min(16);
         let mut padded = [0u8; 32];
         padded[..source_block.len()].copy_from_slice(source_block);
@@ -419,11 +419,11 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_rgb_to_rgba_bytes(
             output.extend_from_slice(&source[source_offset..source_offset + 3]);
             output.push(u8::MAX);
         }
-        return Some((
+        Some((
             output,
             u64::try_from(vectors).ok()?,
             u64::try_from(pixels - vector_pixels).ok()?,
-        ));
+        ))
     }
 
     #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]

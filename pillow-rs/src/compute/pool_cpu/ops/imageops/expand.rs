@@ -129,12 +129,11 @@ pub fn op_expand(
     if let Some(expanded) = expand_indexed_mode(img, border, fill, mode, new_width, new_height) {
         return Ok(expanded);
     }
-    if let Some(channels) = native_expand_channels(img, mode) {
-        if let Some(expanded) =
+    if let Some(channels) = native_expand_channels(img, mode)
+        && let Some(expanded) =
             expand_native_bytes(img, border, fill, channels, new_width, new_height)?
-        {
-            return Ok(expanded);
-        }
+    {
+        return Ok(expanded);
     }
     expand_rgba_compat(img, border, fill, new_width, new_height)
 }

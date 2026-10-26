@@ -146,7 +146,7 @@ impl GpuInner {
         if !operation_values.is_empty() {
             self.queue.write_buffer(
                 &arena.buffer,
-                (cached_values.len() * std::mem::size_of::<u32>()) as u64,
+                std::mem::size_of_val(cached_values) as u64,
                 bytemuck::cast_slice(operation_values),
             );
         }

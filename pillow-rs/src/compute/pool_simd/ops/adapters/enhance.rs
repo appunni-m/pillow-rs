@@ -437,12 +437,11 @@ pub fn simd_brightness(
     let lut: Vec<u8> = (0u32..=255)
         .map(|value| ((value as u64 * factor_fp as u64) / 1000).min(255) as u8)
         .collect();
-    if let Some(tables) = native_lut_tables(&lut) {
-        if let Some(result) =
+    if let Some(tables) = native_lut_tables(&lut)
+        && let Some(result) =
             native_brightness_transform(img, mode, |input| native_lut_chunk(input, &tables))
-        {
-            return Ok(result);
-        }
+    {
+        return Ok(result);
     }
     Err(simd_unsupported("Brightness"))
 }

@@ -832,10 +832,8 @@ fn simd_fit_crop_or_float_shortcut(
         && box_top_f32 == 0.0
         && box_right_f32 == img.width() as f32
         && box_bottom_f32 == img.height() as f32;
-    if full_source_identity {
-        if let Some(result) = native_copy_image_bytes(img, mode)? {
-            return Ok(Some(result));
-        }
+    if full_source_identity && let Some(result) = native_copy_image_bytes(img, mode)? {
+        return Ok(Some(result));
     }
     // `_imaging.c::_resize` takes exact integer crops before dispatching to a
     // filter. Preserve that ordering for F so special values in discarded

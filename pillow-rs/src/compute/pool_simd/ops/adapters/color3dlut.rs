@@ -60,7 +60,7 @@ pub(super) fn color3dlut_supported_for_image(
     target_mode: PixelMode,
     mode: Option<&str>,
 ) -> bool {
-    if !mode.is_none_or(|value| pixel_mode_name(source_mode) == value) {
+    if mode.is_some_and(|value| pixel_mode_name(source_mode) != value) {
         return false;
     }
     let Some(source_channels) = color3dlut_source_channels_for_image(img, source_mode) else {
@@ -89,7 +89,7 @@ pub(super) fn color3dlut_supported_for_shape(
     target_mode: PixelMode,
     mode: Option<&str>,
 ) -> bool {
-    if !mode.is_none_or(|value| pixel_mode_name(source_mode) == value) {
+    if mode.is_some_and(|value| pixel_mode_name(source_mode) != value) {
         return false;
     }
     let Some(source_channels) = color3dlut_source_channels_for_shape(shape, source_mode) else {

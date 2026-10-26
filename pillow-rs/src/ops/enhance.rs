@@ -143,10 +143,10 @@ impl Image {
             value => value,
         };
         let mut pixel = Image::new(1, 1, &mode, (0, 0, 0, 0))?;
-        if mode == "P" {
-            if let Some(palette) = self.palette() {
-                pixel.putpalette(&palette, "RGB")?;
-            }
+        if mode == "P"
+            && let Some(palette) = self.palette()
+        {
+            pixel.putpalette(&palette, "RGB")?;
         }
         pixel.putpixel_value(0, 0, value)?;
         let gray = pixel.convert("L", None, None, None, None)?;

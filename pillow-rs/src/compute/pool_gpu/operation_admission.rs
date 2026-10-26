@@ -49,10 +49,10 @@ pub(super) fn gpu_dimensions_require_cpu(
         // CPU PutPixel reports IndexError for an out-of-range coordinate;
         // the shader would silently perform no write. Route that case to the
         // CPU before device initialization so error semantics are preserved.
-        if let PipelineOp::PutPixel { x, y, .. } = op {
-            if *x >= cur_w || *y >= cur_h {
-                return true;
-            }
+        if let PipelineOp::PutPixel { x, y, .. } = op
+            && (*x >= cur_w || *y >= cur_h)
+        {
+            return true;
         }
         let next = match op_output_dims(op, cur_w, cur_h) {
             Some(dimensions) => dimensions,
@@ -113,10 +113,9 @@ pub(super) fn gpu_dimensions_require_cpu(
             filter,
             ..
         } = op
+            && !gpu_fit_coefficients_are_safe((cur_w, cur_h), next, *bleed, *centering, *filter)
         {
-            if !gpu_fit_coefficients_are_safe((cur_w, cur_h), next, *bleed, *centering, *filter) {
-                return true;
-            }
+            return true;
         }
         if let PipelineOp::Pad { filter, .. } = op {
             let Some(((resize_w, resize_h), _)) = gpu_pad_geometry(op, cur_w, cur_h) else {
@@ -381,19 +380,19 @@ pub(super) fn gpu_auxiliary_modes_are_safe_for_color(
             Some(DynamicImage::ImageLuma8(_))
         );
     }
-    if let PipelineOp::Paste { mask_alpha, .. } = op {
-        if current_color == crate::raster::ColorType::L16 {
-            let source_is_luma16 = auxiliary
-                .second
-                .as_deref()
-                .is_some_and(|source| matches!(source, DynamicImage::ImageLuma16(_)));
-            let mask_is_supported = match (*mask_alpha, auxiliary.third.as_deref()) {
-                (false, None) | (false, Some(DynamicImage::ImageLuma8(_))) => true,
-                (true, Some(DynamicImage::ImageRgba8(_))) => true,
-                _ => false,
-            };
-            return source_is_luma16 && mask_is_supported;
-        }
+    if let PipelineOp::Paste { mask_alpha, .. } = op
+        && current_color == crate::raster::ColorType::L16
+    {
+        let source_is_luma16 = auxiliary
+            .second
+            .as_deref()
+            .is_some_and(|source| matches!(source, DynamicImage::ImageLuma16(_)));
+        let mask_is_supported = match (*mask_alpha, auxiliary.third.as_deref()) {
+            (false, None) | (false, Some(DynamicImage::ImageLuma8(_))) => true,
+            (true, Some(DynamicImage::ImageRgba8(_))) => true,
+            _ => false,
+        };
+        return source_is_luma16 && mask_is_supported;
     }
     if let PipelineOp::CompositeModule { mask_alpha, .. } = op {
         let Some(destination) = auxiliary.second.as_ref() else {

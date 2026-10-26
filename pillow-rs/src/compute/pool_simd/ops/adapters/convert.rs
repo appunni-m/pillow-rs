@@ -492,19 +492,10 @@ fn try_layout_special_conversion(
     if matches!(target, ColorMode::RGB)
         && matches!(mode, None | Some("RGBA"))
         && matches!(img, DynamicImage::ImageRgba8(_))
+        && let Some((output, vector_blocks, scalar_tail, path)) = native_rgba_to_rgb_bytes(img)
     {
-        if let Some((output, vector_blocks, scalar_tail, path)) = native_rgba_to_rgb_bytes(img) {
-            return finish_vector_conversion(
-                img,
-                output,
-                3,
-                vector_blocks,
-                scalar_tail,
-                path,
-                false,
-            )
+        return finish_vector_conversion(img, output, 3, vector_blocks, scalar_tail, path, false)
             .map(Some);
-        }
     }
     if matches!(target, ColorMode::L)
         && layout.source_channels == 3

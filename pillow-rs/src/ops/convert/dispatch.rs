@@ -233,12 +233,12 @@ fn convert_to_rgbx(
             };
             let converted = image.convert(base_mode, None, dither, palette, colors)?;
             let mut rgba = converted.materialized_shared()?.to_rgba8();
-            if source_mode == "P" {
-                if let Some(alpha) = image.palette_alpha() {
-                    let indices = image.materialized_shared()?;
-                    for (pixel, &index) in rgba.pixels_mut().zip(indices.as_bytes()) {
-                        pixel[3] = alpha.get(usize::from(index)).copied().unwrap_or(255);
-                    }
+            if source_mode == "P"
+                && let Some(alpha) = image.palette_alpha()
+            {
+                let indices = image.materialized_shared()?;
+                for (pixel, &index) in rgba.pixels_mut().zip(indices.as_bytes()) {
+                    pixel[3] = alpha.get(usize::from(index)).copied().unwrap_or(255);
                 }
             }
             Ok(Image::from_dynamic(

@@ -186,17 +186,18 @@ pub(super) fn try_convert_nonstandard_source(
     let palette = image.palette();
     let shared = image.materialized_shared_for_ops()?;
     let source = shared.as_ref();
-    if source_mode == "PA" && target_mode == "RGBA" {
-        if let DynamicImage::ImageLumaA8(indices_alpha) = source {
-            let rgba = crate::image::expand_palette_alpha(
-                indices_alpha,
-                palette.as_deref().unwrap_or_default(),
-            );
-            return Ok(Some(Image::from_dynamic(
-                rgba,
-                explicit_mode_for(target_mode),
-            )));
-        }
+    if source_mode == "PA"
+        && target_mode == "RGBA"
+        && let DynamicImage::ImageLumaA8(indices_alpha) = source
+    {
+        let rgba = crate::image::expand_palette_alpha(
+            indices_alpha,
+            palette.as_deref().unwrap_or_default(),
+        );
+        return Ok(Some(Image::from_dynamic(
+            rgba,
+            explicit_mode_for(target_mode),
+        )));
     }
     let converted = nonstandard_rgb_source(source, source_mode, palette.as_deref());
     let result = if matches!(target_mode, "L" | "LA") {

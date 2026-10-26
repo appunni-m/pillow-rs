@@ -84,7 +84,7 @@ impl Image {
             scalar_tail_pixels =
                 scalar_tail_pixels.saturating_add((blocks.remainder().len() / 4) as u64);
             let row_nonzero = if all_columns_covered {
-                blocks.clone().any(|block| block_has_nonzero(block))
+                blocks.clone().any(&mut block_has_nonzero)
                     || blocks.remainder().chunks_exact(4).any(nonzero_4)
             } else {
                 let mut any = false;
@@ -427,7 +427,7 @@ impl Image {
                                 image,
                                 ops.as_slice(),
                                 false,
-                                |image| crate::compute::simd_cmyk_projection(image),
+                                crate::compute::simd_cmyk_projection,
                             )
                             .map(
                                 |(horizontal, vertical, vector_blocks, scalar_tail)| {
@@ -452,7 +452,7 @@ impl Image {
                             image,
                             ops.as_slice(),
                             false,
-                            |image| crate::compute::simd_rgb_projection(image),
+                            crate::compute::simd_rgb_projection,
                         )
                         .map(
                             |(horizontal, vertical, vector_blocks, scalar_tail)| {

@@ -108,7 +108,7 @@ impl Image {
         }
         transparent_index
             .map(PaletteTransparency::Index)
-            .or_else(|| Some(PaletteTransparency::Table(alpha)))
+            .or(Some(PaletteTransparency::Table(alpha)))
     }
 
     /// Returns the pending transparency value in the shape exposed by

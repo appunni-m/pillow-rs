@@ -106,5 +106,5 @@ pub(super) fn apply(context: &mut NativePasteApplyContext<'_>) -> bool {
     } else {
         "vector"
     });
-    return true;
+    true
 }

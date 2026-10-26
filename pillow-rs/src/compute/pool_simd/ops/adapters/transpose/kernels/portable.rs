@@ -482,8 +482,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn transpose_native_odd_collect
         && total_bytes > 2 * 1024 * 1024
         && total_bytes <= 8 * 1024 * 1024
         && width >= 256
-        && height >= 256
-        && height <= 2048
+        && (256..=2048).contains(&height)
         && width.max(height) <= width.min(height).saturating_mul(4)
         && (!width.is_multiple_of(4) || !height.is_multiple_of(4))
         && matches!(

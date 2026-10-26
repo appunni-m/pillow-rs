@@ -394,7 +394,7 @@ pub fn fit_with_input(
 // crop box. Keep this at the public core boundary so CPU, SIMD, and GPU receive
 // the same deferred operation value instead of each reimplementing the rule.
 fn normalize_fit_bleed(bleed: f64) -> f64 {
-    if 0.0 <= bleed && bleed < 0.5 {
+    if (0.0..0.5).contains(&bleed) {
         bleed
     } else {
         0.0

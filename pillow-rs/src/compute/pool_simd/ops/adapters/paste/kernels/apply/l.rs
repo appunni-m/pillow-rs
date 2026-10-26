@@ -108,5 +108,5 @@ pub(super) fn apply(context: &mut NativePasteApplyContext<'_>) -> bool {
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     }
     crate::compute::record_pipeline_operation_path(if used_neon { "neon-blend" } else { "vector" });
-    return true;
+    true
 }

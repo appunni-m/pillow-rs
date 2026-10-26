@@ -12,10 +12,10 @@ fn register_part_1(m: &mut Registry) {
              op: &PipelineOp,
              mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let Some(m) = mode {
-                    if m == "LA" || m == "RGBA" {
-                        return Err(PilError::OsError(format!("not supported for mode {m}")));
-                    }
+                if let Some(m) = mode
+                    && (m == "LA" || m == "RGBA")
+                {
+                    return Err(PilError::OsError(format!("not supported for mode {m}")));
                 }
                 if let PipelineOp::Autocontrast { cutoff, mask } = op {
                     op_autocontrast(img, *cutoff, mask.as_ref())
@@ -34,10 +34,10 @@ fn register_part_1(m: &mut Registry) {
              op: &PipelineOp,
              mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let Some(m) = mode {
-                    if m == "LA" || m == "RGBA" {
-                        return Err(PilError::OsError(format!("not supported for mode {m}")));
-                    }
+                if let Some(m) = mode
+                    && (m == "LA" || m == "RGBA")
+                {
+                    return Err(PilError::OsError(format!("not supported for mode {m}")));
                 }
                 match op {
                     PipelineOp::Equalize => op_equalize(img),

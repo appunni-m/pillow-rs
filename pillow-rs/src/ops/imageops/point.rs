@@ -289,7 +289,7 @@ pub fn colorize(
     whitepoint: u8,
 ) -> Result<Image, PilError> {
     validate_colorize_mode(image)?;
-    if let Some(_) = mid {
+    if mid.is_some() {
         // PIL: assert 0 <= blackpoint <= midpoint <= whitepoint <= 255
         if !(blackpoint <= midpoint && midpoint <= whitepoint) {
             return Err(PilError::AssertionError(String::new()));

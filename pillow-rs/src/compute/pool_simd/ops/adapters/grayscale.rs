@@ -122,13 +122,7 @@ pub(crate) fn simd_grayscale_with_evidence(
         crate::compute::record_pipeline_allocation(output.len());
     }
     let result =
-        crate::image_utils::raw_bytes_to_image_allow_empty(img.width(), img.height(), output, 1)
-            .map(|result| {
-                // Grayscale intentionally changes the public mode to L; preserving the
-                // source RGB variant here would make the next native operation see the
-                // wrong layout, especially for empty RGB images.
-                result
-            })?;
+        crate::image_utils::raw_bytes_to_image_allow_empty(img.width(), img.height(), output, 1)?;
     Ok((result, vector_blocks, scalar_tail, path))
 }
 

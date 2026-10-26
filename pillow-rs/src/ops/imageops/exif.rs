@@ -281,7 +281,7 @@ fn serialize_exif_ifd(
     }
     output.extend_from_slice(tail);
     if pad_short_tail && tail.len() < 4 {
-        output.extend(std::iter::repeat(0).take(4 - tail.len()));
+        output.extend(std::iter::repeat_n(0, 4 - tail.len()));
     }
     output
 }
