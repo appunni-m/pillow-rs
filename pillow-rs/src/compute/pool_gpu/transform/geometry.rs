@@ -109,64 +109,14 @@ pub(in crate::compute::pool_gpu) fn gpu_nearest_affine_is_exact(
     mode: Option<&str>,
     source_dimensions: (u32, u32),
 ) -> bool {
-    let PipelineOp::Transform {
-        w,
-        h,
-        method,
-        data,
-        filter,
-        ..
-    } = op
-    else {
+    let PipelineOp::Transform { w, h, data, .. } = op else {
         return false;
     };
-    let typed_mode = mode == Some("I");
-    let float_mode = mode == Some("F");
-    let luma16_mode = matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"));
-    let indexed_mode = matches!(mode, Some("1" | "P"));
-    let palette_alpha_mode = mode == Some("PA");
-    // CMYK is four raw channel bytes in the same Rgba8 transport. Unlike
-    // RGBA, its fourth byte is K rather than alpha, and the mode-4 nearest
-    // shader branch copies all four bytes without color conversion.
-    let raw_packed_mode = mode == Some("CMYK");
-    if (!typed_mode
-        && !float_mode
-        && !luma16_mode
-        && !indexed_mode
-        && !palette_alpha_mode
-        && !raw_packed_mode)
-        || (typed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
-        || (float_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
-        // The mode-8 shader's affine branch copies complete float words only
-        // for an explicit nearest request.  Pillow's filtered F transform
-        // contract interpolates scalar values; retaining those rows on the
-        // exact host path avoids silently treating a bilinear request as a
-        // nearest relocation.
-        || (float_mode && !matches!(filter, ResampleFilter::Nearest))
-        || (luma16_mode && !matches!(image, DynamicImage::ImageLuma16(_)))
-        || (indexed_mode && !matches!(image, DynamicImage::ImageLuma8(_)))
-        || (palette_alpha_mode && !matches!(image, DynamicImage::ImageLumaA8(_)))
-        || (raw_packed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
-        || !matches!(method, TransformMethod::Affine)
-        || (!gpu_transform_uses_nearest(mode, *filter) && !luma16_mode)
-        || source_dimensions.0 == 0
-        || source_dimensions.1 == 0
-        || source_dimensions.0 > i32::MAX as u32
-        || source_dimensions.1 > i32::MAX as u32
-        || *w > i32::MAX as u32
-        || *h > i32::MAX as u32
-        || *w == 0
-        || *h == 0
-        || (float_mode
-            && u64::from(*w).saturating_mul(u64::from(*h))
-                > GPU_F_AFFINE_PROOF_MAX_PIXELS as u64)
-        || data.len() < 6
-        || data[..6]
-            .iter()
-            .any(|value| !value.is_finite() || (*value as f32).is_infinite())
-    {
+    if !gpu_nearest_affine_request_is_supported(op, image, mode, source_dimensions) {
         return false;
     }
+    let float_mode = mode == Some("F");
+    let luma16_mode = matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"));
 
     // Keep this expression byte-for-byte equivalent to the fixed-point
     // encoding in `prepare_batch` and `affine_nearest_fixed`.
@@ -247,6 +197,89 @@ pub(in crate::compute::pool_gpu) fn gpu_nearest_affine_is_exact(
         return true;
     }
 
+    gpu_float_affine_source_selection_matches(
+        source_dimensions,
+        (*w, *h),
+        [a, b, c, d, e, f],
+        [origin_x, step_x_x, step_y_x, origin_y, step_x_y, step_y_y],
+    )
+}
+
+fn gpu_nearest_affine_request_is_supported(
+    op: &PipelineOp,
+    image: &DynamicImage,
+    mode: Option<&str>,
+    source_dimensions: (u32, u32),
+) -> bool {
+    let PipelineOp::Transform {
+        w,
+        h,
+        method,
+        data,
+        filter,
+        ..
+    } = op
+    else {
+        return false;
+    };
+    let typed_mode = mode == Some("I");
+    let float_mode = mode == Some("F");
+    let luma16_mode = matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"));
+    let indexed_mode = matches!(mode, Some("1" | "P"));
+    let palette_alpha_mode = mode == Some("PA");
+    // CMYK is four raw channel bytes in the same Rgba8 transport. Unlike
+    // RGBA, its fourth byte is K rather than alpha, and the mode-4 nearest
+    // shader branch copies all four bytes without color conversion.
+    let raw_packed_mode = mode == Some("CMYK");
+    if (!typed_mode
+        && !float_mode
+        && !luma16_mode
+        && !indexed_mode
+        && !palette_alpha_mode
+        && !raw_packed_mode)
+        || (typed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
+        || (float_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
+        // The mode-8 shader's affine branch copies complete float words only
+        // for an explicit nearest request. Pillow's filtered F transform
+        // contract interpolates scalar values; retaining those rows on the
+        // exact host path avoids silently treating a bilinear request as a
+        // nearest relocation.
+        || (float_mode && !matches!(filter, ResampleFilter::Nearest))
+        || (luma16_mode && !matches!(image, DynamicImage::ImageLuma16(_)))
+        || (indexed_mode && !matches!(image, DynamicImage::ImageLuma8(_)))
+        || (palette_alpha_mode && !matches!(image, DynamicImage::ImageLumaA8(_)))
+        || (raw_packed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
+        || !matches!(method, TransformMethod::Affine)
+        || (!gpu_transform_uses_nearest(mode, *filter) && !luma16_mode)
+        || source_dimensions.0 == 0
+        || source_dimensions.1 == 0
+        || source_dimensions.0 > i32::MAX as u32
+        || source_dimensions.1 > i32::MAX as u32
+        || *w > i32::MAX as u32
+        || *h > i32::MAX as u32
+        || *w == 0
+        || *h == 0
+        || (float_mode
+            && u64::from(*w).saturating_mul(u64::from(*h))
+                > GPU_F_AFFINE_PROOF_MAX_PIXELS as u64)
+        || data.len() < 6
+        || data[..6]
+            .iter()
+            .any(|value| !value.is_finite() || (*value as f32).is_infinite())
+    {
+        return false;
+    }
+    true
+}
+
+fn gpu_float_affine_source_selection_matches(
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    matrix: [f64; 6],
+    fixed_coordinates: [i64; 6],
+) -> bool {
+    let [a, b, c, d, e, f] = matrix;
+    let [origin_x, step_x_x, step_y_x, origin_y, step_x_y, step_y_y] = fixed_coordinates;
     // F affine nearest uses the same opaque-word sampler as I, but its CPU
     // reference evaluates the original f64 matrix at each pixel before
     // truncating non-negative coordinates. The GPU path instead walks the
@@ -262,8 +295,8 @@ pub(in crate::compute::pool_gpu) fn gpu_nearest_affine_is_exact(
     let fixed_index = |value: i64| -> i64 { if value < 0 { -1 } else { value >> 16 } };
     let source_width = i64::from(source_dimensions.0);
     let source_height = i64::from(source_dimensions.1);
-    for dy in 0..*h {
-        for dx in 0..*w {
+    for dy in 0..output_dimensions.1 {
+        for dx in 0..output_dimensions.0 {
             let dx_f = f64::from(dx);
             let dy_f = f64::from(dy);
             let host_x = a * (dx_f + 0.5) + b * (dy_f + 0.5) + c;
