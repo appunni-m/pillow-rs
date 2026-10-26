@@ -265,44 +265,7 @@ fn image_mutation_support(img: &DynamicImage, op: &PipelineOp, mode: Option<&str
             mask_alpha,
         } => super::paste::native_composite_plan_for_image(img, other, mask, *mask_alpha, mode)
             .is_some(),
-        PipelineOp::Paste {
-            source,
-            x,
-            y,
-            w,
-            h,
-            mask,
-            mask_alpha,
-        } => {
-            super::native_paste_plan_for_image(
-                img,
-                source,
-                *x,
-                *y,
-                *w,
-                *h,
-                mask.as_ref(),
-                *mask_alpha,
-                mode,
-            )
-            .is_some()
-                || super::native_paste_rgba_to_rgb_supported(
-                    img,
-                    source,
-                    *w,
-                    *h,
-                    mask.as_ref(),
-                    mode,
-                )
-                || super::native_paste_rgb_to_rgba_supported(
-                    img,
-                    source,
-                    *w,
-                    *h,
-                    mask.as_ref(),
-                    mode,
-                )
-        }
+        PipelineOp::Paste { .. } => image_paste_support(img, op, mode),
         PipelineOp::Merge {
             mode: target_mode,
             bands,
@@ -311,6 +274,35 @@ fn image_mutation_support(img: &DynamicImage, op: &PipelineOp, mode: Option<&str
         PipelineOp::BlendModule { .. } => super::module_blend::supports_for_image(img, op, mode),
         _ => false,
     }
+}
+
+fn image_paste_support(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
+    let PipelineOp::Paste {
+        source,
+        x,
+        y,
+        w,
+        h,
+        mask,
+        mask_alpha,
+    } = op
+    else {
+        return false;
+    };
+    super::native_paste_plan_for_image(
+        img,
+        source,
+        *x,
+        *y,
+        *w,
+        *h,
+        mask.as_ref(),
+        *mask_alpha,
+        mode,
+    )
+    .is_some()
+        || super::native_paste_rgba_to_rgb_supported(img, source, *w, *h, mask.as_ref(), mode)
+        || super::native_paste_rgb_to_rgba_supported(img, source, *w, *h, mask.as_ref(), mode)
 }
 
 fn image_color3dlut_support(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> bool {
