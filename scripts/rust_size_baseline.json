@@ -46,12 +46,6 @@
       "signature": "pub(super) fn gpu_logical_mode_is_supported( ops: &[PipelineOp], img: Option<&DynamicImage>, mode: Option<&str>, f_resize_constant_bits: Option<u32>, f_pad_f64_is_exact: bool, inspect_auxiliary_modes: bool, ) -> bool {"
     },
     {
-      "lines": 304,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/native_paste/masked_execution.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_masked_byte_paste( &self, destination: &DynamicImage, source: &DynamicImage, mask: &DynamicImage, logical_mode: &str, offset: (i32, i32), dispatch: NativeMaskedBytePasteDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 301,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/projection.rs",
@@ -99,11 +93,6 @@
     "pillow-rs/src/compute/pool_gpu/logical_mode_admission.rs": {
       "owner": "lazytrot",
       "reason": "Moved the logical-mode admission whitelist out of the oversized GPU coordinator; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/native_paste/masked_execution.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved native masked byte paste execution beside its GPU paste family; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/projection.rs": {
