@@ -79,20 +79,28 @@ fn f_resize_box_copy_lowering_requires_non_downscaling_box_chain() {
         )
         .unwrap(),
     );
-    let box_resize = |w, h| PipelineOp::Resize {
+    assert_f_resize_box_copy_positive_chains(&image);
+    assert_f_resize_box_copy_rejected_chains(&image);
+    assert_f_resize_box_copy_special_values();
+}
+
+fn f_resize_box_operation(w: u32, h: u32) -> PipelineOp {
+    PipelineOp::Resize {
         w,
         h,
         filter: ResampleFilter::Box,
-    };
+    }
+}
 
+fn assert_f_resize_box_copy_positive_chains(image: &DynamicImage) {
     assert!(gpu_f_resize_box_copy_is_exact(
-        &[box_resize(6, 4)],
-        &image,
+        &[f_resize_box_operation(6, 4)],
+        image,
         Some("F")
     ));
     assert!(gpu_f_resize_box_copy_is_exact(
-        &[box_resize(3, 2), box_resize(12, 8)],
-        &image,
+        &[f_resize_box_operation(3, 2), f_resize_box_operation(12, 8)],
+        image,
         Some("F")
     ));
     assert!(gpu_f_resize_box_copy_is_exact(
@@ -101,25 +109,28 @@ fn f_resize_box_copy_lowering_requires_non_downscaling_box_chain() {
                 data: bytes::Bytes::from(vec![0u8; 24]),
                 mode: PixelMode::F,
             },
-            box_resize(6, 4),
+            f_resize_box_operation(6, 4),
         ],
-        &image,
+        image,
         Some("F")
     ));
+}
+
+fn assert_f_resize_box_copy_rejected_chains(image: &DynamicImage) {
     assert!(!gpu_f_resize_box_copy_is_exact(
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::from(vec![0u8; 4]),
                 mode: PixelMode::F,
             },
-            box_resize(6, 4),
+            f_resize_box_operation(6, 4),
         ],
-        &image,
+        image,
         Some("F")
     ));
     assert!(!gpu_f_resize_box_copy_is_exact(
-        &[box_resize(2, 2)],
-        &image,
+        &[f_resize_box_operation(2, 2)],
+        image,
         Some("F")
     ));
     assert!(!gpu_f_resize_box_copy_is_exact(
@@ -128,25 +139,27 @@ fn f_resize_box_copy_lowering_requires_non_downscaling_box_chain() {
             h: 4,
             filter: ResampleFilter::Bilinear,
         }],
-        &image,
+        image,
         Some("F")
     ));
     assert!(!gpu_f_resize_box_copy_is_exact(
-        &[box_resize(6, 4)],
-        &image,
+        &[f_resize_box_operation(6, 4)],
+        image,
         Some("I")
     ));
     assert!(!gpu_f_resize_box_copy_is_exact(
-        &[box_resize(6, 4), PipelineOp::Mirror],
-        &image,
+        &[f_resize_box_operation(6, 4), PipelineOp::Mirror],
+        image,
         Some("F")
     ));
+}
 
+fn assert_f_resize_box_copy_special_values() {
     let negative_zero = DynamicImage::ImageRgba8(
         RgbaImage::from_raw(3, 2, (-0.0f32).to_le_bytes().repeat(6)).unwrap(),
     );
     assert!(gpu_f_resize_box_copy_is_exact(
-        &[box_resize(6, 4)],
+        &[f_resize_box_operation(6, 4)],
         &negative_zero,
         Some("F")
     ));
@@ -154,7 +167,7 @@ fn f_resize_box_copy_lowering_requires_non_downscaling_box_chain() {
         RgbaImage::from_raw(3, 2, f32::NAN.to_le_bytes().repeat(6)).unwrap(),
     );
     assert!(gpu_f_resize_box_copy_is_exact(
-        &[box_resize(6, 4)],
+        &[f_resize_box_operation(6, 4)],
         &nan,
         Some("F")
     ));
@@ -162,7 +175,7 @@ fn f_resize_box_copy_lowering_requires_non_downscaling_box_chain() {
         RgbaImage::from_raw(3, 2, f32::INFINITY.to_le_bytes().repeat(6)).unwrap(),
     );
     assert!(gpu_f_resize_box_copy_is_exact(
-        &[box_resize(6, 4)],
+        &[f_resize_box_operation(6, 4)],
         &infinity,
         Some("F")
     ));
