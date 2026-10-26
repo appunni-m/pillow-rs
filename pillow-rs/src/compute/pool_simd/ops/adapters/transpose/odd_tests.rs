@@ -294,7 +294,6 @@ fn transpose_native_odd_collect_all_padding_lengths() {
 fn transpose_native_odd_collect_final_cache_revisits_and_split_counters() {
     use crate::checked_dims::CheckedDims;
     use crate::compute::Backend;
-    use std::sync::atomic::Ordering;
 
     struct RestoreTelemetry(bool);
     impl Drop for RestoreTelemetry {
@@ -315,58 +314,82 @@ fn transpose_native_odd_collect_final_cache_revisits_and_split_counters() {
         (TransposeMethod::Rotate270, false, true),
         (TransposeMethod::Transverse, true, true),
     ] {
-        let expected = odd_transpose_reference(&source, width, height, &method);
-        let counters = TransposeNativeOddCollectCounters::default();
-        {
-            let mut cache = TransposeNativeOddRowCache::new(&scratch_dims, &counters);
-            cache.scratch.fill(0xA5);
-            // Four complete and three partial cache fills, including a
-            // first access to the padded final block and backward visits.
-            for index in [
-                count - 1,
-                0,
-                height - 1,
-                height,
-                height + 1,
-                count - 1,
-                0,
-                count - 2,
-                count - 1,
-                height - 1,
-            ] {
-                let actual =
-                    cache.block(&source, width, height, count, index, reverse_x, reverse_y);
-                let start = index * 16;
-                let valid = (expected.len() - start).min(16);
-                assert_eq!(&actual[..valid], &expected[start..start + valid]);
-            }
-        }
-        assert_eq!(counters.scratch_allocations.load(Ordering::Relaxed), 1);
-        assert_eq!(counters.vector_blocks.load(Ordering::Relaxed), 48);
-        assert_eq!(counters.scalar_tail.load(Ordering::Relaxed), 532);
-
-        let counters = TransposeNativeOddCollectCounters::default();
-        let mut blocks = Vec::with_capacity(count);
-        let split = height + height / 2;
-        for range in [0..split, split..count] {
-            let mut cache = TransposeNativeOddRowCache::new(&scratch_dims, &counters);
-            cache.scratch.fill(0xA5);
-            for index in range {
-                blocks
-                    .push(cache.block(&source, width, height, count, index, reverse_x, reverse_y));
-            }
-        }
-        let _ = Backend::take_pipeline_allocation_telemetry();
-        let (actual, vectors, tail) =
-            counters.finish(blocks, expected.len(), scratch_dims.total_bytes());
-        let allocations = Backend::take_pipeline_allocation_telemetry();
-        assert_eq!(actual, expected);
-        // The middle group is computed by both tasks: 48 actual vectors
-        // instead of 36 unique vectors, and 220 rather than 204 tails.
-        assert_eq!(vectors, 48);
-        assert_eq!(tail, 220);
-        assert_eq!(allocations.allocation_count, 3);
-        assert_eq!(allocations.allocated_bytes, 1200);
-        assert_eq!(actual.len(), 780); // Four initialized padding bytes removed.
+        assert_transpose_native_odd_collect_method(
+            &source,
+            width,
+            height,
+            count,
+            &scratch_dims,
+            method,
+            reverse_x,
+            reverse_y,
+        );
     }
+}
+
+#[cfg(feature = "parallel")]
+fn assert_transpose_native_odd_collect_method(
+    source: &[u8],
+    width: usize,
+    height: usize,
+    count: usize,
+    scratch_dims: &crate::checked_dims::CheckedDims,
+    method: TransposeMethod,
+    reverse_x: bool,
+    reverse_y: bool,
+) {
+    use crate::compute::Backend;
+    use std::sync::atomic::Ordering;
+
+    let expected = odd_transpose_reference(source, width, height, &method);
+    let counters = TransposeNativeOddCollectCounters::default();
+    {
+        let mut cache = TransposeNativeOddRowCache::new(scratch_dims, &counters);
+        cache.scratch.fill(0xA5);
+        // Four complete and three partial cache fills, including a
+        // first access to the padded final block and backward visits.
+        for index in [
+            count - 1,
+            0,
+            height - 1,
+            height,
+            height + 1,
+            count - 1,
+            0,
+            count - 2,
+            count - 1,
+            height - 1,
+        ] {
+            let actual = cache.block(source, width, height, count, index, reverse_x, reverse_y);
+            let start = index * 16;
+            let valid = (expected.len() - start).min(16);
+            assert_eq!(&actual[..valid], &expected[start..start + valid]);
+        }
+    }
+    assert_eq!(counters.scratch_allocations.load(Ordering::Relaxed), 1);
+    assert_eq!(counters.vector_blocks.load(Ordering::Relaxed), 48);
+    assert_eq!(counters.scalar_tail.load(Ordering::Relaxed), 532);
+
+    let counters = TransposeNativeOddCollectCounters::default();
+    let mut blocks = Vec::with_capacity(count);
+    let split = height + height / 2;
+    for range in [0..split, split..count] {
+        let mut cache = TransposeNativeOddRowCache::new(scratch_dims, &counters);
+        cache.scratch.fill(0xA5);
+        for index in range {
+            blocks.push(cache.block(source, width, height, count, index, reverse_x, reverse_y));
+        }
+    }
+    let _ = Backend::take_pipeline_allocation_telemetry();
+    let (actual, vectors, tail) =
+        counters.finish(blocks, expected.len(), scratch_dims.total_bytes());
+    let allocations = Backend::take_pipeline_allocation_telemetry();
+    assert_eq!(actual, expected);
+    // The middle group is computed by both tasks: 48 actual vectors
+    // instead of 36 unique vectors, and 220 rather than 204 tails.
+    assert_eq!(vectors, 48);
+    assert_eq!(tail, 220);
+    assert_eq!(allocations.allocation_count, 3);
+    assert_eq!(allocations.allocated_bytes, 1200);
+    assert_eq!(actual.len(), 780); // Four initialized padding bytes removed.
 }
