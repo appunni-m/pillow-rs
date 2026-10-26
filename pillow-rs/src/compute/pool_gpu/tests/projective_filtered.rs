@@ -1,5 +1,7 @@
 use super::*;
 
+mod palette_partial_mesh;
+
 #[test]
 fn byte_projective_filtered_relocations_native_gpu_preserve_pixels() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
@@ -343,76 +345,6 @@ fn assert_byte_partial_mesh_filter_case(
         "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
     );
     true
-}
-
-#[test]
-fn palette_projective_partial_mesh_relocations_native_gpu_preserve_pairs() {
-    let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let cases = [
-        (
-            [1.0, 2.0, 6.0, 6.0],
-            [2.0, 3.0, 2.0, 7.0, 7.0, 7.0, 7.0, 3.0],
-        ),
-        (
-            [1.0, 2.0, 6.0, 6.0],
-            [2.0, 3.0, 6.0, 3.0, 6.0, 8.0, 2.0, 8.0],
-        ),
-    ];
-    let palette = (0..768)
-        .map(|index| (index * 19 + 7) as u8)
-        .collect::<Vec<_>>();
-    for (mode, channels, fill) in [
-        ("P", 1usize, TransformFill::Scalar(251)),
-        ("PA", 2usize, TransformFill::Components(vec![199, 71])),
-    ] {
-        let source_size = (16u32, 16u32);
-        let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
-            .map(|index| (index * 37 + channels * 11 + 5) as u8)
-            .collect::<Vec<_>>();
-        let storage_mode = if mode == "PA" { "LA" } else { mode };
-        let mut source = Image::frombytes(storage_mode, source_size, &bytes)
-            .unwrap_or_else(|error| panic!("{mode} source: {error}"));
-        source
-            .putpalette(&palette, "RGB")
-            .unwrap_or_else(|error| panic!("{mode} palette: {error}"));
-        assert_eq!(source.mode().expect("palette mode"), mode);
-        for (bbox, quad) in cases {
-            let data = TransformData::Mesh(vec![(bbox.to_vec(), quad.to_vec())]);
-            for filter in [
-                (0, ResampleFilter::Nearest),
-                (2, ResampleFilter::Bilinear),
-                (3, ResampleFilter::Bicubic),
-            ] {
-                let transformed = source
-                    .transform_public(
-                        (9, 8),
-                        4,
-                        Some(data.clone()),
-                        filter.0,
-                        0,
-                        Some(fill.clone()),
-                    )
-                    .unwrap_or_else(|error| {
-                        panic!("{mode} partial Mesh transform bbox={bbox:?} quad={quad:?}: {error}")
-                    });
-                let parity_context = format!("native {mode} partial Mesh filter={filter:?}");
-                let telemetry_context =
-                    format!("mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}");
-                let operation_context = format!("{mode} partial Mesh transform");
-                if !assert_projective_gpu_parity_case(
-                    transformed,
-                    previous,
-                    &parity_context,
-                    "CPU partial palette Mesh transform",
-                    &operation_context,
-                    &telemetry_context,
-                ) {
-                    return;
-                }
-            }
-        }
-    }
-    Backend::set_pipeline_telemetry_enabled(previous);
 }
 
 #[test]

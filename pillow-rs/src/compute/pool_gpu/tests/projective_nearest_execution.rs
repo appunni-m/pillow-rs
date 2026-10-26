@@ -456,7 +456,26 @@ fn byte_projective_quad_mesh_nearest_proof_native_gpu_preserves_pixels() {
 #[test]
 fn byte_projective_fractional_constant_quad_mesh_native_gpu_preserves_pixels() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let cases = [
+    let cases = byte_projective_fractional_constant_cases();
+    for (mode, channels) in [
+        ("L", 1usize),
+        ("LA", 2usize),
+        ("RGB", 3usize),
+        ("RGBA", 4usize),
+        ("P", 1usize),
+    ] {
+        if !run_byte_projective_fractional_constant_mode(mode, channels, &cases) {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
+        }
+    }
+    Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+type ByteProjectiveConstantCase = (i32, TransformData);
+
+fn byte_projective_fractional_constant_cases() -> [ByteProjectiveConstantCase; 2] {
+    [
         (
             3,
             TransformData::Affine(vec![3.25, 4.0, 3.25, 4.0, 3.25, 4.0, 3.25, 4.0]),
@@ -468,68 +487,95 @@ fn byte_projective_fractional_constant_quad_mesh_native_gpu_preserves_pixels() {
                 vec![3.25, 4.0, 3.25, 4.0, 3.25, 4.0, 3.25, 4.0],
             )]),
         ),
-    ];
-    for (mode, channels) in [
-        ("L", 1usize),
-        ("LA", 2usize),
-        ("RGB", 3usize),
-        ("RGBA", 4usize),
-        ("P", 1usize),
-    ] {
-        let source_size = (9u32, 6u32);
-        let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
-            .map(|index| (index * 73 + 17 + channels) as u8)
+    ]
+}
+
+fn run_byte_projective_fractional_constant_mode(
+    mode: &str,
+    channels: usize,
+    cases: &[ByteProjectiveConstantCase; 2],
+) -> bool {
+    let source_size = (9u32, 6u32);
+    let byte_count = (source_size.0 as usize)
+        .checked_mul(source_size.1 as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+        .expect("fractional constant fixture size");
+    let source_bytes = (0..byte_count)
+        .map(|index| {
+            index
+                .wrapping_mul(73)
+                .wrapping_add(17)
+                .wrapping_add(channels) as u8
+        })
+        .collect::<Vec<_>>();
+    let mut source = Image::frombytes(mode, source_size, &source_bytes)
+        .unwrap_or_else(|error| panic!("{mode} source: {error}"));
+    if mode == "P" {
+        let palette = (0usize..768)
+            .map(|index| index.wrapping_mul(19).wrapping_add(7) as u8)
             .collect::<Vec<_>>();
-        let mut source = Image::frombytes(mode, source_size, &source_bytes)
-            .unwrap_or_else(|error| panic!("{mode} source: {error}"));
-        if mode == "P" {
-            let palette = (0..768)
-                .map(|index| (index * 19 + 7) as u8)
-                .collect::<Vec<_>>();
-            source
-                .putpalette(&palette, "RGB")
-                .unwrap_or_else(|error| panic!("P palette: {error}"));
-        }
-        let fill = match mode {
-            "L" | "P" => Some(TransformFill::Scalar(251)),
-            "LA" => Some(TransformFill::Components(vec![251, 93])),
-            "RGB" => Some(TransformFill::Components(vec![251, 93, 41])),
-            "RGBA" => Some(TransformFill::Components(vec![251, 93, 41, 173])),
-            _ => unreachable!(),
-        };
-        for (method, data) in &cases {
-            let transformed = source
-                .transform_public((9, 6), *method, Some(data.clone()), 0, 0, fill.clone())
-                .unwrap_or_else(|error| panic!("{mode} constant transform: {error}"));
-            let expected = transformed
-                .clone()
-                .use_backend(Backend::Cpu)
-                .tobytes()
-                .unwrap_or_else(|error| panic!("{mode} constant CPU transform: {error}"));
-            let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
-                Ok(actual) => actual,
-                Err(error)
-                    if error.to_string().contains("GPU adapter not available")
-                        || error
-                            .to_string()
-                            .contains("GPU device initialization failed") =>
-                {
-                    Backend::set_pipeline_telemetry_enabled(previous);
-                    return;
-                }
-                Err(error) => panic!("native GPU {mode} constant transform failed: {error}"),
-            };
-            assert_eq!(actual, expected, "native {mode} constant data={data:?}");
-            let telemetry = Backend::take_pipeline_telemetry().unwrap_or_else(|| {
-                panic!("native GPU {mode} constant transform missing telemetry")
-            });
-            assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
-            assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
-            assert_eq!(telemetry.6, Some(1), "{mode} dispatch count");
-            assert_eq!(telemetry.7, None, "{mode} fallback reason");
+        source
+            .putpalette(&palette, "RGB")
+            .unwrap_or_else(|error| panic!("P palette: {error}"));
+    }
+    let fill = byte_projective_constant_fill(mode);
+    for (method, data) in cases {
+        if !assert_byte_projective_fractional_constant_case(&source, mode, *method, data, &fill) {
+            return false;
         }
     }
-    Backend::set_pipeline_telemetry_enabled(previous);
+    true
+}
+
+fn byte_projective_constant_fill(mode: &str) -> TransformFill {
+    match mode {
+        "L" | "P" => TransformFill::Scalar(251),
+        "LA" => TransformFill::Components(vec![251, 93]),
+        "RGB" => TransformFill::Components(vec![251, 93, 41]),
+        "RGBA" => TransformFill::Components(vec![251, 93, 41, 173]),
+        _ => unreachable!(),
+    }
+}
+
+fn assert_byte_projective_fractional_constant_case(
+    source: &Image,
+    mode: &str,
+    method: i32,
+    data: &TransformData,
+    fill: &TransformFill,
+) -> bool {
+    let transformed = source
+        .transform_public((9, 6), method, Some(data.clone()), 0, 0, Some(fill.clone()))
+        .unwrap_or_else(|error| panic!("{mode} constant transform: {error}"));
+    let expected = transformed
+        .clone()
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .unwrap_or_else(|error| panic!("{mode} constant CPU transform: {error}"));
+    let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            return false;
+        }
+        Err(error) => panic!("native GPU {mode} constant transform failed: {error}"),
+    };
+    assert_eq!(actual, expected, "native {mode} constant data={data:?}");
+    assert_byte_projective_constant_receipt(mode);
+    true
+}
+
+fn assert_byte_projective_constant_receipt(mode: &str) {
+    let telemetry = Backend::take_pipeline_telemetry()
+        .unwrap_or_else(|| panic!("native GPU {mode} constant transform missing telemetry"));
+    assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+    assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
+    assert_eq!(telemetry.6, Some(1), "{mode} dispatch count");
+    assert_eq!(telemetry.7, None, "{mode} fallback reason");
 }
 
 #[test]

@@ -1,5 +1,7 @@
 use super::*;
 
+mod palette_alpha_mesh;
+
 #[test]
 fn palette_alpha_projective_relocation_proof_is_narrow() {
     assert!(gpu_transform_should_premultiply(
@@ -198,6 +200,22 @@ fn assert_palette_alpha_filtered_mode_proofs(
     quad_direct: &[f64; 8],
     mesh_relocation: &[f64; 12],
 ) {
+    assert_palette_alpha_perspective_filtered_proofs(direct, swapped);
+    assert_palette_alpha_quad_mesh_filtered_proofs(
+        direct,
+        quad_axis_swap,
+        quad_direct,
+        mesh_relocation,
+    );
+}
+
+fn assert_palette_alpha_perspective_filtered_proofs(direct: &[f64; 8], swapped: &[f64; 8]) {
+    assert_palette_alpha_perspective_primary_proofs(direct, swapped);
+    assert_palette_alpha_perspective_constant_proofs();
+    assert_palette_alpha_perspective_mode_proofs(direct, swapped);
+}
+
+fn assert_palette_alpha_perspective_primary_proofs(direct: &[f64; 8], swapped: &[f64; 8]) {
     assert!(!gpu_palette_alpha_projective_relocation_is_admitted(
         TransformMethod::Perspective,
         &[1.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0],
@@ -218,6 +236,9 @@ fn assert_palette_alpha_filtered_mode_proofs(
         Some("PA"),
         (5, 7),
     ));
+}
+
+fn assert_palette_alpha_perspective_constant_proofs() {
     let perspective_constant_half = [0.0, 0.0, 1.5, 0.0, 0.0, 4.5, 0.0, 0.0];
     assert!(gpu_projective_filtered_relocation_is_admitted(
         TransformMethod::Perspective,
@@ -234,6 +255,9 @@ fn assert_palette_alpha_filtered_mode_proofs(
         Some("PA"),
         (9, 6),
     ));
+}
+
+fn assert_palette_alpha_perspective_mode_proofs(direct: &[f64; 8], swapped: &[f64; 8]) {
     assert!(gpu_projective_filtered_relocation_is_admitted(
         TransformMethod::Perspective,
         direct,
@@ -263,6 +287,14 @@ fn assert_palette_alpha_filtered_mode_proofs(
         Some("LA"),
         (9, 6),
     ));
+}
+
+fn assert_palette_alpha_quad_mesh_filtered_proofs(
+    direct: &[f64; 8],
+    quad_axis_swap: &[f64; 8],
+    quad_direct: &[f64; 8],
+    mesh_relocation: &[f64; 12],
+) {
     assert!(!gpu_projective_filtered_relocation_is_admitted(
         TransformMethod::Quad,
         direct,
@@ -630,194 +662,6 @@ fn assert_palette_filtered_case(
         assert_eq!(telemetry.7, None);
     }
     true
-}
-
-#[test]
-fn palette_alpha_quad_mesh_filtered_relocations_native_gpu_preserve_pairs() {
-    let source_size = (16u32, 16u32);
-    let source_bytes = (0..source_size.0 as usize * source_size.1 as usize)
-        .flat_map(|index| [(index * 17 + 3) as u8, (index * 29 + 11) as u8])
-        .collect::<Vec<_>>();
-    let mut source = Image::frombytes("LA", source_size, &source_bytes).expect("LA source");
-    let palette = vec![10, 20, 30, 40, 50, 60];
-    source.putpalette(&palette, "RGB").expect("PA palette");
-    assert_eq!(source.mode().expect("PA mode"), "PA");
-
-    let cases = [
-        (
-            3,
-            TransformData::Affine(vec![0.0, 0.0, 0.0, 6.0, 9.0, 6.0, 9.0, 0.0]),
-        ),
-        (
-            3,
-            TransformData::Affine(vec![0.0, 0.0, 6.0, 0.0, 6.0, 9.0, 0.0, 9.0]),
-        ),
-        (
-            4,
-            TransformData::Mesh(vec![(
-                vec![0.0, 0.0, 9.0, 6.0],
-                vec![1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0],
-            )]),
-        ),
-        (
-            4,
-            TransformData::Mesh(vec![(
-                vec![0.0, 0.0, 9.0, 6.0],
-                vec![1.0, 2.0, 7.0, 2.0, 7.0, 11.0, 1.0, 11.0],
-            )]),
-        ),
-        (
-            3,
-            TransformData::Affine(vec![1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5]),
-        ),
-        (
-            4,
-            TransformData::Mesh(vec![(
-                vec![0.0, 0.0, 9.0, 6.0],
-                vec![1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5],
-            )]),
-        ),
-    ];
-
-    let previous = Backend::set_pipeline_telemetry_enabled(true);
-    for (method, data) in cases {
-        for filter in [ResampleFilter::Bilinear, ResampleFilter::Bicubic] {
-            let transformed = source
-                .transform_public(
-                    (9, 6),
-                    method,
-                    Some(data.clone()),
-                    match filter {
-                        ResampleFilter::Bilinear => 2,
-                        ResampleFilter::Bicubic => 3,
-                        _ => unreachable!(),
-                    },
-                    0,
-                    Some(TransformFill::Components(vec![199, 71])),
-                )
-                .expect("filtered PA Quad/Mesh relocation");
-            assert_eq!(transformed.mode().expect("PA mode"), "PA");
-            assert_eq!(transformed.palette(), Some(palette.clone()));
-            let expected = transformed
-                .clone()
-                .use_backend(Backend::Cpu)
-                .tobytes()
-                .expect("CPU filtered PA Quad/Mesh relocation");
-            let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
-                Ok(actual) => actual,
-                Err(error)
-                    if error.to_string().contains("GPU adapter not available")
-                        || error
-                            .to_string()
-                            .contains("GPU device initialization failed") =>
-                {
-                    Backend::set_pipeline_telemetry_enabled(previous);
-                    return;
-                }
-                Err(error) => {
-                    panic!("native GPU filtered PA Quad/Mesh relocation failed: {error}")
-                }
-            };
-            assert_eq!(actual, expected, "PA filtered method {method}");
-            let telemetry = Backend::take_pipeline_telemetry()
-                .expect("filtered PA Quad/Mesh relocation must publish a receipt");
-            assert_eq!(telemetry.0, Some(Backend::Gpu));
-            assert_eq!(telemetry.1, Backend::Gpu, "telemetry={telemetry:?}");
-            assert_eq!(telemetry.6, Some(1));
-            assert_eq!(telemetry.7, None);
-        }
-    }
-    Backend::set_pipeline_telemetry_enabled(previous);
-}
-
-#[test]
-fn palette_alpha_quad_mesh_nearest_native_gpu_preserves_pairs() {
-    let source_bytes = (0..8 * 8)
-        .flat_map(|index| [(index * 19 + 5) as u8, (index * 31 + 13) as u8])
-        .collect::<Vec<_>>();
-    let mut source = Image::frombytes("LA", (8, 8), &source_bytes).expect("LA source");
-    source
-        .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
-        .expect("PA palette");
-    assert_eq!(source.mode().expect("PA mode"), "PA");
-
-    let cases = [
-        (
-            (8, 8),
-            3,
-            TransformData::Affine(vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0]),
-            None,
-        ),
-        (
-            (8, 8),
-            3,
-            TransformData::Affine(vec![0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 8.0, 0.0]),
-            Some(TransformFill::Components(vec![211, 83])),
-        ),
-        (
-            (10, 10),
-            4,
-            TransformData::Mesh(vec![(
-                vec![0.0, 0.0, 10.0, 10.0],
-                vec![1.0, 2.0, 1.0, 12.0, 11.0, 12.0, 11.0, 2.0],
-            )]),
-            Some(TransformFill::Components(vec![199, 71])),
-        ),
-        (
-            (8, 8),
-            4,
-            TransformData::Mesh(vec![(
-                vec![0.0, 0.0, 8.0, 8.0],
-                vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0],
-            )]),
-            None,
-        ),
-        (
-            (8, 8),
-            3,
-            TransformData::Affine(vec![1.0, 2.0, 1.0, 10.0, 9.0, 10.0, 9.0, 2.0]),
-            Some(TransformFill::Components(vec![61, 233])),
-        ),
-        (
-            (8, 8),
-            3,
-            TransformData::Affine(vec![1.0, 2.0, 9.0, 2.0, 9.0, 10.0, 1.0, 10.0]),
-            Some(TransformFill::Components(vec![17, 203])),
-        ),
-    ];
-
-    let previous = Backend::set_pipeline_telemetry_enabled(true);
-    for (size, method, data, fill) in cases {
-        let transformed = source
-            .transform_public(size, method, Some(data), 0, 0, fill)
-            .expect("PA Quad/Mesh transform");
-        let expected = transformed
-            .clone()
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU PA Quad/Mesh transform");
-        let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU PA Quad/Mesh transform failed: {error}"),
-        };
-        assert_eq!(actual, expected, "PA method {method} pair parity");
-        let telemetry = Backend::take_pipeline_telemetry()
-            .expect("native PA Quad/Mesh transform must publish a receipt");
-        assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(telemetry.1, Backend::Gpu, "telemetry={telemetry:?}");
-        assert_eq!(telemetry.6, Some(1));
-        assert_eq!(telemetry.7, None);
-    }
-    Backend::set_pipeline_telemetry_enabled(previous);
 }
 
 #[test]
