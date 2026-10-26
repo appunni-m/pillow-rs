@@ -458,7 +458,7 @@ impl ImageSequence {
         }
     }
     #[wasm_bindgen(js_name = "next")]
-    pub fn next(&mut self) -> Option<Image> {
+    pub fn next_frame(&mut self) -> Option<Image> {
         if self.yielded {
             return None;
         }
