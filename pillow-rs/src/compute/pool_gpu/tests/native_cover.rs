@@ -156,6 +156,11 @@ fn assert_native_cover_workgroup_boundaries() {
 }
 
 fn assert_native_cover_invalid_limits() {
+    assert_native_cover_invalid_output_limits();
+    assert_native_cover_invalid_dimensions();
+}
+
+fn assert_native_cover_invalid_output_limits() {
     assert!(
         super::plan_native_cover_packed_output_dispatch(
             64,
@@ -181,6 +186,9 @@ fn assert_native_cover_invalid_limits() {
         super::plan_native_cover_packed_output_dispatch(1, 1, 1, 1, 1, u32::MAX, u64::MAX, 3,)
             .is_none()
     );
+}
+
+fn assert_native_cover_invalid_dimensions() {
     assert!(
         super::plan_native_cover_packed_output_dispatch(
             u32::MAX,
@@ -248,71 +256,48 @@ fn native_cover_packed_output_admits_singleton_l_and_la_resize() {
         filter: ResampleFilter::Nearest,
     };
     let limits = (65_535, u32::MAX, u64::MAX, 1024);
-    assert!(
-        super::gpu_native_cover_packed_output_dispatch(
-            std::slice::from_ref(&bicubic),
-            Some(1),
-            Some("L"),
-            8,
-            limits.0,
-            limits.1,
-            limits.2,
-            limits.3,
-        )
-        .is_some()
-    );
-    assert!(
-        super::gpu_native_cover_packed_output_dispatch(
-            std::slice::from_ref(&nearest),
-            Some(1),
-            Some("L"),
-            8,
-            limits.0,
-            limits.1,
-            limits.2,
-            limits.3,
-        )
-        .is_some()
-    );
-    assert!(
-        super::gpu_native_cover_packed_output_dispatch(
-            std::slice::from_ref(&bicubic),
-            Some(2),
-            Some("LA"),
-            8,
-            limits.0,
-            limits.1,
-            limits.2,
-            limits.3,
-        )
-        .is_some()
-    );
-    assert!(
-        super::gpu_native_cover_packed_output_dispatch(
-            std::slice::from_ref(&bicubic),
-            Some(1),
-            Some("RGB"),
-            8,
-            limits.0,
-            limits.1,
-            limits.2,
-            limits.3,
-        )
-        .is_none()
-    );
-    assert!(
-        super::gpu_native_cover_packed_output_dispatch(
-            &[bicubic, PipelineOp::Duplicate],
-            Some(1),
-            Some("L"),
-            8,
-            limits.0,
-            limits.1,
-            limits.2,
-            limits.3,
-        )
-        .is_none()
-    );
+    assert!(native_cover_packed_output_admitted(
+        std::slice::from_ref(&bicubic),
+        Some(1),
+        Some("L"),
+        limits,
+    ));
+    assert!(native_cover_packed_output_admitted(
+        std::slice::from_ref(&nearest),
+        Some(1),
+        Some("L"),
+        limits,
+    ));
+    assert!(native_cover_packed_output_admitted(
+        std::slice::from_ref(&bicubic),
+        Some(2),
+        Some("LA"),
+        limits,
+    ));
+    assert!(!native_cover_packed_output_admitted(
+        std::slice::from_ref(&bicubic),
+        Some(1),
+        Some("RGB"),
+        limits,
+    ));
+    assert!(!native_cover_packed_output_admitted(
+        &[bicubic, PipelineOp::Duplicate],
+        Some(1),
+        Some("L"),
+        limits,
+    ));
+}
+
+fn native_cover_packed_output_admitted(
+    ops: &[PipelineOp],
+    channels: Option<u8>,
+    mode: Option<&str>,
+    limits: (u32, u32, u64, u32),
+) -> bool {
+    super::gpu_native_cover_packed_output_dispatch(
+        ops, channels, mode, 8, limits.0, limits.1, limits.2, limits.3,
+    )
+    .is_some()
 }
 
 #[test]
