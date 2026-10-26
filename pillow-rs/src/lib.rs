@@ -656,26 +656,10 @@ pub fn backend_support_matrix_json() -> Result<String, PilError> {
             )
         })
         .collect::<Vec<_>>();
-    let cpu = registry
-        .values()
-        .filter(|entry| entry.cpu_fn.is_some())
-        .count();
-    let simd_pool = registry
-        .values()
-        .filter(|entry| entry.simd_fn.is_some())
-        .count();
-    let gpu_shader = registry
-        .values()
-        .filter(|entry| entry.gpu_shader.is_some())
-        .count();
-    let cpu_without_simd = registry
-        .iter()
-        .filter_map(|(name, entry)| {
-            (entry.cpu_fn.is_some() && entry.simd_fn.is_none()).then_some(*name)
-        })
-        .collect::<Vec<_>>();
+    let counts = backend_support_matrix_counts(&registry);
 
-    let cpu_without_simd_json = cpu_without_simd
+    let cpu_without_simd_json = counts
+        .cpu_without_simd
         .iter()
         .map(|name| format!("\"{name}\""))
         .collect::<Vec<_>>()
@@ -703,11 +687,50 @@ pub fn backend_support_matrix_json() -> Result<String, PilError> {
             "}}"
         ),
         operations = registry.len(),
-        cpu = cpu,
-        simd_pool = simd_pool,
-        gpu_shader = gpu_shader,
-        cpu_without_simd_len = cpu_without_simd.len(),
+        cpu = counts.cpu,
+        simd_pool = counts.simd_pool,
+        gpu_shader = counts.gpu_shader,
+        cpu_without_simd_len = counts.cpu_without_simd.len(),
         cpu_without_simd_json = cpu_without_simd_json,
         operations_json = operations_json
     ))
+}
+
+#[cfg(feature = "test-api")]
+struct BackendSupportMatrixCounts {
+    cpu: usize,
+    simd_pool: usize,
+    gpu_shader: usize,
+    cpu_without_simd: Vec<&'static str>,
+}
+
+#[cfg(feature = "test-api")]
+fn backend_support_matrix_counts(
+    registry: &BTreeMap<&'static str, BackendSupportEntry>,
+) -> BackendSupportMatrixCounts {
+    let cpu = registry
+        .values()
+        .filter(|entry| entry.cpu_fn.is_some())
+        .count();
+    let simd_pool = registry
+        .values()
+        .filter(|entry| entry.simd_fn.is_some())
+        .count();
+    let gpu_shader = registry
+        .values()
+        .filter(|entry| entry.gpu_shader.is_some())
+        .count();
+    let cpu_without_simd = registry
+        .iter()
+        .filter_map(|(name, entry)| {
+            (entry.cpu_fn.is_some() && entry.simd_fn.is_none()).then_some(*name)
+        })
+        .collect();
+
+    BackendSupportMatrixCounts {
+        cpu,
+        simd_pool,
+        gpu_shader,
+        cpu_without_simd,
+    }
 }
