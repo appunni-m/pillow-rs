@@ -71,8 +71,8 @@
   is a compatibility alias. `make ci` adds fixture, parity, and coverage
   verification.
 - Keep first-party Rust files at or below 1,000 physical lines and functions
-  at or below 100 Clippy-counted body lines. Review files from 800 lines and
-  functions over the configured 60-line Clippy threshold. Existing violations
+  at or below 100 Clippy-counted body lines. Review files from 800 lines.
+  Function size has no lower review threshold. Existing violations
   shrink against a checked-in baseline; new over-limit code and growth beyond
   the baseline fail the quality gate. Include first-party tests and use only
   the exact exclusions in the checker. See

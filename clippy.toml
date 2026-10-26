@@ -1,2 +1,2 @@
-# Report function growth before it reaches the hard 100-line ratchet.
-too-many-lines-threshold = 60
+# Enforce the hard function-body ceiling without a lower review advisory.
+too-many-lines-threshold = 100

@@ -9,7 +9,7 @@ live in [scripts/rust_size_baseline.json](../scripts/rust_size_baseline.json).
 | Measure | Review signal | Hard ceiling |
 | --- | ---: | ---: |
 | First-party Rust source file | 800 physical lines and above | 1,000 physical lines |
-| Rust function or method body | Clippy too_many_lines threshold: 60 | 100 counted body lines |
+| Rust function or method body | None | 100 counted body lines |
 
 The checker rejects a new file over 1,000 lines, a new function over 100 counted
 body lines, and growth beyond an existing legacy ceiling. Legacy entries may
@@ -44,9 +44,9 @@ A final newline does not add an extra empty line.
 The function gate consumes Clippy's clippy::too_many_lines diagnostics from
 cargo clippy --workspace --all-targets --all-features using the pinned
 toolchain in rust-toolchain.toml. It uses Clippy source spans, not a regular
-expression over Rust syntax. clippy.toml sets the review threshold to 60;
-scripts/run_clippy_quality.py applies the 100-line hard ceiling and compares
-over-limit functions against the recorded baseline.
+expression over Rust syntax. clippy.toml sets the threshold to the 100-line
+hard ceiling; there is no lower function review threshold. The checker compares
+functions over that ceiling against the recorded baseline.
 
 Clippy counts nonblank, non-comment-only lines in the function body source
 span. For block bodies, the outer braces are removed and leading or trailing
@@ -76,13 +76,12 @@ scripts/rust_size_baseline.json records:
 - legacy_owners: one owner, reduction task, and reason for each path that has
   either a legacy file or function entry.
 
-All current exceptions predate the size ratchet and have an owner plus an open
-focused Kata reduction task. New over-limit files or functions are failures;
-they must not be added as ordinary baseline debt. A reviewed exception, if a
-maintainer approves one, needs a specific reason, an owner, and a reduction
-task, and must remain visible in the baseline inventory. The incremental
-checkstyle gate tracked by Kata pillow-rs#q730 should validate that the
-ownership map covers every active legacy path and has no retired entries.
+New over-limit files or functions are failures; they must not be added as
+ordinary baseline debt. A reviewed exception, if a maintainer approves one,
+needs a specific reason, an owner, and a reduction task, and must remain
+visible in the baseline inventory. The incremental checkstyle gate tracked by
+Kata pillow-rs#q730 should validate that the ownership map covers every active
+legacy path and has no retired entries.
 
 make checkstyle-update-baseline rewrites the file and function ceiling
 sections from current measurements, preserves metadata for active paths, and
@@ -99,89 +98,6 @@ pass.
 
 ## Current legacy inventory
 
-Snapshot: 0 legacy file ceilings and 121 legacy functions across 78 source paths.
-A dash means that path has no over-limit file entry; function counts and
-maximum recorded function lines are summarized here, with each exact
-signature and ceiling in the JSON baseline. Each table row repeats the
-owner and reducer issue recorded for that path.
-
-| Source path | Recorded file ceiling | Long functions (count; max lines) | Owner | Reduction task |
-| --- | ---: | ---: | --- | --- |
-| <code>pillow-rs/src/compute/pool_cpu/ops/composite.rs</code> | — | 1 (max 136 lines) | lazytrot | pillow-rs#8rfy |
-| <code>pillow-rs/src/compute/pool_cpu/ops/filter/blur.rs</code> | — | 1 (max 260 lines) | lazytrot | pillow-rs#qpfs |
-| <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs</code> | — | 1 (max 157 lines) | lazytrot | pillow-rs#qpfs |
-| <code>pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5/int32.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#qpfs |
-| <code>pillow-rs/src/compute/pool_cpu/ops/filter/rank.rs</code> | — | 1 (max 110 lines) | lazytrot | pillow-rs#qpfs |
-| <code>pillow-rs/src/compute/pool_cpu/ops/paste.rs</code> | — | 2 (max 235 lines) | lazytrot | pillow-rs#8rfy |
-| <code>pillow-rs/src/compute/pool_cpu/ops/reduce.rs</code> | — | 2 (max 244 lines) | lazytrot | pillow-rs#wtxv |
-| <code>pillow-rs/src/compute/pool_cpu/ops/resize/float.rs</code> | — | 1 (max 156 lines) | lazytrot | pillow-rs#wtxv |
-| <code>pillow-rs/src/compute/pool_cpu/ops/resize/integer.rs</code> | — | 1 (max 133 lines) | lazytrot | pillow-rs#wtxv |
-| <code>pillow-rs/src/compute/pool_cpu/ops/rotate/affine.rs</code> | — | 2 (max 237 lines) | lazytrot | pillow-rs#wtxv |
-| <code>pillow-rs/src/compute/pool_cpu/ops/rotate/scalar.rs</code> | — | 1 (max 159 lines) | lazytrot | pillow-rs#wtxv |
-| <code>pillow-rs/src/compute/pool_cpu/ops/thumbnail.rs</code> | — | 3 (max 133 lines) | lazytrot | pillow-rs#wtxv |
-| <code>pillow-rs/src/compute/pool_cpu/ops/transform.rs</code> | — | 1 (max 216 lines) | lazytrot | pillow-rs#8rfy |
-| <code>pillow-rs/src/compute/pool_cpu/ops/transform/affine.rs</code> | — | 1 (max 150 lines) | lazytrot | pillow-rs#8rfy |
-| <code>pillow-rs/src/compute/pool_cpu/ops/transform/projective.rs</code> | — | 2 (max 169 lines) | lazytrot | pillow-rs#8rfy |
-| <code>pillow-rs/src/compute/pool_cpu/ops/transform/scalar.rs</code> | — | 2 (max 146 lines) | lazytrot | pillow-rs#8rfy |
-| <code>pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs</code> | — | 1 (max 105 lines) | lazytrot | pillow-rs#wtxv |
-| <code>pillow-rs/src/compute/pool_gpu/auxiliary_images.rs</code> | — | 1 (max 121 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_encoding.rs</code> | — | 1 (max 369 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_encoding/dispatch.rs</code> | — | 2 (max 254 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_estimates.rs</code> | — | 1 (max 238 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_execution.rs</code> | — | 1 (max 269 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_execution/routing.rs</code> | — | 1 (max 659 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_operation_planning.rs</code> | — | 1 (max 103 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_pipeline.rs</code> | — | 1 (max 628 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/batch_preparation.rs</code> | — | 1 (max 122 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/geometry/native_execution.rs</code> | — | 2 (max 218 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/logical_mode_admission.rs</code> | — | 1 (max 385 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/native_composite.rs</code> | — | 1 (max 210 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/native_hsv_pad.rs</code> | — | 1 (max 147 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/native_paste/execution.rs</code> | — | 3 (max 216 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/native_paste/masked_execution.rs</code> | — | 1 (max 307 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/operation_admission.rs</code> | — | 2 (max 134 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/operation_support.rs</code> | — | 1 (max 226 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/pipeline_cache.rs</code> | — | 1 (max 228 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/point_ops.rs</code> | — | 1 (max 143 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs</code> | — | 3 (max 175 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/point_ops/native_byte_op.rs</code> | — | 1 (max 416 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/projection.rs</code> | — | 1 (max 301 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/resize/compact_box.rs</code> | — | 2 (max 113 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs</code> | — | 4 (max 282 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/resize/integer_arithmetic.rs</code> | — | 1 (max 101 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/resize/ordered_float.rs</code> | — | 1 (max 134 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/resize/tiled.rs</code> | — | 1 (max 194 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/rgb_merge.rs</code> | — | 1 (max 275 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/stream/encoding.rs</code> | — | 3 (max 271 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/mod.rs</code> | — | 1 (max 129 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/native_cover.rs</code> | — | 1 (max 160 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/native_luma.rs</code> | — | 1 (max 249 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/native_transform.rs</code> | — | 1 (max 109 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/palette_projective.rs</code> | — | 3 (max 232 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/projective_filtered.rs</code> | — | 3 (max 144 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs</code> | — | 5 (max 148 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/projective_nearest_proofs.rs</code> | — | 1 (max 420 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/readback.rs</code> | — | 3 (max 137 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/resize_float_execution.rs</code> | — | 1 (max 206 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/resize_float_proofs.rs</code> | — | 3 (max 223 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/resize_ordered_taps.rs</code> | — | 1 (max 135 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/resize_thumbnail.rs</code> | — | 1 (max 103 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs</code> | — | 2 (max 176 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/transpose_execution.rs</code> | — | 1 (max 103 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/tests/transpose_planning.rs</code> | — | 2 (max 128 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/transform/geometry.rs</code> | — | 1 (max 163 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/transform/projective_admission.rs</code> | — | 1 (max 126 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs</code> | — | 1 (max 408 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/compute/pool_gpu/transform/safety.rs</code> | — | 2 (max 244 lines) | lazytrot | pillow-rs#ras2 |
-| <code>pillow-rs/src/image/backend.rs</code> | — | 1 (max 110 lines) | lazytrot | pillow-rs#knsf |
-| <code>pillow-rs/src/image/channel_access.rs</code> | — | 1 (max 114 lines) | lazytrot | pillow-rs#knsf |
-| <code>pillow-rs/src/image/construction.rs</code> | — | 2 (max 156 lines) | lazytrot | pillow-rs#knsf |
-| <code>pillow-rs/src/image/data_access.rs</code> | — | 1 (max 101 lines) | lazytrot | pillow-rs#knsf |
-| <code>pillow-rs/src/image/entropy.rs</code> | — | 1 (max 156 lines) | lazytrot | pillow-rs#knsf |
-| <code>pillow-rs/src/image/pipeline_ops.rs</code> | — | 2 (max 160 lines) | lazytrot | pillow-rs#knsf |
-| <code>pillow-rs/src/image/projection.rs</code> | — | 2 (max 208 lines) | lazytrot | pillow-rs#knsf |
-| <code>pillow-rs/src/image/statistics.rs</code> | — | 3 (max 265 lines) | lazytrot | pillow-rs#knsf |
-| <code>pillow-rs/src/ops/pil_resize/boxed.rs</code> | — | 2 (max 240 lines) | lazytrot | pillow-rs#nsax |
-| <code>pillow-rs/src/ops/pil_resize/horizontal_passes.rs</code> | — | 2 (max 131 lines) | lazytrot | pillow-rs#nsax |
-| <code>pillow-rs/src/ops/pil_resize/resize.rs</code> | — | 1 (max 194 lines) | lazytrot | pillow-rs#nsax |
-| <code>pillow-rs/src/ops/pil_resize/vertical_passes.rs</code> | — | 2 (max 116 lines) | lazytrot | pillow-rs#nsax |
+The checked-in baseline currently has no over-limit files or functions. The
+machine-readable baseline is authoritative if a reviewed exception is approved
+later.

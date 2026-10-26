@@ -21,7 +21,6 @@ from check_rust_file_sizes import (
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = ROOT / "scripts" / "rust_size_baseline.json"
 FUNCTION_HARD_LIMIT = 100
-FUNCTION_REVIEW_LINE = 60
 TOO_MANY_LINES = "clippy::too_many_lines"
 LINE_COUNT_RE = re.compile(r"too many lines \((\d+)/(\d+)\)")
 
@@ -291,15 +290,10 @@ def main() -> int:
 
     if clippy_status == 0:
         print(
-            f"Rust function-size report: {len(metrics)} Clippy warnings over "
-            f"{FUNCTION_REVIEW_LINE} lines; {legacy_count} legacy functions over "
-            f"{FUNCTION_HARD_LIMIT} lines are at or below baseline."
+            f"Rust function-size report: {len(over_limit)} functions over "
+            f"{FUNCTION_HARD_LIMIT} lines; {legacy_count} legacy over-limit "
+            "functions are at or below baseline."
         )
-        for metric in sorted(metrics, key=lambda item: int(item["lines"]), reverse=True)[:5]:
-            print(
-                f"  review: {metric['path']}:{metric['line_start']} has "
-                f"{metric['lines']} lines: {metric['signature']}"
-            )
         if isinstance(owner_map, dict):
             for metric in over_limit:
                 key = metric_key(metric)

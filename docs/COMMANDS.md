@@ -26,10 +26,10 @@ enabled.
 | Local large-file commit guard | `make install-hooks` | Installs a pre-commit hook that rejects newly staged files at or above 1 MiB unless their exact path has a reviewed size ceiling and reason in `scripts/check_large_files.py` |
 | Large-file diff guard | `make large-files-check` | Checks the latest commit diff for files at or above 1 MiB that lack an exact-path approval |
 | Compatibility lint command | `make lint` | Alias for `make quality` |
-| Rust checkstyle | `make checkstyle` | Reports files from 800 lines and functions over 60 lines; fails on new code over 1,000/100 lines or growth beyond a legacy baseline |
+| Rust checkstyle | `make checkstyle` | Reviews files from 800 lines; enforces 1,000-line file and 100-line function limits plus legacy-baseline growth |
 | Checkstyle baseline maintenance | `make checkstyle-update-baseline` | Records reviewed file/function reductions and lowers the per-file wildcard-use baseline; inspect all baseline diffs |
 | Rust size policy and legacy inventory | [Rust size policy](RUST_SIZE_POLICY.md) | Defines counting rules, exclusions, baseline behavior, owners, and reducer issues |
-| Rust lint | `make clippy` | Runs workspace Clippy, reports functions over 60 lines, and fails on new functions over 100 lines or growth beyond a legacy baseline |
+| Rust lint | `make clippy` | Runs workspace Clippy and reports function-size violations only above the 100-line hard limit |
 | Source map | `make repo-map-update` / `make repo-map-check` | Regenerates / validates the tracked source inventory |
 | Operation source crosswalk | `make operation-source-crosswalk` / `make operation-source-crosswalk-test` | Generates the ignored manifest→Python→PyO3→backend crosswalk, maps declared parity cases and benchmark workloads to public operations, includes the Rust module inventory, and checks focused contracts; input declarations never count as execution |
 | Implementation structure | `make implementation-structure-inventory` / `make implementation-structure-audit` / `make implementation-structure-audit-test` | Inventories every maintained path, audits additions and moves against the same guide, and checks path-classification and inventory-scope contracts |
