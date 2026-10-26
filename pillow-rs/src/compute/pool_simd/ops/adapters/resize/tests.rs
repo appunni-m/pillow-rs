@@ -587,23 +587,7 @@ fn rgba_i32_resize_matches_widened_for_filters_and_alpha_patterns() {
             };
 
             for pattern in 0..4u32 {
-                let source = (0..width * height)
-                    .flat_map(|index| {
-                        let alpha = match pattern {
-                            0 => 0,
-                            1 => 255,
-                            2 if (index + index / width) % 2 == 0 => 0,
-                            2 => 255,
-                            _ => index.wrapping_mul(47).wrapping_add(index / width * 61) as u8,
-                        };
-                        [
-                            index.wrapping_mul(73).wrapping_add(31) as u8,
-                            index.wrapping_mul(29).wrapping_add(19) as u8,
-                            index.wrapping_mul(97).wrapping_add(11) as u8,
-                            alpha,
-                        ]
-                    })
-                    .collect::<Vec<_>>();
+                let source = rgba_resize_pattern_source(width, height, pattern);
                 let image = DynamicImage::ImageRgba8(
                     RgbaImage::from_raw(width, height, source).expect("test RGBA image shape"),
                 );
@@ -628,6 +612,26 @@ fn rgba_i32_resize_matches_widened_for_filters_and_alpha_patterns() {
             }
         }
     }
+}
+
+fn rgba_resize_pattern_source(width: u32, height: u32, pattern: u32) -> Vec<u8> {
+    (0..width * height)
+        .flat_map(|index| {
+            let alpha = match pattern {
+                0 => 0,
+                1 => 255,
+                2 if (index + index / width) % 2 == 0 => 0,
+                2 => 255,
+                _ => index.wrapping_mul(47).wrapping_add(index / width * 61) as u8,
+            };
+            [
+                index.wrapping_mul(73).wrapping_add(31) as u8,
+                index.wrapping_mul(29).wrapping_add(19) as u8,
+                index.wrapping_mul(97).wrapping_add(11) as u8,
+                alpha,
+            ]
+        })
+        .collect()
 }
 
 #[cfg(target_endian = "little")]
