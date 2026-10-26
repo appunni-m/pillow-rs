@@ -135,85 +135,7 @@ impl Image {
         // added only when retained EXIF provenance makes that Pillow result
         // observable. WebP's zero timing fields are added below only after
         // pixels have been materialized, matching Pillow's lazy frame load.
-        let mut fields = match format {
-            Some(ImageFormat::Jpeg) => {
-                let mut fields = vec![
-                    ("jfif".to_owned(), ImageInfoValue::Integer(257)),
-                    (
-                        "jfif_version".to_owned(),
-                        ImageInfoValue::IntegerTuple(vec![1, 1]),
-                    ),
-                    ("jfif_unit".to_owned(), ImageInfoValue::Integer(0)),
-                    (
-                        "jfif_density".to_owned(),
-                        ImageInfoValue::IntegerTuple(vec![1, 1]),
-                    ),
-                ];
-                // Pillow exposes its 72-dpi fallback for the EXIF-bearing
-                // JPEG fixtures, but omits it for the plain JFIF-only image.
-                // The decoder retains EXIF bytes but not JFIF density, so
-                // retained EXIF provenance is the only available discriminator.
-                if self.exif_metadata().is_some() {
-                    fields.push(("dpi".to_owned(), ImageInfoValue::IntegerTuple(vec![72, 72])));
-                }
-                fields
-            }
-            Some(ImageFormat::Bmp) => vec![
-                (
-                    "dpi".to_owned(),
-                    ImageInfoValue::FloatList(vec![96.01194815354799, 96.01194815354799]),
-                ),
-                ("compression".to_owned(), ImageInfoValue::Integer(0)),
-            ],
-            Some(ImageFormat::Gif) => vec![
-                (
-                    "version".to_owned(),
-                    ImageInfoValue::Object(vec![
-                        (
-                            "kind".to_owned(),
-                            ImageInfoValue::String("bytes".to_owned()),
-                        ),
-                        (
-                            "encoding".to_owned(),
-                            ImageInfoValue::String("base64".to_owned()),
-                        ),
-                        (
-                            "data".to_owned(),
-                            ImageInfoValue::String("R0lGODdh".to_owned()),
-                        ),
-                    ]),
-                ),
-                ("background".to_owned(), ImageInfoValue::Integer(0)),
-            ],
-            Some(ImageFormat::Tiff) => vec![
-                (
-                    "compression".to_owned(),
-                    ImageInfoValue::String("raw".to_owned()),
-                ),
-                ("dpi".to_owned(), ImageInfoValue::IntegerList(vec![1, 1])),
-                (
-                    "resolution".to_owned(),
-                    ImageInfoValue::IntegerList(vec![1, 1]),
-                ),
-            ],
-            Some(ImageFormat::WebP) => {
-                let mut fields = vec![
-                    ("loop".to_owned(), ImageInfoValue::Integer(1)),
-                    (
-                        "background".to_owned(),
-                        ImageInfoValue::IntegerTuple(vec![255, 255, 255, 255]),
-                    ),
-                ];
-                if self.is_materialized() {
-                    fields.extend([
-                        ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
-                        ("duration".to_owned(), ImageInfoValue::Integer(0)),
-                    ]);
-                }
-                fields
-            }
-            _ => Vec::new(),
-        };
+        let mut fields = self.compatibility_format_fields(format);
         if matches!(format, Some(ImageFormat::Jpeg))
             && let Some(exif) = self.exif_metadata()
         {
@@ -234,6 +156,106 @@ impl Image {
             ));
         }
         fields
+    }
+
+    fn compatibility_format_fields(
+        &self,
+        format: Option<ImageFormat>,
+    ) -> Vec<(String, ImageInfoValue)> {
+        match format {
+            Some(ImageFormat::Jpeg) => self.jpeg_compatibility_fields(),
+            Some(ImageFormat::Bmp) => Self::bmp_compatibility_fields(),
+            Some(ImageFormat::Gif) => Self::gif_compatibility_fields(),
+            Some(ImageFormat::Tiff) => Self::tiff_compatibility_fields(),
+            Some(ImageFormat::WebP) => self.webp_compatibility_fields(),
+            _ => Vec::new(),
+        }
+    }
+
+    fn jpeg_compatibility_fields(&self) -> Vec<(String, ImageInfoValue)> {
+        let mut fields = vec![
+            ("jfif".to_owned(), ImageInfoValue::Integer(257)),
+            (
+                "jfif_version".to_owned(),
+                ImageInfoValue::IntegerTuple(vec![1, 1]),
+            ),
+            ("jfif_unit".to_owned(), ImageInfoValue::Integer(0)),
+            (
+                "jfif_density".to_owned(),
+                ImageInfoValue::IntegerTuple(vec![1, 1]),
+            ),
+        ];
+        // Pillow exposes its 72-dpi fallback for the EXIF-bearing JPEG
+        // fixtures, but omits it for the plain JFIF-only image. Retained EXIF
+        // provenance is the only available discriminator.
+        if self.exif_metadata().is_some() {
+            fields.push(("dpi".to_owned(), ImageInfoValue::IntegerTuple(vec![72, 72])));
+        }
+        fields
+    }
+
+    fn webp_compatibility_fields(&self) -> Vec<(String, ImageInfoValue)> {
+        let mut fields = vec![
+            ("loop".to_owned(), ImageInfoValue::Integer(1)),
+            (
+                "background".to_owned(),
+                ImageInfoValue::IntegerTuple(vec![255, 255, 255, 255]),
+            ),
+        ];
+        if self.is_materialized() {
+            fields.extend([
+                ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
+                ("duration".to_owned(), ImageInfoValue::Integer(0)),
+            ]);
+        }
+        fields
+    }
+
+    fn bmp_compatibility_fields() -> Vec<(String, ImageInfoValue)> {
+        vec![
+            (
+                "dpi".to_owned(),
+                ImageInfoValue::FloatList(vec![96.01194815354799, 96.01194815354799]),
+            ),
+            ("compression".to_owned(), ImageInfoValue::Integer(0)),
+        ]
+    }
+
+    fn gif_compatibility_fields() -> Vec<(String, ImageInfoValue)> {
+        vec![
+            (
+                "version".to_owned(),
+                ImageInfoValue::Object(vec![
+                    (
+                        "kind".to_owned(),
+                        ImageInfoValue::String("bytes".to_owned()),
+                    ),
+                    (
+                        "encoding".to_owned(),
+                        ImageInfoValue::String("base64".to_owned()),
+                    ),
+                    (
+                        "data".to_owned(),
+                        ImageInfoValue::String("R0lGODdh".to_owned()),
+                    ),
+                ]),
+            ),
+            ("background".to_owned(), ImageInfoValue::Integer(0)),
+        ]
+    }
+
+    fn tiff_compatibility_fields() -> Vec<(String, ImageInfoValue)> {
+        vec![
+            (
+                "compression".to_owned(),
+                ImageInfoValue::String("raw".to_owned()),
+            ),
+            ("dpi".to_owned(), ImageInfoValue::IntegerList(vec![1, 1])),
+            (
+                "resolution".to_owned(),
+                ImageInfoValue::IntegerList(vec![1, 1]),
+            ),
+        ]
     }
 
     fn pipeline_lab_icc_profile(&self) -> Option<&[u8]> {
