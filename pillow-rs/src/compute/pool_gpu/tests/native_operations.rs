@@ -284,34 +284,8 @@ fn cmyk_putalpha_native_gpu_promotes_exactly() {
 
 #[test]
 fn draw_point_native_gpu_preserves_raw_byte_modes() {
-    let cases = [
-        ("1", vec![0x00, 0xff]),
-        ("P", vec![17, 18]),
-        ("PA", vec![17, 18]),
-        ("RGBX", vec![1, 2, 3, 4, 5, 6, 7, 8]),
-        ("RGBa", vec![11, 12, 13, 14, 15, 16, 17, 18]),
-        ("CMYK", vec![21, 22, 23, 24, 25, 26, 27, 28]),
-        ("HSV", vec![31, 32, 33, 34, 35, 36]),
-        ("YCbCr", vec![41, 42, 43, 44, 45, 46]),
-        (
-            "I",
-            (-123i32)
-                .to_le_bytes()
-                .into_iter()
-                .chain(456i32.to_le_bytes())
-                .collect(),
-        ),
-        (
-            "F",
-            1.25f32
-                .to_le_bytes()
-                .into_iter()
-                .chain(2.5f32.to_le_bytes())
-                .collect(),
-        ),
-    ];
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    for (mode, source_bytes) in cases {
+    for (mode, source_bytes) in raw_byte_draw_point_cases() {
         let source = if mode == "PA" {
             let mut indexed = Image::frombytes("P", (2, 1), &source_bytes)
                 .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
@@ -348,4 +322,33 @@ fn draw_point_native_gpu_preserves_raw_byte_modes() {
         assert_eq!(telemetry.7, None);
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn raw_byte_draw_point_cases() -> [(&'static str, Vec<u8>); 10] {
+    [
+        ("1", vec![0x00, 0xff]),
+        ("P", vec![17, 18]),
+        ("PA", vec![17, 18]),
+        ("RGBX", vec![1, 2, 3, 4, 5, 6, 7, 8]),
+        ("RGBa", vec![11, 12, 13, 14, 15, 16, 17, 18]),
+        ("CMYK", vec![21, 22, 23, 24, 25, 26, 27, 28]),
+        ("HSV", vec![31, 32, 33, 34, 35, 36]),
+        ("YCbCr", vec![41, 42, 43, 44, 45, 46]),
+        (
+            "I",
+            (-123i32)
+                .to_le_bytes()
+                .into_iter()
+                .chain(456i32.to_le_bytes())
+                .collect(),
+        ),
+        (
+            "F",
+            1.25f32
+                .to_le_bytes()
+                .into_iter()
+                .chain(2.5f32.to_le_bytes())
+                .collect(),
+        ),
+    ]
 }
