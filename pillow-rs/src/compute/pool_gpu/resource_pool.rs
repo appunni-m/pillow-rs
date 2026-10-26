@@ -362,6 +362,20 @@ impl ReadbackTarget {
     }
 }
 
+fn create_pool_buffer(
+    device: &wgpu::Device,
+    label: &'static str,
+    size: u64,
+    usage: wgpu::BufferUsages,
+) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some(label),
+        size,
+        usage,
+        mapped_at_creation: false,
+    })
+}
+
 impl BufferPool {
     pub(super) fn new(device: &wgpu::Device, capacity: u32, direct_primary_readback: bool) -> Self {
         Self::new_with_mapped_input(device, capacity, direct_primary_readback, false)
@@ -387,45 +401,22 @@ impl BufferPool {
         } else {
             image_usage
         };
-        let buf_a = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("gpu_buf_a"),
-            size,
-            usage: input_usage,
-            mapped_at_creation: false,
-        });
-        let buf_b = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("gpu_buf_b"),
-            size,
-            usage: image_usage,
-            mapped_at_creation: false,
-        });
-        let buf_img2 = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("gpu_buf_img2"),
-            // Missing optional auxiliary inputs are never read by the
-            // shader. A single storage element is sufficient as the
-            // fallback binding and avoids allocating another full image.
-            size: 4,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let buf_img3 = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("gpu_buf_img3"),
-            size: 4,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let lut_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("gpu_lut"),
-            size: 1024, // 256 entries * 4 bytes each
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let histogram_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("gpu_histogram"),
-            size: GPU_HISTOGRAM_BYTES as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let buf_a = create_pool_buffer(device, "gpu_buf_a", size, input_usage);
+        let buf_b = create_pool_buffer(device, "gpu_buf_b", size, image_usage);
+        // Missing optional auxiliary inputs are never read by the shader. A
+        // single storage element is sufficient as the fallback binding and
+        // avoids allocating another full image.
+        let optional_input_usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
+        let buf_img2 = create_pool_buffer(device, "gpu_buf_img2", 4, optional_input_usage);
+        let buf_img3 = create_pool_buffer(device, "gpu_buf_img3", 4, optional_input_usage);
+        // 256 entries * 4 bytes each.
+        let lut_buf = create_pool_buffer(device, "gpu_lut", 1024, optional_input_usage);
+        let histogram_buf = create_pool_buffer(
+            device,
+            "gpu_histogram",
+            GPU_HISTOGRAM_BYTES as u64,
+            optional_input_usage,
+        );
         let params_arena = ReusableGpuBuffer::new(
             device,
             "gpu_batch_params",
