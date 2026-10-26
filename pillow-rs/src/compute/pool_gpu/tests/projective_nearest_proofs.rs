@@ -1,10 +1,30 @@
 use super::*;
 
-#[test]
-fn projective_nearest_proof_is_bounded() {
+struct ProjectiveNearestOps {
+    perspective: PipelineOp,
+    quad: PipelineOp,
+    quad_direct: PipelineOp,
+    quad_constant: PipelineOp,
+    quad_constant_fill: PipelineOp,
+    mesh: PipelineOp,
+    mesh_constant: PipelineOp,
+    mesh_constant_fill: PipelineOp,
+}
+
+fn projective_nearest_images() -> (DynamicImage, DynamicImage, DynamicImage) {
     let image = DynamicImage::ImageLuma8(
         GrayImage::from_raw(16, 16, vec![0; 16 * 16]).expect("indexed image"),
     );
+    let rgb = DynamicImage::ImageRgb8(
+        RgbImage::from_raw(16, 16, vec![0; 16 * 16 * 3]).expect("RGB image"),
+    );
+    let rgba = DynamicImage::ImageRgba8(
+        RgbaImage::from_raw(16, 16, vec![0; 16 * 16 * 4]).expect("RGBA image"),
+    );
+    (image, rgb, rgba)
+}
+
+fn projective_nearest_ops() -> ProjectiveNearestOps {
     let perspective = PipelineOp::Transform {
         w: 8,
         h: 8,
@@ -91,22 +111,57 @@ fn projective_nearest_proof_is_bounded() {
         fill_is_none: false,
         palette_fill: None,
     };
-    for op in [&perspective, &quad, &quad_direct, &mesh] {
+    ProjectiveNearestOps {
+        perspective,
+        quad,
+        quad_direct,
+        quad_constant,
+        quad_constant_fill,
+        mesh,
+        mesh_constant,
+        mesh_constant_fill,
+    }
+}
+
+#[test]
+fn projective_nearest_proof_is_bounded() {
+    let (image, rgb, rgba) = projective_nearest_images();
+    let cases = projective_nearest_ops();
+    assert_projective_nearest_identity_and_constant_proofs(&image, &rgb, &rgba, &cases);
+    assert_projective_nearest_perspective_relocations(&rgb, &rgba);
+    assert_projective_nearest_mesh_relocations(&rgb);
+    assert_projective_nearest_mesh_rejections(&rgb);
+    assert_projective_nearest_overflowing_geometry(&rgb);
+    assert_projective_nearest_fractional_and_scaled_maps(&image, &rgb);
+    assert_projective_nearest_overflowing_perspective(&rgb);
+}
+
+fn assert_projective_nearest_identity_and_constant_proofs(
+    image: &DynamicImage,
+    rgb: &DynamicImage,
+    rgba: &DynamicImage,
+    cases: &ProjectiveNearestOps,
+) {
+    let ProjectiveNearestOps {
+        perspective,
+        quad,
+        quad_direct,
+        quad_constant,
+        quad_constant_fill,
+        mesh,
+        mesh_constant,
+        mesh_constant_fill,
+    } = cases;
+    for op in [perspective, quad, quad_direct, mesh] {
         assert!(gpu_projective_nearest_is_exact(
             op,
-            &image,
+            image,
             Some("P"),
             (16, 16)
         ));
     }
-    let rgb = DynamicImage::ImageRgb8(
-        RgbImage::from_raw(16, 16, vec![0; 16 * 16 * 3]).expect("RGB image"),
-    );
-    let rgba = DynamicImage::ImageRgba8(
-        RgbaImage::from_raw(16, 16, vec![0; 16 * 16 * 4]).expect("RGBA image"),
-    );
-    for (mode, image) in [("RGB", &rgb), ("RGBA", &rgba)] {
-        for op in [&perspective, &quad, &quad_direct, &mesh] {
+    for (mode, image) in [("RGB", rgb), ("RGBA", rgba)] {
+        for op in [perspective, quad, quad_direct, mesh] {
             assert!(
                 gpu_projective_nearest_is_exact(op, image, Some(mode), (16, 16)),
                 "identity projective proof for {mode}"
@@ -114,17 +169,17 @@ fn projective_nearest_proof_is_bounded() {
         }
     }
     for (name, op) in [
-        ("constant Quad", &quad_constant),
-        ("constant Quad fill", &quad_constant_fill),
-        ("constant Mesh", &mesh_constant),
-        ("constant Mesh fill", &mesh_constant_fill),
+        ("constant Quad", quad_constant),
+        ("constant Quad fill", quad_constant_fill),
+        ("constant Mesh", mesh_constant),
+        ("constant Mesh fill", mesh_constant_fill),
     ] {
         assert!(
-            gpu_projective_nearest_is_exact(op, &rgb, Some("RGB"), (16, 16)),
+            gpu_projective_nearest_is_exact(op, rgb, Some("RGB"), (16, 16)),
             "{name} proof"
         );
         assert!(
-            gpu_projective_nearest_is_exact(op, &rgba, Some("RGBA"), (16, 16)),
+            gpu_projective_nearest_is_exact(op, rgba, Some("RGBA"), (16, 16)),
             "{name} proof for RGBA"
         );
     }
@@ -142,6 +197,9 @@ fn projective_nearest_proof_is_bounded() {
         Some("RGBA"),
         (8, 8),
     ));
+}
+
+fn assert_projective_nearest_perspective_relocations(rgb: &DynamicImage, rgba: &DynamicImage) {
     let perspective_translate = PipelineOp::Transform {
         w: 8,
         h: 8,
@@ -166,7 +224,7 @@ fn projective_nearest_proof_is_bounded() {
         ("integer translation", &perspective_translate),
         ("integer axis swap", &perspective_axis_swap),
     ] {
-        for (mode, image) in [("RGB", &rgb), ("RGBA", &rgba)] {
+        for (mode, image) in [("RGB", rgb), ("RGBA", rgba)] {
             assert!(
                 gpu_projective_nearest_is_exact(op, image, Some(mode), (16, 16)),
                 "{name} proof for {mode}"
@@ -185,7 +243,7 @@ fn projective_nearest_proof_is_bounded() {
     };
     assert!(gpu_projective_nearest_is_exact(
         &perspective_translate_negative,
-        &rgb,
+        rgb,
         Some("RGB"),
         (16, 16)
     ));
@@ -212,11 +270,14 @@ fn projective_nearest_proof_is_bounded() {
         };
         assert!(gpu_projective_nearest_is_exact(
             &op,
-            &rgb,
+            rgb,
             Some("RGB"),
             (16, 16),
         ));
     }
+}
+
+fn assert_projective_nearest_mesh_relocations(rgb: &DynamicImage) {
     let mesh_translate = PipelineOp::Transform {
         w: 8,
         h: 8,
@@ -246,10 +307,13 @@ fn projective_nearest_proof_is_bounded() {
         ("unit mesh axis swap", &mesh_axis_swap),
     ] {
         assert!(
-            gpu_projective_nearest_is_exact(op, &rgb, Some("RGB"), (16, 16)),
+            gpu_projective_nearest_is_exact(op, rgb, Some("RGB"), (16, 16)),
             "{name} proof"
         );
     }
+}
+
+fn assert_projective_nearest_mesh_rejections(rgb: &DynamicImage) {
     let mesh_scaled = PipelineOp::Transform {
         w: 8,
         h: 8,
@@ -264,7 +328,7 @@ fn projective_nearest_proof_is_bounded() {
     };
     assert!(!gpu_projective_nearest_is_exact(
         &mesh_scaled,
-        &rgb,
+        rgb,
         Some("RGB"),
         (16, 16)
     ));
@@ -283,7 +347,7 @@ fn projective_nearest_proof_is_bounded() {
     };
     assert!(!gpu_projective_nearest_is_exact(
         &mesh_extra_record,
-        &rgb,
+        rgb,
         Some("RGB"),
         (16, 16)
     ));
@@ -302,7 +366,7 @@ fn projective_nearest_proof_is_bounded() {
     };
     assert!(!gpu_projective_nearest_is_exact(
         &mesh_constant_extra_record,
-        &rgb,
+        rgb,
         Some("RGB"),
         (16, 16)
     ));
@@ -318,10 +382,13 @@ fn projective_nearest_proof_is_bounded() {
     };
     assert!(gpu_projective_nearest_is_exact(
         &scaled_quad_axis,
-        &rgb,
+        rgb,
         Some("RGB"),
         (16, 16)
     ));
+}
+
+fn assert_projective_nearest_overflowing_geometry(rgb: &DynamicImage) {
     let f32_max = f64::from(f32::MAX);
     let overflowing_quad = PipelineOp::Transform {
         w: 3,
@@ -341,7 +408,7 @@ fn projective_nearest_proof_is_bounded() {
     // classifications from a non-finite source-selection result.
     assert!(!gpu_projective_nearest_is_exact(
         &overflowing_quad,
-        &rgb,
+        rgb,
         Some("RGB"),
         (16, 16)
     ));
@@ -359,10 +426,13 @@ fn projective_nearest_proof_is_bounded() {
     };
     assert!(!gpu_projective_nearest_is_exact(
         &overflowing_mesh,
-        &rgb,
+        rgb,
         Some("RGB"),
         (16, 16)
     ));
+}
+
+fn assert_projective_nearest_fractional_and_scaled_maps(image: &DynamicImage, rgb: &DynamicImage) {
     let fractional = PipelineOp::Transform {
         w: 8,
         h: 8,
@@ -375,13 +445,13 @@ fn projective_nearest_proof_is_bounded() {
     };
     assert!(gpu_projective_nearest_is_exact(
         &fractional,
-        &image,
+        image,
         Some("P"),
         (16, 16)
     ));
     assert!(gpu_projective_nearest_is_exact(
         &fractional,
-        &rgb,
+        rgb,
         Some("RGB"),
         (16, 16)
     ));
@@ -397,10 +467,13 @@ fn projective_nearest_proof_is_bounded() {
     };
     assert!(gpu_projective_nearest_is_exact(
         &scaled,
-        &rgb,
+        rgb,
         Some("RGB"),
         (16, 16)
     ));
+}
+
+fn assert_projective_nearest_overflowing_perspective(rgb: &DynamicImage) {
     let overflowing = PipelineOp::Transform {
         w: 3,
         h: 1,
@@ -426,7 +499,7 @@ fn projective_nearest_proof_is_bounded() {
     // on both sides of that pixel.
     assert!(!gpu_projective_nearest_is_exact(
         &overflowing,
-        &rgb,
+        rgb,
         Some("RGB"),
         (16, 16)
     ));

@@ -184,12 +184,6 @@
       "signature": "fn byte_projective_quad_mesh_nearest_proof_native_gpu_preserves_pixels() {"
     },
     {
-      "lines": 420,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/projective_nearest_proofs.rs",
-      "signature": "fn projective_nearest_proof_is_bounded() {"
-    },
-    {
       "lines": 111,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/readback.rs",
@@ -377,11 +371,6 @@
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/tests/projective_nearest_execution.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/tests/projective_nearest_proofs.rs": {
       "owner": "lazytrot",
       "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
