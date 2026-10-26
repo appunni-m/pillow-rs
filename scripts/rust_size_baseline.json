@@ -70,12 +70,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn execute_native_masked_byte_paste( &self, destination: &DynamicImage, source: &DynamicImage, mask: &DynamicImage, logical_mode: &str, offset: (i32, i32), dispatch: NativeMaskedBytePasteDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 226,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/operation_support.rs",
-      "signature": "pub(super) fn expand_gpu_geometry_ops( ops: &[PipelineOp], image: &DynamicImage, dimensions: (u32, u32), logical_mode: Option<&str>, ) -> Vec<PipelineOp> {"
-    },
-    {
       "lines": 301,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/projection.rs",
@@ -335,11 +329,6 @@
     "pillow-rs/src/compute/pool_gpu/native_paste/masked_execution.rs": {
       "owner": "lazytrot",
       "reason": "Moved native masked byte paste execution beside its GPU paste family; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/operation_support.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU operation support and exactness guards; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/projection.rs": {

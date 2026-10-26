@@ -413,6 +413,189 @@ pub(super) fn gpu_fit_is_exact_identity(
         && logical_mode.is_none_or(|mode| matches!(mode, "L" | "LA" | "RGB" | "RGBA"))
 }
 
+// Preserve Pillow's vertical-first FLOAT32 store for tall F inputs by
+// separating the resize into GPU segments.
+fn expand_tall_f_resize(
+    op: &PipelineOp,
+    f_resize_chain: bool,
+    dimensions: (u32, u32),
+) -> Option<(Vec<PipelineOp>, (u32, u32))> {
+    let PipelineOp::Resize { w, h, filter } = op else {
+        return None;
+    };
+    if !f_resize_chain
+        || *w == 0
+        || *h == 0
+        || matches!(filter, ResampleFilter::Nearest)
+        || !gpu_f_resize_uses_pillow_tall_order(dimensions, (*w, *h))
+    {
+        return None;
+    }
+    // PIL.Image.resize's tall-image branch stores FLOAT32 after the vertical
+    // pass. Separate GPU segments retain those words and prove the horizontal
+    // pass from that actual result.
+    Some((
+        vec![
+            PipelineOp::Resize {
+                w: dimensions.0,
+                h: *h,
+                filter: *filter,
+            },
+            op.clone(),
+        ],
+        (*w, *h),
+    ))
+}
+
+fn expand_thumbnail_integer_reduction(
+    op: &PipelineOp,
+    dimensions: (u32, u32),
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> Option<(Vec<PipelineOp>, (u32, u32))> {
+    let PipelineOp::Thumbnail { filter, .. } = op else {
+        return None;
+    };
+    let effective_filter = if matches!(logical_mode, Some("1" | "P")) {
+        ResampleFilter::Nearest
+    } else {
+        *filter
+    };
+    let has_alpha = matches!(
+        image,
+        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+    ) && !matches!(logical_mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
+    if gpu_thumbnail_requires_exact_host_control(op, dimensions, image, logical_mode)
+        || matches!(effective_filter, ResampleFilter::Nearest)
+        || has_alpha
+        || matches!(logical_mode, Some("F" | "I"))
+    {
+        return None;
+    }
+    let (out_w, out_h) = op_output_dims(op, dimensions.0, dimensions.1)?;
+    let factor_x = ((f64::from(dimensions.0) / f64::from(out_w) / 2.0) as u32).max(1);
+    let factor_y = ((f64::from(dimensions.1) / f64::from(out_h) / 2.0) as u32).max(1);
+    if (factor_x == 1 && factor_y == 1)
+        || dimensions.0 % factor_x != 0
+        || dimensions.1 % factor_y != 0
+    {
+        return None;
+    }
+    // Pillow's default Thumbnail reducing_gap=2.0 performs integer box
+    // reduction before resize. Partial edge blocks stay on the exact host path.
+    Some((
+        vec![
+            PipelineOp::Reduce {
+                x_factor: factor_x,
+                y_factor: factor_y,
+            },
+            PipelineOp::Resize {
+                w: out_w,
+                h: out_h,
+                filter: effective_filter,
+            },
+        ],
+        (out_w, out_h),
+    ))
+}
+
+fn expand_gpu_rotate(
+    op: &PipelineOp,
+    image: &DynamicImage,
+    dimensions: (u32, u32),
+    logical_mode: Option<&str>,
+) -> PipelineOp {
+    let PipelineOp::Rotate {
+        angle,
+        expand,
+        fill,
+        center,
+        translate,
+        filter,
+        nearest,
+    } = op
+    else {
+        return op.clone();
+    };
+    if gpu_rotate_requires_exact_host_control(image, logical_mode)
+        && !matches!(logical_mode, Some("1" | "P"))
+        && !matches!(
+            (op, logical_mode),
+            (
+                PipelineOp::Rotate { nearest: false, .. },
+                Some("PA" | "RGBa" | "RGBX" | "CMYK" | "HSV" | "YCbCr" | "F")
+            )
+        )
+        && !gpu_rotate_has_exact_transpose_lowering(op, logical_mode, dimensions)
+        && !gpu_rotate_nearest_affine_is_exact(op, image, logical_mode, dimensions)
+    {
+        return op.clone();
+    }
+    let normalized_angle = angle.rem_euclid(360.0);
+    if center.is_none() && translate.is_none() && normalized_angle.abs() <= f64::EPSILON {
+        return PipelineOp::Duplicate;
+    }
+    let right_angle = if gpu_rotate_has_exact_transpose_lowering(op, logical_mode, dimensions) {
+        match angle.rem_euclid(360.0) {
+            value if (value - 90.0).abs() < f64::EPSILON => Some(TransposeMethod::Rotate90),
+            value if (value - 180.0).abs() < f64::EPSILON => Some(TransposeMethod::Rotate180),
+            value if (value - 270.0).abs() < f64::EPSILON => Some(TransposeMethod::Rotate270),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    if let Some(method) = right_angle {
+        return PipelineOp::Transpose { method };
+    }
+    let Some((affine, (w, h))) = gpu_rotate_affine(
+        *angle,
+        *expand,
+        *fill,
+        *center,
+        *translate,
+        dimensions.0,
+        dimensions.1,
+    ) else {
+        return op.clone();
+    };
+    // The public boundary keeps LA/PA rotate colors in the public RGBA-shaped
+    // tuple `(gray, gray, gray, alpha)`, while Transform expects
+    // `(gray, alpha, 0, 0)`. Normalize only this lowered rotate node.
+    let transform_fill = if matches!(logical_mode, Some("LA" | "PA")) {
+        (*fill).map(|(gray, _, _, alpha)| (gray, alpha, 0, 0))
+    } else {
+        *fill
+    };
+    let effective_nearest = *nearest || matches!(logical_mode, Some("1" | "P"));
+    // Filtered rotation uses the binary64 projective kernel. A denominator of
+    // one preserves affine center mapping; host-generated tables carry only
+    // geometry, and every pixel sample stays on the device.
+    let (method, data) = if effective_nearest {
+        (TransformMethod::Affine, affine.to_vec())
+    } else {
+        let mut data = affine.to_vec();
+        data.extend([0.0, 0.0]);
+        (TransformMethod::Perspective, data)
+    };
+    PipelineOp::Transform {
+        w,
+        h,
+        method,
+        data: Arc::from(data),
+        filter: if effective_nearest {
+            ResampleFilter::Nearest
+        } else {
+            *filter
+        },
+        // Rotate's omitted fill is zero in every stored band, including
+        // RGBX's fourth byte. Make that explicit for the GPU and any fallback.
+        fill: Some(transform_fill.unwrap_or((0, 0, 0, 0))),
+        fill_is_none: fill.is_none(),
+        palette_fill: None,
+    }
+}
+
 /// Replace valid aspect-ratio/Scale nodes with the equivalent exact Resize
 /// operation.
 ///
@@ -436,23 +619,11 @@ pub(super) fn expand_gpu_geometry_ops(
     let f_resize_chain =
         logical_mode == Some("F") && ops.iter().all(|op| matches!(op, PipelineOp::Resize { .. }));
     for op in ops {
-        if f_resize_chain
-            && let PipelineOp::Resize { w, h, filter } = op
-            && *w > 0
-            && *h > 0
-            && !matches!(filter, ResampleFilter::Nearest)
-            && gpu_f_resize_uses_pillow_tall_order((cur_w, cur_h), (*w, *h))
+        if let Some((replacements, dimensions)) =
+            expand_tall_f_resize(op, f_resize_chain, (cur_w, cur_h))
         {
-            // PIL.Image.resize's tall-image branch stores FLOAT32 after
-            // the vertical pass. Separate GPU segments below retain those
-            // words and prove the horizontal pass from that actual result.
-            expanded.push(PipelineOp::Resize {
-                w: cur_w,
-                h: *h,
-                filter: *filter,
-            });
-            expanded.push(op.clone());
-            (cur_w, cur_h) = (*w, *h);
+            expanded.extend(replacements);
+            (cur_w, cur_h) = dimensions;
             continue;
         }
         if i_resize_identity_is_exact {
@@ -469,48 +640,12 @@ pub(super) fn expand_gpu_geometry_ops(
             expanded.push(PipelineOp::Duplicate);
             continue;
         }
-        // Pillow's default Thumbnail reducing_gap=2.0 performs an integer
-        // box reduction before the final resize.  When both source axes are
-        // divisible by the chosen factors, the exact two-step contract is
-        // representable by the native Reduce and Resize kernels.  Preserve
-        // the original node for partial edge blocks; those use a fractional
-        // resize box and remain on the exact host path until that geometry is
-        // carried by the device plan.
-        if let PipelineOp::Thumbnail { filter, .. } = op {
-            let effective_filter = if matches!(logical_mode, Some("1" | "P")) {
-                ResampleFilter::Nearest
-            } else {
-                *filter
-            };
-            let has_alpha =
-                matches!(
-                    image,
-                    DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
-                ) && !matches!(logical_mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
-            if !gpu_thumbnail_requires_exact_host_control(op, (cur_w, cur_h), image, logical_mode)
-                && !matches!(effective_filter, ResampleFilter::Nearest)
-                && !has_alpha
-                && !matches!(logical_mode, Some("F" | "I"))
-                && let Some((out_w, out_h)) = op_output_dims(op, cur_w, cur_h)
-            {
-                let factor_x = ((f64::from(cur_w) / f64::from(out_w) / 2.0) as u32).max(1);
-                let factor_y = ((f64::from(cur_h) / f64::from(out_h) / 2.0) as u32).max(1);
-                if (factor_x > 1 || factor_y > 1) && cur_w % factor_x == 0 && cur_h % factor_y == 0
-                {
-                    expanded.push(PipelineOp::Reduce {
-                        x_factor: factor_x,
-                        y_factor: factor_y,
-                    });
-                    expanded.push(PipelineOp::Resize {
-                        w: out_w,
-                        h: out_h,
-                        filter: effective_filter,
-                    });
-                    cur_w = out_w;
-                    cur_h = out_h;
-                    continue;
-                }
-            }
+        if let Some((replacements, dimensions)) =
+            expand_thumbnail_integer_reduction(op, (cur_w, cur_h), image, logical_mode)
+        {
+            expanded.extend(replacements);
+            (cur_w, cur_h) = dimensions;
+            continue;
         }
         let replacement = match op {
             PipelineOp::Transform {
@@ -580,115 +715,7 @@ pub(super) fn expand_gpu_geometry_ops(
             // planner has selected the expanded canvas.  Feed that mapping
             // into the reviewed Transform shader; exact right-angle
             // rotations use the byte-relocation transpose kernel instead.
-            PipelineOp::Rotate { .. }
-                if gpu_rotate_requires_exact_host_control(image, logical_mode)
-                    && !matches!(logical_mode, Some("1" | "P"))
-                    && !matches!(
-                        (op, logical_mode),
-                        (
-                            PipelineOp::Rotate { nearest: false, .. },
-                            Some("PA" | "RGBa" | "RGBX" | "CMYK" | "HSV" | "YCbCr" | "F")
-                        )
-                    )
-                    && !gpu_rotate_has_exact_transpose_lowering(
-                        op,
-                        logical_mode,
-                        (cur_w, cur_h),
-                    )
-                    && !gpu_rotate_nearest_affine_is_exact(
-                        op,
-                        image,
-                        logical_mode,
-                        (cur_w, cur_h),
-                    ) =>
-            {
-                op.clone()
-            }
-            PipelineOp::Rotate {
-                angle,
-                expand,
-                fill,
-                center,
-                translate,
-                filter,
-                nearest,
-            } => {
-                let normalized_angle = angle.rem_euclid(360.0);
-                if center.is_none() && translate.is_none() && normalized_angle.abs() <= f64::EPSILON
-                {
-                    PipelineOp::Duplicate
-                } else {
-                    let right_angle = if gpu_rotate_has_exact_transpose_lowering(
-                        op,
-                        logical_mode,
-                        (cur_w, cur_h),
-                    ) {
-                        match angle.rem_euclid(360.0) {
-                            value if (value - 90.0).abs() < f64::EPSILON => {
-                                Some(TransposeMethod::Rotate90)
-                            }
-                            value if (value - 180.0).abs() < f64::EPSILON => {
-                                Some(TransposeMethod::Rotate180)
-                            }
-                            value if (value - 270.0).abs() < f64::EPSILON => {
-                                Some(TransposeMethod::Rotate270)
-                            }
-                            _ => None,
-                        }
-                    } else {
-                        None
-                    };
-                    if let Some(method) = right_angle {
-                        PipelineOp::Transpose { method }
-                    } else if let Some((affine, (w, h))) =
-                        gpu_rotate_affine(*angle, *expand, *fill, *center, *translate, cur_w, cur_h)
-                    {
-                        // The public boundary keeps LA/PA rotate colors
-                        // in the public RGBA-shaped tuple `(gray, gray,
-                        // gray, alpha)`, while Transform's native two-band
-                        // fill contract is `(gray, alpha, 0, 0)`. Normalize
-                        // only this lowered rotate node so the shader packs
-                        // the logical alpha into byte three; direct
-                        // Transform fills already use the latter layout.
-                        let transform_fill = if matches!(logical_mode, Some("LA" | "PA")) {
-                            (*fill).map(|(gray, _, _, alpha)| (gray, alpha, 0, 0))
-                        } else {
-                            *fill
-                        };
-                        let effective_nearest = *nearest || matches!(logical_mode, Some("1" | "P"));
-                        // Filtered rotation needs the binary64 sample arithmetic
-                        // of the projective kernel. A denominator of one preserves
-                        // the affine center mapping exactly; the host table contains
-                        // geometry only, and all pixel sampling stays on the device.
-                        let (method, data) = if effective_nearest {
-                            (TransformMethod::Affine, affine.to_vec())
-                        } else {
-                            let mut data = affine.to_vec();
-                            data.extend([0.0, 0.0]);
-                            (TransformMethod::Perspective, data)
-                        };
-                        PipelineOp::Transform {
-                            w,
-                            h,
-                            method,
-                            data: Arc::from(data),
-                            filter: if effective_nearest {
-                                ResampleFilter::Nearest
-                            } else {
-                                *filter
-                            },
-                            // Rotate's omitted fill is zero in every stored
-                            // band, including RGBX's fourth byte. Make it explicit
-                            // for both the device and any geometry-limit fallback.
-                            fill: Some(transform_fill.unwrap_or((0, 0, 0, 0))),
-                            fill_is_none: fill.is_none(),
-                            palette_fill: None,
-                        }
-                    } else {
-                        op.clone()
-                    }
-                }
-            }
+            PipelineOp::Rotate { .. } => expand_gpu_rotate(op, image, (cur_w, cur_h), logical_mode),
             _ => op.clone(),
         };
         if let Some(next) = op_output_dims(&replacement, cur_w, cur_h) {
