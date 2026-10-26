@@ -53,6 +53,35 @@ pub(crate) fn simd_cmyk_projection(image: &RgbaImage) -> (Vec<u32>, Vec<u32>, u6
     )
 }
 
+fn simd_cmyk_projection_fill_axis(output: &mut [u32], marks: &[u32]) -> (u64, u64) {
+    let zero = u32x4::splat(0);
+    let one = u32x4::splat(1);
+    let vector_len = output.len() / 4 * 4;
+    let mut vector_blocks = 0u64;
+    for start in (0..vector_len).step_by(4) {
+        let lanes = u32x4::new([
+            start as u32,
+            start as u32 + 1,
+            start as u32 + 2,
+            start as u32 + 3,
+        ]);
+        let mut projected = zero;
+        for &mark in marks {
+            projected |= lanes.simd_eq(u32x4::splat(mark)).bitselect(one, zero);
+        }
+        output[start..start + 4].copy_from_slice(&projected.to_array());
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    for (index, value) in output.iter_mut().enumerate().skip(vector_len) {
+        *value = u32::from(marks.contains(&(index as u32)));
+    }
+    (
+        vector_blocks,
+        output.len().saturating_sub(vector_len) as u64,
+    )
+}
+
 /// Build CMYK projection axes from a proven zero source and a small set of
 /// positive deferred writes. The SIMD comparisons materialize each four-axis
 /// output block directly, avoiding a full-frame source scan.
@@ -91,39 +120,12 @@ pub(crate) fn simd_cmyk_projection_from_positive_writes(
         y_marks[index] = *y;
     }
 
-    fn fill_axis(output: &mut [u32], marks: &[u32]) -> (u64, u64) {
-        let zero = u32x4::splat(0);
-        let one = u32x4::splat(1);
-        let vector_len = output.len() / 4 * 4;
-        let mut vector_blocks = 0u64;
-        for start in (0..vector_len).step_by(4) {
-            let lanes = u32x4::new([
-                start as u32,
-                start as u32 + 1,
-                start as u32 + 2,
-                start as u32 + 3,
-            ]);
-            let mut projected = zero;
-            for &mark in marks {
-                projected |= lanes.simd_eq(u32x4::splat(mark)).bitselect(one, zero);
-            }
-            output[start..start + 4].copy_from_slice(&projected.to_array());
-            vector_blocks = vector_blocks.saturating_add(1);
-        }
-
-        for (index, value) in output.iter_mut().enumerate().skip(vector_len) {
-            *value = u32::from(marks.contains(&(index as u32)));
-        }
-        (
-            vector_blocks,
-            output.len().saturating_sub(vector_len) as u64,
-        )
-    }
-
     let mut horizontal = vec![0u32; width as usize];
     let mut vertical = vec![0u32; height as usize];
-    let (horizontal_vectors, horizontal_tail) = fill_axis(&mut horizontal, &x_marks[..ops.len()]);
-    let (vertical_vectors, vertical_tail) = fill_axis(&mut vertical, &y_marks[..ops.len()]);
+    let (horizontal_vectors, horizontal_tail) =
+        simd_cmyk_projection_fill_axis(&mut horizontal, &x_marks[..ops.len()]);
+    let (vertical_vectors, vertical_tail) =
+        simd_cmyk_projection_fill_axis(&mut vertical, &y_marks[..ops.len()]);
     Some((
         horizontal,
         vertical,
