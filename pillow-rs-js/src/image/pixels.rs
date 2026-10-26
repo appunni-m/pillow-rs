@@ -5,6 +5,7 @@ use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
 #[wasm_bindgen]
 impl Image {
+    /// Pastes `src` into this image with its upper-left corner at `(x, y)`.
     #[wasm_bindgen(js_name = "pasteImage")]
     pub fn paste_image(&mut self, src: &Image, x: i32, y: i32) -> Result<(), JsValue> {
         use pillow_rs::PasteSource;
@@ -16,6 +17,7 @@ impl Image {
             )
             .map_err(err)
     }
+    /// Pastes `src` at `(x, y)` using `mask` to control the blend.
     #[wasm_bindgen(js_name = "pasteImageMasked")]
     pub fn paste_image_masked(
         &mut self,
@@ -33,6 +35,7 @@ impl Image {
             )
             .map_err(err)
     }
+    /// Pastes the source region bounded by left, top, right, and bottom coordinates.
     #[wasm_bindgen(js_name = "pasteImageRegion")]
     pub fn paste_image_region(
         &mut self,
@@ -51,6 +54,7 @@ impl Image {
             )
             .map_err(err)
     }
+    /// Pastes the selected source region using `mask` to control the blend.
     #[wasm_bindgen(js_name = "pasteImageRegionMasked")]
     pub fn paste_image_region_masked(
         &mut self,
@@ -70,6 +74,7 @@ impl Image {
             )
             .map_err(err)
     }
+    /// Fills the destination box with the supplied RGBA color.
     #[wasm_bindgen(js_name = "pasteColor")]
     pub fn paste_color(
         &mut self,
@@ -87,6 +92,7 @@ impl Image {
             .paste(PasteSource::Rgba(r, g, b, a), Some((l, t, rt, bt)), None)
             .map_err(err)
     }
+    /// Fills the destination box with a scalar pixel value.
     #[wasm_bindgen(js_name = "pasteScalarRegion")]
     pub fn paste_scalar_region(
         &mut self,
@@ -101,6 +107,7 @@ impl Image {
             .paste(PasteSource::Scalar(value), Some((l, t, r, b)), None)
             .map_err(err)
     }
+    /// Writes a scalar pixel value at `(x, y)`.
     #[wasm_bindgen(js_name = "pasteScalarAt")]
     pub fn paste_scalar_at(&mut self, value: u8, x: i32, y: i32) -> Result<(), JsValue> {
         use pillow_rs::PasteSource;
@@ -108,6 +115,7 @@ impl Image {
             .paste_at(PasteSource::Scalar(value), Some((x, y)), None)
             .map_err(err)
     }
+    /// Fills the destination box with the supplied luminance and alpha values.
     #[wasm_bindgen(js_name = "pasteLumaAlphaRegion")]
     pub fn paste_luma_alpha_region(
         &mut self,
@@ -127,6 +135,7 @@ impl Image {
             )
             .map_err(err)
     }
+    /// Pastes the supplied RGB color at `(x, y)` using `mask` to control the blend.
     #[wasm_bindgen(js_name = "pasteRgbAt")]
     pub fn paste_rgb_at(
         &mut self,
@@ -144,6 +153,7 @@ impl Image {
     }
 
     // Pixels
+    /// Returns the pixel at `(x, y)` as channel bytes.
     #[wasm_bindgen(js_name = "getpixel")]
     pub fn getpixel(&mut self, x: u32, y: u32) -> Result<Vec<u8>, JsValue> {
         self.inner
@@ -151,6 +161,7 @@ impl Image {
             .map(|(r, g, b, a)| vec![r, g, b, a])
             .map_err(err)
     }
+    /// Returns the pixel at `(x, y)` in a JavaScript value matching its image mode.
     #[wasm_bindgen(js_name = "getpixelFormatted")]
     pub fn getpixel_formatted(&self, x: u32, y: u32) -> Result<JsValue, JsValue> {
         self.inner
@@ -158,16 +169,19 @@ impl Image {
             .map(formatted_pixel_to_js)
             .map_err(err)
     }
+    /// Sets the pixel at `(x, y)` from RGBA channel values.
     #[wasm_bindgen(js_name = "putpixel")]
     pub fn putpixel(&mut self, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> {
         self.inner.putpixel(x, y, r, g, b, a).map_err(err)
     }
+    /// Sets the pixel at `(x, y)` from a mode-aware JavaScript scalar or component value.
     #[wasm_bindgen(js_name = "putpixelValue")]
     pub fn putpixel_value(&mut self, x: u32, y: u32, value: JsValue) -> Result<(), JsValue> {
         self.inner
             .putpixel_value(x, y, js_putpixel_value(&value))
             .map_err(err)
     }
+    /// Applies a byte lookup table to the image and returns the result.
     #[wasm_bindgen(js_name = "point")]
     pub fn point(&self, lut: Vec<u8>) -> Result<Image, JsValue> {
         pillow_rs::image_eval_validated(&self.inner, &lut)
@@ -191,15 +205,18 @@ impl Image {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "pointWithTransform")]
+    /// Applies the point transform `value * scale + offset` to the image.
     pub fn point_with_transform(&self, scale: f64, offset: f64) -> Result<Image, JsValue> {
         pillow_rs::image_eval_point_transform(&self.inner, scale, offset)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Sets or adds an alpha channel using the supplied scalar alpha value.
     #[wasm_bindgen(js_name = "putalpha")]
     pub fn putalpha(&mut self, a: u8) -> Result<(), JsValue> {
         self.inner.putalpha(a).map_err(err)
     }
+    /// Sets or adds alpha from a JavaScript integer input.
     #[wasm_bindgen(js_name = "putalphaInput")]
     pub fn putalpha_input(&mut self, alpha: JsValue) -> Result<(), JsValue> {
         let input = if let Some(value) = alpha.as_f64() {
@@ -213,6 +230,7 @@ impl Image {
         };
         self.inner.putalpha_with_input(input).map_err(err)
     }
+    /// Sets or adds alpha from another image.
     #[wasm_bindgen(js_name = "putalphaImageInput")]
     pub fn putalpha_image_input(&mut self, alpha: &Image) -> Result<(), JsValue> {
         self.inner
@@ -223,6 +241,7 @@ impl Image {
     }
 
     // Bands
+    /// Splits the image into one image per band.
     #[wasm_bindgen(js_name = "split")]
     pub fn split(&self) -> Result<Vec<Image>, JsValue> {
         self.inner
@@ -230,10 +249,12 @@ impl Image {
             .map(|v| v.into_iter().map(|i| Image { inner: i }).collect())
             .map_err(err)
     }
+    /// Returns the names of the image's bands.
     #[wasm_bindgen(js_name = "getbands")]
     pub fn getbands(&self) -> Result<Vec<String>, JsValue> {
         self.inner.getbands().map_err(err)
     }
+    /// Returns the image band at the requested index.
     #[wasm_bindgen(js_name = "getchannel")]
     pub fn getchannel(&mut self, ch: i32) -> Result<Image, JsValue> {
         self.inner
@@ -241,6 +262,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Alpha-composites `src` into this image using optional destination and source boxes.
     #[wasm_bindgen(js_name = "alphaComposite")]
     pub fn alpha_composite(
         &mut self,
@@ -268,6 +290,9 @@ impl Image {
     }
 
     // Analysis
+    /// Returns the non-empty pixel bounding box, or `null` for an empty image.
+    ///
+    /// `alpha_only` defaults to true when omitted.
     #[wasm_bindgen(js_name = "getbbox")]
     pub fn getbbox(&self, a: Option<bool>) -> Result<JsValue, JsValue> {
         self.inner
@@ -285,6 +310,7 @@ impl Image {
             })
             .map_err(err)
     }
+    /// Returns the minimum and maximum value for each image band.
     #[wasm_bindgen(js_name = "getextrema")]
     pub fn getextrema(&self) -> Result<js_sys::Array, JsValue> {
         let extrema = self.inner.getextrema().map_err(err)?;
@@ -297,6 +323,7 @@ impl Image {
         }
         Ok(arr)
     }
+    /// Returns per-band extrema formatted according to the image mode.
     #[wasm_bindgen(js_name = "getextremaFormatted")]
     pub fn getextrema_formatted(&self) -> Result<JsValue, JsValue> {
         self.inner
@@ -304,10 +331,12 @@ impl Image {
             .map(formatted_extrema_to_js)
             .map_err(err)
     }
+    /// Returns the image histogram without a mask.
     #[wasm_bindgen(js_name = "histogram")]
     pub fn histogram(&self) -> Result<Vec<u32>, JsValue> {
         self.inner.histogram().map_err(err)
     }
+    /// Returns the image histogram using `mask` to select contributing pixels.
     #[wasm_bindgen(js_name = "histogramWithInput")]
     pub fn histogram_with_input(&self, mask: &Image) -> Result<Vec<u32>, JsValue> {
         self.inner
@@ -316,20 +345,24 @@ impl Image {
             )))
             .map_err(err)
     }
+    /// Exercises histogram mask validation with the supplied input type name.
     #[wasm_bindgen(js_name = "histogramInvalidInput")]
     pub fn histogram_invalid_input(&self, type_name: &str) -> Result<Vec<u32>, JsValue> {
         self.inner
             .histogram_with_input(pillow_rs::ImageAnalysisMask::Invalid(type_name.to_owned()))
             .map_err(err)
     }
+    /// Returns the image entropy.
     #[wasm_bindgen(js_name = "entropy")]
     pub fn entropy(&mut self) -> Result<f64, JsValue> {
         self.inner.entropy().map_err(err)
     }
+    /// Returns image entropy using `mask` to select contributing pixels.
     #[wasm_bindgen(js_name = "entropyWithInput")]
     pub fn entropy_with_input(&mut self, mask: &Image) -> Result<f64, JsValue> {
         self.inner.entropy_with_mask(Some(&mask.inner)).map_err(err)
     }
+    /// Returns distinct colors and their counts, or `null` when the limit is exceeded.
     #[wasm_bindgen(js_name = "getcolors")]
     pub fn getcolors(&mut self, m: i32) -> Result<JsValue, JsValue> {
         match self.inner.getcolors_with_signed_limit(m).map_err(err)? {
@@ -370,10 +403,12 @@ impl Image {
             None => Ok(JsValue::null()),
         }
     }
+    /// Returns pixel data, optionally restricted to the requested number of bands.
     #[wasm_bindgen(js_name = "getdata")]
     pub fn getdata(&mut self, b: Option<i32>) -> Result<Vec<u8>, JsValue> {
         self.inner.getdata(b).map_err(err)
     }
+    /// Returns pixel data formatted to preserve the image mode's value types.
     #[wasm_bindgen(js_name = "getdataFormatted")]
     pub fn getdata_formatted(&self, b: Option<i32>) -> Result<JsValue, JsValue> {
         self.inner
@@ -381,6 +416,7 @@ impl Image {
             .map(formatted_image_data_to_js)
             .map_err(err)
     }
+    /// Returns horizontal and vertical pixel projections as a two-item array.
     #[wasm_bindgen(js_name = "getprojection")]
     pub fn getprojection(&mut self) -> Result<js_sys::Array, JsValue> {
         let (h_proj, v_proj) = self.inner.getprojection().map_err(err)?;
