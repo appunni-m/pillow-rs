@@ -58,12 +58,6 @@
       "signature": "pub fn op_transform( img: &DynamicImage, w: u32, h: u32, method: &TransformMethod, data: &[f64], filter: &ResampleFilter, fill: Option<(u8, u8, u8, u8)>, fill_is_none: bool, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 169,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/transform/projective.rs",
-      "signature": "pub(super) fn transform_mesh_with_filter( img: &DynamicImage, dst_w: u32, dst_h: u32, mesh_data: &[f64], fill: Option<(u8, u8, u8, u8)>, filter: ResampleFilter, fill_is_none: bool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 105,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs",
@@ -419,11 +413,6 @@
       "reduction_task": "pillow-rs#wtxv"
     },
     "pillow-rs/src/compute/pool_cpu/ops/transform.rs": {
-      "owner": "lazytrot",
-      "reason": "Retains pre-existing functions above the 100-line limit moved from effects.rs during the CPU operation family split; preserve their bodies and track any later reductions under pillow-rs#8rfy.",
-      "reduction_task": "pillow-rs#8rfy"
-    },
-    "pillow-rs/src/compute/pool_cpu/ops/transform/projective.rs": {
       "owner": "lazytrot",
       "reason": "Retains pre-existing functions above the 100-line limit moved from effects.rs during the CPU operation family split; preserve their bodies and track any later reductions under pillow-rs#8rfy.",
       "reduction_task": "pillow-rs#8rfy"

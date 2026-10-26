@@ -358,6 +358,128 @@ pub(super) fn transform_mesh(
     transform_mesh_with_filter(img, dst_w, dst_h, mesh_data, fill, filter, fill_is_none)
 }
 
+#[inline(always)]
+fn transform_mesh_source_coordinate(
+    coefficients: [f64; 8],
+    local_x: f64,
+    local_y: f64,
+) -> (f64, f64) {
+    let sx_linear =
+        coefficients[2].mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0]));
+    let sx = (coefficients[3] * local_x).mul_add(local_y, sx_linear);
+    let sy_linear =
+        coefficients[6].mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4]));
+    let sy = (coefficients[7] * local_x).mul_add(local_y, sy_linear);
+    (sx, sy)
+}
+
+#[inline(always)]
+fn transform_mesh_sample_pixel(
+    raw: &[u8],
+    destination: &mut [u8],
+    source_dimensions: (u32, u32),
+    channels: usize,
+    fill_is_none: bool,
+    filter: ResampleFilter,
+    sx: f64,
+    sy: f64,
+) {
+    let (sw, sh) = source_dimensions;
+    if matches!(filter, ResampleFilter::Nearest) {
+        // Geometry.c `COORD`: negative/non-finite values are outside and
+        // nonnegative values are truncated toward zero.
+        let ix = if sx.is_finite() && sx >= 0.0 {
+            sx as i64
+        } else {
+            -1
+        };
+        let iy = if sy.is_finite() && sy >= 0.0 {
+            sy as i64
+        } else {
+            -1
+        };
+        if ix >= 0 && ix < i64::from(sw) && iy >= 0 && iy < i64::from(sh) {
+            let source_idx = ((iy as usize * sw as usize) + ix as usize) * channels;
+            destination.copy_from_slice(&raw[source_idx..source_idx + channels]);
+        } else if fill_is_none {
+            destination.fill(0);
+        }
+        return;
+    }
+
+    if !sx.is_finite()
+        || !sy.is_finite()
+        || sx < 0.0
+        || sx >= f64::from(sw)
+        || sy < 0.0
+        || sy >= f64::from(sh)
+    {
+        if fill_is_none {
+            destination.fill(0);
+        }
+        return;
+    }
+
+    let (x, y, dx, dy) = match filter {
+        ResampleFilter::Bilinear => {
+            let x = (sx - 0.5).floor() as i64;
+            let y = (sy - 0.5).floor() as i64;
+            (x, y, sx - 0.5 - x as f64, sy - 0.5 - y as f64)
+        }
+        ResampleFilter::Bicubic => {
+            let x = (sx - 0.5).floor() as i64 - 1;
+            let y = (sy - 0.5).floor() as i64 - 1;
+            (x, y, sx - 0.5 - (x + 1) as f64, sy - 0.5 - (y + 1) as f64)
+        }
+        _ => return,
+    };
+
+    for (channel, output) in destination.iter_mut().enumerate() {
+        let value = match filter {
+            ResampleFilter::Bilinear => {
+                let x0 = x.clamp(0, i64::from(sw - 1)) as usize;
+                let x1 = (x + 1).clamp(0, i64::from(sw - 1)) as usize;
+                let y0 = y.clamp(0, i64::from(sh - 1)) as usize;
+                let y1 = (y + 1).clamp(0, i64::from(sh - 1)) as usize;
+                let p00 = raw[(y0 * sw as usize + x0) * channels + channel] as f64;
+                let p10 = raw[(y0 * sw as usize + x1) * channels + channel] as f64;
+                let p01 = raw[(y1 * sw as usize + x0) * channels + channel] as f64;
+                let p11 = raw[(y1 * sw as usize + x1) * channels + channel] as f64;
+                let top = (p10 - p00).mul_add(dx, p00);
+                let bottom = (p11 - p01).mul_add(dx, p01);
+                (bottom - top).mul_add(dy, top)
+            }
+            ResampleFilter::Bicubic => {
+                let mut rows = [0.0; 4];
+                for (row, output) in rows.iter_mut().enumerate() {
+                    let yy = y + row as i64;
+                    let cy = yy.clamp(0, i64::from(sh - 1)) as usize;
+                    let samples = [
+                        raw[(cy * sw as usize + x.clamp(0, i64::from(sw - 1)) as usize) * channels
+                            + channel] as f64,
+                        raw[(cy * sw as usize + (x + 1).clamp(0, i64::from(sw - 1)) as usize)
+                            * channels
+                            + channel] as f64,
+                        raw[(cy * sw as usize + (x + 2).clamp(0, i64::from(sw - 1)) as usize)
+                            * channels
+                            + channel] as f64,
+                        raw[(cy * sw as usize + (x + 3).clamp(0, i64::from(sw - 1)) as usize)
+                            * channels
+                            + channel] as f64,
+                    ];
+                    *output = cubic_sample(samples, dx);
+                }
+                cubic_sample(rows, dy)
+            }
+            _ => unreachable!(),
+        };
+        *output = match filter {
+            ResampleFilter::Bicubic => value.clamp(0.0, 255.0) as u8,
+            _ => value as u8,
+        };
+    }
+}
+
 /// Apply Pillow's piecewise quadrilateral mesh transform using the exact
 /// destination-box and source-filter contracts of `Geometry.c`.
 ///
@@ -381,8 +503,6 @@ pub(super) fn transform_mesh_with_filter(
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
     let (sw, sh) = img.dimensions();
-    let sw_f = sw as f64;
-    let sh_f = sh as f64;
     let fill_color = fill.unwrap_or((0, 0, 0, 255));
 
     let output_len = usize::try_from(dst_w)
@@ -458,114 +578,19 @@ pub(super) fn transform_mesh_with_filter(
                 // final fused y-product on this target. Keep the cross-term
                 // multiplication separate from the final `mul_add`; folding
                 // it into `local_x * local_y` changes boundary truncation.
-                let sx_linear = coefficients[2]
-                    .mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0]));
-                let sx = (coefficients[3] * local_x).mul_add(local_y, sx_linear);
-                let sy_linear = coefficients[6]
-                    .mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4]));
-                let sy = (coefficients[7] * local_x).mul_add(local_y, sy_linear);
+                let (sx, sy) = transform_mesh_source_coordinate(coefficients, local_x, local_y);
                 let out_idx =
                     ((destination_y as usize * dst_w as usize) + destination_x as usize) * channels;
-
-                if matches!(filter, ResampleFilter::Nearest) {
-                    // Geometry.c `COORD`: negative values are outside and
-                    // nonnegative values are truncated toward zero.
-                    let ix = if sx.is_finite() && sx >= 0.0 {
-                        sx as i64
-                    } else {
-                        -1
-                    };
-                    let iy = if sy.is_finite() && sy >= 0.0 {
-                        sy as i64
-                    } else {
-                        -1
-                    };
-                    if ix >= 0 && ix < i64::from(sw) && iy >= 0 && iy < i64::from(sh) {
-                        let source_idx = ((iy as usize * sw as usize) + ix as usize) * channels;
-                        out[out_idx..out_idx + channels]
-                            .copy_from_slice(&raw[source_idx..source_idx + channels]);
-                    } else if fill_is_none {
-                        out[out_idx..out_idx + channels].fill(0);
-                    }
-                    continue;
-                }
-
-                if !sx.is_finite()
-                    || !sy.is_finite()
-                    || sx < 0.0
-                    || sx >= sw_f
-                    || sy < 0.0
-                    || sy >= sh_f
-                {
-                    if fill_is_none {
-                        out[out_idx..out_idx + channels].fill(0);
-                    }
-                    continue;
-                }
-
-                let (x, y, dx, dy) = match filter {
-                    ResampleFilter::Bilinear => {
-                        let x = (sx - 0.5).floor() as i64;
-                        let y = (sy - 0.5).floor() as i64;
-                        (x, y, sx - 0.5 - x as f64, sy - 0.5 - y as f64)
-                    }
-                    ResampleFilter::Bicubic => {
-                        let x = (sx - 0.5).floor() as i64 - 1;
-                        let y = (sy - 0.5).floor() as i64 - 1;
-                        (x, y, sx - 0.5 - (x + 1) as f64, sy - 0.5 - (y + 1) as f64)
-                    }
-                    _ => continue,
-                };
-
-                for channel in 0..channels {
-                    let value = match filter {
-                        ResampleFilter::Bilinear => {
-                            let x0 = x.clamp(0, i64::from(sw - 1)) as usize;
-                            let x1 = (x + 1).clamp(0, i64::from(sw - 1)) as usize;
-                            let y0 = y.clamp(0, i64::from(sh - 1)) as usize;
-                            let y1 = (y + 1).clamp(0, i64::from(sh - 1)) as usize;
-                            let p00 = raw[(y0 * sw as usize + x0) * channels + channel] as f64;
-                            let p10 = raw[(y0 * sw as usize + x1) * channels + channel] as f64;
-                            let p01 = raw[(y1 * sw as usize + x0) * channels + channel] as f64;
-                            let p11 = raw[(y1 * sw as usize + x1) * channels + channel] as f64;
-                            let top = (p10 - p00).mul_add(dx, p00);
-                            let bottom = (p11 - p01).mul_add(dx, p01);
-                            (bottom - top).mul_add(dy, top)
-                        }
-                        ResampleFilter::Bicubic => {
-                            let mut rows = [0.0; 4];
-                            for (row, output) in rows.iter_mut().enumerate() {
-                                let yy = y + row as i64;
-                                let cy = yy.clamp(0, i64::from(sh - 1)) as usize;
-                                let samples = [
-                                    raw[(cy * sw as usize
-                                        + (x).clamp(0, i64::from(sw - 1)) as usize)
-                                        * channels
-                                        + channel] as f64,
-                                    raw[(cy * sw as usize
-                                        + (x + 1).clamp(0, i64::from(sw - 1)) as usize)
-                                        * channels
-                                        + channel] as f64,
-                                    raw[(cy * sw as usize
-                                        + (x + 2).clamp(0, i64::from(sw - 1)) as usize)
-                                        * channels
-                                        + channel] as f64,
-                                    raw[(cy * sw as usize
-                                        + (x + 3).clamp(0, i64::from(sw - 1)) as usize)
-                                        * channels
-                                        + channel] as f64,
-                                ];
-                                *output = cubic_sample(samples, dx);
-                            }
-                            cubic_sample(rows, dy)
-                        }
-                        _ => unreachable!(),
-                    };
-                    out[out_idx + channel] = match filter {
-                        ResampleFilter::Bicubic => value.clamp(0.0, 255.0) as u8,
-                        _ => value as u8,
-                    };
-                }
+                transform_mesh_sample_pixel(
+                    raw,
+                    &mut out[out_idx..out_idx + channels],
+                    (sw, sh),
+                    channels,
+                    fill_is_none,
+                    filter,
+                    sx,
+                    sy,
+                );
             }
         }
     }
