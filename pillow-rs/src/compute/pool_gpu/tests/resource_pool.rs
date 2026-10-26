@@ -120,6 +120,14 @@ fn gpu_working_set_pool_scaled_byte_boundaries_reject_and_evict() {
             aggregate_limit
         );
     }
+    assert_working_set_pool_aggregate_eviction(&gpu, aggregate_limit, first_bytes);
+}
+
+fn assert_working_set_pool_aggregate_eviction(
+    gpu: &super::GpuInner,
+    aggregate_limit: u64,
+    first_bytes: u64,
+) {
     let third = super::BufferPool::new(&gpu.device, 66, gpu.direct_primary_readback);
     let third_bytes = actual_working_set_buffer_bytes(&third);
     assert_eq!(third.retained_bytes(), third_bytes);
