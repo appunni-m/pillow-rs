@@ -19,6 +19,25 @@ use super::{
 };
 use std::time::Instant;
 
+fn reset_eager_image_operation_telemetry() {
+    reset_pipeline_allocation_telemetry();
+    reset_pipeline_operation_telemetry();
+    let _ = take_pipeline_resource_telemetry();
+    let _ = take_pipeline_backend_override();
+    let _ = take_pipeline_dispatch_count();
+    let _ = take_pipeline_resize_coeff_cache_stats();
+}
+
+fn discard_eager_image_operation_telemetry() {
+    reset_pipeline_allocation_telemetry();
+    reset_pipeline_operation_telemetry();
+    let _ = take_pipeline_resource_telemetry();
+    let _ = take_pipeline_backend_override();
+    let _ = take_pipeline_dispatch_count();
+    let _ = take_pipeline_resize_coeff_cache_stats();
+    let _ = take_pipeline_telemetry();
+}
+
 /// Run the SIMD CMYK projection block scanner and return its vector/tail
 /// evidence together with the two Pillow-compatible result axes.
 pub(crate) fn simd_cmyk_projection(
@@ -50,12 +69,7 @@ pub(crate) fn execute_eager_cpu_getprojection(
 ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
     let timed = pipeline_telemetry_enabled();
     if timed {
-        reset_pipeline_allocation_telemetry();
-        reset_pipeline_operation_telemetry();
-        let _ = take_pipeline_resource_telemetry();
-        let _ = take_pipeline_backend_override();
-        let _ = take_pipeline_dispatch_count();
-        let _ = take_pipeline_resize_coeff_cache_stats();
+        reset_eager_image_operation_telemetry();
     }
     let backend_start = timed.then(pipeline_timestamp).flatten();
     let result = execute()?;
@@ -232,12 +246,7 @@ pub(crate) fn execute_eager_cpu_image_operation(
 ) -> Result<DynamicImage, PilError> {
     let timed = pipeline_telemetry_enabled();
     if timed {
-        reset_pipeline_allocation_telemetry();
-        reset_pipeline_operation_telemetry();
-        let _ = take_pipeline_resource_telemetry();
-        let _ = take_pipeline_backend_override();
-        let _ = take_pipeline_dispatch_count();
-        let _ = take_pipeline_resize_coeff_cache_stats();
+        reset_eager_image_operation_telemetry();
     }
 
     let backend_start = timed.then(pipeline_timestamp).flatten();
@@ -245,13 +254,7 @@ pub(crate) fn execute_eager_cpu_image_operation(
         Ok(result) => result,
         Err(error) => {
             if timed {
-                reset_pipeline_allocation_telemetry();
-                reset_pipeline_operation_telemetry();
-                let _ = take_pipeline_resource_telemetry();
-                let _ = take_pipeline_backend_override();
-                let _ = take_pipeline_dispatch_count();
-                let _ = take_pipeline_resize_coeff_cache_stats();
-                let _ = take_pipeline_telemetry();
+                discard_eager_image_operation_telemetry();
             }
             return Err(error);
         }
@@ -316,12 +319,7 @@ pub(crate) fn execute_eager_cpu_shared_result<T>(
 ) -> Result<T, PilError> {
     let timed = pipeline_telemetry_enabled();
     if timed {
-        reset_pipeline_allocation_telemetry();
-        reset_pipeline_operation_telemetry();
-        let _ = take_pipeline_resource_telemetry();
-        let _ = take_pipeline_backend_override();
-        let _ = take_pipeline_dispatch_count();
-        let _ = take_pipeline_resize_coeff_cache_stats();
+        reset_eager_image_operation_telemetry();
     }
 
     let backend_start = timed.then(pipeline_timestamp).flatten();
@@ -329,13 +327,7 @@ pub(crate) fn execute_eager_cpu_shared_result<T>(
         Ok(result) => result,
         Err(error) => {
             if timed {
-                reset_pipeline_allocation_telemetry();
-                reset_pipeline_operation_telemetry();
-                let _ = take_pipeline_resource_telemetry();
-                let _ = take_pipeline_backend_override();
-                let _ = take_pipeline_dispatch_count();
-                let _ = take_pipeline_resize_coeff_cache_stats();
-                let _ = take_pipeline_telemetry();
+                discard_eager_image_operation_telemetry();
             }
             return Err(error);
         }
@@ -380,12 +372,7 @@ pub(crate) fn execute_eager_simd_image_operation(
 ) -> Result<DynamicImage, PilError> {
     let timed = pipeline_telemetry_enabled();
     if timed {
-        reset_pipeline_allocation_telemetry();
-        reset_pipeline_operation_telemetry();
-        let _ = take_pipeline_resource_telemetry();
-        let _ = take_pipeline_backend_override();
-        let _ = take_pipeline_dispatch_count();
-        let _ = take_pipeline_resize_coeff_cache_stats();
+        reset_eager_image_operation_telemetry();
     }
 
     let backend_start = timed.then(pipeline_timestamp).flatten();
@@ -393,13 +380,7 @@ pub(crate) fn execute_eager_simd_image_operation(
         Ok(result) => result,
         Err(error) => {
             if timed {
-                reset_pipeline_allocation_telemetry();
-                reset_pipeline_operation_telemetry();
-                let _ = take_pipeline_resource_telemetry();
-                let _ = take_pipeline_backend_override();
-                let _ = take_pipeline_dispatch_count();
-                let _ = take_pipeline_resize_coeff_cache_stats();
-                let _ = take_pipeline_telemetry();
+                discard_eager_image_operation_telemetry();
             }
             return Err(error);
         }
