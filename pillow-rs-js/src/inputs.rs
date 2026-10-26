@@ -419,43 +419,47 @@ pub(crate) fn js_font_start(value: &JsValue) -> (Option<(f64, f64)>, bool) {
     (Some((values[0], values[1])), false)
 }
 
-pub(crate) fn js_font_options(
-    mode: Option<String>,
-    direction: Option<String>,
-    features: &JsValue,
-    language: Option<String>,
-    stroke_width: f64,
-    anchor: Option<String>,
-    ink: Option<i64>,
-    start: &JsValue,
-    embedded_color: bool,
-    stroke_filled: bool,
-    has_args: bool,
-    has_kwargs: bool,
-    anchor_invalid_length_error: bool,
-) -> pillow_rs::ImageFontTextOptions {
-    let (features, features_invalid) = js_font_features(features);
-    let (start, start_invalid) = js_font_start(start);
+#[derive(Default)]
+pub(crate) struct JsFontOptionsInput<'a> {
+    pub(crate) mode: Option<String>,
+    pub(crate) direction: Option<String>,
+    pub(crate) features: Option<&'a JsValue>,
+    pub(crate) language: Option<String>,
+    pub(crate) stroke_width: f64,
+    pub(crate) anchor: Option<String>,
+    pub(crate) ink: Option<i64>,
+    pub(crate) start: Option<&'a JsValue>,
+    pub(crate) embedded_color: bool,
+    pub(crate) stroke_filled: bool,
+    pub(crate) has_args: bool,
+    pub(crate) has_kwargs: bool,
+    pub(crate) anchor_invalid_length_error: bool,
+}
+
+pub(crate) fn js_font_options(input: JsFontOptionsInput<'_>) -> pillow_rs::ImageFontTextOptions {
+    let default = JsValue::NULL;
+    let (features, features_invalid) = js_font_features(input.features.unwrap_or(&default));
+    let (start, start_invalid) = js_font_start(input.start.unwrap_or(&default));
     pillow_rs::ImageFontTextOptions {
-        mode,
-        embedded_color,
-        direction,
+        mode: input.mode,
+        embedded_color: input.embedded_color,
+        direction: input.direction,
         features,
         features_invalid,
-        language,
-        stroke_width: stroke_width as f32,
+        language: input.language,
+        stroke_width: input.stroke_width as f32,
         stroke_fill: None,
         text_fill_is_integer: false,
         stroke_fill_is_integer: false,
         align: None,
-        stroke_filled,
-        anchor,
-        anchor_invalid_length_error,
+        stroke_filled: input.stroke_filled,
+        anchor: input.anchor,
+        anchor_invalid_length_error: input.anchor_invalid_length_error,
         start,
         start_invalid,
-        ink,
-        has_args,
-        has_kwargs,
+        ink: input.ink,
+        has_args: input.has_args,
+        has_kwargs: input.has_kwargs,
     }
 }
 

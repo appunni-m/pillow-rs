@@ -128,21 +128,15 @@ impl ImageFont {
         stroke_width: f64,
         anchor: Option<String>,
     ) -> Result<Vec<f64>, JsValue> {
-        let options = js_font_options(
+        let options = js_font_options(JsFontOptionsInput {
             mode,
             direction,
-            &features,
+            features: Some(&features),
             language,
             stroke_width,
             anchor,
-            None,
-            &JsValue::NULL,
-            false,
-            false,
-            false,
-            false,
-            false,
-        );
+            ..JsFontOptionsInput::default()
+        });
         let bbox = pillow_rs::imagefont_getbbox_input_with_options(
             &self.font,
             js_font_text_input(&text),
@@ -167,21 +161,13 @@ impl ImageFont {
         features: JsValue,
         language: Option<String>,
     ) -> Result<f64, JsValue> {
-        let options = js_font_options(
+        let options = js_font_options(JsFontOptionsInput {
             mode,
             direction,
-            &features,
+            features: Some(&features),
             language,
-            0.0,
-            None,
-            None,
-            &JsValue::NULL,
-            false,
-            false,
-            false,
-            false,
-            false,
-        );
+            ..JsFontOptionsInput::default()
+        });
         pillow_rs::imagefont_getlength_input_with_options(
             &self.font,
             js_font_text_input(&text),
@@ -214,21 +200,17 @@ impl ImageFont {
         start: JsValue,
     ) -> Result<ImageFontMask, JsValue> {
         let ink = js_font_ink(&ink)?;
-        let options = js_font_options(
+        let options = js_font_options(JsFontOptionsInput {
             mode,
             direction,
-            &features,
+            features: Some(&features),
             language,
             stroke_width,
             anchor,
             ink,
-            &start,
-            false,
-            false,
-            false,
-            false,
-            false,
-        );
+            start: Some(&start),
+            ..JsFontOptionsInput::default()
+        });
         let (width, height, pixels) = pillow_rs::imagefont_getmask_input_with_options(
             &self.font,
             js_font_text_input(&text),
@@ -268,21 +250,20 @@ impl ImageFont {
         has_kwargs: bool,
     ) -> Result<ImageFontMask, JsValue> {
         let ink = js_font_ink(&ink)?;
-        let options = js_font_options(
+        let options = js_font_options(JsFontOptionsInput {
             mode,
             direction,
-            &features,
+            features: Some(&features),
             language,
             stroke_width,
             anchor,
             ink,
-            &start,
-            false,
+            start: Some(&start),
             stroke_filled,
             has_args,
             has_kwargs,
-            false,
-        );
+            ..JsFontOptionsInput::default()
+        });
         let (width, height, pixels, offset) = pillow_rs::imagefont_getmask2_input_with_options(
             &self.font,
             js_font_text_input(&text),

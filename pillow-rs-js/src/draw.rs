@@ -586,21 +586,16 @@ impl ImageDraw {
         font_size: Option<f64>,
         stroke_fill: JsValue,
     ) -> Result<(), JsValue> {
-        let mut options = js_font_options(
-            None,
+        let mut options = js_font_options(JsFontOptionsInput {
             direction,
-            &features,
+            features: Some(&features),
             language,
             stroke_width,
             anchor,
-            None,
-            &JsValue::NULL,
             embedded_color,
-            false,
-            false,
-            false,
-            true,
-        );
+            anchor_invalid_length_error: true,
+            ..JsFontOptionsInput::default()
+        });
         let (color, text_fill_is_integer) = js_text_color_and_kind(&self.draw, &fill)?;
         options.text_fill_is_integer = text_fill_is_integer;
         if !stroke_fill.is_null() && !stroke_fill.is_undefined() {
@@ -640,21 +635,16 @@ impl ImageDraw {
         font_size: Option<f64>,
         stroke_fill: JsValue,
     ) -> Result<(), JsValue> {
-        let mut options = js_font_options(
-            None,
+        let mut options = js_font_options(JsFontOptionsInput {
             direction,
-            &features,
+            features: Some(&features),
             language,
             stroke_width,
             anchor,
-            None,
-            &JsValue::NULL,
             embedded_color,
-            false,
-            false,
-            false,
-            true,
-        );
+            anchor_invalid_length_error: true,
+            ..JsFontOptionsInput::default()
+        });
         let (color, text_fill_is_integer) = js_text_color_and_kind(&self.draw, &fill)?;
         options.text_fill_is_integer = text_fill_is_integer;
         if !stroke_fill.is_null() && !stroke_fill.is_undefined() {
@@ -692,21 +682,16 @@ impl ImageDraw {
         embedded_color: bool,
         font_size: Option<f64>,
     ) -> Result<Vec<i32>, JsValue> {
-        let options = js_font_options(
-            None,
+        let options = js_font_options(JsFontOptionsInput {
             direction,
-            &features,
+            features: Some(&features),
             language,
             stroke_width,
             anchor,
-            None,
-            &JsValue::NULL,
             embedded_color,
-            false,
-            false,
-            false,
-            true,
-        );
+            anchor_invalid_length_error: true,
+            ..JsFontOptionsInput::default()
+        });
         self.draw.validate_text_options(&options).map_err(err)?;
         let bbox = pillow_rs::imagefont_textbbox_at_with_optional_font_input(
             font.as_ref().map(|font| &font.font),
@@ -731,21 +716,13 @@ impl ImageDraw {
         embedded_color: bool,
         font_size: Option<f64>,
     ) -> Result<f64, JsValue> {
-        let options = js_font_options(
-            None,
+        let options = js_font_options(JsFontOptionsInput {
             direction,
-            &features,
+            features: Some(&features),
             language,
-            0.0,
-            None,
-            None,
-            &JsValue::NULL,
             embedded_color,
-            false,
-            false,
-            false,
-            false,
-        );
+            ..JsFontOptionsInput::default()
+        });
         self.draw.validate_text_options(&options).map_err(err)?;
         pillow_rs::imagefont_getlength_with_optional_font_input(
             font.as_ref().map(|font| &font.font),
@@ -775,21 +752,16 @@ impl ImageDraw {
         embedded_color: bool,
         font_size: Option<f64>,
     ) -> Result<Vec<i32>, JsValue> {
-        let options = js_font_options(
-            None,
+        let options = js_font_options(JsFontOptionsInput {
             direction,
-            &features,
+            features: Some(&features),
             language,
             stroke_width,
             anchor,
-            None,
-            &JsValue::NULL,
             embedded_color,
-            false,
-            false,
-            false,
-            true,
-        );
+            anchor_invalid_length_error: true,
+            ..JsFontOptionsInput::default()
+        });
         self.draw.validate_text_options(&options).map_err(err)?;
         let bbox = pillow_rs::imagefont_multiline_textbbox_with_optional_font_input(
             font.as_ref().map(|font| &font.font),
