@@ -60,6 +60,12 @@ fn gpu_native_cover_input_requires_matching_byte_layout() {
 
 #[test]
 fn native_cover_packed_output_dispatch_covers_row_tails_and_checks_limits() {
+    assert_native_cover_row_tails();
+    assert_native_cover_workgroup_boundaries();
+    assert_native_cover_invalid_limits();
+}
+
+fn assert_native_cover_row_tails() {
     for channels in [1u8, 2] {
         for width in [1u32, 2, 3, 4, 5, 63, 64, 65] {
             for height in [1u32, 15, 16, 17] {
@@ -117,7 +123,9 @@ fn native_cover_packed_output_dispatch_covers_row_tails_and_checks_limits() {
             }
         }
     }
+}
 
+fn assert_native_cover_workgroup_boundaries() {
     for (channels, one_group_width) in [(1, 64), (2, 32)] {
         let exact = super::plan_native_cover_packed_output_dispatch(
             one_group_width,
@@ -145,6 +153,9 @@ fn native_cover_packed_output_dispatch_covers_row_tails_and_checks_limits() {
             .is_none()
         );
     }
+}
+
+fn assert_native_cover_invalid_limits() {
     assert!(
         super::plan_native_cover_packed_output_dispatch(
             64,
