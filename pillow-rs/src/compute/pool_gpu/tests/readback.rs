@@ -483,6 +483,10 @@ fn assert_native_rgb_readback_receipt(
 ) {
     assert_eq!(actual.color(), expected.color(), "{mode} {op:?}");
     assert_eq!(actual.as_bytes(), expected.as_bytes(), "{mode} {op:?}");
+    assert_native_rgb_readback_resources(mode, op, actual);
+}
+
+fn assert_native_rgb_readback_resources(mode: &str, op: &PipelineOp, actual: &DynamicImage) {
     let telemetry = Backend::take_pipeline_telemetry().expect("readback receipt");
     assert_eq!(telemetry.1, Backend::Gpu);
     assert_eq!(telemetry.6, Some(1));
