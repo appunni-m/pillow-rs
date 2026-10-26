@@ -103,9 +103,10 @@ impl AffineNearestByteSampler<'_> {
                             .ok_or_else(|| simd_unsupported("Transform"))?,
                     );
             } else {
-                for channel in 0..self.channels {
-                    block[block_start + channel] = self.fill[channel];
-                }
+                block
+                    .get_mut(block_start..block_start + self.channels)
+                    .ok_or_else(|| simd_unsupported("Transform"))?
+                    .copy_from_slice(&self.fill[..self.channels]);
             }
         }
         let output_start = row_start
