@@ -127,7 +127,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_filter_3x3_channel_bl
     debug_assert!((1..=4).contains(&channels));
     debug_assert!(channel < channels);
     debug_assert!((1..=8).contains(&active_pixels));
-    debug_assert!(x_start >= 1 && x_start + active_pixels <= width - 1);
+    debug_assert!(x_start > 0 && x_start + active_pixels < width);
 
     let row = |dy: isize| {
         let source_row = (y as isize + dy) as usize * width * channels;
@@ -273,7 +273,7 @@ pub(super) fn native_filter_3x3_pixel_block_vector(
 ) -> [u8; 8] {
     debug_assert!((1..=4).contains(&channels));
     debug_assert!(active_pixels <= 8 / channels.max(1));
-    debug_assert!(x_start >= 1 && x_start + active_pixels <= width - 1);
+    debug_assert!(x_start > 0 && x_start + active_pixels < width);
 
     let row = |dy: isize, kernel_start: usize| -> f32x8 {
         let source_row = (y as isize + dy) as usize * width;
