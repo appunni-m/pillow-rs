@@ -295,21 +295,7 @@ fn f_resize_wide_box_extreme_exponent_is_native() {
         h: 1,
         filter: ResampleFilter::Box,
     };
-    assert!(!gpu_f_resize_integer_is_exact(
-        std::slice::from_ref(&op),
-        &source_dynamic,
-        Some("F")
-    ));
-    assert!(!gpu_f_resize_dyadic_is_exact(
-        std::slice::from_ref(&op),
-        &source_dynamic,
-        Some("F")
-    ));
-    assert!(!gpu_f_resize_f64_is_exact(
-        std::slice::from_ref(&op),
-        &source_dynamic,
-        Some("F")
-    ));
+    assert_wide_box_proofs_reject_inexact_paths(&op, &source_dynamic);
 
     let expected = bytes(&[0x7d7f_ffff]);
     let cpu = source
@@ -346,6 +332,24 @@ fn f_resize_wide_box_extreme_exponent_is_native() {
     assert_eq!(telemetry.1, Backend::Gpu);
     assert_eq!(telemetry.7, None);
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_wide_box_proofs_reject_inexact_paths(op: &PipelineOp, image: &DynamicImage) {
+    assert!(!gpu_f_resize_integer_is_exact(
+        std::slice::from_ref(op),
+        image,
+        Some("F")
+    ));
+    assert!(!gpu_f_resize_dyadic_is_exact(
+        std::slice::from_ref(op),
+        image,
+        Some("F")
+    ));
+    assert!(!gpu_f_resize_f64_is_exact(
+        std::slice::from_ref(op),
+        image,
+        Some("F")
+    ));
 }
 
 #[test]
