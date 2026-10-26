@@ -31,6 +31,40 @@ fn projection_source_is_zero(source: &[u8]) -> bool {
     combined == zero && tail.remainder().iter().all(|&byte| byte == 0)
 }
 
+fn projection_dispatch_fits_limits(
+    width: u32,
+    height: u32,
+    pixels: u64,
+    channels: u8,
+    ops: &[PipelineOp],
+    limits: &wgpu::Limits,
+) -> bool {
+    let output_words = u64::from(width).saturating_add(u64::from(height));
+    let Some(output_bytes) = output_words.checked_mul(4) else {
+        return false;
+    };
+    let capacity_words = pixels.max(output_words).max(1);
+    let Some(capacity_bytes) = capacity_words.checked_mul(4) else {
+        return false;
+    };
+    let groups_x = u64::from(width).div_ceil(16);
+    let groups_y = u64::from(height)
+        .div_ceil(16)
+        .saturating_add(u64::from(ops.iter().any(|op| match op {
+            PipelineOp::PutPixel { color, .. } => {
+                color.0 != 0 || color.1 != 0 || color.2 != 0 || (channels == 4 && color.3 != 0)
+            }
+            _ => false,
+        })));
+    pixels <= u64::from(GPU_BUFFER_CAPACITY)
+        && capacity_words <= u64::from(GPU_BUFFER_CAPACITY)
+        && capacity_bytes <= limits.max_buffer_size
+        && capacity_bytes <= u64::from(limits.max_storage_buffer_binding_size)
+        && output_bytes <= u64::from(limits.max_storage_buffer_binding_size)
+        && groups_x <= u64::from(limits.max_compute_workgroups_per_dimension)
+        && groups_y <= u64::from(limits.max_compute_workgroups_per_dimension)
+}
+
 impl GpuPool {
     pub(crate) fn cmyk_projection_terminal_supported(
         image: &DynamicImage,
@@ -80,38 +114,15 @@ impl GpuPool {
             return false;
         };
         let limits = gpu.device.limits();
-        let width = u64::from(image.width());
-        let height = u64::from(image.height());
         let pixels = dimensions.total_pixels() as u64;
-        let output_words = u64::from(image.width()).saturating_add(u64::from(image.height()));
-        let Some(output_bytes) = output_words.checked_mul(4) else {
-            return false;
-        };
-        let capacity_words = pixels.max(output_words).max(1);
-        let Some(capacity_bytes) = capacity_words.checked_mul(4) else {
-            return false;
-        };
-        let groups_x = width.div_ceil(16);
-        let groups_y =
-            height
-                .div_ceil(16)
-                .saturating_add(u64::from(ops.iter().any(|op| match op {
-                    PipelineOp::PutPixel { color, .. } => {
-                        color.0 != 0
-                            || color.1 != 0
-                            || color.2 != 0
-                            || (channels == 4 && color.3 != 0)
-                    }
-                    _ => false,
-                })));
-        if pixels > u64::from(GPU_BUFFER_CAPACITY)
-            || capacity_words > u64::from(GPU_BUFFER_CAPACITY)
-            || capacity_bytes > limits.max_buffer_size
-            || capacity_bytes > u64::from(limits.max_storage_buffer_binding_size)
-            || output_bytes > u64::from(limits.max_storage_buffer_binding_size)
-            || groups_x > u64::from(limits.max_compute_workgroups_per_dimension)
-            || groups_y > u64::from(limits.max_compute_workgroups_per_dimension)
-        {
+        if !projection_dispatch_fits_limits(
+            image.width(),
+            image.height(),
+            pixels,
+            channels,
+            ops,
+            &limits,
+        ) {
             return false;
         }
         ops.iter().all(|op| match op {
