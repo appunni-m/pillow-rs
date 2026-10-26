@@ -210,10 +210,36 @@ pub(in crate::compute::pool_gpu) fn gpu_quad_constant_map_is_admitted(data: &[f6
         && data[2..8].chunks_exact(2).all(|pair| pair == [x, y])
 }
 
+fn gpu_quad_shader_axis_arithmetic_is_finite(points: [f32; 4], u: f32, v: f32) -> bool {
+    let [point0, point1, point2, point3] = points;
+    let point3_minus_point0 = point3 - point0;
+    let point1_minus_point0 = point1 - point0;
+    let point2_minus_point1 = point2 - point1;
+    let point2_minus_point1_minus_point3 = point2_minus_point1 - point3;
+    let cross = point2_minus_point1_minus_point3 + point0;
+    let term0 = point3_minus_point0 * u;
+    let term1 = point1_minus_point0 * v;
+    let term2 = cross * u * v;
+    let sample = point0 + term0 + term1 + term2;
+    [
+        point3_minus_point0,
+        point1_minus_point0,
+        point2_minus_point1,
+        point2_minus_point1_minus_point3,
+        cross,
+        term0,
+        term1,
+        term2,
+        sample,
+    ]
+    .into_iter()
+    .all(f32::is_finite)
+}
+
 /// Check that the generic Quad WGSL bilinear expression has no non-finite
-/// f32 intermediate for one output pixel.  A finite f64 map can still
+/// f32 intermediate for one output pixel. A finite f64 map can still
 /// overflow in the device arithmetic; a resulting NaN would bypass the
-/// shader sampler's unordered bounds comparisons.  The exhaustive source
+/// shader sampler's unordered bounds comparisons. The exhaustive source
 /// proof calls this only for nonconstant maps, while relocation/constant
 /// branches avoid the generic expression entirely.
 pub(in crate::compute::pool_gpu) fn gpu_quad_shader_arithmetic_is_finite(
@@ -241,52 +267,11 @@ pub(in crate::compute::pool_gpu) fn gpu_quad_shader_arithmetic_is_finite(
     let v = dy / height;
     let one_minus_u = 1.0 - u;
     let one_minus_v = 1.0 - v;
-    let x3_minus_x0 = x3 - x0;
-    let x1_minus_x0 = x1 - x0;
-    let x2_minus_x1 = x2 - x1;
-    let x2_minus_x1_minus_x3 = x2_minus_x1 - x3;
-    let x_cross = x2_minus_x1_minus_x3 + x0;
-    let y3_minus_y0 = y3 - y0;
-    let y1_minus_y0 = y1 - y0;
-    let y2_minus_y1 = y2 - y1;
-    let y2_minus_y1_minus_y3 = y2_minus_y1 - y3;
-    let y_cross = y2_minus_y1_minus_y3 + y0;
-    let x_term0 = x3_minus_x0 * u;
-    let x_term1 = x1_minus_x0 * v;
-    let x_term2 = x_cross * u * v;
-    let y_term0 = y3_minus_y0 * u;
-    let y_term1 = y1_minus_y0 * v;
-    let y_term2 = y_cross * u * v;
-    let sx = x0 + x_term0 + x_term1 + x_term2;
-    let sy = y0 + y_term0 + y_term1 + y_term2;
-    [
-        width,
-        height,
-        u,
-        v,
-        one_minus_u,
-        one_minus_v,
-        x3_minus_x0,
-        x1_minus_x0,
-        x2_minus_x1,
-        x2_minus_x1_minus_x3,
-        x_cross,
-        y3_minus_y0,
-        y1_minus_y0,
-        y2_minus_y1,
-        y2_minus_y1_minus_y3,
-        y_cross,
-        x_term0,
-        x_term1,
-        x_term2,
-        y_term0,
-        y_term1,
-        y_term2,
-        sx,
-        sy,
-    ]
-    .into_iter()
-    .all(f32::is_finite)
+    [width, height, u, v, one_minus_u, one_minus_v]
+        .into_iter()
+        .all(f32::is_finite)
+        && gpu_quad_shader_axis_arithmetic_is_finite([x0, x1, x2, x3], u, v)
+        && gpu_quad_shader_axis_arithmetic_is_finite([y0, y1, y2, y3], u, v)
 }
 
 /// Check that the generic one-record Mesh WGSL bilinear expression has no
