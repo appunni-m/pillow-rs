@@ -61,23 +61,27 @@ fn typed_luma16_nearest_affine_transform_uses_native_word_path() {
         assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
         assert_eq!(telemetry.7, None, "{mode} fallback reason");
 
-        let op = PipelineOp::Transform {
-            w: 3,
-            h: 2,
-            method: TransformMethod::Affine,
-            data: Arc::from(vec![0.5, 0.0, 0.0, 0.0, 0.5, 0.0]),
-            filter: ResampleFilter::Bicubic,
-            fill: Some((2, 1, 0, 0)),
-            fill_is_none: false,
-            palette_fill: None,
-        };
-        let image = source.materialize().expect("materialize typed source");
-        assert!(
-            gpu_nearest_affine_is_exact(&op, &image, Some(mode), (4, 3)),
-            "{mode} nearest-affine proof"
-        );
+        assert_typed_luma16_nearest_proof(&source, mode);
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_typed_luma16_nearest_proof(source: &Image, mode: &str) {
+    let op = PipelineOp::Transform {
+        w: 3,
+        h: 2,
+        method: TransformMethod::Affine,
+        data: Arc::from(vec![0.5, 0.0, 0.0, 0.0, 0.5, 0.0]),
+        filter: ResampleFilter::Bicubic,
+        fill: Some((2, 1, 0, 0)),
+        fill_is_none: false,
+        palette_fill: None,
+    };
+    let image = source.materialize().expect("materialize typed source");
+    assert!(
+        gpu_nearest_affine_is_exact(&op, &image, Some(mode), (4, 3)),
+        "{mode} nearest-affine proof"
+    );
 }
 
 #[test]
