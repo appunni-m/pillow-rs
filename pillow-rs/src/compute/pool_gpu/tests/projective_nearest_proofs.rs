@@ -165,6 +165,14 @@ fn assert_projective_nearest_identity_and_constant_proofs(
 }
 
 fn assert_projective_nearest_perspective_relocations(rgb: &DynamicImage, rgba: &DynamicImage) {
+    assert_projective_nearest_integer_perspective_relocations(rgb, rgba);
+    assert_projective_nearest_signed_unit_perspective_relocations(rgb);
+}
+
+fn assert_projective_nearest_integer_perspective_relocations(
+    rgb: &DynamicImage,
+    rgba: &DynamicImage,
+) {
     let perspective_translate = PipelineOp::Transform {
         w: 8,
         h: 8,
@@ -212,6 +220,9 @@ fn assert_projective_nearest_perspective_relocations(rgb: &DynamicImage, rgba: &
         Some("RGB"),
         (16, 16)
     ));
+}
+
+fn assert_projective_nearest_signed_unit_perspective_relocations(rgb: &DynamicImage) {
     let perspective_signed_unit = [
         [-1.0, 0.0, 8.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         [1.0, 0.0, 0.0, 0.0, -1.0, 8.0, 0.0, 0.0],
@@ -335,6 +346,10 @@ fn assert_projective_nearest_mesh_rejections(rgb: &DynamicImage) {
         Some("RGB"),
         (16, 16)
     ));
+    assert_scaled_quad_axis_nearest_is_admitted(rgb);
+}
+
+fn assert_scaled_quad_axis_nearest_is_admitted(rgb: &DynamicImage) {
     let scaled_quad_axis = PipelineOp::Transform {
         w: 9,
         h: 6,
