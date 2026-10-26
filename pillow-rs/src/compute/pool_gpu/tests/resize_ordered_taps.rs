@@ -1,11 +1,11 @@
 use super::*;
 
+fn f32_words_to_bytes(words: &[u32]) -> Vec<u8> {
+    words.iter().flat_map(|word| word.to_le_bytes()).collect()
+}
+
 #[test]
 fn f_resize_ordered_f64_over_64_taps_native_matches_cpu() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     // The ordered reducer is a dynamic tap loop; exercise rows larger
     // than the former policy cap with heterogeneous finite values. The
     // host proof must still reject any state that cannot be represented,
@@ -23,8 +23,8 @@ fn f_resize_ordered_f64_over_64_taps_native_matches_cpu() {
                 value.to_bits()
             })
             .collect();
-        let source =
-            Image::frombytes("F", (width as u32, 1), &bytes(&words)).expect("wide F source");
+        let source = Image::frombytes("F", (width as u32, 1), &f32_words_to_bytes(&words))
+            .expect("wide F source");
         let source_dynamic = source.materialize().expect("materialize wide F source");
         let op = PipelineOp::Resize { w: 1, h: 1, filter };
         assert!(
@@ -50,23 +50,16 @@ fn f_resize_ordered_f64_over_64_taps_native_matches_cpu() {
             .tobytes()
             .expect("CPU wide F bytes");
         let previous = Backend::set_pipeline_telemetry_enabled(true);
-        let actual = match source
-            .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
-            .expect("GPU wide F resize")
-            .use_backend(Backend::Gpu)
-            .tobytes()
-        {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU wide F resize failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            source
+                .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+                .expect("GPU wide F resize")
+                .use_backend(Backend::Gpu)
+                .tobytes(),
+            "native GPU wide F resize failed",
+        ) else {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
         };
         assert_eq!(actual, expected, "wide {filter_name} F resize");
         let telemetry =
@@ -80,10 +73,6 @@ fn f_resize_ordered_f64_over_64_taps_native_matches_cpu() {
 
 #[test]
 fn f_resize_ordered_f64_two_axes_over_64_taps_native_matches_cpu() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     let width = 65usize;
     let height = 65usize;
     let words: Vec<u32> = (0..width * height)
@@ -92,8 +81,12 @@ fn f_resize_ordered_f64_two_axes_over_64_taps_native_matches_cpu() {
             value.to_bits()
         })
         .collect();
-    let source = Image::frombytes("F", (width as u32, height as u32), &bytes(&words))
-        .expect("wide two-axis F source");
+    let source = Image::frombytes(
+        "F",
+        (width as u32, height as u32),
+        &f32_words_to_bytes(&words),
+    )
+    .expect("wide two-axis F source");
     let source_dynamic = source
         .materialize()
         .expect("materialize wide two-axis F source");
@@ -115,23 +108,16 @@ fn f_resize_ordered_f64_two_axes_over_64_taps_native_matches_cpu() {
         .tobytes()
         .expect("CPU wide two-axis F bytes");
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let actual = match source
-        .resize((1, 1), Some(filter), None)
-        .expect("GPU wide two-axis F resize")
-        .use_backend(Backend::Gpu)
-        .tobytes()
-    {
-        Ok(actual) => actual,
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            Backend::set_pipeline_telemetry_enabled(previous);
-            return;
-        }
-        Err(error) => panic!("native GPU wide two-axis F resize failed: {error}"),
+    let Some(actual) = native_gpu_result_or_skip(
+        source
+            .resize((1, 1), Some(filter), None)
+            .expect("GPU wide two-axis F resize")
+            .use_backend(Backend::Gpu)
+            .tobytes(),
+        "native GPU wide two-axis F resize failed",
+    ) else {
+        Backend::set_pipeline_telemetry_enabled(previous);
+        return;
     };
     assert_eq!(actual, expected, "wide two-axis F resize");
     let telemetry =
@@ -216,10 +202,6 @@ const F_RESIZE_ORDERED_F64_CASES: &[(usize, ResampleFilter)] = &[
 
 #[test]
 fn f_resize_ordered_f64_through_8388607_taps_native_matches_cpu() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     for &(width, filter) in F_RESIZE_ORDERED_F64_CASES {
         let words: Vec<u32> = (0..width)
             .map(|index| {
@@ -227,7 +209,7 @@ fn f_resize_ordered_f64_through_8388607_taps_native_matches_cpu() {
                 value.to_bits()
             })
             .collect();
-        let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+        let source = Image::frombytes("F", (width as u32, 1), &f32_words_to_bytes(&words))
             .expect("wide ordered F source");
         let source_dynamic = source
             .materialize()
@@ -256,23 +238,16 @@ fn f_resize_ordered_f64_through_8388607_taps_native_matches_cpu() {
             .tobytes()
             .expect("CPU wide ordered F bytes");
         let previous = Backend::set_pipeline_telemetry_enabled(true);
-        let actual = match source
-            .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
-            .expect("GPU wide ordered F resize")
-            .use_backend(Backend::Gpu)
-            .tobytes()
-        {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU wide ordered F resize failed: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            source
+                .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+                .expect("GPU wide ordered F resize")
+                .use_backend(Backend::Gpu)
+                .tobytes(),
+            "native GPU wide ordered F resize failed",
+        ) else {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
         };
         assert_eq!(actual, expected, "{width}-tap {filter_name} F resize");
         let telemetry = Backend::take_pipeline_telemetry()
@@ -286,10 +261,6 @@ fn f_resize_ordered_f64_through_8388607_taps_native_matches_cpu() {
 
 #[test]
 fn f_resize_ordered_f64_2097152_two_axis_native_matches_cpu() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     let width = 2_097_152usize;
     let height = 2usize;
     let words: Vec<u32> = (0..width * height)
@@ -298,8 +269,12 @@ fn f_resize_ordered_f64_2097152_two_axis_native_matches_cpu() {
             value.to_bits()
         })
         .collect();
-    let source = Image::frombytes("F", (width as u32, height as u32), &bytes(&words))
-        .expect("wide two-axis ordered F source");
+    let source = Image::frombytes(
+        "F",
+        (width as u32, height as u32),
+        &f32_words_to_bytes(&words),
+    )
+    .expect("wide two-axis ordered F source");
     let source_dynamic = source
         .materialize()
         .expect("materialize wide two-axis ordered source");
@@ -366,16 +341,12 @@ fn f_resize_ordered_f64_2097152_two_axis_native_matches_cpu() {
 
 #[test]
 fn f_resize_ordered_f64_524289_taps_native_matches_cpu() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     let width = 524289usize;
     let words: Vec<u32> = (0..width)
         .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
         .collect();
-    let source =
-        Image::frombytes("F", (width as u32, 1), &bytes(&words)).expect("over-bound F source");
+    let source = Image::frombytes("F", (width as u32, 1), &f32_words_to_bytes(&words))
+        .expect("over-bound F source");
     let source_dynamic = source
         .materialize()
         .expect("materialize over-bound F source");
@@ -419,16 +390,12 @@ fn f_resize_ordered_f64_524289_taps_native_matches_cpu() {
 
 #[test]
 fn f_resize_ordered_f64_over_8388607_taps_streams_natively() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     let width = 8_388_608usize;
     let words: Vec<u32> = (0..width)
         .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
         .collect();
-    let source =
-        Image::frombytes("F", (width as u32, 1), &bytes(&words)).expect("over-bound F source");
+    let source = Image::frombytes("F", (width as u32, 1), &f32_words_to_bytes(&words))
+        .expect("over-bound F source");
     let source_dynamic = source
         .materialize()
         .expect("materialize over-bound F source");
