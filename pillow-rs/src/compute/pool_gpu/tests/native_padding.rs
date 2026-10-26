@@ -192,10 +192,15 @@ fn gpu_native_hsv_pad_plan_requires_aligned_identity_contain() {
     assert_eq!(dispatch.output_height, 5);
     assert_eq!(dispatch.offset_y, 2);
 
+    assert_native_hsv_pad_plan_rejections(&image, &pad);
+}
+
+#[cfg(target_endian = "little")]
+fn assert_native_hsv_pad_plan_rejections(image: &DynamicImage, pad: &PipelineOp) {
     assert!(
         super::plan_native_hsv_pad_dispatch(
-            std::slice::from_ref(&pad),
-            &image,
+            std::slice::from_ref(pad),
+            image,
             Some("RGB"),
             65_535,
             u32::MAX,
@@ -206,7 +211,7 @@ fn gpu_native_hsv_pad_plan_requires_aligned_identity_contain() {
     assert!(
         super::plan_native_hsv_pad_dispatch(
             &[pad.clone(), PipelineOp::Duplicate],
-            &image,
+            image,
             Some("HSV"),
             65_535,
             u32::MAX,
@@ -238,8 +243,8 @@ fn gpu_native_hsv_pad_plan_requires_aligned_identity_contain() {
     );
     assert!(
         super::plan_native_hsv_pad_dispatch(
-            std::slice::from_ref(&pad),
-            &image,
+            std::slice::from_ref(pad),
+            image,
             Some("HSV"),
             0,
             u32::MAX,
