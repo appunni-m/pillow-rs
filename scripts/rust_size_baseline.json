@@ -22,12 +22,6 @@
       "signature": "pub(super) fn execute_reduce_rgb_with_sparse_rows( img: &DynamicImage, x_factor: u32, y_factor: u32, explicit_mode: Option<&str>, ) -> SparseRgbReductionResult {"
     },
     {
-      "lines": 237,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/rotate/affine.rs",
-      "signature": "pub(crate) fn affine_nearest_fixed( source: &[u8], source_size: (u32, u32), destination_size: (u32, u32), channels: usize, affine: [f64; 6], fill: (u8, u8, u8, u8), output: &mut [u8], ) {"
-    },
-    {
       "lines": 221,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/rotate/affine.rs",

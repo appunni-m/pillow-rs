@@ -118,14 +118,8 @@ pub(crate) fn affine_nearest_fixed(
     // coefficients to signed 16.16 values once, then advances those integers
     // across each output row. Recomputing the same coordinates as f64 changes
     // which source pixel wins at exact integer boundaries.
-    let fixed = |value: f64| (value.mul_add(65_536.0, 0.5).floor()) as i64;
-    let [a, b, c, d, e, f] = affine;
-    let step_x_x = fixed(a);
-    let step_y_x = fixed(b);
-    let step_x_y = fixed(d);
-    let step_y_y = fixed(e);
-    let origin_x = fixed(c + a * 0.5 + b * 0.5);
-    let origin_y = fixed(f + d * 0.5 + e * 0.5);
+    let (step_x_x, step_y_x, step_x_y, step_y_y, origin_x, origin_y) =
+        affine_nearest_fixed_coordinates(affine);
     let (source_width, source_height) = source_size;
     let (destination_width, destination_height) = destination_size;
     if destination_width == 0 || destination_height == 0 {
@@ -133,211 +127,63 @@ pub(crate) fn affine_nearest_fixed(
     }
 
     let process_row = |y: u32, row: &mut [u8]| {
-        let mut source_x = origin_x + i64::from(y) * step_y_x;
-        let mut source_y = origin_y + i64::from(y) * step_y_y;
-        for x in 0..destination_width {
-            let input_x = source_x >> 16;
-            let input_y = source_y >> 16;
-            let output_index = x as usize * channels;
-            if input_x >= 0
-                && input_x < i64::from(source_width)
-                && input_y >= 0
-                && input_y < i64::from(source_height)
-            {
-                let input_index =
-                    (input_y as u32 * source_width + input_x as u32) as usize * channels;
-                row[output_index..output_index + channels]
-                    .copy_from_slice(&source[input_index..input_index + channels]);
-            } else {
-                for channel in 0..channels.min(4) {
-                    let value = if channels == 2 && channel == 1 {
-                        // LA/PA normalize their second sample as alpha in
-                        // fill.3; fill.1 is only the duplicated luma/index
-                        // component used by the host-neutral color record.
-                        fill.3
-                    } else {
-                        match channel {
-                            0 => fill.0,
-                            1 => fill.1,
-                            2 => fill.2,
-                            _ => fill.3,
-                        }
-                    };
-                    row[output_index + channel] = value;
-                }
-            }
-            source_x += step_x_x;
-            source_y += step_x_y;
-        }
+        affine_nearest_fixed_process_row(
+            source,
+            source_width,
+            source_height,
+            destination_width,
+            channels,
+            origin_x,
+            origin_y,
+            step_x_x,
+            step_y_x,
+            step_x_y,
+            step_y_y,
+            fill,
+            y,
+            row,
+        );
     };
 
     #[cfg(not(feature = "parallel"))]
     if channels == 3 {
-        let fill_pixel = [fill.0, fill.1, fill.2];
-        let output_stride = destination_width as usize * channels;
-        for (y, row) in output
-            .chunks_exact_mut(output_stride)
-            .take(destination_height as usize)
-            .enumerate()
-        {
-            let Some((start, end, mut source_x, mut source_y)) =
-                nearest_positive_step_in_bounds_span(
-                    y as u32,
-                    destination_width,
-                    source_width,
-                    source_height,
-                    origin_x,
-                    origin_y,
-                    step_x_x,
-                    step_y_x,
-                    step_x_y,
-                    step_y_y,
-                )
-            else {
-                process_row(y as u32, row);
-                continue;
-            };
-
-            let start_byte = start * channels;
-            let end_byte = end * channels;
-            fill_rgb_pixels(&mut row[..start_byte], fill_pixel);
-            fill_rgb_pixels(&mut row[end_byte..], fill_pixel);
-
-            let source_width = source_width as usize;
-            let span_length = end - start;
-            let mut offset = 0;
-            let mut contiguous_copies = true;
-            while offset < span_length {
-                let Some(run_length) = nearest_contiguous_rgb_run_len(
-                    source_x,
-                    source_y,
-                    step_x_x,
-                    step_x_y,
-                    span_length - offset,
-                ) else {
-                    contiguous_copies = false;
-                    break;
-                };
-                // Short copies do not repay the run-bound calculation. Keep
-                // the original fixed-point per-pixel path for those rows.
-                if run_length < 4 {
-                    contiguous_copies = false;
-                    break;
-                }
-
-                let input_x = (source_x >> 16) as usize;
-                let input_y = (source_y >> 16) as usize;
-                let source_start = (input_y * source_width + input_x) * 3;
-                let destination_start = start_byte + offset * 3;
-                let copy_bytes = run_length * 3;
-                row[destination_start..destination_start + copy_bytes]
-                    .copy_from_slice(&source[source_start..source_start + copy_bytes]);
-
-                offset += run_length;
-                if offset < span_length {
-                    let run = run_length as i128;
-                    let Some(next_x) =
-                        i64::try_from(i128::from(source_x) + i128::from(step_x_x) * run).ok()
-                    else {
-                        contiguous_copies = false;
-                        break;
-                    };
-                    let Some(next_y) =
-                        i64::try_from(i128::from(source_y) + i128::from(step_x_y) * run).ok()
-                    else {
-                        contiguous_copies = false;
-                        break;
-                    };
-                    source_x = next_x;
-                    source_y = next_y;
-                }
-            }
-            if !contiguous_copies {
-                process_row(y as u32, row);
-            }
-        }
+        affine_nearest_fixed_rgb(
+            source,
+            source_width,
+            source_height,
+            destination_width,
+            destination_height,
+            origin_x,
+            origin_y,
+            step_x_x,
+            step_y_x,
+            step_x_y,
+            step_y_y,
+            fill,
+            output,
+            &process_row,
+        );
         return;
     }
 
     #[cfg(not(feature = "parallel"))]
     if channels == 4 {
-        let fill_pixel = [fill.0, fill.1, fill.2, fill.3];
-        let output_stride = destination_width as usize * channels;
-        for (y, row) in output
-            .chunks_exact_mut(output_stride)
-            .take(destination_height as usize)
-            .enumerate()
-        {
-            let Some((start, end, mut source_x, mut source_y)) =
-                nearest_positive_step_in_bounds_span(
-                    y as u32,
-                    destination_width,
-                    source_width,
-                    source_height,
-                    origin_x,
-                    origin_y,
-                    step_x_x,
-                    step_y_x,
-                    step_x_y,
-                    step_y_y,
-                )
-            else {
-                process_row(y as u32, row);
-                continue;
-            };
-
-            let start_byte = start * channels;
-            let end_byte = end * channels;
-            fill_rgba_pixels(&mut row[..start_byte], fill_pixel);
-            fill_rgba_pixels(&mut row[end_byte..], fill_pixel);
-
-            let source_width = source_width as usize;
-            let span_length = end - start;
-            let mut pixels = row[start_byte..end_byte].chunks_exact_mut(16);
-            let group_count = span_length / 4;
-            let tail_count = span_length % 4;
-            for (group_index, group) in pixels.by_ref().enumerate() {
-                let input_x = (source_x >> 16) as usize;
-                let input_y = (source_y >> 16) as usize;
-                let input_index = (input_y * source_width + input_x) * 4;
-                group[0..4].copy_from_slice(&source[input_index..input_index + 4]);
-                source_x += step_x_x;
-                source_y += step_x_y;
-
-                let input_x = (source_x >> 16) as usize;
-                let input_y = (source_y >> 16) as usize;
-                let input_index = (input_y * source_width + input_x) * 4;
-                group[4..8].copy_from_slice(&source[input_index..input_index + 4]);
-                source_x += step_x_x;
-                source_y += step_x_y;
-
-                let input_x = (source_x >> 16) as usize;
-                let input_y = (source_y >> 16) as usize;
-                let input_index = (input_y * source_width + input_x) * 4;
-                group[8..12].copy_from_slice(&source[input_index..input_index + 4]);
-                source_x += step_x_x;
-                source_y += step_x_y;
-
-                let input_x = (source_x >> 16) as usize;
-                let input_y = (source_y >> 16) as usize;
-                let input_index = (input_y * source_width + input_x) * 4;
-                group[12..16].copy_from_slice(&source[input_index..input_index + 4]);
-                if group_index + 1 < group_count || tail_count > 0 {
-                    source_x += step_x_x;
-                    source_y += step_x_y;
-                }
-            }
-            for (offset, pixel) in pixels.into_remainder().chunks_exact_mut(4).enumerate() {
-                let input_x = (source_x >> 16) as usize;
-                let input_y = (source_y >> 16) as usize;
-                let input_index = (input_y * source_width + input_x) * 4;
-                pixel.copy_from_slice(&source[input_index..input_index + 4]);
-                if offset + 1 < tail_count {
-                    source_x += step_x_x;
-                    source_y += step_x_y;
-                }
-            }
-        }
+        affine_nearest_fixed_rgba(
+            source,
+            source_width,
+            source_height,
+            destination_width,
+            destination_height,
+            origin_x,
+            origin_y,
+            step_x_x,
+            step_y_x,
+            step_x_y,
+            step_y_y,
+            fill,
+            output,
+            &process_row,
+        );
         return;
     }
 
@@ -372,6 +218,270 @@ pub(crate) fn affine_nearest_fixed(
         .enumerate()
     {
         process_row(y as u32, row);
+    }
+}
+
+#[inline(always)]
+fn affine_nearest_fixed_coordinates(affine: [f64; 6]) -> (i64, i64, i64, i64, i64, i64) {
+    let fixed = |value: f64| (value.mul_add(65_536.0, 0.5).floor()) as i64;
+    let [a, b, c, d, e, f] = affine;
+    let step_x_x = fixed(a);
+    let step_y_x = fixed(b);
+    let step_x_y = fixed(d);
+    let step_y_y = fixed(e);
+    let origin_x = fixed(c + a * 0.5 + b * 0.5);
+    let origin_y = fixed(f + d * 0.5 + e * 0.5);
+    (step_x_x, step_y_x, step_x_y, step_y_y, origin_x, origin_y)
+}
+
+#[inline(always)]
+fn affine_nearest_fixed_process_row(
+    source: &[u8],
+    source_width: u32,
+    source_height: u32,
+    destination_width: u32,
+    channels: usize,
+    origin_x: i64,
+    origin_y: i64,
+    step_x_x: i64,
+    step_y_x: i64,
+    step_x_y: i64,
+    step_y_y: i64,
+    fill: (u8, u8, u8, u8),
+    y: u32,
+    row: &mut [u8],
+) {
+    let mut source_x = origin_x + i64::from(y) * step_y_x;
+    let mut source_y = origin_y + i64::from(y) * step_y_y;
+    for x in 0..destination_width {
+        let input_x = source_x >> 16;
+        let input_y = source_y >> 16;
+        let output_index = x as usize * channels;
+        if input_x >= 0
+            && input_x < i64::from(source_width)
+            && input_y >= 0
+            && input_y < i64::from(source_height)
+        {
+            let input_index = (input_y as u32 * source_width + input_x as u32) as usize * channels;
+            row[output_index..output_index + channels]
+                .copy_from_slice(&source[input_index..input_index + channels]);
+        } else {
+            for channel in 0..channels.min(4) {
+                let value = if channels == 2 && channel == 1 {
+                    // LA/PA normalize their second sample as alpha in fill.3;
+                    // fill.1 is the duplicated luma/index component.
+                    fill.3
+                } else {
+                    match channel {
+                        0 => fill.0,
+                        1 => fill.1,
+                        2 => fill.2,
+                        _ => fill.3,
+                    }
+                };
+                row[output_index + channel] = value;
+            }
+        }
+        source_x += step_x_x;
+        source_y += step_x_y;
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+#[inline(always)]
+fn affine_nearest_fixed_rgb(
+    source: &[u8],
+    source_width: u32,
+    source_height: u32,
+    destination_width: u32,
+    destination_height: u32,
+    origin_x: i64,
+    origin_y: i64,
+    step_x_x: i64,
+    step_y_x: i64,
+    step_x_y: i64,
+    step_y_y: i64,
+    fill: (u8, u8, u8, u8),
+    output: &mut [u8],
+    process_row: &impl Fn(u32, &mut [u8]),
+) {
+    let channels = 3;
+    let fill_pixel = [fill.0, fill.1, fill.2];
+    let output_stride = destination_width as usize * channels;
+    for (y, row) in output
+        .chunks_exact_mut(output_stride)
+        .take(destination_height as usize)
+        .enumerate()
+    {
+        let Some((start, end, mut source_x, mut source_y)) = nearest_positive_step_in_bounds_span(
+            y as u32,
+            destination_width,
+            source_width,
+            source_height,
+            origin_x,
+            origin_y,
+            step_x_x,
+            step_y_x,
+            step_x_y,
+            step_y_y,
+        ) else {
+            process_row(y as u32, row);
+            continue;
+        };
+
+        let start_byte = start * channels;
+        let end_byte = end * channels;
+        fill_rgb_pixels(&mut row[..start_byte], fill_pixel);
+        fill_rgb_pixels(&mut row[end_byte..], fill_pixel);
+
+        let source_width = source_width as usize;
+        let span_length = end - start;
+        let mut offset = 0;
+        let mut contiguous_copies = true;
+        while offset < span_length {
+            let Some(run_length) = nearest_contiguous_rgb_run_len(
+                source_x,
+                source_y,
+                step_x_x,
+                step_x_y,
+                span_length - offset,
+            ) else {
+                contiguous_copies = false;
+                break;
+            };
+            // Short copies do not repay the run-bound calculation. Keep
+            // the original fixed-point per-pixel path for those rows.
+            if run_length < 4 {
+                contiguous_copies = false;
+                break;
+            }
+
+            let input_x = (source_x >> 16) as usize;
+            let input_y = (source_y >> 16) as usize;
+            let source_start = (input_y * source_width + input_x) * 3;
+            let destination_start = start_byte + offset * 3;
+            let copy_bytes = run_length * 3;
+            row[destination_start..destination_start + copy_bytes]
+                .copy_from_slice(&source[source_start..source_start + copy_bytes]);
+
+            offset += run_length;
+            if offset < span_length {
+                let run = run_length as i128;
+                let Some(next_x) =
+                    i64::try_from(i128::from(source_x) + i128::from(step_x_x) * run).ok()
+                else {
+                    contiguous_copies = false;
+                    break;
+                };
+                let Some(next_y) =
+                    i64::try_from(i128::from(source_y) + i128::from(step_x_y) * run).ok()
+                else {
+                    contiguous_copies = false;
+                    break;
+                };
+                source_x = next_x;
+                source_y = next_y;
+            }
+        }
+        if !contiguous_copies {
+            process_row(y as u32, row);
+        }
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+#[inline(always)]
+fn affine_nearest_fixed_rgba(
+    source: &[u8],
+    source_width: u32,
+    source_height: u32,
+    destination_width: u32,
+    destination_height: u32,
+    origin_x: i64,
+    origin_y: i64,
+    step_x_x: i64,
+    step_y_x: i64,
+    step_x_y: i64,
+    step_y_y: i64,
+    fill: (u8, u8, u8, u8),
+    output: &mut [u8],
+    process_row: &impl Fn(u32, &mut [u8]),
+) {
+    let channels = 4;
+    let fill_pixel = [fill.0, fill.1, fill.2, fill.3];
+    let output_stride = destination_width as usize * channels;
+    for (y, row) in output
+        .chunks_exact_mut(output_stride)
+        .take(destination_height as usize)
+        .enumerate()
+    {
+        let Some((start, end, mut source_x, mut source_y)) = nearest_positive_step_in_bounds_span(
+            y as u32,
+            destination_width,
+            source_width,
+            source_height,
+            origin_x,
+            origin_y,
+            step_x_x,
+            step_y_x,
+            step_x_y,
+            step_y_y,
+        ) else {
+            process_row(y as u32, row);
+            continue;
+        };
+
+        let start_byte = start * channels;
+        let end_byte = end * channels;
+        fill_rgba_pixels(&mut row[..start_byte], fill_pixel);
+        fill_rgba_pixels(&mut row[end_byte..], fill_pixel);
+
+        let source_width = source_width as usize;
+        let span_length = end - start;
+        let mut pixels = row[start_byte..end_byte].chunks_exact_mut(16);
+        let group_count = span_length / 4;
+        let tail_count = span_length % 4;
+        for (group_index, group) in pixels.by_ref().enumerate() {
+            let input_x = (source_x >> 16) as usize;
+            let input_y = (source_y >> 16) as usize;
+            let input_index = (input_y * source_width + input_x) * 4;
+            group[0..4].copy_from_slice(&source[input_index..input_index + 4]);
+            source_x += step_x_x;
+            source_y += step_x_y;
+
+            let input_x = (source_x >> 16) as usize;
+            let input_y = (source_y >> 16) as usize;
+            let input_index = (input_y * source_width + input_x) * 4;
+            group[4..8].copy_from_slice(&source[input_index..input_index + 4]);
+            source_x += step_x_x;
+            source_y += step_x_y;
+
+            let input_x = (source_x >> 16) as usize;
+            let input_y = (source_y >> 16) as usize;
+            let input_index = (input_y * source_width + input_x) * 4;
+            group[8..12].copy_from_slice(&source[input_index..input_index + 4]);
+            source_x += step_x_x;
+            source_y += step_x_y;
+
+            let input_x = (source_x >> 16) as usize;
+            let input_y = (source_y >> 16) as usize;
+            let input_index = (input_y * source_width + input_x) * 4;
+            group[12..16].copy_from_slice(&source[input_index..input_index + 4]);
+            if group_index + 1 < group_count || tail_count > 0 {
+                source_x += step_x_x;
+                source_y += step_x_y;
+            }
+        }
+        for (offset, pixel) in pixels.into_remainder().chunks_exact_mut(4).enumerate() {
+            let input_x = (source_x >> 16) as usize;
+            let input_y = (source_y >> 16) as usize;
+            let input_index = (input_y * source_width + input_x) * 4;
+            pixel.copy_from_slice(&source[input_index..input_index + 4]);
+            if offset + 1 < tail_count {
+                source_x += step_x_x;
+                source_y += step_x_y;
+            }
+        }
     }
 }
 
