@@ -144,14 +144,7 @@ fn f_resize_ordered_f64_subnormal_and_extreme_finite_native_matches_cpu() {
             ),
             "ordered proof should cover 32768-tap {filter:?} row"
         );
-        let filter_name = match filter {
-            ResampleFilter::Bilinear => "BILINEAR",
-            ResampleFilter::Bicubic => "BICUBIC",
-            ResampleFilter::Lanczos => "LANCZOS",
-            ResampleFilter::Hamming => "HAMMING",
-            ResampleFilter::Box => "BOX",
-            _ => unreachable!(),
-        };
+        let filter_name = ordered_f_resize_filter_name(filter);
         let expected = source
             .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
             .expect("CPU subnormal/extreme F resize")
@@ -184,6 +177,17 @@ fn f_resize_ordered_f64_subnormal_and_extreme_finite_native_matches_cpu() {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+}
+
+fn ordered_f_resize_filter_name(filter: ResampleFilter) -> &'static str {
+    match filter {
+        ResampleFilter::Bilinear => "BILINEAR",
+        ResampleFilter::Bicubic => "BICUBIC",
+        ResampleFilter::Lanczos => "LANCZOS",
+        ResampleFilter::Hamming => "HAMMING",
+        ResampleFilter::Box => "BOX",
+        _ => unreachable!(),
     }
 }
 
