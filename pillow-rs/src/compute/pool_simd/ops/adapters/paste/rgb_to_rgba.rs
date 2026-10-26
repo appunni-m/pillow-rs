@@ -18,6 +18,23 @@ struct RgbToRgbaRegionPlan {
     destination_rows: std::ops::Range<usize>,
 }
 
+fn checked_paste_region_range(
+    start: usize,
+    length: usize,
+    stride: usize,
+) -> Result<std::ops::Range<usize>, PilError> {
+    let start = start
+        .checked_mul(stride)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let length = length
+        .checked_mul(stride)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let end = start
+        .checked_add(length)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    Ok(start..end)
+}
+
 fn rgb_to_rgba_region_plan(
     image_width: u32,
     source_width: u32,
@@ -29,62 +46,19 @@ fn rgb_to_rgba_region_plan(
     let destination_stride = (image_width as usize)
         .checked_mul(4)
         .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_x_start = region
-        .source_left
-        .checked_mul(3)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_x_end = source_x_start
-        .checked_add(
-            region
-                .width
-                .checked_mul(3)
-                .ok_or_else(|| simd_unsupported("Paste"))?,
-        )
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_x_start = region
-        .destination_left
-        .checked_mul(4)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_x_end = destination_x_start
-        .checked_add(
-            region
-                .width
-                .checked_mul(4)
-                .ok_or_else(|| simd_unsupported("Paste"))?,
-        )
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_rows_start = region
-        .source_top
-        .checked_mul(source_stride)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let source_rows_end = source_rows_start
-        .checked_add(
-            region
-                .height
-                .checked_mul(source_stride)
-                .ok_or_else(|| simd_unsupported("Paste"))?,
-        )
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_rows_start = region
-        .destination_top
-        .checked_mul(destination_stride)
-        .ok_or_else(|| simd_unsupported("Paste"))?;
-    let destination_rows_end = destination_rows_start
-        .checked_add(
-            region
-                .height
-                .checked_mul(destination_stride)
-                .ok_or_else(|| simd_unsupported("Paste"))?,
-        )
-        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let source_x = checked_paste_region_range(region.source_left, region.width, 3)?;
+    let destination_x = checked_paste_region_range(region.destination_left, region.width, 4)?;
+    let source_rows = checked_paste_region_range(region.source_top, region.height, source_stride)?;
+    let destination_rows =
+        checked_paste_region_range(region.destination_top, region.height, destination_stride)?;
     Ok(RgbToRgbaRegionPlan {
         region,
         source_stride,
         destination_stride,
-        source_x: source_x_start..source_x_end,
-        destination_x: destination_x_start..destination_x_end,
-        source_rows: source_rows_start..source_rows_end,
-        destination_rows: destination_rows_start..destination_rows_end,
+        source_x,
+        destination_x,
+        source_rows,
+        destination_rows,
     })
 }
 
