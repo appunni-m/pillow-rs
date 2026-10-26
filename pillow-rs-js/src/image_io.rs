@@ -216,26 +216,27 @@ impl Image {
                 }
                 if let Some(values) = js_integer_array(&value) {
                     if values.len() == 1 {
-                        return Ok(pillow_rs::PutDataValue::Packed(i64::from(values[0])));
+                        return Ok(pillow_rs::PutDataValue::Packed(values[0]));
                     }
                     return Ok(pillow_rs::PutDataValue::Components(
                         values.into_iter().map(i128::from).collect(),
                     ));
                 }
-                if value.is_object() && !value.is_array() {
-                    if matches!(
+                if value.is_object()
+                    && !value.is_array()
+                    && matches!(
                         kind,
                         pillow_rs::PutDataValueKind::Components { channels: 2 }
-                    ) && js_sys::Reflect::has(
+                    )
+                    && js_sys::Reflect::has(
                         &value,
                         &JsValue::from_str("__pillow_rs_putdata_custom_index__"),
                     )
                     .unwrap_or(false)
-                    {
-                        return Err(pillow_rs::PilError::TypeError(
-                            "color must be int or tuple".to_owned(),
-                        ));
-                    }
+                {
+                    return Err(pillow_rs::PilError::TypeError(
+                        "color must be int or tuple".to_owned(),
+                    ));
                 }
                 if value.is_array() && js_sys::Array::from(&value).length() == 1 {
                     if matches!(

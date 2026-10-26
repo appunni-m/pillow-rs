@@ -644,7 +644,7 @@ fn stat_result_to_python(result: &pillow_rs::StatResult) -> PyResult<Py<PyAny>> 
         set!("var", var);
         set!("stddev", stddev);
         set!("extrema", extrema);
-        Ok(dict.into_py_any(py)?)
+        dict.into_py_any(py)
     })
 }
 

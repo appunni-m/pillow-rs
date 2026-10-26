@@ -97,13 +97,13 @@ pub(crate) fn js_chops_offset(value: &JsValue) -> Result<i32, JsValue> {
         if boolean { 1 } else { 0 }
     } else if value.is_bigint() {
         let bigint = value.clone().unchecked_into::<js_sys::BigInt>();
-        let integer = bigint
+
+        bigint
             .to_string(10)
             .ok()
             .and_then(|value| value.as_string())
             .and_then(|value| value.parse::<i64>().ok())
-            .ok_or_else(chops_offset_c_long_overflow)?;
-        integer
+            .ok_or_else(chops_offset_c_long_overflow)?
     } else if has_python_float_marker(value) {
         return Err(chops_offset_type_error("float"));
     } else if let Some(number) = value.as_f64() {
@@ -250,11 +250,7 @@ pub(crate) fn js_draw_points_input(value: &JsValue) -> pillow_rs::DrawPointsInpu
         return pillow_rs::DrawPointsInput::Invalid;
     }
     let values = js_sys::Array::from(value).iter().collect::<Vec<_>>();
-    if let Some(flat) = values
-        .iter()
-        .map(|value| js_integer(value))
-        .collect::<Option<Vec<_>>>()
-    {
+    if let Some(flat) = values.iter().map(js_integer).collect::<Option<Vec<_>>>() {
         return pillow_rs::DrawPointsInput::Flat(
             flat.into_iter().map(|value| value as i32).collect(),
         );
@@ -792,15 +788,14 @@ pub(crate) fn js_putpixel_value(value: &JsValue) -> pillow_rs::PutPixelValue {
     if let Ok(components) = js_sys::Reflect::get(
         value,
         &JsValue::from_str("__pillow_rs_putpixel_float_components__"),
-    ) {
-        if components.is_array() {
-            let values = js_sys::Array::from(&components)
-                .iter()
-                .map(|item| item.as_f64())
-                .collect::<Option<Vec<_>>>();
-            if let Some(values) = values {
-                return pillow_rs::PutPixelValue::FloatComponents(values);
-            }
+    ) && components.is_array()
+    {
+        let values = js_sys::Array::from(&components)
+            .iter()
+            .map(|item| item.as_f64())
+            .collect::<Option<Vec<_>>>();
+        if let Some(values) = values {
+            return pillow_rs::PutPixelValue::FloatComponents(values);
         }
     }
     if let Some(number) = value.as_f64() {

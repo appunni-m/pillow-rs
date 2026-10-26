@@ -571,7 +571,7 @@ impl PyFont {
 
     fn get_name<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         let (family, style) = pillow_rs::imagefont_getname_optional(&self.inner);
-        Ok(PyTuple::new(py, [family, style])?)
+        PyTuple::new(py, [family, style])
     }
 
     fn get_size(&self) -> f32 {
@@ -710,10 +710,8 @@ fn load_pilfont_from_path(
         let cache_raster = pilfont_glyph_image_within_cache_limit(&image);
         match pilfont_from_glyph_image(&metrics, image) {
             Ok(font) => {
-                if cache_raster {
-                    if let Some(bitmap) = cache_bitmap {
-                        remember_pilfont_load(&metrics, &bitmap, &font);
-                    }
+                if cache_raster && let Some(bitmap) = cache_bitmap {
+                    remember_pilfont_load(&metrics, &bitmap, &font);
                 }
                 return Ok((font, candidate.to_string_lossy().into_owned()));
             }

@@ -146,14 +146,14 @@ fn putdata_bulk(
         // reported at its position after any earlier writes; coercing the
         // whole list as f64 would turn the first packed pixel into an invalid
         // scalar and lose that order.
-        if matches!(kind, PutDataValueKind::Numeric) {
-            if let Ok(values) = data.extract::<Vec<f64>>() {
-                slf.try_borrow_mut()?
-                    .inner
-                    .putdata_input(PutDataInput::Numbers(&values), scale, offset)
-                    .map_err(map_error)?;
-                return Ok(true);
-            }
+        if matches!(kind, PutDataValueKind::Numeric)
+            && let Ok(values) = data.extract::<Vec<f64>>()
+        {
+            slf.try_borrow_mut()?
+                .inner
+                .putdata_input(PutDataInput::Numbers(&values), scale, offset)
+                .map_err(map_error)?;
+            return Ok(true);
         }
     }
 

@@ -52,7 +52,7 @@ impl PyImage {
                 .iter()
                 .map(|band| band.into_py_any(py))
                 .collect::<PyResult<_>>()?;
-            Ok(PyTuple::new(py, objs)?.into_py_any(py)?)
+            PyTuple::new(py, objs)?.into_py_any(py)
         })
     }
 

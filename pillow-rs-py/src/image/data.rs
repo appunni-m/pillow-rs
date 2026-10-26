@@ -146,7 +146,7 @@ impl PyImage {
             .getpixel_rgb_if_loaded(xy.0, xy.1)
             .map_err(map_error)?
         {
-            return Ok(PyTuple::new(py, rgb)?.into_py_any(py)?);
+            return PyTuple::new(py, rgb)?.into_py_any(py);
         }
         let value = py
             .detach(|| self.inner.getpixel_formatted(xy.0, xy.1))
