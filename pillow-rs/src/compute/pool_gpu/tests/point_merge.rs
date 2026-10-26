@@ -247,22 +247,7 @@ fn contrast_mean_after_exact_putpixel_prefix_matches_materialized_prefix() {
         ),
     ];
     for (image, mode, (x, y, color)) in cases {
-        let ops = [
-            PipelineOp::PutPixel {
-                x,
-                y,
-                color,
-                palette_index: false,
-            },
-            PipelineOp::Contrast { factor: 0.5 },
-        ];
-        let prefixed = crate::compute::pool_cpu::ops::effects::op_put_pixel(&image, x, y, color)
-            .expect("exact PutPixel prefix");
-        assert_eq!(
-            gpu_contrast_mean_after_exact_prefix(&image, &ops, mode),
-            gpu_contrast_mean(&prefixed, mode),
-            "mode {mode:?}"
-        );
+        assert_contrast_mean_after_exact_putpixel_case(image, mode, x, y, color);
     }
 
     let indexed = [
@@ -278,5 +263,30 @@ fn contrast_mean_after_exact_putpixel_prefix_matches_materialized_prefix() {
     assert_eq!(
         gpu_contrast_mean_after_exact_prefix(&image, &indexed, Some("P")),
         None
+    );
+}
+
+fn assert_contrast_mean_after_exact_putpixel_case(
+    image: DynamicImage,
+    mode: Option<&str>,
+    x: u32,
+    y: u32,
+    color: (u8, u8, u8, u8),
+) {
+    let ops = [
+        PipelineOp::PutPixel {
+            x,
+            y,
+            color,
+            palette_index: false,
+        },
+        PipelineOp::Contrast { factor: 0.5 },
+    ];
+    let prefixed = crate::compute::pool_cpu::ops::effects::op_put_pixel(&image, x, y, color)
+        .expect("exact PutPixel prefix");
+    assert_eq!(
+        gpu_contrast_mean_after_exact_prefix(&image, &ops, mode),
+        gpu_contrast_mean(&prefixed, mode),
+        "mode {mode:?}"
     );
 }
