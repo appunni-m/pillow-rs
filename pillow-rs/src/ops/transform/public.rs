@@ -106,105 +106,171 @@ impl Image {
             requested_filter
         };
         let (fill, palette_fill) = self.public_transform_fill(fillcolor)?;
+        self.apply_public_transform_method(
+            size,
+            method,
+            data,
+            fill,
+            palette_fill,
+            filter,
+            fill_is_none,
+        )
+    }
+
+    fn apply_public_transform_method(
+        &self,
+        size: (u32, u32),
+        method: i32,
+        data: Option<TransformData>,
+        fill: (u8, u8, u8, u8),
+        palette_fill: Option<u8>,
+        filter: ResampleFilter,
+        fill_is_none: bool,
+    ) -> Result<Image, PilError> {
         match method {
-            0 => {
-                let Some(TransformData::Affine(matrix)) = data else {
-                    return Err(PilError::ValueError("missing method data".into()));
-                };
-                // Keep the public Pillow path on the same core entry points
-                // exposed for direct Rust callers. Palette scalar fills retain
-                // their index, while tuple/name fills resolve to palette index
-                // zero through the same helper.
-                if let Some(index) = palette_fill {
-                    self.transform_affine_palette_index_with_filter(
-                        size,
-                        &matrix,
-                        index,
-                        filter,
-                        fill_is_none,
-                    )
-                } else {
-                    self.transform_affine_with_palette_fill(
-                        size,
-                        &matrix,
-                        fill,
-                        None,
-                        filter,
-                        fill_is_none,
-                    )
-                }
-            }
-            1 => {
-                let Some(TransformData::Affine(extent)) = data else {
-                    return Err(PilError::ValueError("missing method data".into()));
-                };
-                let [x0, y0, x1, y1] = extent.as_slice() else {
-                    let message = if extent.len() < 4 {
-                        format!(
-                            "not enough values to unpack (expected 4, got {})",
-                            extent.len()
-                        )
-                    } else {
-                        "too many values to unpack (expected 4)".into()
-                    };
-                    return Err(PilError::ValueError(message));
-                };
-                // Pillow's EXTENT method maps each destination pixel back
-                // into the requested source rectangle. Express that mapping
-                // through the same affine pipeline used by method 0 so mode,
-                // fill, and lazy execution remain shared.
-                let matrix = vec![
-                    (x1 - x0) / f64::from(size.0),
-                    0.0,
-                    *x0,
-                    0.0,
-                    (y1 - y0) / f64::from(size.1),
-                    *y0,
-                ];
-                self.transform_affine_with_palette_fill(
-                    size,
-                    &matrix,
-                    fill,
-                    palette_fill,
-                    filter,
-                    fill_is_none,
-                )
-            }
-            2 | 3 => {
-                let Some(TransformData::Affine(data)) = data else {
-                    return Err(PilError::ValueError("missing method data".into()));
-                };
-                if data.len() < 8 {
-                    return if method == 2 {
-                        Err(PilError::ValueError(
-                            "wrong number of matrix entries".into(),
-                        ))
-                    } else {
-                        Err(PilError::IndexError("tuple index out of range".into()))
-                    };
-                }
-                if method == 2 {
-                    self.transform_perspective_with_palette_fill(
-                        size,
-                        &data[..8],
-                        fill,
-                        palette_fill,
-                        filter,
-                        fill_is_none,
-                    )
-                } else {
-                    self.transform_quad_with_palette_fill(
-                        size,
-                        &data[..8],
-                        fill,
-                        palette_fill,
-                        filter,
-                        fill_is_none,
-                    )
-                }
-            }
+            0 => self.transform_public_affine_method(
+                size,
+                data,
+                fill,
+                palette_fill,
+                filter,
+                fill_is_none,
+            ),
+            1 => self.transform_public_extent_method(
+                size,
+                data,
+                fill,
+                palette_fill,
+                filter,
+                fill_is_none,
+            ),
+            2 | 3 => self.transform_public_projective_method(
+                size,
+                method,
+                data,
+                fill,
+                palette_fill,
+                filter,
+                fill_is_none,
+            ),
             4 => transform_public_mesh(self, size, data, fill, palette_fill, filter, fill_is_none),
             _ => Err(PilError::ValueError("unknown transformation method".into())),
+        }
+    }
+
+    fn transform_public_affine_method(
+        &self,
+        size: (u32, u32),
+        data: Option<TransformData>,
+        fill: (u8, u8, u8, u8),
+        palette_fill: Option<u8>,
+        filter: ResampleFilter,
+        fill_is_none: bool,
+    ) -> Result<Image, PilError> {
+        let Some(TransformData::Affine(matrix)) = data else {
+            return Err(PilError::ValueError("missing method data".into()));
+        };
+        // Keep the public Pillow path on the same core entry points exposed
+        // for direct Rust callers. Palette scalar fills retain their index,
+        // while tuple/name fills resolve to palette index zero through the
+        // same helper.
+        if let Some(index) = palette_fill {
+            self.transform_affine_palette_index_with_filter(
+                size,
+                &matrix,
+                index,
+                filter,
+                fill_is_none,
+            )
+        } else {
+            self.transform_affine_with_palette_fill(size, &matrix, fill, None, filter, fill_is_none)
+        }
+    }
+
+    fn transform_public_extent_method(
+        &self,
+        size: (u32, u32),
+        data: Option<TransformData>,
+        fill: (u8, u8, u8, u8),
+        palette_fill: Option<u8>,
+        filter: ResampleFilter,
+        fill_is_none: bool,
+    ) -> Result<Image, PilError> {
+        let Some(TransformData::Affine(extent)) = data else {
+            return Err(PilError::ValueError("missing method data".into()));
+        };
+        let [x0, y0, x1, y1] = extent.as_slice() else {
+            let message = if extent.len() < 4 {
+                format!(
+                    "not enough values to unpack (expected 4, got {})",
+                    extent.len()
+                )
+            } else {
+                "too many values to unpack (expected 4)".into()
+            };
+            return Err(PilError::ValueError(message));
+        };
+        // Pillow's EXTENT method maps each destination pixel back into the
+        // requested source rectangle. Express that mapping through the same
+        // affine pipeline so mode, fill, and lazy execution remain shared.
+        let matrix = vec![
+            (x1 - x0) / f64::from(size.0),
+            0.0,
+            *x0,
+            0.0,
+            (y1 - y0) / f64::from(size.1),
+            *y0,
+        ];
+        self.transform_affine_with_palette_fill(
+            size,
+            &matrix,
+            fill,
+            palette_fill,
+            filter,
+            fill_is_none,
+        )
+    }
+
+    fn transform_public_projective_method(
+        &self,
+        size: (u32, u32),
+        method: i32,
+        data: Option<TransformData>,
+        fill: (u8, u8, u8, u8),
+        palette_fill: Option<u8>,
+        filter: ResampleFilter,
+        fill_is_none: bool,
+    ) -> Result<Image, PilError> {
+        let Some(TransformData::Affine(data)) = data else {
+            return Err(PilError::ValueError("missing method data".into()));
+        };
+        if data.len() < 8 {
+            return if method == 2 {
+                Err(PilError::ValueError(
+                    "wrong number of matrix entries".into(),
+                ))
+            } else {
+                Err(PilError::IndexError("tuple index out of range".into()))
+            };
+        }
+        if method == 2 {
+            self.transform_perspective_with_palette_fill(
+                size,
+                &data[..8],
+                fill,
+                palette_fill,
+                filter,
+                fill_is_none,
+            )
+        } else {
+            self.transform_quad_with_palette_fill(
+                size,
+                &data[..8],
+                fill,
+                palette_fill,
+                filter,
+                fill_is_none,
+            )
         }
     }
 }
