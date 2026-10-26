@@ -209,61 +209,77 @@ fn rgb_radius_one_direct_vertical_passes_match_transposed_simd() {
             (65, 47),
             (67, 53),
         ] {
-            let dimensions = crate::checked_dims::CheckedDims::new(width, height, 3)
-                .expect("test RGB dimensions fit");
-            let source: Vec<u8> = (0..dimensions.total_bytes())
-                .map(|index| (index.wrapping_mul(73).wrapping_add(29) % 256) as u8)
-                .collect();
-
-            let mut expected = dimensions.alloc_buffer();
-            super::simd_transpose_interleaved_rows(
-                &source,
-                &mut expected,
-                width as usize,
-                height as usize,
-                3,
-            );
-            let mut expected_scratch = dimensions.alloc_buffer();
-            for _ in 0..3 {
-                super::simd_blur_rows::<false>(
-                    &expected,
-                    &mut expected_scratch,
-                    height as usize,
-                    width as usize,
-                    3,
-                    1,
-                    whole_weight,
-                    fractional_weight,
-                );
-                std::mem::swap(&mut expected, &mut expected_scratch);
-            }
-            super::simd_transpose_interleaved_rows(
-                &expected,
-                &mut expected_scratch,
-                height as usize,
-                width as usize,
-                3,
-            );
-
-            let mut actual = source;
-            let mut actual_scratch = dimensions.alloc_buffer();
-            for _ in 0..3 {
-                super::simd_rgb_vertical_radius_one_rows(
-                    &actual,
-                    &mut actual_scratch,
-                    width as usize,
-                    height as usize,
-                    whole_weight,
-                    fractional_weight,
-                );
-                std::mem::swap(&mut actual, &mut actual_scratch);
-            }
-            assert_eq!(
-                actual, expected_scratch,
-                "vertical dimensions={width}x{height} radius={radius}"
+            assert_rgb_radius_one_vertical_case(
+                width,
+                height,
+                radius,
+                whole_weight,
+                fractional_weight,
             );
         }
     }
+}
+
+fn assert_rgb_radius_one_vertical_case(
+    width: u32,
+    height: u32,
+    radius: f32,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let dimensions =
+        crate::checked_dims::CheckedDims::new(width, height, 3).expect("test RGB dimensions fit");
+    let source: Vec<u8> = (0..dimensions.total_bytes())
+        .map(|index| (index.wrapping_mul(73).wrapping_add(29) % 256) as u8)
+        .collect();
+
+    let mut expected = dimensions.alloc_buffer();
+    super::simd_transpose_interleaved_rows(
+        &source,
+        &mut expected,
+        width as usize,
+        height as usize,
+        3,
+    );
+    let mut expected_scratch = dimensions.alloc_buffer();
+    for _ in 0..3 {
+        super::simd_blur_rows::<false>(
+            &expected,
+            &mut expected_scratch,
+            height as usize,
+            width as usize,
+            3,
+            1,
+            whole_weight,
+            fractional_weight,
+        );
+        std::mem::swap(&mut expected, &mut expected_scratch);
+    }
+    super::simd_transpose_interleaved_rows(
+        &expected,
+        &mut expected_scratch,
+        height as usize,
+        width as usize,
+        3,
+    );
+
+    let mut actual = source;
+    let mut actual_scratch = dimensions.alloc_buffer();
+    for _ in 0..3 {
+        super::simd_rgb_vertical_radius_one_rows(
+            &actual,
+            &mut actual_scratch,
+            width as usize,
+            height as usize,
+            whole_weight,
+            fractional_weight,
+        );
+        std::mem::swap(&mut actual, &mut actual_scratch);
+    }
+    assert_eq!(
+        actual, expected_scratch,
+        "vertical dimensions={width}x{height} radius={radius}"
+    );
 }
 
 #[test]
