@@ -2,6 +2,83 @@ use super::RsImage;
 use crate::*;
 use pyo3::pymethods;
 
+fn prepare_palette_putpixel<'py>(
+    image: &mut pillow_rs::Image,
+    value: &Bound<'py, PyAny>,
+    mode: &str,
+    info: Option<&Bound<'py, PyDict>>,
+) -> PyResult<(Option<pillow_rs::PutPixelValue>, Option<Bound<'py, PyAny>>)> {
+    let palette_color = matches!(mode, "P" | "PA")
+        && (value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>())
+        && matches!(value.len()?, 3 | 4);
+    let deferred_alpha = if palette_color && mode == "PA" && value.len()? == 4 {
+        Some(value.get_item(3)?)
+    } else {
+        None
+    };
+    let prepared = if palette_color {
+        // The palette wrapper precedes coordinate parsing. PA's alpha
+        // conversion happens later, after allocation and bounds checks.
+        let rgb_only = mode == "PA" || image.palette_mode() != Some("RGBA");
+        if mode == "P" && rgb_only && value.len()? == 4 && !value.get_item(3)?.eq(255)? {
+            return Err(PyValueError::new_err(
+                "cannot add non-opaque RGBA color to RGB palette",
+            ));
+        }
+        let components = PyTuple::new(
+            value.py(),
+            (0..if rgb_only { 3 } else { value.len()? })
+                .map(|index| value.get_item(index))
+                .collect::<PyResult<Vec<_>>>()?,
+        )?;
+        let value = putpixel_value_from_python(components.as_any(), mode)?;
+        let mut reserved = Vec::with_capacity(2);
+        if let Some(info) = info {
+            for key in ["background", "transparency"] {
+                if let Some(value) = info.get_item(key)?
+                    && let Ok(value) = value.extract::<f64>()
+                    && (0.0..=255.0).contains(&value)
+                    && value.fract() == 0.0
+                {
+                    reserved.push(value as u32);
+                }
+            }
+        }
+        Some(
+            image
+                .prepare_putpixel_palette(value, &reserved)
+                .map_err(map_error)?,
+        )
+    } else {
+        None
+    };
+    Ok((prepared, deferred_alpha))
+}
+
+fn putpixel_coordinates_in_bounds(
+    image: &pillow_rs::Image,
+    xy: &Bound<'_, PyAny>,
+) -> PyResult<(u32, u32)> {
+    let (x, y) = putpixel_coordinates_from_python(xy)?;
+    let (width, height) = image.size().map_err(map_error)?;
+    let x = if x < 0 {
+        i64::from(width) + i64::from(x)
+    } else {
+        i64::from(x)
+    };
+    let y = if y < 0 {
+        i64::from(height) + i64::from(y)
+    } else {
+        i64::from(y)
+    };
+    if x < 0 || y < 0 || x >= i64::from(width) || y >= i64::from(height) {
+        return Err(pyo3::exceptions::PyIndexError::new_err(
+            "image index out of range",
+        ));
+    }
+    Ok((x as u32, y as u32))
+}
+
 #[pymethods]
 impl PyImage {
     #[pyo3(signature = (rawmode=None))]
@@ -185,67 +262,9 @@ impl PyImage {
         info: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
         let mode = self.inner.mode().map_err(map_error)?;
-        let palette_color = matches!(mode.as_str(), "P" | "PA")
-            && (value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>())
-            && matches!(value.len()?, 3 | 4);
-        let deferred_alpha = if palette_color && mode == "PA" && value.len()? == 4 {
-            Some(value.get_item(3)?)
-        } else {
-            None
-        };
-        let prepared = if palette_color {
-            // The palette wrapper precedes coordinate parsing. PA's alpha
-            // conversion happens later, after allocation and bounds checks.
-            let rgb_only = mode == "PA" || self.inner.palette_mode() != Some("RGBA");
-            if mode == "P" && rgb_only && value.len()? == 4 && !value.get_item(3)?.eq(255)? {
-                return Err(PyValueError::new_err(
-                    "cannot add non-opaque RGBA color to RGB palette",
-                ));
-            }
-            let components = PyTuple::new(
-                value.py(),
-                (0..if rgb_only { 3 } else { value.len()? })
-                    .map(|index| value.get_item(index))
-                    .collect::<PyResult<Vec<_>>>()?,
-            )?;
-            let value = putpixel_value_from_python(components.as_any(), &mode)?;
-            let mut reserved = Vec::with_capacity(2);
-            if let Some(info) = info {
-                for key in ["background", "transparency"] {
-                    if let Some(value) = info.get_item(key)?
-                        && let Ok(value) = value.extract::<f64>()
-                        && (0.0..=255.0).contains(&value)
-                        && value.fract() == 0.0
-                    {
-                        reserved.push(value as u32);
-                    }
-                }
-            }
-            Some(
-                self.inner
-                    .prepare_putpixel_palette(value, &reserved)
-                    .map_err(map_error)?,
-            )
-        } else {
-            None
-        };
-        let (x, y) = putpixel_coordinates_from_python(xy)?;
-        let (width, height) = self.inner.size().map_err(map_error)?;
-        let x = if x < 0 {
-            i64::from(width) + i64::from(x)
-        } else {
-            i64::from(x)
-        };
-        let y = if y < 0 {
-            i64::from(height) + i64::from(y)
-        } else {
-            i64::from(y)
-        };
-        if x < 0 || y < 0 || x >= i64::from(width) || y >= i64::from(height) {
-            return Err(pyo3::exceptions::PyIndexError::new_err(
-                "image index out of range",
-            ));
-        }
+        let (prepared, deferred_alpha) =
+            prepare_palette_putpixel(&mut self.inner, value, &mode, info)?;
+        let (x, y) = putpixel_coordinates_in_bounds(&self.inner, xy)?;
         // `putpixel_value_from_python` must retain flexible coercion and error
         // ordering for arbitrary sequences. Ordinary RGB byte tuples contain
         // exact built-in ints, so write those native channels directly and
@@ -254,10 +273,7 @@ impl PyImage {
             && prepared.is_none()
             && let Some([r, g, b]) = exact_rgb_tuple_from_python(value)
         {
-            return self
-                .inner
-                .putpixel(x as u32, y as u32, r, g, b, 255)
-                .map_err(map_error);
+            return self.inner.putpixel(x, y, r, g, b, 255).map_err(map_error);
         }
         let value = match prepared {
             Some(pillow_rs::PutPixelValue::Components(mut values)) if deferred_alpha.is_some() => {
@@ -278,12 +294,12 @@ impl PyImage {
                     // of resolving the same mode again in putpixel_value.
                     let bytes = value.to_le_bytes();
                     self.inner
-                        .putpixel(x as u32, y as u32, bytes[0], bytes[1], bytes[2], bytes[3])
+                        .putpixel(x, y, bytes[0], bytes[1], bytes[2], bytes[3])
                 }
-                value => self.inner.putpixel_value(x as u32, y as u32, value),
+                value => self.inner.putpixel_value(x, y, value),
             }
         } else {
-            self.inner.putpixel_value(x as u32, y as u32, value)
+            self.inner.putpixel_value(x, y, value)
         };
         result.map_err(map_error)
     }
