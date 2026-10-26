@@ -217,7 +217,20 @@ fn byte_quad_mesh_filtered_cases() -> [(i32, TransformData, (u32, u32)); 9] {
 #[test]
 fn byte_projective_partial_mesh_relocations_native_gpu_preserve_pixels() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let cases = [
+    let cases = byte_partial_mesh_relocation_cases();
+    for (mode, channels) in [("L", 1usize), ("LA", 2), ("RGB", 3), ("RGBA", 4)] {
+        if !assert_byte_partial_mesh_mode(mode, channels, &cases) {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
+        }
+    }
+    Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+type BytePartialMeshCase = ([f64; 4], [f64; 8]);
+
+fn byte_partial_mesh_relocation_cases() -> [BytePartialMeshCase; 4] {
+    [
         (
             [1.0, 2.0, 6.0, 6.0],
             [2.0, 3.0, 2.0, 7.0, 7.0, 7.0, 7.0, 3.0],
@@ -234,86 +247,100 @@ fn byte_projective_partial_mesh_relocations_native_gpu_preserve_pixels() {
             [0.0, 3.0, 9.0, 7.0],
             [1.0, 2.0, 5.0, 2.0, 5.0, 11.0, 1.0, 11.0],
         ),
-    ];
-    for (mode, channels) in [
-        ("L", 1usize),
-        ("LA", 2usize),
-        ("RGB", 3usize),
-        ("RGBA", 4usize),
-    ] {
-        let source_size = (16u32, 16u32);
-        let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
-            .map(|index| (index * 37 + channels * 11 + 5) as u8)
-            .collect::<Vec<_>>();
-        let source = Image::frombytes(mode, source_size, &bytes).expect("byte source");
-        let fill = match mode {
-            "L" => Some(TransformFill::Scalar(199)),
-            "LA" => Some(TransformFill::Components(vec![199, 71])),
-            "RGB" => Some(TransformFill::Components(vec![199, 71, 17])),
-            "RGBA" => Some(TransformFill::Components(vec![199, 71, 17, 83])),
-            _ => unreachable!(),
-        };
-        for (bbox, quad) in cases {
-            let data = TransformData::Mesh(vec![(bbox.to_vec(), quad.to_vec())]);
-            for filter in [
-                (0, ResampleFilter::Nearest),
-                (2, ResampleFilter::Bilinear),
-                (3, ResampleFilter::Bicubic),
-            ] {
-                let transformed = source
-                    .transform_public((9, 8), 4, Some(data.clone()), filter.0, 0, fill.clone())
-                    .unwrap_or_else(|error| {
-                        panic!("{mode} partial Mesh transform bbox={bbox:?} quad={quad:?}: {error}")
-                    });
-                let expected = transformed
-                    .clone()
-                    .use_backend(Backend::Cpu)
-                    .tobytes()
-                    .expect("CPU partial Mesh transform");
-                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
-                    Ok(actual) => actual,
-                    Err(error)
-                        if error.to_string().contains("GPU adapter not available")
-                            || error
-                                .to_string()
-                                .contains("GPU device initialization failed") =>
-                    {
-                        Backend::set_pipeline_telemetry_enabled(previous);
-                        return;
-                    }
-                    Err(error) => {
-                        panic!("native GPU {mode} partial Mesh transform failed: {error}")
-                    }
-                };
-                assert_eq!(
-                    actual, expected,
-                    "native {mode} partial Mesh filter={filter:?}"
-                );
-                let telemetry = Backend::take_pipeline_telemetry()
-                    .expect("partial Mesh transform must publish telemetry");
-                assert_eq!(
-                    telemetry.0,
-                    Some(Backend::Gpu),
-                    "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
-                );
-                assert_eq!(
-                    telemetry.1,
-                    Backend::Gpu,
-                    "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
-                );
-                assert_eq!(
-                    telemetry.6,
-                    Some(1),
-                    "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
-                );
-                assert_eq!(
-                    telemetry.7, None,
-                    "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
-                );
+    ]
+}
+
+fn assert_byte_partial_mesh_mode(
+    mode: &str,
+    channels: usize,
+    cases: &[BytePartialMeshCase; 4],
+) -> bool {
+    let source_size = (16u32, 16u32);
+    let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
+        .map(|index| (index * 37 + channels * 11 + 5) as u8)
+        .collect::<Vec<_>>();
+    let source = Image::frombytes(mode, source_size, &bytes).expect("byte source");
+    let fill = match mode {
+        "L" => Some(TransformFill::Scalar(199)),
+        "LA" => Some(TransformFill::Components(vec![199, 71])),
+        "RGB" => Some(TransformFill::Components(vec![199, 71, 17])),
+        "RGBA" => Some(TransformFill::Components(vec![199, 71, 17, 83])),
+        _ => unreachable!(),
+    };
+    for &(bbox, quad) in cases {
+        let data = TransformData::Mesh(vec![(bbox.to_vec(), quad.to_vec())]);
+        for filter in [
+            (0, ResampleFilter::Nearest),
+            (2, ResampleFilter::Bilinear),
+            (3, ResampleFilter::Bicubic),
+        ] {
+            if !assert_byte_partial_mesh_filter_case(
+                &source, mode, bbox, quad, &data, filter, &fill,
+            ) {
+                return false;
             }
         }
     }
-    Backend::set_pipeline_telemetry_enabled(previous);
+    true
+}
+
+fn assert_byte_partial_mesh_filter_case(
+    source: &Image,
+    mode: &str,
+    bbox: [f64; 4],
+    quad: [f64; 8],
+    data: &TransformData,
+    filter: (i32, ResampleFilter),
+    fill: &Option<TransformFill>,
+) -> bool {
+    let transformed = source
+        .transform_public((9, 8), 4, Some(data.clone()), filter.0, 0, fill.clone())
+        .unwrap_or_else(|error| {
+            panic!("{mode} partial Mesh transform bbox={bbox:?} quad={quad:?}: {error}")
+        });
+    let expected = transformed
+        .clone()
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU partial Mesh transform");
+    let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            return false;
+        }
+        Err(error) => panic!("native GPU {mode} partial Mesh transform failed: {error}"),
+    };
+    assert_eq!(
+        actual, expected,
+        "native {mode} partial Mesh filter={filter:?}"
+    );
+    let telemetry =
+        Backend::take_pipeline_telemetry().expect("partial Mesh transform must publish telemetry");
+    assert_eq!(
+        telemetry.0,
+        Some(Backend::Gpu),
+        "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
+    );
+    assert_eq!(
+        telemetry.1,
+        Backend::Gpu,
+        "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
+    );
+    assert_eq!(
+        telemetry.6,
+        Some(1),
+        "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
+    );
+    assert_eq!(
+        telemetry.7, None,
+        "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
+    );
+    true
 }
 
 #[test]
