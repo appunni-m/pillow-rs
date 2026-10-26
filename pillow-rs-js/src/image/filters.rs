@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 #[wasm_bindgen]
 impl Image {
     // Enhancement
+    /// Adjusts image brightness by the supplied enhancement factor.
     #[wasm_bindgen(js_name = "enhanceBrightness")]
     pub fn bright(&self, f: f64) -> Result<Image, JsValue> {
         self.inner
@@ -13,6 +14,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Adjusts image contrast by the supplied enhancement factor.
     #[wasm_bindgen(js_name = "enhanceContrast")]
     pub fn contrast(&self, f: f64) -> Result<Image, JsValue> {
         self.inner
@@ -20,6 +22,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Adjusts image color saturation by the supplied enhancement factor.
     #[wasm_bindgen(js_name = "enhanceColor")]
     pub fn color(&self, f: f64) -> Result<Image, JsValue> {
         self.inner
@@ -27,6 +30,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Adjusts image sharpness by the supplied enhancement factor.
     #[wasm_bindgen(js_name = "enhanceSharpness")]
     pub fn sharp(&self, f: f64) -> Result<Image, JsValue> {
         self.inner
@@ -60,6 +64,7 @@ impl Image {
     }
 
     // Filters
+    /// Applies a Gaussian blur with the given radius.
     #[wasm_bindgen(js_name = "gaussianBlur")]
     pub fn gaussian(&self, r: f32) -> Result<Image, JsValue> {
         self.inner
@@ -67,6 +72,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Applies a Gaussian blur with independent horizontal and vertical radii.
     #[wasm_bindgen(js_name = "gaussianBlurXY")]
     pub fn gaussian_xy(&self, rx: f32, ry: f32) -> Result<Image, JsValue> {
         self.inner
@@ -74,6 +80,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Applies a box blur with the given radius.
     #[wasm_bindgen(js_name = "boxBlur")]
     pub fn boxb(&self, r: f32) -> Result<Image, JsValue> {
         self.inner
@@ -81,6 +88,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Applies a box blur with independent horizontal and vertical radii.
     #[wasm_bindgen(js_name = "boxBlurXY")]
     pub fn box_xy(&self, rx: f32, ry: f32) -> Result<Image, JsValue> {
         self.inner
@@ -88,6 +96,8 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Sharpens the image using an unsharp mask with the supplied radius, percent,
+    /// and threshold.
     #[wasm_bindgen(js_name = "unsharpMask")]
     pub fn unsharp(&self, r: f32, p: i32, t: i32) -> Result<Image, JsValue> {
         self.inner
@@ -95,6 +105,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Replaces each pixel with the maximum value in its `size`-wide neighborhood.
     #[wasm_bindgen(js_name = "maxFilter")]
     pub fn maxf(&self, s: u32) -> Result<Image, JsValue> {
         self.inner
@@ -102,6 +113,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Replaces each pixel with the minimum value in its `size`-wide neighborhood.
     #[wasm_bindgen(js_name = "minFilter")]
     pub fn minf(&self, s: u32) -> Result<Image, JsValue> {
         self.inner
@@ -109,6 +121,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Replaces each pixel with the median value in its `size`-wide neighborhood.
     #[wasm_bindgen(js_name = "medianFilter")]
     pub fn medianf(&self, s: u32) -> Result<Image, JsValue> {
         self.inner
@@ -116,6 +129,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Replaces each pixel with the most frequent value in its `size`-wide neighborhood.
     #[wasm_bindgen(js_name = "modeFilter")]
     pub fn modef(&self, s: u32) -> Result<Image, JsValue> {
         self.inner
@@ -123,6 +137,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Selects rank `rank` from each `size`-wide neighborhood.
     #[wasm_bindgen(js_name = "rankFilter")]
     pub fn rankf(&self, s: u32, r: u32) -> Result<Image, JsValue> {
         self.inner
@@ -130,6 +145,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Applies a square convolution kernel with an explicit scale and offset.
     #[wasm_bindgen(js_name = "kernelFilter")]
     pub fn kernelf(
         &self,
@@ -149,6 +165,10 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Applies a three-dimensional color lookup table.
+    ///
+    /// The table dimensions and input channel count describe its layout; `target_mode`
+    /// optionally selects the output image mode.
     #[wasm_bindgen(js_name = "color3DLUT")]
     pub fn color3dlut(
         &self,
@@ -223,6 +243,7 @@ impl Image {
     }
 
     // Quantize/Reduce
+    /// Quantizes the image to at most `colors` palette entries using default options.
     #[wasm_bindgen(js_name = "quantize")]
     pub fn quantize(&self, c: u32) -> Result<Image, JsValue> {
         self.inner
@@ -230,6 +251,8 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Quantizes the image with optional color count, method, k-means, dither, and
+    /// palette inputs.
     #[wasm_bindgen(js_name = "quantizeWithInput")]
     pub fn quantize_with_input(
         &self,
@@ -261,6 +284,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Quantizes the image using `palette` as the destination palette.
     #[wasm_bindgen(js_name = "quantizeWithPaletteInput")]
     pub fn quantize_with_palette_input(
         &self,
@@ -293,6 +317,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Reduces image dimensions by the same integer factor on both axes.
     #[wasm_bindgen(js_name = "reduce")]
     pub fn reduce(&self, f: u32) -> Result<Image, JsValue> {
         self.inner
@@ -300,6 +325,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Reduces the image using a scalar or per-axis factor and an optional source box.
     #[wasm_bindgen(js_name = "reduceWithInput")]
     pub fn reduce_with_input(
         &self,
@@ -316,6 +342,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Returns a copy of the image with its palette remapped by `mapping`.
     #[wasm_bindgen(js_name = "remapPalette")]
     pub fn remap(&mut self, m: Vec<u8>) -> Result<Image, JsValue> {
         self.inner
@@ -323,30 +350,38 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Applies the spread effect using the given pixel distance.
     #[wasm_bindgen(js_name = "effectSpread")]
     pub fn spread(&self, d: u32) -> Result<Image, JsValue> {
         pillow_rs::image_effect_spread(&self.inner, d)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Adds noise with the given standard deviation.
     #[wasm_bindgen(js_name = "effectNoise")]
     pub fn noise(&self, sigma: f64) -> Result<Image, JsValue> {
         pillow_rs::image_effect_noise(&self.inner, sigma)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Applies a lookup table to the image's pixel values.
     #[wasm_bindgen(js_name = "eval")]
     pub fn eval(&self, lut: Vec<u8>) -> Result<Image, JsValue> {
         pillow_rs::image_eval_replicated_for_image(&self.inner, &lut)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Resizes this image in place so it fits within the requested dimensions.
     #[wasm_bindgen(js_name = "thumbnail")]
     pub fn thumb(&mut self, w: u32, h: u32) -> Result<(), JsValue> {
         self.inner
             .thumbnail((i64::from(w), i64::from(h)), None)
             .map_err(err)
     }
+    /// Resizes this image in place using Pillow-style size and resampling inputs.
+    ///
+    /// `size` must contain two integers. An omitted resampling value uses the core
+    /// default; invalid values are returned as JavaScript errors.
     #[wasm_bindgen(js_name = "thumbnailWithInput")]
     pub fn thumb_with_input(&mut self, size: JsValue, resample: JsValue) -> Result<(), JsValue> {
         let values = js_integer_array(&size).ok_or_else(|| {

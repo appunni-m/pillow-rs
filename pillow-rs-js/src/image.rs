@@ -4,11 +4,13 @@ use pillow_rs::Image as RsImage;
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
 #[wasm_bindgen]
+/// An image owned by the Rust image engine and exposed to JavaScript.
 pub struct Image {
     pub(crate) inner: RsImage,
 }
 
 #[wasm_bindgen]
+/// Resolved image layout for an array descriptor.
 pub struct ArrayDescriptorLayout {
     mode: String,
     raw_mode: String,
@@ -20,31 +22,37 @@ pub struct ArrayDescriptorLayout {
 
 #[wasm_bindgen]
 impl ArrayDescriptorLayout {
+    /// Returns the image mode selected for the descriptor.
     #[wasm_bindgen(getter)]
     pub fn mode(&self) -> String {
         self.mode.clone()
     }
 
+    /// Returns the descriptor's storage mode before any dtype reinterpretation.
     #[wasm_bindgen(getter, js_name = "rawMode")]
     pub fn raw_mode(&self) -> String {
         self.raw_mode.clone()
     }
 
+    /// Returns the resolved image width in pixels.
     #[wasm_bindgen(getter)]
     pub fn width(&self) -> usize {
         self.width
     }
 
+    /// Returns the resolved image height in pixels.
     #[wasm_bindgen(getter)]
     pub fn height(&self) -> usize {
         self.height
     }
 
+    /// Returns the number of dimensions in the source array shape.
     #[wasm_bindgen(getter)]
     pub fn dimensions(&self) -> usize {
         self.dimensions
     }
 
+    /// Reports whether resolving the requested mode reinterprets the array dtype.
     #[wasm_bindgen(getter, js_name = "modeReinterpretsDtype")]
     pub fn mode_reinterprets_dtype(&self) -> bool {
         self.mode_reinterprets_dtype
@@ -52,6 +60,9 @@ impl ArrayDescriptorLayout {
 }
 
 #[wasm_bindgen(js_name = "resolveArrayLayout")]
+/// Resolves an array shape, dtype string, and optional image mode to an image layout.
+///
+/// Returns a JavaScript error when the descriptor cannot represent a supported image.
 pub fn resolve_array_layout(
     shape: Vec<usize>,
     typestr: &str,
@@ -70,6 +81,10 @@ pub fn resolve_array_layout(
 
 #[wasm_bindgen]
 impl Image {
+    /// Creates an image filled with the supplied color in the requested mode.
+    ///
+    /// The color channels are interpreted by the selected mode; invalid modes or
+    /// dimensions are returned as JavaScript errors.
     #[wasm_bindgen(constructor)]
     pub fn new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Result<Image, JsValue> {
         #[cfg(feature = "debug-hooks")]
@@ -82,6 +97,9 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Opens an image from encoded bytes.
+    ///
+    /// Decode failures are returned as JavaScript errors.
     #[wasm_bindgen(js_name = "open")]
     pub fn open(data: Vec<u8>) -> Result<Image, JsValue> {
         RsImage::open_bytes(data)
@@ -90,39 +108,50 @@ impl Image {
     }
 
     // Properties
+    /// Returns the image width in pixels.
     #[wasm_bindgen(getter)]
     pub fn width(&mut self) -> Result<u32, JsValue> {
         self.inner.size().map(|(w, _)| w).map_err(err)
     }
+    /// Returns the image height in pixels.
     #[wasm_bindgen(getter)]
     pub fn height(&mut self) -> Result<u32, JsValue> {
         self.inner.size().map(|(_, h)| h).map_err(err)
     }
+    /// Returns the image's current pixel mode.
     #[wasm_bindgen(getter)]
     pub fn mode(&mut self) -> Result<String, JsValue> {
         self.inner.mode().map_err(err)
     }
+    /// Returns the decoded image format name, when the image came from a known format.
     #[wasm_bindgen(getter)]
     pub fn format(&self) -> Option<String> {
         self.inner.format_name()
     }
+    /// Returns compatibility metadata for the current image.
     #[wasm_bindgen(js_name = "compatibilityInfo")]
     pub fn compatibility_info(&self) -> JsValue {
         image_info_to_js(self.inner.compatibility_info())
     }
+    /// Returns compatibility metadata after interpreting the image in `target_mode`.
     #[wasm_bindgen(js_name = "convertedCompatibilityInfo")]
     pub fn converted_compatibility_info(&self, target_mode: &str) -> JsValue {
         image_info_to_js(self.inner.converted_compatibility_info(target_mode))
     }
+    /// Replaces this image's contents with a clone of `other`.
     #[wasm_bindgen(js_name = "replaceFrom")]
     pub fn replace_from(&mut self, other: &Image) {
         self.inner = other.inner.clone();
     }
+    /// Returns the image dimensions as `[width, height]`.
     pub fn size(&mut self) -> Result<Vec<u32>, JsValue> {
         self.inner.size().map(|(w, h)| vec![w, h]).map_err(err)
     }
 
     // Transforms
+    /// Resizes the image to the requested dimensions using an optional named filter.
+    ///
+    /// When `filter` is omitted, the core resize default is used.
     #[wasm_bindgen(js_name = "resize")]
     pub fn resize(&self, w: u32, h: u32, f: Option<String>) -> Result<Image, JsValue> {
         let filter = f.map(pillow_rs::ResampleInput::Name);
@@ -131,6 +160,10 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Resizes the image with Pillow-style size, resampling, box, and reducing-gap inputs.
+    ///
+    /// `size` must contain two integers. Optional arguments may be `null` or
+    /// `undefined`; invalid values are returned as JavaScript errors.
     #[wasm_bindgen(js_name = "resizeWithInput")]
     pub fn resize_with_input(
         &self,
@@ -166,6 +199,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Returns the rectangular crop bounded by left, top, right, and bottom coordinates.
     #[wasm_bindgen(js_name = "crop")]
     pub fn crop(&self, l: u32, t: u32, r: u32, b: u32) -> Result<Image, JsValue> {
         self.inner
@@ -173,6 +207,10 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Crops the image using an optional four-coordinate box.
+    ///
+    /// A `null` or `undefined` box selects the full image; other boxes must contain
+    /// four numeric coordinates.
     #[wasm_bindgen(js_name = "cropWithInput")]
     pub fn crop_with_input(&self, box_value: JsValue) -> Result<Image, JsValue> {
         let box_coords = if box_value.is_null() || box_value.is_undefined() {
@@ -196,6 +234,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Rotates the image by `angle` degrees using the core default resampling behavior.
     #[wasm_bindgen(js_name = "rotate")]
     pub fn rotate(&self, a: f64) -> Result<Image, JsValue> {
         self.inner
@@ -203,6 +242,8 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Rotates the image with explicit resampling, expansion, center, translation,
+    /// and fill-color inputs.
     #[wasm_bindgen(js_name = "rotateWithInput")]
     pub fn rotate_with_input(
         &self,
@@ -225,6 +266,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Applies a named transpose operation and returns the resulting image.
     #[wasm_bindgen(js_name = "transpose")]
     pub fn transpose(&self, m: &str) -> Result<Image, JsValue> {
         self.inner
@@ -232,6 +274,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Converts the image to `mode`, optionally selecting a dithering method.
     #[wasm_bindgen(js_name = "convert")]
     pub fn convert(&self, m: &str, dither: Option<String>) -> Result<Image, JsValue> {
         self.inner
@@ -239,6 +282,10 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Converts the image using Pillow-style mode, matrix, dithering, palette, and
+    /// color-count inputs.
+    ///
+    /// Invalid input values and conversion failures are returned as JavaScript errors.
     #[wasm_bindgen(js_name = "convertWithInput")]
     pub fn convert_with_input(
         &self,
@@ -268,6 +315,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Applies a named image filter and returns the filtered image.
     #[wasm_bindgen(js_name = "filter")]
     pub fn filter(&self, n: &str) -> Result<Image, JsValue> {
         self.inner
