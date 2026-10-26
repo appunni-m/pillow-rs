@@ -19,6 +19,29 @@ fn f_pad_f64_native_preserves_heterogeneous_words() {
         (ResampleFilter::Hamming, 5),
         (ResampleFilter::Box, 4),
     ];
+    assert_f_pad_f64_lowering_cases(&source_dynamic, &putdata, filters);
+
+    let mut expected_source = source.clone();
+    expected_source
+        .putdata(&source_bytes)
+        .expect("CPU F PutData");
+    let mut actual_source = source;
+    actual_source.putdata(&source_bytes).expect("GPU F PutData");
+    let previous = Backend::set_pipeline_telemetry_enabled(true);
+    for (filter, code) in filters {
+        if !assert_f_pad_f64_native_result(&expected_source, &actual_source, filter, code) {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
+        }
+    }
+    Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_f_pad_f64_lowering_cases(
+    source_dynamic: &DynamicImage,
+    putdata: &bytes::Bytes,
+    filters: [(ResampleFilter, i64); 5],
+) {
     for (filter, _) in filters {
         let pad = PipelineOp::Pad {
             w: 5,
@@ -29,7 +52,7 @@ fn f_pad_f64_native_preserves_heterogeneous_words() {
         };
         assert!(gpu_f_pad_f64_is_exact(
             std::slice::from_ref(&pad),
-            &source_dynamic,
+            source_dynamic,
             Some("F")
         ));
         assert!(gpu_f_pad_f64_is_exact(
@@ -40,64 +63,61 @@ fn f_pad_f64_native_preserves_heterogeneous_words() {
                 },
                 pad,
             ],
-            &source_dynamic,
+            source_dynamic,
             Some("F")
         ));
     }
+}
 
-    let mut expected_source = source.clone();
-    expected_source
-        .putdata(&source_bytes)
-        .expect("CPU F PutData");
-    let mut actual_source = source;
-    actual_source.putdata(&source_bytes).expect("GPU F PutData");
-    let previous = Backend::set_pipeline_telemetry_enabled(true);
-    for (filter, code) in filters {
-        let expected = crate::ops::imageops::pad_with_input(
-            &expected_source,
-            5,
-            5,
-            Some(ResampleInput::Code(code)),
-            ImageOpsColor::Scalar(0),
-            crate::ops::imageops::CenteringInput::Default,
-        )
-        .expect("CPU F Pad operation")
-        .use_backend(Backend::Cpu)
-        .tobytes()
-        .expect("CPU F Pad");
-        let actual = match crate::ops::imageops::pad_with_input(
-            &actual_source,
-            5,
-            5,
-            Some(ResampleInput::Code(code)),
-            ImageOpsColor::Scalar(0),
-            crate::ops::imageops::CenteringInput::Default,
-        )
-        .expect("GPU F Pad operation")
-        .use_backend(Backend::Gpu)
-        .tobytes()
+fn assert_f_pad_f64_native_result(
+    expected_source: &Image,
+    actual_source: &Image,
+    filter: ResampleFilter,
+    code: i64,
+) -> bool {
+    let expected = crate::ops::imageops::pad_with_input(
+        expected_source,
+        5,
+        5,
+        Some(ResampleInput::Code(code)),
+        ImageOpsColor::Scalar(0),
+        crate::ops::imageops::CenteringInput::Default,
+    )
+    .expect("CPU F Pad operation")
+    .use_backend(Backend::Cpu)
+    .tobytes()
+    .expect("CPU F Pad");
+    let actual = match crate::ops::imageops::pad_with_input(
+        actual_source,
+        5,
+        5,
+        Some(ResampleInput::Code(code)),
+        ImageOpsColor::Scalar(0),
+        crate::ops::imageops::CenteringInput::Default,
+    )
+    .expect("GPU F Pad operation")
+    .use_backend(Backend::Gpu)
+    .tobytes()
+    {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
         {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU F Pad {filter:?} failed: {error}"),
-        };
-        assert_eq!(actual, expected, "native GPU F Pad {filter:?}");
-        let telemetry = Backend::take_pipeline_telemetry()
-            .expect("native GPU F Pad must publish a telemetry receipt");
-        assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(telemetry.1, Backend::Gpu);
-        assert_eq!(telemetry.6, Some(4));
-        assert_eq!(telemetry.7, None);
-    }
-    Backend::set_pipeline_telemetry_enabled(previous);
+            return false;
+        }
+        Err(error) => panic!("native GPU F Pad {filter:?} failed: {error}"),
+    };
+    assert_eq!(actual, expected, "native GPU F Pad {filter:?}");
+    let telemetry = Backend::take_pipeline_telemetry()
+        .expect("native GPU F Pad must publish a telemetry receipt");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(telemetry.1, Backend::Gpu);
+    assert_eq!(telemetry.6, Some(4));
+    assert_eq!(telemetry.7, None);
+    true
 }
 
 #[test]
