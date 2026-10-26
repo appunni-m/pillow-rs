@@ -63,49 +63,16 @@ pub(super) fn gpu_dimensions_require_cpu(
         | PipelineOp::Scale { filter, .. }
         | PipelineOp::Contain { filter, .. }
         | PipelineOp::Cover { filter, .. } = op
+            && gpu_resize_dimensions_require_cpu(
+                ops,
+                image,
+                logical_mode,
+                *filter,
+                (cur_w, cur_h),
+                next,
+            )
         {
-            // A direct F Box reduction to one column can use the compact
-            // repeated-coefficient vertical shader. Check that proof before
-            // asking for the full vertical table, which could otherwise
-            // allocate hundreds of MiB only to reject an over-limit row.
-            let compact_vertical = logical_mode == Some("F")
-                && gpu_f_resize_compact_box_vertical_only_is_exact(ops, image, logical_mode);
-            let compact_box = logical_mode == Some("F")
-                && ops.len() == 1
-                && matches!(ops.first(), Some(PipelineOp::Resize { filter, .. }) if matches!(filter, ResampleFilter::Box))
-                && gpu_f_resize_compact_box_is_exact(ops, image, logical_mode);
-            if compact_vertical {
-                let horizontal = gpu_resize_coefficients(next.0, cur_w, *filter);
-                if resize_coeff_word_count(&horizontal).is_err() {
-                    return true;
-                }
-            } else if compact_box {
-                // Marker 13 supplies the compact table for the over-limit
-                // axis.  The other axis may still change when its ordinary
-                // f64 table fits the binding and every row stays within the
-                // ordered reducer's tap cap; the compact proof has already
-                // validated both pass results and finite-only chaining.
-                let (kernel, support) = filter_from_resample(*filter);
-                for (source_size, output_size, compact) in [
-                    (cur_w, next.0, gpu_f_resize_compact_box_axis(cur_w, next.0)),
-                    (cur_h, next.1, gpu_f_resize_compact_box_axis(cur_h, next.1)),
-                ] {
-                    if compact {
-                        continue;
-                    }
-                    let coeffs = precompute_coeffs_f64(output_size, source_size, kernel, support);
-                    if !gpu_f_resize_f64_coefficients_fit_binding(&coeffs)
-                        || coeffs
-                            .count
-                            .iter()
-                            .any(|&count| count > GPU_F_RESIZE_ORDERED_MAX_TAPS)
-                    {
-                        return true;
-                    }
-                }
-            } else if !gpu_resize_coefficients_are_safe(*filter, (cur_w, cur_h), next) {
-                return true;
-            }
+            return true;
         }
         if let PipelineOp::Fit {
             bleed,
@@ -145,6 +112,65 @@ pub(super) fn gpu_dimensions_require_cpu(
         (cur_w, cur_h) = next;
     }
     false
+}
+
+fn gpu_resize_dimensions_require_cpu(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+    filter: ResampleFilter,
+    source: (u32, u32),
+    output: (u32, u32),
+) -> bool {
+    // A direct F Box reduction to one column can use the compact
+    // repeated-coefficient vertical shader. Check that proof before asking
+    // for the full vertical table, which could otherwise allocate hundreds
+    // of MiB only to reject an over-limit row.
+    let compact_vertical = logical_mode == Some("F")
+        && gpu_f_resize_compact_box_vertical_only_is_exact(ops, image, logical_mode);
+    let compact_box = logical_mode == Some("F")
+        && ops.len() == 1
+        && matches!(ops.first(), Some(PipelineOp::Resize { filter, .. }) if matches!(filter, ResampleFilter::Box))
+        && gpu_f_resize_compact_box_is_exact(ops, image, logical_mode);
+    if compact_vertical {
+        let horizontal = gpu_resize_coefficients(output.0, source.0, filter);
+        return resize_coeff_word_count(&horizontal).is_err();
+    }
+    if compact_box {
+        // Marker 13 supplies the compact table for the over-limit axis. The
+        // other axis may still change when its ordinary f64 table fits the
+        // binding and every row stays within the ordered reducer's tap cap;
+        // the compact proof has already validated both pass results and
+        // finite-only chaining.
+        let (kernel, support) = filter_from_resample(filter);
+        for (source_size, output_size, compact) in [
+            (
+                source.0,
+                output.0,
+                gpu_f_resize_compact_box_axis(source.0, output.0),
+            ),
+            (
+                source.1,
+                output.1,
+                gpu_f_resize_compact_box_axis(source.1, output.1),
+            ),
+        ] {
+            if compact {
+                continue;
+            }
+            let coeffs = precompute_coeffs_f64(output_size, source_size, kernel, support);
+            if !gpu_f_resize_f64_coefficients_fit_binding(&coeffs)
+                || coeffs
+                    .count
+                    .iter()
+                    .any(|&count| count > GPU_F_RESIZE_ORDERED_MAX_TAPS)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    !gpu_resize_coefficients_are_safe(filter, source, output)
 }
 
 /// Some shader math is layout-safe but still differs from Pillow for a
