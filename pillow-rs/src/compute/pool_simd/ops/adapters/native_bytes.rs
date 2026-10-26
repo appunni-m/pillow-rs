@@ -21,7 +21,7 @@ macro_rules! simd_rows_mut_serial {
             .for_each(|(_y_idx, _row)| {
                 let $row_start: usize = _y_idx * _stride;
                 let $row_end: usize = $row_start + _stride;
-                let $y: u32 = _y_idx as u32;
+                let $y: u32 = u32::try_from(_y_idx).expect("image row index fits in u32");
                 let $row: &mut [u8] = _row;
                 $body
             });
