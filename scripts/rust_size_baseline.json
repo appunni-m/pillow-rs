@@ -88,12 +88,6 @@
       "signature": "fn encode_graph( plan: &Plan<'_>, gpu: &'static GpuInner, encoder: &mut wgpu::CommandEncoder, ) -> Result<EncodedGraph, PilError> {"
     },
     {
-      "lines": 129,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/mod.rs",
-      "signature": "fn gpu_native_upload_paths_concurrent_reuse_and_resources(channels: usize) {"
-    },
-    {
       "lines": 109,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/palette_projective.rs",
@@ -267,11 +261,6 @@
     "pillow-rs/src/compute/pool_gpu/stream/encoding.rs": {
       "owner": "lazytrot",
       "reason": "Moved the existing graph encoder from stream.rs without increasing its over-limit functions; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/tests/mod.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/tests/palette_projective.rs": {

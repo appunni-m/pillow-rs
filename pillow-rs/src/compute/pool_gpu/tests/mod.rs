@@ -45,9 +45,122 @@ fn rgba_transpose_reference(
 }
 
 #[cfg(target_endian = "little")]
-fn gpu_native_upload_paths_concurrent_reuse_and_resources(channels: usize) {
+type NativeUploadCase = (DynamicImage, Vec<u8>);
+
+#[cfg(target_endian = "little")]
+struct RestoreTelemetry(bool);
+
+#[cfg(target_endian = "little")]
+impl Drop for RestoreTelemetry {
+    fn drop(&mut self) {
+        Backend::set_pipeline_telemetry_enabled(self.0);
+    }
+}
+
+#[cfg(target_endian = "little")]
+fn native_upload_test_cases(channels: usize, worker: usize) -> Vec<NativeUploadCase> {
+    (0usize..6)
+        .map(|iteration| {
+            let (width, height) = [(129usize, 132usize), (132, 129), (131, 129)][iteration % 3];
+            let bytes: Vec<u8> = (0..width * height * channels)
+                .map(|index| {
+                    index
+                        .wrapping_mul(113)
+                        .wrapping_add(index / 7)
+                        .wrapping_add(worker * 61)
+                        .wrapping_add(iteration * 43) as u8
+                })
+                .collect();
+            let mut expected = vec![0; bytes.len()];
+            for y in 0..height {
+                for x in 0..width {
+                    let input_start = (y * width + x) * channels;
+                    let output_start = (x * height + y) * channels;
+                    expected[output_start..output_start + channels]
+                        .copy_from_slice(&bytes[input_start..input_start + channels]);
+                }
+            }
+            (
+                if channels == 3 {
+                    DynamicImage::ImageRgb8(
+                        RgbImage::from_raw(width as u32, height as u32, bytes).unwrap(),
+                    )
+                } else {
+                    DynamicImage::ImageRgba8(
+                        RgbaImage::from_raw(width as u32, height as u32, bytes).unwrap(),
+                    )
+                },
+                expected,
+            )
+        })
+        .collect()
+}
+
+#[cfg(target_endian = "little")]
+fn execute_native_upload_worker(
+    gpu: &'static super::GpuInner,
+    mapped_input: bool,
+    cases: Vec<NativeUploadCase>,
+    start: &std::sync::Barrier,
+) -> Vec<NativeUploadCase> {
     use crate::pipeline::TransposeMethod;
 
+    let _telemetry = RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
+    let mut buffers = super::BufferPool::new(&gpu.device, 132 * 132, true);
+    let mut retained = Vec::new();
+    start.wait();
+    for (input, expected) in cases {
+        let native_bytes = input.as_bytes().len();
+        let transfer_bytes = (native_bytes as u64 + 3) & !3;
+        let _ = crate::compute::take_pipeline_dispatch_count();
+        let _ = crate::compute::take_pipeline_resource_telemetry();
+        let _ = Backend::take_pipeline_allocation_telemetry();
+        // This explicit GPU helper has no CPU fallback branch.
+        let op = PipelineOp::Transpose {
+            method: TransposeMethod::Transpose,
+        };
+        let actual = match &input {
+            DynamicImage::ImageRgb8(rgb) => {
+                let layout = super::packed_rgb_transpose_layout(
+                    rgb.width(),
+                    rgb.height(),
+                    gpu.device.limits().max_compute_workgroups_per_dimension,
+                )
+                .unwrap();
+                gpu.execute_packed_rgb_transpose_with_upload(
+                    &op,
+                    rgb,
+                    &layout,
+                    &mut buffers,
+                    mapped_input,
+                )
+                .unwrap()
+            }
+            DynamicImage::ImageRgba8(rgba) => gpu
+                .execute_rgba_transpose_with_upload(&op, rgba, &mut buffers, mapped_input)
+                .unwrap(),
+            _ => unreachable!(),
+        };
+        assert_eq!(actual.dimensions(), (input.height(), input.width()));
+        assert_eq!(actual.color(), input.color());
+        assert_eq!(actual.as_bytes(), expected);
+        assert_eq!(crate::compute::take_pipeline_dispatch_count(), Some(1));
+        let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
+        assert_eq!(resources.upload_bytes, transfer_bytes);
+        assert_eq!(resources.readback_bytes, transfer_bytes);
+        assert_eq!(resources.mode_conversion_count, 0);
+        assert_eq!(resources.full_frame_copy_count, u64::from(!mapped_input));
+        assert_eq!(resources.retained_cache_bytes, buffers.retained_bytes());
+        let allocations = Backend::take_pipeline_allocation_telemetry();
+        assert_eq!(allocations.allocation_count, 1);
+        assert_eq!(allocations.allocated_bytes, native_bytes as u64);
+        retained.push((actual, expected));
+    }
+    retained
+}
+
+#[cfg(target_endian = "little")]
+fn gpu_native_upload_paths_concurrent_reuse_and_resources(channels: usize) {
     let Some(gpu) = primary_readback_test_gpu() else {
         return;
     };
@@ -55,52 +168,8 @@ fn gpu_native_upload_paths_concurrent_reuse_and_resources(channels: usize) {
     let jobs: Vec<_> = [false, true]
         .into_iter()
         .enumerate()
-        .map(|(worker, mapped)| {
-            let cases: Vec<_> = (0usize..6)
-                .map(|iteration| {
-                    let (width, height) =
-                        [(129usize, 132usize), (132, 129), (131, 129)][iteration % 3];
-                    let bytes: Vec<u8> = (0..width * height * channels)
-                        .map(|index| {
-                            index
-                                .wrapping_mul(113)
-                                .wrapping_add(index / 7)
-                                .wrapping_add(worker * 61)
-                                .wrapping_add(iteration * 43) as u8
-                        })
-                        .collect();
-                    let mut expected = vec![0; bytes.len()];
-                    for y in 0..height {
-                        for x in 0..width {
-                            let input_start = (y * width + x) * channels;
-                            let output_start = (x * height + y) * channels;
-                            expected[output_start..output_start + channels]
-                                .copy_from_slice(&bytes[input_start..input_start + channels]);
-                        }
-                    }
-                    (
-                        if channels == 3 {
-                            DynamicImage::ImageRgb8(
-                                RgbImage::from_raw(width as u32, height as u32, bytes).unwrap(),
-                            )
-                        } else {
-                            DynamicImage::ImageRgba8(
-                                RgbaImage::from_raw(width as u32, height as u32, bytes).unwrap(),
-                            )
-                        },
-                        expected,
-                    )
-                })
-                .collect();
-            (mapped, cases)
-        })
+        .map(|(worker, mapped)| (mapped, native_upload_test_cases(channels, worker)))
         .collect();
-    struct RestoreTelemetry(bool);
-    impl Drop for RestoreTelemetry {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.0);
-        }
-    }
     // Telemetry opt-in is thread-local, just like its result counters.
     let _telemetry = RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
     let start = std::sync::Barrier::new(2);
@@ -109,66 +178,7 @@ fn gpu_native_upload_paths_concurrent_reuse_and_resources(channels: usize) {
             .into_iter()
             .map(|(mapped_input, cases)| {
                 let start = &start;
-                scope.spawn(move || {
-                    let _telemetry =
-                        RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
-                    let mut buffers = super::BufferPool::new(&gpu.device, 132 * 132, true);
-                    let mut retained = Vec::new();
-                    start.wait();
-                    for (input, expected) in cases {
-                        let native_bytes = input.as_bytes().len();
-                        let transfer_bytes = (native_bytes as u64 + 3) & !3;
-                        let _ = crate::compute::take_pipeline_dispatch_count();
-                        let _ = crate::compute::take_pipeline_resource_telemetry();
-                        let _ = Backend::take_pipeline_allocation_telemetry();
-                        // This explicit GPU helper has no CPU fallback branch.
-                        let op = PipelineOp::Transpose {
-                            method: TransposeMethod::Transpose,
-                        };
-                        let actual = match &input {
-                            DynamicImage::ImageRgb8(rgb) => {
-                                let layout = super::packed_rgb_transpose_layout(
-                                    rgb.width(),
-                                    rgb.height(),
-                                    gpu.device.limits().max_compute_workgroups_per_dimension,
-                                )
-                                .unwrap();
-                                gpu.execute_packed_rgb_transpose_with_upload(
-                                    &op,
-                                    rgb,
-                                    &layout,
-                                    &mut buffers,
-                                    mapped_input,
-                                )
-                                .unwrap()
-                            }
-                            DynamicImage::ImageRgba8(rgba) => gpu
-                                .execute_rgba_transpose_with_upload(
-                                    &op,
-                                    rgba,
-                                    &mut buffers,
-                                    mapped_input,
-                                )
-                                .unwrap(),
-                            _ => unreachable!(),
-                        };
-                        assert_eq!(actual.dimensions(), (input.height(), input.width()));
-                        assert_eq!(actual.color(), input.color());
-                        assert_eq!(actual.as_bytes(), expected);
-                        assert_eq!(crate::compute::take_pipeline_dispatch_count(), Some(1));
-                        let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
-                        assert_eq!(resources.upload_bytes, transfer_bytes);
-                        assert_eq!(resources.readback_bytes, transfer_bytes);
-                        assert_eq!(resources.mode_conversion_count, 0);
-                        assert_eq!(resources.full_frame_copy_count, u64::from(!mapped_input));
-                        assert_eq!(resources.retained_cache_bytes, buffers.retained_bytes());
-                        let allocations = Backend::take_pipeline_allocation_telemetry();
-                        assert_eq!(allocations.allocation_count, 1);
-                        assert_eq!(allocations.allocated_bytes, native_bytes as u64);
-                        retained.push((actual, expected));
-                    }
-                    retained
-                })
+                scope.spawn(move || execute_native_upload_worker(gpu, mapped_input, cases, start))
             })
             .collect();
         handles
