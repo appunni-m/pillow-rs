@@ -109,7 +109,8 @@ pub fn op_put_data(
     data: &[u8],
     mode: PixelMode,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = (img.width() as usize, img.height() as usize);
+    let (width, height) = (img.width(), img.height());
+    let (w, h) = (width as usize, height as usize);
     let expected = w * h * mode.channels();
     // PIL: putdata accepts data shorter than the image — only the first
     // data.len() bytes are replaced; remaining pixels stay unchanged.
@@ -119,7 +120,7 @@ pub fn op_put_data(
         // already has the requested native layout, construct the result from
         // the payload directly instead of converting/cloning the old frame
         // and copying the same bytes over it.
-        let dimensions = (w as u32, h as u32);
+        let dimensions = (width, height);
         match (mode, img) {
             (PixelMode::L, DynamicImage::ImageLuma8(_)) => {
                 if let Some(output) =

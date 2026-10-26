@@ -43,12 +43,19 @@ fn shape_native_extract_channels(shape: SimdImageShape, mode: Option<&str>) -> O
 
 pub(super) fn supports_for_image(img: &DynamicImage, index: u8, mode: Option<&str>) -> bool {
     native_extract_layout(img, mode).is_some_and(|channels| {
-        usize::from(index) < channels
+        let Ok(channels) = u32::try_from(channels) else {
+            return false;
+        };
+        u32::from(index) < channels
             && img
                 .width()
                 .checked_mul(img.height())
-                .and_then(|pixels| pixels.checked_mul(channels as u32))
-                .is_some_and(|bytes| img.as_bytes().len() == bytes as usize && bytes != 0)
+                .and_then(|pixels| pixels.checked_mul(channels))
+                .is_some_and(|bytes| {
+                    bytes != 0
+                        && usize::try_from(bytes)
+                            .is_ok_and(|byte_len| img.as_bytes().len() == byte_len)
+                })
     })
 }
 
