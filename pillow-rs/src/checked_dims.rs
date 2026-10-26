@@ -228,7 +228,9 @@ impl CheckedDims {
     /// Returns the tightly packed row stride in bytes.
     #[inline]
     pub fn row_stride(&self) -> usize {
-        self.width as usize * self.channels as usize
+        (self.width as usize)
+            .checked_mul(usize::from(self.channels))
+            .expect("validated image dimensions keep row stride representable")
     }
 
     // ── Allocation helpers (AS PER DESIGN: use these, never vec![0u8; w*h*ch]) ──
