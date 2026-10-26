@@ -398,54 +398,7 @@ fn typed_scalar_right_angle_rotate_uses_native_transpose() {
     // path even when a non-nearest filter token was supplied.  Exercise
     // every typed storage representation: I/F words must survive as-is,
     // and I;16 must preserve its declared byte order in the low word.
-    let cases = [
-        (
-            "I",
-            (3, 2),
-            vec![
-                0i32.to_le_bytes(),
-                (-17i32).to_le_bytes(),
-                65_535i32.to_le_bytes(),
-                i32::MIN.to_le_bytes(),
-                42i32.to_le_bytes(),
-                i32::MAX.to_le_bytes(),
-            ]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>(),
-        ),
-        (
-            "F",
-            (3, 2),
-            vec![
-                0.25f32.to_le_bytes(),
-                (-17.5f32).to_le_bytes(),
-                f32::from_bits(0x7f7f_ffff).to_le_bytes(),
-                (-0.0f32).to_le_bytes(),
-                42.0f32.to_le_bytes(),
-                f32::from_bits(0x8000_0001).to_le_bytes(),
-            ]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>(),
-        ),
-        (
-            "I;16",
-            (3, 2),
-            [1u16, 258, 32_767, 65_535, 42, 54_321]
-                .into_iter()
-                .flat_map(u16::to_le_bytes)
-                .collect::<Vec<_>>(),
-        ),
-        (
-            "I;16B",
-            (3, 2),
-            [1u16, 258, 32_767, 65_535, 42, 54_321]
-                .into_iter()
-                .flat_map(u16::to_be_bytes)
-                .collect::<Vec<_>>(),
-        ),
-    ];
+    let cases = typed_scalar_right_angle_rotate_cases();
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (mode, size, raw) in cases {
         let source = Image::frombytes(mode, size, &raw)
@@ -489,6 +442,71 @@ fn typed_scalar_right_angle_rotate_uses_native_transpose() {
         assert_eq!(telemetry.7, None, "{mode} fallback reason");
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+type TypedScalarRotateCase = (&'static str, (u32, u32), Vec<u8>);
+
+fn typed_scalar_right_angle_rotate_cases() -> Vec<TypedScalarRotateCase> {
+    typed_scalar_word_rotate_cases()
+        .into_iter()
+        .chain(typed_scalar_u16_rotate_cases())
+        .collect()
+}
+
+fn typed_scalar_word_rotate_cases() -> [TypedScalarRotateCase; 2] {
+    [
+        (
+            "I",
+            (3, 2),
+            vec![
+                0i32.to_le_bytes(),
+                (-17i32).to_le_bytes(),
+                65_535i32.to_le_bytes(),
+                i32::MIN.to_le_bytes(),
+                42i32.to_le_bytes(),
+                i32::MAX.to_le_bytes(),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>(),
+        ),
+        (
+            "F",
+            (3, 2),
+            vec![
+                0.25f32.to_le_bytes(),
+                (-17.5f32).to_le_bytes(),
+                f32::from_bits(0x7f7f_ffff).to_le_bytes(),
+                (-0.0f32).to_le_bytes(),
+                42.0f32.to_le_bytes(),
+                f32::from_bits(0x8000_0001).to_le_bytes(),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>(),
+        ),
+    ]
+}
+
+fn typed_scalar_u16_rotate_cases() -> [TypedScalarRotateCase; 2] {
+    [
+        (
+            "I;16",
+            (3, 2),
+            [1u16, 258, 32_767, 65_535, 42, 54_321]
+                .into_iter()
+                .flat_map(u16::to_le_bytes)
+                .collect::<Vec<_>>(),
+        ),
+        (
+            "I;16B",
+            (3, 2),
+            [1u16, 258, 32_767, 65_535, 42, 54_321]
+                .into_iter()
+                .flat_map(u16::to_be_bytes)
+                .collect::<Vec<_>>(),
+        ),
+    ]
 }
 
 #[test]
