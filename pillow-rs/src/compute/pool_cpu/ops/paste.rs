@@ -407,6 +407,34 @@ struct PasteRegion {
     copy_height: u32,
 }
 
+#[inline(always)]
+fn paste_region(
+    x: i64,
+    y: i64,
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+) -> PasteRegion {
+    let (src_w, src_h) = source_size;
+    let (dest_w, dest_h) = destination_size;
+    let region = PasteRegion {
+        source_left: x.saturating_neg().max(0).min(i64::from(src_w)) as u32,
+        source_top: y.saturating_neg().max(0).min(i64::from(src_h)) as u32,
+        dest_left: x.max(0).min(i64::from(dest_w)) as u32,
+        dest_top: y.max(0).min(i64::from(dest_h)) as u32,
+        copy_width: 0,
+        copy_height: 0,
+    };
+    PasteRegion {
+        copy_width: src_w
+            .saturating_sub(region.source_left)
+            .min(dest_w.saturating_sub(region.dest_left)),
+        copy_height: src_h
+            .saturating_sub(region.source_top)
+            .min(dest_h.saturating_sub(region.dest_top)),
+        ..region
+    }
+}
+
 enum Luma16PasteMask {
     Native(PasteMaskPixels),
     Luma(crate::raster::GrayImage),
@@ -679,23 +707,7 @@ pub fn op_paste(
     };
     let (src_w, src_h) = (src_img.width(), src_img.height());
     let (dest_w, dest_h) = img.dimensions();
-    let region = PasteRegion {
-        source_left: x.saturating_neg().max(0).min(i64::from(src_w)) as u32,
-        source_top: y.saturating_neg().max(0).min(i64::from(src_h)) as u32,
-        dest_left: x.max(0).min(i64::from(dest_w)) as u32,
-        dest_top: y.max(0).min(i64::from(dest_h)) as u32,
-        copy_width: 0,
-        copy_height: 0,
-    };
-    let region = PasteRegion {
-        copy_width: src_w
-            .saturating_sub(region.source_left)
-            .min(dest_w.saturating_sub(region.dest_left)),
-        copy_height: src_h
-            .saturating_sub(region.source_top)
-            .min(dest_h.saturating_sub(region.dest_top)),
-        ..region
-    };
+    let region = paste_region(x, y, (src_w, src_h), (dest_w, dest_h));
     if region.copy_width == 0 || region.copy_height == 0 {
         return Ok(img.clone());
     }
