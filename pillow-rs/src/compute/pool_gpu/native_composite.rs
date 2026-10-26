@@ -38,6 +38,23 @@ fn native_composite_transfer_size(length: usize) -> Result<u64, PilError> {
         & !3)
 }
 
+#[cfg(target_endian = "little")]
+#[inline(always)]
+fn native_composite_parameters(
+    input: &NativeCompositeInput<'_>,
+    plan: &NativeCompositePlan,
+) -> Result<[u32; 8], PilError> {
+    let mut parameters = [0u32; 8];
+    parameters[0] = u32::from(input.channels);
+    parameters[1] = u32::from(input.mask_channels);
+    parameters[2] = u32::from(plan.mask_channel);
+    parameters[3] = u32::try_from(plan.output_length)
+        .map_err(|_| PilError::ValueError("GPU native composite is too large".into()))?;
+    parameters[4] = plan.word_count;
+    parameters[5] = plan.groups_x;
+    Ok(parameters)
+}
+
 impl GpuInner {
     #[cfg(target_endian = "little")]
     #[inline(always)]
@@ -133,14 +150,7 @@ impl GpuInner {
             self.device.limits().min_uniform_buffer_offset_alignment as usize,
         );
 
-        let mut parameters = [0u32; 8];
-        parameters[0] = u32::from(input.channels);
-        parameters[1] = u32::from(input.mask_channels);
-        parameters[2] = u32::from(plan.mask_channel);
-        parameters[3] = u32::try_from(plan.output_length)
-            .map_err(|_| PilError::ValueError("GPU native composite is too large".into()))?;
-        parameters[4] = plan.word_count;
-        parameters[5] = plan.groups_x;
+        let parameters = native_composite_parameters(input, plan)?;
         let write_bytes = |buffer: &wgpu::Buffer, bytes: &[u8], size: u64| {
             let size = NonZeroU64::new(size).ok_or_else(|| {
                 PilError::InternalError("GPU native composite upload is empty".into())
