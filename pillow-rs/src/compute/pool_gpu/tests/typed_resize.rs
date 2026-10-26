@@ -225,45 +225,58 @@ fn luma16_filtered_resize_native_gpu_matches_cpu() {
             matches!(mode, "I;16B" | "I;16N")
         );
         for &((width, height), filter) in &cases {
-            let filter_name = ResampleInput::Name(format!("{filter:?}").to_uppercase());
-            let expected = source
-                .resize(
-                    (width as i64, height as i64),
-                    Some(filter_name.clone()),
-                    None,
-                )
-                .expect("CPU I;16 resize")
-                .use_backend(Backend::Cpu)
-                .tobytes()
-                .expect("CPU I;16 bytes");
-            let actual = match source
-                .resize((width as i64, height as i64), Some(filter_name), None)
-                .expect("GPU I;16 resize")
-                .use_backend(Backend::Gpu)
-                .tobytes()
-            {
-                Ok(actual) => actual,
-                Err(error)
-                    if error.to_string().contains("GPU adapter not available")
-                        || error
-                            .to_string()
-                            .contains("GPU device initialization failed") =>
-                {
-                    Backend::set_pipeline_telemetry_enabled(previous);
-                    return;
-                }
-                Err(error) => panic!("native GPU {mode} resize failed: {error}"),
-            };
-            assert_eq!(actual, expected, "native GPU I;16 {mode} {filter:?} resize");
-            let telemetry = Backend::take_pipeline_telemetry()
-                .expect("native GPU I;16 resize must publish a receipt");
-            assert_eq!(telemetry.0, Some(Backend::Gpu));
-            assert_eq!(telemetry.1, Backend::Gpu);
-            assert_eq!(telemetry.6, Some(2));
-            assert_eq!(telemetry.7, None);
+            if !assert_native_luma16_filter_case(&source, mode, width, height, filter) {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
         }
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_native_luma16_filter_case(
+    source: &Image,
+    mode: &str,
+    width: u32,
+    height: u32,
+    filter: ResampleFilter,
+) -> bool {
+    let filter_name = ResampleInput::Name(format!("{filter:?}").to_uppercase());
+    let expected = source
+        .resize(
+            (width as i64, height as i64),
+            Some(filter_name.clone()),
+            None,
+        )
+        .expect("CPU I;16 resize")
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU I;16 bytes");
+    let actual = match source
+        .resize((width as i64, height as i64), Some(filter_name), None)
+        .expect("GPU I;16 resize")
+        .use_backend(Backend::Gpu)
+        .tobytes()
+    {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            return false;
+        }
+        Err(error) => panic!("native GPU {mode} resize failed: {error}"),
+    };
+    assert_eq!(actual, expected, "native GPU I;16 {mode} {filter:?} resize");
+    let telemetry =
+        Backend::take_pipeline_telemetry().expect("native GPU I;16 resize must publish a receipt");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(telemetry.1, Backend::Gpu);
+    assert_eq!(telemetry.6, Some(2));
+    assert_eq!(telemetry.7, None);
+    true
 }
 
 #[test]
