@@ -308,12 +308,6 @@
       "occurrence": 1,
       "path": "pillow-rs/src/image/projection.rs",
       "signature": "fn try_getprojection_putpixel_pipeline(&self) -> Result<Option<ProjectionAxes>, PilError> {"
-    },
-    {
-      "lines": 238,
-      "occurrence": 1,
-      "path": "pillow-rs/src/ops/pil_resize/boxed.rs",
-      "signature": "fn pil_resize_boxed_with_hints( img: &DynamicImage, dst_w: u32, dst_h: u32, box_left: f64, box_top: f64, box_right: f64, box_bottom: f64, filter: ResampleFilter, explicit_mode: Option<&str>, parallel_pixel_threshold: usize, sparse_rgb_nonzero_rows: Option<&[bool]>, ) -> DynamicImage {"
     }
   ],
   "legacy_owners": {
@@ -491,11 +485,6 @@
       "owner": "lazytrot",
       "reason": "Moved the existing long getprojection methods from image.rs; continue reducing under pillow-rs#knsf.",
       "reduction_task": "pillow-rs#knsf"
-    },
-    "pillow-rs/src/ops/pil_resize/boxed.rs": {
-      "owner": "lazytrot",
-      "reason": "Resize routines still exceed the 100-line function review ceiling after moving into focused family modules; their bodies stay intact for this behavior-preserving split, with further reductions reserved for a scoped follow-up under pillow-rs#nsax.",
-      "reduction_task": "pillow-rs#nsax"
     }
   }
 }

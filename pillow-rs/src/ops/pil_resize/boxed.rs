@@ -536,7 +536,8 @@ pub(crate) fn pil_resize_boxed_with_sparse_rgb_rows(
     )
 }
 
-fn pil_resize_boxed_with_hints(
+#[inline(always)]
+fn pil_resize_boxed_early_paths(
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
@@ -546,10 +547,7 @@ fn pil_resize_boxed_with_hints(
     box_bottom: f64,
     filter: ResampleFilter,
     explicit_mode: Option<&str>,
-    parallel_pixel_threshold: usize,
-    sparse_rgb_nonzero_rows: Option<&[bool]>,
-) -> DynamicImage {
-    let orig_img = img;
+) -> (Option<DynamicImage>, bool) {
     // Pillow narrows the source box to float32 before `_resize` sees it. Keep
     // those values for the crop and pass-elision decisions below so integer
     // boundaries do not drift in Rust's f64 control plane.
@@ -561,18 +559,6 @@ fn pil_resize_boxed_with_hints(
         && box_top_f32.is_finite()
         && box_right_f32.is_finite()
         && box_bottom_f32.is_finite();
-    if finite_box
-        && dst_w == img.width()
-        && dst_h == img.height()
-        && box_left_f32 == 0.0
-        && box_top_f32 == 0.0
-        && box_right_f32 == img.width() as f32
-        && box_bottom_f32 == img.height() as f32
-    {
-        // Image.resize returns self.copy() before mode conversion for a
-        // complete source at its original size, including F and alpha modes.
-        return img.clone();
-    }
     let is_cmyk = explicit_mode == Some("CMYK");
     let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
     let needs_alpha = !matches!(filter, ResampleFilter::Nearest)
@@ -583,6 +569,18 @@ fn pil_resize_boxed_with_hints(
             img.color(),
             crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
         );
+    if finite_box
+        && dst_w == img.width()
+        && dst_h == img.height()
+        && box_left_f32 == 0.0
+        && box_top_f32 == 0.0
+        && box_right_f32 == img.width() as f32
+        && box_bottom_f32 == img.height() as f32
+    {
+        // Image.resize returns self.copy() before mode conversion for a
+        // complete source at its original size, including F and alpha modes.
+        return (Some(img.clone()), needs_alpha);
+    }
 
     // `_imaging.c::_resize` crops an integer-aligned box whose dimensions
     // already equal the target before selecting the resampler. This ordering
@@ -596,52 +594,52 @@ fn pil_resize_boxed_with_hints(
     if integer_crop && !needs_alpha {
         let left = box_left_f32 as u32;
         let top = box_top_f32 as u32;
-        return img.crop_imm(left, top, dst_w, dst_h);
+        return (Some(img.crop_imm(left, top, dst_w, dst_h)), needs_alpha);
     }
 
     if let DynamicImage::ImageLuma16(luma) = img {
         // A two-byte typed sample cannot enter the generic four-byte pixel
         // transport. Reuse the native u16 passes with boxed coefficients.
-        return pil_resize_luma16(
-            luma,
-            dst_w,
-            dst_h,
-            filter,
-            explicit_mode,
-            Some((box_left, box_top, box_right, box_bottom)),
+        return (
+            Some(pil_resize_luma16(
+                luma,
+                dst_w,
+                dst_h,
+                filter,
+                explicit_mode,
+                Some((box_left, box_top, box_right, box_bottom)),
+            )),
+            needs_alpha,
         );
     }
 
     if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
-        return pil_resize_f_boxed(
-            img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter,
+        return (
+            Some(pil_resize_f_boxed(
+                img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter,
+            )),
+            needs_alpha,
         );
     }
     if let Some(byte_mode) = typed_color_resize_bytes(img) {
-        return pil_resize_boxed(
-            &byte_mode, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter, None,
+        return (
+            Some(pil_resize_boxed(
+                &byte_mode, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter, None,
+            )),
+            needs_alpha,
         );
     }
-    let (kernel_fn, support) = filter_from_resample(filter);
-    let (sw, sh) = (img.width(), img.height());
+    (None, needs_alpha)
+}
 
-    let channels = match img.color() {
-        crate::raster::ColorType::L8 => 1usize,
-        crate::raster::ColorType::La8 => 2usize,
-        crate::raster::ColorType::Rgb8 => 3usize,
-        _ => 4usize,
-    };
-    let sparse_rgb_nonzero_rows = sparse_rgb_nonzero_rows.filter(|rows| {
-        matches!(img, DynamicImage::ImageRgb8(_))
-            && matches!(explicit_mode, None | Some("RGB"))
-            && !needs_alpha
-            && rows.len() == sh as usize
-    });
-
-    // A bounded all-zero byte source remains zero through every normalized
-    // Pillow resampling filter, including alpha premultiplication. Boxed
-    // resizes otherwise rebuild two coefficient tables and walk both passes
-    // even though every tap and destination sample is zero.
+#[inline(always)]
+fn pil_resize_boxed_zero_fast_path(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    channels: usize,
+) -> Option<DynamicImage> {
+    let (source_width, source_height) = (img.width(), img.height());
     let native_byte_image = matches!(
         img,
         DynamicImage::ImageLuma8(_)
@@ -649,7 +647,7 @@ fn pil_resize_boxed_with_hints(
             | DynamicImage::ImageRgb8(_)
             | DynamicImage::ImageRgba8(_)
     );
-    let source_pixels = (sw as usize).checked_mul(sh as usize);
+    let source_pixels = (source_width as usize).checked_mul(source_height as usize);
     if native_byte_image
         && source_pixels.is_some_and(|pixels| {
             pixels != 0
@@ -660,92 +658,87 @@ fn pil_resize_boxed_with_hints(
             .checked_mul(dst_h as usize)
             .and_then(|pixels| pixels.checked_mul(channels))
     {
-        return pil_preserve_mode(
-            orig_img,
+        return Some(pil_preserve_mode(
+            img,
             raw_to_dynamic_owned(vec![0; output_len], dst_w, dst_h, channels),
-        );
+        ));
     }
+    None
+}
 
-    // Pillow's boxed nearest path is an affine sample, not a one-tap box
-    // convolution. The convolution-style coefficient builder can include
-    // adjacent samples at a boundary and produce a value that Pillow never
-    // emits (most visibly for indexed ImageOps.fit, but the same source
-    // selection applies to every byte layout). Use the exact
-    // ``int(box_start + (x + 0.5) * scale)`` mapping from ImagingTransform.
-    if matches!(filter, ResampleFilter::Nearest) {
-        if sw == 0 || sh == 0 {
-            return pil_preserve_mode(
-                orig_img,
-                raw_to_dynamic_owned(
-                    vec![0; (dst_w as usize) * (dst_h as usize) * channels],
-                    dst_w,
-                    dst_h,
-                    channels,
-                ),
-            );
-        }
-        // The native transform path receives the same float box record as the
-        // resampler; keep its scale calculation at that boundary too.
-        let box_left_f32 = box_left as f32;
-        let box_top_f32 = box_top as f32;
-        let box_right_f32 = box_right as f32;
-        let box_bottom_f32 = box_bottom as f32;
-        let box_left = box_left_f32 as f64;
-        let box_top = box_top_f32 as f64;
-        let scale_x = ((box_right_f32 - box_left_f32) as f64) / dst_w as f64;
-        let scale_y = ((box_bottom_f32 - box_top_f32) as f64) / dst_h as f64;
-        let source = img.as_bytes();
-        let mut out_bytes = Vec::with_capacity((dst_w * dst_h) as usize * channels);
-        // `_resize` takes this path through ImagingScaleAffine. Its source
-        // coordinate is initialized once and advanced with `xo += a[0]` /
-        // `yo += a[4]` for every output pixel/row. Preserve that cumulative
-        // floating-point rounding instead of recomputing `(index + 0.5) *
-        // scale`; the difference is observable exactly at upsample boundaries
-        // such as a 2x1 box expanded to seven pixels.
-        let mut source_y = box_top + scale_y * 0.5;
-        for _ in 0..dst_h {
-            let sy = source_y.floor().clamp(0.0, (sh - 1) as f64) as usize;
-            let mut source_x = box_left + scale_x * 0.5;
-            for _ in 0..dst_w {
-                let sx = source_x.floor().clamp(0.0, (sw - 1) as f64) as usize;
-                let start = (sy * sw as usize + sx) * channels;
-                out_bytes.extend_from_slice(&source[start..start + channels]);
-                source_x += scale_x;
-            }
-            source_y += scale_y;
-        }
+#[inline(always)]
+fn pil_resize_boxed_nearest(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    channels: usize,
+) -> DynamicImage {
+    let (sw, sh) = (img.width(), img.height());
+    if sw == 0 || sh == 0 {
         return pil_preserve_mode(
-            orig_img,
-            raw_to_dynamic_owned(out_bytes, dst_w, dst_h, channels),
+            img,
+            raw_to_dynamic_owned(
+                vec![0; (dst_w as usize) * (dst_h as usize) * channels],
+                dst_w,
+                dst_h,
+                channels,
+            ),
         );
     }
+    // The native transform path receives the same float box record as the
+    // resampler; keep its scale calculation at that boundary too.
+    let box_left_f32 = box_left as f32;
+    let box_top_f32 = box_top as f32;
+    let box_right_f32 = box_right as f32;
+    let box_bottom_f32 = box_bottom as f32;
+    let box_left = box_left_f32 as f64;
+    let box_top = box_top_f32 as f64;
+    let scale_x = ((box_right_f32 - box_left_f32) as f64) / dst_w as f64;
+    let scale_y = ((box_bottom_f32 - box_top_f32) as f64) / dst_h as f64;
+    let source = img.as_bytes();
+    let mut out_bytes = Vec::with_capacity((dst_w * dst_h) as usize * channels);
+    // `_resize` takes this path through ImagingScaleAffine. Its source
+    // coordinate is initialized once and advanced with `xo += a[0]` /
+    // `yo += a[4]` for every output pixel/row. Preserve that cumulative
+    // floating-point rounding instead of recomputing `(index + 0.5) *
+    // scale`; the difference is observable exactly at upsample boundaries
+    // such as a 2x1 box expanded to seven pixels.
+    let mut source_y = box_top + scale_y * 0.5;
+    for _ in 0..dst_h {
+        let sy = source_y.floor().clamp(0.0, (sh - 1) as f64) as usize;
+        let mut source_x = box_left + scale_x * 0.5;
+        for _ in 0..dst_w {
+            let sx = source_x.floor().clamp(0.0, (sw - 1) as f64) as usize;
+            let start = (sy * sw as usize + sx) * channels;
+            out_bytes.extend_from_slice(&source[start..start + channels]);
+            source_x += scale_x;
+        }
+        source_y += scale_y;
+    }
+    pil_preserve_mode(img, raw_to_dynamic_owned(out_bytes, dst_w, dst_h, channels))
+}
 
-    // Use box-parameter coefficients for both passes
-    let h_coeffs = precompute_coeffs_boxed(dst_w, sw, box_left, box_right, kernel_fn, support);
-    let mut v_coeffs = precompute_coeffs_boxed(dst_h, sh, box_top, box_bottom, kernel_fn, support);
-
-    // Resample.c skips a pass when that axis already has the requested size
-    // and covers the complete source extent. A boxed one-axis crop therefore
-    // must resample only the changed axis; the unchanged axis retains source
-    // samples (or premultiplied samples for LA/RGBA).
-    let need_horizontal = dst_w != sw || box_left_f32 != 0.0 || box_right_f32 != dst_w as f32;
-    let need_vertical = dst_h != sh || box_top_f32 != 0.0 || box_bottom_f32 != dst_h as f32;
-
-    // The horizontal pass is independent per source row. Avoid processing
-    // vertical rows that the rebased output table cannot read, which is a
-    // substantial win when a small fractional box is enlarged.
-    let (first_source_row, intermediate_rows) = if need_vertical {
-        compact_resize_coeffs_to_source_span(&mut v_coeffs, sh).unwrap_or((0, sh))
-    } else {
-        (0, sh)
-    };
-
-    // Allocate only rows referenced by the vertical table.
-    let mut intermediate = vec![0u8; (intermediate_rows * dst_w) as usize * channels];
-
-    // Horizontal pass: each source row writes one independent intermediate row.
+#[inline(always)]
+fn pil_resize_boxed_horizontal_pass(
+    img: &DynamicImage,
+    source_width: u32,
+    first_source_row: u32,
+    intermediate_rows: u32,
+    channels: usize,
+    h_coeffs: &FilterCoeffs,
+    dst_w: u32,
+    intermediate: &mut [u8],
+    needs_alpha: bool,
+    parallel_pixel_threshold: usize,
+    sparse_rgb_nonzero_rows: Option<&[bool]>,
+    need_horizontal: bool,
+) {
     if !need_horizontal {
-        let source_stride = sw as usize * channels;
+        let source_stride = source_width as usize * channels;
         let source_start = first_source_row as usize * source_stride;
         let source_end = source_start + intermediate.len();
         let source_rows = &img.as_bytes()[source_start..source_end];
@@ -769,23 +762,35 @@ fn pil_resize_boxed_with_hints(
     } else {
         horizontal_pass_boxed_rows(
             img.as_bytes(),
-            sw,
+            source_width,
             first_source_row,
             intermediate_rows,
             channels,
-            &h_coeffs,
+            h_coeffs,
             dst_w,
-            &mut intermediate,
+            intermediate,
             needs_alpha,
             parallel_pixel_threshold,
             sparse_rgb_nonzero_rows,
         );
     }
+}
 
-    // Allocate output image
-    let mut out_bytes = vec![0u8; (dst_w * dst_h) as usize * channels];
-
-    // Vertical output rows are independent after the horizontal pass.
+#[inline(always)]
+fn pil_resize_boxed_vertical_pass(
+    intermediate: &[u8],
+    first_source_row: u32,
+    intermediate_rows: u32,
+    dst_w: u32,
+    dst_h: u32,
+    channels: usize,
+    v_coeffs: &FilterCoeffs,
+    needs_alpha: bool,
+    sparse_rgb_nonzero_rows: Option<&[bool]>,
+    parallel_pixel_threshold: usize,
+    need_vertical: bool,
+    out_bytes: &mut [u8],
+) {
     if !need_vertical {
         if needs_alpha {
             for (intermediate_pixel, output_pixel) in intermediate
@@ -807,42 +812,156 @@ fn pil_resize_boxed_with_hints(
         }
     } else if let Some(nonzero_rows) = sparse_rgb_nonzero_rows {
         vertical_pass_rows_sparse_rgb(
-            &intermediate,
+            intermediate,
             dst_w,
             dst_h,
-            &v_coeffs,
+            v_coeffs,
             first_source_row,
             nonzero_rows,
-            &mut out_bytes,
+            out_bytes,
             parallel_pixel_threshold,
         );
     } else if needs_alpha {
         vertical_pass_rows_alpha(
-            &intermediate,
+            intermediate,
             intermediate_rows,
             dst_w,
             dst_h,
             channels,
-            &v_coeffs,
-            &mut out_bytes,
+            v_coeffs,
+            out_bytes,
             parallel_pixel_threshold,
         );
     } else {
         vertical_pass_rows(
-            &intermediate,
+            intermediate,
             intermediate_rows,
             dst_w,
             dst_h,
             channels,
-            &v_coeffs,
-            &mut out_bytes,
+            v_coeffs,
+            out_bytes,
             parallel_pixel_threshold,
         );
     }
+}
+
+fn pil_resize_boxed_with_hints(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    filter: ResampleFilter,
+    explicit_mode: Option<&str>,
+    parallel_pixel_threshold: usize,
+    sparse_rgb_nonzero_rows: Option<&[bool]>,
+) -> DynamicImage {
+    let (early_output, needs_alpha) = pil_resize_boxed_early_paths(
+        img,
+        dst_w,
+        dst_h,
+        box_left,
+        box_top,
+        box_right,
+        box_bottom,
+        filter,
+        explicit_mode,
+    );
+    if let Some(output) = early_output {
+        return output;
+    }
+
+    let (kernel_fn, support) = filter_from_resample(filter);
+    let (sw, sh) = (img.width(), img.height());
+    let channels = match img.color() {
+        crate::raster::ColorType::L8 => 1usize,
+        crate::raster::ColorType::La8 => 2usize,
+        crate::raster::ColorType::Rgb8 => 3usize,
+        _ => 4usize,
+    };
+    let sparse_rgb_nonzero_rows = sparse_rgb_nonzero_rows.filter(|rows| {
+        matches!(img, DynamicImage::ImageRgb8(_))
+            && matches!(explicit_mode, None | Some("RGB"))
+            && !needs_alpha
+            && rows.len() == sh as usize
+    });
+
+    // A bounded all-zero byte source remains zero through every normalized
+    // Pillow resampling filter, including alpha premultiplication.
+    if let Some(output) = pil_resize_boxed_zero_fast_path(img, dst_w, dst_h, channels) {
+        return output;
+    }
+
+    // Pillow's boxed nearest path is an affine sample, not a one-tap box
+    // convolution. The convolution-style coefficient builder can include
+    // adjacent samples at a boundary and produce a value that Pillow never
+    // emits (most visibly for indexed ImageOps.fit, but the same source
+    // selection applies to every byte layout).
+    if matches!(filter, ResampleFilter::Nearest) {
+        return pil_resize_boxed_nearest(
+            img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, channels,
+        );
+    }
+
+    // Use box-parameter coefficients for both passes.
+    let h_coeffs = precompute_coeffs_boxed(dst_w, sw, box_left, box_right, kernel_fn, support);
+    let mut v_coeffs = precompute_coeffs_boxed(dst_h, sh, box_top, box_bottom, kernel_fn, support);
+
+    // Resample.c skips a pass when that axis already has the requested size
+    // and covers the complete source extent. A boxed one-axis crop therefore
+    // must resample only the changed axis; the unchanged axis retains source
+    // samples (or premultiplied samples for LA/RGBA).
+    let need_horizontal = dst_w != sw || box_left as f32 != 0.0 || box_right as f32 != dst_w as f32;
+    let need_vertical = dst_h != sh || box_top as f32 != 0.0 || box_bottom as f32 != dst_h as f32;
+
+    // The horizontal pass is independent per source row. Avoid processing
+    // vertical rows that the rebased output table cannot read, which is a
+    // substantial win when a small fractional box is enlarged.
+    let (first_source_row, intermediate_rows) = if need_vertical {
+        compact_resize_coeffs_to_source_span(&mut v_coeffs, sh).unwrap_or((0, sh))
+    } else {
+        (0, sh)
+    };
+
+    // Allocate only rows referenced by the vertical table.
+    let mut intermediate = vec![0u8; (intermediate_rows * dst_w) as usize * channels];
+    pil_resize_boxed_horizontal_pass(
+        img,
+        sw,
+        first_source_row,
+        intermediate_rows,
+        channels,
+        &h_coeffs,
+        dst_w,
+        &mut intermediate,
+        needs_alpha,
+        parallel_pixel_threshold,
+        sparse_rgb_nonzero_rows,
+        need_horizontal,
+    );
+
+    // Allocate output image.
+    let mut out_bytes = vec![0u8; (dst_w * dst_h) as usize * channels];
+    pil_resize_boxed_vertical_pass(
+        &intermediate,
+        first_source_row,
+        intermediate_rows,
+        dst_w,
+        dst_h,
+        channels,
+        &v_coeffs,
+        needs_alpha,
+        sparse_rgb_nonzero_rows,
+        parallel_pixel_threshold,
+        need_vertical,
+        &mut out_bytes,
+    );
 
     let result = raw_to_dynamic_owned(out_bytes, dst_w, dst_h, channels);
-
-    pil_preserve_mode(orig_img, result)
+    pil_preserve_mode(img, result)
 }
 
 /// Move a completed native-byte result into its image without allocating
