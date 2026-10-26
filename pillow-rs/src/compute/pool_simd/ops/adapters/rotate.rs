@@ -86,6 +86,47 @@ struct SimdRotateGeometry {
     height: u32,
 }
 
+fn simd_rotate_destination_dimensions(
+    affine: [f64; 6],
+    width: u32,
+    height: u32,
+    expand: bool,
+) -> Option<(u32, u32)> {
+    let [affine_a, affine_b, affine_c, affine_d, affine_e, affine_f] = affine;
+    let sw = f64::from(width);
+    let sh = f64::from(height);
+    let transform = |x: f64, y: f64| {
+        (
+            affine_a * x + affine_b * y + affine_c,
+            affine_d * x + affine_e * y + affine_f,
+        )
+    };
+    let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for &(corner_x, corner_y) in &corners {
+        let (rotated_x, rotated_y) = transform(corner_x, corner_y);
+        min_x = min_x.min(rotated_x);
+        max_x = max_x.max(rotated_x);
+        min_y = min_y.min(rotated_y);
+        max_y = max_y.max(rotated_y);
+    }
+    let (destination_width, destination_height) = if expand {
+        (max_x.ceil() - min_x.floor(), max_y.ceil() - min_y.floor())
+    } else {
+        (sw, sh)
+    };
+    if !destination_width.is_finite()
+        || !destination_height.is_finite()
+        || destination_width < 0.0
+        || destination_height < 0.0
+        || destination_width > f64::from(u32::MAX)
+        || destination_height > f64::from(u32::MAX)
+    {
+        return None;
+    }
+    Some((destination_width as u32, destination_height as u32))
+}
+
 /// Build the same reverse affine matrix and expanded canvas as Pillow's
 /// `Image.rotate` implementation.
 ///
@@ -119,37 +160,12 @@ fn simd_rotate_geometry(
         affine_a * (-center_x - translate_x) + affine_b * (-center_y - translate_y) + center_x;
     let mut affine_f =
         affine_d * (-center_x - translate_x) + affine_e * (-center_y - translate_y) + center_y;
-    let transform = |x: f64, y: f64| {
-        (
-            affine_a * x + affine_b * y + affine_c,
-            affine_d * x + affine_e * y + affine_f,
-        )
-    };
-    let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
-    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-    for &(corner_x, corner_y) in &corners {
-        let (rotated_x, rotated_y) = transform(corner_x, corner_y);
-        min_x = min_x.min(rotated_x);
-        max_x = max_x.max(rotated_x);
-        min_y = min_y.min(rotated_y);
-        max_y = max_y.max(rotated_y);
-    }
-    let (destination_width, destination_height) = if expand {
-        (max_x.ceil() - min_x.floor(), max_y.ceil() - min_y.floor())
-    } else {
-        (sw, sh)
-    };
-    if !destination_width.is_finite()
-        || !destination_height.is_finite()
-        || destination_width < 0.0
-        || destination_height < 0.0
-        || destination_width > f64::from(u32::MAX)
-        || destination_height > f64::from(u32::MAX)
-    {
-        return None;
-    }
-    let destination_width = destination_width as u32;
-    let destination_height = destination_height as u32;
+    let (destination_width, destination_height) = simd_rotate_destination_dimensions(
+        [affine_a, affine_b, affine_c, affine_d, affine_e, affine_f],
+        width,
+        height,
+        expand,
+    )?;
     if expand {
         let shift_x = -(f64::from(destination_width) - sw) / 2.0;
         let shift_y = -(f64::from(destination_height) - sh) / 2.0;
