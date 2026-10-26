@@ -31,6 +31,74 @@ pub(crate) fn pil_preserve_mode(original: &DynamicImage, result: DynamicImage) -
     }
 }
 
+struct NearestResizeGeometry {
+    source_width: u32,
+    source_height: u32,
+    destination_width: u32,
+    destination_height: u32,
+    channels: usize,
+    scale_y: f64,
+    pixel_count: usize,
+}
+
+#[inline(always)]
+// Native byte images already have the exact sample layout required by
+// Pillow's affine nearest path. Copy complete source pixels directly instead
+// of expanding each one through `pixel_at`'s four-channel f64 representation
+// and then pushing bytes individually. This keeps the coordinate calculation
+// identical while making the common byte-image path bandwidth-bound.
+fn pil_resize_nearest_native_bytes(
+    img: &DynamicImage,
+    orig_img: &DynamicImage,
+    geometry: &NearestResizeGeometry,
+    xintab: &[u32],
+) -> Option<DynamicImage> {
+    if !matches!(
+        img,
+        DynamicImage::ImageLuma8(_)
+            | DynamicImage::ImageLumaA8(_)
+            | DynamicImage::ImageRgb8(_)
+            | DynamicImage::ImageRgba8(_)
+    ) {
+        return None;
+    }
+    let source = img.as_bytes();
+    let mut out_bytes = vec![0u8; geometry.pixel_count * geometry.channels];
+    let source_stride = geometry.source_width as usize * geometry.channels;
+    let destination_stride = geometry.destination_width as usize * geometry.channels;
+    let mut yo = geometry.scale_y * 0.5;
+    for dy in 0..geometry.destination_height as usize {
+        let sy = if yo >= geometry.source_height as f64 {
+            geometry.source_height - 1
+        } else {
+            yo as u32
+        } as usize;
+        let source_row = sy * source_stride;
+        let destination_row = dy * destination_stride;
+        if geometry.channels == 1 {
+            let destination = &mut out_bytes[destination_row..destination_row + destination_stride];
+            for (destination_pixel, &sx) in destination.iter_mut().zip(xintab) {
+                *destination_pixel = source[source_row + sx as usize];
+            }
+        } else {
+            for (dx, &sx) in xintab.iter().enumerate() {
+                let source_start = source_row + sx as usize * geometry.channels;
+                let destination_start = destination_row + dx * geometry.channels;
+                out_bytes[destination_start..destination_start + geometry.channels]
+                    .copy_from_slice(&source[source_start..source_start + geometry.channels]);
+            }
+        }
+        yo += geometry.scale_y;
+    }
+    let result = raw_to_dynamic_owned(
+        out_bytes,
+        geometry.destination_width,
+        geometry.destination_height,
+        geometry.channels,
+    );
+    Some(pil_preserve_mode(orig_img, result))
+}
+
 #[inline(always)]
 fn pil_resize_nearest(
     img: &DynamicImage,
@@ -60,47 +128,19 @@ fn pil_resize_nearest(
         xo += scale_x;
     }
 
-    // Native byte images already have the exact sample layout required by
-    // Pillow's affine nearest path. Copy complete source pixels directly
-    // instead of expanding each one through `pixel_at`'s four-channel
-    // f64 representation and then pushing bytes individually. This keeps
-    // the coordinate calculation identical while making the common
-    // byte-image path bandwidth-bound.
-    if matches!(
-        img,
-        DynamicImage::ImageLuma8(_)
-            | DynamicImage::ImageLumaA8(_)
-            | DynamicImage::ImageRgb8(_)
-            | DynamicImage::ImageRgba8(_)
-    ) {
-        let source = img.as_bytes();
-        let mut out_bytes = vec![0u8; n * channels];
-        let source_stride = sw as usize * channels;
-        let destination_stride = dw as usize * channels;
-        let mut yo = scale_y * 0.5;
-        for dy in 0..dh as usize {
-            let sy = if yo >= sh as f64 { sh - 1 } else { yo as u32 } as usize;
-            let source_row = sy * source_stride;
-            let destination_row = dy * destination_stride;
-            if channels == 1 {
-                let destination =
-                    &mut out_bytes[destination_row..destination_row + destination_stride];
-                for (destination_pixel, &sx) in destination.iter_mut().zip(&xintab) {
-                    *destination_pixel = source[source_row + sx as usize];
-                }
-            } else {
-                for (dx, &sx) in xintab.iter().enumerate() {
-                    let source_start = source_row + sx as usize * channels;
-                    let destination_start = destination_row + dx * channels;
-                    out_bytes[destination_start..destination_start + channels]
-                        .copy_from_slice(&source[source_start..source_start + channels]);
-                }
-            }
-            yo += scale_y;
-        }
-        let result = raw_to_dynamic_owned(out_bytes, dw, dh, channels);
-        return pil_preserve_mode(orig_img, result);
+    let geometry = NearestResizeGeometry {
+        source_width: sw,
+        source_height: sh,
+        destination_width: dw,
+        destination_height: dh,
+        channels,
+        scale_y,
+        pixel_count: n,
+    };
+    if let Some(result) = pil_resize_nearest_native_bytes(img, orig_img, &geometry, &xintab) {
+        return result;
     }
+
     // PIL also uses cumulative stepping for y: yo = a[4] * 0.5
     let mut yo = scale_y * 0.5;
     for _dy in 0..dh {
