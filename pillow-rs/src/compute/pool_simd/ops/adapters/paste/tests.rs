@@ -161,26 +161,12 @@ fn rgba_l_masked_paste_fixture() -> RgbaLMaskedPasteFixture {
 
     let (source_width, source_height) = (27usize, 4usize);
     let (destination_width, destination_height) = (23usize, 3usize);
-    let source_bytes = (0..source_width * source_height * 4)
-        .map(|index| {
-            u8::try_from(index % 256)
-                .expect("wrapped source sample fits in a byte")
-                .wrapping_mul(37)
-                .wrapping_add(13)
-        })
-        .collect::<Vec<_>>();
-    let destination_bytes = (0..destination_width * destination_height * 4)
-        .map(|index| {
-            u8::try_from(index % 256)
-                .expect("wrapped destination sample fits in a byte")
-                .wrapping_mul(71)
-                .wrapping_add(29)
-        })
-        .collect::<Vec<_>>();
-    let mask_pattern = [0u8, 1, 127, 128, 254, 255];
-    let mask_bytes = (0..source_width * source_height)
-        .map(|index| mask_pattern[index % mask_pattern.len()])
-        .collect::<Vec<_>>();
+    let (source_bytes, destination_bytes, mask_bytes) = rgba_l_masked_paste_bytes(
+        source_width,
+        source_height,
+        destination_width,
+        destination_height,
+    );
     let destination = DynamicImage::ImageRgba8(
         RgbaImage::from_raw(
             destination_width as u32,
@@ -230,6 +216,35 @@ fn rgba_l_masked_paste_fixture() -> RgbaLMaskedPasteFixture {
         destination,
         op,
     }
+}
+
+fn rgba_l_masked_paste_bytes(
+    source_width: usize,
+    source_height: usize,
+    destination_width: usize,
+    destination_height: usize,
+) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    let source_bytes = (0..source_width * source_height * 4)
+        .map(|index| {
+            u8::try_from(index % 256)
+                .expect("wrapped source sample fits in a byte")
+                .wrapping_mul(37)
+                .wrapping_add(13)
+        })
+        .collect::<Vec<_>>();
+    let destination_bytes = (0..destination_width * destination_height * 4)
+        .map(|index| {
+            u8::try_from(index % 256)
+                .expect("wrapped destination sample fits in a byte")
+                .wrapping_mul(71)
+                .wrapping_add(29)
+        })
+        .collect::<Vec<_>>();
+    let mask_pattern = [0u8, 1, 127, 128, 254, 255];
+    let mask_bytes = (0..source_width * source_height)
+        .map(|index| mask_pattern[index % mask_pattern.len()])
+        .collect::<Vec<_>>();
+    (source_bytes, destination_bytes, mask_bytes)
 }
 
 #[test]
