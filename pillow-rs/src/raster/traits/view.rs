@@ -173,56 +173,69 @@ pub trait GenericImage: GenericImageView {
             return false;
         }
 
-        match (sx < dx, sy < dy) {
-            (true, true) => {
-                for y in (0..height).rev() {
-                    let sy = sy.saturating_add(y);
-                    let dy = dy.saturating_add(y);
-                    for x in (0..width).rev() {
-                        let sx = sx.saturating_add(x);
-                        let dx = dx.saturating_add(x);
-                        let pixel = self.get_pixel(sx, sy);
-                        self.put_pixel(dx, dy, pixel);
-                    }
-                }
-            }
-            (true, false) => {
-                for y in 0..height {
-                    let sy = sy.saturating_add(y);
-                    let dy = dy.saturating_add(y);
-                    for x in (0..width).rev() {
-                        let sx = sx.saturating_add(x);
-                        let dx = dx.saturating_add(x);
-                        let pixel = self.get_pixel(sx, sy);
-                        self.put_pixel(dx, dy, pixel);
-                    }
-                }
-            }
-            (false, true) => {
-                for y in (0..height).rev() {
-                    let sy = sy.saturating_add(y);
-                    let dy = dy.saturating_add(y);
-                    for x in 0..width {
-                        let sx = sx.saturating_add(x);
-                        let dx = dx.saturating_add(x);
-                        let pixel = self.get_pixel(sx, sy);
-                        self.put_pixel(dx, dy, pixel);
-                    }
-                }
-            }
-            (false, false) => {
-                for y in 0..height {
-                    let sy = sy.saturating_add(y);
-                    let dy = dy.saturating_add(y);
-                    for x in 0..width {
-                        let sx = sx.saturating_add(x);
-                        let dx = dx.saturating_add(x);
-                        let pixel = self.get_pixel(sx, sy);
-                        self.put_pixel(dx, dy, pixel);
-                    }
+        copy_within_pixels(self, sx, sy, dx, dy, width, height);
+        true
+    }
+}
+
+#[inline(always)]
+fn copy_within_pixels<I: GenericImage + ?Sized>(
+    image: &mut I,
+    sx: u32,
+    sy: u32,
+    dx: u32,
+    dy: u32,
+    width: u32,
+    height: u32,
+) {
+    match (sx < dx, sy < dy) {
+        (true, true) => {
+            for y in (0..height).rev() {
+                let sy = sy.saturating_add(y);
+                let dy = dy.saturating_add(y);
+                for x in (0..width).rev() {
+                    let sx = sx.saturating_add(x);
+                    let dx = dx.saturating_add(x);
+                    let pixel = image.get_pixel(sx, sy);
+                    image.put_pixel(dx, dy, pixel);
                 }
             }
         }
-        true
+        (true, false) => {
+            for y in 0..height {
+                let sy = sy.saturating_add(y);
+                let dy = dy.saturating_add(y);
+                for x in (0..width).rev() {
+                    let sx = sx.saturating_add(x);
+                    let dx = dx.saturating_add(x);
+                    let pixel = image.get_pixel(sx, sy);
+                    image.put_pixel(dx, dy, pixel);
+                }
+            }
+        }
+        (false, true) => {
+            for y in (0..height).rev() {
+                let sy = sy.saturating_add(y);
+                let dy = dy.saturating_add(y);
+                for x in 0..width {
+                    let sx = sx.saturating_add(x);
+                    let dx = dx.saturating_add(x);
+                    let pixel = image.get_pixel(sx, sy);
+                    image.put_pixel(dx, dy, pixel);
+                }
+            }
+        }
+        (false, false) => {
+            for y in 0..height {
+                let sy = sy.saturating_add(y);
+                let dy = dy.saturating_add(y);
+                for x in 0..width {
+                    let sx = sx.saturating_add(x);
+                    let dx = dx.saturating_add(x);
+                    let pixel = image.get_pixel(sx, sy);
+                    image.put_pixel(dx, dy, pixel);
+                }
+            }
+        }
     }
 }
