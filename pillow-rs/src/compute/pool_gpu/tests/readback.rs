@@ -352,10 +352,19 @@ fn gpu_rgb_readback_matches_native_mode_preservation() {
 
 #[test]
 fn gpu_rgb_readback_native_respects_final_mode_and_transfer_counts() {
-    use crate::compute::{execute_prepared, prepare_execution, registry};
-
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    for (mode, channels, op) in [
+    for (mode, channels, op) in native_rgb_readback_cases() {
+        let Some((actual, expected)) = execute_native_rgb_readback_case(mode, channels, &op) else {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
+        };
+        assert_native_rgb_readback_receipt(mode, &op, &actual, &expected);
+    }
+    Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn native_rgb_readback_cases() -> Vec<(&'static str, usize, PipelineOp)> {
+    vec![
         ("RGB", 3, PipelineOp::Duplicate),
         (
             "RGB",
@@ -401,82 +410,67 @@ fn gpu_rgb_readback_native_respects_final_mode_and_transfer_counts() {
                 mode: PixelMode::RGB,
             },
         ),
-    ] {
-        let bytes: Vec<u8> = (0usize..5 * 3 * channels)
-            .map(|index| index.wrapping_mul(29).wrapping_add(index / 3) as u8)
-            .collect();
-        let source = Image::frombytes(mode, (5, 3), &bytes)
-            .expect("native readback source")
-            .materialize()
-            .expect("readback source materialization");
-        let expected =
-            registry::execute_cpu(&op, &source, Some(mode)).expect("CPU native readback reference");
-        let ops = std::slice::from_ref(&op);
-        let prepared = prepare_execution(ops, Some(Backend::Gpu)).expect("GPU routing");
-        let actual = match execute_prepared(&prepared, ops, &source, Some(mode)) {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU {mode} readback failed: {error}"),
-        };
-        assert_eq!(actual.color(), expected.color(), "{mode} {op:?}");
-        assert_eq!(actual.as_bytes(), expected.as_bytes(), "{mode} {op:?}");
-        let telemetry = Backend::take_pipeline_telemetry().expect("readback receipt");
-        assert_eq!(telemetry.1, Backend::Gpu);
-        assert_eq!(telemetry.6, Some(1));
-        assert_eq!(telemetry.7, None);
-        let resources = telemetry.8.expect("native transfer counters");
-        let native_rgb_duplicate =
-            cfg!(target_endian = "little") && mode == "RGB" && matches!(op, PipelineOp::Duplicate);
-        let native_three_channel_upload = native_rgb_duplicate
-            || (cfg!(target_endian = "little")
-                && matches!(
-                    op,
-                    PipelineOp::PutAlpha {
-                        mode: PixelMode::RGB,
-                        ..
-                    }
-                ))
-            || (cfg!(target_endian = "little")
-                && mode == "RGB"
-                && matches!(
-                    op,
-                    PipelineOp::Convert {
-                        mode: ColorMode::RGBA,
-                        matrix: None,
-                        dither: None,
-                    }
-                ));
-        let expected_upload_bytes = if native_three_channel_upload {
-            (5 * 3 * 3 + 3) & !3
-        } else {
-            5 * 3 * 4
-        };
-        assert_eq!(
-            resources.upload_bytes, expected_upload_bytes,
-            "{mode} {op:?}"
-        );
-        let expected_readback_bytes = if native_rgb_duplicate {
-            (5 * 3 * 3 + 3) & !3
-        } else {
-            5 * 3 * 4
-        };
-        assert_eq!(
-            resources.readback_bytes, expected_readback_bytes,
-            "{mode} {op:?}"
-        );
-        if actual.color() == crate::raster::ColorType::Rgb8 {
-            assert_eq!(resources.host_allocation_count, 1);
-            assert_eq!(resources.host_allocated_bytes, 5 * 3 * 3);
+    ]
+}
+
+fn execute_native_rgb_readback_case(
+    mode: &str,
+    channels: usize,
+    op: &PipelineOp,
+) -> Option<(DynamicImage, DynamicImage)> {
+    use crate::compute::{execute_prepared, prepare_execution, registry};
+
+    let bytes: Vec<u8> = (0usize..channels.saturating_mul(15))
+        .map(|index| index.wrapping_mul(29).wrapping_add(index / 3) as u8)
+        .collect();
+    let source = Image::frombytes(mode, (5, 3), &bytes)
+        .expect("native readback source")
+        .materialize()
+        .expect("readback source materialization");
+    let expected =
+        registry::execute_cpu(op, &source, Some(mode)).expect("CPU native readback reference");
+    let ops = std::slice::from_ref(op);
+    let prepared = prepare_execution(ops, Some(Backend::Gpu)).expect("GPU routing");
+    match execute_prepared(&prepared, ops, &source, Some(mode)) {
+        Ok(actual) => Some((actual, expected)),
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            None
         }
-        if mode == "RGB"
+        Err(error) => panic!("native GPU {mode} readback failed: {error}"),
+    }
+}
+
+fn assert_native_rgb_readback_receipt(
+    mode: &str,
+    op: &PipelineOp,
+    actual: &DynamicImage,
+    expected: &DynamicImage,
+) {
+    assert_eq!(actual.color(), expected.color(), "{mode} {op:?}");
+    assert_eq!(actual.as_bytes(), expected.as_bytes(), "{mode} {op:?}");
+    let telemetry = Backend::take_pipeline_telemetry().expect("readback receipt");
+    assert_eq!(telemetry.1, Backend::Gpu);
+    assert_eq!(telemetry.6, Some(1));
+    assert_eq!(telemetry.7, None);
+    let resources = telemetry.8.expect("native transfer counters");
+    let native_rgb_duplicate =
+        cfg!(target_endian = "little") && mode == "RGB" && matches!(op, PipelineOp::Duplicate);
+    let native_three_channel_upload = native_rgb_duplicate
+        || (cfg!(target_endian = "little")
+            && matches!(
+                op,
+                PipelineOp::PutAlpha {
+                    mode: PixelMode::RGB,
+                    ..
+                }
+            ))
+        || (cfg!(target_endian = "little")
+            && mode == "RGB"
             && matches!(
                 op,
                 PipelineOp::Convert {
@@ -484,12 +478,41 @@ fn gpu_rgb_readback_native_respects_final_mode_and_transfer_counts() {
                     matrix: None,
                     dither: None,
                 }
-            )
-        {
-            assert_eq!(resources.mode_conversion_count, 0);
-        }
+            ));
+    let expected_upload_bytes = if native_three_channel_upload {
+        (5 * 3 * 3 + 3) & !3
+    } else {
+        5 * 3 * 4
+    };
+    assert_eq!(
+        resources.upload_bytes, expected_upload_bytes,
+        "{mode} {op:?}"
+    );
+    let expected_readback_bytes = if native_rgb_duplicate {
+        (5 * 3 * 3 + 3) & !3
+    } else {
+        5 * 3 * 4
+    };
+    assert_eq!(
+        resources.readback_bytes, expected_readback_bytes,
+        "{mode} {op:?}"
+    );
+    if actual.color() == crate::raster::ColorType::Rgb8 {
+        assert_eq!(resources.host_allocation_count, 1);
+        assert_eq!(resources.host_allocated_bytes, 5 * 3 * 3);
     }
-    Backend::set_pipeline_telemetry_enabled(previous);
+    if mode == "RGB"
+        && matches!(
+            op,
+            PipelineOp::Convert {
+                mode: ColorMode::RGBA,
+                matrix: None,
+                dither: None,
+            }
+        )
+    {
+        assert_eq!(resources.mode_conversion_count, 0);
+    }
 }
 
 #[test]
