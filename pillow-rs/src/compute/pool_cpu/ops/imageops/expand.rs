@@ -204,22 +204,46 @@ fn expand_rgba_compat(
     let source = img.to_rgba8();
     let (source_width, source_height) = source.dimensions();
     let dims = CheckedDims::new(new_width, new_height, 4)?;
+    let fill = [fill.0, fill.1, fill.2, fill.3];
+    let source = source.as_raw();
+    let mut output = dims.alloc_buffer();
+    expand_rgba_compat_rows(
+        &mut output,
+        dims,
+        source,
+        source_width,
+        source_height,
+        border,
+        fill,
+    );
+
+    let expanded = crate::image_utils::raw_bytes_to_image(new_width, new_height, output, 4)?;
+    Ok(preserve_mode(img, expanded))
+}
+
+#[inline(always)]
+fn expand_rgba_compat_rows(
+    output: &mut [u8],
+    dims: CheckedDims,
+    source: &[u8],
+    source_width: u32,
+    source_height: u32,
+    border: u32,
+    fill: [u8; 4],
+) {
     #[cfg(feature = "parallel")]
-    let height = new_height as usize;
+    let height = dims.height as usize;
     let row_stride = dims.row_stride();
     let source_stride = source_width as usize * 4;
     let offset_x = border as usize;
     let offset_y = border as usize;
-    let copy_width = source_width.min(new_width.saturating_sub(border)) as usize;
-    let copy_height = source_height.min(new_height.saturating_sub(border)) as usize;
-    let fill = [fill.0, fill.1, fill.2, fill.3];
-    let source = source.as_raw();
-    let mut output = dims.alloc_buffer();
+    let copy_width = source_width.min(dims.width.saturating_sub(border)) as usize;
+    let copy_height = source_height.min(dims.height.saturating_sub(border)) as usize;
 
     #[cfg(feature = "parallel")]
     if dims.total_pixels() >= POINT_PARALLEL_PIXEL_THRESHOLD {
         crate::par_rows_mut!(
-            &mut output,
+            output,
             row_stride,
             height,
             |_row_start, _row_end, y, row| {
@@ -238,7 +262,7 @@ fn expand_rgba_compat(
         );
     } else {
         fill_rgba_rows(
-            &mut output,
+            output,
             row_stride,
             source,
             source_stride,
@@ -251,7 +275,7 @@ fn expand_rgba_compat(
     }
     #[cfg(not(feature = "parallel"))]
     fill_rgba_rows(
-        &mut output,
+        output,
         row_stride,
         source,
         source_stride,
@@ -261,9 +285,6 @@ fn expand_rgba_compat(
         copy_height,
         fill,
     );
-
-    let expanded = crate::image_utils::raw_bytes_to_image(new_width, new_height, output, 4)?;
-    Ok(preserve_mode(img, expanded))
 }
 
 fn fill_rgba_rows(
