@@ -5,6 +5,117 @@ use pillow_rs::Image as RsImage;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
+fn putdata_uint8_values(
+    image: &mut RsImage,
+    data: &JsValue,
+    scale: Option<f64>,
+    offset: Option<f64>,
+) -> Result<(), JsValue> {
+    let bytes = js_sys::Uint8Array::new(data).to_vec();
+    let scale = scale.unwrap_or(1.0);
+    let offset = offset.unwrap_or(0.0);
+    if image
+        .putdata_bytes_fast_path(&bytes, bytes.len(), scale, offset)
+        .map_err(err)?
+    {
+        return Ok(());
+    }
+    let kind = image.putdata_value_kind().map_err(err)?;
+    let values = bytes
+        .into_iter()
+        .map(|value| match kind {
+            pillow_rs::PutDataValueKind::Numeric => {
+                pillow_rs::PutDataValue::Number(f64::from(value))
+            }
+            pillow_rs::PutDataValueKind::Components { .. } => {
+                pillow_rs::PutDataValue::Packed(i64::from(value))
+            }
+        })
+        .collect::<Vec<_>>();
+    image.putdata_values(&values, scale, offset).map_err(err)
+}
+
+fn putdata_value_from_js(
+    value: &JsValue,
+    kind: pillow_rs::PutDataValueKind,
+) -> Result<pillow_rs::PutDataValue, pillow_rs::PilError> {
+    if let Some(number) = value.as_f64() {
+        return match kind {
+            pillow_rs::PutDataValueKind::Numeric => Ok(pillow_rs::PutDataValue::Number(number)),
+            pillow_rs::PutDataValueKind::Components { .. }
+                if number.is_finite() && number.fract() == 0.0 =>
+            {
+                Ok(pillow_rs::PutDataValue::Packed(number as i64))
+            }
+            pillow_rs::PutDataValueKind::Components { .. } => {
+                Ok(pillow_rs::PutDataValue::Number(number))
+            }
+        };
+    }
+    if let Some(values) = js_integer_array(value) {
+        if values.len() == 1 {
+            return Ok(pillow_rs::PutDataValue::Packed(values[0]));
+        }
+        return Ok(pillow_rs::PutDataValue::Components(
+            values.into_iter().map(i128::from).collect(),
+        ));
+    }
+    if value.is_object()
+        && !value.is_array()
+        && matches!(
+            kind,
+            pillow_rs::PutDataValueKind::Components { channels: 2 }
+        )
+        && js_sys::Reflect::has(
+            value,
+            &JsValue::from_str("__pillow_rs_putdata_custom_index__"),
+        )
+        .unwrap_or(false)
+    {
+        return Err(pillow_rs::PilError::TypeError(
+            "color must be int or tuple".to_owned(),
+        ));
+    }
+    if value.is_array() && js_sys::Array::from(value).length() == 1 {
+        if matches!(
+            kind,
+            pillow_rs::PutDataValueKind::Components { channels: 2 }
+        ) {
+            return Err(pillow_rs::PilError::SystemError(
+                "new style getargs format but argument is not a tuple".to_owned(),
+            ));
+        }
+        return Err(pillow_rs::PilError::TypeError(
+            "color must be int, or tuple of one, three or four elements".to_owned(),
+        ));
+    }
+    Err(pillow_rs::PilError::TypeError(
+        "color must be int or tuple".to_owned(),
+    ))
+}
+
+fn putdata_array_values(
+    image: &mut RsImage,
+    data: &JsValue,
+    scale: Option<f64>,
+    offset: Option<f64>,
+) -> Result<(), JsValue> {
+    if !data.is_array() {
+        return Err(err(pillow_rs::PilError::TypeError(
+            "argument must be a sequence".to_owned(),
+        )));
+    }
+    let kind = image.putdata_value_kind().map_err(err)?;
+    let values = js_sys::Array::from(data)
+        .iter()
+        .map(|value| putdata_value_from_js(&value, kind))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(err)?;
+    image
+        .putdata_values(&values, scale.unwrap_or(1.0), offset.unwrap_or(0.0))
+        .map_err(err)
+}
+
 #[wasm_bindgen]
 impl Image {
     /// Encodes the image as PNG and returns the encoded bytes.
@@ -184,103 +295,9 @@ impl Image {
         offset: Option<f64>,
     ) -> Result<(), JsValue> {
         if data.is_instance_of::<js_sys::Uint8Array>() {
-            let bytes = js_sys::Uint8Array::new(&data).to_vec();
-            let scale = scale.unwrap_or(1.0);
-            let offset = offset.unwrap_or(0.0);
-            if self
-                .inner
-                .putdata_bytes_fast_path(&bytes, bytes.len(), scale, offset)
-                .map_err(err)?
-            {
-                return Ok(());
-            }
-            let kind = self.inner.putdata_value_kind().map_err(err)?;
-            let values = bytes
-                .into_iter()
-                .map(|value| match kind {
-                    pillow_rs::PutDataValueKind::Numeric => {
-                        pillow_rs::PutDataValue::Number(f64::from(value))
-                    }
-                    pillow_rs::PutDataValueKind::Components { .. } => {
-                        pillow_rs::PutDataValue::Packed(i64::from(value))
-                    }
-                })
-                .collect::<Vec<_>>();
-            return self
-                .inner
-                .putdata_values(&values, scale, offset)
-                .map_err(err);
+            return putdata_uint8_values(&mut self.inner, &data, scale, offset);
         }
-        if !data.is_array() {
-            return Err(err(pillow_rs::PilError::TypeError(
-                "argument must be a sequence".to_owned(),
-            )));
-        }
-        let kind = self.inner.putdata_value_kind().map_err(err)?;
-        let values = js_sys::Array::from(&data)
-            .iter()
-            .map(|value| {
-                if let Some(number) = value.as_f64() {
-                    return match kind {
-                        pillow_rs::PutDataValueKind::Numeric => {
-                            Ok(pillow_rs::PutDataValue::Number(number))
-                        }
-                        pillow_rs::PutDataValueKind::Components { .. }
-                            if number.is_finite() && number.fract() == 0.0 =>
-                        {
-                            Ok(pillow_rs::PutDataValue::Packed(number as i64))
-                        }
-                        pillow_rs::PutDataValueKind::Components { .. } => {
-                            Ok(pillow_rs::PutDataValue::Number(number))
-                        }
-                    };
-                }
-                if let Some(values) = js_integer_array(&value) {
-                    if values.len() == 1 {
-                        return Ok(pillow_rs::PutDataValue::Packed(values[0]));
-                    }
-                    return Ok(pillow_rs::PutDataValue::Components(
-                        values.into_iter().map(i128::from).collect(),
-                    ));
-                }
-                if value.is_object()
-                    && !value.is_array()
-                    && matches!(
-                        kind,
-                        pillow_rs::PutDataValueKind::Components { channels: 2 }
-                    )
-                    && js_sys::Reflect::has(
-                        &value,
-                        &JsValue::from_str("__pillow_rs_putdata_custom_index__"),
-                    )
-                    .unwrap_or(false)
-                {
-                    return Err(pillow_rs::PilError::TypeError(
-                        "color must be int or tuple".to_owned(),
-                    ));
-                }
-                if value.is_array() && js_sys::Array::from(&value).length() == 1 {
-                    if matches!(
-                        kind,
-                        pillow_rs::PutDataValueKind::Components { channels: 2 }
-                    ) {
-                        return Err(pillow_rs::PilError::SystemError(
-                            "new style getargs format but argument is not a tuple".to_owned(),
-                        ));
-                    }
-                    return Err(pillow_rs::PilError::TypeError(
-                        "color must be int, or tuple of one, three or four elements".to_owned(),
-                    ));
-                }
-                Err(pillow_rs::PilError::TypeError(
-                    "color must be int or tuple".to_owned(),
-                ))
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(err)?;
-        self.inner
-            .putdata_values(&values, scale.unwrap_or(1.0), offset.unwrap_or(0.0))
-            .map_err(err)
+        putdata_array_values(&mut self.inner, &data, scale, offset)
     }
     /// Writes raw bytes to the image using the core `putdata` semantics.
     #[wasm_bindgen(js_name = "putdata")]
