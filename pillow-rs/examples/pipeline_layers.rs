@@ -381,25 +381,7 @@ fn run_workload(name: &str, backend: Backend, samples: usize) -> Result<String, 
     let _ = build_workload(name, backend)?.tobytes()?;
     let mut measurements = Vec::with_capacity(samples);
     for _ in 0..samples {
-        reset_allocations();
-        let total_started = Instant::now();
-        let graph_started = Instant::now();
-        let image = build_workload(name, backend)?;
-        let graph_ns = graph_started.elapsed().as_nanos();
-        let graph_allocations = allocation_sample();
-        reset_allocations();
-        let execute_started = Instant::now();
-        let bytes = image.tobytes()?;
-        let execute_ns = execute_started.elapsed().as_nanos();
-        let (_, _, execute_allocations) = execution_telemetry();
-        measurements.push(Sample {
-            graph_ns,
-            execute_ns,
-            total_ns: total_started.elapsed().as_nanos(),
-            graph_allocations,
-            execute_allocations,
-            digest: digest(&bytes),
-        });
+        measurements.push(measure_workload_sample(name, backend)?);
     }
     let sample = measurements
         .first()
@@ -439,6 +421,28 @@ fn run_workload(name: &str, backend: Backend, samples: usize) -> Result<String, 
         ),
         sample.digest,
     ))
+}
+
+fn measure_workload_sample(name: &str, backend: Backend) -> Result<Sample, PilError> {
+    reset_allocations();
+    let total_started = Instant::now();
+    let graph_started = Instant::now();
+    let image = build_workload(name, backend)?;
+    let graph_ns = graph_started.elapsed().as_nanos();
+    let graph_allocations = allocation_sample();
+    reset_allocations();
+    let execute_started = Instant::now();
+    let bytes = image.tobytes()?;
+    let execute_ns = execute_started.elapsed().as_nanos();
+    let (_, _, execute_allocations) = execution_telemetry();
+    Ok(Sample {
+        graph_ns,
+        execute_ns,
+        total_ns: total_started.elapsed().as_nanos(),
+        graph_allocations,
+        execute_allocations,
+        digest: digest(&bytes),
+    })
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
