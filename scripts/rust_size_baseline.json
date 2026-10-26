@@ -16,12 +16,6 @@
       "signature": "pub fn execute_filter5x5( img: &DynamicImage, kernel: &[f32; 25], scale: f32, offset: f32, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 114,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5/int32.rs",
-      "signature": "pub(super) fn filter_5x5_i32( img: &DynamicImage, kernel: &[f32; 25], scale: f32, offset: f32, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 127,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/paste.rs",
@@ -689,11 +683,6 @@
       "reduction_task": "pillow-rs#qpfs"
     },
     "pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs": {
-      "owner": "lazytrot",
-      "reason": "Retains functions above the 100-line ratchet moved from the oversized CPU filter module; continue the scoped reduction under pillow-rs#qpfs.",
-      "reduction_task": "pillow-rs#qpfs"
-    },
-    "pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5/int32.rs": {
       "owner": "lazytrot",
       "reason": "Retains functions above the 100-line ratchet moved from the oversized CPU filter module; continue the scoped reduction under pillow-rs#qpfs.",
       "reduction_task": "pillow-rs#qpfs"

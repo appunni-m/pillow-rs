@@ -742,6 +742,65 @@ pub(crate) fn uniform_i32_filter5x5_is_identity(
     filtered == sample_i32
 }
 
+#[cfg(feature = "parallel")]
+fn filter_5x5_i32_fast_path(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    offset: f32,
+) -> Result<Option<Vec<u8>>, PilError> {
+    if uniform_i32_filter5x5_is_identity(raw, width, height, kernel, offset + 0.5) {
+        return Ok(Some(raw.to_vec()));
+    }
+    if i32_filter5x5_bounded_binomial_is_applicable(raw, width, height, kernel, offset) {
+        let output = filter_5x5_i32_bounded_binomial(raw, width, height)
+            .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?;
+        return Ok(Some(output));
+    }
+    Ok(None)
+}
+
+#[cfg(not(feature = "parallel"))]
+fn filter_5x5_i32_fast_path(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    offset: f32,
+) -> Option<Vec<u8>> {
+    if uniform_i32_filter5x5_is_identity(raw, width, height, kernel, offset + 0.5) {
+        return Some(raw.to_vec());
+    }
+
+    let first_sample_is_bounded = raw.get(..4).is_some_and(|sample| {
+        i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]).unsigned_abs()
+            <= I32_BINOMIAL_FILTER5X5_MAX_ABS_SAMPLE
+    });
+    if first_sample_is_bounded && let Some(pixel_count) = width.checked_mul(height) {
+        let samples = i32_samples_from_le_bytes(raw, pixel_count);
+        if i32_filter5x5_bounded_binomial_kernel_is_applicable(
+            samples.len(),
+            width,
+            height,
+            kernel,
+            offset,
+        ) && let Some(output) =
+            filter_5x5_i32_bounded_binomial_from_samples(raw, samples.as_ref(), width, height)
+        {
+            return Some(output);
+        }
+    }
+
+    filter_5x5_i32_f32_ring(raw, width, height, kernel, offset)
+}
+
+fn filter_5x5_i32_image(width: u32, height: u32, raw: Vec<u8>) -> Result<DynamicImage, PilError> {
+    crate::raster::RgbaImage::from_raw(width, height, raw)
+        .map(DynamicImage::ImageRgba8)
+        .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))
+}
+
 pub(super) fn filter_5x5_i32(
     img: &DynamicImage,
     kernel: &[f32; 25],
@@ -765,74 +824,21 @@ pub(super) fn filter_5x5_i32(
     // Pre-compute normalized kernel coefficients using f32 (matching PIL C construction)
     let kd: [f32; 25] = std::array::from_fn(|i| kernel[i] / s);
 
-    if uniform_i32_filter5x5_is_identity(raw, w_u32 as usize, h_u32 as usize, &kd, offset + 0.5) {
-        return Ok(DynamicImage::ImageRgba8(
-            crate::raster::RgbaImage::from_raw(w_u32, h_u32, raw.to_vec())
-                .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
-        ));
-    }
-
     // Keep the bounded-input proof on both CPU profiles. Parallel CPU uses its
     // integer factorization below; serial CPU checks an aligned sample view
     // and only selects the integer factorization when every sample is proven
     // to preserve Pillow's f32 arithmetic exactly.
     #[cfg(feature = "parallel")]
-    if i32_filter5x5_bounded_binomial_is_applicable(
-        raw,
-        w_u32 as usize,
-        h_u32 as usize,
-        &kd,
-        offset,
-    ) {
-        let output = filter_5x5_i32_bounded_binomial(raw, w_u32 as usize, h_u32 as usize)
-            .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?;
-        return Ok(DynamicImage::ImageRgba8(
-            crate::raster::RgbaImage::from_raw(w_u32, h_u32, output)
-                .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
-        ));
+    if let Some(output) =
+        filter_5x5_i32_fast_path(raw, w_u32 as usize, h_u32 as usize, &kd, offset)?
+    {
+        return filter_5x5_i32_image(w_u32, h_u32, output);
     }
 
     #[cfg(not(feature = "parallel"))]
+    if let Some(output) = filter_5x5_i32_fast_path(raw, w_u32 as usize, h_u32 as usize, &kd, offset)
     {
-        let first_sample_is_bounded = raw.get(..4).is_some_and(|sample| {
-            i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]).unsigned_abs()
-                <= I32_BINOMIAL_FILTER5X5_MAX_ABS_SAMPLE
-        });
-        if first_sample_is_bounded {
-            let pixel_count = (w_u32 as usize).checked_mul(h_u32 as usize);
-            if let Some(pixel_count) = pixel_count {
-                let samples = i32_samples_from_le_bytes(raw, pixel_count);
-                if i32_filter5x5_bounded_binomial_kernel_is_applicable(
-                    samples.len(),
-                    w_u32 as usize,
-                    h_u32 as usize,
-                    &kd,
-                    offset,
-                ) {
-                    if let Some(output) = filter_5x5_i32_bounded_binomial_from_samples(
-                        raw,
-                        samples.as_ref(),
-                        w_u32 as usize,
-                        h_u32 as usize,
-                    ) {
-                        return Ok(DynamicImage::ImageRgba8(
-                            crate::raster::RgbaImage::from_raw(w_u32, h_u32, output).ok_or_else(
-                                || PilError::ValueError("filter_5x5_i32: buffer error".into()),
-                            )?,
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    #[cfg(not(feature = "parallel"))]
-    if let Some(output) = filter_5x5_i32_f32_ring(raw, w_u32 as usize, h_u32 as usize, &kd, offset)
-    {
-        return Ok(DynamicImage::ImageRgba8(
-            crate::raster::RgbaImage::from_raw(w_u32, h_u32, output)
-                .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
-        ));
+        return filter_5x5_i32_image(w_u32, h_u32, output);
     }
 
     let mut out = raw.to_vec();
@@ -876,10 +882,7 @@ pub(super) fn filter_5x5_i32(
         );
     }
 
-    Ok(DynamicImage::ImageRgba8(
-        crate::raster::RgbaImage::from_raw(w_u32, h_u32, out)
-            .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
-    ))
+    filter_5x5_i32_image(w_u32, h_u32, out)
 }
 
 #[cfg(test)]
