@@ -526,12 +526,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn gpu_projective_uniform_is_exact( op: &PipelineOp, mode: Option<&str>, source_dimensions: (u32, u32), ) -> bool {"
     },
     {
-      "lines": 244,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/transform/safety.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn gpu_transform_all_fill_is_exact( op: &PipelineOp, image: &DynamicImage, mode: Option<&str>, source_dimensions: (u32, u32), ) -> bool {"
-    },
-    {
       "lines": 156,
       "occurrence": 1,
       "path": "pillow-rs/src/image/construction.rs",
@@ -875,11 +869,6 @@
     "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs": {
       "owner": "lazytrot",
       "reason": "Relocated GPU projective nearest and uniform exactness proofs; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/transform/safety.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU transform safety, fill, and host-control proofs; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/image/construction.rs": {
