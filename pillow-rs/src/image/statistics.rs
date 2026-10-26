@@ -1,5 +1,6 @@
 //! Pillow-compatible image statistics methods for [`Image`].
 
+mod extrema;
 mod result;
 
 pub use result::{StatResult, StatValue, stat_from_histogram, stat_from_list};
@@ -609,18 +610,7 @@ impl Image {
         let mode = self.mode()?;
         if mode == "I" {
             let image = self.materialized_shared()?;
-            let (minimum, maximum) = image
-                .as_bytes()
-                .chunks_exact(4)
-                .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
-                .fold(None, |extrema: Option<(i32, i32)>, value| {
-                    Some(match extrema {
-                        Some((minimum, maximum)) => (minimum.min(value), maximum.max(value)),
-                        None => (value, value),
-                    })
-                })
-                .ok_or_else(|| PilError::InternalError("I image has no scalar samples".into()))?;
-            return Ok(FormattedExtrema::Integer((minimum, maximum)));
+            return extrema::integer(image.as_ref());
         }
         if matches!(mode.as_str(), "I;16L" | "I;16B" | "I;16N") {
             // Pillow exposes the native I;16 mode to getextrema, but the
@@ -630,34 +620,11 @@ impl Image {
         }
         if is_l16_mode(&mode) {
             let image = self.materialized_shared()?;
-            let luma = image.to_luma16();
-            let values = luma.as_raw().iter().copied().map(i32::from);
-            let (minimum, maximum) = values
-                .fold(None, |extrema: Option<(i32, i32)>, value| {
-                    Some(match extrema {
-                        Some((minimum, maximum)) => (minimum.min(value), maximum.max(value)),
-                        None => (value, value),
-                    })
-                })
-                .ok_or_else(|| PilError::InternalError("I;16 image has no samples".into()))?;
-            return Ok(FormattedExtrema::Integer((minimum, maximum)));
+            return extrema::luma16(image.as_ref());
         }
         if mode == "F" {
             let image = self.materialized_shared()?;
-            let (minimum, maximum) = image
-                .as_bytes()
-                .chunks_exact(4)
-                .map(|sample| {
-                    f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64
-                })
-                .fold(None, |extrema: Option<(f64, f64)>, value| {
-                    Some(match extrema {
-                        Some((minimum, maximum)) => (minimum.min(value), maximum.max(value)),
-                        None => (value, value),
-                    })
-                })
-                .ok_or_else(|| PilError::InternalError("F image has no scalar samples".into()))?;
-            return Ok(FormattedExtrema::Float((minimum, maximum)));
+            return extrema::float(image.as_ref());
         }
 
         let extrema = self.getextrema()?;
