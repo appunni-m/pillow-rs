@@ -293,7 +293,7 @@ pub(crate) fn maxcoverage_quantize_rgb(
 /// as the mean of assigned pixels and remap until changes stabilize.
 pub(crate) fn kmeans_refine(
     pixel_list: &[[u8; 3]],
-    palette: &mut Vec<[u8; 3]>,
+    palette: &mut [[u8; 3]],
     quantized: &mut [u32],
     threshold: u32,
 ) {

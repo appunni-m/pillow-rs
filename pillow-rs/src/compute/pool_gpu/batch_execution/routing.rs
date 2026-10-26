@@ -653,11 +653,10 @@ impl GpuPool {
             gpu.readback_to_cover_native_bytes(final_w, final_h, dispatch, readback_buffer)?
         } else if native_rgb_packed_output {
             gpu.readback_to_native_channels(final_w, final_h, 3, readback_buffer)?
-        } else if packed_la_pad {
-            gpu.readback_to_native_channels(final_w, final_h, 2, readback_buffer)?
-        } else if native_la_transform_output {
-            gpu.readback_to_native_channels(final_w, final_h, 2, readback_buffer)?
-        } else if packed_native_byte_filter && matches!(mode, Some("LA")) {
+        } else if packed_la_pad
+            || native_la_transform_output
+            || (packed_native_byte_filter && matches!(mode, Some("LA")))
+        {
             gpu.readback_to_native_channels(final_w, final_h, 2, readback_buffer)?
         } else if native_luma16 {
             gpu.readback_to_luma16(final_w, final_h, readback_buffer, mode)?

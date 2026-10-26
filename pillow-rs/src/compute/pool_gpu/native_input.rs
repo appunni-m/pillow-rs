@@ -225,7 +225,7 @@ pub(super) fn gpu_packed_luma_point_input(
     let native_luma_equalize = matches!(ops, [PipelineOp::Equalize]);
     if !matches!(ops, [PipelineOp::Eval { .. } | PipelineOp::Equalize])
         || !matches!(logical_mode, None | Some("L"))
-        || (!native_luma_equalize && !(source_is_luma_point_run || host_autocontrast_luma_lut))
+        || (!native_luma_equalize && !source_is_luma_point_run && !host_autocontrast_luma_lut)
     {
         return false;
     }

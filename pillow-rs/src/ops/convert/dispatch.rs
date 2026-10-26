@@ -137,7 +137,9 @@ fn convert_from_premultiplied(
     palette: Option<&str>,
     colors: Option<u32>,
 ) -> Result<Option<Image>, PilError> {
-    if source_mode != "La" && !(source_mode == "RGBa" && !matches!(target_mode, "P" | "PA")) {
+    let has_supported_conversion =
+        source_mode == "La" || (source_mode == "RGBa" && !matches!(target_mode, "P" | "PA"));
+    if !has_supported_conversion {
         return Ok(None);
     }
     super::nonstandard::with_eager_cpu_convert_receipt(

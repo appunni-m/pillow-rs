@@ -293,7 +293,7 @@ fn quantize_median_cut(
 fn refine_median_cut_kmeans(
     indices: Vec<u8>,
     pixels: &[[u8; 3]],
-    palette: &mut Vec<[u8; 3]>,
+    palette: &mut [[u8; 3]],
     kmeans: u32,
 ) -> Vec<u8> {
     if kmeans == 0 {

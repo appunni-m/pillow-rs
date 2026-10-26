@@ -542,7 +542,7 @@ fn transform_palette_fill(value: &JsValue) -> Result<pillow_rs::TransformFill, J
             return Err(transform_palette_fill_type_error());
         }
         if values.iter().any(|value| {
-            !value.as_bool().is_some()
+            value.as_bool().is_none()
                 && !value.is_bigint()
                 && !value
                     .as_f64()
