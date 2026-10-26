@@ -286,57 +286,61 @@ fn f_resize_ordered_f64_2097152_two_axis_native_matches_cpu() {
         ResampleFilter::Hamming,
         ResampleFilter::Box,
     ] {
-        let op = PipelineOp::Resize { w: 1, h: 1, filter };
-        assert!(
-            gpu_f_resize_f64_ordered_is_exact(
-                std::slice::from_ref(&op),
-                &source_dynamic,
-                Some("F")
-            ),
-            "ordered proof should cover two-axis {filter:?} resize"
-        );
-        let filter_name = match filter {
-            ResampleFilter::Bilinear => "BILINEAR",
-            ResampleFilter::Bicubic => "BICUBIC",
-            ResampleFilter::Lanczos => "LANCZOS",
-            ResampleFilter::Hamming => "HAMMING",
-            ResampleFilter::Box => "BOX",
-            _ => unreachable!(),
-        };
-        let expected = source
-            .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
-            .expect("CPU wide two-axis ordered F resize")
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU wide two-axis ordered F bytes");
-        let actual = source
-            .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
-            .expect("GPU wide two-axis ordered F resize")
-            .use_backend(Backend::Gpu)
-            .tobytes()
-            .expect("GPU wide two-axis ordered F bytes");
-        assert_eq!(
-            actual, expected,
-            "2097152-tap two-axis {filter_name} resize"
-        );
-        let telemetry = Backend::take_pipeline_telemetry()
-            .expect("wide two-axis ordered F resize must publish telemetry");
-        assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(telemetry.1, Backend::Gpu);
-        // Box retains the exact fixed-table path. Other filters stream
-        // 128 horizontal chunks plus one store, then one vertical chunk
-        // and its final store.
-        assert_eq!(
-            telemetry.6,
-            Some(if matches!(filter, ResampleFilter::Box) {
-                2
-            } else {
-                131
-            })
-        );
-        assert_eq!(telemetry.7, None);
+        assert_f_resize_two_axis_ordered_case(&source, &source_dynamic, filter);
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_f_resize_two_axis_ordered_case(
+    source: &Image,
+    source_dynamic: &DynamicImage,
+    filter: ResampleFilter,
+) {
+    let op = PipelineOp::Resize { w: 1, h: 1, filter };
+    assert!(
+        gpu_f_resize_f64_ordered_is_exact(std::slice::from_ref(&op), source_dynamic, Some("F")),
+        "ordered proof should cover two-axis {filter:?} resize"
+    );
+    let filter_name = match filter {
+        ResampleFilter::Bilinear => "BILINEAR",
+        ResampleFilter::Bicubic => "BICUBIC",
+        ResampleFilter::Lanczos => "LANCZOS",
+        ResampleFilter::Hamming => "HAMMING",
+        ResampleFilter::Box => "BOX",
+        _ => unreachable!(),
+    };
+    let expected = source
+        .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+        .expect("CPU wide two-axis ordered F resize")
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU wide two-axis ordered F bytes");
+    let actual = source
+        .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+        .expect("GPU wide two-axis ordered F resize")
+        .use_backend(Backend::Gpu)
+        .tobytes()
+        .expect("GPU wide two-axis ordered F bytes");
+    assert_eq!(
+        actual, expected,
+        "2097152-tap two-axis {filter_name} resize"
+    );
+    let telemetry = Backend::take_pipeline_telemetry()
+        .expect("wide two-axis ordered F resize must publish telemetry");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(telemetry.1, Backend::Gpu);
+    // Box retains the exact fixed-table path. Other filters stream
+    // 128 horizontal chunks plus one store, then one vertical chunk
+    // and its final store.
+    assert_eq!(
+        telemetry.6,
+        Some(if matches!(filter, ResampleFilter::Box) {
+            2
+        } else {
+            131
+        })
+    );
+    assert_eq!(telemetry.7, None);
 }
 
 #[test]
