@@ -587,6 +587,44 @@ fn update_shape_geometry(
     }
 }
 
+fn layout_for_convert_mode(mode: &ColorMode) -> SimdLayout {
+    match mode {
+        ColorMode::L => SimdLayout::Luma8,
+        ColorMode::LA => SimdLayout::LumaA8,
+        ColorMode::RGB | ColorMode::YCbCr | ColorMode::HSV => SimdLayout::Rgb8,
+        ColorMode::RGBA | ColorMode::CMYK => SimdLayout::Rgba8,
+        _ => SimdLayout::Unsupported,
+    }
+}
+
+fn layout_for_color_3d_lut_mode(mode: PixelMode) -> SimdLayout {
+    match mode {
+        PixelMode::RGB => SimdLayout::Rgb8,
+        PixelMode::RGBA | PixelMode::CMYK => SimdLayout::Rgba8,
+        _ => SimdLayout::Unsupported,
+    }
+}
+
+fn layout_for_merge_mode(mode: &ColorMode) -> SimdLayout {
+    match mode {
+        ColorMode::L | ColorMode::Mode1 => SimdLayout::Luma8,
+        ColorMode::LA => SimdLayout::LumaA8,
+        ColorMode::RGB => SimdLayout::Rgb8,
+        ColorMode::RGBA | ColorMode::CMYK => SimdLayout::Rgba8,
+        _ => SimdLayout::Unsupported,
+    }
+}
+
+fn layout_for_composite_mode(mode: &str) -> SimdLayout {
+    match mode {
+        "1" | "L" | "P" => SimdLayout::Luma8,
+        "LA" | "PA" => SimdLayout::LumaA8,
+        "RGB" | "HSV" | "YCbCr" => SimdLayout::Rgb8,
+        "RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F" => SimdLayout::Rgba8,
+        _ => SimdLayout::Unsupported,
+    }
+}
+
 fn update_shape_layout(next: &mut SimdImageShape, op: &PipelineOp) -> Option<bool> {
     match op {
         PipelineOp::Constant { .. } | PipelineOp::Grayscale => {
@@ -606,43 +644,21 @@ fn update_shape_layout(next: &mut SimdImageShape, op: &PipelineOp) -> Option<boo
             Some(true)
         }
         PipelineOp::Convert { mode, .. } => {
-            next.layout = match mode {
-                ColorMode::L => SimdLayout::Luma8,
-                ColorMode::LA => SimdLayout::LumaA8,
-                ColorMode::RGB | ColorMode::YCbCr | ColorMode::HSV => SimdLayout::Rgb8,
-                ColorMode::RGBA | ColorMode::CMYK => SimdLayout::Rgba8,
-                _ => SimdLayout::Unsupported,
-            };
+            next.layout = layout_for_convert_mode(mode);
             Some(true)
         }
         PipelineOp::Color3DLut { target_mode, .. } => {
-            next.layout = match target_mode {
-                PixelMode::RGB => SimdLayout::Rgb8,
-                PixelMode::RGBA | PixelMode::CMYK => SimdLayout::Rgba8,
-                _ => SimdLayout::Unsupported,
-            };
+            next.layout = layout_for_color_3d_lut_mode(*target_mode);
             Some(true)
         }
         PipelineOp::Merge { mode, .. } => {
-            next.layout = match mode {
-                ColorMode::L | ColorMode::Mode1 => SimdLayout::Luma8,
-                ColorMode::LA => SimdLayout::LumaA8,
-                ColorMode::RGB => SimdLayout::Rgb8,
-                ColorMode::RGBA | ColorMode::CMYK => SimdLayout::Rgba8,
-                _ => SimdLayout::Unsupported,
-            };
+            next.layout = layout_for_merge_mode(mode);
             Some(true)
         }
         PipelineOp::CompositeModule { other, .. } => {
             let output_mode = other.mode().ok()?;
             (next.width, next.height) = other.size().ok()?;
-            next.layout = match output_mode.as_str() {
-                "1" | "L" | "P" => SimdLayout::Luma8,
-                "LA" | "PA" => SimdLayout::LumaA8,
-                "RGB" | "HSV" | "YCbCr" => SimdLayout::Rgb8,
-                "RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F" => SimdLayout::Rgba8,
-                _ => SimdLayout::Unsupported,
-            };
+            next.layout = layout_for_composite_mode(output_mode.as_str());
             Some(true)
         }
         PipelineOp::PutAlpha { .. } | PipelineOp::PutAlphaData { .. } => {
