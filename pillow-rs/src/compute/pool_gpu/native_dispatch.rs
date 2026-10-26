@@ -219,6 +219,29 @@ pub(super) struct SharpnessLDispatch {
     pub(super) row_aligned: bool,
 }
 
+fn plan_row_aligned_sharpness_l_dispatch(
+    width: u32,
+    height: u32,
+    max_groups: u64,
+) -> Result<Option<SharpnessLDispatch>, PilError> {
+    if !width.is_multiple_of(4) {
+        return Ok(None);
+    }
+    let words_per_row = u64::from(width) / 4;
+    let groups_x = words_per_row.div_ceil(SHARPNESS_L_WORKGROUP_WIDTH);
+    let groups_y = u64::from(height).div_ceil(SHARPNESS_L_WORKGROUP_HEIGHT);
+    if groups_x > max_groups || groups_y > max_groups {
+        return Ok(None);
+    }
+    Ok(Some(SharpnessLDispatch {
+        groups_x: u32::try_from(groups_x)
+            .map_err(|_| PilError::ValueError("GPU Sharpness dispatch is too wide".into()))?,
+        groups_y: u32::try_from(groups_y)
+            .map_err(|_| PilError::ValueError("GPU Sharpness dispatch is too tall".into()))?,
+        row_aligned: true,
+    }))
+}
+
 /// Plan one invocation per four-pixel output word. Word-aligned widths map
 /// directly to image rows; other dimensions use a bounded flattened 2D grid.
 /// The shader's fourth uniform word selects the same layout returned here.
@@ -242,21 +265,8 @@ pub(super) fn plan_sharpness_l_dispatch(
     }
 
     let max_groups = u64::from(max_workgroups_per_dimension);
-    if width.is_multiple_of(4) {
-        let words_per_row = u64::from(width) / 4;
-        let groups_x = words_per_row.div_ceil(SHARPNESS_L_WORKGROUP_WIDTH);
-        let groups_y = u64::from(height).div_ceil(SHARPNESS_L_WORKGROUP_HEIGHT);
-        if groups_x <= max_groups && groups_y <= max_groups {
-            return Ok(SharpnessLDispatch {
-                groups_x: u32::try_from(groups_x).map_err(|_| {
-                    PilError::ValueError("GPU Sharpness dispatch is too wide".into())
-                })?,
-                groups_y: u32::try_from(groups_y).map_err(|_| {
-                    PilError::ValueError("GPU Sharpness dispatch is too tall".into())
-                })?,
-                row_aligned: true,
-            });
-        }
+    if let Some(dispatch) = plan_row_aligned_sharpness_l_dispatch(width, height, max_groups)? {
+        return Ok(dispatch);
     }
 
     let output_words = pixel_count.div_ceil(4);
