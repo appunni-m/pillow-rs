@@ -386,24 +386,7 @@ fn gpu_packed_rgb_hsv_transpose_tiled_public_pixels_and_receipts() {
                 ),
                 Some((height.div_ceil(16), width.div_ceil(16))),
             );
-            let mut expected = vec![0; bytes.len()];
-            // Independent forward scatter checks every native sample,
-            // without sharing the shader's inverse mapping or tile order.
-            for y in 0..height {
-                for x in 0..width {
-                    let (target_x, target_y) = match method {
-                        TransposeMethod::Rotate90 => (y, width - 1 - x),
-                        TransposeMethod::Rotate270 => (height - 1 - y, x),
-                        TransposeMethod::Transpose => (y, x),
-                        TransposeMethod::Transverse => (height - 1 - y, width - 1 - x),
-                        _ => unreachable!("only axis swaps are selected"),
-                    };
-                    let input_start = ((y * width + x) * 3) as usize;
-                    let output_start = ((target_y * height + target_x) * 3) as usize;
-                    expected[output_start..output_start + 3]
-                        .copy_from_slice(&bytes[input_start..input_start + 3]);
-                }
-            }
+            let expected = expected_tiled_rgb_transpose(&bytes, width, height, &method);
             let ops = [PipelineOp::Transpose { method }];
             for mode in [None, Some("RGB"), Some("HSV")] {
                 let prepared = prepare_execution(&ops, Some(Backend::Gpu)).unwrap();
@@ -411,25 +394,57 @@ fn gpu_packed_rgb_hsv_transpose_tiled_public_pixels_and_receipts() {
                 assert_eq!(actual.dimensions(), (height, width));
                 assert_eq!(actual.color(), crate::raster::ColorType::Rgb8);
                 assert_eq!(actual.as_bytes(), expected);
-                let receipt = Backend::take_pipeline_telemetry().expect("tiled RGB receipt");
-                assert_eq!(receipt.0, Some(Backend::Gpu));
-                assert_eq!(receipt.1, Backend::Gpu);
-                assert_eq!(receipt.2, 1);
-                assert_eq!(receipt.6, Some(1));
-                assert_eq!(receipt.7, None);
-                let resources = receipt.8.expect("tiled RGB transfer counters");
-                let native_bytes = u64::from(width) * u64::from(height) * 3;
-                assert_eq!(resources.upload_bytes, native_bytes);
-                assert_eq!(resources.readback_bytes, native_bytes);
-                assert_eq!(resources.parameter_bytes, 32);
-                assert_eq!(resources.host_allocation_count, 1);
-                assert_eq!(resources.host_allocated_bytes, native_bytes);
-                assert_eq!(resources.mode_conversion_count, 0);
-                assert_eq!(
-                    resources.full_frame_copy_count,
-                    if gpu.direct_primary_readback { 0 } else { 2 },
-                );
+                assert_tiled_rgb_transpose_receipt(width, height, gpu.direct_primary_readback);
             }
         }
     }
+}
+
+#[cfg(target_endian = "little")]
+fn expected_tiled_rgb_transpose(
+    bytes: &[u8],
+    width: u32,
+    height: u32,
+    method: &crate::pipeline::TransposeMethod,
+) -> Vec<u8> {
+    let mut expected = vec![0; bytes.len()];
+    // Independent forward scatter checks samples without sharing the shader's mapping.
+    for y in 0..height {
+        for x in 0..width {
+            let (target_x, target_y) = match method {
+                crate::pipeline::TransposeMethod::Rotate90 => (y, width - 1 - x),
+                crate::pipeline::TransposeMethod::Rotate270 => (height - 1 - y, x),
+                crate::pipeline::TransposeMethod::Transpose => (y, x),
+                crate::pipeline::TransposeMethod::Transverse => (height - 1 - y, width - 1 - x),
+                _ => unreachable!("only axis swaps are selected"),
+            };
+            let input_start = ((y * width + x) * 3) as usize;
+            let output_start = ((target_y * height + target_x) * 3) as usize;
+            expected[output_start..output_start + 3]
+                .copy_from_slice(&bytes[input_start..input_start + 3]);
+        }
+    }
+    expected
+}
+
+#[cfg(target_endian = "little")]
+fn assert_tiled_rgb_transpose_receipt(width: u32, height: u32, direct_primary_readback: bool) {
+    let receipt = Backend::take_pipeline_telemetry().expect("tiled RGB receipt");
+    assert_eq!(receipt.0, Some(Backend::Gpu));
+    assert_eq!(receipt.1, Backend::Gpu);
+    assert_eq!(receipt.2, 1);
+    assert_eq!(receipt.6, Some(1));
+    assert_eq!(receipt.7, None);
+    let resources = receipt.8.expect("tiled RGB transfer counters");
+    let native_bytes = u64::from(width) * u64::from(height) * 3;
+    assert_eq!(resources.upload_bytes, native_bytes);
+    assert_eq!(resources.readback_bytes, native_bytes);
+    assert_eq!(resources.parameter_bytes, 32);
+    assert_eq!(resources.host_allocation_count, 1);
+    assert_eq!(resources.host_allocated_bytes, native_bytes);
+    assert_eq!(resources.mode_conversion_count, 0);
+    assert_eq!(
+        resources.full_frame_copy_count,
+        if direct_primary_readback { 0 } else { 2 },
+    );
 }
