@@ -1,11 +1,11 @@
 use super::*;
 
+fn f_resize_words_to_bytes(words: &[u32]) -> Vec<u8> {
+    words.iter().flat_map(|word| word.to_le_bytes()).collect()
+}
+
 #[test]
 fn f_resize_dyadic_gpu_bytes_match_reference_and_publish_native_receipt() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     let first_cases = f_resize_dyadic_first_cases();
     let remaining_cases = f_resize_dyadic_remaining_cases();
 
@@ -13,7 +13,7 @@ fn f_resize_dyadic_gpu_bytes_match_reference_and_publish_native_receipt() {
     for (source_size, output_size, filter, values, expected_words) in
         first_cases.into_iter().chain(remaining_cases)
     {
-        let source_bytes = bytes(
+        let source_bytes = f_resize_words_to_bytes(
             &values
                 .iter()
                 .map(|value| value.to_bits())
@@ -42,7 +42,7 @@ fn f_resize_dyadic_gpu_bytes_match_reference_and_publish_native_receipt() {
             }
             Err(error) => panic!("native GPU F resize failed: {error}"),
         };
-        assert_eq!(actual, bytes(&expected_words));
+        assert_eq!(actual, f_resize_words_to_bytes(&expected_words));
         let telemetry = Backend::take_pipeline_telemetry()
             .expect("native GPU resize must publish a telemetry receipt");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
@@ -51,12 +51,23 @@ fn f_resize_dyadic_gpu_bytes_match_reference_and_publish_native_receipt() {
         assert_eq!(telemetry.7, None);
     }
 
+    if !assert_f_resize_box_chain(previous) {
+        return;
+    }
+    Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_f_resize_box_chain(previous: bool) -> bool {
     // Two sequential 2:1 Box reductions exercise the chain proof: the
     // first pass stores non-power-of-two f32 averages, and the second
     // pass must still match Pillow's f64 accumulation and f32 store.
     let chain_values = [1.0f32, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0];
-    let chain_source = Image::frombytes("F", (4, 2), &bytes(&chain_values.map(f32::to_bits)))
-        .expect("F chain source");
+    let chain_source = Image::frombytes(
+        "F",
+        (4, 2),
+        &f_resize_words_to_bytes(&chain_values.map(f32::to_bits)),
+    )
+    .expect("F chain source");
     let chain_actual = match chain_source
         .resize((2, 1), Some(ResampleInput::Name("BOX".into())), None)
         .expect("first Box resize")
@@ -73,18 +84,18 @@ fn f_resize_dyadic_gpu_bytes_match_reference_and_publish_native_receipt() {
                     .contains("GPU device initialization failed") =>
         {
             Backend::set_pipeline_telemetry_enabled(previous);
-            return;
+            return false;
         }
         Err(error) => panic!("native GPU F Box chain failed: {error}"),
     };
-    assert_eq!(chain_actual, bytes(&[0x41ff_0000]));
+    assert_eq!(chain_actual, f_resize_words_to_bytes(&[0x41ff_0000]));
     let chain_telemetry = Backend::take_pipeline_telemetry()
         .expect("native GPU F Box chain must publish a telemetry receipt");
     assert_eq!(chain_telemetry.0, Some(Backend::Gpu));
     assert_eq!(chain_telemetry.1, Backend::Gpu);
     assert_eq!(chain_telemetry.6, Some(4));
     assert_eq!(chain_telemetry.7, None);
-    Backend::set_pipeline_telemetry_enabled(previous);
+    true
 }
 
 type DyadicResizeCase = ((u32, u32), (u32, u32), ResampleInput, Vec<f32>, Vec<u32>);
