@@ -190,7 +190,24 @@ fn gpu_native_flip_keeps_mode_specific_storage_and_pixels() {
         }
     }
     let _telemetry = RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
-    let cases = [
+    assert_native_flip_cases(native_flip_cases());
+}
+
+#[cfg(target_endian = "little")]
+type NativeFlipCase = (&'static str, DynamicImage, u64);
+
+#[cfg(target_endian = "little")]
+fn native_flip_cases() -> Vec<NativeFlipCase> {
+    native_flip_luma_cases()
+        .into_iter()
+        .chain(native_flip_alpha_cases())
+        .chain(native_flip_color_cases())
+        .collect()
+}
+
+#[cfg(target_endian = "little")]
+fn native_flip_luma_cases() -> [NativeFlipCase; 3] {
+    [
         (
             "1",
             DynamicImage::ImageLuma8(
@@ -217,6 +234,12 @@ fn gpu_native_flip_keeps_mode_specific_storage_and_pixels() {
             ),
             24,
         ),
+    ]
+}
+
+#[cfg(target_endian = "little")]
+fn native_flip_alpha_cases() -> [NativeFlipCase; 2] {
+    [
         (
             "LA",
             DynamicImage::ImageLumaA8(
@@ -241,6 +264,12 @@ fn gpu_native_flip_keeps_mode_specific_storage_and_pixels() {
             ),
             36,
         ),
+    ]
+}
+
+#[cfg(target_endian = "little")]
+fn native_flip_color_cases() -> [NativeFlipCase; 2] {
+    [
         (
             "RGB",
             DynamicImage::ImageRgb8(
@@ -269,15 +298,11 @@ fn gpu_native_flip_keeps_mode_specific_storage_and_pixels() {
             ),
             60,
         ),
-    ];
-    assert_native_flip_cases(cases);
+    ]
 }
 
 #[cfg(target_endian = "little")]
-type NativeFlipCase = (&'static str, DynamicImage, u64);
-
-#[cfg(target_endian = "little")]
-fn assert_native_flip_cases(cases: [NativeFlipCase; 7]) {
+fn assert_native_flip_cases(cases: Vec<NativeFlipCase>) {
     use crate::compute::{execute_prepared, prepare_execution, registry};
 
     let op = PipelineOp::Flip;
