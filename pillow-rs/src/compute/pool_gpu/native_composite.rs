@@ -29,6 +29,26 @@ struct NativeCompositePlan {
 
 #[cfg(target_endian = "little")]
 #[inline(always)]
+fn record_native_composite_telemetry(
+    buffers: &BufferPool,
+    plan: &NativeCompositePlan,
+    readback: &ReadbackTarget,
+) {
+    crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+        upload_bytes: plan.input_transfer + plan.other_transfer + plan.mask_transfer,
+        auxiliary_bytes: plan.other_transfer + plan.mask_transfer,
+        readback_bytes: plan.output_transfer,
+        parameter_bytes: 32,
+        retained_cache_bytes: buffers.retained_bytes(),
+        full_frame_copy_count: 3 + u64::from(matches!(readback, ReadbackTarget::Staging(_))),
+        mode_conversion_count: 0,
+        ..PipelineResourceTelemetry::default()
+    });
+    crate::compute::record_pipeline_dispatch_count(1);
+}
+
+#[cfg(target_endian = "little")]
+#[inline(always)]
 fn native_composite_transfer_size(length: usize) -> Result<u64, PilError> {
     let length = u64::try_from(length)
         .map_err(|_| PilError::ValueError("GPU native composite is too large".into()))?;
@@ -310,17 +330,7 @@ impl GpuInner {
                 )
             },
         )?;
-        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
-            upload_bytes: plan.input_transfer + plan.other_transfer + plan.mask_transfer,
-            auxiliary_bytes: plan.other_transfer + plan.mask_transfer,
-            readback_bytes: plan.output_transfer,
-            parameter_bytes: 32,
-            retained_cache_bytes: buffers.retained_bytes(),
-            full_frame_copy_count: 3 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
-            mode_conversion_count: 0,
-            ..PipelineResourceTelemetry::default()
-        });
-        crate::compute::record_pipeline_dispatch_count(1);
+        record_native_composite_telemetry(buffers, plan, &readback);
         if let ReadbackTarget::Staging(staging) = readback {
             self.recycle_staging(staging);
         }
