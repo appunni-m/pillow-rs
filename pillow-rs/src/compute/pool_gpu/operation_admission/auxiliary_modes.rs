@@ -34,25 +34,7 @@ pub fn gpu_auxiliary_modes_are_safe_for_color(
     if let PipelineOp::CompositeModule { mask_alpha, .. } = op {
         return gpu_composite_auxiliary_modes_are_safe(*mask_alpha, current_color, auxiliary);
     }
-    let requires_matching_source = matches!(
-        op,
-        PipelineOp::Add { .. }
-            | PipelineOp::Subtract { .. }
-            | PipelineOp::Multiply { .. }
-            | PipelineOp::Screen { .. }
-            | PipelineOp::Darker { .. }
-            | PipelineOp::Lighter { .. }
-            | PipelineOp::Difference { .. }
-            | PipelineOp::AddModulo { .. }
-            | PipelineOp::SubtractModulo { .. }
-            | PipelineOp::LogicalAnd { .. }
-            | PipelineOp::LogicalOr { .. }
-            | PipelineOp::LogicalXor { .. }
-            | PipelineOp::BlendModule { .. }
-            | PipelineOp::Paste { .. }
-            | PipelineOp::AlphaComposite { .. }
-    );
-    if requires_matching_source
+    if gpu_auxiliary_operation_requires_matching_source(op)
         && auxiliary
             .second
             .as_ref()
@@ -78,14 +60,39 @@ pub fn gpu_auxiliary_modes_are_safe_for_color(
         // Paste's luma-mask path calls DynamicImage::to_luma8(), which uses
         // weighted RGB conversion for RGB/RGBA masks. The shader samples byte
         // 0 directly, so only native L/LA masks are exact.
-        return !auxiliary.third.as_ref().is_some_and(|mask| {
-            !matches!(
-                mask.as_ref(),
-                DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
-            )
-        });
+        return gpu_paste_mask_modes_are_safe(auxiliary);
     }
     true
+}
+
+fn gpu_auxiliary_operation_requires_matching_source(op: &PipelineOp) -> bool {
+    matches!(
+        op,
+        PipelineOp::Add { .. }
+            | PipelineOp::Subtract { .. }
+            | PipelineOp::Multiply { .. }
+            | PipelineOp::Screen { .. }
+            | PipelineOp::Darker { .. }
+            | PipelineOp::Lighter { .. }
+            | PipelineOp::Difference { .. }
+            | PipelineOp::AddModulo { .. }
+            | PipelineOp::SubtractModulo { .. }
+            | PipelineOp::LogicalAnd { .. }
+            | PipelineOp::LogicalOr { .. }
+            | PipelineOp::LogicalXor { .. }
+            | PipelineOp::BlendModule { .. }
+            | PipelineOp::Paste { .. }
+            | PipelineOp::AlphaComposite { .. }
+    )
+}
+
+fn gpu_paste_mask_modes_are_safe(auxiliary: &AuxiliaryImages) -> bool {
+    !auxiliary.third.as_ref().is_some_and(|mask| {
+        !matches!(
+            mask.as_ref(),
+            DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
+        )
+    })
 }
 
 #[inline]
