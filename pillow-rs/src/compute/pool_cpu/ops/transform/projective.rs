@@ -10,6 +10,170 @@ use crate::raster::{
 /// quadrilateral transforms as a bilinear map from output coordinates to the
 /// four source corners. Keeping both calculations here lets the public core
 /// route methods 2 and 3 through the same lazy pipeline as affine transforms.
+#[inline(always)]
+fn projective_source_at(
+    destination: (u32, u32),
+    data: &[f64],
+    quad: bool,
+    dx: f64,
+    dy: f64,
+) -> Option<(f64, f64)> {
+    let (dst_w, dst_h) = destination;
+    if quad {
+        if dst_w == 0 || dst_h == 0 {
+            return None;
+        }
+        // Pillow's Image.__transformer first converts QUAD's raw NW/SW/SE/NE
+        // corners to bilinear coefficients, then evaluates pixel centers.
+        let dx = dx + 0.5;
+        let dy = dy + 0.5;
+        let x0 = data[0];
+        let y0 = data[1];
+        let sw = f64::from(dst_w);
+        let sh = f64::from(dst_h);
+        let inverse_width = 1.0 / sw;
+        let inverse_height = 1.0 / sh;
+        let x1 = (data[6] - x0) * inverse_width;
+        let x2 = (data[2] - x0) * inverse_height;
+        let x3 = (data[4] - data[2] - data[6] + x0) * inverse_width * inverse_height;
+        let y1 = (data[7] - y0) * inverse_width;
+        let y2 = (data[3] - y0) * inverse_height;
+        let y3 = (data[5] - data[3] - data[7] + y0) * inverse_width * inverse_height;
+        let x = x0 + x1 * dx + x2 * dy + x3 * dx * dy;
+        let y = y0 + y1 * dx + y2 * dy + y3 * dx * dy;
+        return Some((x, y));
+    }
+
+    // Pillow 12.2.0's libImaging/Geometry.c `perspective_transform` evaluates
+    // the inverse map at each destination pixel center.
+    let dx = dx + 0.5;
+    let dy = dy + 0.5;
+    // Keep Geometry.c's fused grouping: the first product is fused with the
+    // second product, then the constant term is added. Reassociation can move
+    // an edge coordinate by one ULP after an LA/RGBA premultiplied round trip.
+    let denominator = data[6].mul_add(dx, data[7] * dy) + 1.0;
+    if denominator == 0.0 || !denominator.is_finite() {
+        return None;
+    }
+    let x = (data[0].mul_add(dx, data[1] * dy) + data[2]) / denominator;
+    let y = (data[3].mul_add(dx, data[4] * dy) + data[5]) / denominator;
+    (x.is_finite() && y.is_finite()).then_some((x, y))
+}
+
+#[inline(always)]
+fn projective_fill_sample(destination: &mut [u8], fill_color: (u8, u8, u8, u8)) {
+    for (channel, value) in destination.iter_mut().enumerate() {
+        *value = match channel {
+            0 => fill_color.0,
+            1 => fill_color.1,
+            2 => fill_color.2,
+            _ => fill_color.3,
+        };
+    }
+}
+
+#[inline(always)]
+fn projective_nearest_coordinate(value: f64) -> i64 {
+    if value < 0.0 { -1 } else { value as i64 }
+}
+
+#[inline(always)]
+fn transform_projective_sample(
+    raw: &[u8],
+    destination: &mut [u8],
+    source_dimensions: (u32, u32),
+    channels: usize,
+    fill_color: (u8, u8, u8, u8),
+    nearest: bool,
+    filter: &ResampleFilter,
+    sx: f64,
+    sy: f64,
+) {
+    let (src_w, src_h) = source_dimensions;
+    if nearest {
+        // Geometry.c defines COORD() as -1 for negative values and a C cast
+        // otherwise. Maps were evaluated at destination pixel centers above.
+        let ix = projective_nearest_coordinate(sx);
+        let iy = projective_nearest_coordinate(sy);
+        if ix >= 0 && ix < i64::from(src_w) && iy >= 0 && iy < i64::from(src_h) {
+            let in_idx = (iy as usize * src_w as usize + ix as usize) * channels;
+            destination.copy_from_slice(&raw[in_idx..in_idx + channels]);
+        } else {
+            projective_fill_sample(destination, fill_color);
+        }
+        return;
+    }
+
+    if src_w == 0
+        || src_h == 0
+        || sx < 0.0
+        || sx >= f64::from(src_w)
+        || sy < 0.0
+        || sy >= f64::from(src_h)
+    {
+        projective_fill_sample(destination, fill_color);
+        return;
+    }
+    // Geometry.c checks the unshifted coordinate, subtracts 0.5, then clips
+    // the sample window. Horizontal interpolation precedes vertical, and the
+    // final UINT8 cast truncates toward zero.
+    let sample_x = sx - 0.5;
+    let sample_y = sy - 0.5;
+    if matches!(filter, ResampleFilter::Bicubic) {
+        // Pillow's BICUBIC callback uses four-tap Horner form with the same
+        // fused operations as `cubic_sample`.
+        let floor_x = sample_x.floor() as i64 - 1;
+        let floor_y = sample_y.floor() as i64 - 1;
+        let fx = sample_x - (floor_x + 1) as f64;
+        let fy = sample_y - (floor_y + 1) as f64;
+        for channel in 0..channels {
+            let mut rows = [0.0; 4];
+            for (row, output) in rows.iter_mut().enumerate() {
+                let y = (floor_y + row as i64).clamp(0, i64::from(src_h - 1)) as usize;
+                let samples = [
+                    raw[(y * src_w as usize + floor_x.clamp(0, i64::from(src_w - 1)) as usize)
+                        * channels
+                        + channel] as f64,
+                    raw[(y * src_w as usize
+                        + (floor_x + 1).clamp(0, i64::from(src_w - 1)) as usize)
+                        * channels
+                        + channel] as f64,
+                    raw[(y * src_w as usize
+                        + (floor_x + 2).clamp(0, i64::from(src_w - 1)) as usize)
+                        * channels
+                        + channel] as f64,
+                    raw[(y * src_w as usize
+                        + (floor_x + 3).clamp(0, i64::from(src_w - 1)) as usize)
+                        * channels
+                        + channel] as f64,
+                ];
+                *output = cubic_sample(samples, fx);
+            }
+            destination[channel] = cubic_sample(rows, fy).clamp(0.0, 255.0) as u8;
+        }
+    } else {
+        let floor_x = sample_x.floor() as i64;
+        let floor_y = sample_y.floor() as i64;
+        let x0 = floor_x.clamp(0, i64::from(src_w - 1)) as usize;
+        let x1 = (floor_x + 1).clamp(0, i64::from(src_w - 1)) as usize;
+        let y0 = floor_y.clamp(0, i64::from(src_h - 1)) as usize;
+        let y1 = (floor_y + 1).clamp(0, i64::from(src_h - 1)) as usize;
+        let fx = sample_x - floor_x as f64;
+        let fy = sample_y - floor_y as f64;
+        for channel in 0..channels {
+            let p00 = raw[(y0 * src_w as usize + x0) * channels + channel] as f64;
+            let p10 = raw[(y0 * src_w as usize + x1) * channels + channel] as f64;
+            let p01 = raw[(y1 * src_w as usize + x0) * channels + channel] as f64;
+            let p11 = raw[(y1 * src_w as usize + x1) * channels + channel] as f64;
+            let horizontal_top = (p10 - p00).mul_add(fx, p00);
+            let horizontal_bottom = (p11 - p01).mul_add(fx, p01);
+            destination[channel] = (horizontal_bottom - horizontal_top)
+                .mul_add(fy, horizontal_top)
+                .clamp(0.0, 255.0) as u8;
+        }
+    }
+}
+
 pub(super) fn transform_projective_generic(
     img: &DynamicImage,
     dst_w: u32,
@@ -37,164 +201,27 @@ pub(super) fn transform_projective_generic(
     let mut out = vec![0u8; byte_count];
     let nearest = matches!(filter, ResampleFilter::Nearest);
 
-    let source_at = |dx: f64, dy: f64| -> Option<(f64, f64)> {
-        if quad {
-            if dst_w == 0 || dst_h == 0 {
-                return None;
-            }
-            // Pillow's Image.__transformer first converts QUAD's raw
-            // NW/SW/SE/NE corners to these bilinear coefficients, then
-            // Geometry.c evaluates them at destination pixel centers.
-            let dx = dx + 0.5;
-            let dy = dy + 0.5;
-            let x0 = data[0];
-            let y0 = data[1];
-            let sw = f64::from(dst_w);
-            let sh = f64::from(dst_h);
-            let inverse_width = 1.0 / sw;
-            let inverse_height = 1.0 / sh;
-            let x1 = (data[6] - x0) * inverse_width;
-            let x2 = (data[2] - x0) * inverse_height;
-            let x3 = (data[4] - data[2] - data[6] + x0) * inverse_width * inverse_height;
-            let y1 = (data[7] - y0) * inverse_width;
-            let y2 = (data[3] - y0) * inverse_height;
-            let y3 = (data[5] - data[3] - data[7] + y0) * inverse_width * inverse_height;
-            let x = x0 + x1 * dx + x2 * dy + x3 * dx * dy;
-            let y = y0 + y1 * dx + y2 * dy + y3 * dx * dy;
-            return Some((x, y));
-        }
-
-        // Pillow 12.2.0's libImaging/Geometry.c `perspective_transform`
-        // evaluates the inverse map at each destination pixel center.
-        let dx = dx + 0.5;
-        let dy = dy + 0.5;
-        // Keep the same fused grouping as Geometry.c's compiled
-        // `perspective_transform`: the first product is fused with the
-        // second product, then the constant term is added.  Reassociating
-        // these three terms can move a clipped edge coordinate by one ULP,
-        // which is observable after an LA/RGBA premultiplied round trip.
-        let denominator = data[6].mul_add(dx, data[7] * dy) + 1.0;
-        if denominator == 0.0 || !denominator.is_finite() {
-            return None;
-        }
-        let x = (data[0].mul_add(dx, data[1] * dy) + data[2]) / denominator;
-        let y = (data[3].mul_add(dx, data[4] * dy) + data[5]) / denominator;
-        (x.is_finite() && y.is_finite()).then_some((x, y))
-    };
-
-    let fill_sample = |destination: &mut [u8]| {
-        for (channel, value) in destination.iter_mut().enumerate() {
-            *value = match channel {
-                0 => fill_color.0,
-                1 => fill_color.1,
-                2 => fill_color.2,
-                _ => fill_color.3,
-            };
-        }
-    };
-    let nearest_coordinate = |value: f64| {
-        if value < 0.0 { -1 } else { value as i64 }
-    };
-
     for dy in 0..dst_h {
         for dx in 0..dst_w {
             let out_idx = (dy as usize * dst_w as usize + dx as usize) * channels;
             let destination = &mut out[out_idx..out_idx + channels];
-            let Some((sx, sy)) = source_at(f64::from(dx), f64::from(dy)) else {
-                fill_sample(destination);
+            let Some((sx, sy)) =
+                projective_source_at((dst_w, dst_h), data, quad, f64::from(dx), f64::from(dy))
+            else {
+                projective_fill_sample(destination, fill_color);
                 continue;
             };
-
-            if nearest {
-                // Geometry.c defines COORD(v) as -1 for negative values and
-                // a C cast otherwise, i.e. truncation toward zero rather
-                // than rounding to the nearest source pixel. Both
-                // perspective and quad maps have already been evaluated at
-                // destination pixel centers above.
-                let ix = nearest_coordinate(sx);
-                let iy = nearest_coordinate(sy);
-                if ix >= 0 && ix < i64::from(src_w) && iy >= 0 && iy < i64::from(src_h) {
-                    let in_idx = (iy as usize * src_w as usize + ix as usize) * channels;
-                    destination.copy_from_slice(&raw[in_idx..in_idx + channels]);
-                } else {
-                    fill_sample(destination);
-                }
-                continue;
-            }
-
-            if src_w == 0
-                || src_h == 0
-                || sx < 0.0
-                || sx >= f64::from(src_w)
-                || sy < 0.0
-                || sy >= f64::from(src_h)
-            {
-                fill_sample(destination);
-                continue;
-            }
-            // Geometry.c's filtered path checks the unshifted source
-            // coordinate, subtracts 0.5, then clips the sample window. Its
-            // horizontal interpolation is performed before the vertical
-            // interpolation, and the final UINT8 cast truncates toward zero.
-            let sample_x = sx - 0.5;
-            let sample_y = sy - 0.5;
-            if matches!(filter, ResampleFilter::Bicubic) {
-                // Pillow's BICUBIC callback uses a four-tap Horner form,
-                // with the same fused operations as `cubic_sample`. Keep the
-                // bicubic branch separate from bilinear: treating every
-                // non-nearest projective request as bilinear changes PA and
-                // ordinary byte results for fractional maps.
-                let floor_x = sample_x.floor() as i64 - 1;
-                let floor_y = sample_y.floor() as i64 - 1;
-                let fx = sample_x - (floor_x + 1) as f64;
-                let fy = sample_y - (floor_y + 1) as f64;
-                for channel in 0..channels {
-                    let mut rows = [0.0; 4];
-                    for (row, output) in rows.iter_mut().enumerate() {
-                        let y = (floor_y + row as i64).clamp(0, i64::from(src_h - 1)) as usize;
-                        let samples = [
-                            raw[(y * src_w as usize
-                                + (floor_x).clamp(0, i64::from(src_w - 1)) as usize)
-                                * channels
-                                + channel] as f64,
-                            raw[(y * src_w as usize
-                                + (floor_x + 1).clamp(0, i64::from(src_w - 1)) as usize)
-                                * channels
-                                + channel] as f64,
-                            raw[(y * src_w as usize
-                                + (floor_x + 2).clamp(0, i64::from(src_w - 1)) as usize)
-                                * channels
-                                + channel] as f64,
-                            raw[(y * src_w as usize
-                                + (floor_x + 3).clamp(0, i64::from(src_w - 1)) as usize)
-                                * channels
-                                + channel] as f64,
-                        ];
-                        *output = cubic_sample(samples, fx);
-                    }
-                    destination[channel] = cubic_sample(rows, fy).clamp(0.0, 255.0) as u8;
-                }
-            } else {
-                let floor_x = sample_x.floor() as i64;
-                let floor_y = sample_y.floor() as i64;
-                let x0 = floor_x.clamp(0, i64::from(src_w - 1)) as usize;
-                let x1 = (floor_x + 1).clamp(0, i64::from(src_w - 1)) as usize;
-                let y0 = floor_y.clamp(0, i64::from(src_h - 1)) as usize;
-                let y1 = (floor_y + 1).clamp(0, i64::from(src_h - 1)) as usize;
-                let fx = sample_x - floor_x as f64;
-                let fy = sample_y - floor_y as f64;
-                for channel in 0..channels {
-                    let p00 = raw[(y0 * src_w as usize + x0) * channels + channel] as f64;
-                    let p10 = raw[(y0 * src_w as usize + x1) * channels + channel] as f64;
-                    let p01 = raw[(y1 * src_w as usize + x0) * channels + channel] as f64;
-                    let p11 = raw[(y1 * src_w as usize + x1) * channels + channel] as f64;
-                    let horizontal_top = (p10 - p00).mul_add(fx, p00);
-                    let horizontal_bottom = (p11 - p01).mul_add(fx, p01);
-                    destination[channel] = (horizontal_bottom - horizontal_top)
-                        .mul_add(fy, horizontal_top)
-                        .clamp(0.0, 255.0) as u8;
-                }
-            }
+            transform_projective_sample(
+                raw,
+                destination,
+                (src_w, src_h),
+                channels,
+                fill_color,
+                nearest,
+                filter,
+                sx,
+                sy,
+            );
         }
     }
 
