@@ -78,6 +78,65 @@ fn extract_effect_spread_or_lut_auxiliary(
     }
 }
 
+fn extract_merge_auxiliary(
+    bands: &[crate::image::Image],
+) -> Result<Option<Arc<DynamicImage>>, PilError> {
+    // Merge's first band is the current pipeline image. Pack the remaining
+    // single-band values consecutively for the ordinary dual-input binding.
+    let first = bands
+        .first()
+        .ok_or_else(|| PilError::ValueError("GPU Merge requires at least one band".into()))?;
+    let (w, h) = first.size()?;
+    let pixels = CheckedDims::new(w, h, 1)?.total_pixels();
+    let extras = bands.len().saturating_sub(1);
+    if extras == 0 {
+        return Ok(None);
+    }
+    let packed_width = pixels.checked_mul(extras).ok_or_else(|| {
+        PilError::ValueError("GPU Merge auxiliary band dimensions overflow".into())
+    })?;
+    let packed_width = u32::try_from(packed_width).map_err(|_| {
+        PilError::ValueError("GPU Merge auxiliary band dimensions exceed u32".into())
+    })?;
+    let mut values = Vec::with_capacity(packed_width as usize);
+    for band in bands.iter().skip(1) {
+        let image = band.materialize_for_ops()?;
+        if image.dimensions() != (w, h) {
+            return Err(PilError::ValueError(
+                "GPU Merge band dimensions do not match".into(),
+            ));
+        }
+        values.extend(image.to_luma8().into_raw());
+    }
+    let synthetic = crate::raster::GrayImage::from_raw(packed_width, 1, values)
+        .ok_or_else(|| PilError::InternalError("GPU Merge auxiliary shape mismatch".into()))?;
+    Ok(Some(Arc::new(DynamicImage::ImageLuma8(synthetic))))
+}
+
+fn dual_input_image(op: &PipelineOp) -> Option<&Arc<crate::image::Image>> {
+    match op {
+        PipelineOp::Add { other, .. }
+        | PipelineOp::Subtract { other, .. }
+        | PipelineOp::Multiply { other }
+        | PipelineOp::Screen { other }
+        | PipelineOp::Darker { other }
+        | PipelineOp::Lighter { other }
+        | PipelineOp::Difference { other }
+        | PipelineOp::Overlay { other }
+        | PipelineOp::HardLight { other }
+        | PipelineOp::SoftLight { other }
+        | PipelineOp::AddModulo { other }
+        | PipelineOp::SubtractModulo { other }
+        | PipelineOp::LogicalAnd { other }
+        | PipelineOp::LogicalOr { other }
+        | PipelineOp::LogicalXor { other }
+        | PipelineOp::BlendModule { other, .. }
+        | PipelineOp::CompositeModule { other, .. } => Some(other),
+        PipelineOp::AlphaComposite { source, .. } => Some(source),
+        _ => None,
+    }
+}
+
 pub(super) fn extract_second_image(
     op: &PipelineOp,
     primary_dimensions: Option<(u32, u32)>,
@@ -117,37 +176,7 @@ pub(super) fn extract_second_image(
         return Ok(Some(Arc::new(DynamicImage::ImageRgba8(synthetic))));
     }
     if let PipelineOp::Merge { bands, .. } = op {
-        // Merge's first band is the current pipeline image. Pack the remaining
-        // single-band values consecutively into a synthetic Luma image so the
-        // ordinary dual-input binding can carry all bands without a new ABI.
-        let first = bands
-            .first()
-            .ok_or_else(|| PilError::ValueError("GPU Merge requires at least one band".into()))?;
-        let (w, h) = first.size()?;
-        let pixels = CheckedDims::new(w, h, 1)?.total_pixels();
-        let extras = bands.len().saturating_sub(1);
-        if extras == 0 {
-            return Ok(None);
-        }
-        let packed_width = pixels.checked_mul(extras).ok_or_else(|| {
-            PilError::ValueError("GPU Merge auxiliary band dimensions overflow".into())
-        })?;
-        let packed_width = u32::try_from(packed_width).map_err(|_| {
-            PilError::ValueError("GPU Merge auxiliary band dimensions exceed u32".into())
-        })?;
-        let mut values = Vec::with_capacity(packed_width as usize);
-        for band in bands.iter().skip(1) {
-            let image = band.materialize_for_ops()?;
-            if image.dimensions() != (w, h) {
-                return Err(PilError::ValueError(
-                    "GPU Merge band dimensions do not match".into(),
-                ));
-            }
-            values.extend(image.to_luma8().into_raw());
-        }
-        let synthetic = crate::raster::GrayImage::from_raw(packed_width, 1, values)
-            .ok_or_else(|| PilError::InternalError("GPU Merge auxiliary shape mismatch".into()))?;
-        return Ok(Some(Arc::new(DynamicImage::ImageLuma8(synthetic))));
+        return extract_merge_auxiliary(bands.as_ref());
     }
     if let PipelineOp::Paste { source, .. } = op {
         // Paste has already converted its source to the destination mode. Keep
@@ -165,28 +194,7 @@ pub(super) fn extract_second_image(
         return other.materialized_shared().map(Some);
     }
 
-    let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {
-        PipelineOp::Add { other, .. }
-        | PipelineOp::Subtract { other, .. }
-        | PipelineOp::Multiply { other }
-        | PipelineOp::Screen { other }
-        | PipelineOp::Darker { other }
-        | PipelineOp::Lighter { other }
-        | PipelineOp::Difference { other }
-        | PipelineOp::Overlay { other }
-        | PipelineOp::HardLight { other }
-        | PipelineOp::SoftLight { other }
-        | PipelineOp::AddModulo { other }
-        | PipelineOp::SubtractModulo { other }
-        | PipelineOp::LogicalAnd { other }
-        | PipelineOp::LogicalOr { other }
-        | PipelineOp::LogicalXor { other }
-        | PipelineOp::BlendModule { other, .. }
-        | PipelineOp::CompositeModule { other, .. } => Some(other),
-        PipelineOp::AlphaComposite { source, .. } => Some(source),
-        _ => None,
-    };
-    arc_img
+    dual_input_image(op)
         .map(|image| image.materialized_shared().map(Some))
         .unwrap_or(Ok(None))
 }
