@@ -130,7 +130,6 @@ fn gpu_transpose_fusion_covers_every_pair_and_identity_continuation() {
 
 #[test]
 fn gpu_transpose_fusion_native_preserves_logical_modes_and_dispatch_counts() {
-    use crate::compute::{execute_prepared, prepare_execution, registry};
     use crate::pipeline::TransposeMethod;
 
     let methods = [
@@ -154,72 +153,94 @@ fn gpu_transpose_fusion_native_preserves_logical_modes_and_dispatch_counts() {
         ("F", 4),
         ("RGBX", 4),
     ] {
-        let bytes: Vec<u8> = (0..5 * 3 * channels)
-            .map(|index: usize| index.wrapping_mul(29).wrapping_add(index / 3) as u8)
-            .collect();
-        let source = Image::frombytes(mode, (5, 3), &bytes)
-            .expect("transpose source")
-            .materialize()
-            .expect("native transpose source");
-        for first in &methods {
-            for second in &methods {
-                let ops = [
-                    PipelineOp::Transpose {
-                        method: first.clone(),
-                    },
-                    PipelineOp::Transpose {
-                        method: second.clone(),
-                    },
-                ];
-                let middle = registry::execute_cpu(&ops[0], &source, Some(mode))
-                    .expect("first CPU transpose");
-                let expected = registry::execute_cpu(&ops[1], &middle, Some(mode))
-                    .expect("second CPU transpose");
-                // Image::push_op intentionally puts each PA operation in
-                // a separate materialization node to preserve palette
-                // layout boundaries. That public chain reports a final
-                // one-op receipt and cannot exercise two-op GPU fusion.
-                // Submit the explicit batch through the ordinary routed
-                // execution boundary so every mode must preserve both
-                // public operations in this receipt.
-                let prepared = prepare_execution(&ops, Some(Backend::Gpu))
-                    .expect("GPU transpose batch routing");
-                let actual = match execute_prepared(&prepared, &ops, &source, Some(mode)) {
-                    Ok(actual) => actual,
-                    Err(error)
-                        if error.to_string().contains("GPU adapter not available")
-                            || error
-                                .to_string()
-                                .contains("GPU device initialization failed") =>
-                    {
-                        Backend::set_pipeline_telemetry_enabled(previous);
-                        return;
-                    }
-                    Err(error) => panic!("native GPU {mode} transpose chain failed: {error}"),
-                };
-                assert_eq!(
-                    actual.dimensions(),
-                    expected.dimensions(),
-                    "{mode} {first:?} {second:?}"
-                );
-                assert_eq!(
-                    actual.as_bytes(),
-                    expected.as_bytes(),
-                    "{mode} {first:?} {second:?}"
-                );
-                let telemetry = Backend::take_pipeline_telemetry().expect("GPU transpose receipt");
-                assert_eq!(telemetry.0, Some(Backend::Gpu));
-                assert_eq!(telemetry.1, Backend::Gpu);
-                assert_eq!(telemetry.2, 2, "{mode} {first:?} {second:?}");
-                assert_eq!(
-                    telemetry.6,
-                    Some(super::fuse_gpu_transpose_ops(&ops).len() as u64)
-                );
-                assert_eq!(telemetry.7, None);
-            }
+        if !assert_native_gpu_transpose_fusion_mode(mode, channels, &methods) {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
         }
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_native_gpu_transpose_fusion_mode(
+    mode: &str,
+    channels: usize,
+    methods: &[crate::pipeline::TransposeMethod; 7],
+) -> bool {
+    let bytes: Vec<u8> = (0..5 * 3 * channels)
+        .map(|index: usize| index.wrapping_mul(29).wrapping_add(index / 3) as u8)
+        .collect();
+    let source = Image::frombytes(mode, (5, 3), &bytes)
+        .expect("transpose source")
+        .materialize()
+        .expect("native transpose source");
+    for first in methods {
+        for second in methods {
+            if !assert_native_gpu_transpose_fusion_pair(mode, &source, first, second) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn assert_native_gpu_transpose_fusion_pair(
+    mode: &str,
+    source: &DynamicImage,
+    first: &crate::pipeline::TransposeMethod,
+    second: &crate::pipeline::TransposeMethod,
+) -> bool {
+    use crate::compute::{execute_prepared, prepare_execution, registry};
+
+    let ops = [
+        PipelineOp::Transpose {
+            method: first.clone(),
+        },
+        PipelineOp::Transpose {
+            method: second.clone(),
+        },
+    ];
+    let middle = registry::execute_cpu(&ops[0], source, Some(mode)).expect("first CPU transpose");
+    let expected =
+        registry::execute_cpu(&ops[1], &middle, Some(mode)).expect("second CPU transpose");
+    // Image::push_op intentionally puts each PA operation in a separate
+    // materialization node to preserve palette layout boundaries. That
+    // public chain reports a final one-op receipt and cannot exercise
+    // two-op GPU fusion. Submit the explicit batch through the ordinary
+    // routed execution boundary so each mode must preserve both operations.
+    let prepared =
+        prepare_execution(&ops, Some(Backend::Gpu)).expect("GPU transpose batch routing");
+    let actual = match execute_prepared(&prepared, &ops, source, Some(mode)) {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            return false;
+        }
+        Err(error) => panic!("native GPU {mode} transpose chain failed: {error}"),
+    };
+    assert_eq!(
+        actual.dimensions(),
+        expected.dimensions(),
+        "{mode} {first:?} {second:?}"
+    );
+    assert_eq!(
+        actual.as_bytes(),
+        expected.as_bytes(),
+        "{mode} {first:?} {second:?}"
+    );
+    let telemetry = Backend::take_pipeline_telemetry().expect("GPU transpose receipt");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(telemetry.1, Backend::Gpu);
+    assert_eq!(telemetry.2, 2, "{mode} {first:?} {second:?}");
+    assert_eq!(
+        telemetry.6,
+        Some(super::fuse_gpu_transpose_ops(&ops).len() as u64)
+    );
+    assert_eq!(telemetry.7, None);
+    true
 }
 
 #[test]
