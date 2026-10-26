@@ -1,5 +1,6 @@
 //! Encoding for native byte Paste stages in explicit GPU graphs.
 
+use super::super::pipeline_cache::CachedPipeline;
 use super::super::{BufferPool, GpuInner, create_sized_buffer, plan_extract_band_dispatch};
 use super::encoding::EncodedGraph;
 use super::graph::{Plan, Stage, planned_channels};
@@ -92,19 +93,14 @@ pub(super) fn encode_paste_stage(
         1,
         gpu.device.limits().max_compute_workgroups_per_dimension,
     )?;
-    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-        label: Some("gpu_stream_paste"),
-        timestamp_writes: None,
-    });
-    pass.set_pipeline(&cached.pipeline);
-    pass.set_bind_group(0, &bind, &[]);
-    pass.dispatch_workgroups(groups.0, groups.1, 1);
-    crate::compute::record_gpu_shader_dispatch(
-        cached.variant_name,
-        cached.shader_file,
-        u64::from(groups.0) * u64::from(groups.1),
-    );
-    Ok(!current_a)
+    Ok(encode_compute_dispatch(
+        encoder,
+        &cached,
+        &bind,
+        groups,
+        "gpu_stream_paste",
+        current_a,
+    ))
 }
 
 fn masked_paste_parameters(stage: &Stage<'_>) -> Result<(u32, [u32; 16]), PilError> {
@@ -247,17 +243,36 @@ pub(super) fn encode_masked_paste_stage(
         1,
         gpu.device.limits().max_compute_workgroups_per_dimension,
     )?;
+    Ok(encode_compute_dispatch(
+        encoder,
+        &cached,
+        &bind,
+        groups,
+        "gpu_stream_masked_paste",
+        current_a,
+    ))
+}
+
+#[inline(always)]
+fn encode_compute_dispatch(
+    encoder: &mut wgpu::CommandEncoder,
+    cached: &CachedPipeline,
+    bind: &wgpu::BindGroup,
+    groups: (u32, u32),
+    pass_label: &'static str,
+    current_a: bool,
+) -> bool {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-        label: Some("gpu_stream_masked_paste"),
+        label: Some(pass_label),
         timestamp_writes: None,
     });
     pass.set_pipeline(&cached.pipeline);
-    pass.set_bind_group(0, &bind, &[]);
+    pass.set_bind_group(0, bind, &[]);
     pass.dispatch_workgroups(groups.0, groups.1, 1);
     crate::compute::record_gpu_shader_dispatch(
         cached.variant_name,
         cached.shader_file,
         u64::from(groups.0) * u64::from(groups.1),
     );
-    Ok(!current_a)
+    !current_a
 }
