@@ -25,6 +25,29 @@ struct NativeBytePasteExecution<'a> {
     dispatch: NativeBytePasteDispatch,
 }
 
+#[inline(always)]
+fn write_native_paste_padded(
+    queue: &wgpu::Queue,
+    buffer: &wgpu::Buffer,
+    bytes: &[u8],
+    transfer_bytes: u64,
+) -> Result<(), PilError> {
+    let size = NonZeroU64::new(transfer_bytes)
+        .ok_or_else(|| PilError::InternalError("GPU native Paste upload is empty".into()))?;
+    let mut view = queue.write_buffer_with(buffer, 0, size).ok_or_else(|| {
+        PilError::InternalError("GPU native Paste staging allocation failed".into())
+    })?;
+    let mapped = view.as_mut();
+    if mapped.len() != transfer_bytes as usize || bytes.len() > mapped.len() {
+        return Err(PilError::InternalError(
+            "GPU native Paste upload length mismatch".into(),
+        ));
+    }
+    mapped[..bytes.len()].copy_from_slice(bytes);
+    mapped[bytes.len()..].fill(0);
+    Ok(())
+}
+
 #[cfg(target_endian = "little")]
 #[inline(always)]
 fn record_native_rgb_crop_telemetry(
@@ -391,32 +414,14 @@ impl GpuInner {
             self.device.limits().min_uniform_buffer_offset_alignment as usize,
         );
 
-        let write_padded = |buffer: &wgpu::Buffer, bytes: &[u8], transfer_bytes: u64| {
-            let size = NonZeroU64::new(transfer_bytes).ok_or_else(|| {
-                PilError::InternalError("GPU native Paste upload is empty".into())
-            })?;
-            let mut view = self
-                .queue
-                .write_buffer_with(buffer, 0, size)
-                .ok_or_else(|| {
-                    PilError::InternalError("GPU native Paste staging allocation failed".into())
-                })?;
-            let mapped = view.as_mut();
-            if mapped.len() != transfer_bytes as usize || bytes.len() > mapped.len() {
-                return Err(PilError::InternalError(
-                    "GPU native Paste upload length mismatch".into(),
-                ));
-            }
-            mapped[..bytes.len()].copy_from_slice(bytes);
-            mapped[bytes.len()..].fill(0);
-            Ok::<(), PilError>(())
-        };
-        write_padded(
+        write_native_paste_padded(
+            &self.queue,
             &buffers.buf_a,
             execution.destination.as_bytes(),
             dispatch.destination_transfer_bytes,
         )?;
-        write_padded(
+        write_native_paste_padded(
+            &self.queue,
             &buffers.img2_arena.buffer,
             execution.source.as_bytes(),
             dispatch.source_transfer_bytes,
