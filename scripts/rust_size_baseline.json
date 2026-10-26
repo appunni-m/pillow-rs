@@ -106,12 +106,6 @@
       "signature": "fn native_cover_packed_output_dispatch_covers_row_tails_and_checks_limits() {"
     },
     {
-      "lines": 249,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/native_luma.rs",
-      "signature": "fn gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons() {"
-    },
-    {
       "lines": 109,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/native_transform.rs",
@@ -346,11 +340,6 @@
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/tests/native_cover.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/tests/native_luma.rs": {
       "owner": "lazytrot",
       "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"

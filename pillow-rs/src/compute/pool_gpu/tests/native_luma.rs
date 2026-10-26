@@ -482,9 +482,24 @@ fn gpu_packed_luma_order_statistic_admits_only_exact_native_l_singletons() {
     ));
 }
 
-#[test]
 #[cfg(target_endian = "little")]
-fn gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons() {
+struct NativeByteFilterCases {
+    blur: PipelineOp,
+    box_blur: PipelineOp,
+    median: PipelineOp,
+    max_filter: PipelineOp,
+    min_filter: PipelineOp,
+    rank_filter: PipelineOp,
+    binomial3x3_kernel: [f32; 9],
+    filter_3x3: PipelineOp,
+    filter_5x5: PipelineOp,
+    luma: DynamicImage,
+    aligned_luma: DynamicImage,
+    la: DynamicImage,
+}
+
+#[cfg(target_endian = "little")]
+fn native_byte_filter_cases() -> NativeByteFilterCases {
     let blur = PipelineOp::GaussianBlur { sigma: 2.0 };
     let box_blur = PipelineOp::BoxBlur { radius: 1 };
     let median = PipelineOp::MedianFilter { size: 3 };
@@ -509,54 +524,82 @@ fn gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons() {
         DynamicImage::ImageLuma8(GrayImage::from_raw(8, 6, vec![37; 8 * 6]).unwrap());
     let la =
         DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(65, 47, vec![37; 65 * 47 * 2]).unwrap());
+    NativeByteFilterCases {
+        blur,
+        box_blur,
+        median,
+        max_filter,
+        min_filter,
+        rank_filter,
+        binomial3x3_kernel,
+        filter_3x3,
+        filter_5x5,
+        luma,
+        aligned_luma,
+        la,
+    }
+}
+
+#[test]
+#[cfg(target_endian = "little")]
+fn gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons() {
+    let cases = native_byte_filter_cases();
+    assert_luma_native_byte_filter_admission(&cases);
+    assert_la_native_byte_filter_admission(&cases);
+    assert_la_native_byte_filter_rejections(&cases);
+    assert_native_byte_filter_mode_and_shape_rejections(&cases);
+}
+
+#[cfg(target_endian = "little")]
+fn assert_luma_native_byte_filter_admission(cases: &NativeByteFilterCases) {
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&blur),
-        &luma,
+        std::slice::from_ref(&cases.blur),
+        &cases.luma,
         None
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&blur),
-        &luma,
+        std::slice::from_ref(&cases.blur),
+        &cases.luma,
         Some("L")
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::GaussianBlur { sigma: -2.0 }],
-        &luma,
+        &cases.luma,
         Some("L")
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::GaussianBlur { sigma: 0.0 }],
-        &luma,
+        &cases.luma,
         Some("L")
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&box_blur),
-        &luma,
+        std::slice::from_ref(&cases.box_blur),
+        &cases.luma,
         None
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&box_blur),
-        &luma,
+        std::slice::from_ref(&cases.box_blur),
+        &cases.luma,
         Some("L")
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&filter_5x5),
-        &aligned_luma,
+        std::slice::from_ref(&cases.filter_5x5),
+        &cases.aligned_luma,
         None
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&filter_5x5),
-        &aligned_luma,
+        std::slice::from_ref(&cases.filter_5x5),
+        &cases.aligned_luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&filter_5x5),
-        &luma,
+        std::slice::from_ref(&cases.filter_5x5),
+        &cases.luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&filter_5x5),
-        &aligned_luma,
+        std::slice::from_ref(&cases.filter_5x5),
+        &cases.aligned_luma,
         Some("P")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
@@ -565,27 +608,31 @@ fn gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons() {
             scale: 0.0,
             offset: 0.0,
         }],
-        &aligned_luma,
+        &cases.aligned_luma,
         Some("L")
     ));
+}
+
+#[cfg(target_endian = "little")]
+fn assert_la_native_byte_filter_admission(cases: &NativeByteFilterCases) {
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&blur),
-        &la,
+        std::slice::from_ref(&cases.blur),
+        &cases.la,
         Some("LA")
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&filter_5x5),
-        &la,
+        std::slice::from_ref(&cases.filter_5x5),
+        &cases.la,
         Some("LA")
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&filter_3x3),
-        &la,
+        std::slice::from_ref(&cases.filter_3x3),
+        &cases.la,
         Some("LA")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&filter_3x3),
-        &la,
+        std::slice::from_ref(&cases.filter_3x3),
+        &cases.la,
         None
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
@@ -594,21 +641,21 @@ fn gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons() {
             scale: 16.0,
             offset: 0.0,
         }],
-        &la,
+        &cases.la,
         Some("LA")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::Filter3x3 {
-            kernel: binomial3x3_kernel,
+            kernel: cases.binomial3x3_kernel,
             scale: 16.0,
             offset: 1.0,
         }],
-        &la,
+        &cases.la,
         Some("LA")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&filter_5x5),
-        &la,
+        std::slice::from_ref(&cases.filter_5x5),
+        &cases.la,
         None
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
@@ -617,82 +664,90 @@ fn gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons() {
             scale: 0.0,
             offset: 0.0,
         }],
-        &la,
+        &cases.la,
+        Some("LA")
+    ));
+}
+
+#[cfg(target_endian = "little")]
+fn assert_la_native_byte_filter_rejections(cases: &NativeByteFilterCases) {
+    assert!(super::gpu_packed_native_byte_filter_input(
+        std::slice::from_ref(&cases.box_blur),
+        &cases.la,
         Some("LA")
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&box_blur),
-        &la,
+        std::slice::from_ref(&cases.median),
+        &cases.la,
         Some("LA")
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&median),
-        &la,
+        std::slice::from_ref(&cases.max_filter),
+        &cases.la,
         Some("LA")
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&max_filter),
-        &la,
+        std::slice::from_ref(&cases.min_filter),
+        &cases.la,
         Some("LA")
     ));
     assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&min_filter),
-        &la,
-        Some("LA")
-    ));
-    assert!(super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&rank_filter),
-        &la,
+        std::slice::from_ref(&cases.rank_filter),
+        &cases.la,
         Some("LA")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&median),
-        &la,
+        std::slice::from_ref(&cases.median),
+        &cases.la,
         None
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::MedianFilter { size: 5 }],
-        &la,
+        &cases.la,
         Some("LA")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::MaxFilter { size: 5 }],
-        &la,
+        &cases.la,
         Some("LA")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::MinFilter { size: 5 }],
-        &la,
+        &cases.la,
         Some("LA")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::RankFilter { size: 5, rank: 1 }],
-        &la,
+        &cases.la,
         Some("LA")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::RankFilter { size: 3, rank: 9 }],
-        &la,
+        &cases.la,
         Some("LA")
     ));
+}
+
+#[cfg(target_endian = "little")]
+fn assert_native_byte_filter_mode_and_shape_rejections(cases: &NativeByteFilterCases) {
     assert!(!super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&median),
-        &luma,
+        std::slice::from_ref(&cases.median),
+        &cases.luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&blur),
-        &la,
+        std::slice::from_ref(&cases.blur),
+        &cases.la,
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::BoxBlur { radius: 0 }],
-        &luma,
+        &cases.luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::BoxBlur { radius: 2 }],
-        &luma,
+        &cases.luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
@@ -701,36 +756,36 @@ fn gpu_packed_native_byte_filter_admits_exact_native_l_and_la_singletons() {
             radius_y: 1.0,
             passes: 1,
         }],
-        &luma,
+        &cases.luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        &[blur.clone(), PipelineOp::Duplicate],
-        &luma,
+        &[cases.blur.clone(), PipelineOp::Duplicate],
+        &cases.luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        &[box_blur, PipelineOp::Duplicate],
-        &luma,
+        &[cases.box_blur.clone(), PipelineOp::Duplicate],
+        &cases.luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&blur),
-        &luma,
+        std::slice::from_ref(&cases.blur),
+        &cases.luma,
         Some("RGB")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&blur),
+        std::slice::from_ref(&cases.blur),
         &DynamicImage::ImageRgb8(RgbImage::from_raw(65, 47, vec![0; 65 * 47 * 3]).unwrap()),
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
         &[PipelineOp::GaussianBlur { sigma: f32::NAN }],
-        &luma,
+        &cases.luma,
         Some("L")
     ));
     assert!(!super::gpu_packed_native_byte_filter_input(
-        std::slice::from_ref(&blur),
+        std::slice::from_ref(&cases.blur),
         &DynamicImage::ImageLuma8(GrayImage::new(0, 1)),
         Some("L")
     ));
