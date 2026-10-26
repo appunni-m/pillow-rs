@@ -22,94 +22,146 @@ fn assert_native_transpose_matches_forward_mapping(
         TransposeMethod::Transpose,
         TransposeMethod::Transverse,
     ] {
-        let swapped = matches!(
-            method,
-            TransposeMethod::Rotate90
-                | TransposeMethod::Rotate270
-                | TransposeMethod::Transpose
-                | TransposeMethod::Transverse
-        );
-        let (expected_width, expected_height) = if swapped {
-            (height, width)
+        assert_native_transpose_method(source, width, height, channels, method);
+    }
+}
+
+fn assert_native_transpose_method(
+    source: &[u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    method: TransposeMethod,
+) {
+    let swapped = transpose_swaps_dimensions(&method);
+    let (expected_width, expected_height) = if swapped {
+        (height, width)
+    } else {
+        (width, height)
+    };
+    let expected = expected_transpose_bytes(source, width, height, channels, &method);
+    let (actual, actual_width, actual_height, blocks, tail, kernel_path) = native_transpose_bytes(
+        source,
+        width as u32,
+        height as u32,
+        channels,
+        method.clone(),
+    )
+    .expect("valid native transpose");
+    assert_eq!(
+        (actual_width, actual_height),
+        (expected_width as u32, expected_height as u32)
+    );
+    assert_eq!(
+        actual, expected,
+        "{method:?}: {width}x{height}, {channels} channels"
+    );
+    #[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
+    if channels == 4
+        && swapped
+        && width >= 8
+        && height >= 8
+        && std::is_x86_feature_detected!("avx2")
+    {
+        assert_eq!(kernel_path, "avx2-transpose");
+    }
+    assert_native_transpose_metrics(
+        width,
+        height,
+        channels,
+        swapped,
+        source.len(),
+        &method,
+        kernel_path,
+        blocks,
+        tail,
+    );
+}
+
+fn transpose_swaps_dimensions(method: &TransposeMethod) -> bool {
+    matches!(
+        method,
+        TransposeMethod::Rotate90
+            | TransposeMethod::Rotate270
+            | TransposeMethod::Transpose
+            | TransposeMethod::Transverse
+    )
+}
+
+fn expected_transpose_bytes(
+    source: &[u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    method: &TransposeMethod,
+) -> Vec<u8> {
+    let (expected_width, _) = if transpose_swaps_dimensions(method) {
+        (height, width)
+    } else {
+        (width, height)
+    };
+    let mut expected = vec![0; source.len()];
+    // Scatter the original samples using the public forward coordinate
+    // mapping, independent of the kernel's inverse mapping and tile layout.
+    for y in 0..height {
+        for x in 0..width {
+            let (target_x, target_y) = match method {
+                TransposeMethod::FlipLeftRight => (width - 1 - x, y),
+                TransposeMethod::FlipTopBottom => (x, height - 1 - y),
+                TransposeMethod::Rotate90 => (y, width - 1 - x),
+                TransposeMethod::Rotate180 => (width - 1 - x, height - 1 - y),
+                TransposeMethod::Rotate270 => (height - 1 - y, x),
+                TransposeMethod::Transpose => (y, x),
+                TransposeMethod::Transverse => (height - 1 - y, width - 1 - x),
+            };
+            let source_start = (y * width + x) * channels;
+            let target_start = (target_y * expected_width + target_x) * channels;
+            expected[target_start..target_start + channels]
+                .copy_from_slice(&source[source_start..source_start + channels]);
+        }
+    }
+    expected
+}
+
+fn assert_native_transpose_metrics(
+    width: usize,
+    height: usize,
+    channels: usize,
+    swapped: bool,
+    source_len: usize,
+    method: &TransposeMethod,
+    kernel_path: &str,
+    blocks: u64,
+    tail: u64,
+) {
+    let tile = if kernel_path == "avx2-transpose" {
+        8
+    } else {
+        match channels {
+            1 => 16,
+            2 => 8,
+            _ => 4,
+        }
+    };
+    if swapped && width >= tile && height >= tile {
+        let tiles = (width / tile) * (height / tile);
+        #[cfg(feature = "parallel")]
+        let uses_collect =
+            transpose_native_collect_admitted(width, height, channels, source_len, method);
+        #[cfg(not(feature = "parallel"))]
+        let uses_collect = false;
+        if uses_collect {
+            // Work includes complete groups rebuilt at task splits.
+            // The forced-split test checks that exact extra count.
+            assert!(blocks >= (tiles * tile) as u64);
+            assert_eq!(blocks % height as u64, 0);
         } else {
-            (width, height)
-        };
-        let mut expected = vec![0; source.len()];
-        // Scatter the original samples using the public forward
-        // coordinate mapping, independent of the kernel's inverse
-        // mapping and tile layout.
-        for y in 0..height {
-            for x in 0..width {
-                let (target_x, target_y) = match method {
-                    TransposeMethod::FlipLeftRight => (width - 1 - x, y),
-                    TransposeMethod::FlipTopBottom => (x, height - 1 - y),
-                    TransposeMethod::Rotate90 => (y, width - 1 - x),
-                    TransposeMethod::Rotate180 => (width - 1 - x, height - 1 - y),
-                    TransposeMethod::Rotate270 => (height - 1 - y, x),
-                    TransposeMethod::Transpose => (y, x),
-                    TransposeMethod::Transverse => (height - 1 - y, width - 1 - x),
-                };
-                let source_start = (y * width + x) * channels;
-                let target_start = (target_y * expected_width + target_x) * channels;
-                expected[target_start..target_start + channels]
-                    .copy_from_slice(&source[source_start..source_start + channels]);
-            }
+            assert_eq!(blocks, (tiles * tile) as u64);
         }
-        let (actual, actual_width, actual_height, blocks, tail, kernel_path) =
-            native_transpose_bytes(
-                source,
-                width as u32,
-                height as u32,
-                channels,
-                method.clone(),
-            )
-            .expect("valid native transpose");
         assert_eq!(
-            (actual_width, actual_height),
-            (expected_width as u32, expected_height as u32)
+            tail,
+            ((width * height - tiles * tile * tile) * channels) as u64
         );
-        assert_eq!(
-            actual, expected,
-            "{method:?}: {width}x{height}, {channels} channels"
-        );
-        #[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
-        if channels == 4
-            && swapped
-            && width >= 8
-            && height >= 8
-            && std::is_x86_feature_detected!("avx2")
-        {
-            assert_eq!(kernel_path, "avx2-transpose");
-        }
-        let tile = if kernel_path == "avx2-transpose" {
-            8
-        } else {
-            match channels {
-                1 => 16,
-                2 => 8,
-                _ => 4,
-            }
-        };
-        if swapped && width >= tile && height >= tile {
-            let tiles = (width / tile) * (height / tile);
-            #[cfg(feature = "parallel")]
-            let uses_collect =
-                transpose_native_collect_admitted(width, height, channels, source.len(), &method);
-            #[cfg(not(feature = "parallel"))]
-            let uses_collect = false;
-            if uses_collect {
-                // Work includes complete groups rebuilt at task splits.
-                // The forced-split test checks that exact extra count.
-                assert!(blocks >= (tiles * tile) as u64);
-                assert_eq!(blocks % height as u64, 0);
-            } else {
-                assert_eq!(blocks, (tiles * tile) as u64);
-            }
-            assert_eq!(
-                tail,
-                ((width * height - tiles * tile * tile) * channels) as u64
-            );
-        }
     }
 }
 
