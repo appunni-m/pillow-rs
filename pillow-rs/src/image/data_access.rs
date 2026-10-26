@@ -210,6 +210,15 @@ pub(super) fn pillow_band_count(mode: &str) -> usize {
     }
 }
 
+fn validated_band_index(band: i32, band_count: usize) -> Result<usize, PilError> {
+    let band_index = usize::try_from(band)
+        .map_err(|_| PilError::ValueError("band index out of range".into()))?;
+    if band_index >= band_count {
+        return Err(PilError::ValueError("band index out of range".into()));
+    }
+    Ok(band_index)
+}
+
 impl Image {
     /// Returns pixel data as a flat sequence of channel bytes.
     ///
@@ -227,11 +236,7 @@ impl Image {
             // it. Keep this check in the core so every binding observes the
             // same contract instead of silently clamping to RGBA channel 3.
             let mode = self.mode_from_materialized(&img);
-            let band_count = pillow_band_count(&mode);
-            if band < 0 || band as usize >= band_count {
-                return Err(PilError::ValueError("band index out of range".into()));
-            }
-            let band = band as usize;
+            let band = validated_band_index(band, pillow_band_count(&mode))?;
             if mode == "LAB" {
                 if let DynamicImage::ImageRgb8(image) = img.as_ref() {
                     return Ok(select_lab_band(image.as_raw(), band));
@@ -319,9 +324,7 @@ impl Image {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
         let band_count = pillow_band_count(mode);
-        if band < 0 || band as usize >= band_count {
-            return Err(PilError::ValueError("band index out of range".into()));
-        }
+        validated_band_index(band, band_count)?;
         let (width, height) = self.size()?;
         Ok(crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?.total_pixels())
     }
@@ -396,6 +399,8 @@ impl Image {
         let mode_name = self.mode()?;
         let mode = mode_name.as_str();
         let expected = self.getdata_band_len_for_mode(mode, band)?;
+        let band_index = usize::try_from(band).expect("getdata band was validated as nonnegative");
+        let backend_band = u8::try_from(band_index).expect("Pillow band indices fit in u8");
         if output.len() != expected {
             return Err(PilError::InternalError(
                 "getdata band output length mismatch".into(),
@@ -430,7 +435,7 @@ impl Image {
                     |output| {
                         crate::compute::simd_extract_band_into(
                             image.as_ref(),
-                            band as u8,
+                            backend_band,
                             Some(mode),
                             output,
                         )
@@ -443,8 +448,13 @@ impl Image {
             // execution receipt. P and LAB stay on the exact host path below:
             // P must expose raw indices, while LAB's a/b samples use Pillow's
             // signed-byte offset rather than ExtractBand's raw channel value.
-            let extracted = Image::push_op(self, PipelineOp::ExtractBand { index: band as u8 })
-                .use_backend(backend);
+            let extracted = Image::push_op(
+                self,
+                PipelineOp::ExtractBand {
+                    index: backend_band,
+                },
+            )
+            .use_backend(backend);
             let image = extracted.materialized_shared()?;
             let values = image.as_bytes();
             if values.len() != output.len() {
@@ -456,12 +466,12 @@ impl Image {
             return Ok(());
         }
 
-        self.write_getdata_band_cpu(band, selected_backend, output)
+        self.write_getdata_band_cpu(band_index, selected_backend, output)
     }
 
     fn write_getdata_band_cpu(
         &self,
-        band: i32,
+        band: usize,
         selected_backend: Option<crate::compute::Backend>,
         output: &mut [u8],
     ) -> Result<(), PilError> {
@@ -475,7 +485,6 @@ impl Image {
 
             let img = self.materialized_shared()?;
             let materialized_mode = self.mode_from_materialized(&img);
-            let band = band as usize;
             if materialized_mode == "LAB" {
                 if let DynamicImage::ImageRgb8(image) = img.as_ref() {
                     select_lab_band_into(image.as_raw(), band, output);
