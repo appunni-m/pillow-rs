@@ -1,5 +1,41 @@
 use super::*;
 
+struct RestoreTransformDiagnostics {
+    telemetry: bool,
+    shader_coverage: bool,
+}
+
+impl Drop for RestoreTransformDiagnostics {
+    fn drop(&mut self) {
+        Backend::set_pipeline_telemetry_enabled(self.telemetry);
+        Backend::set_gpu_shader_coverage_enabled(self.shader_coverage);
+    }
+}
+
+fn native_transform_gpu_available(context: &str) -> bool {
+    match super::GpuPool::ensure_init() {
+        Ok(_) => true,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            false
+        }
+        Err(error) => panic!("native GPU {context} initialization failed: {error}"),
+    }
+}
+
+fn enable_native_transform_diagnostics() -> RestoreTransformDiagnostics {
+    let restore = RestoreTransformDiagnostics {
+        telemetry: Backend::set_pipeline_telemetry_enabled(true),
+        shader_coverage: Backend::set_gpu_shader_coverage_enabled(true),
+    };
+    let _ = Backend::take_gpu_shader_coverage();
+    restore
+}
+
 #[test]
 #[cfg(target_endian = "little")]
 fn gpu_native_luma_affine_nearest_transform_reads_and_writes_packed_bytes() {
@@ -132,175 +168,134 @@ fn assert_aligned_native_luma_transform() {
 #[test]
 #[cfg(target_endian = "little")]
 fn gpu_native_rgb_affine_nearest_transform_reads_and_writes_packed_bytes() {
-    match super::GpuPool::ensure_init() {
-        Ok(_) => {}
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            return;
-        }
-        Err(error) => panic!("native GPU RGB Transform initialization failed: {error}"),
+    if !native_transform_gpu_available("RGB Transform") {
+        return;
     }
-
-    struct RestoreDiagnostics {
-        telemetry: bool,
-        shader_coverage: bool,
-    }
-    impl Drop for RestoreDiagnostics {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.telemetry);
-            Backend::set_gpu_shader_coverage_enabled(self.shader_coverage);
-        }
-    }
-    let _restore = RestoreDiagnostics {
-        telemetry: Backend::set_pipeline_telemetry_enabled(true),
-        shader_coverage: Backend::set_gpu_shader_coverage_enabled(true),
-    };
-    let _ = Backend::take_gpu_shader_coverage();
-
+    let _restore = enable_native_transform_diagnostics();
     for (width, height) in [(5u32, 3u32), (8u32, 4u32)] {
-        let source_bytes = (0..(width * height * 3) as usize)
-            .map(|index| (index * 29 + 7) as u8)
-            .collect::<Vec<_>>();
-        let source =
-            Image::frombytes("RGB", (width, height), &source_bytes).expect("native RGB source");
-        let transformed = source
-            .transform_public(
-                (width, height),
-                0,
-                Some(TransformData::Affine(vec![
-                    0.87, 0.21, -1.25, -0.16, 1.13, 0.5,
-                ])),
-                0,
-                0,
-                Some(TransformFill::Components(vec![199, 71, 17])),
-            )
-            .expect("native affine nearest RGB transform");
-        let expected = transformed
-            .clone()
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU native RGB Transform");
-        let _ = Backend::take_pipeline_telemetry();
-        let _ = Backend::take_gpu_shader_coverage();
-        let actual = transformed
-            .use_backend(Backend::Gpu)
-            .tobytes()
-            .expect("GPU native RGB Transform");
-        assert_eq!(actual, expected, "native RGB {width}x{height} parity");
-
-        let receipt = Backend::take_pipeline_telemetry()
-            .expect("native RGB Transform must publish telemetry");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native RGB Transform resources");
-        let transfer_bytes = ((width * height * 3 + 3) / 4 * 4) as u64;
-        assert_eq!(resources.upload_bytes, transfer_bytes);
-        assert_eq!(resources.readback_bytes, transfer_bytes);
-        assert_eq!(resources.mode_conversion_count, 0);
-
-        let shader_coverage = Backend::take_gpu_shader_coverage();
-        assert_eq!(shader_coverage.len(), 1);
-        assert_eq!(
-            shader_coverage[0].variant_name,
-            "__internal_transform_rgb_nearest_packed"
-        );
-        assert_eq!(
-            shader_coverage[0].shader_file,
-            "transform_rgb_nearest_packed.wgsl"
-        );
+        assert_native_rgb_affine_case(width, height);
     }
+}
+
+#[cfg(target_endian = "little")]
+fn assert_native_rgb_affine_case(width: u32, height: u32) {
+    let source_bytes = (0..(width * height * 3) as usize)
+        .map(|index| (index * 29 + 7) as u8)
+        .collect::<Vec<_>>();
+    let source =
+        Image::frombytes("RGB", (width, height), &source_bytes).expect("native RGB source");
+    let transformed = source
+        .transform_public(
+            (width, height),
+            0,
+            Some(TransformData::Affine(vec![
+                0.87, 0.21, -1.25, -0.16, 1.13, 0.5,
+            ])),
+            0,
+            0,
+            Some(TransformFill::Components(vec![199, 71, 17])),
+        )
+        .expect("native affine nearest RGB transform");
+    let expected = transformed
+        .clone()
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU native RGB Transform");
+    let _ = Backend::take_pipeline_telemetry();
+    let _ = Backend::take_gpu_shader_coverage();
+    let actual = transformed
+        .use_backend(Backend::Gpu)
+        .tobytes()
+        .expect("GPU native RGB Transform");
+    assert_eq!(actual, expected, "native RGB {width}x{height} parity");
+
+    let receipt =
+        Backend::take_pipeline_telemetry().expect("native RGB Transform must publish telemetry");
+    assert_eq!(receipt.0, Some(Backend::Gpu));
+    assert_eq!(receipt.1, Backend::Gpu);
+    assert_eq!(receipt.6, Some(1));
+    assert_eq!(receipt.7, None);
+    let resources = receipt.8.expect("native RGB Transform resources");
+    let transfer_bytes = (u64::from(width) * u64::from(height) * 3).div_ceil(4) * 4;
+    assert_eq!(resources.upload_bytes, transfer_bytes);
+    assert_eq!(resources.readback_bytes, transfer_bytes);
+    assert_eq!(resources.mode_conversion_count, 0);
+
+    let shader_coverage = Backend::take_gpu_shader_coverage();
+    assert_eq!(shader_coverage.len(), 1);
+    assert_eq!(
+        shader_coverage[0].variant_name,
+        "__internal_transform_rgb_nearest_packed"
+    );
+    assert_eq!(
+        shader_coverage[0].shader_file,
+        "transform_rgb_nearest_packed.wgsl"
+    );
 }
 
 #[test]
 #[cfg(target_endian = "little")]
 fn gpu_native_la_affine_nearest_transform_keeps_two_channel_bytes() {
-    match super::GpuPool::ensure_init() {
-        Ok(_) => {}
-        Err(error)
-            if error.to_string().contains("GPU adapter not available")
-                || error
-                    .to_string()
-                    .contains("GPU device initialization failed") =>
-        {
-            return;
-        }
-        Err(error) => panic!("native GPU LA Transform initialization failed: {error}"),
+    if !native_transform_gpu_available("LA Transform") {
+        return;
     }
-
-    struct RestoreDiagnostics {
-        telemetry: bool,
-        shader_coverage: bool,
-    }
-    impl Drop for RestoreDiagnostics {
-        fn drop(&mut self) {
-            Backend::set_pipeline_telemetry_enabled(self.telemetry);
-            Backend::set_gpu_shader_coverage_enabled(self.shader_coverage);
-        }
-    }
-    let _restore = RestoreDiagnostics {
-        telemetry: Backend::set_pipeline_telemetry_enabled(true),
-        shader_coverage: Backend::set_gpu_shader_coverage_enabled(true),
-    };
-    let _ = Backend::take_gpu_shader_coverage();
-
+    let _restore = enable_native_transform_diagnostics();
     for (width, height) in [(5u32, 3u32), (8u32, 4u32), (4096u32, 4096u32)] {
-        let source_bytes = (0..(width * height * 2) as usize)
-            .map(|index| (index * 29 + 7) as u8)
-            .collect::<Vec<_>>();
-        let source =
-            Image::frombytes("LA", (width, height), &source_bytes).expect("native LA source");
-        let transformed = source
-            .transform_public(
-                (width, height),
-                0,
-                Some(TransformData::Affine(vec![
-                    0.87, 0.21, -1.25, -0.16, 1.13, 0.5,
-                ])),
-                0,
-                0,
-                Some(TransformFill::Components(vec![173, 127])),
-            )
-            .expect("native affine nearest LA transform");
-        let expected = transformed
-            .clone()
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU native LA Transform");
-        let _ = Backend::take_pipeline_telemetry();
-        let _ = Backend::take_gpu_shader_coverage();
-        let actual = transformed
-            .use_backend(Backend::Gpu)
-            .tobytes()
-            .expect("GPU native LA Transform");
-        assert_eq!(actual, expected, "native LA {width}x{height} parity");
-
-        let receipt = Backend::take_pipeline_telemetry()
-            .expect("native LA Transform must publish a telemetry receipt");
-        assert_eq!(receipt.0, Some(Backend::Gpu));
-        assert_eq!(receipt.1, Backend::Gpu);
-        assert_eq!(receipt.6, Some(1));
-        assert_eq!(receipt.7, None);
-        let resources = receipt.8.expect("native LA Transform resources");
-        let transfer_bytes = (u64::from(width) * u64::from(height) * 2).div_ceil(4) * 4;
-        assert_eq!(resources.upload_bytes, transfer_bytes);
-        assert_eq!(resources.readback_bytes, transfer_bytes);
-        assert_eq!(resources.mode_conversion_count, 0);
-
-        let shader_coverage = Backend::take_gpu_shader_coverage();
-        assert_eq!(shader_coverage.len(), 1);
-        assert_eq!(
-            shader_coverage[0].variant_name,
-            "__internal_transform_la_nearest_packed"
-        );
-        assert_eq!(
-            shader_coverage[0].shader_file,
-            "transform_la_nearest_packed.wgsl"
-        );
+        assert_native_la_affine_case(width, height);
     }
+}
+
+#[cfg(target_endian = "little")]
+fn assert_native_la_affine_case(width: u32, height: u32) {
+    let source_bytes = (0..(width * height * 2) as usize)
+        .map(|index| (index * 29 + 7) as u8)
+        .collect::<Vec<_>>();
+    let source = Image::frombytes("LA", (width, height), &source_bytes).expect("native LA source");
+    let transformed = source
+        .transform_public(
+            (width, height),
+            0,
+            Some(TransformData::Affine(vec![
+                0.87, 0.21, -1.25, -0.16, 1.13, 0.5,
+            ])),
+            0,
+            0,
+            Some(TransformFill::Components(vec![173, 127])),
+        )
+        .expect("native affine nearest LA transform");
+    let expected = transformed
+        .clone()
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU native LA Transform");
+    let _ = Backend::take_pipeline_telemetry();
+    let _ = Backend::take_gpu_shader_coverage();
+    let actual = transformed
+        .use_backend(Backend::Gpu)
+        .tobytes()
+        .expect("GPU native LA Transform");
+    assert_eq!(actual, expected, "native LA {width}x{height} parity");
+
+    let receipt = Backend::take_pipeline_telemetry()
+        .expect("native LA Transform must publish a telemetry receipt");
+    assert_eq!(receipt.0, Some(Backend::Gpu));
+    assert_eq!(receipt.1, Backend::Gpu);
+    assert_eq!(receipt.6, Some(1));
+    assert_eq!(receipt.7, None);
+    let resources = receipt.8.expect("native LA Transform resources");
+    let transfer_bytes = (u64::from(width) * u64::from(height) * 2).div_ceil(4) * 4;
+    assert_eq!(resources.upload_bytes, transfer_bytes);
+    assert_eq!(resources.readback_bytes, transfer_bytes);
+    assert_eq!(resources.mode_conversion_count, 0);
+
+    let shader_coverage = Backend::take_gpu_shader_coverage();
+    assert_eq!(shader_coverage.len(), 1);
+    assert_eq!(
+        shader_coverage[0].variant_name,
+        "__internal_transform_la_nearest_packed"
+    );
+    assert_eq!(
+        shader_coverage[0].shader_file,
+        "transform_la_nearest_packed.wgsl"
+    );
 }
