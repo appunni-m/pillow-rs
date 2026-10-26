@@ -10,18 +10,6 @@
       "signature": "pub(super) fn encode_batch( &self, encoder: &mut wgpu::CommandEncoder, ops: &[PipelineOp], prepared: &PreparedGpuBatch, start_is_a: bool, logical_mode: Option<&str>, packed_luma_point: bool, packed_luma_putdata: bool, packed_luma_order_statistic: bool, packed_native_byte_filter: bool, packed_luma_pad: bool, packed_la_pad: bool, packed_luma_transform_output: bool, native_sharpness_l_input: bool, native_sharpness_la_input: bool, native_sharpness_rgb_input: bool, ) -> Result<bool, PilError> {"
     },
     {
-      "lines": 254,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/batch_encoding/dispatch.rs",
-      "signature": "fn make_bind_group( &self, cached: &CachedPipeline, input_buf: &wgpu::Buffer, output_buf: &wgpu::Buffer, resources: &GpuBatchResources, op_index: usize, ) -> Result<wgpu::BindGroup, PilError> {"
-    },
-    {
-      "lines": 248,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/batch_encoding/dispatch.rs",
-      "signature": "pub(super) fn encode_dispatch( &self, cpass: &mut wgpu::ComputePass<'_>, cached: &CachedPipeline, index: usize, current_is_a: bool, resources: &GpuBatchResources, input_dims: (u32, u32), output_dims: (u32, u32), ) -> Result<bool, PilError> {"
-    },
-    {
       "lines": 267,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/batch_execution.rs",
@@ -50,11 +38,6 @@
     "pillow-rs/src/compute/pool_gpu/batch_encoding.rs": {
       "owner": "lazytrot",
       "reason": "Separated GPU batch command orchestration from the batch coordinator; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/batch_encoding/dispatch.rs": {
-      "owner": "lazytrot",
-      "reason": "Separated GPU bind-group construction and per-pipeline dispatch from batch encoding; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/batch_execution.rs": {
