@@ -268,12 +268,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_sample_bits( bytes: &[u8], source_dimensions: (u32, u32), source_axis: u32, output_axis: u32, horizontal: bool, output_index: usize, line: usize, ) -> Option<u32> {"
     },
     {
-      "lines": 282,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn gpu_f_resize_dyadic_is_exact( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
-    },
-    {
       "lines": 150,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs",

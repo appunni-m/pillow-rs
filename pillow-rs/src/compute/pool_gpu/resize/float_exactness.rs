@@ -460,15 +460,15 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_integer_is_exact(
 /// bit equal to Pillow's f64 table, then proves that every f32 product and
 /// sequential reduction is exact on the native adapter.
 /// Bilinear rows have at most two taps, while Box downscales use at most 64
-/// equal power-of-two taps on each changed axis.  The exponent-span bound
+/// equal power-of-two taps on each changed axis. The exponent-span bound
 /// keeps every multi-tap Box partial sum representable in f32, making its
 /// sequential shader reduction equal to the exact f64 sum followed by the
-/// F-mode f32 store.  Multiple all-Box resizes are admitted with the same
+/// F-mode f32 store. Multiple all-Box resizes are admitted with the same
 /// bound accumulated across their passes; scanned `PutData` words can replace
 /// an intermediate without widening the proven value domain.
 //
 // This mirrors Pillow's `Resample.c::precompute_coeffs` and
-// `ImagingResample` f64-accumulate/f32-store boundary.  It intentionally does
+// `ImagingResample` f64-accumulate/f32-store boundary. It intentionally does
 // not claim arbitrary arithmetic-filter parity; those inputs remain under
 // exact host semantic control.
 pub(in crate::compute::pool_gpu) fn gpu_f_resize_dyadic_is_exact(
@@ -488,53 +488,6 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_dyadic_is_exact(
         return true;
     }
 
-    // The native Metal adapter used by the GPU backend flushes some low
-    // normal-range intermediate products in relaxed f32 arithmetic.  The
-    // 22-bit coefficient table can shift a source word by 22 bits, so keep a
-    // 46-bit source margin above the IEEE normal floor (leaving 24 bits after
-    // the shift) rather than treating the abstract f32 range as a device
-    // guarantee.
-    const MIN_NORMAL_EXPONENT: i32 = -80;
-    const MAX_EXPONENT_SPAN: i32 = 16;
-    const MAX_BOX_TAPS: u32 = MAX_GPU_REDUCE_FACTOR;
-
-    // Keep only positive-zero or normal power-of-two words.  A source sign
-    // is returned separately so cancellation and signed zero cannot enter
-    // the proof.  Subnormals are excluded because native adapters may flush
-    // them during shader arithmetic.
-    let scan_words = |bytes: &[u8]| -> Option<(Option<bool>, Option<i32>, Option<i32>)> {
-        if !bytes.chunks_exact(4).remainder().is_empty() {
-            return None;
-        }
-        let mut sign = None;
-        let mut min_exponent: Option<i32> = None;
-        let mut max_exponent: Option<i32> = None;
-        for sample in bytes.chunks_exact(4) {
-            let bits = u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-            if bits == (-0.0f32).to_bits() {
-                return None;
-            }
-            let value = f32::from_bits(bits);
-            if value == 0.0 {
-                continue;
-            }
-            let exponent_bits = ((bits >> 23) & 0xff) as i32;
-            let significand = bits & 0x7f_ff_ff;
-            if exponent_bits == 0 || exponent_bits == 0xff || significand != 0 {
-                return None;
-            }
-            let positive = bits & (1 << 31) == 0;
-            if sign.is_some_and(|expected| expected != positive) {
-                return None;
-            }
-            sign = Some(positive);
-            let exponent = exponent_bits - 127;
-            min_exponent = Some(min_exponent.map_or(exponent, |min| min.min(exponent)));
-            max_exponent = Some(max_exponent.map_or(exponent, |max| max.max(exponent)));
-        }
-        Some((sign, min_exponent, max_exponent))
-    };
-
     let DynamicImage::ImageRgba8(pixels) = image else {
         return false;
     };
@@ -544,43 +497,126 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_dyadic_is_exact(
     if expected != Some(pixels.as_raw().len()) {
         return false;
     }
-    let mut summary = match scan_words(pixels.as_raw()) {
-        Some(summary) => summary,
-        None => return false,
+    let Some(mut summary) = GpuFDyadicExponentSummary::scan_words(pixels.as_raw()) else {
+        return false;
     };
+    let Some(plan) = gpu_f_resize_dyadic_collect_plan(ops, image.dimensions(), &mut summary) else {
+        return false;
+    };
+    let Some((min_exponent, max_exponent)) = summary.supported_exponent_range() else {
+        return false;
+    };
+    gpu_f_resize_dyadic_plan_is_exact(image.dimensions(), &plan, min_exponent, max_exponent)
+}
 
-    // Combine source updates with the original words before checking the
-    // shared exponent/sign proof.  PutData does not change dimensions.
-    let merge_summary = |summary: &mut (Option<bool>, Option<i32>, Option<i32>),
-                         next: (Option<bool>, Option<i32>, Option<i32>)|
-     -> bool {
-        if summary
-            .0
-            .is_some_and(|expected| next.0.is_some_and(|actual| expected != actual))
+#[derive(Clone, Copy)]
+struct GpuFDyadicExponentSummary {
+    sign: Option<bool>,
+    min_exponent: Option<i32>,
+    max_exponent: Option<i32>,
+}
+
+impl GpuFDyadicExponentSummary {
+    fn scan_words(bytes: &[u8]) -> Option<Self> {
+        if !bytes.chunks_exact(4).remainder().is_empty() {
+            return None;
+        }
+        let mut summary = Self {
+            sign: None,
+            min_exponent: None,
+            max_exponent: None,
+        };
+        for sample in bytes.chunks_exact(4) {
+            let bits = u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+            if bits == (-0.0f32).to_bits() {
+                return None;
+            }
+            if f32::from_bits(bits) == 0.0 {
+                continue;
+            }
+            let exponent_bits = ((bits >> 23) & 0xff) as i32;
+            let significand = bits & 0x7f_ff_ff;
+            if exponent_bits == 0 || exponent_bits == 0xff || significand != 0 {
+                return None;
+            }
+            let positive = bits & (1 << 31) == 0;
+            if summary.sign.is_some_and(|expected| expected != positive) {
+                return None;
+            }
+            summary.sign = Some(positive);
+            let exponent = exponent_bits - 127;
+            summary.min_exponent = Some(
+                summary
+                    .min_exponent
+                    .map_or(exponent, |min| min.min(exponent)),
+            );
+            summary.max_exponent = Some(
+                summary
+                    .max_exponent
+                    .map_or(exponent, |max| max.max(exponent)),
+            );
+        }
+        Some(summary)
+    }
+
+    fn merge(&mut self, next: Self) -> bool {
+        if self
+            .sign
+            .is_some_and(|expected| next.sign.is_some_and(|actual| expected != actual))
         {
             return false;
         }
-        summary.0 = summary.0.or(next.0);
-        summary.1 = match (summary.1, next.1) {
+        self.sign = self.sign.or(next.sign);
+        self.min_exponent = match (self.min_exponent, next.min_exponent) {
             (Some(left), Some(right)) => Some(left.min(right)),
             (left, right) => left.or(right),
         };
-        summary.2 = match (summary.2, next.2) {
+        self.max_exponent = match (self.max_exponent, next.max_exponent) {
             (Some(left), Some(right)) => Some(left.max(right)),
             (left, right) => left.or(right),
         };
         true
-    };
-
-    let mut dimensions = image.dimensions();
-    if dimensions.0 == 0 || dimensions.1 == 0 {
-        return false;
     }
+
+    fn supported_exponent_range(self) -> Option<(i32, i32)> {
+        const MIN_NORMAL_EXPONENT: i32 = -80;
+        const MAX_EXPONENT_SPAN: i32 = 16;
+
+        let min_exponent = self.min_exponent?;
+        let max_exponent = self.max_exponent.expect("minimum exponent implies maximum");
+        if min_exponent < MIN_NORMAL_EXPONENT
+            || max_exponent.saturating_sub(min_exponent) > MAX_EXPONENT_SPAN
+        {
+            return None;
+        }
+        Some((min_exponent, max_exponent))
+    }
+}
+
+type GpuFDyadicResizeGeometry = ((u32, u32), (u32, u32), ResampleFilter);
+
+struct GpuFDyadicResizePlan {
+    output_dimensions: (u32, u32),
+    resize_count: usize,
+    changed_axis_count: usize,
+    filter: ResampleFilter,
+    geometries: Vec<GpuFDyadicResizeGeometry>,
+}
+
+fn gpu_f_resize_dyadic_collect_plan(
+    ops: &[PipelineOp],
+    source_dimensions: (u32, u32),
+    summary: &mut GpuFDyadicExponentSummary,
+) -> Option<GpuFDyadicResizePlan> {
+    if source_dimensions.0 == 0 || source_dimensions.1 == 0 {
+        return None;
+    }
+    let mut dimensions = source_dimensions;
     let mut resize_count = 0usize;
     let mut changed_axis = false;
     let mut changed_axis_count = 0usize;
     let mut filter_kind = None;
-    let mut resize_geometries = Vec::new();
+    let mut geometries = Vec::new();
     for op in ops {
         match op {
             PipelineOp::PutData {
@@ -590,228 +626,206 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_dyadic_is_exact(
                 let expected = CheckedDims::new(dimensions.0, dimensions.1, 4)
                     .ok()
                     .map(|dims| dims.total_bytes());
-                let Some(next) = expected
-                    .and_then(|expected| (expected == data.len()).then(|| scan_words(data)))
-                else {
-                    return false;
-                };
-                let Some(next) = next else {
-                    return false;
-                };
-                if !merge_summary(&mut summary, next) {
-                    return false;
+                if expected != Some(data.len()) {
+                    return None;
+                }
+                let next = GpuFDyadicExponentSummary::scan_words(data)?;
+                if !summary.merge(next) {
+                    return None;
                 }
             }
             PipelineOp::Resize { w, h, filter } => {
                 resize_count = resize_count.saturating_add(1);
-                if *w == 0 || *h == 0 {
-                    return false;
-                }
-                if *w > dimensions.0 && *h < dimensions.1 {
-                    return false;
+                if *w == 0 || *h == 0 || (*w > dimensions.0 && *h < dimensions.1) {
+                    return None;
                 }
                 changed_axis_count += usize::from(*w != dimensions.0);
                 changed_axis_count += usize::from(*h != dimensions.1);
                 changed_axis |= (*w, *h) != dimensions;
                 filter_kind = Some(*filter);
-                resize_geometries.push((dimensions, (*w, *h), *filter));
+                geometries.push((dimensions, (*w, *h), *filter));
                 dimensions = (*w, *h);
             }
-            _ => return false,
+            _ => return None,
         }
     }
-    let Some(filter) = filter_kind else {
-        return false;
-    };
+    let filter = filter_kind?;
     if resize_count == 0 || !changed_axis || changed_axis_count == 0 {
-        return false;
+        return None;
     }
+    Some(GpuFDyadicResizePlan {
+        output_dimensions: dimensions,
+        resize_count,
+        changed_axis_count,
+        filter,
+        geometries,
+    })
+}
 
-    let Some(min_exponent) = summary.1 else {
-        // An all-zero image is already covered by the constant-bit lowering;
-        // keep this proof focused on arithmetic reductions with a known sign.
-        return false;
-    };
-    let max_exponent = summary.2.expect("minimum exponent implies maximum");
-    if min_exponent < MIN_NORMAL_EXPONENT
-        || max_exponent.saturating_sub(min_exponent) > MAX_EXPONENT_SPAN
+fn gpu_f_resize_dyadic_plan_is_exact(
+    source_dimensions: (u32, u32),
+    plan: &GpuFDyadicResizePlan,
+    min_exponent: i32,
+    max_exponent: i32,
+) -> bool {
+    if plan.resize_count > 1 {
+        return gpu_f_resize_dyadic_box_chain_is_exact(
+            &plan.geometries,
+            min_exponent,
+            max_exponent,
+        );
+    }
+    gpu_f_resize_dyadic_single_is_exact(
+        source_dimensions,
+        plan.output_dimensions,
+        plan.filter,
+        plan.changed_axis_count,
+        min_exponent,
+        max_exponent,
+    )
+}
+
+fn gpu_f_resize_dyadic_box_chain_is_exact(
+    geometries: &[GpuFDyadicResizeGeometry],
+    min_exponent: i32,
+    max_exponent: i32,
+) -> bool {
+    let mut total_shift = 0i32;
+    for &(source_dimensions, output_dimensions, filter) in geometries {
+        if !matches!(filter, ResampleFilter::Box) {
+            return false;
+        }
+        let (kernel, support) = filter_from_resample(filter);
+        let horizontal = gpu_resize_coefficients(output_dimensions.0, source_dimensions.0, filter);
+        let vertical = gpu_resize_coefficients(output_dimensions.1, source_dimensions.1, filter);
+        let horizontal_f64 =
+            precompute_coeffs_f64(output_dimensions.0, source_dimensions.0, kernel, support);
+        let vertical_f64 =
+            precompute_coeffs_f64(output_dimensions.1, source_dimensions.1, kernel, support);
+        if !gpu_f_resize_dyadic_rows_match(&horizontal, &horizontal_f64)
+            || !gpu_f_resize_dyadic_rows_match(&vertical, &vertical_f64)
+        {
+            return false;
+        }
+        let Some(horizontal_shift) = gpu_f_resize_dyadic_box_axis_shift(&horizontal) else {
+            return false;
+        };
+        let Some(vertical_shift) = gpu_f_resize_dyadic_box_axis_shift(&vertical) else {
+            return false;
+        };
+        total_shift = total_shift
+            .checked_add(horizontal_shift)
+            .and_then(|shift| shift.checked_add(vertical_shift))
+            .unwrap_or(i32::MAX);
+    }
+    max_exponent
+        .saturating_sub(min_exponent)
+        .saturating_add(total_shift)
+        <= 23
+}
+
+fn gpu_f_resize_dyadic_single_is_exact(
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    filter: ResampleFilter,
+    changed_axis_count: usize,
+    min_exponent: i32,
+    max_exponent: i32,
+) -> bool {
+    let (kernel, support) = filter_from_resample(filter);
+    let horizontal = gpu_resize_coefficients(output_dimensions.0, source_dimensions.0, filter);
+    let vertical = gpu_resize_coefficients(output_dimensions.1, source_dimensions.1, filter);
+    let horizontal_f64 =
+        precompute_coeffs_f64(output_dimensions.0, source_dimensions.0, kernel, support);
+    let vertical_f64 =
+        precompute_coeffs_f64(output_dimensions.1, source_dimensions.1, kernel, support);
+    if !gpu_f_resize_dyadic_rows_match(&horizontal, &horizontal_f64)
+        || !gpu_f_resize_dyadic_rows_match(&vertical, &vertical_f64)
     {
         return false;
     }
-
-    let rows_match = |fixed: &FilterCoeffs, exact: &FilterCoeffsF64| {
-        if fixed.xmin != exact.xmin || fixed.count != exact.count {
-            return false;
-        }
-        for (row, &count) in fixed.count.iter().enumerate() {
-            let start = fixed.offsets[row];
-            let Some(weights) = fixed.weights.get(start..start.saturating_add(count)) else {
-                return false;
-            };
-            let Some(exact_weights) = exact.weights.get(row) else {
-                return false;
-            };
-            if exact_weights.len() != count
-                || weights
-                    .iter()
-                    .zip(exact_weights)
-                    .any(|(&fixed, &exact)| exact != fixed as f64 / 4_194_304.0)
-            {
-                return false;
-            }
-        }
-        true
-    };
-    if resize_count > 1 {
-        // A chain has no single arithmetic-filter proof yet. Keep the
-        // expanded admission limited to all-Box passes, for which each
-        // intermediate is still an exact f32 sum and every following tap is
-        // only a power-of-two scaling of that sum.
-        let box_axis_shift = |coeffs: &FilterCoeffs| -> Option<i32> {
-            let mut max_shift = 0i32;
-            for (row, &count) in coeffs.count.iter().enumerate() {
-                let count = u32::try_from(count).ok()?;
-                if count == 0 || count > MAX_BOX_TAPS || !count.is_power_of_two() {
-                    return None;
-                }
-                let shift = count.trailing_zeros() as i32;
-                max_shift = max_shift.max(shift);
-                let expected_weight = (1i64 << 22) / i64::from(count);
-                let start = coeffs.offsets[row];
-                let weights = coeffs
-                    .weights
-                    .get(start..start.saturating_add(count as usize))?;
-                if weights.iter().any(|&weight| weight != expected_weight) {
-                    return None;
-                }
-            }
-            Some(max_shift)
-        };
-        let mut total_shift = 0i32;
-        for &(source_dimensions, output_dimensions, filter) in &resize_geometries {
-            if !matches!(filter, ResampleFilter::Box) {
-                return false;
-            }
-            let (kernel, support) = filter_from_resample(filter);
-            let horizontal =
-                gpu_resize_coefficients(output_dimensions.0, source_dimensions.0, filter);
-            let vertical =
-                gpu_resize_coefficients(output_dimensions.1, source_dimensions.1, filter);
-            let horizontal_f64 =
-                precompute_coeffs_f64(output_dimensions.0, source_dimensions.0, kernel, support);
-            let vertical_f64 =
-                precompute_coeffs_f64(output_dimensions.1, source_dimensions.1, kernel, support);
-            if !rows_match(&horizontal, &horizontal_f64) || !rows_match(&vertical, &vertical_f64) {
-                return false;
-            }
-            let Some(horizontal_shift) = box_axis_shift(&horizontal) else {
-                return false;
-            };
-            let Some(vertical_shift) = box_axis_shift(&vertical) else {
-                return false;
-            };
-            total_shift = total_shift
-                .checked_add(horizontal_shift)
-                .and_then(|shift| shift.checked_add(vertical_shift))
-                .unwrap_or(i32::MAX);
-        }
-
-        return max_exponent
-            .saturating_sub(min_exponent)
-            .saturating_add(total_shift)
-            <= 23;
-    }
-
-    let (source_w, source_h) = image.dimensions();
-    let (output_w, output_h) = dimensions;
-    let (kernel, support) = filter_from_resample(filter);
-    let horizontal = gpu_resize_coefficients(output_w, source_w, filter);
-    let vertical = gpu_resize_coefficients(output_h, source_h, filter);
-    let horizontal_f64 = precompute_coeffs_f64(output_w, source_w, kernel, support);
-    let vertical_f64 = precompute_coeffs_f64(output_h, source_h, kernel, support);
-    if !rows_match(&horizontal, &horizontal_f64) || !rows_match(&vertical, &vertical_f64) {
-        return false;
-    }
-
     match filter {
         ResampleFilter::Bilinear
         | ResampleFilter::Bicubic
         | ResampleFilter::Lanczos
         | ResampleFilter::Hamming => {
-            // With power-of-two source words, every dyadic fixed coefficient
-            // product is an exactly representable f32 value. Restrict the
-            // arithmetic filters to non-negative rows with at most two taps:
-            // one f32 addition is then correctly rounded to the same value as
-            // Pillow's f64 sum followed by its f32 store. The non-negative
-            // condition also excludes ringing-filter cancellation, which can
-            // create a signed zero or a low normal value that native adapters
-            // do not preserve uniformly.
-            let two_tap_nonnegative = |coeffs: &FilterCoeffs| {
-                coeffs.count.iter().enumerate().all(|(row, &count)| {
-                    if !(1..=2).contains(&count) {
-                        return false;
-                    }
-                    let start = coeffs.offsets[row];
-                    coeffs
-                        .weights
-                        .get(start..start.saturating_add(count))
-                        .is_some_and(|weights| {
-                            weights
-                                .iter()
-                                .all(|&weight| (0..=4_194_304).contains(&weight))
-                        })
-                })
-            };
-            two_tap_nonnegative(&horizontal) && two_tap_nonnegative(&vertical)
+            gpu_f_resize_dyadic_two_tap_nonnegative(&horizontal)
+                && gpu_f_resize_dyadic_two_tap_nonnegative(&vertical)
         }
         ResampleFilter::Box => {
-            // Box rows are safe for the dyadic shader beyond integral
-            // reductions when every row still has an exact power-of-two
-            // number of equal taps. Pillow's normalized Box table then has
-            // weights `1 / count`; checking the emitted fixed rows (rather
-            // than inferring a ratio from dimensions) keeps non-divisor
-            // geometry honest. This covers, for example, 5 -> 3 where all
-            // rows are two 1/2 taps, while 7 -> 3 remains host-controlled
-            // if any row needs a non-dyadic three-tap normalization.
-            let box_axis_shift = |coeffs: &FilterCoeffs| -> Option<i32> {
-                let mut max_shift = 0i32;
-                for (row, &count) in coeffs.count.iter().enumerate() {
-                    let count = u32::try_from(count).ok()?;
-                    if count == 0 || count > MAX_BOX_TAPS || !count.is_power_of_two() {
-                        return None;
-                    }
-                    let shift = count.trailing_zeros() as i32;
-                    max_shift = max_shift.max(shift);
-                    let expected_weight = (1i64 << 22) / i64::from(count);
-                    let start = coeffs.offsets[row];
-                    let weights = coeffs
-                        .weights
-                        .get(start..start.saturating_add(count as usize))?;
-                    if weights.iter().any(|&weight| weight != expected_weight) {
-                        return None;
-                    }
-                }
-                Some(max_shift)
-            };
-            let Some(horizontal_shift) = box_axis_shift(&horizontal) else {
+            let Some(horizontal_shift) = gpu_f_resize_dyadic_box_axis_shift(&horizontal) else {
                 return false;
             };
-            let Some(vertical_shift) = box_axis_shift(&vertical) else {
+            let Some(vertical_shift) = gpu_f_resize_dyadic_box_axis_shift(&vertical) else {
                 return false;
             };
-            // Horizontal and vertical averages may each expose one extra
-            // significand bit range below the source minimum. Keep the
-            // complete two-pass dyadic sum within f32's 24-bit significand;
-            // applying the same conservative bound to one-axis rows also
-            // covers non-divisor Box geometry without relying on a ratio
-            // shortcut.
             if max_exponent.saturating_sub(min_exponent) + horizontal_shift + vertical_shift > 23 {
                 return false;
             }
-            // A resize must still change at least one axis. The identity path
-            // has a separate proof that preserves every bit pattern.
             changed_axis_count > 0
         }
         _ => false,
     }
+}
+
+fn gpu_f_resize_dyadic_rows_match(fixed: &FilterCoeffs, exact: &FilterCoeffsF64) -> bool {
+    if fixed.xmin != exact.xmin || fixed.count != exact.count {
+        return false;
+    }
+    for (row, &count) in fixed.count.iter().enumerate() {
+        let start = fixed.offsets[row];
+        let Some(weights) = fixed.weights.get(start..start.saturating_add(count)) else {
+            return false;
+        };
+        let Some(exact_weights) = exact.weights.get(row) else {
+            return false;
+        };
+        if exact_weights.len() != count
+            || weights
+                .iter()
+                .zip(exact_weights)
+                .any(|(&fixed, &exact)| exact != fixed as f64 / 4_194_304.0)
+        {
+            return false;
+        }
+    }
+    true
+}
+
+fn gpu_f_resize_dyadic_two_tap_nonnegative(coeffs: &FilterCoeffs) -> bool {
+    coeffs.count.iter().enumerate().all(|(row, &count)| {
+        if !(1..=2).contains(&count) {
+            return false;
+        }
+        let start = coeffs.offsets[row];
+        coeffs
+            .weights
+            .get(start..start.saturating_add(count))
+            .is_some_and(|weights| {
+                weights
+                    .iter()
+                    .all(|&weight| (0..=4_194_304).contains(&weight))
+            })
+    })
+}
+
+fn gpu_f_resize_dyadic_box_axis_shift(coeffs: &FilterCoeffs) -> Option<i32> {
+    let mut max_shift = 0i32;
+    for (row, &count) in coeffs.count.iter().enumerate() {
+        let count = u32::try_from(count).ok()?;
+        if count == 0 || count > MAX_GPU_REDUCE_FACTOR || !count.is_power_of_two() {
+            return None;
+        }
+        let shift = count.trailing_zeros() as i32;
+        max_shift = max_shift.max(shift);
+        let expected_weight = (1i64 << 22) / i64::from(count);
+        let start = coeffs.offsets[row];
+        let weights = coeffs
+            .weights
+            .get(start..start.saturating_add(count as usize))?;
+        if weights.iter().any(|&weight| weight != expected_weight) {
+            return None;
+        }
+    }
+    Some(max_shift)
 }
