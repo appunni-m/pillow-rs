@@ -34,6 +34,50 @@ pub(super) fn put_alpha_output(
 
 /// Extract the second (right-hand) image from a dual-input PipelineOp, if present.
 /// Returns shared materialized pixels ready for GPU upload.
+fn extract_effect_spread_or_lut_auxiliary(
+    op: &PipelineOp,
+    primary_dimensions: Option<(u32, u32)>,
+) -> Option<Result<Arc<DynamicImage>, PilError>> {
+    match op {
+        PipelineOp::EffectSpread { distance } => Some((|| {
+            let (width, height) = primary_dimensions.ok_or_else(|| {
+                PilError::InternalError("GPU EffectSpread is missing primary dimensions".into())
+            })?;
+            let mapping = crate::compute::pool_cpu::ops::effects::effect_spread_mapping(
+                width, height, *distance,
+            )?;
+            let mut bytes = Vec::with_capacity(mapping.len().saturating_mul(4));
+            for value in mapping {
+                bytes.extend_from_slice(&value.to_le_bytes());
+            }
+            let synthetic = RgbaImage::from_raw(width.saturating_mul(height), 1, bytes)
+                .ok_or_else(|| {
+                    PilError::InternalError("GPU EffectSpread map shape mismatch".into())
+                })?;
+            Ok(Arc::new(DynamicImage::ImageRgba8(synthetic)))
+        })()),
+        PipelineOp::Color3DLut { table, .. } => Some((|| {
+            // Color3DLut table entries are prepared once on the host using the
+            // exact signed 10.6 conversion from the CPU implementation. Store one
+            // signed i16 value per synthetic pixel; the shader reads the low 16
+            // bits through the normal packed RGBA upload path.
+            let values = color3dlut_table_words(table)?;
+            let width = u32::try_from(values.len()).map_err(|_| {
+                PilError::ValueError("GPU Color3DLut table exceeds u32 dimensions".into())
+            })?;
+            let mut bytes = Vec::with_capacity(values.len().saturating_mul(4));
+            for value in values {
+                bytes.extend_from_slice(&value.to_le_bytes());
+            }
+            let synthetic = RgbaImage::from_raw(width, 1, bytes).ok_or_else(|| {
+                PilError::InternalError("GPU Color3DLut auxiliary table shape mismatch".into())
+            })?;
+            Ok(Arc::new(DynamicImage::ImageRgba8(synthetic)))
+        })()),
+        _ => None,
+    }
+}
+
 pub(super) fn extract_second_image(
     op: &PipelineOp,
     primary_dimensions: Option<(u32, u32)>,
@@ -54,20 +98,8 @@ pub(super) fn extract_second_image(
             rendered.to_rgba8(),
         ))));
     }
-    if let PipelineOp::EffectSpread { distance } = op {
-        let (width, height) = primary_dimensions.ok_or_else(|| {
-            PilError::InternalError("GPU EffectSpread is missing primary dimensions".into())
-        })?;
-        let mapping = crate::compute::pool_cpu::ops::effects::effect_spread_mapping(
-            width, height, *distance,
-        )?;
-        let mut bytes = Vec::with_capacity(mapping.len().saturating_mul(4));
-        for value in mapping {
-            bytes.extend_from_slice(&value.to_le_bytes());
-        }
-        let synthetic = RgbaImage::from_raw(width.saturating_mul(height), 1, bytes)
-            .ok_or_else(|| PilError::InternalError("GPU EffectSpread map shape mismatch".into()))?;
-        return Ok(Some(Arc::new(DynamicImage::ImageRgba8(synthetic))));
+    if let Some(auxiliary) = extract_effect_spread_or_lut_auxiliary(op, primary_dimensions) {
+        return auxiliary.map(Some);
     }
     if let PipelineOp::EffectNoise { sigma } = op {
         let (width, height) = primary_dimensions.ok_or_else(|| {
@@ -116,24 +148,6 @@ pub(super) fn extract_second_image(
         let synthetic = crate::raster::GrayImage::from_raw(packed_width, 1, values)
             .ok_or_else(|| PilError::InternalError("GPU Merge auxiliary shape mismatch".into()))?;
         return Ok(Some(Arc::new(DynamicImage::ImageLuma8(synthetic))));
-    }
-    if let PipelineOp::Color3DLut { table, .. } = op {
-        // Color3DLut table entries are prepared once on the host using the
-        // exact signed 10.6 conversion from the CPU implementation. Store one
-        // signed i16 value per synthetic pixel; the shader reads the low 16
-        // bits through the normal packed RGBA upload path.
-        let values = color3dlut_table_words(table)?;
-        let width = u32::try_from(values.len()).map_err(|_| {
-            PilError::ValueError("GPU Color3DLut table exceeds u32 dimensions".into())
-        })?;
-        let mut bytes = Vec::with_capacity(values.len().saturating_mul(4));
-        for value in values {
-            bytes.extend_from_slice(&value.to_le_bytes());
-        }
-        let synthetic = RgbaImage::from_raw(width, 1, bytes).ok_or_else(|| {
-            PilError::InternalError("GPU Color3DLut auxiliary table shape mismatch".into())
-        })?;
-        return Ok(Some(Arc::new(DynamicImage::ImageRgba8(synthetic))));
     }
     if let PipelineOp::Paste { source, .. } = op {
         // Paste has already converted its source to the destination mode. Keep

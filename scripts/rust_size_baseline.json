@@ -112,12 +112,6 @@
       "signature": "fn transpose_tiled_rows_preserve_native_pixels_edges_and_trailing_storage() {"
     },
     {
-      "lines": 121,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/auxiliary_images.rs",
-      "signature": "pub(super) fn extract_second_image( op: &PipelineOp, primary_dimensions: Option<(u32, u32)>, draw_source: Option<&DynamicImage>, ) -> Result<Option<Arc<DynamicImage>>, PilError> {"
-    },
-    {
       "lines": 369,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/batch_encoding.rs",
@@ -692,11 +686,6 @@
       "owner": "lazytrot",
       "reason": "The moved transpose contract test remains above the 100-line function ratchet; track its continued reduction with the geometry family split under pillow-rs#wtxv.",
       "reduction_task": "pillow-rs#wtxv"
-    },
-    "pillow-rs/src/compute/pool_gpu/auxiliary_images.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU auxiliary image materialization and mask helpers; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/batch_encoding.rs": {
       "owner": "lazytrot",
