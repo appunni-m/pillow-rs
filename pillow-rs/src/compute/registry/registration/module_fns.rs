@@ -3,7 +3,7 @@ use super::prelude::{
     DynamicImage, PilError, PipelineOp, Registry, op_blend_module, op_composite_module,
     op_effect_noise, op_eval, op_merge,
 };
-fn register_part_1(m: &mut Registry) {
+fn register_merge_blend(m: &mut Registry) {
     // Merge packs the remaining single-band images into one auxiliary storage
     // range. The GPU planner validates the band count, modes, and dimensions
     // before constructing that range, so this shader only interleaves validated
@@ -47,7 +47,9 @@ fn register_part_1(m: &mut Registry) {
             "blend_module.wgsl"
         ),
     );
+}
 
+fn register_composite_eval(m: &mut Registry) {
     m.insert(
         "CompositeModule",
         gpu_entry!(
@@ -109,7 +111,8 @@ fn register_part_2(m: &mut Registry) {
 }
 
 pub(super) fn register(m: &mut Registry) -> Result<(), PilError> {
-    register_part_1(m);
+    register_merge_blend(m);
+    register_composite_eval(m);
     register_part_2(m);
     Ok(())
 }

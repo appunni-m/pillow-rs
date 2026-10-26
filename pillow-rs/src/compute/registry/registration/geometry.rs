@@ -3,7 +3,7 @@ use super::prelude::{
     DynamicImage, PilError, PipelineOp, Registry, execute_crop, execute_reduce, execute_resize,
     execute_resize_boxed, execute_rotate, execute_thumbnail, execute_transpose,
 };
-fn register_part_1(m: &mut Registry) {
+fn register_resize(m: &mut Registry) {
     m.insert(
         "Resize",
         gpu_entry!(
@@ -27,7 +27,9 @@ fn register_part_1(m: &mut Registry) {
             "resize_nearest.wgsl"
         ),
     );
+}
 
+fn register_crop_rotate(m: &mut Registry) {
     m.insert(
         "Crop",
         gpu_entry!(
@@ -134,7 +136,8 @@ fn register_part_2(m: &mut Registry) {
 }
 
 pub(super) fn register(m: &mut Registry) -> Result<(), PilError> {
-    register_part_1(m);
+    register_resize(m);
+    register_crop_rotate(m);
     register_part_2(m);
     Ok(())
 }
