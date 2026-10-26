@@ -336,6 +336,25 @@ struct NativePutAlphaDataSubmission<'a> {
     readback_error: &'static str,
 }
 
+#[cfg(target_endian = "little")]
+fn record_native_put_alpha_data_telemetry(
+    buffers: &BufferPool,
+    submission: &NativePutAlphaDataSubmission<'_>,
+    readback: &ReadbackTarget,
+) {
+    crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+        upload_bytes: submission.input_transfer_bytes,
+        auxiliary_bytes: submission.mask_transfer_bytes,
+        readback_bytes: submission.output_transfer_bytes,
+        parameter_bytes: 16,
+        retained_cache_bytes: buffers.retained_bytes(),
+        full_frame_copy_count: 2 + u64::from(matches!(readback, ReadbackTarget::Staging(_))),
+        mode_conversion_count: 0,
+        ..PipelineResourceTelemetry::default()
+    });
+    crate::compute::record_pipeline_dispatch_count(1);
+}
+
 impl GpuInner {
     #[cfg(target_endian = "little")]
     fn execute_native_put_alpha_data(
@@ -391,17 +410,7 @@ impl GpuInner {
                 )
             },
         )?;
-        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
-            upload_bytes: submission.input_transfer_bytes,
-            auxiliary_bytes: submission.mask_transfer_bytes,
-            readback_bytes: submission.output_transfer_bytes,
-            parameter_bytes: 16,
-            retained_cache_bytes: buffers.retained_bytes(),
-            full_frame_copy_count: 2 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
-            mode_conversion_count: 0,
-            ..PipelineResourceTelemetry::default()
-        });
-        crate::compute::record_pipeline_dispatch_count(1);
+        record_native_put_alpha_data_telemetry(buffers, &submission, &readback);
         if let ReadbackTarget::Staging(staging) = readback {
             self.recycle_staging(staging);
         }
