@@ -11,6 +11,24 @@ pub(super) struct NativeHsvPadDispatch {
     pub(super) fill_pixel: u32,
 }
 
+#[cfg(target_endian = "little")]
+fn native_hsv_pad_input_transfer_bytes(
+    input_bytes: usize,
+    max_storage_buffer_binding_size: u32,
+    max_buffer_size: u64,
+) -> Option<u64> {
+    let input_transfer_bytes =
+        u64::try_from(input_bytes.checked_add(3)?.checked_div(4)?.checked_mul(4)?).ok()?;
+    let buffer_capacity_bytes = u64::from(GPU_BUFFER_CAPACITY).checked_mul(4)?;
+    if input_transfer_bytes > buffer_capacity_bytes
+        || input_transfer_bytes > u64::from(max_storage_buffer_binding_size)
+        || input_transfer_bytes > max_buffer_size
+    {
+        return None;
+    }
+    Some(input_transfer_bytes)
+}
+
 /// Plan native HSV padding for identity contain geometry. RGB triples use
 /// three packed output words per four pixels; requiring complete four-pixel
 /// groups per row keeps both source and output word addresses aligned.
@@ -56,15 +74,11 @@ pub(super) fn plan_native_hsv_pad_dispatch(
     if input_bytes == 0 || rgb.as_raw().len() != input_bytes || input_bytes > u32::MAX as usize {
         return None;
     }
-    let input_transfer_bytes =
-        u64::try_from(input_bytes.checked_add(3)?.checked_div(4)?.checked_mul(4)?).ok()?;
-    let buffer_capacity_bytes = u64::from(GPU_BUFFER_CAPACITY).checked_mul(4)?;
-    if input_transfer_bytes > buffer_capacity_bytes
-        || input_transfer_bytes > u64::from(max_storage_buffer_binding_size)
-        || input_transfer_bytes > max_buffer_size
-    {
-        return None;
-    }
+    let input_transfer_bytes = native_hsv_pad_input_transfer_bytes(
+        input_bytes,
+        max_storage_buffer_binding_size,
+        max_buffer_size,
+    )?;
 
     let output = plan_native_rgb_point_output(
         *dst_w,
