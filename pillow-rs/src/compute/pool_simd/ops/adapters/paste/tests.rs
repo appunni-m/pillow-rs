@@ -87,7 +87,23 @@ fn simd_l_masked_paste_uses_neon_and_keeps_exact_rounding_and_tail() {
     let telemetry = crate::compute::Backend::take_pipeline_operation_telemetry();
     crate::compute::Backend::set_pipeline_telemetry_enabled(previous);
 
-    let expected = source_bytes
+    let expected = expected_l_masked_paste_bytes(&source_bytes, &destination_bytes, &mask_bytes);
+    assert_eq!(output.as_bytes(), expected);
+
+    let operation = telemetry
+        .first()
+        .expect("SIMD Paste must publish operation telemetry");
+    assert_eq!(operation.path, "neon-blend");
+    assert_eq!(operation.vector_block_count, 32);
+    assert_eq!(operation.scalar_tail_count, 2);
+}
+
+fn expected_l_masked_paste_bytes(
+    source_bytes: &[u8],
+    destination_bytes: &[u8],
+    mask_bytes: &[u8],
+) -> Vec<u8> {
+    source_bytes
         .iter()
         .copied()
         .zip(destination_bytes.iter().copied())
@@ -98,15 +114,7 @@ fn simd_l_masked_paste_uses_neon_and_keeps_exact_rounding_and_tail() {
                 + 127)
                 / 255) as u8
         })
-        .collect::<Vec<_>>();
-    assert_eq!(output.as_bytes(), expected);
-
-    let operation = telemetry
-        .first()
-        .expect("SIMD Paste must publish operation telemetry");
-    assert_eq!(operation.path, "neon-blend");
-    assert_eq!(operation.vector_block_count, 32);
-    assert_eq!(operation.scalar_tail_count, 2);
+        .collect()
 }
 
 struct RgbaLMaskedPasteFixture {
@@ -306,7 +314,17 @@ fn native_pa_masked_paste_plan_uses_packed_pa_bytes_and_clipped_mask() {
         true,
     ));
 
-    let mut expected = destination_bytes;
+    let expected =
+        expected_native_pa_masked_paste_bytes(&destination_bytes, &source_bytes, &mask_bytes);
+    assert_eq!(actual, expected);
+}
+
+fn expected_native_pa_masked_paste_bytes(
+    destination_bytes: &[u8],
+    source_bytes: &[u8],
+    mask_bytes: &[u8],
+) -> Vec<u8> {
+    let mut expected = destination_bytes.to_vec();
     for destination_pixel in 0..4 {
         let source_pixel = destination_pixel + 1;
         let weight = u32::from(mask_bytes[source_pixel]);
@@ -318,7 +336,7 @@ fn native_pa_masked_paste_plan_uses_packed_pa_bytes_and_clipped_mask() {
                 ((source_value * weight + destination_value * (255 - weight) + 127) / 255) as u8;
         }
     }
-    assert_eq!(actual, expected);
+    expected
 }
 
 #[test]
