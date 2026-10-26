@@ -425,6 +425,55 @@ fn native_pad_resized_source(
     Ok(Some(resized))
 }
 
+#[inline(always)]
+fn native_pad_compose_row(
+    source: &[u8],
+    canvas: NativePadCanvas,
+    row: &mut [u8],
+    output_y: usize,
+    fill: (u8, u8, u8, u8),
+    fill_is_zero: bool,
+    content_start: usize,
+    content_end: usize,
+    vector_blocks: &mut u64,
+    scalar_tail: &mut u64,
+) -> Result<(), PilError> {
+    if output_y < canvas.offset_y || output_y - canvas.offset_y >= canvas.source_height {
+        if !fill_is_zero {
+            let (blocks, tail) = native_fill_row(row, fill, canvas.channels)
+                .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
+            *vector_blocks = vector_blocks.saturating_add(blocks);
+            *scalar_tail = scalar_tail.saturating_add(tail);
+        }
+        return Ok(());
+    }
+
+    let source_y = output_y - canvas.offset_y;
+    if !fill_is_zero {
+        let (blocks, tail) = native_fill_row(&mut row[..content_start], fill, canvas.channels)
+            .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
+        *vector_blocks = vector_blocks.saturating_add(blocks);
+        *scalar_tail = scalar_tail.saturating_add(tail);
+    }
+    let source_start = source_y
+        .checked_mul(canvas.source_stride)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    let (blocks, tail) = copy_native_bytes(
+        &source[source_start..source_start + canvas.source_stride],
+        &mut row[content_start..content_end],
+    )
+    .ok_or_else(|| PilError::InternalError("SIMD pad copy shape mismatch".into()))?;
+    *vector_blocks = vector_blocks.saturating_add(blocks);
+    *scalar_tail = scalar_tail.saturating_add(tail);
+    if !fill_is_zero {
+        let (blocks, tail) = native_fill_row(&mut row[content_end..], fill, canvas.channels)
+            .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
+        *vector_blocks = vector_blocks.saturating_add(blocks);
+        *scalar_tail = scalar_tail.saturating_add(tail);
+    }
+    Ok(())
+}
+
 fn native_pad_compose_canvas(
     img: &DynamicImage,
     source: &[u8],
@@ -450,41 +499,18 @@ fn native_pad_compose_canvas(
         .checked_add(canvas.source_stride)
         .ok_or_else(|| simd_unsupported("Pad"))?;
     for (output_y, row) in output.chunks_exact_mut(canvas.target_stride).enumerate() {
-        if output_y < canvas.offset_y || output_y - canvas.offset_y >= canvas.source_height {
-            if !fill_is_zero {
-                let (blocks, tail) =
-                    native_fill_row(row, fill, canvas.channels).ok_or_else(|| {
-                        PilError::InternalError("SIMD pad fill shape mismatch".into())
-                    })?;
-                vector_blocks = vector_blocks.saturating_add(blocks);
-                scalar_tail = scalar_tail.saturating_add(tail);
-            }
-            continue;
-        }
-
-        let source_y = output_y - canvas.offset_y;
-        if !fill_is_zero {
-            let (blocks, tail) = native_fill_row(&mut row[..content_start], fill, canvas.channels)
-                .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
-            vector_blocks = vector_blocks.saturating_add(blocks);
-            scalar_tail = scalar_tail.saturating_add(tail);
-        }
-        let source_start = source_y
-            .checked_mul(canvas.source_stride)
-            .ok_or_else(|| simd_unsupported("Pad"))?;
-        let (blocks, tail) = copy_native_bytes(
-            &source[source_start..source_start + canvas.source_stride],
-            &mut row[content_start..content_end],
-        )
-        .ok_or_else(|| PilError::InternalError("SIMD pad copy shape mismatch".into()))?;
-        vector_blocks = vector_blocks.saturating_add(blocks);
-        scalar_tail = scalar_tail.saturating_add(tail);
-        if !fill_is_zero {
-            let (blocks, tail) = native_fill_row(&mut row[content_end..], fill, canvas.channels)
-                .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
-            vector_blocks = vector_blocks.saturating_add(blocks);
-            scalar_tail = scalar_tail.saturating_add(tail);
-        }
+        native_pad_compose_row(
+            source,
+            canvas,
+            row,
+            output_y,
+            fill,
+            fill_is_zero,
+            content_start,
+            content_end,
+            &mut vector_blocks,
+            &mut scalar_tail,
+        )?;
     }
     let result = crate::image_utils::raw_bytes_to_image(
         canvas.target_width,
