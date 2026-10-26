@@ -411,8 +411,6 @@ fn grayscale_f_prefix_keeps_gpu_suffix_receipt_terminal() {
 #[test]
 #[cfg(target_endian = "little")]
 fn ycbcr_grayscale_matches_cpu_for_complete_groups_and_pixel_tails() {
-    use crate::compute::BackendImpl;
-
     struct RestoreTelemetry(bool);
     impl Drop for RestoreTelemetry {
         fn drop(&mut self) {
@@ -437,66 +435,78 @@ fn ycbcr_grayscale_matches_cpu_for_complete_groups_and_pixel_tails() {
 
     let operation = PipelineOp::Grayscale;
     for (width, height) in [(1u32, 1u32), (2, 1), (3, 1), (4, 1), (5, 1), (3, 3)] {
-        let pixel_count = width as usize * height as usize;
-        let bytes = (0..pixel_count)
-            .flat_map(|pixel| {
-                [
-                    pixel.wrapping_mul(47).wrapping_add(13) as u8,
-                    pixel.wrapping_mul(29).wrapping_add(71) as u8,
-                    pixel.wrapping_mul(83).wrapping_add(19) as u8,
-                ]
-            })
-            .collect();
-        let source = DynamicImage::ImageRgb8(
-            RgbImage::from_raw(width, height, bytes).expect("YCbCr grayscale source"),
-        );
-        let expected = crate::compute::registry::execute_cpu(&operation, &source, Some("YCbCr"))
-            .unwrap_or_else(|error| panic!("CPU YCbCr grayscale {width}x{height}: {error}"));
-        let _ = Backend::take_pipeline_allocation_telemetry();
-        let actual = super::GpuPool
-            .execute_batch_strict(std::slice::from_ref(&operation), &source, Some("YCbCr"))
-            .unwrap_or_else(|error| panic!("GPU YCbCr grayscale {width}x{height}: {error}"));
-        assert!(matches!(&actual, DynamicImage::ImageLuma8(_)));
-        assert_eq!(
-            actual.as_bytes(),
-            expected.as_bytes(),
-            "{width}x{height} pixels"
-        );
-
-        let resources = crate::compute::take_pipeline_resource_telemetry()
-            .unwrap_or_else(|| panic!("{width}x{height} resource receipt"));
-        let allocations = Backend::take_pipeline_allocation_telemetry();
-        let upload_bytes = (pixel_count * 3).div_ceil(4) * 4;
-        let readback_bytes = pixel_count.div_ceil(4) * 4;
-        assert_eq!(
-            resources.upload_bytes, upload_bytes as u64,
-            "{width}x{height} upload"
-        );
-        assert_eq!(
-            resources.readback_bytes, readback_bytes as u64,
-            "{width}x{height} readback"
-        );
-        assert_eq!(
-            resources.mode_conversion_count, 0,
-            "{width}x{height} conversion"
-        );
-        assert_eq!(
-            allocations.allocation_count, 1,
-            "{width}x{height} allocations"
-        );
-        assert_eq!(
-            allocations.allocated_bytes, pixel_count as u64,
-            "{width}x{height} allocated bytes"
-        );
-        assert_eq!(
-            crate::compute::take_pipeline_dispatch_count(),
-            Some(1),
-            "{width}x{height} dispatch"
-        );
-        assert_eq!(
-            crate::compute::take_pipeline_backend_override(),
-            None,
-            "{width}x{height} must execute on GPU without fallback"
-        );
+        assert_ycbcr_grayscale_case(&operation, width, height);
     }
+}
+
+#[cfg(target_endian = "little")]
+fn assert_ycbcr_grayscale_case(operation: &PipelineOp, width: u32, height: u32) {
+    use crate::compute::BackendImpl;
+
+    let pixel_count = width as usize * height as usize;
+    let bytes = (0..pixel_count)
+        .flat_map(|pixel| {
+            [
+                pixel.wrapping_mul(47).wrapping_add(13) as u8,
+                pixel.wrapping_mul(29).wrapping_add(71) as u8,
+                pixel.wrapping_mul(83).wrapping_add(19) as u8,
+            ]
+        })
+        .collect();
+    let source = DynamicImage::ImageRgb8(
+        RgbImage::from_raw(width, height, bytes).expect("YCbCr grayscale source"),
+    );
+    let expected = crate::compute::registry::execute_cpu(operation, &source, Some("YCbCr"))
+        .unwrap_or_else(|error| panic!("CPU YCbCr grayscale {width}x{height}: {error}"));
+    let _ = Backend::take_pipeline_allocation_telemetry();
+    let actual = super::GpuPool
+        .execute_batch_strict(std::slice::from_ref(operation), &source, Some("YCbCr"))
+        .unwrap_or_else(|error| panic!("GPU YCbCr grayscale {width}x{height}: {error}"));
+    assert!(matches!(&actual, DynamicImage::ImageLuma8(_)));
+    assert_eq!(
+        actual.as_bytes(),
+        expected.as_bytes(),
+        "{width}x{height} pixels"
+    );
+
+    assert_ycbcr_grayscale_resource_receipts(width, height, pixel_count);
+}
+
+#[cfg(target_endian = "little")]
+fn assert_ycbcr_grayscale_resource_receipts(width: u32, height: u32, pixel_count: usize) {
+    let resources = crate::compute::take_pipeline_resource_telemetry()
+        .unwrap_or_else(|| panic!("{width}x{height} resource receipt"));
+    let allocations = Backend::take_pipeline_allocation_telemetry();
+    let upload_bytes = (pixel_count * 3).div_ceil(4) * 4;
+    let readback_bytes = pixel_count.div_ceil(4) * 4;
+    assert_eq!(
+        resources.upload_bytes, upload_bytes as u64,
+        "{width}x{height} upload"
+    );
+    assert_eq!(
+        resources.readback_bytes, readback_bytes as u64,
+        "{width}x{height} readback"
+    );
+    assert_eq!(
+        resources.mode_conversion_count, 0,
+        "{width}x{height} conversion"
+    );
+    assert_eq!(
+        allocations.allocation_count, 1,
+        "{width}x{height} allocations"
+    );
+    assert_eq!(
+        allocations.allocated_bytes, pixel_count as u64,
+        "{width}x{height} allocated bytes"
+    );
+    assert_eq!(
+        crate::compute::take_pipeline_dispatch_count(),
+        Some(1),
+        "{width}x{height} dispatch"
+    );
+    assert_eq!(
+        crate::compute::take_pipeline_backend_override(),
+        None,
+        "{width}x{height} must execute on GPU without fallback"
+    );
 }
