@@ -204,7 +204,7 @@ fn register_arc(m: &mut Registry) {
     });
 }
 
-fn register_chord_pieslice(m: &mut Registry) {
+fn register_chord(m: &mut Registry) {
     draw_entry!(m, "DrawChord", |img, op, mode| {
         if let PipelineOp::DrawChord {
             x0,
@@ -237,7 +237,9 @@ fn register_chord_pieslice(m: &mut Registry) {
             Err(PilError::ValueError("expected DrawChord".into()))
         }
     });
+}
 
+fn register_pieslice(m: &mut Registry) {
     draw_entry!(m, "DrawPieslice", |img, op, mode| {
         if let PipelineOp::DrawPieslice {
             x0,
@@ -292,7 +294,8 @@ pub(super) fn register(m: &mut Registry) -> Result<(), PilError> {
     register_part_2(m);
     register_circle_polygon(m);
     register_arc(m);
-    register_chord_pieslice(m);
+    register_chord(m);
+    register_pieslice(m);
     register_point(m);
     Ok(())
 }
