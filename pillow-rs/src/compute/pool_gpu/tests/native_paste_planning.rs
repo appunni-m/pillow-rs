@@ -325,6 +325,13 @@ fn native_masked_l_paste_planner_checks_packed_workgroup_and_buffer_limits() {
 #[test]
 fn native_masked_la_paste_planner_checks_two_pixel_packing_and_limits() {
     let max_workgroups = 65_535;
+    assert_native_masked_la_paste_workgroup_limit(max_workgroups);
+    assert_native_masked_la_paste_global_limit();
+    assert_native_masked_la_paste_odd_pixel_transfers(max_workgroups);
+    assert_native_masked_la_paste_rejects_invalid_cases(max_workgroups);
+}
+
+fn assert_native_masked_la_paste_workgroup_limit(max_workgroups: u32) {
     let max_pixels = max_workgroups * 64 * 2;
     let at_limit = plan_gpu_native_masked_byte_paste(
         max_pixels,
@@ -365,6 +372,9 @@ fn native_masked_la_paste_planner_checks_two_pixel_packing_and_limits() {
         )
         .is_none()
     );
+}
+
+fn assert_native_masked_la_paste_global_limit() {
     assert!(
         plan_gpu_native_masked_byte_paste(
             GPU_BUFFER_CAPACITY + 1,
@@ -381,7 +391,9 @@ fn native_masked_la_paste_planner_checks_two_pixel_packing_and_limits() {
         .is_none(),
         "the compact route must retain the shared static image pixel cap"
     );
+}
 
+fn assert_native_masked_la_paste_odd_pixel_transfers(max_workgroups: u32) {
     let odd_pixels =
         plan_gpu_native_masked_byte_paste(5, 3, 5, 3, 5, 3, 2, max_workgroups, u32::MAX, u64::MAX)
             .expect("odd pixel counts have one padded output word");
@@ -394,7 +406,9 @@ fn native_masked_la_paste_planner_checks_two_pixel_packing_and_limits() {
     assert_eq!(odd_pixels.input_transfer_bytes, 48);
     assert_eq!(odd_pixels.word_count, 8);
     assert_eq!(odd_pixels.workgroups, 1);
+}
 
+fn assert_native_masked_la_paste_rejects_invalid_cases(max_workgroups: u32) {
     assert!(
         plan_gpu_native_masked_byte_paste(5, 3, 5, 3, 5, 3, 2, max_workgroups, 47, u64::MAX,)
             .is_none()
