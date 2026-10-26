@@ -220,12 +220,6 @@
       "signature": "fn build_pipeline( device: &wgpu::Device, variant_name: &'static str, shader_file: &'static str, shader_source: &str, ) -> Option<CachedPipeline> {"
     },
     {
-      "lines": 137,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_rgb_put_alpha( &self, image: &DynamicImage, alpha: u8, dispatch: NativeRgbPutAlphaDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 175,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs",

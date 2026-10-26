@@ -183,6 +183,84 @@ pub(in crate::compute::pool_gpu) fn plan_native_rgba_put_alpha_data_dispatch(
     })
 }
 
+#[cfg(target_endian = "little")]
+fn native_rgb_put_alpha_bind_group(
+    device: &wgpu::Device,
+    cached: &CachedPipeline,
+    buffers: &BufferPool,
+    dispatch: NativeRgbPutAlphaDispatch,
+) -> Result<wgpu::BindGroup, PilError> {
+    Ok(device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("gpu_put_alpha_native_rgb"),
+        layout: &cached.bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: ranged_binding(
+                    &buffers.buf_a,
+                    Some(BufferRange {
+                        offset: 0,
+                        size: dispatch.input_transfer_bytes,
+                    }),
+                )?,
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: ranged_binding(
+                    &buffers.buf_b,
+                    Some(BufferRange {
+                        offset: 0,
+                        size: dispatch.output_transfer_bytes,
+                    }),
+                )?,
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: ranged_binding(
+                    &buffers.params_arena.buffer,
+                    Some(BufferRange {
+                        offset: 0,
+                        size: 16,
+                    }),
+                )?,
+            },
+        ],
+    }))
+}
+
+#[cfg(target_endian = "little")]
+fn write_native_rgb_put_alpha_parameters(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    buffers: &mut BufferPool,
+    width: u32,
+    height: u32,
+    alpha: u8,
+    input_bytes: usize,
+) -> Result<(), PilError> {
+    buffers.params_arena.ensure_capacity(
+        device,
+        "gpu_put_alpha_native_rgb_params",
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        16,
+        device.limits().min_uniform_buffer_offset_alignment as usize,
+    );
+    let parameters = [
+        width,
+        height,
+        u32::from(alpha),
+        u32::try_from(input_bytes).map_err(|_| {
+            PilError::ValueError("GPU native RGB PutAlpha input is too large".into())
+        })?,
+    ];
+    queue.write_buffer(
+        &buffers.params_arena.buffer,
+        0,
+        bytemuck::cast_slice(&parameters),
+    );
+    Ok(())
+}
+
 impl GpuInner {
     /// Add scalar alpha to native RGB samples and write the required RGBA
     /// result without first expanding the host upload to four bytes per pixel.
@@ -212,67 +290,21 @@ impl GpuInner {
         }
 
         buffers.upload_native_channel_bytes(&self.queue, width, height, 3, rgb.as_raw())?;
-        buffers.params_arena.ensure_capacity(
+        write_native_rgb_put_alpha_parameters(
             &self.device,
-            "gpu_put_alpha_native_rgb_params",
-            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            16,
-            self.device.limits().min_uniform_buffer_offset_alignment as usize,
-        );
-        let parameters = [
+            &self.queue,
+            buffers,
             width,
             height,
-            u32::from(alpha),
-            u32::try_from(dispatch.input_bytes).map_err(|_| {
-                PilError::ValueError("GPU native RGB PutAlpha input is too large".into())
-            })?,
-        ];
-        self.queue.write_buffer(
-            &buffers.params_arena.buffer,
-            0,
-            bytemuck::cast_slice(&parameters),
-        );
+            alpha,
+            dispatch.input_bytes,
+        )?;
         let cached = self.resolve_pipeline(
             "PutAlphaNativeRGB",
             "put_alpha_native_rgb.wgsl",
             include_str!("../shaders/put_alpha_native_rgb.wgsl"),
         )?;
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("gpu_put_alpha_native_rgb"),
-            layout: &cached.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: ranged_binding(
-                        &buffers.buf_a,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.input_transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: ranged_binding(
-                        &buffers.buf_b,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.output_transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: ranged_binding(
-                        &buffers.params_arena.buffer,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: 16,
-                        }),
-                    )?,
-                },
-            ],
-        });
+        let bind_group = native_rgb_put_alpha_bind_group(&self.device, &cached, buffers, dispatch)?;
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
