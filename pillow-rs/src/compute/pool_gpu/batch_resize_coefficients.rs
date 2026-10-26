@@ -66,14 +66,14 @@ pub(super) fn gpu_resize_coefficients(
     })
 }
 
-/// Validate and size the fixed-point coefficient table consumed by the
-/// separable resize shaders.
+/// Validate the fixed-point coefficient table consumed by the separable resize
+/// shaders.
 ///
 /// `FilterCoeffs` is deliberately shared with the CPU/SIMD implementations so
 /// the GPU receives the same Pillow-rounded coefficients.  The shader uses an
 /// i32 accumulator; prove the complete byte-domain accumulation before a
 /// resize is admitted rather than allowing device arithmetic to wrap.
-pub(super) fn resize_coeff_word_count(coeffs: &FilterCoeffs) -> Result<usize, PilError> {
+fn validate_resize_coefficients_for_shader(coeffs: &FilterCoeffs) -> Result<(), PilError> {
     if coeffs.xmin.len() != coeffs.count.len()
         || coeffs.xmin.len() != coeffs.offsets.len()
         || coeffs
@@ -138,6 +138,12 @@ pub(super) fn resize_coeff_word_count(coeffs: &FilterCoeffs) -> Result<usize, Pi
         }
     }
 
+    Ok(())
+}
+
+/// Validate the coefficient table and return its encoded `u32` word count.
+pub(super) fn resize_coeff_word_count(coeffs: &FilterCoeffs) -> Result<usize, PilError> {
+    validate_resize_coefficients_for_shader(coeffs)?;
     coeffs
         .xmin
         .len()
