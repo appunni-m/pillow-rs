@@ -3,7 +3,7 @@ use super::prelude::{
     DynamicImage, PilError, PipelineOp, Registry, op_enhance_brightness,
     op_enhance_color_saturation, op_enhance_contrast, op_enhance_sharpness,
 };
-fn register_part_1(m: &mut Registry) {
+fn register_brightness_contrast(m: &mut Registry) {
     m.insert(
         "Brightness",
         gpu_entry!(
@@ -37,7 +37,9 @@ fn register_part_1(m: &mut Registry) {
             "contrast.wgsl"
         ),
     );
+}
 
+fn register_color_sharpness(m: &mut Registry) {
     m.insert(
         "ColorSaturation",
         gpu_entry!(
@@ -74,6 +76,7 @@ fn register_part_1(m: &mut Registry) {
 }
 
 pub(super) fn register(m: &mut Registry) -> Result<(), PilError> {
-    register_part_1(m);
+    register_brightness_contrast(m);
+    register_color_sharpness(m);
     Ok(())
 }
