@@ -272,21 +272,22 @@ fn f_resize_f64_filtered_chain_native_matches_cpu() {
     Backend::set_pipeline_telemetry_enabled(previous);
 }
 
-#[test]
-fn f_resize_f64_relocation_chain_native_matches_cpu() {
-    fn source() -> Image {
-        Image::frombytes(
-            "F",
-            (2, 2),
-            &[0.1f32, -0.3, 1.7, 2.9]
-                .into_iter()
-                .flat_map(f32::to_le_bytes)
-                .collect::<Vec<_>>(),
-        )
-        .expect("F relocation-chain source")
-    }
+type FResizeRelocationCase = ((u32, u32), PipelineOp, (u32, u32), &'static str);
 
-    let cases = [
+fn f_resize_f64_relocation_chain_source() -> Image {
+    Image::frombytes(
+        "F",
+        (2, 2),
+        &[0.1f32, -0.3, 1.7, 2.9]
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect::<Vec<_>>(),
+    )
+    .expect("F relocation-chain source")
+}
+
+fn f_resize_f64_relocation_cases() -> [FResizeRelocationCase; 7] {
+    [
         ((3, 2), PipelineOp::Mirror, (2, 2), "mirror"),
         ((3, 2), PipelineOp::Flip, (2, 2), "flip"),
         (
@@ -316,11 +317,16 @@ fn f_resize_f64_relocation_chain_native_matches_cpu() {
             (3, 3),
             "crop-border",
         ),
-    ];
+    ]
+}
+
+#[test]
+fn f_resize_f64_relocation_chain_native_matches_cpu() {
+    let cases = f_resize_f64_relocation_cases();
 
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (first_dimensions, relocation, final_dimensions, name) in cases {
-        let first = source()
+        let first = f_resize_f64_relocation_chain_source()
             .resize(
                 (i64::from(first_dimensions.0), i64::from(first_dimensions.1)),
                 Some(ResampleInput::Name("BICUBIC".into())),
@@ -338,7 +344,7 @@ fn f_resize_f64_relocation_chain_native_matches_cpu() {
             .tobytes()
             .unwrap_or_else(|error| panic!("CPU {name} relocation chain failed: {error}"));
 
-        let first = source()
+        let first = f_resize_f64_relocation_chain_source()
             .resize(
                 (i64::from(first_dimensions.0), i64::from(first_dimensions.1)),
                 Some(ResampleInput::Name("BICUBIC".into())),

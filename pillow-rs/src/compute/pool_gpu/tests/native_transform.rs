@@ -73,6 +73,11 @@ fn gpu_native_luma_affine_nearest_transform_reads_and_writes_packed_bytes() {
     assert_eq!(resources.readback_bytes, 16);
     assert_eq!(resources.mode_conversion_count, 0);
 
+    assert_aligned_native_luma_transform();
+}
+
+#[cfg(target_endian = "little")]
+fn assert_aligned_native_luma_transform() {
     // The common even-width path keeps every packed four-byte output word
     // inside one row and advances fixed coordinates from a shared base.
     let aligned_bytes = (0..32)

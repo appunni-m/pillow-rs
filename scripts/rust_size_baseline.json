@@ -4,12 +4,6 @@
   "format_version": 1,
   "function_lines": [
     {
-      "lines": 105,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs",
-      "signature": "fn transpose_tiled_rows_preserve_native_pixels_edges_and_trailing_storage() {"
-    },
-    {
       "lines": 369,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/batch_encoding.rs",
@@ -102,12 +96,6 @@
     {
       "lines": 109,
       "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/native_transform.rs",
-      "signature": "fn gpu_native_luma_affine_nearest_transform_reads_and_writes_packed_bytes() {"
-    },
-    {
-      "lines": 109,
-      "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/palette_projective.rs",
       "signature": "fn palette_alpha_projective_filtered_relocations_native_gpu_preserve_pairs() {"
     },
@@ -190,12 +178,6 @@
       "signature": "fn f_resize_ordered_f64_through_8388607_taps_native_matches_cpu() {"
     },
     {
-      "lines": 103,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/resize_thumbnail.rs",
-      "signature": "fn f_resize_f64_relocation_chain_native_matches_cpu() {"
-    },
-    {
       "lines": 176,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs",
@@ -206,12 +188,6 @@
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs",
       "signature": "fn rgb_transform_consumes_compact_input_for_affine_and_geometry_shaders() {"
-    },
-    {
-      "lines": 103,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/tests/transpose_execution.rs",
-      "signature": "fn gpu_packed_rgb_transpose_native_tails_and_methods() {"
     },
     {
       "lines": 127,
@@ -233,11 +209,6 @@
     }
   ],
   "legacy_owners": {
-    "pillow-rs/src/compute/pool_cpu/ops/transpose/tests.rs": {
-      "owner": "lazytrot",
-      "reason": "The moved transpose contract test remains above the 100-line function ratchet; track its continued reduction with the geometry family split under pillow-rs#wtxv.",
-      "reduction_task": "pillow-rs#wtxv"
-    },
     "pillow-rs/src/compute/pool_gpu/batch_encoding.rs": {
       "owner": "lazytrot",
       "reason": "Separated GPU batch command orchestration from the batch coordinator; continue refactoring under pillow-rs#ras2.",
@@ -303,11 +274,6 @@
       "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
-    "pillow-rs/src/compute/pool_gpu/tests/native_transform.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
     "pillow-rs/src/compute/pool_gpu/tests/palette_projective.rs": {
       "owner": "lazytrot",
       "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
@@ -338,17 +304,7 @@
       "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
-    "pillow-rs/src/compute/pool_gpu/tests/resize_thumbnail.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
     "pillow-rs/src/compute/pool_gpu/tests/rgb_compact.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/tests/transpose_execution.rs": {
       "owner": "lazytrot",
       "reason": "Relocated GPU backend tests into focused modules; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"

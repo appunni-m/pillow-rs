@@ -231,7 +231,6 @@ fn gpu_rgba_transpose_public_fusion_and_inferred_mode() {
 #[test]
 #[cfg(target_endian = "little")]
 fn gpu_packed_rgb_transpose_native_tails_and_methods() {
-    use crate::compute::registry;
     use crate::pipeline::TransposeMethod;
 
     let gpu = match super::GpuPool::ensure_init() {
@@ -278,61 +277,72 @@ fn gpu_packed_rgb_transpose_native_tails_and_methods() {
             (513, 515),
             (768, 772),
         ] {
-            let bytes: Vec<u8> = (0usize..width as usize * height as usize * 3)
-                .map(|index| index.wrapping_mul(113).wrapping_add(index / 7) as u8)
-                .collect();
-            let rgb = RgbImage::from_raw(width, height, bytes).unwrap();
-            let source = DynamicImage::ImageRgb8(rgb.clone());
-            let mut buffers = super::BufferPool::new(&gpu.device, width * height, direct);
-            let layout = super::packed_rgb_transpose_layout(
-                width,
-                height,
-                gpu.device.limits().max_compute_workgroups_per_dimension,
-            )
-            .unwrap();
-            for method in &methods {
-                let op = PipelineOp::Transpose {
-                    method: method.clone(),
-                };
-                let expected = registry::execute_cpu(&op, &source, Some("RGB")).unwrap();
-                for mapped_input in [false, true] {
-                    if mapped_input && !gpu.direct_primary_readback {
-                        continue;
-                    }
-                    let _ = crate::compute::take_pipeline_dispatch_count();
-                    let _ = crate::compute::take_pipeline_resource_telemetry();
-                    let _ = Backend::take_pipeline_allocation_telemetry();
-                    let actual = gpu
-                        .execute_packed_rgb_transpose_with_upload(
-                            &op,
-                            &rgb,
-                            &layout,
-                            &mut buffers,
-                            mapped_input,
-                        )
-                        .unwrap();
-                    assert_eq!(actual.color(), expected.color());
-                    assert_eq!(actual.dimensions(), expected.dimensions());
-                    assert_eq!(
-                        actual.as_bytes(),
-                        expected.as_bytes(),
-                        "{width}x{height} {method:?} direct={direct} mapped={mapped_input}"
-                    );
-                    assert_eq!(crate::compute::take_pipeline_dispatch_count(), Some(1));
-                    let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
-                    assert_eq!(resources.upload_bytes, layout.transfer_bytes);
-                    assert_eq!(resources.readback_bytes, layout.transfer_bytes);
-                    assert_eq!(resources.mode_conversion_count, 0);
-                    assert_eq!(
-                        resources.full_frame_copy_count,
-                        u64::from(!mapped_input) + u64::from(!direct),
-                    );
-                    assert_eq!(resources.retained_cache_bytes, buffers.retained_bytes());
-                    let allocations = Backend::take_pipeline_allocation_telemetry();
-                    assert_eq!(allocations.allocation_count, 1);
-                    assert_eq!(allocations.allocated_bytes, layout.native_bytes as u64);
-                }
+            assert_packed_rgb_transpose_case(gpu, width, height, direct, &methods);
+        }
+    }
+}
+
+fn assert_packed_rgb_transpose_case(
+    gpu: &super::GpuInner,
+    width: u32,
+    height: u32,
+    direct: bool,
+    methods: &[crate::pipeline::TransposeMethod],
+) {
+    use crate::compute::registry;
+    let bytes: Vec<u8> = (0usize..width as usize * height as usize * 3)
+        .map(|index| index.wrapping_mul(113).wrapping_add(index / 7) as u8)
+        .collect();
+    let rgb = RgbImage::from_raw(width, height, bytes).unwrap();
+    let source = DynamicImage::ImageRgb8(rgb.clone());
+    let mut buffers = super::BufferPool::new(&gpu.device, width * height, direct);
+    let layout = super::packed_rgb_transpose_layout(
+        width,
+        height,
+        gpu.device.limits().max_compute_workgroups_per_dimension,
+    )
+    .unwrap();
+    for method in methods {
+        let op = PipelineOp::Transpose {
+            method: method.clone(),
+        };
+        let expected = registry::execute_cpu(&op, &source, Some("RGB")).unwrap();
+        for mapped_input in [false, true] {
+            if mapped_input && !gpu.direct_primary_readback {
+                continue;
             }
+            let _ = crate::compute::take_pipeline_dispatch_count();
+            let _ = crate::compute::take_pipeline_resource_telemetry();
+            let _ = Backend::take_pipeline_allocation_telemetry();
+            let actual = gpu
+                .execute_packed_rgb_transpose_with_upload(
+                    &op,
+                    &rgb,
+                    &layout,
+                    &mut buffers,
+                    mapped_input,
+                )
+                .unwrap();
+            assert_eq!(actual.color(), expected.color());
+            assert_eq!(actual.dimensions(), expected.dimensions());
+            assert_eq!(
+                actual.as_bytes(),
+                expected.as_bytes(),
+                "{width}x{height} {method:?} direct={direct} mapped={mapped_input}"
+            );
+            assert_eq!(crate::compute::take_pipeline_dispatch_count(), Some(1));
+            let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
+            assert_eq!(resources.upload_bytes, layout.transfer_bytes);
+            assert_eq!(resources.readback_bytes, layout.transfer_bytes);
+            assert_eq!(resources.mode_conversion_count, 0);
+            assert_eq!(
+                resources.full_frame_copy_count,
+                u64::from(!mapped_input) + u64::from(!direct),
+            );
+            assert_eq!(resources.retained_cache_bytes, buffers.retained_bytes());
+            let allocations = Backend::take_pipeline_allocation_telemetry();
+            assert_eq!(allocations.allocation_count, 1);
+            assert_eq!(allocations.allocated_bytes, layout.native_bytes as u64);
         }
     }
 }
