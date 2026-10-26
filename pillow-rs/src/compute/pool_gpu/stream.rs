@@ -11,7 +11,7 @@ mod paste;
 mod types;
 
 use self::encoding::compile_graph;
-use self::graph::plan_graph;
+use self::graph::{Plan, plan_graph};
 pub use self::types::{
     BatchError, BatchErrorKind, BatchKey, BatchOutput, BatchResult, GpuBatchConfig, GpuBatchStats,
     GpuImage,
@@ -197,44 +197,19 @@ impl GpuBatchExecutor {
         self.submit_with_metadata(pipeline, key, 0)
     }
 
-    /// Host-adapter admission with a separately measured metadata reservation.
-    pub fn submit_with_metadata(
-        &mut self,
-        pipeline: &Image,
-        key: Option<BatchKey>,
+    fn plan_submission<'a>(
+        &self,
+        pipeline: &'a Image,
+        key: Option<&BatchKey>,
+        id: u64,
         metadata_bytes: u64,
-    ) -> Result<u64, BatchError> {
-        if self.closed {
-            return Err(error(
-                None,
-                key,
-                "admission",
-                BatchErrorKind::State,
-                "executor is closed",
-            ));
-        }
-        let id = self.next_id.ok_or_else(|| {
-            error(
-                None,
-                key.clone(),
-                "admission",
-                BatchErrorKind::Limit,
-                "job ID exhausted",
-            )
-        })?;
-        self.next_id = id.checked_add(1);
-        let fail = |kind, message: String| error(Some(id), key.clone(), "admission", kind, message);
-        #[cfg(feature = "test-api")]
-        if std::mem::take(&mut self.injected_admission_failure) {
-            return Err(fail(
-                BatchErrorKind::Execution,
-                "GPU device unavailable during GPU batch admission: injected test failure".into(),
-            ));
-        }
+    ) -> Result<(Plan<'a>, u64, u64), BatchError> {
+        let fail =
+            |kind, message: String| error(Some(id), key.cloned(), "admission", kind, message);
         self.gpu
             .ensure_healthy("GPU batch admission")
             .map_err(|e| fail(BatchErrorKind::Execution, e.to_string()))?;
-        let key_bytes = batch_key_host_bytes(key.as_ref());
+        let key_bytes = batch_key_host_bytes(key);
         if key_bytes > self.config.host_bytes {
             return Err(fail(
                 BatchErrorKind::Limit,
@@ -270,24 +245,75 @@ impl GpuBatchExecutor {
                 ),
             ));
         }
+        Ok((plan, host, gpu))
+    }
+
+    fn reserve_submission_credit(
+        &mut self,
+        id: u64,
+        key: Option<&BatchKey>,
+        host: u64,
+        gpu: u64,
+    ) -> Result<Credit, BatchError> {
         let mut usage = self.usage.lock().unwrap_or_else(|e| e.into_inner());
         if self.stats.live_jobs >= self.config.max_jobs
             || usage.gpu > self.config.gpu_bytes - gpu
             || usage.host > self.config.host_bytes - host
         {
-            return Err(fail(
+            return Err(error(
+                Some(id),
+                key.cloned(),
+                "admission",
                 BatchErrorKind::QueueFull,
-                "live work or returned GPU leases fill the resource budget".into(),
+                "live work or returned GPU leases fill the resource budget",
             ));
         }
         usage.gpu += gpu;
         usage.host += host;
         drop(usage);
-        let credit = Credit {
+        Ok(Credit {
             usage: self.usage.clone(),
             gpu,
             host,
-        };
+        })
+    }
+
+    /// Host-adapter admission with a separately measured metadata reservation.
+    pub fn submit_with_metadata(
+        &mut self,
+        pipeline: &Image,
+        key: Option<BatchKey>,
+        metadata_bytes: u64,
+    ) -> Result<u64, BatchError> {
+        if self.closed {
+            return Err(error(
+                None,
+                key,
+                "admission",
+                BatchErrorKind::State,
+                "executor is closed",
+            ));
+        }
+        let id = self.next_id.ok_or_else(|| {
+            error(
+                None,
+                key.clone(),
+                "admission",
+                BatchErrorKind::Limit,
+                "job ID exhausted",
+            )
+        })?;
+        self.next_id = id.checked_add(1);
+        let fail = |kind, message: String| error(Some(id), key.clone(), "admission", kind, message);
+        #[cfg(feature = "test-api")]
+        if std::mem::take(&mut self.injected_admission_failure) {
+            return Err(fail(
+                BatchErrorKind::Execution,
+                "GPU device unavailable during GPU batch admission: injected test failure".into(),
+            ));
+        }
+        let (plan, host, gpu) = self.plan_submission(pipeline, key.as_ref(), id, metadata_bytes)?;
+        let credit = self.reserve_submission_credit(id, key.as_ref(), host, gpu)?;
         let job = match compile_graph(pipeline, key.clone(), id, plan, credit, self.gpu) {
             Ok(job) => job,
             Err(error) => {
