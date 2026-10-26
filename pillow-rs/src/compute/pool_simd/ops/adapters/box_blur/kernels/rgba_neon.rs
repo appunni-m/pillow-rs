@@ -29,7 +29,7 @@ pub(super) fn blur_middle_block(
     let line_length = source.len() / CHANNELS;
     debug_assert_eq!(source.len() % CHANNELS, 0);
     debug_assert_eq!(destination.len(), source.len());
-    debug_assert!(output_start >= RADIUS + 1);
+    debug_assert!(output_start > RADIUS);
     debug_assert!(output_start + BLOCK_PIXELS + RADIUS < line_length);
     debug_assert_ne!(fractional_weight, 0);
 
