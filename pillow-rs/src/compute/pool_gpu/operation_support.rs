@@ -647,81 +647,85 @@ pub(super) fn expand_gpu_geometry_ops(
             (cur_w, cur_h) = dimensions;
             continue;
         }
-        let replacement = match op {
-            PipelineOp::Transform {
-                method: TransformMethod::Affine,
-                data,
-                filter,
-                ..
-            } if data.len() >= 6
-                && (!gpu_transform_uses_nearest(logical_mode, *filter)
-                    || matches!(logical_mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))) =>
-            {
-                let mut replacement = op.clone();
-                if let PipelineOp::Transform {
-                    method,
-                    data: coefficients,
-                    ..
-                } = &mut replacement
-                {
-                    // Denominator one retains the affine center mapping while
-                    // using the exact filtered arithmetic and SPECIAL nearest
-                    // coordinates, rather than the old f32/16.16 shader paths.
-                    *method = TransformMethod::Perspective;
-                    let mut projective = data[..6].to_vec();
-                    projective.extend([0.0, 0.0]);
-                    *coefficients = Arc::from(projective);
-                }
-                replacement
-            }
-            PipelineOp::Scale { filter, .. }
-            | PipelineOp::Contain { filter, .. }
-            | PipelineOp::Cover { filter, .. } => match op_output_dims(op, cur_w, cur_h) {
-                Some((w, h)) => PipelineOp::Resize {
-                    w,
-                    h,
-                    filter: *filter,
-                },
-                None => op.clone(),
-            },
-            // Thumbnail has already computed its aspect-preserving output
-            // dimensions at the public boundary.  Lower it to the exact
-            // separable Resize implementation so every resampling filter
-            // (including bicubic/lanczos) uses the same fixed-point kernels
-            // as Image.resize instead of the older bilinear-only shader.
-            PipelineOp::Thumbnail { filter, .. }
-                if gpu_thumbnail_requires_exact_host_control(
-                    op,
-                    (cur_w, cur_h),
-                    image,
-                    logical_mode,
-                ) =>
-            {
-                op.clone()
-            }
-            PipelineOp::Thumbnail { filter, .. } => match op_output_dims(op, cur_w, cur_h) {
-                Some((w, h)) => PipelineOp::Resize {
-                    w,
-                    h,
-                    filter: if matches!(logical_mode, Some("1" | "P")) {
-                        ResampleFilter::Nearest
-                    } else {
-                        *filter
-                    },
-                },
-                None => op.clone(),
-            },
-            // Rotation is an affine mapping after Pillow's scalar geometry
-            // planner has selected the expanded canvas.  Feed that mapping
-            // into the reviewed Transform shader; exact right-angle
-            // rotations use the byte-relocation transpose kernel instead.
-            PipelineOp::Rotate { .. } => expand_gpu_rotate(op, image, (cur_w, cur_h), logical_mode),
-            _ => op.clone(),
-        };
+        let replacement =
+            expanded_gpu_geometry_replacement(op, image, (cur_w, cur_h), logical_mode);
         if let Some(next) = op_output_dims(&replacement, cur_w, cur_h) {
             (cur_w, cur_h) = next;
         }
         expanded.push(replacement);
     }
     expanded
+}
+
+#[inline]
+fn expanded_gpu_geometry_replacement(
+    op: &PipelineOp,
+    image: &DynamicImage,
+    dimensions: (u32, u32),
+    logical_mode: Option<&str>,
+) -> PipelineOp {
+    let (cur_w, cur_h) = dimensions;
+    match op {
+        PipelineOp::Transform {
+            method: TransformMethod::Affine,
+            data,
+            filter,
+            ..
+        } if data.len() >= 6
+            && (!gpu_transform_uses_nearest(logical_mode, *filter)
+                || matches!(logical_mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))) =>
+        {
+            let mut replacement = op.clone();
+            if let PipelineOp::Transform {
+                method,
+                data: coefficients,
+                ..
+            } = &mut replacement
+            {
+                // Denominator one retains the affine center mapping while
+                // using the exact filtered arithmetic and SPECIAL nearest
+                // coordinates, rather than the old f32/16.16 shader paths.
+                *method = TransformMethod::Perspective;
+                let mut projective = data[..6].to_vec();
+                projective.extend([0.0, 0.0]);
+                *coefficients = Arc::from(projective);
+            }
+            replacement
+        }
+        PipelineOp::Scale { filter, .. }
+        | PipelineOp::Contain { filter, .. }
+        | PipelineOp::Cover { filter, .. } => match op_output_dims(op, cur_w, cur_h) {
+            Some((w, h)) => PipelineOp::Resize {
+                w,
+                h,
+                filter: *filter,
+            },
+            None => op.clone(),
+        },
+        // Thumbnail has already computed its aspect-preserving output
+        // dimensions at the public boundary. Lower it to the exact separable
+        // Resize implementation so all filters use Resize's fixed-point kernels.
+        PipelineOp::Thumbnail { filter, .. }
+            if gpu_thumbnail_requires_exact_host_control(op, dimensions, image, logical_mode) =>
+        {
+            op.clone()
+        }
+        PipelineOp::Thumbnail { filter, .. } => match op_output_dims(op, cur_w, cur_h) {
+            Some((w, h)) => PipelineOp::Resize {
+                w,
+                h,
+                filter: if matches!(logical_mode, Some("1" | "P")) {
+                    ResampleFilter::Nearest
+                } else {
+                    *filter
+                },
+            },
+            None => op.clone(),
+        },
+        // Rotation is an affine mapping after Pillow's scalar geometry planner
+        // has selected the expanded canvas. Exact right-angle rotations use the
+        // byte-relocation transpose kernel instead.
+        PipelineOp::Rotate { .. } => expand_gpu_rotate(op, image, dimensions, logical_mode),
+        _ => op.clone(),
+    }
 }
