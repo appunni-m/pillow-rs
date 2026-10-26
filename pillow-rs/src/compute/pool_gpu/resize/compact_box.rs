@@ -19,29 +19,14 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_sample_bits(
     output_index: usize,
     line: usize,
 ) -> Option<u32> {
-    if source_axis == 0
-        || output_axis == 0
-        || !source_axis.is_multiple_of(output_axis)
-        || output_index >= usize::try_from(output_axis).ok()?
-        || line
-            >= usize::try_from(if horizontal {
-                source_dimensions.1
-            } else {
-                source_dimensions.0
-            })
-            .ok()?
-    {
-        return None;
-    }
-    let source_w = usize::try_from(source_dimensions.0).ok()?;
-    let source_h = usize::try_from(source_dimensions.1).ok()?;
-    let source_axis_usize = usize::try_from(source_axis).ok()?;
-    let output_axis_usize = usize::try_from(output_axis).ok()?;
-    if source_axis_usize != if horizontal { source_w } else { source_h } || output_axis_usize == 0 {
-        return None;
-    }
-    let tap_count = source_axis_usize.checked_div(output_axis_usize)?;
-    let source_start = output_index.checked_mul(tap_count)?;
+    let (source_w, tap_count, source_start) = gpu_f_resize_compact_box_sample_plan(
+        source_dimensions,
+        source_axis,
+        output_axis,
+        horizontal,
+        output_index,
+        line,
+    )?;
     let coefficient = 1.0 / f64::from(u32::try_from(tap_count).ok()?);
     let coefficient_parts = gpu_f64_integer_parts(coefficient)?;
     let mut state = F64OrderedState {
@@ -122,6 +107,41 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_sample_bits(
     let actual = gpu_f64_ordered_state_to_f32(state)?;
     let expected = (ordered_accumulator as f32).to_bits();
     (actual == expected).then_some(actual)
+}
+
+#[inline(always)]
+fn gpu_f_resize_compact_box_sample_plan(
+    source_dimensions: (u32, u32),
+    source_axis: u32,
+    output_axis: u32,
+    horizontal: bool,
+    output_index: usize,
+    line: usize,
+) -> Option<(usize, usize, usize)> {
+    if source_axis == 0
+        || output_axis == 0
+        || !source_axis.is_multiple_of(output_axis)
+        || output_index >= usize::try_from(output_axis).ok()?
+        || line
+            >= usize::try_from(if horizontal {
+                source_dimensions.1
+            } else {
+                source_dimensions.0
+            })
+            .ok()?
+    {
+        return None;
+    }
+    let source_w = usize::try_from(source_dimensions.0).ok()?;
+    let source_h = usize::try_from(source_dimensions.1).ok()?;
+    let source_axis_usize = usize::try_from(source_axis).ok()?;
+    let output_axis_usize = usize::try_from(output_axis).ok()?;
+    if source_axis_usize != if horizontal { source_w } else { source_h } || output_axis_usize == 0 {
+        return None;
+    }
+    let tap_count = source_axis_usize.checked_div(output_axis_usize)?;
+    let source_start = output_index.checked_mul(tap_count)?;
+    Some((source_w, tap_count, source_start))
 }
 
 pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_pass_bits(

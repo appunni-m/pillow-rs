@@ -262,12 +262,6 @@
       "signature": "fn execute_projection_terminal( &self, image: &DynamicImage, ops: &[PipelineOp], channels: u8, source_is_known_zero: bool, ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {"
     },
     {
-      "lines": 103,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/resize/compact_box.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn gpu_f_resize_compact_box_sample_bits( bytes: &[u8], source_dimensions: (u32, u32), source_axis: u32, output_axis: u32, horizontal: bool, output_index: usize, line: usize, ) -> Option<u32> {"
-    },
-    {
       "lines": 150,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs",
@@ -702,11 +696,6 @@
     "pillow-rs/src/compute/pool_gpu/projection.rs": {
       "owner": "lazytrot",
       "reason": "Moved GPU getprojection admission, sparse override dispatch, and readback out of the oversized coordinator; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/resize/compact_box.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated compact Box resize admission and proof helpers with existing long functions; continue reducing under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs": {
