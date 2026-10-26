@@ -78,9 +78,6 @@ fn gpu_rgba_upload_paths_concurrent_reuse_and_resources() {
 #[test]
 #[cfg(target_endian = "little")]
 fn gpu_packed_rgb_transpose_public_fusion_and_inferred_mode() {
-    use crate::compute::{execute_prepared, prepare_execution, registry};
-    use crate::pipeline::TransposeMethod;
-
     match super::GpuPool::ensure_init() {
         Ok(_) => {}
         Err(error) if error.to_string().contains("GPU adapter not available") => return,
@@ -97,6 +94,15 @@ fn gpu_packed_rgb_transpose_public_fusion_and_inferred_mode() {
         .map(|index| index.wrapping_mul(47).wrapping_add(index / 5) as u8)
         .collect();
     let source = DynamicImage::ImageRgb8(RgbImage::from_raw(5, 3, bytes).unwrap());
+    assert_packed_rgb_transpose_fusion(&source);
+    assert_packed_rgb_flip_backend(&source);
+}
+
+#[cfg(target_endian = "little")]
+fn assert_packed_rgb_transpose_fusion(source: &DynamicImage) {
+    use crate::compute::{execute_prepared, prepare_execution, registry};
+    use crate::pipeline::TransposeMethod;
+
     let ops = [
         PipelineOp::Transpose {
             method: TransposeMethod::FlipTopBottom,
@@ -110,7 +116,7 @@ fn gpu_packed_rgb_transpose_public_fusion_and_inferred_mode() {
             registry::execute_cpu(op, &image, mode).unwrap()
         });
         let prepared = prepare_execution(&ops, Some(Backend::Gpu)).unwrap();
-        let actual = execute_prepared(&prepared, &ops, &source, mode).unwrap();
+        let actual = execute_prepared(&prepared, &ops, source, mode).unwrap();
         assert_eq!(actual.dimensions(), expected.dimensions());
         assert_eq!(actual.color(), expected.color());
         assert_eq!(actual.as_bytes(), expected.as_bytes());
@@ -127,12 +133,17 @@ fn gpu_packed_rgb_transpose_public_fusion_and_inferred_mode() {
         assert_eq!(resources.host_allocated_bytes, 45);
         assert_eq!(resources.mode_conversion_count, 0);
     }
+}
+
+#[cfg(target_endian = "little")]
+fn assert_packed_rgb_flip_backend(source: &DynamicImage) {
+    use crate::compute::{execute_prepared, prepare_execution, registry};
 
     let flip_ops = [PipelineOp::Flip];
     for mode in [None, Some("RGB")] {
-        let expected = registry::execute_cpu(&PipelineOp::Flip, &source, mode).unwrap();
+        let expected = registry::execute_cpu(&PipelineOp::Flip, source, mode).unwrap();
         let prepared = prepare_execution(&flip_ops, Some(Backend::Gpu)).unwrap();
-        let actual = execute_prepared(&prepared, &flip_ops, &source, mode).unwrap();
+        let actual = execute_prepared(&prepared, &flip_ops, source, mode).unwrap();
         assert_eq!(actual.dimensions(), expected.dimensions());
         assert_eq!(actual.color(), expected.color());
         assert_eq!(actual.as_bytes(), expected.as_bytes());
