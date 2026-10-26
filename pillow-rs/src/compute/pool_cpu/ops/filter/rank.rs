@@ -724,10 +724,107 @@ fn rank_filter_f_large_parallel(
     });
 }
 
-/// Generic rank filter: sorts neighborhood values and picks the one at `rank`.
-/// PIL uses clamping for border pixels.
-/// Generalized to handle any number of channels (1-4).
-/// For F-mode ("F"): treats each little-endian four-byte sample as one f32.
+/// Precomputed dimensions and neighborhood bounds for one rank-filter operation.
+#[derive(Clone, Copy)]
+struct RankFilterWindow {
+    width: u32,
+    height: u32,
+    width_i32: i32,
+    height_i32: i32,
+    half: i32,
+    area: usize,
+    rank: usize,
+}
+
+/// Select an F-mode rank from a small, fixed-size neighborhood.
+fn rank_filter_f_small(
+    raw: &[u8],
+    output: &mut [u8],
+    width: i32,
+    height: i32,
+    half: i32,
+    area: usize,
+    rank: usize,
+) {
+    for y in 0..height {
+        for x in 0..width {
+            let mut values = [0f32; SMALL_RANK_AREA];
+            let mut value_index = 0usize;
+            for dy in -half..=half {
+                for dx in -half..=half {
+                    let sx = (x + dx).clamp(0, width - 1);
+                    let sy = (y + dy).clamp(0, height - 1);
+                    let base = (sy * width + sx) as usize * 4;
+                    values[value_index] = f32::from_le_bytes([
+                        raw[base],
+                        raw[base + 1],
+                        raw[base + 2],
+                        raw[base + 3],
+                    ]);
+                    value_index += 1;
+                }
+            }
+            values[..area]
+                .sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let out_base = (y * width + x) as usize * 4;
+            output[out_base..out_base + 4].copy_from_slice(&values[rank].to_le_bytes());
+        }
+    }
+}
+
+/// Apply an F-mode rank filter to little-endian f32 samples in four-byte storage.
+fn rank_filter_f_impl(
+    img: &DynamicImage,
+    window: RankFilterWindow,
+) -> Result<DynamicImage, PilError> {
+    let RankFilterWindow {
+        width: w_u32,
+        height: h_u32,
+        width_i32: w,
+        height_i32: h,
+        half,
+        area,
+        rank,
+    } = window;
+
+    // F-mode stores each scalar as one little-endian f32 in the four-byte
+    // carrier. Borrow that storage directly and retain the accessor only for
+    // mismatched internal variants.
+    let raw: Cow<'_, [u8]> = match img {
+        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
+    let raw = raw.as_ref();
+    if area > 1 && native_uniform_f_mode_image(raw, w_u32 as usize, h_u32 as usize) {
+        let result = match img {
+            DynamicImage::ImageRgba8(_) => img.clone(),
+            _ => DynamicImage::ImageRgba8(
+                crate::raster::RgbaImage::from_raw(w_u32, h_u32, raw.to_vec()).ok_or_else(
+                    || PilError::ValueError("rank_filter_impl(F): buffer error".into()),
+                )?,
+            ),
+        };
+        return Ok(preserve_mode(img, result));
+    }
+    let mut out = CheckedDims::new(w as u32, h as u32, 4)?.alloc_buffer();
+    if area <= SMALL_RANK_AREA {
+        rank_filter_f_small(raw, &mut out, w, h, half, area, rank);
+    } else {
+        let legacy_sort = rank_filter_f_requires_legacy_sort(raw);
+        #[cfg(feature = "parallel")]
+        rank_filter_f_large_parallel(raw, &mut out, w, h, half, area, rank, legacy_sort);
+        #[cfg(not(feature = "parallel"))]
+        rank_filter_f_large_serial(raw, &mut out, w, h, half, area, rank, legacy_sort);
+    }
+    let result = DynamicImage::ImageRgba8(
+        crate::raster::RgbaImage::from_raw(w_u32, h_u32, out)
+            .ok_or_else(|| PilError::ValueError("rank_filter_impl(F): buffer error".into()))?,
+    );
+    Ok(preserve_mode(img, result))
+}
+
+/// Generic rank filter: selects the neighborhood value at `rank`.
+/// PIL uses clamping for border pixels and preserves each byte mode's channels.
 fn rank_filter_impl(
     img: &DynamicImage,
     size: u32,
@@ -739,66 +836,17 @@ fn rank_filter_impl(
     let half = (size / 2) as i32;
     let area = (size * size) as usize;
     let rank = rank.min((area - 1) as u32) as usize;
-
-    // F-mode stores each scalar as one little-endian f32 in the four-byte
-    // carrier. Borrow that storage directly and retain the accessor only for
-    // mismatched internal variants.
+    let window = RankFilterWindow {
+        width: w_u32,
+        height: h_u32,
+        width_i32: w,
+        height_i32: h,
+        half,
+        area,
+        rank,
+    };
     if mode == Some("F") {
-        let raw: Cow<'_, [u8]> = match img {
-            DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw()),
-            _ => Cow::Owned(img.to_rgba8().into_raw()),
-        };
-        let raw = raw.as_ref();
-        if area > 1 && native_uniform_f_mode_image(raw, w_u32 as usize, h_u32 as usize) {
-            let result = match img {
-                DynamicImage::ImageRgba8(_) => img.clone(),
-                _ => DynamicImage::ImageRgba8(
-                    crate::raster::RgbaImage::from_raw(w_u32, h_u32, raw.to_vec()).ok_or_else(
-                        || PilError::ValueError("rank_filter_impl(F): buffer error".into()),
-                    )?,
-                ),
-            };
-            return Ok(preserve_mode(img, result));
-        }
-        let mut out = CheckedDims::new(w as u32, h as u32, 4)?.alloc_buffer();
-        if area <= SMALL_RANK_AREA {
-            for y in 0..h {
-                for x in 0..w {
-                    let mut values = [0f32; SMALL_RANK_AREA];
-                    let mut value_index = 0usize;
-                    for dy in -half..=half {
-                        for dx in -half..=half {
-                            let sx = (x + dx).clamp(0, w - 1);
-                            let sy = (y + dy).clamp(0, h - 1);
-                            let base = (sy * w + sx) as usize * 4;
-                            values[value_index] = f32::from_le_bytes([
-                                raw[base],
-                                raw[base + 1],
-                                raw[base + 2],
-                                raw[base + 3],
-                            ]);
-                            value_index += 1;
-                        }
-                    }
-                    values[..area].sort_unstable_by(|a, b| {
-                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                    });
-                    let out_base = (y * w + x) as usize * 4;
-                    out[out_base..out_base + 4].copy_from_slice(&values[rank].to_le_bytes());
-                }
-            }
-        } else {
-            let legacy_sort = rank_filter_f_requires_legacy_sort(raw);
-            #[cfg(feature = "parallel")]
-            rank_filter_f_large_parallel(raw, &mut out, w, h, half, area, rank, legacy_sort);
-            #[cfg(not(feature = "parallel"))]
-            rank_filter_f_large_serial(raw, &mut out, w, h, half, area, rank, legacy_sort);
-        }
-        let result = DynamicImage::ImageRgba8(
-            crate::raster::RgbaImage::from_raw(w_u32, h_u32, out)
-                .ok_or_else(|| PilError::ValueError("rank_filter_impl(F): buffer error".into()))?,
-        );
-        return Ok(preserve_mode(img, result));
+        return rank_filter_f_impl(img, window);
     }
 
     let channels = img.color().channel_count() as usize;
