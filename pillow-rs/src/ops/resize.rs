@@ -170,20 +170,10 @@ impl Image {
         if matches!(mode.as_str(), "1" | "P") {
             filter = ResampleFilter::Nearest;
         }
-        if mode == "F"
-            && matches!(filter, ResampleFilter::Nearest)
-            && (w, h) == (source_w, source_h)
+        if let Some(identity_resize) =
+            self.identity_boxed_nearest_resize(filter, (w, h), (source_w, source_h), &mode, bounds)?
         {
-            // Validate before the no-op check to keep Pillow's box errors.
-            // A fractional box can still map every nearest coordinate to the
-            // same sample; return a logically independent copy that shares
-            // immutable storage instead of queuing a full pixel gather.
-            let bounds = validate_resize_box(bounds, (source_w, source_h))?;
-            if nearest_box_axis_maps_identity(source_w, w, bounds.0, bounds.2)
-                && nearest_box_axis_maps_identity(source_h, h, bounds.1, bounds.3)
-            {
-                return Ok(self.copy());
-            }
+            return Ok(identity_resize);
         }
         let mut source = self.clone();
         // Pillow's alpha recursion omits reducing_gap after premultiplying.
@@ -220,6 +210,30 @@ impl Image {
                 box_coords: bounds,
             },
         ))
+    }
+
+    #[inline(always)]
+    fn identity_boxed_nearest_resize(
+        &self,
+        filter: ResampleFilter,
+        output_size: (u32, u32),
+        source_size: (u32, u32),
+        mode: &str,
+        bounds: (f64, f64, f64, f64),
+    ) -> Result<Option<Image>, PilError> {
+        if mode == "F" && matches!(filter, ResampleFilter::Nearest) && output_size == source_size {
+            // Validate before the no-op check to keep Pillow's box errors.
+            // A fractional box can still map every nearest coordinate to the
+            // same sample; return a logically independent copy that shares
+            // immutable storage instead of queuing a full pixel gather.
+            let bounds = validate_resize_box(bounds, source_size)?;
+            if nearest_box_axis_maps_identity(source_size.0, output_size.0, bounds.0, bounds.2)
+                && nearest_box_axis_maps_identity(source_size.1, output_size.1, bounds.1, bounds.3)
+            {
+                return Ok(Some(self.copy()));
+            }
+        }
+        Ok(None)
     }
 
     fn resize_with_filter(
