@@ -1,8 +1,9 @@
 use super::*;
 
-#[test]
-fn extract_band_native_gpu_preserves_raw_color_mode_channels() {
-    let cases = [
+type ExtractBandCase = (&'static str, i32, Vec<u8>, Vec<u8>);
+
+fn native_extract_band_cases() -> [ExtractBandCase; 12] {
+    [
         ("L", 0, vec![71, 19], vec![71, 19]),
         ("LA", 1, vec![10, 201, 20, 202], vec![201, 202]),
         ("RGB", 0, vec![1, 2, 3, 11, 12, 13], vec![1, 11]),
@@ -35,7 +36,12 @@ fn extract_band_native_gpu_preserves_raw_color_mode_channels() {
         ("CMYK", 3, vec![1, 2, 3, 4, 11, 12, 13, 14], vec![4, 14]),
         ("HSV", 1, vec![21, 22, 23, 31, 32, 33], vec![22, 32]),
         ("YCbCr", 2, vec![41, 42, 43, 51, 52, 53], vec![43, 53]),
-    ];
+    ]
+}
+
+#[test]
+fn extract_band_native_gpu_preserves_raw_color_mode_channels() {
+    let cases = native_extract_band_cases();
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (mode, channel, source_bytes, expected_bytes) in cases {
         let source = Image::frombytes(mode, (2, 1), &source_bytes).expect("source image");
