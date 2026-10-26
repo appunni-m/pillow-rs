@@ -111,59 +111,79 @@ pub(crate) fn execute_prepared_simd_terminal<T>(
     let (result, vector_blocks, scalar_tail) = execute()?;
     let backend_ns = elapsed_ns(backend_start);
     if timed {
-        for (index, op) in ops.iter().enumerate() {
-            begin_pipeline_operation_telemetry(registry::variant_key(op));
-            if index == 0 {
-                record_pipeline_operation_vector_blocks(vector_blocks);
-                record_pipeline_operation_scalar_tail(scalar_tail);
-            } else {
-                record_pipeline_operation_path("scalar-control");
-            }
-            finish_pipeline_operation_telemetry();
-        }
-
-        let mut resource = host_resource_telemetry(input);
-        let output_bytes = output_buffer_sizes
-            .iter()
-            .map(|&size| size as u64)
-            .fold(0u64, u64::saturating_add);
-        let output_count = output_buffer_sizes
-            .iter()
-            .filter(|&&size| size != 0)
-            .count() as u64;
-        resource.host_buffer_count = resource.host_buffer_count.saturating_add(output_count);
-        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
-        resource.peak_live_host_bytes = resource
-            .peak_live_host_bytes
-            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
-        resource.fused_operation_count = ops.len() as u64;
-        for size in output_buffer_sizes {
-            if size != 0 {
-                record_pipeline_allocation(size);
-            }
-        }
-        let allocation = take_pipeline_allocation_telemetry();
-        resource.host_allocation_count = allocation.allocation_count;
-        resource.host_allocated_bytes = allocation.allocated_bytes;
-        record_pipeline_resource_telemetry(resource);
-        let _ = take_pipeline_backend_override();
-        let _ = take_pipeline_dispatch_count();
-        let _ = take_pipeline_resize_coeff_cache_stats();
-        record_pipeline_telemetry(PipelineTelemetry {
-            requested_backend: prepared.requested_backend,
-            actual_backend: Backend::Simd,
-            operation_count: ops.len(),
-            route_ns: prepared.route_ns,
-            validation_ns: prepared.validation_ns,
+        record_simd_terminal_telemetry(
+            prepared,
+            ops,
+            input,
+            output_buffer_sizes,
+            vector_blocks,
+            scalar_tail,
             backend_ns,
-            dispatch_count: None,
-            fallback_reason: prepared.fallback_reason.clone(),
-            resource: Some(resource),
-            resize_coeff_cache_hits: 0,
-            resize_coeff_cache_misses: 0,
-        });
+        );
     }
     Ok(result)
+}
+
+fn record_simd_terminal_telemetry(
+    prepared: &PreparedExecution,
+    ops: &[PipelineOp],
+    input: &DynamicImage,
+    output_buffer_sizes: [usize; 2],
+    vector_blocks: u64,
+    scalar_tail: u64,
+    backend_ns: u64,
+) {
+    for (index, op) in ops.iter().enumerate() {
+        begin_pipeline_operation_telemetry(registry::variant_key(op));
+        if index == 0 {
+            record_pipeline_operation_vector_blocks(vector_blocks);
+            record_pipeline_operation_scalar_tail(scalar_tail);
+        } else {
+            record_pipeline_operation_path("scalar-control");
+        }
+        finish_pipeline_operation_telemetry();
+    }
+
+    let mut resource = host_resource_telemetry(input);
+    let output_bytes = output_buffer_sizes
+        .iter()
+        .map(|&size| size as u64)
+        .fold(0u64, u64::saturating_add);
+    let output_count = output_buffer_sizes
+        .iter()
+        .filter(|&&size| size != 0)
+        .count() as u64;
+    resource.host_buffer_count = resource.host_buffer_count.saturating_add(output_count);
+    resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+    resource.peak_live_host_bytes = resource
+        .peak_live_host_bytes
+        .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
+    resource.fused_operation_count = ops.len() as u64;
+    for size in output_buffer_sizes {
+        if size != 0 {
+            record_pipeline_allocation(size);
+        }
+    }
+    let allocation = take_pipeline_allocation_telemetry();
+    resource.host_allocation_count = allocation.allocation_count;
+    resource.host_allocated_bytes = allocation.allocated_bytes;
+    record_pipeline_resource_telemetry(resource);
+    let _ = take_pipeline_backend_override();
+    let _ = take_pipeline_dispatch_count();
+    let _ = take_pipeline_resize_coeff_cache_stats();
+    record_pipeline_telemetry(PipelineTelemetry {
+        requested_backend: prepared.requested_backend,
+        actual_backend: Backend::Simd,
+        operation_count: ops.len(),
+        route_ns: prepared.route_ns,
+        validation_ns: prepared.validation_ns,
+        backend_ns,
+        dispatch_count: None,
+        fallback_reason: prepared.fallback_reason.clone(),
+        resource: Some(resource),
+        resize_coeff_cache_hits: 0,
+        resize_coeff_cache_misses: 0,
+    });
 }
 
 #[cfg(feature = "gpu")]
