@@ -49,7 +49,7 @@
       "lines": 230,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/reduce.rs",
-      "signature": "pub(super) fn execute_reduce_rgb_with_sparse_rows( img: &DynamicImage, x_factor: u32, y_factor: u32, explicit_mode: Option<&str>, ) -> Result<Option<(DynamicImage, Option<Vec<bool>>)>, PilError> {"
+      "signature": "pub(super) fn execute_reduce_rgb_with_sparse_rows( img: &DynamicImage, x_factor: u32, y_factor: u32, explicit_mode: Option<&str>, ) -> SparseRgbReductionResult {"
     },
     {
       "lines": 156,
@@ -175,7 +175,7 @@
       "lines": 267,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/batch_execution.rs",
-      "signature": "pub(super) fn execute_batch_impl( &self, ops: &[PipelineOp], auxiliary_images: &[AuxiliaryImages], w: u32, h: u32, mode: u32, packed_luma_colorize: bool, packed_luma_convert: bool, packed_luma_transform_input: bool, packed_luma_transform_output: bool, native_rgb_compact_input: bool, native_rgb_packed_output: bool, native_la_transform_output: bool, packed_luma_point: bool, packed_luma_putdata: bool, packed_luma_order_statistic: bool, packed_native_byte_filter: bool, packed_luma_pad: bool, packed_la_pad: bool, native_extract_band: bool, native_grayscale_rgb_input: bool, native_sharpness_l_input: bool, native_sharpness_la_input: bool, native_sharpness_rgb_input: bool, native_reduce_rgb_input: bool, native_expand_channels: Option<u8>, native_cover_input_channels: Option<u8>, native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>, logical_mode: Option<&str>, contrast_mean: Option<u8>, f_resize_constant_bits: Option<u32>, f_resize_box_copy_is_exact: bool, f_resize_identity_is_exact: bool, f_resize_box_average_is_exact: bool, f_resize_dyadic_is_exact: bool, f_resize_f64_is_exact: bool, f_resize_f64_ordered_is_exact: bool, initial_input: Option<&wgpu::Buffer>, buffers: &mut BufferPool, ) -> Result< ( bool, u32, u32, ReadbackTarget, PipelineResourceTelemetry, u64, bool, ), PilError, > {"
+      "signature": "pub(super) fn execute_batch_impl( &self, ops: &[PipelineOp], auxiliary_images: &[AuxiliaryImages], w: u32, h: u32, mode: u32, packed_luma_colorize: bool, packed_luma_convert: bool, packed_luma_transform_input: bool, packed_luma_transform_output: bool, native_rgb_compact_input: bool, native_rgb_packed_output: bool, native_la_transform_output: bool, packed_luma_point: bool, packed_luma_putdata: bool, packed_luma_order_statistic: bool, packed_native_byte_filter: bool, packed_luma_pad: bool, packed_la_pad: bool, native_extract_band: bool, native_grayscale_rgb_input: bool, native_sharpness_l_input: bool, native_sharpness_la_input: bool, native_sharpness_rgb_input: bool, native_reduce_rgb_input: bool, native_expand_channels: Option<u8>, native_cover_input_channels: Option<u8>, native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>, logical_mode: Option<&str>, contrast_mean: Option<u8>, f_resize_constant_bits: Option<u32>, f_resize_box_copy_is_exact: bool, f_resize_identity_is_exact: bool, f_resize_box_average_is_exact: bool, f_resize_dyadic_is_exact: bool, f_resize_f64_is_exact: bool, f_resize_f64_ordered_is_exact: bool, initial_input: Option<&wgpu::Buffer>, buffers: &mut BufferPool, ) -> GpuBatchExecutionResult {"
     },
     {
       "lines": 657,
@@ -643,7 +643,7 @@
       "lines": 198,
       "occurrence": 1,
       "path": "pillow-rs/src/image/projection.rs",
-      "signature": "fn try_getprojection_putpixel_pipeline( &self, ) -> Result<Option<(Vec<u32>, Vec<u32>)>, PilError> {"
+      "signature": "fn try_getprojection_putpixel_pipeline(&self) -> Result<Option<ProjectionAxes>, PilError> {"
     },
     {
       "lines": 127,

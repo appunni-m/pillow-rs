@@ -281,9 +281,7 @@ impl Image {
         Ok((h_proj, v_proj, vector_blocks, scalar_tail))
     }
 
-    fn try_getprojection_putpixel_pipeline(
-        &self,
-    ) -> Result<Option<(Vec<u32>, Vec<u32>)>, PilError> {
+    fn try_getprojection_putpixel_pipeline(&self) -> Result<Option<ProjectionAxes>, PilError> {
         // A projection is the terminal result here. Applying queued RGB or
         // CMYK pixels to the two axes is exact and avoids creating a full-frame
         // image that the caller never receives. The lazy pipeline remains

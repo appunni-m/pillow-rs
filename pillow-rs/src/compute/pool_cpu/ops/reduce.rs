@@ -49,7 +49,7 @@ pub(super) fn execute_reduce_rgb_with_sparse_rows(
     x_factor: u32,
     y_factor: u32,
     explicit_mode: Option<&str>,
-) -> Result<Option<(DynamicImage, Option<Vec<bool>>)>, PilError> {
+) -> SparseRgbReductionResult {
     if explicit_mode != Some("RGB") || !matches!(img, DynamicImage::ImageRgb8(_)) {
         return Ok(None);
     }

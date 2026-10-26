@@ -5,6 +5,19 @@ use super::*;
 
 mod routing;
 
+pub(super) type GpuBatchExecutionResult = Result<
+    (
+        bool,
+        u32,
+        u32,
+        ReadbackTarget,
+        PipelineResourceTelemetry,
+        u64,
+        bool,
+    ),
+    PilError,
+>;
+
 pub(super) fn select_gpu_chunk_end(
     chunk_start: usize,
     resource_bytes: &[usize],
@@ -113,18 +126,7 @@ impl GpuInner {
         f_resize_f64_ordered_is_exact: bool,
         initial_input: Option<&wgpu::Buffer>,
         buffers: &mut BufferPool,
-    ) -> Result<
-        (
-            bool,
-            u32,
-            u32,
-            ReadbackTarget,
-            PipelineResourceTelemetry,
-            u64,
-            bool,
-        ),
-        PilError,
-    > {
+    ) -> GpuBatchExecutionResult {
         if logical_mode == Some("F")
             && (f_resize_f64_is_exact || f_resize_f64_ordered_is_exact)
             && let [
