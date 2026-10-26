@@ -163,7 +163,33 @@ fn f32_source(values: &[f32], width: u32, height: u32) -> DynamicImage {
 #[test]
 fn f_projective_filters_use_scalar_words() {
     let source = f32_source(&[1.25, -2.5, 7.75, 10.5], 2, 2);
-    let cases = [
+    for (method, data, filter, expected) in f_projective_filter_cases() {
+        let output = op_transform(
+            &source,
+            3,
+            3,
+            &method,
+            &data,
+            &filter,
+            Some((0, 0, 0, 0)),
+            false,
+            Some("F"),
+        )
+        .expect("F projective transform");
+        let words = output
+            .as_bytes()
+            .chunks_exact(4)
+            .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+            .collect::<Vec<_>>();
+        assert_eq!(words, expected);
+    }
+}
+
+type FProjectiveFilterCase = (TransformMethod, Vec<f64>, ResampleFilter, [u32; 9]);
+
+#[cfg(target_endian = "little")]
+fn f_projective_filter_cases() -> [FProjectiveFilterCase; 3] {
+    [
         (
             TransformMethod::Perspective,
             vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
@@ -212,27 +238,7 @@ fn f_projective_filters_use_scalar_words() {
                 0x4128_0000,
             ],
         ),
-    ];
-    for (method, data, filter, expected) in cases {
-        let output = op_transform(
-            &source,
-            3,
-            3,
-            &method,
-            &data,
-            &filter,
-            Some((0, 0, 0, 0)),
-            false,
-            Some("F"),
-        )
-        .expect("F projective transform");
-        let words = output
-            .as_bytes()
-            .chunks_exact(4)
-            .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
-            .collect::<Vec<_>>();
-        assert_eq!(words, expected);
-    }
+    ]
 }
 
 #[cfg(target_endian = "little")]
