@@ -304,12 +304,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn gpu_f_resize_f64_is_exact( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
     },
     {
-      "lines": 103,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn gpu_f_resize_integer_is_exact( ops: &[PipelineOp], image: &DynamicImage, logical_mode: Option<&str>, ) -> bool {"
-    },
-    {
       "lines": 150,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs",

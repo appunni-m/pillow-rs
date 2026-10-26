@@ -511,6 +511,26 @@ pub(in crate::compute::pool_gpu) fn gpu_f_pad_f64_is_exact(
 /// aligned integer. For two changed axes, the exact rounded horizontal words
 /// are passed through the vertical proof so Pillow's intermediate f32 store
 /// remains part of the admission contract.
+#[inline]
+fn gpu_f_resize_integer_coefficients_match(fixed: &FilterCoeffs, exact: &FilterCoeffsF64) -> bool {
+    fixed.xmin == exact.xmin
+        && fixed.count == exact.count
+        && fixed.count.iter().enumerate().all(|(row, &count)| {
+            let start = fixed.offsets[row];
+            let (Some(weights), Some(exact_weights)) = (
+                fixed.weights.get(start..start.saturating_add(count)),
+                exact.weights.get(row),
+            ) else {
+                return false;
+            };
+            exact_weights.len() == count
+                && weights
+                    .iter()
+                    .zip(exact_weights)
+                    .all(|(&fixed, &exact)| exact == fixed as f64 / 4_194_304.0)
+        })
+}
+
 pub(in crate::compute::pool_gpu) fn gpu_f_resize_integer_is_exact(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -562,30 +582,9 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_integer_is_exact(
     let vertical = gpu_resize_coefficients(*h, source_dimensions.1, *filter);
     let horizontal_f64 = precompute_coeffs_f64(*w, source_dimensions.0, kernel, support);
     let vertical_f64 = precompute_coeffs_f64(*h, source_dimensions.1, kernel, support);
-    let rows_match = |fixed: &FilterCoeffs, exact: &FilterCoeffsF64| {
-        if fixed.xmin != exact.xmin || fixed.count != exact.count {
-            return false;
-        }
-        for (row, &count) in fixed.count.iter().enumerate() {
-            let start = fixed.offsets[row];
-            let Some(weights) = fixed.weights.get(start..start.saturating_add(count)) else {
-                return false;
-            };
-            let Some(exact_weights) = exact.weights.get(row) else {
-                return false;
-            };
-            if exact_weights.len() != count
-                || weights
-                    .iter()
-                    .zip(exact_weights)
-                    .any(|(&fixed, &exact)| exact != fixed as f64 / 4_194_304.0)
-            {
-                return false;
-            }
-        }
-        true
-    };
-    if !rows_match(&horizontal, &horizontal_f64) || !rows_match(&vertical, &vertical_f64) {
+    if !gpu_f_resize_integer_coefficients_match(&horizontal, &horizontal_f64)
+        || !gpu_f_resize_integer_coefficients_match(&vertical, &vertical_f64)
+    {
         return false;
     }
 
