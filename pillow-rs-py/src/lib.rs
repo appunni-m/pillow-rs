@@ -681,7 +681,16 @@ fn putpixel_value_from_python(
                 }
             });
     }
-    let single_band = matches!(mode, "1" | "L" | "P" | "I") || mode.starts_with("I;16");
+    let tuple_length = tuple.map(|tuple| tuple.len());
+    let (length, palette_color) = putpixel_component_shape_from_python(value, mode, tuple_length)?;
+    putpixel_components_from_python(value, length, palette_color)
+}
+
+fn putpixel_component_shape_from_python(
+    value: &Bound<'_, PyAny>,
+    mode: &str,
+    tuple_length: Option<usize>,
+) -> PyResult<(usize, bool)> {
     // Only P/PA's public palette wrapper accepts RGB(A) lists. Ordinary
     // getink accepts tuples, and unwraps a singleton before numeric coercion.
     let palette_list = matches!(mode, "P" | "PA")
@@ -690,9 +699,10 @@ fn putpixel_value_from_python(
     let length = if palette_list {
         Some(value.len()?)
     } else {
-        tuple.map(|t| t.len())
+        tuple_length
     };
     let palette_color = matches!(mode, "P" | "PA") && matches!(length, Some(3 | 4));
+    let single_band = matches!(mode, "1" | "L" | "P" | "I") || mode.starts_with("I;16");
     if single_band && !palette_color {
         return Err(PyTypeError::new_err(
             "color must be int or single-element tuple",
@@ -716,6 +726,16 @@ fn putpixel_value_from_python(
             "new style getargs format but argument is not a tuple",
         ));
     }
+    Ok((length, palette_color))
+}
+
+fn putpixel_components_from_python(
+    value: &Bound<'_, PyAny>,
+    length: usize,
+    palette_color: bool,
+) -> PyResult<pillow_rs::PutPixelValue> {
+    use pillow_rs::PutPixelValue;
+
     if palette_color
         && (0..length).any(|index| {
             value
