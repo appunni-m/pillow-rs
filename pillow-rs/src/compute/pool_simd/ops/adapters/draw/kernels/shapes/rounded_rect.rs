@@ -189,27 +189,27 @@ fn draw_rounded_rect_spans(
 ) -> Result<Option<DynamicImage>, PilError> {
     let (image_width, image_height) = img.dimensions();
     let mut output = img.as_bytes().to_vec();
-    let mut writer = SimdDrawSpanWriter {
-        output: &mut output,
-        image_width,
-        image_height,
-        channels,
-        alpha_blend_rgb,
-        vector_blocks: 0,
-        scalar_tail: 0,
+    let (vector_blocks, scalar_tail) = {
+        let mut writer = SimdDrawSpanWriter {
+            output: &mut output,
+            image_width,
+            image_height,
+            channels,
+            alpha_blend_rgb,
+            vector_blocks: 0,
+            scalar_tail: 0,
+        };
+
+        if let Some(fill) = fill {
+            write_rounded_rect_fill(&mut writer, geometry, fill)?;
+        }
+        if let Some(outline) = outline.filter(|color| Some(*color) != fill && width != 0) {
+            let width = i32::try_from(width).unwrap_or(i32::MAX);
+            write_rounded_rect_outline(&mut writer, geometry, width, outline)?;
+        }
+
+        (writer.vector_blocks, writer.scalar_tail)
     };
-
-    if let Some(fill) = fill {
-        write_rounded_rect_fill(&mut writer, geometry, fill)?;
-    }
-    if let Some(outline) = outline.filter(|color| Some(*color) != fill && width != 0) {
-        let width = i32::try_from(width).unwrap_or(i32::MAX);
-        write_rounded_rect_outline(&mut writer, geometry, width, outline)?;
-    }
-
-    let vector_blocks = writer.vector_blocks;
-    let scalar_tail = writer.scalar_tail;
-    drop(writer);
     if vector_blocks == 0 {
         crate::compute::record_pipeline_operation_path("scalar-control");
         return Ok(Some(img.clone()));

@@ -88,7 +88,6 @@ fn draw_wide_line(
     }
     let vector_blocks = writer.vector_blocks;
     let scalar_tail = writer.scalar_tail;
-    drop(writer);
     if vector_blocks == 0 {
         crate::compute::record_pipeline_operation_path("scalar-control");
         return Ok(Some(img.clone()));
