@@ -562,12 +562,6 @@
       "signature": "pub fn push_op(source: &Image, op: PipelineOp) -> Image {"
     },
     {
-      "lines": 160,
-      "occurrence": 1,
-      "path": "pillow-rs/src/image/pipeline_ops.rs",
-      "signature": "pub(super) fn known_pipeline_op_dimensions( op: &PipelineOp, (width, height): (u32, u32), ) -> Option<(u32, u32)> {"
-    },
-    {
       "lines": 170,
       "occurrence": 1,
       "path": "pillow-rs/src/image/projection.rs",

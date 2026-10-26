@@ -356,6 +356,107 @@ fn round_dimension(value: f64) -> Option<u32> {
     (rounded <= f64::from(u32::MAX)).then_some(rounded as u32)
 }
 
+fn known_rotated_dimensions(
+    angle: f64,
+    expand: bool,
+    center: Option<(f64, f64)>,
+    translate: Option<(f64, f64)>,
+    (width, height): (u32, u32),
+) -> Option<(u32, u32)> {
+    if !expand {
+        return Some((width, height));
+    }
+    // Pillow takes an exact transpose fast path for right-angle rotations
+    // before constructing the affine matrix, regardless of the requested
+    // resampling filter. Reflect that public shape here so lazy `size`
+    // agrees with the materialized result.
+    let normalized = angle.rem_euclid(360.0);
+    if center.is_none()
+        && translate.is_none()
+        && [90.0, 270.0]
+            .into_iter()
+            .any(|right_angle| (normalized - right_angle).abs() <= f64::EPSILON)
+    {
+        return Some((height, width));
+    }
+    let sw = f64::from(width);
+    let sh = f64::from(height);
+    let radians = -angle.to_radians();
+    let affine_a = crate::ops::rotate::round_rotate_coefficient(radians.cos());
+    let affine_b = crate::ops::rotate::round_rotate_coefficient(radians.sin());
+    let affine_d = crate::ops::rotate::round_rotate_coefficient(-radians.sin());
+    let affine_e = affine_a;
+    let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
+    let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
+    let affine_c =
+        affine_a * (-center_x - translate_x) + affine_b * (-center_y - translate_y) + center_x;
+    let affine_f =
+        affine_d * (-center_x - translate_x) + affine_e * (-center_y - translate_y) + center_y;
+    let transform = |x: f64, y: f64| {
+        (
+            affine_a * x + affine_b * y + affine_c,
+            affine_d * x + affine_e * y + affine_f,
+        )
+    };
+    let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for &(x, y) in &corners {
+        let (rotated_x, rotated_y) = transform(x, y);
+        min_x = min_x.min(rotated_x);
+        max_x = max_x.max(rotated_x);
+        min_y = min_y.min(rotated_y);
+        max_y = max_y.max(rotated_y);
+    }
+    Some((
+        round_dimension(max_x.ceil() - min_x.floor())?,
+        round_dimension(max_y.ceil() - min_y.floor())?,
+    ))
+}
+
+fn known_contain_cover_dimensions(
+    width: u32,
+    height: u32,
+    target_width: u32,
+    target_height: u32,
+    cover: bool,
+) -> Option<(u32, u32)> {
+    if width == 0 || height == 0 || target_width == 0 || target_height == 0 {
+        return None;
+    }
+    let image_ratio = f64::from(width) / f64::from(height);
+    let destination_ratio = f64::from(target_width) / f64::from(target_height);
+    if (image_ratio - destination_ratio).abs() < 1e-10 {
+        return Some((target_width, target_height));
+    }
+    if (image_ratio > destination_ratio) != cover {
+        let new_height =
+            round_dimension(f64::from(height) / f64::from(width) * f64::from(target_width))?;
+        Some((
+            target_width,
+            if cover { new_height.max(1) } else { new_height },
+        ))
+    } else {
+        let new_width =
+            round_dimension(f64::from(width) / f64::from(height) * f64::from(target_height))?;
+        Some((
+            if cover { new_width.max(1) } else { new_width },
+            target_height,
+        ))
+    }
+}
+
+fn known_transposed_dimensions(method: &TransposeMethod, width: u32, height: u32) -> (u32, u32) {
+    match method {
+        TransposeMethod::Rotate90
+        | TransposeMethod::Rotate270
+        | TransposeMethod::Transpose
+        | TransposeMethod::Transverse => (height, width),
+        TransposeMethod::FlipLeftRight
+        | TransposeMethod::FlipTopBottom
+        | TransposeMethod::Rotate180 => (width, height),
+    }
+}
+
 /// Computes the output shape for a lazy operation without touching pixels.
 ///
 /// The match is intentionally conservative: operations with secondary images,
@@ -385,74 +486,16 @@ pub(super) fn known_pipeline_op_dimensions(
             let border = border.checked_mul(2)?;
             Some((width.checked_sub(border)?, height.checked_sub(border)?))
         }
-        PipelineOp::Transpose { method } => Some(match method {
-            TransposeMethod::Rotate90
-            | TransposeMethod::Rotate270
-            | TransposeMethod::Transpose
-            | TransposeMethod::Transverse => (height, width),
-            TransposeMethod::FlipLeftRight
-            | TransposeMethod::FlipTopBottom
-            | TransposeMethod::Rotate180 => (width, height),
-        }),
+        PipelineOp::Transpose { method } => {
+            Some(known_transposed_dimensions(method, width, height))
+        }
         PipelineOp::Rotate {
             angle,
             expand,
             center,
             translate,
             ..
-        } => {
-            if !expand {
-                return Some((width, height));
-            }
-            // Pillow takes an exact transpose fast path for right-angle
-            // rotations before constructing the affine matrix, regardless
-            // of the requested resampling filter. Reflect that public shape
-            // here so lazy `size` agrees with the materialized result.
-            let normalized = angle.rem_euclid(360.0);
-            if center.is_none()
-                && translate.is_none()
-                && [90.0, 270.0]
-                    .into_iter()
-                    .any(|right_angle| (normalized - right_angle).abs() <= f64::EPSILON)
-            {
-                return Some((height, width));
-            }
-            let sw = f64::from(width);
-            let sh = f64::from(height);
-            let radians = -angle.to_radians();
-            let affine_a = crate::ops::rotate::round_rotate_coefficient(radians.cos());
-            let affine_b = crate::ops::rotate::round_rotate_coefficient(radians.sin());
-            let affine_d = crate::ops::rotate::round_rotate_coefficient(-radians.sin());
-            let affine_e = affine_a;
-            let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
-            let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
-            let affine_c = affine_a * (-center_x - translate_x)
-                + affine_b * (-center_y - translate_y)
-                + center_x;
-            let affine_f = affine_d * (-center_x - translate_x)
-                + affine_e * (-center_y - translate_y)
-                + center_y;
-            let transform = |x: f64, y: f64| {
-                (
-                    affine_a * x + affine_b * y + affine_c,
-                    affine_d * x + affine_e * y + affine_f,
-                )
-            };
-            let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
-            let (mut min_x, mut min_y, mut max_x, mut max_y) =
-                (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-            for &(x, y) in &corners {
-                let (rotated_x, rotated_y) = transform(x, y);
-                min_x = min_x.min(rotated_x);
-                max_x = max_x.max(rotated_x);
-                min_y = min_y.min(rotated_y);
-                max_y = max_y.max(rotated_y);
-            }
-            Some((
-                round_dimension(max_x.ceil() - min_x.floor())?,
-                round_dimension(max_y.ceil() - min_y.floor())?,
-            ))
-        }
+        } => known_rotated_dimensions(*angle, *expand, *center, *translate, (width, height)),
         PipelineOp::Reduce { x_factor, y_factor } => Some((
             width.div_ceil((*x_factor).max(1)),
             height.div_ceil((*y_factor).max(1)),
@@ -462,24 +505,13 @@ pub(super) fn known_pipeline_op_dimensions(
             round_dimension(f64::from(height) * *factor)?.max(1),
         )),
         PipelineOp::Contain { w, h, .. } | PipelineOp::Cover { w, h, .. } => {
-            if width == 0 || height == 0 || *w == 0 || *h == 0 {
-                return None;
-            }
-            let image_ratio = f64::from(width) / f64::from(height);
-            let destination_ratio = f64::from(*w) / f64::from(*h);
-            if (image_ratio - destination_ratio).abs() < 1e-10 {
-                return Some((*w, *h));
-            }
-            let cover = matches!(op, PipelineOp::Cover { .. });
-            if (image_ratio > destination_ratio) != cover {
-                let new_height =
-                    round_dimension(f64::from(height) / f64::from(width) * f64::from(*w))?;
-                Some((*w, if cover { new_height.max(1) } else { new_height }))
-            } else {
-                let new_width =
-                    round_dimension(f64::from(width) / f64::from(height) * f64::from(*h))?;
-                Some((if cover { new_width.max(1) } else { new_width }, *h))
-            }
+            known_contain_cover_dimensions(
+                width,
+                height,
+                *w,
+                *h,
+                matches!(op, PipelineOp::Cover { .. }),
+            )
         }
         // These operations are unary and have no deferred dimension or
         // secondary-image validation.  Keeping them here is what makes long
