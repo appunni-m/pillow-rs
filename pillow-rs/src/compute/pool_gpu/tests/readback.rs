@@ -48,6 +48,34 @@ fn assert_primary_readback_case(
     operation_count: usize,
     buffers: &mut super::BufferPool,
 ) {
+    let (source, ops, expected) = primary_readback_case_input(operation_count);
+    let auxiliary: Vec<_> = ops
+        .iter()
+        .map(|_| super::AuxiliaryImages {
+            second: None,
+            third: None,
+        })
+        .collect();
+    buffers.upload_standard_image(&gpu.queue, &source).unwrap();
+    let (final_is_a, width, height, readback, dispatches) =
+        run_primary_readback_batch(gpu, &ops, &auxiliary, buffers);
+    assert_primary_readback_result(
+        gpu,
+        direct,
+        operation_count,
+        buffers,
+        &expected,
+        final_is_a,
+        width,
+        height,
+        readback,
+        dispatches,
+    );
+}
+
+fn primary_readback_case_input(
+    operation_count: usize,
+) -> (DynamicImage, Vec<PipelineOp>, DynamicImage) {
     use crate::compute::registry;
     use crate::pipeline::TransposeMethod;
 
@@ -67,18 +95,19 @@ fn assert_primary_readback_case(
     let expected = ops.iter().fold(source.clone(), |image, op| {
         registry::execute_cpu(op, &image, Some("RGBA")).unwrap()
     });
-    let auxiliary: Vec<_> = ops
-        .iter()
-        .map(|_| super::AuxiliaryImages {
-            second: None,
-            third: None,
-        })
-        .collect();
-    buffers.upload_standard_image(&gpu.queue, &source).unwrap();
+    (source, ops, expected)
+}
+
+fn run_primary_readback_batch(
+    gpu: &super::GpuInner,
+    ops: &[PipelineOp],
+    auxiliary: &[super::AuxiliaryImages],
+    buffers: &mut super::BufferPool,
+) -> (bool, u32, u32, super::ReadbackTarget, u64) {
     let (final_is_a, width, height, readback, _, dispatches, _) = gpu
         .execute_batch_impl(
-            &ops,
-            &auxiliary,
+            ops,
+            auxiliary,
             17,
             15,
             3,
@@ -117,6 +146,21 @@ fn assert_primary_readback_case(
             buffers,
         )
         .unwrap();
+    (final_is_a, width, height, readback, dispatches)
+}
+
+fn assert_primary_readback_result(
+    gpu: &super::GpuInner,
+    direct: bool,
+    operation_count: usize,
+    buffers: &mut super::BufferPool,
+    expected: &DynamicImage,
+    final_is_a: bool,
+    width: u32,
+    height: u32,
+    readback: super::ReadbackTarget,
+    dispatches: u64,
+) {
     assert_eq!(dispatches, operation_count as u64);
     assert_eq!(final_is_a, operation_count.is_multiple_of(2));
     assert_eq!(matches!(readback, super::ReadbackTarget::Primary), direct);
