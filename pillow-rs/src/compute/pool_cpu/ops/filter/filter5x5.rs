@@ -175,7 +175,7 @@ fn try_filter5x5_native_byte_rows(
 }
 
 #[inline(always)]
-fn try_filter5x5_luma_rows(
+fn try_filter5x5_luma_byte_rows(
     context: &Filter5x5Context<'_>,
     output: &mut Vec<u8>,
 ) -> Result<Option<DynamicImage>, PilError> {
@@ -203,6 +203,17 @@ fn try_filter5x5_luma_rows(
         )
     {
         return Ok(Some(finish_filter5x5(context, std::mem::take(output))?));
+    }
+    Ok(None)
+}
+
+#[inline(always)]
+fn try_filter5x5_luma_rows(
+    context: &Filter5x5Context<'_>,
+    output: &mut Vec<u8>,
+) -> Result<Option<DynamicImage>, PilError> {
+    if let Some(result) = try_filter5x5_luma_byte_rows(context, output)? {
+        return Ok(Some(result));
     }
     #[cfg(not(feature = "parallel"))]
     #[cfg(target_arch = "aarch64")]
