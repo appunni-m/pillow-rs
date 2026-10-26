@@ -76,12 +76,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn execute_native_rgb_luma_merge( &self, image: &DynamicImage, bands: &[crate::image::Image], dispatch: NativeRgbMergeDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 186,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/stream/encoding.rs",
-      "signature": "fn encode_byte_stage( gpu: &GpuInner, encoder: &mut wgpu::CommandEncoder, buffers: &BufferPool, stage: &Stage<'_>, secondary: Option<&EncodedGraph>, current_a: bool, ) -> Result<bool, PilError> {"
-    },
-    {
       "lines": 408,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs",
@@ -142,11 +136,6 @@
     "pillow-rs/src/compute/pool_gpu/rgb_merge.rs": {
       "owner": "lazytrot",
       "reason": "Consolidated GPU RGB merge admission, limits, and native execution under the merge concern; continue refactoring under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/stream/encoding.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved the existing graph encoder from stream.rs without increasing its over-limit functions; continue reducing under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/transform/projective_exactness.rs": {
