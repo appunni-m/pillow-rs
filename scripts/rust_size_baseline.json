@@ -496,12 +496,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn gpu_projective_uniform_is_exact( op: &PipelineOp, mode: Option<&str>, source_dimensions: (u32, u32), ) -> bool {"
     },
     {
-      "lines": 170,
-      "occurrence": 1,
-      "path": "pillow-rs/src/image/projection.rs",
-      "signature": "fn getprojection_from_materialized( img: &DynamicImage, mode: &str, ) -> Result<(Vec<u32>, Vec<u32>), PilError> {"
-    },
-    {
       "lines": 198,
       "occurrence": 1,
       "path": "pillow-rs/src/image/projection.rs",
