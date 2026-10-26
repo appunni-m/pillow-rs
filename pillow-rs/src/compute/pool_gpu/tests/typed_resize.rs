@@ -115,9 +115,13 @@ fn f_resize_identity_lowering_copies_nonfinite_words() {
         h: 4,
         filter: ResampleFilter::Bicubic,
     };
+    assert_f_resize_identity_proofs(&image, &same_size);
+}
+
+fn assert_f_resize_identity_proofs(image: &DynamicImage, same_size: &PipelineOp) {
     assert!(gpu_f_resize_identity_is_exact(
-        std::slice::from_ref(&same_size),
-        &image,
+        std::slice::from_ref(same_size),
+        image,
         Some("F")
     ));
     assert!(gpu_f_resize_identity_is_exact(
@@ -126,9 +130,9 @@ fn f_resize_identity_lowering_copies_nonfinite_words() {
                 data: bytes::Bytes::from([0xde, 0xad, 0xbe, 0xef].repeat(16)),
                 mode: PixelMode::F,
             },
-            same_size.clone(),
+            (*same_size).clone(),
         ],
-        &image,
+        image,
         Some("F")
     ));
     assert!(!gpu_f_resize_identity_is_exact(
@@ -137,17 +141,17 @@ fn f_resize_identity_lowering_copies_nonfinite_words() {
             h: 4,
             filter: ResampleFilter::Bilinear,
         }],
-        &image,
+        image,
         Some("F")
     ));
     assert!(!gpu_f_resize_identity_is_exact(
-        &[same_size.clone(), PipelineOp::Mirror],
-        &image,
+        &[(*same_size).clone(), PipelineOp::Mirror],
+        image,
         Some("F")
     ));
     assert!(!gpu_f_resize_identity_is_exact(
-        std::slice::from_ref(&same_size),
-        &image,
+        std::slice::from_ref(same_size),
+        image,
         Some("I")
     ));
 }
