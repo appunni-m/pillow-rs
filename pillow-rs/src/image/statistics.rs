@@ -756,55 +756,15 @@ impl Image {
         let mut counts = PillowColorCounts::new(code_mask, initial_capacity, pixel_count);
         let mut distinct_colors = 0usize;
         if has_repeated_prefix {
-            let mut samples = bytes.chunks_exact(4).peekable();
-            while let Some(sample) = samples.next() {
-                let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
-                let mut repetitions = 1usize;
-                while let Some(next) = samples.peek() {
-                    if *next != sample {
-                        break;
-                    }
-                    samples.next();
-                    repetitions += 1;
-                }
-
-                if repetitions == 1 {
-                    if !counts.count(
-                        &mut distinct_colors,
-                        pixel,
-                        max_distinct_colors,
-                        code_mask,
-                        code_polynomial,
-                    ) {
-                        return Ok(None);
-                    }
-                    continue;
-                }
-
-                match counts.count_repeated(
-                    &mut distinct_colors,
-                    pixel,
-                    repetitions,
-                    max_distinct_colors,
-                    code_mask,
-                    code_polynomial,
-                ) {
-                    Some(true) => {}
-                    Some(false) => return Ok(None),
-                    None => {
-                        for _ in 0..repetitions {
-                            if !counts.count(
-                                &mut distinct_colors,
-                                pixel,
-                                max_distinct_colors,
-                                code_mask,
-                                code_polynomial,
-                            ) {
-                                return Ok(None);
-                            }
-                        }
-                    }
-                }
+            if !Self::count_repeated_scalar_samples(
+                &mut counts,
+                &mut distinct_colors,
+                bytes,
+                max_distinct_colors,
+                code_mask,
+                code_polynomial,
+            ) {
+                return Ok(None);
             }
         } else {
             if !count_pillow_color_scalar_samples(
@@ -818,20 +778,93 @@ impl Image {
                 return Ok(None);
             }
         }
-        let result = counts.into_slot_order(distinct_colors);
-        Ok(Some(
-            result
-                .into_iter()
-                .map(|(_, (pixel, count))| {
-                    let value = if mode == "I" {
-                        FormattedPixelValue::Integer(i32::from_ne_bytes(pixel.to_ne_bytes()))
-                    } else {
-                        FormattedPixelValue::Float(f32::from_bits(pixel) as f64)
-                    };
-                    (count, value)
-                })
-                .collect(),
-        ))
+        Ok(Some(Self::format_scalar_color_counts(
+            counts,
+            distinct_colors,
+            mode,
+        )))
+    }
+
+    #[inline(always)]
+    fn count_repeated_scalar_samples(
+        counts: &mut PillowColorCounts,
+        distinct_colors: &mut usize,
+        bytes: &[u8],
+        max_distinct_colors: usize,
+        code_mask: u32,
+        code_polynomial: u32,
+    ) -> bool {
+        let mut samples = bytes.chunks_exact(4).peekable();
+        while let Some(sample) = samples.next() {
+            let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
+            let mut repetitions = 1usize;
+            while let Some(next) = samples.peek() {
+                if *next != sample {
+                    break;
+                }
+                samples.next();
+                repetitions += 1;
+            }
+
+            if repetitions == 1 {
+                if !counts.count(
+                    distinct_colors,
+                    pixel,
+                    max_distinct_colors,
+                    code_mask,
+                    code_polynomial,
+                ) {
+                    return false;
+                }
+                continue;
+            }
+
+            match counts.count_repeated(
+                distinct_colors,
+                pixel,
+                repetitions,
+                max_distinct_colors,
+                code_mask,
+                code_polynomial,
+            ) {
+                Some(true) => {}
+                Some(false) => return false,
+                None => {
+                    for _ in 0..repetitions {
+                        if !counts.count(
+                            distinct_colors,
+                            pixel,
+                            max_distinct_colors,
+                            code_mask,
+                            code_polynomial,
+                        ) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    #[inline(always)]
+    fn format_scalar_color_counts(
+        counts: PillowColorCounts,
+        distinct_colors: usize,
+        mode: &str,
+    ) -> Vec<(u32, FormattedPixelValue)> {
+        counts
+            .into_slot_order(distinct_colors)
+            .into_iter()
+            .map(|(_, (pixel, count))| {
+                let value = if mode == "I" {
+                    FormattedPixelValue::Integer(i32::from_ne_bytes(pixel.to_ne_bytes()))
+                } else {
+                    FormattedPixelValue::Float(f32::from_bits(pixel) as f64)
+                };
+                (count, value)
+            })
+            .collect()
     }
 
     /// Reads the retained four-byte scalar storage for `I` and `F` modes.
