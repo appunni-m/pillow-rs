@@ -71,6 +71,53 @@ impl NativeMaskedRows<'_> {
     }
 }
 
+#[inline(always)]
+fn paste_native_masked_rows(
+    output_bytes: &mut [u8],
+    destination_top: usize,
+    destination_stride: usize,
+    _copy_width: usize,
+    copy_height: usize,
+    transform_rows: NativeMaskedRows<'_>,
+) -> Option<()> {
+    #[cfg(feature = "parallel")]
+    if _copy_width.saturating_mul(copy_height) >= EFFECT_PARALLEL_PIXEL_THRESHOLD {
+        let output_row_start = destination_top.checked_mul(destination_stride)?;
+        let output_row_end = destination_top
+            .checked_add(copy_height)?
+            .checked_mul(destination_stride)?;
+        let output_rows = output_bytes.get_mut(output_row_start..output_row_end)?;
+        crate::par_rows_mut!(
+            output_rows,
+            destination_stride,
+            copy_height,
+            |_row_start, _row_end, row_index, row| {
+                let destination_y = destination_top.saturating_add(row_index as usize);
+                transform_rows.transform_row(destination_y, row);
+            }
+        );
+    } else {
+        for row_index in 0..copy_height {
+            let destination_y = destination_top.saturating_add(row_index);
+            let row_start = destination_y.saturating_mul(destination_stride);
+            transform_rows.transform_row(
+                destination_y,
+                &mut output_bytes[row_start..row_start.saturating_add(destination_stride)],
+            );
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for row_index in 0..copy_height {
+        let destination_y = destination_top.saturating_add(row_index);
+        let row_start = destination_y.saturating_mul(destination_stride);
+        transform_rows.transform_row(
+            destination_y,
+            &mut output_bytes[row_start..row_start.saturating_add(destination_stride)],
+        );
+    }
+    Some(())
+}
+
 /// Blend an exact same-mode byte layout directly. This covers common modes
 /// whose storage is already native; tagged, indexed, scalar, and cross-mode
 /// cases retain the established conversion path until their contracts have
@@ -180,41 +227,14 @@ fn paste_native_masked(
         mask_copy_bytes,
     };
 
-    #[cfg(feature = "parallel")]
-    if copy_width.saturating_mul(copy_height) >= EFFECT_PARALLEL_PIXEL_THRESHOLD {
-        let output_row_start = destination_top.checked_mul(destination_stride)?;
-        let output_row_end = destination_top
-            .checked_add(copy_height)?
-            .checked_mul(destination_stride)?;
-        let output_rows = output_bytes.get_mut(output_row_start..output_row_end)?;
-        crate::par_rows_mut!(
-            output_rows,
-            destination_stride,
-            copy_height,
-            |_row_start, _row_end, row_index, row| {
-                let destination_y = destination_top.saturating_add(row_index as usize);
-                transform_rows.transform_row(destination_y, row);
-            }
-        );
-    } else {
-        for row_index in 0..copy_height {
-            let destination_y = destination_top.saturating_add(row_index);
-            let row_start = destination_y.saturating_mul(destination_stride);
-            transform_rows.transform_row(
-                destination_y,
-                &mut output_bytes[row_start..row_start.saturating_add(destination_stride)],
-            );
-        }
-    }
-    #[cfg(not(feature = "parallel"))]
-    for row_index in 0..copy_height {
-        let destination_y = destination_top.saturating_add(row_index);
-        let row_start = destination_y.saturating_mul(destination_stride);
-        transform_rows.transform_row(
-            destination_y,
-            &mut output_bytes[row_start..row_start.saturating_add(destination_stride)],
-        );
-    }
+    paste_native_masked_rows(
+        output_bytes,
+        destination_top,
+        destination_stride,
+        copy_width,
+        copy_height,
+        transform_rows,
+    )?;
     Some(output)
 }
 

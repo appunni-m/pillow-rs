@@ -16,12 +16,6 @@
       "signature": "pub fn execute_filter5x5( img: &DynamicImage, kernel: &[f32; 25], scale: f32, offset: f32, explicit_mode: Option<&str>, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 127,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_cpu/ops/paste.rs",
-      "signature": "fn paste_native_masked( destination: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &Arc<Image>, mask_alpha: bool, mode: &str, ) -> Option<DynamicImage> {"
-    },
-    {
       "lines": 208,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_cpu/ops/paste.rs",
