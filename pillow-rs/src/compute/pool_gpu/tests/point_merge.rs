@@ -171,18 +171,12 @@ fn native_rgb_luma_merge_gpu_preserves_odd_tail_and_compact_transfer() {
             .use_backend(Backend::Cpu)
             .tobytes()
             .expect("CPU RGB merge");
-        let actual = match merged.use_backend(Backend::Gpu).tobytes() {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU RGB/L merge failed for {width}x{height}: {error}"),
+        let Some(actual) = native_gpu_result_or_skip(
+            merged.use_backend(Backend::Gpu).tobytes(),
+            format_args!("native GPU RGB/L merge failed for {width}x{height}"),
+        ) else {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
         };
         assert_eq!(actual, expected, "native RGB/L merge {width}x{height}");
         if (width, height) == (3, 2) {
