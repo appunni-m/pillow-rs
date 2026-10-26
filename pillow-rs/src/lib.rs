@@ -75,6 +75,8 @@
 //   4. Remove redundant clones
 //   5. Replace manual loop indexing with iter()/enumerate()
 //   Tracked at docs/ARCHITECTURE.md (existing Clippy allowances). Remove each when addressed.
+// The `image` dev dependency is consumed by the comparison benchmark, not this library target.
+#![allow(unused_crate_dependencies)]
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 #![allow(clippy::unwrap_in_result)]

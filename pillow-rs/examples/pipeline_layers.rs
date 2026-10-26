@@ -5,6 +5,8 @@
 //! `pillow-rs` API.  It intentionally reports graph construction separately
 //! from terminal materialization so Python binding overhead is not attributed
 //! to the core executor.
+// Package dependencies are used by the linked core library; this example uses its public API.
+#![allow(unused_crate_dependencies)]
 
 use pillow_rs::{
     Backend, Image, PilError, chops_multiply, chops_screen, image_eval_validated, imageops_invert,
