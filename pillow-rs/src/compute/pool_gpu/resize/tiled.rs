@@ -2,6 +2,13 @@
 
 use super::super::*;
 
+struct FResizeTileResources {
+    cached: Arc<CachedPipeline>,
+    states: wgpu::Buffer,
+    coefficients: wgpu::Buffer,
+    parameters: wgpu::Buffer,
+}
+
 impl GpuInner {
     /// Stream coefficient tiles while the ordered binary64 state stays on the
     /// device. Resample.c stores FLOAT32 only after the complete axis, never at
@@ -24,6 +31,38 @@ impl GpuInner {
         ),
         PilError,
     > {
+        let resources = self.create_f_resize_tile_resources()?;
+        let mut telemetry = PipelineResourceTelemetry::default();
+        let mut dispatches = 0u64;
+        let (current_is_a, dimensions) = self.execute_f_resize_tile_axes(
+            source,
+            destination,
+            horizontal,
+            vertical,
+            buffers,
+            &resources,
+            &mut telemetry,
+            &mut dispatches,
+        )?;
+        let size = CheckedDims::new(destination.0, destination.1, 4)?.total_bytes() as u64;
+        let result_buffer = if current_is_a {
+            &buffers.buf_a
+        } else {
+            &buffers.buf_b
+        };
+        let readback = self.prepare_readback(result_buffer, size)?;
+        self.finish_f_resize_tile_readback(result_buffer, &readback, size, dispatches)?;
+        Ok((
+            current_is_a,
+            dimensions.0,
+            dimensions.1,
+            readback,
+            telemetry,
+            dispatches,
+        ))
+    }
+
+    fn create_f_resize_tile_resources(&self) -> Result<FResizeTileResources, PilError> {
         let cached = self.resolve_pipeline(
             "__internal_resize_h",
             "resize_convolution_h.wgsl",
@@ -51,21 +90,37 @@ impl GpuInner {
             8 * 4,
             256,
         );
+        Ok(FResizeTileResources {
+            cached,
+            states,
+            coefficients,
+            parameters,
+        })
+    }
+
+    fn execute_f_resize_tile_axes(
+        &self,
+        source: (u32, u32),
+        destination: (u32, u32),
+        horizontal: &FilterCoeffsF64,
+        vertical: &FilterCoeffsF64,
+        buffers: &BufferPool,
+        resources: &FResizeTileResources,
+        telemetry: &mut PipelineResourceTelemetry,
+        dispatches: &mut u64,
+    ) -> Result<(bool, (u32, u32)), PilError> {
         let mut current_is_a = true;
         let mut dimensions = source;
-        let mut telemetry = PipelineResourceTelemetry::default();
-        let mut dispatches = 0u64;
         for (axis, table, target) in [
             (0u32, horizontal, destination.0),
             (1, vertical, destination.1),
         ] {
-            if target
-                == if axis == 0 {
-                    dimensions.0
-                } else {
-                    dimensions.1
-                }
-            {
+            let current_target = if axis == 0 {
+                dimensions.0
+            } else {
+                dimensions.1
+            };
+            if target == current_target {
                 continue;
             }
             let output_dims = if axis == 0 {
@@ -73,131 +128,225 @@ impl GpuInner {
             } else {
                 (dimensions.0, target)
             };
-            let line_count = if axis == 0 {
-                dimensions.1
-            } else {
-                dimensions.0
-            } as usize;
-            let (source_buffer, destination_buffer) = if current_is_a {
-                (&buffers.buf_a, &buffers.buf_b)
-            } else {
-                (&buffers.buf_b, &buffers.buf_a)
-            };
-            for row_start in (0..table.count.len()).step_by(GPU_F_RESIZE_TILE_ROWS) {
-                let rows = GPU_F_RESIZE_TILE_ROWS.min(table.count.len() - row_start);
-                let lines_per_tile = GPU_F_RESIZE_TILE_PIXELS / rows;
-                let max_taps = table.count[row_start..row_start + rows]
-                    .iter()
-                    .copied()
-                    .max()
-                    .unwrap_or(0);
-                for line_start in (0..line_count).step_by(lines_per_tile) {
-                    let lines = lines_per_tile.min(line_count - line_start);
-                    let header = [
-                        axis,
-                        row_start as u32,
-                        line_start as u32,
-                        rows as u32,
-                        lines as u32,
-                        0,
-                    ];
-                    for tap_start in (0..max_taps.max(1)).step_by(GPU_F_RESIZE_TILE_TAPS) {
-                        let mut words = header.to_vec();
-                        words[5] = tap_start as u32;
-                        words.resize(6 + rows * 4, 0);
-                        for row in 0..rows {
-                            let index = row_start + row;
-                            let total = table.count[index];
-                            let end = total.min(tap_start.saturating_add(GPU_F_RESIZE_TILE_TAPS));
-                            let start = total.min(tap_start);
-                            let offset = words.len() as u32;
-                            words[6 + row * 4..6 + (row + 1) * 4].copy_from_slice(&[
-                                table.xmin[index] as u32,
-                                total as u32,
-                                (end - start) as u32,
-                                offset,
-                            ]);
-                            for &weight in &table.weights[index][start..end] {
-                                let parts = gpu_f64_integer_parts(weight).ok_or_else(|| {
-                                    PilError::InternalError(
-                                        "GPU tiled F coefficient is invalid".into(),
-                                    )
-                                })?;
-                                words.extend([
-                                    parts.mantissa as u32,
-                                    (parts.mantissa >> 32) as u32,
-                                    parts.exponent as u32,
-                                    u32::from(parts.negative),
-                                ]);
-                            }
-                        }
-                        self.queue
-                            .write_buffer(&coefficients, 0, bytemuck::cast_slice(&words));
-                        telemetry.auxiliary_bytes += (words.len() * 4) as u64;
-                        let params = [
-                            dimensions.0,
-                            dimensions.1,
-                            8,
-                            0,
-                            output_dims.0,
-                            output_dims.1,
-                            1,
-                            14,
-                        ];
-                        self.queue
-                            .write_buffer(&parameters, 0, bytemuck::cast_slice(&params));
-                        telemetry.parameter_bytes += 32;
-                        self.submit_f_resize_tile(
-                            &cached,
-                            source_buffer,
-                            &states,
-                            &parameters,
-                            &coefficients,
-                            rows as u32,
-                            lines as u32,
-                        )?;
-                        dispatches += 1;
-                        if dispatches.is_multiple_of(8) {
-                            self.device.poll(wgpu::Maintain::Wait);
-                            self.ensure_healthy("GPU tiled F resize bounded queue")?;
-                        }
-                    }
-                    let params = [
-                        dimensions.0,
-                        dimensions.1,
-                        8,
-                        0,
-                        output_dims.0,
-                        output_dims.1,
-                        1,
-                        15,
-                    ];
-                    self.queue
-                        .write_buffer(&parameters, 0, bytemuck::cast_slice(&params));
-                    telemetry.parameter_bytes += 32;
-                    self.submit_f_resize_tile(
-                        &cached,
-                        &states,
-                        destination_buffer,
-                        &parameters,
-                        &coefficients,
-                        rows as u32,
-                        lines as u32,
-                    )?;
-                    dispatches += 1;
-                }
-            }
+            self.execute_f_resize_tile_axis(
+                axis,
+                table,
+                dimensions,
+                output_dims,
+                current_is_a,
+                buffers,
+                resources,
+                telemetry,
+                dispatches,
+            )?;
             current_is_a = !current_is_a;
             dimensions = output_dims;
         }
-        let size = CheckedDims::new(destination.0, destination.1, 4)?.total_bytes() as u64;
-        let result_buffer = if current_is_a {
-            &buffers.buf_a
+        Ok((current_is_a, dimensions))
+    }
+
+    fn execute_f_resize_tile_axis(
+        &self,
+        axis: u32,
+        table: &FilterCoeffsF64,
+        dimensions: (u32, u32),
+        output_dims: (u32, u32),
+        current_is_a: bool,
+        buffers: &BufferPool,
+        resources: &FResizeTileResources,
+        telemetry: &mut PipelineResourceTelemetry,
+        dispatches: &mut u64,
+    ) -> Result<(), PilError> {
+        let line_count = if axis == 0 {
+            dimensions.1
         } else {
-            &buffers.buf_b
+            dimensions.0
+        } as usize;
+        let (source_buffer, destination_buffer) = if current_is_a {
+            (&buffers.buf_a, &buffers.buf_b)
+        } else {
+            (&buffers.buf_b, &buffers.buf_a)
         };
-        let readback = self.prepare_readback(result_buffer, size)?;
-        if let ReadbackTarget::Staging(staging) = &readback {
+        for row_start in (0..table.count.len()).step_by(GPU_F_RESIZE_TILE_ROWS) {
+            let rows = GPU_F_RESIZE_TILE_ROWS.min(table.count.len() - row_start);
+            let lines_per_tile = GPU_F_RESIZE_TILE_PIXELS / rows;
+            let max_taps = table.count[row_start..row_start + rows]
+                .iter()
+                .copied()
+                .max()
+                .unwrap_or(0);
+            for line_start in (0..line_count).step_by(lines_per_tile) {
+                let lines = lines_per_tile.min(line_count - line_start);
+                for tap_start in (0..max_taps.max(1)).step_by(GPU_F_RESIZE_TILE_TAPS) {
+                    self.submit_f_resize_tile_partial(
+                        axis,
+                        table,
+                        resources,
+                        source_buffer,
+                        dimensions,
+                        output_dims,
+                        row_start,
+                        rows,
+                        line_start,
+                        lines,
+                        tap_start,
+                        telemetry,
+                        dispatches,
+                    )?;
+                }
+                self.submit_f_resize_tile_pass(
+                    resources,
+                    &resources.states,
+                    destination_buffer,
+                    dimensions,
+                    output_dims,
+                    rows as u32,
+                    lines as u32,
+                    15,
+                    telemetry,
+                    dispatches,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn submit_f_resize_tile_partial(
+        &self,
+        axis: u32,
+        table: &FilterCoeffsF64,
+        resources: &FResizeTileResources,
+        source: &wgpu::Buffer,
+        dimensions: (u32, u32),
+        output_dims: (u32, u32),
+        row_start: usize,
+        rows: usize,
+        line_start: usize,
+        lines: usize,
+        tap_start: usize,
+        telemetry: &mut PipelineResourceTelemetry,
+        dispatches: &mut u64,
+    ) -> Result<(), PilError> {
+        self.write_f_resize_tile_coefficients(
+            axis, table, resources, row_start, rows, line_start, lines, tap_start, telemetry,
+        )?;
+        self.submit_f_resize_tile_pass(
+            resources,
+            source,
+            &resources.states,
+            dimensions,
+            output_dims,
+            rows as u32,
+            lines as u32,
+            14,
+            telemetry,
+            dispatches,
+        )?;
+        if dispatches.is_multiple_of(8) {
+            self.device.poll(wgpu::Maintain::Wait);
+            self.ensure_healthy("GPU tiled F resize bounded queue")?;
+        }
+        Ok(())
+    }
+
+    fn write_f_resize_tile_coefficients(
+        &self,
+        axis: u32,
+        table: &FilterCoeffsF64,
+        resources: &FResizeTileResources,
+        row_start: usize,
+        rows: usize,
+        line_start: usize,
+        lines: usize,
+        tap_start: usize,
+        telemetry: &mut PipelineResourceTelemetry,
+    ) -> Result<(), PilError> {
+        let mut words = vec![
+            axis,
+            row_start as u32,
+            line_start as u32,
+            rows as u32,
+            lines as u32,
+            tap_start as u32,
+        ];
+        words.resize(6 + rows * 4, 0);
+        for row in 0..rows {
+            let index = row_start + row;
+            let total = table.count[index];
+            let end = total.min(tap_start.saturating_add(GPU_F_RESIZE_TILE_TAPS));
+            let start = total.min(tap_start);
+            let offset = words.len() as u32;
+            words[6 + row * 4..6 + (row + 1) * 4].copy_from_slice(&[
+                table.xmin[index] as u32,
+                total as u32,
+                (end - start) as u32,
+                offset,
+            ]);
+            for &weight in &table.weights[index][start..end] {
+                let parts = gpu_f64_integer_parts(weight).ok_or_else(|| {
+                    PilError::InternalError("GPU tiled F coefficient is invalid".into())
+                })?;
+                words.extend([
+                    parts.mantissa as u32,
+                    (parts.mantissa >> 32) as u32,
+                    parts.exponent as u32,
+                    u32::from(parts.negative),
+                ]);
+            }
+        }
+        self.queue
+            .write_buffer(&resources.coefficients, 0, bytemuck::cast_slice(&words));
+        telemetry.auxiliary_bytes += (words.len() * 4) as u64;
+        Ok(())
+    }
+
+    fn submit_f_resize_tile_pass(
+        &self,
+        resources: &FResizeTileResources,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        dimensions: (u32, u32),
+        output_dims: (u32, u32),
+        rows: u32,
+        lines: u32,
+        marker: u32,
+        telemetry: &mut PipelineResourceTelemetry,
+        dispatches: &mut u64,
+    ) -> Result<(), PilError> {
+        let params = [
+            dimensions.0,
+            dimensions.1,
+            8,
+            0,
+            output_dims.0,
+            output_dims.1,
+            1,
+            marker,
+        ];
+        self.queue
+            .write_buffer(&resources.parameters, 0, bytemuck::cast_slice(&params));
+        telemetry.parameter_bytes += 32;
+        self.submit_f_resize_tile(
+            &resources.cached,
+            input,
+            output,
+            &resources.parameters,
+            &resources.coefficients,
+            rows,
+            lines,
+        )?;
+        *dispatches += 1;
+        Ok(())
+    }
+
+    fn finish_f_resize_tile_readback(
+        &self,
+        result_buffer: &wgpu::Buffer,
+        readback: &ReadbackTarget,
+        size: u64,
+        dispatches: u64,
+    ) -> Result<(), PilError> {
+        if let ReadbackTarget::Staging(staging) = readback {
             let mut encoder = self
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -212,14 +361,7 @@ impl GpuInner {
             self.queue.submit(std::iter::empty());
             self.poll_device("GPU tiled F resize identity upload")?;
         }
-        Ok((
-            current_is_a,
-            destination.0,
-            destination.1,
-            readback,
-            telemetry,
-            dispatches,
-        ))
+        Ok(())
     }
 
     fn submit_f_resize_tile(

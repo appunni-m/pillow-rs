@@ -88,12 +88,6 @@
       "signature": "fn execute_projection_terminal( &self, image: &DynamicImage, ops: &[PipelineOp], channels: u8, source_is_known_zero: bool, ) -> Result<(Vec<u32>, Vec<u32>, PipelineResourceTelemetry, u64), PilError> {"
     },
     {
-      "lines": 194,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/resize/tiled.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_f_resize_tiled( &self, source: (u32, u32), destination: (u32, u32), horizontal: &FilterCoeffsF64, vertical: &FilterCoeffsF64, buffers: &BufferPool, ) -> Result< ( bool, u32, u32, ReadbackTarget, PipelineResourceTelemetry, u64, ), PilError, > {"
-    },
-    {
       "lines": 275,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/rgb_merge.rs",
@@ -362,11 +356,6 @@
     "pillow-rs/src/compute/pool_gpu/projection.rs": {
       "owner": "lazytrot",
       "reason": "Moved GPU getprojection admission, sparse override dispatch, and readback out of the oversized coordinator; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/resize/tiled.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved tiled FLOAT resize execution out of the GPU coordinator; continue reducing under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/rgb_merge.rs": {
